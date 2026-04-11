@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+
+# Environment — NE JAMAIS COMMITER
+.env
+.env.local
+.env.*.local
+*.env
+
+# Secrets — NE JAMAIS COMMITER
+*.key
+*.pem
+*.p12
+*.pfx
+vault-keys.json
+unseal-keys.txt
+
+# Prisma
+prisma/migrations/*.sql.bak
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+.nyc_output
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local)
+.docker/
+
+# Test
+junit.xml
+test-results/

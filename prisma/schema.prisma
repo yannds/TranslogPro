@@ -1,0 +1,681 @@
+// ============================================================
+// TransLog Pro — Prisma Schema v2.0 (Corrigé et Complet)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 1 : CORE & IDENTITY
+// ─────────────────────────────────────────────────────────────
+
+model Tenant {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  settings        Json              @default("{}")
+  isActive        Boolean           @default(true)
+  provisionStatus String            @default("PENDING")
+  // PENDING | PROVISIONING | ACTIVE | SUSPENDED
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  users           User[]
+  agencies        Agency[]
+  modules         InstalledModule[]
+  routes          Route[]
+  trips           Trip[]
+  workflowConfigs WorkflowConfig[]
+  pricingRules    PricingRules[]
+  buses           Bus[]
+  stations        Station[]
+  parcels         Parcel[]
+
+  @@map("tenants")
+}
+
+model Agency {
+  id        String  @id @default(cuid())
+  tenantId  String
+  name      String
+  stationId String?
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  station       Station?      @relation(fields: [stationId], references: [id])
+  users         User[]
+  cashRegisters CashRegister[]
+
+  @@index([tenantId])
+  @@map("agencies")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  agencyId  String?
+  email     String   @unique
+  name      String?
+  image     String?
+  roleId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id])
+  agency                 Agency?                 @relation(fields: [agencyId], references: [id])
+  role                   Role?                   @relation(fields: [roleId], references: [id])
+  sessions               Session[]
+  accounts               Account[]
+  auditLogs              AuditLog[]
+  checklists             Checklist[]
+  staffProfile           Staff?
+  notificationPreference NotificationPreference?
+
+  @@index([tenantId])
+  @@index([tenantId, agencyId])
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  tenantId    String
+  name        String
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([tenantId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  // FORMAT: {plane}.{module}.{action}.{scope}
+  description String
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 2 : AUTH (Better Auth)
+// ─────────────────────────────────────────────────────────────
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("sessions")
+}
+
+model Account {
+  id           String  @id @default(cuid())
+  userId       String
+  providerId   String
+  accountId    String
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@map("accounts")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 3 : MODULES & CONFIGURATION
+// ─────────────────────────────────────────────────────────────
+
+model InstalledModule {
+  id        String @id @default(cuid())
+  tenantId  String
+  moduleKey String
+  // YIELD_ENGINE | GARAGE_PRO | SAV_MODULE | SCHEDULER | QUOTA_MANAGER
+  config    Json   @default("{}")
+  isActive  Boolean @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, moduleKey])
+  @@map("installed_modules")
+}
+
+model NotificationPreference {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  tenantId  String
+  sms       Boolean @default(true)
+  whatsapp  Boolean @default(true)
+  push      Boolean @default(true)
+  email     Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notification_preferences")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 4 : WORKFLOW ENGINE
+// ─────────────────────────────────────────────────────────────
+
+model WorkflowConfig {
+  id            String   @id @default(cuid())
+  tenantId      String
+  entityType    String
+  // TICKET | PARCEL | TRIP | BUS | TRAVELER | SHIPMENT
+  fromState     String
+  action        String
+  toState       String
+  requiredPerm  String   // ex: "data.ticket.scan.agency"
+  guards        Json     @default("[]")      // GuardDefinition[]
+  sideEffects   Json     @default("[]")      // SideEffectDefinition[]
+  version       Int      @default(1)
+  effectiveFrom DateTime @default(now())
+  isActive      Boolean  @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, entityType, fromState, action, version])
+  @@index([tenantId, entityType, isActive])
+  @@map("workflow_configs")
+}
+
+model WorkflowTransition {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  tenantId       String
+  entityType     String
+  entityId       String
+  action         String
+  fromState      String
+  toState        String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@map("workflow_transitions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 5 : AUDIT & EVENTS
+// ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userId    String?
+  tenantId  String
+  plane     String   // control | data
+  level     String   // info | warn | critical
+  action    String   // ex: "data.ticket.board.agency"
+  resource  String   // ex: "Ticket:clx..."
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  // Partitionnement RANGE mensuel défini via migration SQL brute
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+  @@index([resource])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id            String    @id @default(cuid())
+  tenantId      String
+  eventType     String    // ex: "ticket.boarded"
+  aggregateType String    // TICKET | TRIP | PARCEL | ...
+  aggregateId   String
+  payload       Json
+  status        String    @default("PENDING")
+  // PENDING | PROCESSING | DELIVERED | FAILED | DEAD
+  attempts      Int       @default(0)
+  lastError     String?
+  scheduledAt   DateTime  @default(now())
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([tenantId, eventType])
+  @@map("outbox_events")
+}
+
+model DeadLetterEvent {
+  id          String    @id @default(cuid())
+  tenantId    String
+  eventType   String
+  aggregateId String
+  payload     Json
+  errorLog    Json      @default("[]")
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+
+  @@index([tenantId, resolvedAt])
+  @@map("dead_letter_events")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 6 : GÉOGRAPHIE & INFRASTRUCTURE
+// ─────────────────────────────────────────────────────────────
+
+model Station {
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String
+  coordinates Json    // { lat: Float, lng: Float }
+  type        String  // PRINCIPALE | RELAIS
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  agencies    Agency[]
+  routesOrigin      Route[]  @relation("RouteOrigin")
+  routesDestination Route[]  @relation("RouteDestination")
+  waypoints         Waypoint[]
+  parcelsTo         Parcel[]   @relation("ParcelDestination")
+  shipmentsTo       Shipment[] @relation("ShipmentDestination")
+  travelersDropoff  Traveler[] @relation("TravelerDropOff")
+
+  @@index([tenantId])
+  @@map("stations")
+}
+
+model Route {
+  id            String @id @default(cuid())
+  tenantId      String
+  name          String
+  originId      String
+  destinationId String
+  distanceKm    Float
+  basePrice     Float
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  origin      Station    @relation("RouteOrigin", fields: [originId], references: [id])
+  destination Station    @relation("RouteDestination", fields: [destinationId], references: [id])
+  waypoints   Waypoint[]
+  trips       Trip[]
+
+  @@index([tenantId])
+  @@map("routes")
+}
+
+model Waypoint {
+  id                String  @id @default(cuid())
+  routeId           String
+  stationId         String
+  order             Int
+  isMandatoryStop   Boolean @default(false)
+  estimatedWaitTime Int?    // minutes
+  isAlertZone       Boolean @default(false)
+  alertDescription  String?
+
+  route   Route   @relation(fields: [routeId], references: [id])
+  station Station @relation(fields: [stationId], references: [id])
+
+  @@unique([routeId, order])
+  @@map("waypoints")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 7 : FLOTTE & PERSONNEL
+// ─────────────────────────────────────────────────────────────
+
+model Bus {
+  id                  String  @id @default(cuid())
+  tenantId            String
+  plateNumber         String  @unique
+  model               String
+  capacity            Int
+  luggageCapacityKg   Float
+  luggageCapacityM3   Float
+  seatLayout          Json?   // Plan de salle numéroté — OBLIGATOIRE avant vente
+  status              String  @default("AVAILABLE")
+  // AVAILABLE | BOARDING | DEPARTED | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE
+  version             Int     @default(1)
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  trips              Trip[]
+  maintenanceReports MaintenanceReport[]
+
+  @@index([tenantId, status])
+  @@map("buses")
+}
+
+model Staff {
+  id                  String  @id @default(cuid())
+  tenantId            String
+  userId              String  @unique
+  role                String  // DRIVER | HOSTESS | MECHANIC
+  licenseData         Json    @default("{}")
+  isAvailable         Boolean @default(true)
+  totalDriveTimeToday Float   @default(0)
+  // Remis à 0 chaque jour à minuit par un scheduler
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, role, isAvailable])
+  @@map("staff")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 8 : TRAJETS & OPÉRATIONS
+// ─────────────────────────────────────────────────────────────
+
+model Trip {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  routeId            String
+  busId              String
+  driverId           String
+  status             String   @default("PLANNED")
+  // PLANNED | OPEN | BOARDING | IN_PROGRESS | IN_PROGRESS_PAUSED
+  // IN_PROGRESS_DELAYED | COMPLETED | CANCELLED
+  roadbook           Json     @default("{}")
+  // Stocké en DB (pas MinIO) pour permettre les requêtes sur waypoints
+  departureScheduled DateTime
+  arrivalScheduled   DateTime
+  currentLat         Float?
+  currentLng         Float?
+  lastGpsAt          DateTime?
+  version            Int      @default(1)
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  route     Route       @relation(fields: [routeId], references: [id])
+  bus       Bus         @relation(fields: [busId], references: [id])
+  checklists Checklist[]
+  incidents  Incident[]
+  shipments  Shipment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, departureScheduled])
+  @@map("trips")
+}
+
+model Checklist {
+  id          String   @id @default(cuid())
+  tripId      String
+  userId      String
+  type        String
+  // PRE_DEPARTURE | BOARDING_READY | POST_TRIP | MAINTENANCE
+  content     Json     @default("{}")
+  isCompliant Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([tripId, type])
+  @@map("checklists")
+}
+
+model Incident {
+  id          String    @id @default(cuid())
+  tripId      String
+  reporterId  String
+  type        String    // MECHANICAL | SECURITY | HEALTH | LOST_OBJECT | SOS
+  severity    String    // LOW | MEDIUM | HIGH | SOS
+  description String
+  metadata    Json      @default("{}")
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@index([tripId, type])
+  @@index([severity, resolvedAt])
+  @@map("incidents")
+}
+
+model MaintenanceReport {
+  id          String    @id @default(cuid())
+  tenantId    String
+  busId       String
+  incidentId  String?
+  mechanicId  String
+  description String
+  partsUsed   Json      @default("[]")
+  resolvedAt  DateTime?
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  bus Bus @relation(fields: [busId], references: [id])
+
+  @@index([tenantId, busId])
+  @@map("maintenance_reports")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 9 : BILLETTERIE & PASSAGERS
+// ─────────────────────────────────────────────────────────────
+
+model Ticket {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tripId        String
+  passengerId   String
+  passengerName String
+  seatNumber    String?
+  pricePaid     Float
+  status        String   @default("CREATED")
+  // CREATED | PENDING_PAYMENT | CONFIRMED | CHECKED_IN | BOARDED | COMPLETED
+  // CANCELLED | EXPIRED
+  qrCode        String   @unique
+  // Format: base64url(payload).HMAC-SHA256(payload, tenant_hmac_key)
+  agencyId      String
+  version       Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, tripId, status])
+  @@index([qrCode])
+  @@index([tenantId, agencyId])
+  @@map("tickets")
+}
+
+model Traveler {
+  id               String  @id @default(cuid())
+  tenantId         String
+  ticketId         String  @unique
+  tripId           String
+  status           String  @default("VERIFIED")
+  // VERIFIED | CHECKED_IN | BOARDED | ARRIVED | EXITED
+  dropOffStationId String?
+  version          Int     @default(1)
+
+  dropOffStation Station? @relation("TravelerDropOff", fields: [dropOffStationId], references: [id])
+
+  @@index([tenantId, tripId, status])
+  @@index([tripId, dropOffStationId])
+  @@map("travelers")
+}
+
+model Baggage {
+  id       String @id @default(cuid())
+  tenantId String
+  ticketId String
+  count    Int    @default(1)
+  weight   Float
+  type     String // CABIN | HOLD
+  surcharge Float  @default(0)
+
+  @@index([ticketId])
+  @@map("baggages")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 10 : COLIS & EXPÉDITIONS
+// ─────────────────────────────────────────────────────────────
+
+model Parcel {
+  id            String   @id @default(cuid())
+  tenantId      String
+  senderId      String
+  trackingCode  String   @unique
+  weight        Float
+  price         Float
+  destinationId String   // FK Station (plus un String libre)
+  recipientInfo Json     // { name, phone, address }
+  shipmentId    String?
+  status        String   @default("CREATED")
+  // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED
+  history       Json     @default("[]")
+  // [{ timestamp, agentId, stationId, action }]
+  version       Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  destination Station   @relation("ParcelDestination", fields: [destinationId], references: [id])
+  shipment    Shipment? @relation(fields: [shipmentId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([trackingCode])
+  @@index([tenantId, destinationId])
+  @@map("parcels")
+}
+
+model Shipment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tripId          String
+  destinationId   String   // FK Station (plus un String libre)
+  totalWeight     Float    @default(0)
+  remainingWeight Float
+  status          String   @default("OPEN")
+  // OPEN | LOADED | IN_TRANSIT | ARRIVED | CLOSED
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  trip        Trip      @relation(fields: [tripId], references: [id])
+  destination Station   @relation("ShipmentDestination", fields: [destinationId], references: [id])
+  parcels     Parcel[]
+
+  @@index([tenantId, tripId])
+  @@map("shipments")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11 : FINANCE & CAISSE
+// ─────────────────────────────────────────────────────────────
+
+model PricingRules {
+  id       String @id @default(cuid())
+  tenantId String
+  routeId  String
+  rules    Json
+  // {
+  //   basePrice: Float, taxRate: Float, tollCost: Float,
+  //   pricePerKm: Float, luggageQuotaKg: Float, surchargePerKg: Float,
+  //   yieldConfig: { enabled: Boolean, tiers: [...] }
+  // }
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, routeId])
+  @@map("pricing_rules")
+}
+
+model CashRegister {
+  id             String        @id @default(cuid())
+  tenantId       String
+  agencyId       String
+  agentId        String
+  openedAt       DateTime      @default(now())
+  closedAt       DateTime?
+  initialBalance Float
+  finalBalance   Float?
+  auditStatus    String        @default("OPEN")
+  // OPEN | CLOSED | DISCREPANCY
+
+  agency       Agency        @relation(fields: [agencyId], references: [id])
+  transactions Transaction[]
+
+  @@index([tenantId, agencyId, auditStatus])
+  @@map("cash_registers")
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  tenantId        String
+  cashRegisterId  String
+  type            String   // TICKET | PARCEL | LUGGAGE_FEE | REFUND
+  amount          Float
+  paymentMethod   String   // CASH | MOBILE_MONEY
+  externalRef     String?  // Référence Flutterwave/Paystack (idempotent)
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([externalRef])
+  @@map("transactions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 12 : SAV & OBJETS TROUVÉS
+// ─────────────────────────────────────────────────────────────
+
+model LostFoundItem {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tripId       String
+  reporterId   String
+  description  String
+  photoUrl     String?   // MinIO signed URL — TTL 30 jours post-remise
+  status       String    @default("FOUND")
+  // FOUND | CLAIMED | DISPOSED
+  claimedAt    DateTime?
+  claimedBy    String?
+  signatureUrl String?   // Photo pièce ID — TTL 15min (biométrique)
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@map("lost_found_items")
+}
+
+model Claim {
+  id          String    @id @default(cuid())
+  tenantId    String
+  type        String    // PARCEL_DAMAGE | PARCEL_LOSS | SERVICE | REFUND_REQUEST
+  reporterId  String
+  entityId    String    // parcelId ou ticketId
+  entityType  String    // PARCEL | TICKET
+  description String
+  status      String    @default("OPEN")
+  // OPEN | IN_REVIEW | RESOLVED | REJECTED
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@map("claims")
+}

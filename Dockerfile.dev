@@ -1,0 +1,16 @@
+FROM node:20-alpine
+WORKDIR /app
+
+RUN addgroup -S translog && adduser -S translog -G translog
+
+COPY package*.json ./
+RUN npm ci
+
+COPY --chown=translog:translog . .
+RUN npx prisma generate
+
+USER translog
+ENV NODE_ENV=development
+EXPOSE 3000 3001 9229
+
+CMD ["npm", "run", "start:dev"]
