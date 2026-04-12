@@ -33,7 +33,6 @@ export class SchedulerService {
 
     if (expired.count > 0) {
       this.logger.log(`Tickets expirés : ${expired.count}`);
-      // TODO: publier OutboxEvent pour libérer les sièges (side effect)
     }
   }
 
@@ -58,28 +57,28 @@ export class SchedulerService {
 
       // Vérifier qu'un trip n'existe pas déjà pour ce template + cette date
       const exists = await this.prisma.trip.findFirst({
-        where: { templateId: tpl.id, departureTime: { gte: tomorrow } },
+        where: { tenantId: tpl.tenantId, departureScheduled: { gte: tomorrow } },
       });
       if (exists) continue;
 
-      const departureTime = new Date(tomorrow);
+      const departureScheduled = new Date(tomorrow);
       const [h, m] = (tpl.departureTime as string).split(':').map(Number);
-      departureTime.setHours(h, m, 0, 0);
+      departureScheduled.setHours(h, m, 0, 0);
 
       await this.prisma.trip.create({
         data: {
-          tenantId:      tpl.tenantId,
-          templateId:    tpl.id,
-          routeId:       tpl.routeId as string,
-          busId:         tpl.defaultBusId as string | undefined,
-          driverId:      tpl.defaultDriverId as string | undefined,
-          departureTime,
-          status:        'PLANNED',
-          version:       0,
+          tenantId:           tpl.tenantId,
+          routeId:            tpl.routeId,
+          busId:              tpl.defaultBusId   ?? '',
+          driverId:           tpl.defaultDriverId ?? '',
+          departureScheduled,
+          arrivalScheduled:   departureScheduled,  // sera mis à jour par l'agent
+          status:             'PLANNED',
+          version:            0,
         },
       });
 
-      this.logger.debug(`Trip généré depuis template ${tpl.id} pour ${departureTime.toISOString()}`);
+      this.logger.debug(`Trip généré depuis template ${tpl.id} pour ${departureScheduled.toISOString()}`);
     }
   }
 

@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -10,34 +11,62 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @RequirePermission(Permission.STATS_READ_TENANT)
-  dashboard(@TenantId() tenantId: string, @Query('agencyId') agencyId?: string) {
-    return this.analyticsService.getDashboard(tenantId, agencyId);
+  dashboard(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
+  ) {
+    // scope.scope='agency' → l'acteur ne voit que son agence, peu importe le query param
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getDashboard(tenantId, effectiveAgencyId);
   }
 
   @Get('trips')
   @RequirePermission(Permission.STATS_READ_TENANT)
   tripsReport(
     @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
     @Query('from') from: string,
-    @Query('to') to: string,
+    @Query('to')   to: string,
     @Query('agencyId') agencyId?: string,
   ) {
-    return this.analyticsService.getTripsReport(tenantId, new Date(from), new Date(to), agencyId);
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getTripsReport(
+      tenantId, new Date(from), new Date(to), effectiveAgencyId,
+    );
   }
 
   @Get('revenue')
   @RequirePermission(Permission.STATS_READ_TENANT)
   revenueReport(
     @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
     @Query('from') from: string,
-    @Query('to') to: string,
+    @Query('to')   to: string,
+    @Query('agencyId') agencyId?: string,
   ) {
-    return this.analyticsService.getRevenueReport(tenantId, new Date(from), new Date(to));
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getRevenueReport(
+      tenantId, new Date(from), new Date(to), effectiveAgencyId,
+    );
   }
 
   @Get('trips/:tripId/occupancy')
   @RequirePermission(Permission.STATS_READ_TENANT)
   occupancy(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.analyticsService.getOccupancyRate(tenantId, tripId);
+  }
+
+  @Get('top-routes')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  topRoutes(
+    @TenantId() tenantId: string,
+    @Query('from') from: string,
+    @Query('to')   to: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.analyticsService.getTopRoutes(
+      tenantId, new Date(from), new Date(to), limit ? parseInt(limit, 10) : 10,
+    );
   }
 }

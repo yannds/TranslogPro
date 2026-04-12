@@ -4,7 +4,7 @@ export interface CurrentUserPayload {
   id:        string;
   tenantId:  string;
   roleId:    string;    // DB Role.id — utilisé par PermissionGuard et WorkflowEngine
-  role:      string;    // Role.name — conservé pour compatibilité et logs
+  roleName:  string;    // Role.name — usage : logs et audit uniquement, JAMAIS logique d'accès
   agencyId?: string;
   userType?: string;    // STAFF | VOYAGEUR | ANONYMOUS
 }

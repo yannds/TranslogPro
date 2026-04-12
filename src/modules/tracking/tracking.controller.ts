@@ -9,7 +9,7 @@ export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 
   @Post('trips/:tripId/gps')
-  @RequirePermission(Permission.TRIP_UPDATE)
+  @RequirePermission(Permission.TRIP_UPDATE_AGENCY)
   updateGps(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
@@ -22,13 +22,13 @@ export class TrackingController {
   }
 
   @Get('trips/:tripId/position')
-  @RequirePermission(Permission.TRIP_READ)
+  @RequirePermission(Permission.TRIP_READ_OWN)
   lastPosition(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.trackingService.getLastPosition(tenantId, tripId);
   }
 
   @Get('trips/:tripId/history')
-  @RequirePermission(Permission.TRIP_READ)
+  @RequirePermission(Permission.TRIP_READ_OWN)
   history(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,

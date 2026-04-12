@@ -58,7 +58,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /** Transaction standard avec contexte tenant injecté automatiquement */
-  async transact<T>(fn: (tx: PrismaClient) => Promise<T>): Promise<T> {
+  async transact<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     const ctx = TenantContextService.getStore();
     return this.$transaction(async (tx) => {
       if (ctx?.tenantId) {

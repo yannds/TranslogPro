@@ -24,7 +24,7 @@ export interface SessionInfo {
   userId:    string;
   tenantId:  string;
   roleId:    string;   // requis par PermissionGuard
-  role:      string;   // Role.name — pour les logs
+  roleName:  string;   // Role.name — logs uniquement
   agencyId?: string;
   userType:  string;
   expiresAt: Date;

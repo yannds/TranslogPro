@@ -58,11 +58,10 @@ export class SavController {
   process(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body('decision') decision: 'APPROVED' | 'REJECTED',
-    @Body('notes') notes: string,
+    @Body('decision') decision: 'RESOLVE' | 'REJECT',
     @CurrentUser() actor: CurrentUserPayload,
   ) {
-    return this.savService.process(tenantId, id, decision, notes, actor);
+    return this.savService.process(tenantId, id, decision, actor);
   }
 
   /**

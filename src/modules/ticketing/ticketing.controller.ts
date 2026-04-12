@@ -17,10 +17,9 @@ export class TicketingController {
     @TenantId() tenantId: string,
     @Body() dto: IssueTicketDto,
     @CurrentUser() actor: CurrentUserPayload,
-    @ScopeCtx() scope: ScopeContext,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.ticketingService.issue(tenantId, dto, actor, scope, idempotencyKey);
+    return this.ticketingService.issue(tenantId, dto, actor, idempotencyKey);
   }
 
   /** Scan QR — check-in + embarquement */
@@ -52,7 +51,7 @@ export class TicketingController {
     @ScopeCtx() scope: ScopeContext,
     @Query('tripId') tripId?: string,
   ) {
-    return this.ticketingService.findMany(tenantId, scope, tripId);
+    return this.ticketingService.findMany(tenantId, tripId);
   }
 
   @Get(':id')

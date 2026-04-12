@@ -10,7 +10,7 @@ export class ManifestController {
   constructor(private readonly manifestService: ManifestService) {}
 
   @Post('trips/:tripId')
-  @RequirePermission(Permission.MANIFEST_GENERATE)
+  @RequirePermission(Permission.MANIFEST_GENERATE_AGENCY)
   generate(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
@@ -20,7 +20,7 @@ export class ManifestController {
   }
 
   @Patch(':id/sign')
-  @RequirePermission(Permission.MANIFEST_SIGN)
+  @RequirePermission(Permission.MANIFEST_SIGN_AGENCY)
   sign(
     @TenantId() tenantId: string,
     @Param('id') id: string,
@@ -30,13 +30,13 @@ export class ManifestController {
   }
 
   @Get(':id/download')
-  @RequirePermission(Permission.MANIFEST_READ)
+  @RequirePermission(Permission.MANIFEST_READ_OWN)
   download(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.manifestService.getDownloadUrl(tenantId, id);
   }
 
   @Get('trips/:tripId')
-  @RequirePermission(Permission.MANIFEST_READ)
+  @RequirePermission(Permission.MANIFEST_READ_OWN)
   findByTrip(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.manifestService.findByTrip(tenantId, tripId);
   }

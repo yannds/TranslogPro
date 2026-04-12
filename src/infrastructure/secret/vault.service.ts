@@ -12,7 +12,9 @@ export class VaultService implements ISecretService, OnModuleInit {
     const vaultAddr = process.env.VAULT_ADDR;
     if (!vaultAddr) throw new Error('VAULT_ADDR environment variable is required');
 
-    this.client = vault.default({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vaultFactory = ((vault as any).default ?? vault) as (...args: any[]) => any;
+    this.client = vaultFactory({
       apiVersion: 'v1',
       endpoint: vaultAddr,
       token: process.env.VAULT_TOKEN,

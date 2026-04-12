@@ -20,13 +20,13 @@ export class TripService {
     return this.prisma.trip.create({
       data: {
         tenantId,
-        routeId:              dto.routeId,
-        busId:                dto.busId,
-        driverId:             dto.driverId,
-        departureTime:        new Date(dto.departureTime),
-        estimatedArrivalTime: dto.estimatedArrivalTime ? new Date(dto.estimatedArrivalTime) : null,
-        status:               TripState.PLANNED,
-        version:              0,
+        routeId:             dto.routeId,
+        busId:               dto.busId,
+        driverId:            dto.driverId,
+        departureScheduled:  new Date(dto.departureTime),
+        arrivalScheduled:    dto.estimatedArrivalTime ? new Date(dto.estimatedArrivalTime) : new Date(dto.departureTime),
+        status:              TripState.PLANNED,
+        version:             0,
       },
     });
   }
@@ -35,10 +35,10 @@ export class TripService {
     return this.prisma.trip.findMany({
       where: {
         tenantId,
-        ...(filters?.status   ? { status:   filters.status   } : {}),
+        ...(filters?.status ? { status: filters.status } : {}),
       },
       include: { route: true, bus: true },
-      orderBy: { departureTime: 'asc' },
+      orderBy: { departureScheduled: 'asc' },
     });
   }
 
@@ -54,7 +54,7 @@ export class TripService {
   async transition(
     tenantId:       string,
     tripId:         string,
-    targetState:    string,
+    action:         string,
     actor:          CurrentUserPayload,
     idempotencyKey?: string,
   ) {
@@ -69,8 +69,8 @@ export class TripService {
       [TripState.CANCELLED]:          EventTypes.TRIP_CANCELLED,
     };
 
-    return this.workflow.transition(trip as Parameters<typeof this.workflow.transition>[0], {
-      targetState,
+    return this.workflow.transition(trip as any, {
+      action,
       actor,
       idempotencyKey,
     }, {
@@ -81,10 +81,8 @@ export class TripService {
           data:  {
             status:  state,
             version: { increment: 1 },
-            ...(state === TripState.COMPLETED ? { actualArrivalTime: new Date() } : {}),
           },
         });
-        // Publish outbox event inside same transaction
         const eventType = eventTypeMap[state] ?? `trip.${state.toLowerCase()}`;
         const event: DomainEvent = {
           id:            uuidv4(),

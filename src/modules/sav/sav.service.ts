@@ -6,11 +6,10 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { ClaimState } from '../../common/constants/workflow-states';
 
 export interface CreateClaimDto {
-  type:          string;
-  description:   string;
-  ticketId?:     string;
-  parcelId?:     string;
-  amount?:       number;
+  type:        string;
+  description: string;
+  entityId:    string;   // parcelId ou ticketId
+  entityType:  string;   // PARCEL | TICKET | INCIDENT
 }
 
 @Injectable()
@@ -24,13 +23,12 @@ export class SavService {
     return this.prisma.claim.create({
       data: {
         tenantId,
-        type:         dto.type,
-        description:  dto.description,
-        ticketId:     dto.ticketId,
-        parcelId:     dto.parcelId,
-        claimedAmount:dto.amount,
-        submittedById:actor.id,
-        status:       ClaimState.SUBMITTED,
+        type:        dto.type,
+        description: dto.description,
+        entityId:    dto.entityId,
+        entityType:  dto.entityType,
+        reporterId:  actor.id,
+        status:      ClaimState.OPEN,
       },
     });
   }
@@ -38,8 +36,7 @@ export class SavService {
   async process(
     tenantId: string,
     claimId:  string,
-    decision: 'APPROVED' | 'REJECTED',
-    notes:    string,
+    decision: 'RESOLVE' | 'REJECT',
     actor:    CurrentUserPayload,
   ) {
     const claim = await this.prisma.claim.findFirst({ where: { id: claimId, tenantId } });
@@ -48,16 +45,14 @@ export class SavService {
     return this.prisma.claim.update({
       where: { id: claimId },
       data:  {
-        status:      decision === 'APPROVED' ? ClaimState.APPROVED : ClaimState.REJECTED,
-        processedById: actor.id,
-        processedAt: new Date(),
-        notes,
+        status:     decision === 'RESOLVE' ? ClaimState.RESOLVED : ClaimState.REJECTED,
+        resolvedBy: actor.id,
+        resolvedAt: new Date(),
       },
     });
   }
 
   async getIdPhotoUploadUrl(tenantId: string, claimId: string) {
-    // Biometric data — 15min TTL enforced by DocumentType.ID_PHOTO_SAV
     const key = `${tenantId}/sav/${claimId}/id-${Date.now()}.jpg`;
     return this.storage.getUploadUrl(tenantId, key, DocumentType.ID_PHOTO_SAV);
   }

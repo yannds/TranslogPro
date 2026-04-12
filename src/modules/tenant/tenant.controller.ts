@@ -8,6 +8,7 @@ export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
   @Post()
+  @RequirePermission(Permission.TENANT_MANAGE)
   create(@Body() dto: CreateTenantDto) {
     return this.tenantService.create(dto);
   }

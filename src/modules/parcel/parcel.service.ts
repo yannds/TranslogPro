@@ -24,19 +24,17 @@ export class ParcelService {
         data: {
           tenantId,
           trackingCode,
-          senderName:    dto.senderName,
-          senderPhone:   dto.senderPhone,
-          recipientName: dto.recipientName,
-          recipientPhone:dto.recipientPhone,
-          originId:      dto.originId,
+          senderId:      actor.id,
+          weight:        dto.weightKg,
+          price:         dto.declaredValue ?? 0,
           destinationId: dto.destinationId,
-          tripId:        dto.tripId,
-          size:          dto.size,
-          weightKg:      dto.weightKg,
-          description:   dto.description,
-          declaredValue: dto.declaredValue,
-          status:        ParcelState.REGISTERED,
-          version:       0,
+          recipientInfo: {
+            name:    dto.recipientName,
+            phone:   dto.recipientPhone,
+            address: dto.address ?? '',
+          },
+          status:  ParcelState.CREATED,
+          version: 0,
         },
       });
 
@@ -46,7 +44,7 @@ export class ParcelService {
         tenantId,
         aggregateId:   parcel.id,
         aggregateType: 'Parcel',
-        payload:       { parcelId: parcel.id, trackingCode, tripId: dto.tripId },
+        payload:       { parcelId: parcel.id, trackingCode },
         occurredAt:    new Date(),
       };
       await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
@@ -64,43 +62,64 @@ export class ParcelService {
   async trackByCode(tenantId: string, trackingCode: string) {
     const parcel = await this.prisma.parcel.findFirst({
       where:   { tenantId, trackingCode },
-      include: { origin: true, destination: true },
+      include: { destination: true },
     });
     if (!parcel) throw new NotFoundException(`Parcel with code ${trackingCode} not found`);
     return parcel;
   }
 
   async transition(
-    tenantId:       string,
-    parcelId:       string,
-    targetState:    string,
-    actor:          CurrentUserPayload,
+    tenantId:        string,
+    parcelId:        string,
+    action:          string,
+    actor:           CurrentUserPayload,
     idempotencyKey?: string,
   ) {
     const parcel = await this.findOne(tenantId, parcelId);
 
     return this.workflow.transition(parcel as Parameters<typeof this.workflow.transition>[0], {
-      targetState,
+      action,
       actor,
       idempotencyKey,
     }, {
       aggregateType: 'Parcel',
-      persist: async (entity, state, prisma) => {
-        return prisma.parcel.update({
+      persist: async (entity, state, p) => {
+        return p.parcel.update({
           where: { id: entity.id },
           data:  {
             status:  state,
             version: { increment: 1 },
-            ...(state === ParcelState.DELIVERED ? { deliveredAt: new Date() } : {}),
           },
         }) as Promise<typeof entity>;
       },
     });
   }
 
-  async findByTrip(tenantId: string, tripId: string) {
+  /** Scan chargement/déchargement — mappe l'action sur une transition workflow */
+  async scan(
+    tenantId:        string,
+    parcelId:        string,
+    action:          string,
+    _stationId:      string,
+    actor:           CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transition(tenantId, parcelId, action, actor, idempotencyKey);
+  }
+
+  /** Signalement dommage — transition vers DAMAGED */
+  async reportDamage(
+    tenantId:    string,
+    parcelId:    string,
+    description: string,
+    actor:       CurrentUserPayload,
+  ) {
+    return this.transition(tenantId, parcelId, 'REPORT_DAMAGE', actor, undefined);
+  }
+
+  async findByShipment(tenantId: string, shipmentId: string) {
     return this.prisma.parcel.findMany({
-      where:   { tenantId, tripId },
+      where:   { tenantId, shipmentId },
       orderBy: { createdAt: 'asc' },
     });
   }

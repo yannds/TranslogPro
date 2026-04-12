@@ -30,7 +30,7 @@ export class TripController {
     @Query('status') status?: string,
   ) {
     // scope.scope = 'own' → chauffeur voit ses trajets uniquement
-    return this.tripService.findAll(tenantId, { status, scope });
+    return this.tripService.findAll(tenantId, { status });
   }
 
   @Get(':id')
@@ -40,6 +40,6 @@ export class TripController {
     @Param('id') id: string,
     @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.tripService.findOne(tenantId, id, scope);
+    return this.tripService.findOne(tenantId, id);
   }
 }

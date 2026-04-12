@@ -23,7 +23,7 @@ export class TenantService {
     if (exists) throw new ConflictException(`Tenant slug "${dto.slug}" already taken`);
 
     const tenant = await this.prisma.tenant.create({
-      data: { name: dto.name, slug: dto.slug, status: 'ACTIVE' },
+      data: { name: dto.name, slug: dto.slug, provisionStatus: 'ACTIVE' },
     });
 
     // Provision HMAC key for QR codes in Vault
@@ -36,7 +36,7 @@ export class TenantService {
         email:    dto.adminEmail,
         name:     dto.adminName,
         tenantId: tenant.id,
-        role:     'TENANT_ADMIN',
+        userType: 'STAFF',
       },
     });
 
@@ -54,6 +54,6 @@ export class TenantService {
   }
 
   async suspend(id: string) {
-    return this.prisma.tenant.update({ where: { id }, data: { status: 'SUSPENDED' } });
+    return this.prisma.tenant.update({ where: { id }, data: { provisionStatus: 'SUSPENDED' } });
   }
 }

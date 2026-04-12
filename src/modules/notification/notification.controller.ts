@@ -10,7 +10,7 @@ export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @Get('unread')
-  @RequirePermission(Permission.NOTIFICATION_READ)
+  @RequirePermission(Permission.NOTIFICATION_READ_OWN)
   getUnread(
     @TenantId() tenantId: string,
     @CurrentUser() user: CurrentUserPayload,
@@ -19,7 +19,7 @@ export class NotificationController {
   }
 
   @Patch(':id/read')
-  @RequirePermission(Permission.NOTIFICATION_READ)
+  @RequirePermission(Permission.NOTIFICATION_READ_OWN)
   markRead(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.notificationService.markRead(tenantId, id);
   }

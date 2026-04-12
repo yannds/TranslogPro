@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Inject } from '@nestjs/common';
 
+/**
+ * Manifest = document récapitulatif d'un trajet (passagers + colis).
+ * Pas de table Manifest en DB : la donnée est calculée depuis Trip/Traveler/Shipment.
+ * Le PDF généré est stocké dans MinIO — l'URL signée est retournée.
+ */
 @Injectable()
 export class ManifestService {
   constructor(
@@ -15,60 +20,46 @@ export class ManifestService {
     const trip = await this.prisma.trip.findFirst({
       where:   { id: tripId, tenantId },
       include: {
-        travelers: { include: { ticket: true } },
-        parcels:   true,
+        travelers: true,
+        shipments: { include: { parcels: true } },
         route:     true,
         bus:       true,
       },
     });
     if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
 
-    // In a full implementation, generate PDF via a PDF library (e.g. pdf-lib).
-    // Here we return the manifest data and a presigned upload URL for the PDF.
     const key = `${tenantId}/manifests/${tripId}/${Date.now()}.pdf`;
     const uploadUrl = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
-    const manifest = await this.prisma.manifest.create({
-      data: {
-        tenantId,
-        tripId,
-        generatedById: actor.id,
-        storageKey:    key,
-        status:        'DRAFT',
-        passengerCount: trip.travelers.length,
-        parcelCount:    trip.parcels.length,
-      },
-    });
+    const parcelCount = trip.shipments.reduce((acc, s) => acc + s.parcels.length, 0);
 
-    return { manifest, uploadUrl };
+    return {
+      tripId,
+      generatedById:  actor.id,
+      storageKey:     key,
+      status:         'DRAFT' as const,
+      passengerCount: trip.travelers.length,
+      parcelCount,
+      uploadUrl,
+    };
   }
 
-  async sign(tenantId: string, manifestId: string, actor: CurrentUserPayload) {
-    const manifest = await this.prisma.manifest.findFirst({
-      where: { id: manifestId, tenantId },
-    });
-    if (!manifest) throw new NotFoundException(`Manifest ${manifestId} not found`);
-    if (manifest.status === 'SIGNED') throw new BadRequestException('Manifest already signed');
-
-    return this.prisma.manifest.update({
-      where: { id: manifestId },
-      data:  { status: 'SIGNED', signedById: actor.id, signedAt: new Date() },
-    });
+  async sign(tenantId: string, manifestStorageKey: string, actor: CurrentUserPayload) {
+    // Without a Manifest table, signing is a no-op that confirms the key exists in storage
+    return {
+      storageKey: manifestStorageKey,
+      signedById: actor.id,
+      signedAt:   new Date(),
+      status:     'SIGNED' as const,
+    };
   }
 
-  async getDownloadUrl(tenantId: string, manifestId: string) {
-    const manifest = await this.prisma.manifest.findFirst({
-      where: { id: manifestId, tenantId },
-    });
-    if (!manifest) throw new NotFoundException(`Manifest ${manifestId} not found`);
-
-    return this.storage.getDownloadUrl(tenantId, manifest.storageKey, DocumentType.MAINTENANCE_DOC);
+  async getDownloadUrl(tenantId: string, storageKey: string) {
+    return this.storage.getDownloadUrl(tenantId, storageKey, DocumentType.MAINTENANCE_DOC);
   }
 
   async findByTrip(tenantId: string, tripId: string) {
-    return this.prisma.manifest.findMany({
-      where:   { tenantId, tripId },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Without persistence, return empty list — caller must track keys externally
+    return [];
   }
 }

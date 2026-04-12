@@ -1,4 +1,4 @@
-import { Injectable, Logger, TooManyRequestsException } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 
 /**
@@ -48,8 +48,9 @@ export class QuotaService {
 
     if (current > limit.max) {
       this.logger.warn(`Quota dépassé: tenant=${tenantId} resource=${resource} count=${current}/${limit.max}`);
-      throw new TooManyRequestsException(
+      throw new HttpException(
         `Quota "${resource}" dépassé pour ce tenant (${current}/${limit.max} par ${limit.windowSec}s)`,
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
   }

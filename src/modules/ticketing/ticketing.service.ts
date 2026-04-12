@@ -5,7 +5,7 @@ import { PricingEngine } from '../../core/pricing/pricing.engine';
 import { QrService } from '../../core/security/qr/qr.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
-import { TicketState } from '../../common/constants/workflow-states';
+import { TicketAction } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { IssueTicketDto } from './dto/issue-ticket.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,10 +26,10 @@ export class TicketingService {
     // 1. Calculate price
     const price = await this.pricing.calculate({
       tenantId,
-      tripId:      dto.tripId,
-      fareClass:   dto.fareClass,
-      discountCode:dto.discountCode,
-      luggageKg:   dto.luggageKg,
+      tripId:       dto.tripId,
+      fareClass:    dto.fareClass,
+      discountCode: dto.discountCode,
+      luggageKg:    dto.luggageKg,
     });
 
     // 2. Create ticket in PENDING_PAYMENT with expiry
@@ -39,17 +39,16 @@ export class TicketingService {
       const t = await tx.ticket.create({
         data: {
           tenantId,
-          tripId:         dto.tripId,
-          passengerName:  dto.passengerName,
-          passengerPhone: dto.passengerPhone,
-          fareClass:      dto.fareClass,
-          seatNumber:     dto.seatNumber,
-          luggageKg:      dto.luggageKg ?? 0,
-          price:          price.total,
-          currency:       price.currency,
-          status:         TicketState.PENDING_PAYMENT,
+          tripId:        dto.tripId,
+          passengerId:   actor.id,
+          passengerName: dto.passengerName,
+          seatNumber:    dto.seatNumber,
+          pricePaid:     price.total,
+          agencyId:      actor.agencyId ?? '',
+          status:        'PENDING_PAYMENT',
+          qrCode:        `pending-${uuidv4()}`,   // placeholder; replaced on confirm
           expiresAt,
-          version:        0,
+          version:       0,
         },
       });
 
@@ -72,7 +71,8 @@ export class TicketingService {
 
   async confirm(tenantId: string, ticketId: string, actor: CurrentUserPayload, idempotencyKey?: string) {
     const ticket = await this.findOne(tenantId, ticketId);
-    if (ticket.status === TicketState.PENDING_PAYMENT && new Date() > ticket.expiresAt) {
+    const expiresAt = ticket.expiresAt;
+    if (expiresAt && new Date() > expiresAt) {
       throw new BadRequestException('Ticket payment window expired');
     }
 
@@ -81,11 +81,12 @@ export class TicketingService {
       ticketId: ticket.id,
       tenantId,
       tripId:   ticket.tripId,
+      seatNumber: ticket.seatNumber ?? '',
       issuedAt: Date.now(),
     });
 
-    return this.workflow.transition(ticket as Parameters<typeof this.workflow.transition>[0], {
-      targetState: TicketState.CONFIRMED,
+    return this.workflow.transition(ticket as any, {
+      action: TicketAction.PAY,
       actor,
       idempotencyKey,
     }, {
@@ -103,19 +104,19 @@ export class TicketingService {
     const payload = await this.qr.verify(qrToken, tenantId);
     const ticket  = await this.findOne(tenantId, payload.ticketId);
 
-    if (ticket.status !== TicketState.CONFIRMED && ticket.status !== TicketState.CHECKED_IN) {
+    if (ticket.status !== 'CONFIRMED' && ticket.status !== 'CHECKED_IN') {
       throw new BadRequestException(`Ticket is not in a validatable state: ${ticket.status}`);
     }
 
-    return this.workflow.transition(ticket as Parameters<typeof this.workflow.transition>[0], {
-      targetState: TicketState.BOARDED,
+    return this.workflow.transition(ticket as any, {
+      action: TicketAction.BOARD,
       actor,
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, prisma) => {
         return prisma.ticket.update({
           where: { id: entity.id },
-          data:  { status: state, boardedAt: new Date(), version: { increment: 1 } },
+          data:  { status: state, version: { increment: 1 } },
         }) as Promise<typeof entity>;
       },
     });
@@ -124,16 +125,16 @@ export class TicketingService {
   async cancel(tenantId: string, ticketId: string, actor: CurrentUserPayload, reason?: string) {
     const ticket = await this.findOne(tenantId, ticketId);
 
-    return this.workflow.transition(ticket as Parameters<typeof this.workflow.transition>[0], {
-      targetState: TicketState.CANCELLED,
+    return this.workflow.transition(ticket as any, {
+      action:  TicketAction.CANCEL,
       actor,
-      context:     { reason },
+      context: { reason },
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, prisma) => {
         return prisma.ticket.update({
           where: { id: entity.id },
-          data:  { status: state, cancelledAt: new Date(), cancelReason: reason, version: { increment: 1 } },
+          data:  { status: state, version: { increment: 1 } },
         }) as Promise<typeof entity>;
       },
     });
@@ -145,6 +146,13 @@ export class TicketingService {
     return ticket;
   }
 
+  async findMany(tenantId: string, tripId?: string) {
+    return this.prisma.ticket.findMany({
+      where:   { tenantId, ...(tripId ? { tripId } : {}) },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   async findByTrip(tenantId: string, tripId: string) {
     return this.prisma.ticket.findMany({
       where:   { tenantId, tripId },
@@ -152,10 +160,9 @@ export class TicketingService {
     });
   }
 
-  async trackByCode(tenantId: string, trackingCode: string) {
+  async trackByCode(tenantId: string, qrCode: string) {
     const ticket = await this.prisma.ticket.findFirst({
-      where:   { tenantId, trackingCode },
-      include: { trip: { include: { route: true } } },
+      where: { tenantId, qrCode },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
     return ticket;

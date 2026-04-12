@@ -12,7 +12,7 @@ export class FleetService {
       data: {
         tenantId,
         plateNumber:        dto.plateNumber,
-        model:              dto.model,
+        model:              dto.model ?? '',
         capacity:           dto.capacity,
         luggageCapacityKg:  0,
         luggageCapacityM3:  0,
@@ -27,7 +27,8 @@ export class FleetService {
     await this.findOne(tenantId, id);
     return this.prisma.bus.update({
       where: { id },
-      data:  { seatLayout },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data:  { seatLayout: seatLayout as any },
     });
   }
 

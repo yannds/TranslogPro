@@ -1,8 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../database/prisma.service';
 import { RedisPublisherService } from './redis-publisher.service';
-import { OutboxService } from './outbox.service';
+import { OutboxService, verifyOutboxPayload } from './outbox.service';
 import { DomainEvent } from './interfaces/eventbus.interface';
 
 const MAX_RETRIES   = 5;
@@ -57,13 +58,38 @@ export class OutboxPollerService implements OnModuleDestroy {
     id: string; tenantId: string; eventType: string; aggregateId: string;
     aggregateType: string; payload: unknown; scheduledAt: Date; attempts: number;
   }): Promise<void> {
+    const rawPayload = row.payload as Record<string, unknown>;
+    const { verified, payload } = verifyOutboxPayload(
+      row.tenantId, row.eventType, row.aggregateId, row.aggregateType, rawPayload,
+    );
+
+    if (!verified) {
+      this.logger.error(
+        `[SECURITY] Outbox event ${row.id} signature invalide — ignoré et mis en DLQ`,
+      );
+      await this.prisma.outboxEvent.update({
+        where: { id: row.id },
+        data:  { status: 'DEAD', lastError: 'HMAC_SIGNATURE_INVALID' },
+      });
+      await this.prisma.deadLetterEvent.create({
+        data: {
+          tenantId:    row.tenantId,
+          eventType:   row.eventType,
+          aggregateId: row.aggregateId,
+          payload:     rawPayload as unknown as Prisma.InputJsonValue,
+          errorLog:    [{ error: 'HMAC_SIGNATURE_INVALID', at: new Date().toISOString(), originalEventId: row.id }],
+        },
+      });
+      return;
+    }
+
     const event: DomainEvent = {
       id:            row.id,
       type:          row.eventType,
       tenantId:      row.tenantId,
       aggregateId:   row.aggregateId,
       aggregateType: row.aggregateType,
-      payload:       row.payload as Record<string, unknown>,
+      payload,
       occurredAt:    row.scheduledAt,
     };
 
@@ -104,7 +130,7 @@ export class OutboxPollerService implements OnModuleDestroy {
             tenantId:  row.tenantId,
             eventType: row.eventType,
             aggregateId: row.aggregateId,
-            payload:   row.payload as Record<string, unknown>,
+            payload:   row.payload as unknown as Prisma.InputJsonValue,
             errorLog:  [{ error: errorMsg, at: new Date().toISOString(), originalEventId: row.id, aggregateType: row.aggregateType }],
           },
         });

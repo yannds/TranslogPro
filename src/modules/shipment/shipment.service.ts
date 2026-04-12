@@ -19,7 +19,7 @@ export class ShipmentService {
         tenantId,
         tripId:          dto.tripId,
         destinationId:   dto.destinationId,
-        maxWeightKg:     dto.maxWeightKg,
+        totalWeight:     dto.maxWeightKg,
         remainingWeight: dto.maxWeightKg,  // décrémenté à chaque ajout de colis
         status:          ShipmentState.OPEN,
       },
@@ -58,7 +58,7 @@ export class ShipmentService {
 
     // Guard 2 — capacité poids
     const remaining = shipment.remainingWeight as number;
-    const weight    = parcel.weightKg as number;
+    const weight    = parcel.weight as number;
     if (remaining < weight) {
       throw new BadRequestException(
         `Capacité insuffisante : ${remaining}kg disponibles, colis pèse ${weight}kg`,
@@ -108,7 +108,7 @@ export class ShipmentService {
   async findByTrip(tenantId: string, tripId: string) {
     return this.prisma.shipment.findMany({
       where:   { tenantId, tripId },
-      include: { parcels: { select: { id: true, trackingCode: true, status: true, weightKg: true } } },
+      include: { parcels: { select: { id: true, trackingCode: true, status: true, weight: true } } },
     });
   }
 }

@@ -22,7 +22,7 @@ export class TravelerService {
   async verify(tenantId: string, travelerId: string, actor: CurrentUserPayload, idempotencyKey?: string) {
     const traveler = await this.findOne(tenantId, travelerId);
 
-    return this.workflow.transition(traveler as Parameters<typeof this.workflow.transition>[0], {
+    return this.workflow.transition(traveler as any, {
       action:         TravelerAction.VERIFY,
       actor,
       idempotencyKey,
@@ -31,7 +31,7 @@ export class TravelerService {
       persist: async (entity, toState, prisma) => {
         return prisma.traveler.update({
           where: { id: entity.id },
-          data:  { status: toState, verifiedAt: new Date(), version: { increment: 1 } },
+          data:  { status: toState, version: { increment: 1 } },
         }) as Promise<typeof entity>;
       },
     });
@@ -45,15 +45,14 @@ export class TravelerService {
   async scanIn(tenantId: string, travelerId: string, actor: CurrentUserPayload, idempotencyKey?: string) {
     const traveler = await this.findOne(tenantId, travelerId);
 
-    // Guard applicatif : ticket confirmé
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id: traveler.ticketId as string, tenantId },
+      where: { id: traveler.ticketId, tenantId },
     });
     if (ticket?.status !== 'CONFIRMED') {
       throw new BadRequestException(`Le ticket n'est pas confirmé (status: ${ticket?.status})`);
     }
 
-    return this.workflow.transition(traveler as Parameters<typeof this.workflow.transition>[0], {
+    return this.workflow.transition(traveler as any, {
       action:         TravelerAction.SCAN_IN,
       actor,
       idempotencyKey,
@@ -62,7 +61,7 @@ export class TravelerService {
       persist: async (entity, toState, prisma) => {
         return prisma.traveler.update({
           where: { id: entity.id },
-          data:  { status: toState, checkedInAt: new Date(), version: { increment: 1 } },
+          data:  { status: toState, version: { increment: 1 } },
         }) as Promise<typeof entity>;
       },
     });
@@ -71,20 +70,19 @@ export class TravelerService {
   /**
    * PRD §III.7 — SCAN_BOARD : embarquement (scan QR dans le bus).
    * Guard : Trip.status = BOARDING
-   * Side effect : mise à jour seat_map, manifest
    * Permission : data.ticket.scan.agency
    */
   async scanBoard(tenantId: string, travelerId: string, actor: CurrentUserPayload, idempotencyKey?: string) {
     const traveler = await this.findOne(tenantId, travelerId);
 
     const trip = await this.prisma.trip.findFirst({
-      where: { id: traveler.tripId as string, tenantId },
+      where: { id: traveler.tripId, tenantId },
     });
     if (trip?.status !== 'BOARDING') {
       throw new BadRequestException(`Le trajet n'est pas en cours d'embarquement (status: ${trip?.status})`);
     }
 
-    return this.workflow.transition(traveler as Parameters<typeof this.workflow.transition>[0], {
+    return this.workflow.transition(traveler as any, {
       action:         TravelerAction.SCAN_BOARD,
       actor,
       idempotencyKey,
@@ -93,20 +91,19 @@ export class TravelerService {
       persist: async (entity, toState, prisma) => {
         const updated = await prisma.traveler.update({
           where: { id: entity.id },
-          data:  { status: toState, boardedAt: new Date(), version: { increment: 1 } },
+          data:  { status: toState, version: { increment: 1 } },
         });
 
-        // Publish outbox event pour mise à jour manifest temps réel
         const event: DomainEvent = {
           id:            uuidv4(),
           type:          EventTypes.TICKET_BOARDED,
           tenantId,
           aggregateId:   entity.id,
           aggregateType: 'Traveler',
-          payload:       { travelerId: entity.id, tripId: traveler.tripId, seatNumber: traveler.seatNumber },
+          payload:       { travelerId: entity.id, tripId: traveler.tripId },
           occurredAt:    new Date(),
         };
-        await this.eventBus.publish(event, prisma as unknown as Parameters<typeof this.eventBus.publish>[1]);
+        await (this.eventBus).publish(event, prisma as any);
 
         return updated as typeof entity;
       },
@@ -115,8 +112,6 @@ export class TravelerService {
 
   /**
    * PRD §III.7 — SCAN_OUT : déchargement à station intermédiaire.
-   * Guard : Station déchargement = station actuelle du bus.
-   * PRD §IV.10 — Manifeste 3.0 : index @@index([tripId, dropOffStationId])
    */
   async scanOut(tenantId: string, travelerId: string, stationId: string, actor: CurrentUserPayload) {
     const traveler = await this.findOne(tenantId, travelerId);
@@ -127,7 +122,7 @@ export class TravelerService {
       );
     }
 
-    return this.workflow.transition(traveler as Parameters<typeof this.workflow.transition>[0], {
+    return this.workflow.transition(traveler as any, {
       action: TravelerAction.SCAN_OUT,
       actor,
     }, {
@@ -135,7 +130,7 @@ export class TravelerService {
       persist: async (entity, toState, prisma) => {
         return prisma.traveler.update({
           where: { id: entity.id },
-          data:  { status: toState, arrivedAt: new Date(), version: { increment: 1 } },
+          data:  { status: toState, version: { increment: 1 } },
         }) as Promise<typeof entity>;
       },
     });
@@ -143,7 +138,6 @@ export class TravelerService {
 
   /**
    * PRD §IV.10 — Manifeste 3.0 : voyageurs à décharger à une station.
-   * Utilise l'index dédié : @@index([tripId, dropOffStationId]) WHERE status = BOARDED
    */
   async getDropOffList(tenantId: string, tripId: string, stationId: string) {
     return this.prisma.traveler.findMany({
@@ -153,10 +147,7 @@ export class TravelerService {
         dropOffStationId: stationId,
         status:           TravelerState.BOARDED,
       },
-      include: {
-        ticket: { select: { seatNumber: true, fareClass: true, luggageKg: true } },
-      },
-      orderBy: { seatNumber: 'asc' },
+      orderBy: { id: 'asc' },
     });
   }
 
@@ -169,8 +160,7 @@ export class TravelerService {
   async findByTrip(tenantId: string, tripId: string) {
     return this.prisma.traveler.findMany({
       where:   { tenantId, tripId },
-      include: { ticket: true },
-      orderBy: { seatNumber: 'asc' },
+      orderBy: { id: 'asc' },
     });
   }
 }

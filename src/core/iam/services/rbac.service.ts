@@ -4,6 +4,13 @@ import { Redis } from 'ioredis';
 import { REDIS_CLIENT } from '../../../infrastructure/eventbus/redis-publisher.service';
 import { Permission } from '../../../common/constants/permissions';
 
+/**
+ * Cache key strategy :
+ *   Permission granted/denied → iam:perm:{roleId}:{permission}  TTL 60s
+ *   Role permission index     → iam:role-perms:{roleId}  (Redis Set)   TTL 300s
+ *
+ * Invalidation via SCAN (jamais KEYS — O(N) bloquant sur Redis Cluster).
+ */
 @Injectable()
 export class RbacService {
   constructor(
@@ -11,7 +18,6 @@ export class RbacService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  /** Vérifie une permission en DB (sans cache — pour les appels admin critiques). */
   async hasPermission(roleId: string, permission: Permission): Promise<boolean> {
     const rp = await this.prisma.rolePermission.findFirst({
       where: { roleId, permission },
@@ -19,40 +25,47 @@ export class RbacService {
     return rp !== null;
   }
 
-  /** Retourne toutes les permissions d'un rôle depuis la DB. */
   async getPermissions(roleId: string): Promise<string[]> {
     const rows = await this.prisma.rolePermission.findMany({
-      where: { roleId },
+      where:  { roleId },
       select: { permission: true },
     });
     return rows.map(r => r.permission);
   }
 
   /**
-   * Invalide le cache Redis pour toutes les permissions d'un rôle.
-   * Appelé après control.iam.manage.tenant (ajout/suppression de permission).
+   * Invalide le cache pour toutes les permissions d'un rôle.
+   * SCAN cursor-based — non-bloquant, compatible Redis Cluster (single-shard pattern).
+   * Chaque appel traite max 200 clés par itération pour limiter la pression.
    */
   async invalidateCache(roleId: string): Promise<void> {
-    // Pattern delete — ioredis ne supporte pas SCAN pattern natif, on utilise keys()
-    // en dev/staging. En prod avec Redis Cluster, préférer un tag-based approach.
-    const keys = await this.redis.keys(`iam:perm:${roleId}:*`);
-    if (keys.length > 0) {
-      await this.redis.del(...keys);
-    }
+    const pattern = `iam:perm:${roleId}:*`;
+    let cursor = '0';
+
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+      cursor = next;
+      if (keys.length > 0) {
+        await this.redis.del(...(keys as [string, ...string[]]));
+      }
+    } while (cursor !== '0');
+
+    // Invalider aussi le Set d'index si présent
+    await this.redis.del(`iam:role-perms:${roleId}`);
   }
 
-  /** Check si un user peut agir dans une agence donnée (scope agency). */
+  /**
+   * Vérifie si un acteur peut agir dans une agence donnée.
+   * Une permission *.tenant ou *.global autorise le cross-agency.
+   */
   async canActInAgency(
-    userAgencyId: string | undefined,
+    userAgencyId:     string | undefined,
     resourceAgencyId: string | undefined,
-    roleId: string,
+    roleId:           string,
   ): Promise<boolean> {
-    // Roles avec permissions *.tenant ou *.global peuvent agir cross-agency
-    const permissions = await this.getPermissions(roleId);
-    const hasTenantOrGlobal = permissions.some(
-      p => p.endsWith('.tenant') || p.endsWith('.global'),
-    );
-    if (hasTenantOrGlobal) return true;
+    const permissions    = await this.getPermissions(roleId);
+    const hasBroadScope  = permissions.some(p => p.endsWith('.tenant') || p.endsWith('.global'));
+    if (hasBroadScope) return true;
     if (!userAgencyId || !resourceAgencyId) return false;
     return userAgencyId === resourceAgencyId;
   }

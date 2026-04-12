@@ -63,7 +63,7 @@ export class BetterAuthService implements IIdentityManager, OnModuleInit {
       userId:   session.userId,
       tenantId: user.tenantId,
       roleId:   user.roleId   ?? '',
-      role:     user.role?.name ?? '',
+      roleName: user.role?.name ?? '',
       agencyId: user.agencyId ?? undefined,
       userType: user.userType,
       expiresAt: session.expiresAt,

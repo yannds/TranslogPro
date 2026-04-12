@@ -8,8 +8,7 @@ export interface CreateStaffDto {
   name:     string;
   role:     string;
   agencyId: string;
-  phone?:   string;
-  licenseNumber?: string;
+  licenseData?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -28,20 +27,18 @@ export class StaffService {
       password: this.generateTemporaryPassword(),
       name:     dto.name,
       tenantId,
-      role:     dto.role,
       agencyId: dto.agencyId,
+      userType: 'STAFF',
     });
 
-    // Create staff profile with role-specific fields
     await this.prisma.staff.create({
       data: {
-        userId:        user.id,
+        userId:      user.id,
         tenantId,
-        agencyId:      dto.agencyId,
-        role:          dto.role,
-        phone:         dto.phone,
-        licenseNumber: dto.licenseNumber,
-        status:        'ACTIVE',
+        agencyId:    dto.agencyId,
+        role:        dto.role,
+        licenseData: (dto.licenseData ?? {}) as any,
+        status:      'ACTIVE',
       },
     });
 
@@ -51,7 +48,7 @@ export class StaffService {
   async findAll(tenantId: string, agencyId?: string) {
     return this.prisma.staff.findMany({
       where:   { tenantId, ...(agencyId ? { agencyId } : {}) },
-      include: { user: { select: { id: true, email: true, name: true, role: true } } },
+      include: { user: { select: { id: true, email: true, name: true, roleId: true } } },
       orderBy: { createdAt: 'asc' },
     });
   }

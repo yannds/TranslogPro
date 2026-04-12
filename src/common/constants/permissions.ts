@@ -71,6 +71,9 @@ export const P_FLEET_STATUS_AGENCY         = 'data.fleet.status.agency';
 export const P_MAINTENANCE_UPDATE_OWN      = 'data.maintenance.update.own';
 export const P_MAINTENANCE_APPROVE_TENANT  = 'data.maintenance.approve.tenant';
 export const P_MANIFEST_READ_OWN           = 'data.manifest.read.own';
+export const P_MANIFEST_GENERATE_AGENCY    = 'data.manifest.generate.agency';
+export const P_MANIFEST_SIGN_AGENCY        = 'data.manifest.sign.agency';
+export const P_NOTIFICATION_READ_OWN       = 'data.notification.read.own';
 
 // ─── Finance & Caisse ─────────────────────────────────────────────────────────
 export const P_PRICING_MANAGE_TENANT       = 'control.pricing.manage.tenant';
@@ -85,6 +88,11 @@ export const P_SAV_REPORT_OWN              = 'data.sav.report.own';
 export const P_SAV_REPORT_AGENCY           = 'data.sav.report.agency';
 export const P_SAV_DELIVER_AGENCY          = 'data.sav.deliver.agency';
 export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
+
+// ─── Staff & Tenant ───────────────────────────────────────────────────────────
+export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
+export const P_STAFF_READ_AGENCY           = 'data.staff.read.agency';
+export const P_TENANT_MANAGE_GLOBAL        = 'control.tenant.manage.global';
 
 // ─── CRM & Campagnes ─────────────────────────────────────────────────────────
 export const P_CRM_READ_TENANT             = 'data.crm.read.tenant';
@@ -152,6 +160,9 @@ export const Permission = {
   MAINTENANCE_UPDATE_OWN:     P_MAINTENANCE_UPDATE_OWN,
   MAINTENANCE_APPROVE_TENANT: P_MAINTENANCE_APPROVE_TENANT,
   MANIFEST_READ_OWN:          P_MANIFEST_READ_OWN,
+  MANIFEST_GENERATE_AGENCY:   P_MANIFEST_GENERATE_AGENCY,
+  MANIFEST_SIGN_AGENCY:       P_MANIFEST_SIGN_AGENCY,
+  NOTIFICATION_READ_OWN:      P_NOTIFICATION_READ_OWN,
   // Finance
   PRICING_MANAGE_TENANT:      P_PRICING_MANAGE_TENANT,
   PRICING_YIELD_TENANT:       P_PRICING_YIELD_TENANT,
@@ -164,6 +175,10 @@ export const Permission = {
   SAV_REPORT_AGENCY:          P_SAV_REPORT_AGENCY,
   SAV_DELIVER_AGENCY:         P_SAV_DELIVER_AGENCY,
   SAV_CLAIM_TENANT:           P_SAV_CLAIM_TENANT,
+  // Staff & Tenant
+  STAFF_MANAGE:               P_STAFF_MANAGE_TENANT,
+  STAFF_READ:                 P_STAFF_READ_AGENCY,
+  TENANT_MANAGE:              P_TENANT_MANAGE_GLOBAL,
   // CRM
   CRM_READ_TENANT:            P_CRM_READ_TENANT,
   CAMPAIGN_MANAGE_TENANT:     P_CAMPAIGN_MANAGE_TENANT,

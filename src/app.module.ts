@@ -31,6 +31,11 @@ import { SavModule } from './modules/sav/sav.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { DisplayModule } from './modules/display/display.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
+import { SafetyModule } from './modules/safety/safety.module';
+import { CrewModule } from './modules/crew/crew.module';
+import { PublicReporterModule } from './modules/public-reporter/public-reporter.module';
+import { CrmModule } from './modules/crm/crm.module';
 
 // Guards & Middleware
 import { PermissionGuard } from './core/iam/guards/permission.guard';
@@ -76,6 +81,11 @@ import { TenantMiddleware } from './core/iam/middleware/tenant.middleware';
     NotificationModule,
     DisplayModule,
     AnalyticsModule,
+    FeedbackModule,
+    SafetyModule,
+    CrewModule,
+    PublicReporterModule,
+    CrmModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

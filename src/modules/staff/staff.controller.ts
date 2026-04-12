@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
 import { StaffService, CreateStaffDto } from './staff.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
-import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 
 @Controller('tenants/:tenantId/staff')
 export class StaffController {
@@ -19,11 +19,12 @@ export class StaffController {
   @RequirePermission(Permission.STAFF_READ)
   findAll(
     @TenantId() tenantId: string,
-    @CurrentUser() user: CurrentUserPayload,
+    @ScopeCtx() scope: ScopeContext,
     @Query('agencyId') agencyId?: string,
   ) {
-    const agency = ['TENANT_ADMIN'].includes(user.role) ? agencyId : user.agencyId;
-    return this.staffService.findAll(tenantId, agency);
+    // scope dérivé par PermissionGuard depuis la permission string — zéro hardcode de rôle
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.staffService.findAll(tenantId, effectiveAgencyId);
   }
 
   @Get(':userId')

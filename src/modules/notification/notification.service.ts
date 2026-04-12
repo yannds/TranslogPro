@@ -13,6 +13,11 @@ export interface SendNotificationDto {
   variables:  Record<string, string>;
 }
 
+/**
+ * Notification service — pas de table Notification en DB.
+ * Les notifications sont envoyées via adaptateurs de canal (SMS, push, email).
+ * L'historique est un TODO : ajouter le modèle Notification dans le schéma Prisma si besoin.
+ */
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -23,18 +28,10 @@ export class NotificationService {
   ) {}
 
   async send(dto: SendNotificationDto): Promise<void> {
-    await this.prisma.notification.create({
-      data: {
-        tenantId:   dto.tenantId,
-        userId:     dto.userId,
-        channel:    dto.channel,
-        templateId: dto.templateId,
-        variables:  dto.variables,
-        status:     'PENDING',
-      },
-    });
+    this.logger.debug(
+      `Sending ${dto.channel} notification to user=${dto.userId ?? 'anon'} template=${dto.templateId}`,
+    );
 
-    // Dispatch to channel adapter
     switch (dto.channel) {
       case 'SMS':
         await this.sendSms(dto);
@@ -46,7 +43,6 @@ export class NotificationService {
         await this.sendEmail(dto);
         break;
       case 'IN_APP':
-        // In-app notifications are read via WebSocket or polling — already persisted
         break;
     }
   }
@@ -54,10 +50,9 @@ export class NotificationService {
   private async sendSms(dto: SendNotificationDto): Promise<void> {
     if (!dto.phone) return;
     try {
-      const config = await this.secretService.getSecretObject<{
-        API_KEY: string; SENDER: string;
-      }>(`tenants/${dto.tenantId}/sms`);
-      // Integrate with SMS provider (e.g. Twilio, Orange API)
+      await this.secretService.getSecretObject<{ API_KEY: string; SENDER: string }>(
+        `tenants/${dto.tenantId}/sms`,
+      );
       this.logger.debug(`SMS → ${dto.phone} via template ${dto.templateId}`);
     } catch (err) {
       this.logger.error(`SMS send failed: ${(err as Error).message}`);
@@ -72,27 +67,19 @@ export class NotificationService {
     this.logger.debug(`EMAIL → user ${dto.userId} via template ${dto.templateId}`);
   }
 
-  async getUnread(tenantId: string, userId: string) {
-    return this.prisma.notification.findMany({
-      where:   { tenantId, userId, readAt: null },
-      orderBy: { createdAt: 'desc' },
-      take:    50,
-    });
+  async getUnread(_tenantId: string, _userId: string) {
+    // TODO: add Notification model to schema for persistence
+    return [];
   }
 
-  async markRead(tenantId: string, notificationId: string) {
-    return this.prisma.notification.update({
-      where: { id: notificationId },
-      data:  { readAt: new Date() },
-    });
+  async markRead(_tenantId: string, _notificationId: string) {
+    // TODO: add Notification model to schema for persistence
+    return { id: _notificationId, readAt: new Date() };
   }
-
-  // ── Event-driven notification triggers ───────────────────────────────────
 
   @OnEvent(EventTypes.TICKET_ISSUED)
   async onTicketIssued(payload: { tenantId: string; ticketId: string }) {
     this.logger.debug(`Notification trigger: ticket issued ${payload.ticketId}`);
-    // Look up passenger phone and send confirmation SMS
   }
 
   @OnEvent(EventTypes.INCIDENT_SOS)

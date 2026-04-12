@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
@@ -60,7 +61,7 @@ export class DlqService {
           eventType:     dlqEvent.eventType,
           aggregateId:   dlqEvent.aggregateId,
           aggregateType,
-          payload:       dlqEvent.payload as Record<string, unknown>,
+          payload:       dlqEvent.payload as unknown as Prisma.InputJsonValue,
         },
       }),
       this.prisma.deadLetterEvent.update({
