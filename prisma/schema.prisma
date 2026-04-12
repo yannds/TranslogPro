@@ -36,8 +36,36 @@ model Tenant {
   buses           Bus[]
   stations        Station[]
   parcels         Parcel[]
+  config          TenantConfig?
 
   @@map("tenants")
+}
+
+// Paramètres opérationnels par tenant — 1:1 avec Tenant.
+// Chargés en cache (TTL 5min) pour ne pas pénaliser les affichages haute fréquence.
+model TenantConfig {
+  id   String @id @default(cuid())
+  tenantId String @unique
+
+  // ── Géo-sécurité ─────────────────────────────────────────────
+  // Distance maximale (km) pour le score de corrélation GPS Safety
+  proximityThresholdKm     Float  @default(5.0)
+  // Score minimum pour auto-vérifier une alerte (Safety + PublicReporter)
+  autoVerifyScoreThreshold Float  @default(0.9)
+  // PublicReporter : distance (km) pour score=1.0 (linéaire jusqu'à 0)
+  publicProximityKm        Float  @default(0.5)
+
+  // ── Affichage gare ────────────────────────────────────────────
+  // Scope par défaut des écrans (station | city | tenant)
+  displayScopeDefault  String @default("station")
+  // Nombre max de trajets retournés par l'endpoint display
+  displayTakeLimit     Int    @default(20)
+  // Horizon de prévision en heures (combien d'heures à venir afficher)
+  displayHorizonHours  Int    @default(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_configs")
 }
 
 model Agency {
@@ -78,6 +106,7 @@ model User {
   checklists             Checklist[]
   staffProfile           Staff?
   notificationPreference NotificationPreference?
+  notifications          Notification[]
   feedbacks              Feedback[]
   safetyAlerts           SafetyAlert[]
 
@@ -191,6 +220,40 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
+// Notification — historique de toutes les notifications envoyées.
+// Alimenté par NotificationService après chaque envoi réel.
+// Source de vérité pour l'onglet "Mes Notifications" dans les apps.
+//
+// status :
+//   PENDING   → en attente d'envoi (file d'attente ISmsService)
+//   SENT      → confirmé par le provider (Twilio SID reçu)
+//   FAILED    → échec définitif (3 tentatives épuisées)
+//   READ      → lu par l'utilisateur (IN_APP uniquement)
+model Notification {
+  id           String    @id @default(cuid())
+  tenantId     String
+  userId       String
+  channel      String    // SMS | WHATSAPP | PUSH | EMAIL | IN_APP
+  templateId   String    // identifiant du template (ex: "ticket.confirmed")
+  title        String?
+  body         String
+  metadata     Json      @default("{}")   // variables substituées, IDs liés
+  status       String    @default("PENDING")
+  externalRef  String?   // SID Twilio ou message_id WhatsApp
+  failReason   String?
+  attempts     Int       @default(0)      // nombre de tentatives d'envoi
+  sentAt       DateTime?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, status])
+  @@index([tenantId, createdAt])
+  @@index([externalRef])
+  @@map("notifications")
+}
+
 // ─────────────────────────────────────────────────────────────
 // SECTION 4 : WORKFLOW ENGINE
 // ─────────────────────────────────────────────────────────────
@@ -296,6 +359,41 @@ model DeadLetterEvent {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SECTION 5b : IMPERSONATION (Control Plane — Support JIT)
+// ─────────────────────────────────────────────────────────────
+
+// ImpersonationSession — enregistre chaque session JIT (PRD §IV.12).
+//
+// Cycle de vie :
+//   ACTIVE → EXPIRED (TTL 15min atteint)
+//   ACTIVE → REVOKED (actor révoque manuellement ou logout)
+//
+// actorTenantId est toujours PLATFORM_TENANT_ID (00000000-...).
+// targetTenantId est l'ID du tenant client accédé.
+// Ne jamais supprimer les lignes — utiliser revokedAt pour indiquer la fin.
+model ImpersonationSession {
+  id             String    @id @default(uuid())
+  actorId        String    // User.id de l'agent SA ou Support
+  actorTenantId  String    // toujours "00000000-0000-0000-0000-000000000000"
+  targetTenantId String    // tenant client ciblé
+  token          String    @unique  // JWT signé (référence — non stocké en clair)
+  tokenHash      String    @unique  // SHA-256(token) — pour révocation sans stocker le token
+  status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  reason         String?   // justification saisie par l'agent (audit)
+  ipAddress      String?
+  userAgent      String?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokedBy      String?   // userId qui a révoqué (peut être différent de actorId)
+  createdAt      DateTime  @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetTenantId, createdAt])
+  @@index([status, expiresAt])
+  @@map("impersonation_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────
 // SECTION 6 : GÉOGRAPHIE & INFRASTRUCTURE
 // ─────────────────────────────────────────────────────────────
 
@@ -303,6 +401,7 @@ model Station {
   id          String  @id @default(cuid())
   tenantId    String
   name        String
+  city        String  @default("")  // Ville de rattachement — hiérarchie Tenant > Ville > Gare
   coordinates Json    // { lat: Float, lng: Float }
   type        String  // PRINCIPALE | RELAIS
 
@@ -316,6 +415,7 @@ model Station {
   travelersDropoff  Traveler[] @relation("TravelerDropOff")
 
   @@index([tenantId])
+  @@index([tenantId, city])  // Lookup multi-gares par ville (DisplayService scope=city)
   @@map("stations")
 }
 

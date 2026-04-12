@@ -1,36 +1,62 @@
 import { Injectable, Inject } from '@nestjs/common';
+import { IsEnum, IsOptional, IsString, IsNumber } from 'class-validator';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { GeoSafetyProvider } from '../../core/security/geo-safety.provider';
+import { TenantConfigService } from '../../core/security/tenant-config.service';
 import { v4 as uuidv4 } from 'uuid';
 
-export interface PublicReportDto {
+// ─── DTO ──────────────────────────────────────────────────────────────────────
+
+export class PublicReportDto {
+  @IsString()
   plateOrParkNumber: string;
-  type:              'DANGEROUS_DRIVING' | 'ACCIDENT' | 'BREAKDOWN' | 'OTHER';
-  description:       string;
-  reporterGpsLat?:   number;
-  reporterGpsLng?:   number;
+
+  @IsEnum(['DANGEROUS_DRIVING', 'ACCIDENT', 'BREAKDOWN', 'OTHER'])
+  type: 'DANGEROUS_DRIVING' | 'ACCIDENT' | 'BREAKDOWN' | 'OTHER';
+
+  @IsString()
+  description: string;
+
+  @IsNumber()
+  @IsOptional()
+  reporterGpsLat?: number;
+
+  @IsNumber()
+  @IsOptional()
+  reporterGpsLng?: number;
 }
+
+// ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
 export class PublicReporterService {
+  /** RGPD : les coordonnées GPS citoyens expirent après 24h (cron séparé). */
+  private static readonly GPS_TTL_MS = 24 * 3_600_000;
+
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:   PrismaService,
+    private readonly geo:      GeoSafetyProvider,
+    private readonly configs:  TenantConfigService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
   /**
    * Signalement citoyen — pas d'auth requise.
-   * Validation géo-temporelle : corrèle les coords déclarant + GPS bus (±200m, ±15min).
-   * RGPD : les coords GPS expirent après 24h (cron séparé).
+   * Délègue la corrélation géo à GeoSafetyProvider.
+   * Le seuil d'auto-vérification vient de TenantConfig (sans magic-number).
    */
-  async submit(
-    tenantId:    string,
-    dto:         PublicReportDto,
-    reporterIp:  string,
-  ) {
-    const { correlatedBusId, verificationScore } = await this.correlate(
-      tenantId, dto.plateOrParkNumber, dto.reporterGpsLat, dto.reporterGpsLng,
+  async submit(tenantId: string, dto: PublicReportDto, reporterIp: string) {
+    const config = await this.configs.getConfig(tenantId);
+
+    const { correlatedBusId, verificationScore } = await this.geo.correlateByPlate(
+      tenantId,
+      dto.plateOrParkNumber,
+      dto.reporterGpsLat,
+      dto.reporterGpsLng,
     );
+
+    const isVerified = verificationScore >= config.autoVerifyScoreThreshold;
 
     const report = await this.prisma.transact(async (tx) => {
       const r = await tx.publicReport.create({
@@ -41,15 +67,15 @@ export class PublicReporterService {
           description:         dto.description,
           reporterGpsLat:      dto.reporterGpsLat,
           reporterGpsLng:      dto.reporterGpsLng,
-          reporterGpsExpireAt: new Date(Date.now() + 24 * 3_600_000), // RGPD 24h
+          reporterGpsExpireAt: new Date(Date.now() + PublicReporterService.GPS_TTL_MS),
           verificationScore,
-          status:              verificationScore >= 0.9 ? 'VERIFIED' : 'PENDING',
+          status:              isVerified ? 'VERIFIED' : 'PENDING',
           correlatedBusId,
           reporterIp,
         },
       });
 
-      if (verificationScore >= 0.9) {
+      if (isVerified) {
         const event: DomainEvent = {
           id:            uuidv4(),
           type:          'safety.public_report',
@@ -74,6 +100,10 @@ export class PublicReporterService {
     return { id: report.id, status: report.status, verificationScore };
   }
 
+  /**
+   * Liste pour les opérateurs de dispatch.
+   * GPS exclus de la réponse (RGPD — accès restreint aux opérateurs via endpoint séparé).
+   */
   async listForDispatch(tenantId: string, status?: string) {
     return this.prisma.publicReport.findMany({
       where:   { tenantId, ...(status ? { status } : {}) },
@@ -83,51 +113,8 @@ export class PublicReporterService {
         id: true, plateOrParkNumber: true, type: true,
         description: true, verificationScore: true, status: true,
         correlatedBusId: true, createdAt: true,
-        // GPS exclus de la liste (RGPD — accès restreint)
+        // reporterGpsLat / reporterGpsLng intentionnellement exclus (RGPD)
       },
     });
-  }
-
-  /**
-   * Corrélation : retrouve le bus par immatriculation / numéro de parc,
-   * compare sa position GPS au moment du signalement.
-   */
-  private async correlate(
-    tenantId:    string,
-    plate:       string,
-    lat?:        number,
-    lng?:        number,
-  ): Promise<{ correlatedBusId?: string; verificationScore: number }> {
-    const bus = await this.prisma.bus.findFirst({
-      where: { tenantId, plateNumber: plate },
-    });
-
-    if (!bus) return { verificationScore: 0 };
-    if (!lat || !lng || !bus) return { correlatedBusId: bus.id, verificationScore: 0.3 };
-
-    const trip = await this.prisma.trip.findFirst({
-      where:   { tenantId, busId: bus.id, status: { in: ['BOARDING', 'IN_PROGRESS'] } },
-      orderBy: { departureScheduled: 'desc' },
-      select:  { currentLat: true, currentLng: true },
-    });
-
-    if (!trip?.currentLat || !trip?.currentLng) {
-      return { correlatedBusId: bus.id, verificationScore: 0.3 };
-    }
-
-    const dist  = this.haversineKm(lat, lng, trip.currentLat, trip.currentLng);
-    const score = Math.max(0, 1 - dist / 0.5); // 1.0 < 50m, 0 à 500m
-
-    return { correlatedBusId: bus.id, verificationScore: Math.round(score * 100) / 100 };
-  }
-
-  private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R    = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 }

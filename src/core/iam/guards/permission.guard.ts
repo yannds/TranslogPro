@@ -15,14 +15,32 @@ import { REDIS_CLIENT } from '../../../infrastructure/eventbus/redis-publisher.s
 import { Request } from 'express';
 
 /**
+ * ID canonique du tenant plateforme (nil UUID RFC 4122).
+ * Copié ici pour éviter une dépendance circulaire avec le seed.
+ * Source de vérité : PLATFORM_TENANT_ID dans iam.seed.ts.
+ */
+export const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Permission minimale requise pour qu'un user puisse être rattaché
+ * au tenant plateforme. Tout user sans cette permission sur ce tenant
+ * est rejeté immédiatement (SECURITY VIOLATION).
+ */
+const PLATFORM_SENTINEL_PERMISSION = 'control.impersonation.switch.global';
+
+/**
  * Injected into every request by the guard.
  * Services read this to build tenant-scoped Prisma WHERE clauses.
  */
 export interface ScopeContext {
-  scope:    PermissionScope;
-  tenantId: string;
-  userId:   string;
-  agencyId: string | undefined;
+  scope:           PermissionScope;
+  tenantId:        string;
+  userId:          string;
+  agencyId:        string | undefined;
+  /** true si la requête opère sous une session d'impersonation JIT */
+  isImpersonating: boolean;
+  /** tenantId réel de l'acteur (toujours 00000000-... en impersonation) */
+  actorTenantId:   string;
 }
 
 export const SCOPE_CONTEXT_KEY = '__scope_context__';
@@ -33,6 +51,13 @@ type AuthenticatedRequest = Request & {
     tenantId?: string;
     roleId?:   string;
     agencyId?: string;
+  };
+  /** Injecté par ImpersonationGuard si token JIT présent */
+  impersonation?: {
+    sessionId:      string;
+    targetTenantId: string;
+    actorId:        string;
+    actorTenantId:  string;
   };
   [SCOPE_CONTEXT_KEY]?: ScopeContext;
 };
@@ -61,7 +86,30 @@ export class PermissionGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    // ── 1. DB check with Redis cache (TTL 60s) ────────────────────────────
+    // ── 1. PLATFORM TENANT GUARD ──────────────────────────────────────────────
+    // Si l'utilisateur est rattaché au tenant plateforme (00000000-...),
+    // il DOIT posséder au moins la permission sentinelle (switch.global).
+    // Cela empêche toute assignation accidentelle d'un user standard à ce tenant.
+    if (user.tenantId === PLATFORM_TENANT_ID) {
+      const isPlatformActor = await this.hasPermission(user.roleId, PLATFORM_SENTINEL_PERMISSION);
+      if (!isPlatformActor) {
+        // Log sécurité critique — ne pas exposer le détail à l'appelant
+        throw new ForbiddenException(
+          'Access denied — platform tenant reserved for system actors',
+        );
+      }
+    }
+
+    // ── 2. Résolution du tenantId effectif (impersonation JIT) ───────────────
+    // Si une session d'impersonation est active (injectée par ImpersonationGuard),
+    // le tenantId effectif est celui du tenant cible, pas celui de l'acteur.
+    // L'acteur conserve son roleId original pour la vérification de permission.
+    const isImpersonating = !!req.impersonation;
+    const effectiveTenantId = isImpersonating
+      ? req.impersonation!.targetTenantId
+      : user.tenantId;
+
+    // ── 3. DB check with Redis cache (TTL 60s) ────────────────────────────────
     const granted = await this.hasPermission(user.roleId, required);
     if (!granted) {
       throw new ForbiddenException(
@@ -69,7 +117,7 @@ export class PermissionGuard implements CanActivate {
       );
     }
 
-    // ── 2. Scope derivation ───────────────────────────────────────────────
+    // ── 4. Scope derivation ───────────────────────────────────────────────────
     const scope = extractScope(required);
 
     if (scope === 'agency' && !user.agencyId) {
@@ -78,15 +126,16 @@ export class PermissionGuard implements CanActivate {
       );
     }
 
-    // global scope: verified via DB (SUPER_ADMIN role has the permission seeded)
-    // No hardcoded role name check — the RolePermission row is the authority.
+    // global scope: vérifié via DB (pas de hardcode de nom de rôle)
 
-    // ── 3. Attach ScopeContext to the request ─────────────────────────────
+    // ── 5. Attach ScopeContext to the request ──────────────────────────────────
     req[SCOPE_CONTEXT_KEY] = {
       scope,
-      tenantId: user.tenantId,
-      userId:   user.id,
-      agencyId: user.agencyId,
+      tenantId:        effectiveTenantId,
+      userId:          user.id,
+      agencyId:        user.agencyId,
+      isImpersonating,
+      actorTenantId:   user.tenantId,
     };
 
     return true;
@@ -108,7 +157,7 @@ export class PermissionGuard implements CanActivate {
     });
 
     const granted = rp !== null;
-    // Fire-and-forget — cache miss cost is one DB query; don't block on cache write
+    // Fire-and-forget — cache miss cost est une requête DB ; ne pas bloquer
     this.redis.setex(cacheKey, 60, granted ? '1' : '0').catch(() => {/* non-critical */});
 
     return granted;

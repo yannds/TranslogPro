@@ -5,18 +5,23 @@
  *   module : iam | workflow | ticket | parcel | trip | fleet | bus | route |
  *            pricing | cashier | sav | maintenance | manifest | traveler |
  *            luggage | shipment | session | user | integration | settings | module |
- *            crm | campaign | feedback | safety | stats | crew | display
+ *            crm | campaign | feedback | safety | stats | crew | display |
+ *            impersonation | outbox
  *   action : create | read | update | delete | scan | cancel | approve | report |
  *            check | open | close | transaction | deliver | claim | manage |
  *            config | override | install | revoke | verify | track | weigh |
  *            group | layout | yield | audit | setup | status | submit | monitor |
- *            delay | log_event
+ *            delay | log_event | switch | debug | replay
  *   scope  : own | agency | tenant | global
  *
  * IMPORTANT — Ces constantes sont des RÉFÉRENCES COMPILE-TIME uniquement.
  * La source de vérité runtime est la table RolePermission en DB.
  * Le PermissionGuard interroge prisma.rolePermission + cache Redis 60s.
  * JAMAIS utiliser ces constantes comme source de vérité dans le code runtime.
+ *
+ * PLATFORM TENANT : Les permissions *.global sont réservées au tenant
+ * "00000000-0000-0000-0000-000000000000" (PLATFORM_TENANT_ID).
+ * Le PlatformTenantGuard bloque tout user standard sur ce tenant.
  */
 
 // ─── IAM ─────────────────────────────────────────────────────────────────────
@@ -111,6 +116,24 @@ export const P_CREW_MANAGE_TENANT          = 'data.crew.manage.tenant';
 // ─── Display ─────────────────────────────────────────────────────────────────
 export const P_DISPLAY_UPDATE_AGENCY       = 'data.display.update.agency';
 
+// ─── Impersonation (Control Plane — tenant 00000000-...) ─────────────────────
+// Réservé aux rôles SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2 du tenant plateforme.
+// Jamais attribuable via un onboarding client.
+export const P_IMPERSONATION_SWITCH_GLOBAL  = 'control.impersonation.switch.global';
+export const P_IMPERSONATION_REVOKE_GLOBAL  = 'control.impersonation.revoke.global';
+
+// ─── Support — lecture globale Data Plane ────────────────────────────────────
+// Permissions utilisées via le mécanisme JIT (session switch).
+export const P_TICKET_READ_GLOBAL           = 'data.ticket.read.global';
+export const P_TRIP_READ_GLOBAL             = 'data.trip.read.global';
+export const P_FLEET_READ_GLOBAL            = 'data.fleet.read.global';
+export const P_CASHIER_READ_GLOBAL          = 'data.cashier.read.global';
+export const P_MANIFEST_READ_GLOBAL         = 'data.manifest.read.global';
+
+// ─── Support L2 — debug technique ────────────────────────────────────────────
+export const P_WORKFLOW_DEBUG_GLOBAL        = 'data.workflow.debug.global';
+export const P_OUTBOX_REPLAY_GLOBAL         = 'data.outbox.replay.global';
+
 // ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
@@ -191,6 +214,18 @@ export const Permission = {
   CREW_MANAGE_TENANT:         P_CREW_MANAGE_TENANT,
   // Display
   DISPLAY_UPDATE_AGENCY:      P_DISPLAY_UPDATE_AGENCY,
+  // Impersonation
+  IMPERSONATION_SWITCH_GLOBAL: P_IMPERSONATION_SWITCH_GLOBAL,
+  IMPERSONATION_REVOKE_GLOBAL: P_IMPERSONATION_REVOKE_GLOBAL,
+  // Support read global
+  TICKET_READ_GLOBAL:          P_TICKET_READ_GLOBAL,
+  TRIP_READ_GLOBAL:            P_TRIP_READ_GLOBAL,
+  FLEET_READ_GLOBAL:           P_FLEET_READ_GLOBAL,
+  CASHIER_READ_GLOBAL:         P_CASHIER_READ_GLOBAL,
+  MANIFEST_READ_GLOBAL:        P_MANIFEST_READ_GLOBAL,
+  // Support L2 debug
+  WORKFLOW_DEBUG_GLOBAL:       P_WORKFLOW_DEBUG_GLOBAL,
+  OUTBOX_REPLAY_GLOBAL:        P_OUTBOX_REPLAY_GLOBAL,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];

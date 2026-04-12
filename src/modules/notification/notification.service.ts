@@ -1,22 +1,33 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
+import { ISmsService, IWhatsappService, SMS_SERVICE, WHATSAPP_SERVICE } from '../../infrastructure/notification/interfaces/sms.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
 
 export interface SendNotificationDto {
-  tenantId:   string;
-  userId?:    string;
-  phone?:     string;
-  channel:    'SMS' | 'PUSH' | 'EMAIL' | 'IN_APP';
-  templateId: string;
-  variables:  Record<string, string>;
+  tenantId:    string;
+  userId?:     string;
+  phone?:      string;
+  channel:     'SMS' | 'WHATSAPP' | 'PUSH' | 'EMAIL' | 'IN_APP';
+  templateId:  string;
+  title?:      string;
+  body:        string;          // message déjà rendu (variables substituées par l'appelant)
+  metadata?:   Record<string, string>;
 }
 
 /**
- * Notification service — pas de table Notification en DB.
- * Les notifications sont envoyées via adaptateurs de canal (SMS, push, email).
- * L'historique est un TODO : ajouter le modèle Notification dans le schéma Prisma si besoin.
+ * NotificationService — orchestre l'envoi multi-canal et persiste l'historique.
+ *
+ * Architecture :
+ *   SMS     → TwilioSmsService      (via ISmsService)
+ *   WHATSAPP→ TwilioWhatsappService (via IWhatsappService)
+ *   PUSH    → stub (Firebase/OneSignal — à brancher en Phase 4)
+ *   EMAIL   → stub (Resend/SendGrid — à brancher en Phase 3)
+ *   IN_APP  → persist uniquement (lu via getUnread())
+ *
+ * Persistance : chaque notification est créée en DB au statut PENDING,
+ * puis mise à jour SENT/FAILED selon la réponse du provider.
+ * Les préférences utilisateur (NotificationPreference) sont consultées avant envoi.
  */
 @Injectable()
 export class NotificationService {
@@ -24,71 +35,188 @@ export class NotificationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    @Inject(SMS_SERVICE)      private readonly smsService:      ISmsService,
+    @Inject(WHATSAPP_SERVICE) private readonly whatsappService: IWhatsappService,
   ) {}
 
+  // ─── Public API ──────────────────────────────────────────────────────────────
+
   async send(dto: SendNotificationDto): Promise<void> {
-    this.logger.debug(
-      `Sending ${dto.channel} notification to user=${dto.userId ?? 'anon'} template=${dto.templateId}`,
-    );
-
-    switch (dto.channel) {
-      case 'SMS':
-        await this.sendSms(dto);
-        break;
-      case 'PUSH':
-        await this.sendPush(dto);
-        break;
-      case 'EMAIL':
-        await this.sendEmail(dto);
-        break;
-      case 'IN_APP':
-        break;
+    // 1. Vérifier les préférences utilisateur
+    if (dto.userId) {
+      const prefs = await this.prisma.notificationPreference.findUnique({
+        where: { userId: dto.userId },
+      });
+      if (prefs && !this.isChannelEnabled(prefs, dto.channel)) {
+        this.logger.debug(
+          `Channel ${dto.channel} disabled for user ${dto.userId} — skipped`,
+        );
+        return;
+      }
     }
-  }
 
-  private async sendSms(dto: SendNotificationDto): Promise<void> {
-    if (!dto.phone) return;
+    // 2. Créer l'entrée DB PENDING
+    const notification = dto.userId
+      ? await this.prisma.notification.create({
+          data: {
+            tenantId:   dto.tenantId,
+            userId:     dto.userId,
+            channel:    dto.channel,
+            templateId: dto.templateId,
+            title:      dto.title,
+            body:       dto.body,
+            metadata:   dto.metadata ?? {},
+            status:     'PENDING',
+          },
+        })
+      : null;
+
+    // 3. Envoi selon canal
     try {
-      await this.secretService.getSecretObject<{ API_KEY: string; SENDER: string }>(
-        `tenants/${dto.tenantId}/sms`,
-      );
-      this.logger.debug(`SMS → ${dto.phone} via template ${dto.templateId}`);
-    } catch (err) {
-      this.logger.error(`SMS send failed: ${(err as Error).message}`);
+      await this.dispatch(dto);
+
+      // 4a. Mise à jour SENT
+      if (notification) {
+        await this.prisma.notification.update({
+          where: { id: notification.id },
+          data:  { status: 'SENT', sentAt: new Date() },
+        });
+      }
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[Notification] Send failed channel=${dto.channel}: ${reason}`);
+
+      // 4b. Mise à jour FAILED
+      if (notification) {
+        await this.prisma.notification.update({
+          where: { id: notification.id },
+          data:  {
+            status:      'FAILED',
+            failReason:  reason.slice(0, 500),
+            attempts:    { increment: 1 },
+          },
+        });
+      }
     }
   }
 
-  private async sendPush(dto: SendNotificationDto): Promise<void> {
-    this.logger.debug(`PUSH → user ${dto.userId} via template ${dto.templateId}`);
+  async getUnread(tenantId: string, userId: string) {
+    return this.prisma.notification.findMany({
+      where:   { tenantId, userId, status: { not: 'READ' } },
+      orderBy: { createdAt: 'desc' },
+      take:    50,
+      select: {
+        id: true, channel: true, title: true, body: true,
+        status: true, createdAt: true, sentAt: true,
+      },
+    });
   }
 
-  private async sendEmail(dto: SendNotificationDto): Promise<void> {
-    this.logger.debug(`EMAIL → user ${dto.userId} via template ${dto.templateId}`);
+  async markRead(tenantId: string, notificationId: string) {
+    return this.prisma.notification.update({
+      where: { id: notificationId },
+      data:  { status: 'READ', readAt: new Date() },
+    });
   }
 
-  async getUnread(_tenantId: string, _userId: string) {
-    // TODO: add Notification model to schema for persistence
-    return [];
-  }
-
-  async markRead(_tenantId: string, _notificationId: string) {
-    // TODO: add Notification model to schema for persistence
-    return { id: _notificationId, readAt: new Date() };
-  }
+  // ─── Domain event handlers ────────────────────────────────────────────────────
 
   @OnEvent(EventTypes.TICKET_ISSUED)
-  async onTicketIssued(payload: { tenantId: string; ticketId: string }) {
+  async onTicketIssued(payload: { tenantId: string; ticketId: string; phone?: string; userId?: string }) {
     this.logger.debug(`Notification trigger: ticket issued ${payload.ticketId}`);
+    if (payload.phone) {
+      await this.send({
+        tenantId:   payload.tenantId,
+        userId:     payload.userId,
+        phone:      payload.phone,
+        channel:    'SMS',
+        templateId: 'ticket.confirmed',
+        body:       `Votre billet a été confirmé. Réf: ${payload.ticketId}`,
+        metadata:   { ticketId: payload.ticketId },
+      });
+    }
   }
 
   @OnEvent(EventTypes.INCIDENT_SOS)
-  async onSos(payload: { tenantId: string; incidentId: string; tripId?: string }) {
+  async onSos(payload: { tenantId: string; incidentId: string; tripId?: string; dispatchPhone?: string }) {
     this.logger.warn(`SOS received for trip ${payload.tripId} — dispatching emergency notifications`);
+    if (payload.dispatchPhone) {
+      await this.send({
+        tenantId:   payload.tenantId,
+        phone:      payload.dispatchPhone,
+        channel:    'SMS',
+        templateId: 'incident.sos',
+        title:      '🚨 SOS',
+        body:       `SOS déclenché — Trip: ${payload.tripId ?? 'N/A'}. Incident: ${payload.incidentId}`,
+        metadata:   { incidentId: payload.incidentId, tripId: payload.tripId ?? '' },
+      });
+    }
   }
 
   @OnEvent(EventTypes.TRIP_DELAYED)
-  async onTripDelayed(payload: { tenantId: string; tripId: string }) {
+  async onTripDelayed(payload: { tenantId: string; tripId: string; passengerPhones?: string[] }) {
     this.logger.debug(`Trip delayed notification trigger: ${payload.tripId}`);
+    for (const phone of payload.passengerPhones ?? []) {
+      await this.send({
+        tenantId:   payload.tenantId,
+        phone,
+        channel:    'WHATSAPP',
+        templateId: 'trip.delayed',
+        body:       `Votre trajet ${payload.tripId} a été retardé. Consultez l'appli pour l'ETA mis à jour.`,
+        metadata:   { tripId: payload.tripId },
+      });
+    }
+  }
+
+  // ─── Private helpers ─────────────────────────────────────────────────────────
+
+  private async dispatch(dto: SendNotificationDto): Promise<void> {
+    switch (dto.channel) {
+      case 'SMS':
+        if (!dto.phone) throw new Error('phone requis pour canal SMS');
+        await this.smsService.send({
+          to:       dto.phone,
+          body:     dto.body,
+          tenantId: dto.tenantId,
+        });
+        break;
+
+      case 'WHATSAPP':
+        if (!dto.phone) throw new Error('phone requis pour canal WHATSAPP');
+        await this.whatsappService.send({
+          to:       dto.phone,
+          body:     dto.body,
+          tenantId: dto.tenantId,
+        });
+        break;
+
+      case 'PUSH':
+        // Phase 4 : brancher Firebase Admin SDK via IVaultService
+        this.logger.debug(`[PUSH] stub — userId=${dto.userId} template=${dto.templateId}`);
+        break;
+
+      case 'EMAIL':
+        // Phase 3 : brancher Resend/SendGrid
+        this.logger.debug(`[EMAIL] stub — userId=${dto.userId} template=${dto.templateId}`);
+        break;
+
+      case 'IN_APP':
+        // Persisté en DB uniquement — pas d'envoi externe
+        break;
+    }
+  }
+
+  private isChannelEnabled(
+    prefs:   { sms: boolean; whatsapp: boolean; push: boolean; email: boolean },
+    channel: SendNotificationDto['channel'],
+  ): boolean {
+    switch (channel) {
+      case 'SMS':       return prefs.sms;
+      case 'WHATSAPP':  return prefs.whatsapp;
+      case 'PUSH':      return prefs.push;
+      case 'EMAIL':     return prefs.email;
+      case 'IN_APP':    return true;
+      default:          return false;
+    }
   }
 }

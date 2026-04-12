@@ -1,14 +1,21 @@
 /**
- * IAM Seed — PRD §IV.11 Zero-Trust RBAC
+ * IAM Seed — PRD §IV.11 Zero-Trust RBAC + §IV.12 Impersonation JIT
  *
- * ARCHITECTURE :
- *   SUPER_ADMIN  — hors-tenant, stocké dans le tenant synthétique 'PLATFORM'.
- *                  Seul rôle avec des permissions *.global.
- *                  Créé UNE SEULE FOIS au bootstrap plateforme.
- *   Rôles tenant — créés à chaque onboarding via seedTenantRoles().
- *                  isSystem = true → non supprimables par les admins tenant.
+ * ARCHITECTURE TENANT PLATEFORME :
+ *   UUID système  : "00000000-0000-0000-0000-000000000000" (nil UUID canonique)
+ *   Slug          : "__platform__"
+ *   Ce tenant n'existe JAMAIS dans le flux d'onboarding client.
+ *   Aucun utilisateur standard ne peut y être assigné (bloqué par PlatformTenantGuard).
  *
- * JAMAIS créer de SUPER_ADMIN lors d'un onboarding tenant.
+ * RÔLES SYSTÈME (tenant 00000000-...) :
+ *   SUPER_ADMIN  — Control Plane complet (permissions *.global)
+ *   SUPPORT_L1   — Data Plane lecture globale + switch d'impersonation
+ *   SUPPORT_L2   — L1 + outils de debug workflow/outbox
+ *
+ * Rôles tenant — créés à chaque onboarding via seedTenantRoles().
+ *   isSystem = true → non supprimables par les admins tenant.
+ *
+ * RÈGLE ABSOLUE : JAMAIS créer SUPER_ADMIN/SUPPORT lors d'un onboarding tenant.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -16,18 +23,61 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // ─── ID canoniques du tenant plateforme ───────────────────────────────────────
-export const PLATFORM_TENANT_ID = 'PLATFORM';
+// Nil UUID (RFC 4122) — identifiant système stable, jamais généré aléatoirement.
+// Référencé dans PlatformTenantGuard pour bloquer tout accès non autorisé.
+export const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-// ─── Permissions *.global réservées au SUPER_ADMIN ───────────────────────────
+// ─── Permissions *.global réservées au SUPER_ADMIN (Control Plane) ────────────
 const SUPER_ADMIN_PERMISSIONS = [
+  // Control Plane — gestion des tenants
   'control.tenant.manage.global',
   'control.iam.manage.tenant',
   'control.iam.audit.tenant',
   'control.workflow.override.global',
   'control.safety.monitor.global',
+  'control.stats.read.tenant',
+  // Data Plane — accès global en lecture
   'data.traveler.track.global',
   'data.parcel.track.global',
-  'control.stats.read.tenant',
+  'data.ticket.read.global',
+  'data.trip.read.global',
+  'data.manifest.read.global',
+  'data.cashier.read.global',
+  // Impersonation — switch de session JIT
+  'control.impersonation.switch.global',
+  'control.impersonation.revoke.global',
+];
+
+// ─── Permissions SUPPORT_L1 : lecture Data Plane uniquement ──────────────────
+// Principe du moindre privilège : les agents L1 voient les données clients
+// uniquement via le mécanisme de switch de session (impersonation JIT).
+// Ils n'ont AUCUN accès Control Plane (abonnements, workflow config, IAM).
+const SUPPORT_L1_PERMISSIONS = [
+  // Lecture globale Data Plane
+  'data.ticket.read.global',
+  'data.trip.read.global',
+  'data.parcel.read.global',
+  'data.traveler.read.global',
+  'data.manifest.read.global',
+  'data.cashier.read.global',
+  'data.fleet.read.global',
+  // Switch de session JIT uniquement (pas de révocation admin)
+  'control.impersonation.switch.global',
+  // Notifications propres
+  'data.notification.read.own',
+  'data.session.revoke.own',
+];
+
+// ─── Permissions SUPPORT_L2 : L1 + debug technique ───────────────────────────
+// L2 peut rejouer des événements outbox et inspecter le state machine
+// pour diagnostiquer des incidents. Toujours sans accès Control Plane.
+const SUPPORT_L2_PERMISSIONS = [
+  ...SUPPORT_L1_PERMISSIONS,
+  // Debug technique
+  'data.workflow.debug.global',
+  'data.outbox.replay.global',
+  // Révocation de session impersonation (escalade L2)
+  'control.impersonation.revoke.global',
 ];
 
 // ─── Permissions par rôle tenant ──────────────────────────────────────────────
@@ -99,6 +149,8 @@ const TENANT_ROLES: Array<{
       'control.stats.read.tenant',
       'control.integration.setup.tenant',
       'data.display.update.agency',
+      'control.iam.manage.tenant',
+      'control.iam.audit.tenant',
     ],
   },
   {
@@ -228,12 +280,41 @@ const TENANT_ROLES: Array<{
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers internes
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function upsertPlatformRole(
+  name:        string,
+  permissions: string[],
+): Promise<void> {
+  const role = await prisma.role.upsert({
+    where:  { tenantId_name: { tenantId: PLATFORM_TENANT_ID, name } },
+    update: {},
+    create: {
+      tenantId: PLATFORM_TENANT_ID,
+      name,
+      isSystem: true,
+    },
+  });
+
+  for (const permission of permissions) {
+    await prisma.rolePermission.upsert({
+      where:  { roleId_permission: { roleId: role.id, permission } },
+      update: {},
+      create: { roleId: role.id, permission },
+    });
+  }
+
+  console.log(`[IAM Seed] Platform role "${name}" upserted (id=${role.id}, perms=${permissions.length})`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bootstrap Platform (run ONCE at first startup)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function bootstrapPlatform(): Promise<void> {
-  // Crée le tenant plateforme s'il n'existe pas
-  const platformTenant = await prisma.tenant.upsert({
+  // Crée le tenant plateforme avec l'UUID nil canonique
+  await prisma.tenant.upsert({
     where:  { id: PLATFORM_TENANT_ID },
     update: {},
     create: {
@@ -244,39 +325,32 @@ export async function bootstrapPlatform(): Promise<void> {
     },
   });
 
-  // Crée le rôle SUPER_ADMIN (isSystem — non supprimable)
-  const superAdminRole = await prisma.role.upsert({
-    where:  { tenantId_name: { tenantId: PLATFORM_TENANT_ID, name: 'SUPER_ADMIN' } },
-    update: {},
-    create: {
-      tenantId: PLATFORM_TENANT_ID,
-      name:     'SUPER_ADMIN',
-      isSystem: true,
-    },
-  });
+  console.log(`[IAM Seed] Platform tenant ready (id=${PLATFORM_TENANT_ID})`);
 
-  // Seed des permissions *.global
-  for (const permission of SUPER_ADMIN_PERMISSIONS) {
-    await prisma.rolePermission.upsert({
-      where:  { roleId_permission: { roleId: superAdminRole.id, permission } },
-      update: {},
-      create: { roleId: superAdminRole.id, permission },
-    });
-  }
+  // Rôles système — ordre intentionnel : SA d'abord pour référence
+  await upsertPlatformRole('SUPER_ADMIN', SUPER_ADMIN_PERMISSIONS);
+  await upsertPlatformRole('SUPPORT_L1',  SUPPORT_L1_PERMISSIONS);
+  await upsertPlatformRole('SUPPORT_L2',  SUPPORT_L2_PERMISSIONS);
 
-  console.log(`[IAM Seed] SUPER_ADMIN role bootstrapped (id=${superAdminRole.id})`);
-  return;
+  console.log('[IAM Seed] Platform bootstrap complete — SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2 ready');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-Tenant Seeding (appelé par OnboardingService — JAMAIS de SUPER_ADMIN ici)
+// Per-Tenant Seeding (appelé par OnboardingService — JAMAIS de rôles plateforme ici)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function seedTenantRoles(
   prismaClient: PrismaClient,
   tenantId:     string,
 ): Promise<Map<string, string>> {
-  // Retourne Map<roleName, roleId> pour assigner l'admin au rôle TENANT_ADMIN
+  // Garde critique : empêche toute création de rôle dans le tenant plateforme
+  if (tenantId === PLATFORM_TENANT_ID) {
+    throw new Error(
+      '[IAM Seed] SECURITY VIOLATION: seedTenantRoles() appelé avec PLATFORM_TENANT_ID. ' +
+      'Les rôles plateforme sont créés UNIQUEMENT par bootstrapPlatform().',
+    );
+  }
+
   const roleMap = new Map<string, string>();
 
   for (const roleDef of TENANT_ROLES) {
@@ -307,7 +381,6 @@ export async function seedTenantRoles(
 // ─── Standalone runner ────────────────────────────────────────────────────────
 async function main() {
   await bootstrapPlatform();
-  console.log('[IAM Seed] Platform bootstrap complete');
 }
 
 main()

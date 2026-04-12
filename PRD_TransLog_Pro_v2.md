@@ -670,6 +670,29 @@ control.trip.log_event.own      (Chauffeur) Enregistrer pauses et checkpoints
 data.display.update.agency      Modifier remarques sur écrans d'affichage gare
 ```
 
+**Impersonation JIT (tenant 00000000-... uniquement)**
+```
+control.impersonation.switch.global   (SUPER_ADMIN, SUPPORT_L1+) Créer session JIT sur tenant client
+control.impersonation.revoke.global   (SUPER_ADMIN, SUPPORT_L2) Révoquer session active
+```
+
+**Support — Lecture Data Plane globale (via impersonation uniquement)**
+```
+data.ticket.read.global         Lire tickets sur tout tenant (session JIT)
+data.trip.read.global           Lire trajets sur tout tenant (session JIT)
+data.parcel.read.global         Lire colis sur tout tenant (session JIT)
+data.traveler.read.global       Lire voyageurs sur tout tenant (session JIT)
+data.fleet.read.global          Lire flotte sur tout tenant (session JIT)
+data.cashier.read.global        Lire opérations caisse sur tout tenant (session JIT)
+data.manifest.read.global       Lire manifestes sur tout tenant (session JIT)
+```
+
+**Support L2 — Debug technique**
+```
+data.workflow.debug.global      Inspecter le state machine et les transitions (L2)
+data.outbox.replay.global       Rejouer des événements outbox échoués (L2)
+```
+
 ### V.3 IAM Zero-Hardcode — Architecture DB-Driven
 
 **Principe :** Les rôles et leurs permissions ne sont **jamais** définis dans le code TypeScript en tant que source de vérité runtime. Les enums TypeScript (`P_TICKET_SCAN_AGENCY = 'data.ticket.scan.agency'`) sont des constantes compile-time pour éviter les chaînes magiques dans le code. La vérification runtime se fait toujours via la DB.
@@ -703,26 +726,136 @@ model RolePermission {
 
 **Seed onboarding :** À chaque création de tenant, `OnboardingService` exécute `iam.seed.ts` qui insère les 8 rôles par défaut avec leurs permissions. L'admin tenant peut ensuite modifier via `control.iam.manage.tenant` — les rôles `isSystem = true` ne peuvent être supprimés mais leurs permissions peuvent être étendues.
 
-**Rôles par défaut seedés :**
+**Rôles système — tenant plateforme `00000000-0000-0000-0000-000000000000` (bootstrapPlatform) :**
+| Rôle | Profil | Permissions clés | Tenant |
+|---|---|---|---|
+| `SUPER_ADMIN` | Super-Admin | `*.global` — Control + Data complet + impersonation | `0000...` |
+| `SUPPORT_L1` | Technicien Support | `data.*.read.global` + `control.impersonation.switch.global` | `0000...` |
+| `SUPPORT_L2` | Tech Lead Support | L1 + `data.workflow.debug.global` + `data.outbox.replay.global` + revoke | `0000...` |
+
+**Rôles par défaut seedés — par tenant client (seedTenantRoles) :**
 | Rôle | Profil | Permissions clés |
 |---|---|---|
-| `SUPER_ADMIN` | Super-Admin plateforme | `*.global` toutes |
-| `TENANT_ADMIN` | Admin tenant | `control.*.tenant` + `data.*.tenant` |
-| `PLANNER` | Planificateur | `data.trip.create.tenant` + fleet + pricing |
-| `STATION_AGENT` | Agent de gare | `data.ticket.*agency` + `data.cashier.*own` |
-| `QUAY_AGENT` | Agent de quai | `data.parcel.*agency` + `data.sav.*agency` |
+| `TENANT_ADMIN` | Admin tenant | `control.*.tenant` + `data.*.tenant` + `control.iam.manage.tenant` |
+| `AGENCY_MANAGER` | Manager agence | `data.ticket.*agency` + `data.cashier.*` + `data.parcel.*agency` |
+| `CASHIER` | Caissier | `data.ticket.create.agency` + `data.cashier.*own` |
 | `DRIVER` | Chauffeur | `data.trip.read.own` + `data.trip.report.own` + `data.trip.check.own` |
+| `HOSTESS` | Hôtesse/Agent quai | `data.ticket.scan.agency` + `data.traveler.verify.agency` |
 | `MECHANIC` | Mécanicien | `data.maintenance.*own` |
-| `SUPERVISOR` | Superviseur agence | `data.cashier.close.agency` + `data.user.read.agency` |
-| `VOYAGEUR` | Voyageur (passager) | `data.feedback.submit.own` + `data.ticket.read.own` |
+| `DISPATCHER` | Superviseur dispatch | `control.safety.monitor.global` + tracking global |
+| `VOYAGEUR` | Passager | `data.feedback.submit.own` |
+| `PUBLIC_REPORTER` | Citoyen anonyme | `data.feedback.submit.own` |
 
-### V.4 Règles d'Implémentation
+### V.4 Architecture IAM Transverse — Tenant Plateforme (§IV.12)
+
+Le Super-Admin et les agents Support sont des **entités transverses**, absentes du flux d'onboarding client. Ils résident dans un tenant système dédié, jamais visible des clients.
+
+#### V.4.1 Identifiant Système (UUID Canonique)
+
+```
+PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000"  (nil UUID RFC 4122)
+Slug              : "__platform__"
+```
+
+Ce tenant est créé **une seule fois** au bootstrap plateforme (`bootstrapPlatform()`). Il n'est jamais retourné par l'Onboarding Orchestrator. Aucun user client ne peut y être assigné.
+
+**Protection Guard :** `PermissionGuard` vérifie que tout user dont `tenantId === PLATFORM_TENANT_ID` possède au minimum `control.impersonation.switch.global`. Sans cette permission, la requête est rejetée `403` — cela empêche toute assignation accidentelle d'un user standard au tenant plateforme.
+
+#### V.4.2 Rôles Système du Tenant Plateforme
+
+| Rôle | Profil | Permissions clés | Control Plane | Data Plane |
+|---|---|---|---|---|
+| `SUPER_ADMIN` | Super-Admin | `*.global` — toutes permissions | Complet | Lecture + override |
+| `SUPPORT_L1` | Technicien Support | `data.*.read.global` + switch JIT | **Aucun** | Lecture seule |
+| `SUPPORT_L2` | Tech Lead Support | L1 + `data.workflow.debug.global` + `data.outbox.replay.global` + révocation | **Aucun** | Lecture + debug |
+
+**Principe du moindre privilège :** Les agents Support n'ont **aucun** accès Control Plane (pas de gestion d'abonnements, pas de configuration de workflow, pas d'IAM tenant). Leur accès Data Plane est uniquement possible via le mécanisme JIT d'impersonation.
+
+#### V.4.3 Mécanisme JIT — Switch de Session (Impersonation)
+
+**Pourquoi :** Conserver le filtrage RLS existant (`SET LOCAL app.tenant_id`) sans réécrire les requêtes Prisma. L'acteur reste sur le tenant `0000...` mais génère un token éphémère portant le `tenant_id` du client ciblé.
+
+**Flow complet :**
+
+```
+1. Agent SA/Support (tenant 0000...)
+      │
+      ▼
+2. POST /iam/impersonate
+   @RequirePermission("control.impersonation.switch.global")
+      │
+      ▼
+3. ImpersonationService.switchSession(targetTenantId)
+   ├─ Vérifie que targetTenantId ≠ PLATFORM_TENANT_ID
+   ├─ Crée ImpersonationSession en DB (status=ACTIVE, exp=+15min)
+   ├─ Génère token HMAC-SHA256 signé (clé Vault: platform/impersonation_key)
+   └─ Retourne { token, sessionId, expiresAt }
+      │
+      ▼
+4. Requêtes suivantes avec header:
+   X-Impersonation-Token: <token>
+      │
+      ▼
+5. ImpersonationGuard (avant PermissionGuard)
+   ├─ Vérifie acteur ∈ PLATFORM_TENANT_ID
+   ├─ Valide signature HMAC + TTL + statut DB
+   └─ Injecte req.impersonation.targetTenantId
+      │
+      ▼
+6. PermissionGuard
+   ├─ Vérifie permission de l'acteur (roleId original)
+   └─ ScopeContext.tenantId = targetTenantId (effectif)
+      │
+      ▼
+7. RlsMiddleware → SET LOCAL app.tenant_id = targetTenantId
+   Toutes les requêtes Prisma filtrent automatiquement sur le tenant client
+      │
+      ▼
+8. Fin de session: DELETE /iam/impersonate/:sessionId
+   ou expiration automatique à TTL
+```
+
+**Token :** Format `base64url(payload_json).hex(hmac-sha256)` — identique au QrService. Clé distincte par tenant. Non stocké en clair en DB (SHA-256 hash uniquement pour révocation).
+
+**AuditLog :** Toute création/révocation est loggée `level=critical` dans le tenant plateforme avec `actorId`, `targetTenantId`, `sessionId`, `ipAddress`, `reason`. Ces logs ne peuvent être supprimés.
+
+#### V.4.4 Modèle ImpersonationSession
+
+```prisma
+model ImpersonationSession {
+  id             String    @id @default(uuid())
+  actorId        String    // User.id de l'agent SA ou Support
+  actorTenantId  String    // toujours "00000000-0000-0000-0000-000000000000"
+  targetTenantId String    // tenant client ciblé
+  token          String    @unique  // référence opaque (non en clair)
+  tokenHash      String    @unique  // SHA-256(token) pour révocation
+  status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  reason         String?   // justification (audit)
+  ipAddress      String?
+  expiresAt      DateTime  // createdAt + 15 minutes
+  revokedAt      DateTime?
+  revokedBy      String?
+  createdAt      DateTime  @default(now())
+}
+```
+
+#### V.4.5 Endpoints IAM Transverse
+
+| Méthode | Route | Permission requise | Description |
+|---|---|---|---|
+| `POST` | `/iam/impersonate` | `control.impersonation.switch.global` | Crée session JIT (SUPPORT_L1+) |
+| `DELETE` | `/iam/impersonate/:sessionId` | `control.impersonation.revoke.global` | Révoque session (SUPPORT_L2+) |
+| `GET` | `/iam/impersonate/:tenantId/active` | `control.impersonation.revoke.global` | Liste sessions actives (audit) |
+
+### V.5 Règles d'Implémentation
 
 1. `PermissionGuard` global intercepte CHAQUE requête
-2. Source de vérité `tenantId` = session Better Auth uniquement
+2. Source de vérité `tenantId` = session Better Auth uniquement (ou `targetTenantId` en impersonation JIT)
 3. Scope `own`/`agency` → injection SQL dynamique dans requête Prisma
 4. Rate limiting par `tenantId + userId + endpoint`
 5. `control.workflow.override.global` loggé en niveau `critical` — toujours auditable
+6. `control.impersonation.switch.global` loggé en niveau `critical` — non-négociable pour conformité
+7. `seedTenantRoles()` lève une exception si appelé avec `PLATFORM_TENANT_ID` — protection anti-pollution
 
 ---
 
