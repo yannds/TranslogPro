@@ -4,15 +4,15 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  HttpStatus,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEntity } from './interfaces/workflow-entity.interface';
 import { TransitionInput } from './interfaces/transition-input.interface';
 import { GuardDefinition } from './types/guard-definition.type';
 import { SideEffectDefinition } from './types/side-effect-definition.type';
 import { AuditService } from './audit.service';
-import { ROLE_PERMISSIONS, extractScope } from '../../common/constants/permissions';
+import { extractScope } from '../../common/constants/permissions';
 
 /**
  * Configuration passée par chaque module au WorkflowEngine.
@@ -79,11 +79,11 @@ export class WorkflowEngine {
     // ── 2. Résolution (fromState, action) → toState via WorkflowConfig ─────
     const wfConfig = await this.prisma.workflowConfig.findFirst({
       where: {
-        tenantId:      entity.tenantId,
-        aggregateType: config.aggregateType,
-        fromState:     entity.status,
+        tenantId:   entity.tenantId,
+        entityType: config.aggregateType,
+        fromState:  entity.status,
         action,
-        isActive:      true,
+        isActive:   true,
       },
     });
 
@@ -96,19 +96,18 @@ export class WorkflowEngine {
 
     const toState = wfConfig.toState as string;
 
-    // ── 3. Vérification de permission (config.requiredPerm) ────────────────
+    // ── 3. Vérification de permission (DB-driven — zéro hardcode) ────────────
     const requiredPerm = wfConfig.requiredPerm as string;
-    const actorPerms   = ROLE_PERMISSIONS[actor.role] ?? [];
 
-    if (!actorPerms.includes(requiredPerm as never)) {
+    const rp = await this.prisma.rolePermission.findFirst({
+      where: { roleId: actor.roleId, permission: requiredPerm },
+    });
+    if (!rp) {
       throw new ForbiddenException(
-        `Rôle "${actor.role}" ne possède pas la permission "${requiredPerm}" ` +
-        `requise pour l'action "${action}"`,
+        `Rôle ne possède pas la permission "${requiredPerm}" requise pour l'action "${action}"`,
       );
     }
 
-    // Vérification scope agency : si requiredPerm est scope=agency,
-    // l'acteur doit avoir un agencyId
     const scope = extractScope(requiredPerm);
     if (scope === 'agency' && !actor.agencyId) {
       throw new ForbiddenException(
@@ -149,26 +148,24 @@ export class WorkflowEngine {
       await (tx as unknown as PrismaService).workflowTransition.create({
         data: {
           tenantId:       entity.tenantId,
-          aggregateType:  config.aggregateType,
-          aggregateId:    entity.id,
+          entityType:     config.aggregateType,
+          entityId:       entity.id,
           fromState:      entity.status,
           action,
           toState,
-          actorId:        actor.id,
-          requiredPerm,
-          idempotencyKey: idempotencyKey ?? null,
+          userId:         actor.id,
+          idempotencyKey: idempotencyKey ?? randomUUID(),
         },
       });
 
       // Audit trail ISO 27001
       await this.audit.record({
-        tenantId:      entity.tenantId,
-        actorId:       actor.id,
-        action:        requiredPerm,  // permission exercée — pas le verbe d'action
-        aggregateId:   entity.id,
-        aggregateType: config.aggregateType,
-        before:        { status: entity.status, version: entity.version },
-        after:         { status: toState, version: entity.version + 1 },
+        tenantId: entity.tenantId,
+        userId:   actor.id,
+        action:   requiredPerm,  // permission exercée — pas le verbe d'action
+        resource: `${config.aggregateType}:${entity.id}`,
+        oldValue: { status: entity.status, version: entity.version },
+        newValue: { status: toState, version: entity.version + 1 },
         ipAddress,
       });
 

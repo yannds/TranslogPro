@@ -36,15 +36,14 @@ export class OutboxPollerService implements OnModuleDestroy {
     // SELECT FOR UPDATE SKIP LOCKED — safe for multi-pod deployment
     const events = await this.prisma.$queryRaw<
       { id: string; tenantId: string; eventType: string; aggregateId: string;
-        aggregateType: string; payload: Record<string, unknown>; occurredAt: Date;
-        retryCount: number }[]
+        aggregateType: string; payload: unknown; scheduledAt: Date; attempts: number }[]
     >`
       SELECT id, "tenantId", "eventType", "aggregateId", "aggregateType",
-             payload, "occurredAt", "retryCount"
-      FROM   "OutboxEvent"
+             payload, "scheduledAt", attempts
+      FROM   "outbox_events"
       WHERE  status = 'PENDING'
-        AND  "retryCount" < ${MAX_RETRIES}
-      ORDER  BY "occurredAt"
+        AND  attempts < ${MAX_RETRIES}
+      ORDER  BY "scheduledAt"
       LIMIT  50
       FOR UPDATE SKIP LOCKED
     `;
@@ -56,8 +55,7 @@ export class OutboxPollerService implements OnModuleDestroy {
 
   private async processEvent(row: {
     id: string; tenantId: string; eventType: string; aggregateId: string;
-    aggregateType: string; payload: Record<string, unknown>; occurredAt: Date;
-    retryCount: number;
+    aggregateType: string; payload: unknown; scheduledAt: Date; attempts: number;
   }): Promise<void> {
     const event: DomainEvent = {
       id:            row.id,
@@ -65,8 +63,8 @@ export class OutboxPollerService implements OnModuleDestroy {
       tenantId:      row.tenantId,
       aggregateId:   row.aggregateId,
       aggregateType: row.aggregateType,
-      payload:       row.payload,
-      occurredAt:    row.occurredAt,
+      payload:       row.payload as Record<string, unknown>,
+      occurredAt:    row.scheduledAt,
     };
 
     try {
@@ -77,38 +75,37 @@ export class OutboxPollerService implements OnModuleDestroy {
       // 2. Fan-out via Redis Pub/Sub for WebSocket layer
       await this.publisher.publish(event);
 
-      // 3. Mark PROCESSED
+      // 3. Mark DELIVERED
       await this.prisma.outboxEvent.update({
         where: { id: row.id },
-        data:  { status: 'PROCESSED', processedAt: new Date() },
+        data:  { status: 'DELIVERED', processedAt: new Date() },
       });
     } catch (err) {
-      const nextRetry = row.retryCount + 1;
-      const delay     = BASE_DELAY_MS * Math.pow(2, row.retryCount);
+      const nextAttempts = row.attempts + 1;
+      const delay        = BASE_DELAY_MS * Math.pow(2, row.attempts);
+      const errorMsg     = (err as Error).message;
 
       this.logger.warn(
-        `Outbox event ${row.id} failed (attempt ${nextRetry}/${MAX_RETRIES}), ` +
-        `next retry in ${delay}ms. Error: ${(err as Error).message}`,
+        `Outbox event ${row.id} failed (attempt ${nextAttempts}/${MAX_RETRIES}), ` +
+        `next retry in ${delay}ms. Error: ${errorMsg}`,
       );
 
-      if (nextRetry >= MAX_RETRIES) {
+      if (nextAttempts >= MAX_RETRIES) {
         await this.prisma.outboxEvent.update({
           where: { id: row.id },
           data: {
-            status:       'DEAD',
-            retryCount:   nextRetry,
-            lastError:    (err as Error).message,
+            status:    'DEAD',
+            attempts:  nextAttempts,
+            lastError: errorMsg,
           },
         });
         await this.prisma.deadLetterEvent.create({
           data: {
-            tenantId:      row.tenantId,
-            eventType:     row.eventType,
-            aggregateId:   row.aggregateId,
-            aggregateType: row.aggregateType,
-            payload:       row.payload,
-            lastError:     (err as Error).message,
-            originalEventId: row.id,
+            tenantId:  row.tenantId,
+            eventType: row.eventType,
+            aggregateId: row.aggregateId,
+            payload:   row.payload as Record<string, unknown>,
+            errorLog:  [{ error: errorMsg, at: new Date().toISOString(), originalEventId: row.id, aggregateType: row.aggregateType }],
           },
         });
         this.logger.error(`Event ${row.id} moved to DLQ after ${MAX_RETRIES} retries`);
@@ -116,8 +113,9 @@ export class OutboxPollerService implements OnModuleDestroy {
         await this.prisma.outboxEvent.update({
           where: { id: row.id },
           data: {
-            retryCount: nextRetry,
-            nextRetryAt: new Date(Date.now() + delay),
+            attempts:   nextAttempts,
+            lastError:  errorMsg,
+            scheduledAt: new Date(Date.now() + delay),
           },
         });
       }

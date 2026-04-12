@@ -1,10 +1,12 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 export interface CurrentUserPayload {
-  id:       string;
-  tenantId: string;
-  role:     string;
+  id:        string;
+  tenantId:  string;
+  roleId:    string;    // DB Role.id — utilisé par PermissionGuard et WorkflowEngine
+  role:      string;    // Role.name — conservé pour compatibilité et logs
   agencyId?: string;
+  userType?: string;    // STAFF | VOYAGEUR | ANONYMOUS
 }
 
 /**

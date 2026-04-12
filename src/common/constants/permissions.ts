@@ -4,18 +4,19 @@
  *   plane  : control (config/rules) | data (business data)
  *   module : iam | workflow | ticket | parcel | trip | fleet | bus | route |
  *            pricing | cashier | sav | maintenance | manifest | traveler |
- *            luggage | shipment | session | user | integration | settings | module
+ *            luggage | shipment | session | user | integration | settings | module |
+ *            crm | campaign | feedback | safety | stats | crew | display
  *   action : create | read | update | delete | scan | cancel | approve | report |
  *            check | open | close | transaction | deliver | claim | manage |
  *            config | override | install | revoke | verify | track | weigh |
- *            group | layout | yield | audit | setup | status
+ *            group | layout | yield | audit | setup | status | submit | monitor |
+ *            delay | log_event
  *   scope  : own | agency | tenant | global
  *
- * The scope dimension is used by PermissionGuard AND by Prisma query filters:
- *   own    → WHERE userId = actor.id
- *   agency → WHERE agencyId = actor.agencyId
- *   tenant → WHERE tenantId = actor.tenantId  (all agencies)
- *   global → no tenant filter (SuperAdmin only)
+ * IMPORTANT — Ces constantes sont des RÉFÉRENCES COMPILE-TIME uniquement.
+ * La source de vérité runtime est la table RolePermission en DB.
+ * Le PermissionGuard interroge prisma.rolePermission + cache Redis 60s.
+ * JAMAIS utiliser ces constantes comme source de vérité dans le code runtime.
  */
 
 // ─── IAM ─────────────────────────────────────────────────────────────────────
@@ -35,10 +36,13 @@ export const P_SETTINGS_MANAGE_TENANT      = 'control.settings.manage.tenant';
 // ─── Routes & Planning ────────────────────────────────────────────────────────
 export const P_ROUTE_MANAGE_TENANT         = 'control.route.manage.tenant';
 export const P_TRIP_CREATE_TENANT          = 'data.trip.create.tenant';
-export const P_TRIP_READ_OWN               = 'data.trip.read.own';          // Chauffeur
+export const P_TRIP_READ_OWN               = 'data.trip.read.own';
 export const P_TRIP_UPDATE_AGENCY          = 'data.trip.update.agency';
-export const P_TRIP_CHECK_OWN             = 'data.trip.check.own';          // Checklists
-export const P_TRIP_REPORT_OWN             = 'data.trip.report.own';        // Incident / SOS
+export const P_TRIP_CHECK_OWN              = 'data.trip.check.own';
+export const P_TRIP_REPORT_OWN             = 'data.trip.report.own';
+export const P_TRIP_DELAY_AGENCY           = 'control.trip.delay.agency';
+export const P_TRIP_CANCEL_TENANT          = 'control.trip.cancel.tenant';
+export const P_TRIP_LOG_EVENT_OWN          = 'control.trip.log_event.own';
 
 // ─── Billetterie ──────────────────────────────────────────────────────────────
 export const P_TICKET_CREATE_AGENCY        = 'data.ticket.create.agency';
@@ -82,7 +86,24 @@ export const P_SAV_REPORT_AGENCY           = 'data.sav.report.agency';
 export const P_SAV_DELIVER_AGENCY          = 'data.sav.deliver.agency';
 export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
 
-// ─── Union type ───────────────────────────────────────────────────────────────
+// ─── CRM & Campagnes ─────────────────────────────────────────────────────────
+export const P_CRM_READ_TENANT             = 'data.crm.read.tenant';
+export const P_CAMPAIGN_MANAGE_TENANT      = 'control.campaign.manage.tenant';
+
+// ─── Safety & Feedback ────────────────────────────────────────────────────────
+export const P_FEEDBACK_SUBMIT_OWN         = 'data.feedback.submit.own';
+export const P_SAFETY_MONITOR_GLOBAL       = 'control.safety.monitor.global';
+
+// ─── Stats & Analytics ────────────────────────────────────────────────────────
+export const P_STATS_READ_TENANT           = 'control.stats.read.tenant';
+
+// ─── Crew ─────────────────────────────────────────────────────────────────────
+export const P_CREW_MANAGE_TENANT          = 'data.crew.manage.tenant';
+
+// ─── Display ─────────────────────────────────────────────────────────────────
+export const P_DISPLAY_UPDATE_AGENCY       = 'data.display.update.agency';
+
+// ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
   IAM_MANAGE_TENANT:          P_IAM_MANAGE_TENANT,
@@ -103,6 +124,9 @@ export const Permission = {
   TRIP_UPDATE_AGENCY:         P_TRIP_UPDATE_AGENCY,
   TRIP_CHECK_OWN:             P_TRIP_CHECK_OWN,
   TRIP_REPORT_OWN:            P_TRIP_REPORT_OWN,
+  TRIP_DELAY_AGENCY:          P_TRIP_DELAY_AGENCY,
+  TRIP_CANCEL_TENANT:         P_TRIP_CANCEL_TENANT,
+  TRIP_LOG_EVENT_OWN:         P_TRIP_LOG_EVENT_OWN,
   // Tickets
   TICKET_CREATE_AGENCY:       P_TICKET_CREATE_AGENCY,
   TICKET_CANCEL_AGENCY:       P_TICKET_CANCEL_AGENCY,
@@ -140,14 +164,23 @@ export const Permission = {
   SAV_REPORT_AGENCY:          P_SAV_REPORT_AGENCY,
   SAV_DELIVER_AGENCY:         P_SAV_DELIVER_AGENCY,
   SAV_CLAIM_TENANT:           P_SAV_CLAIM_TENANT,
+  // CRM
+  CRM_READ_TENANT:            P_CRM_READ_TENANT,
+  CAMPAIGN_MANAGE_TENANT:     P_CAMPAIGN_MANAGE_TENANT,
+  // Safety & Feedback
+  FEEDBACK_SUBMIT_OWN:        P_FEEDBACK_SUBMIT_OWN,
+  SAFETY_MONITOR_GLOBAL:      P_SAFETY_MONITOR_GLOBAL,
+  // Stats
+  STATS_READ_TENANT:          P_STATS_READ_TENANT,
+  // Crew
+  CREW_MANAGE_TENANT:         P_CREW_MANAGE_TENANT,
+  // Display
+  DISPLAY_UPDATE_AGENCY:      P_DISPLAY_UPDATE_AGENCY,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];
 
-/**
- * Scope extrait depuis la permission string.
- * Utilisé par le PermissionGuard pour piloter le filtre Prisma.
- */
+/** Scope extrait depuis la permission string. */
 export type PermissionScope = 'own' | 'agency' | 'tenant' | 'global';
 
 export function extractScope(permission: string): PermissionScope {
@@ -158,98 +191,3 @@ export function extractScope(permission: string): PermissionScope {
 export function extractPlane(permission: string): 'control' | 'data' {
   return (permission.split('.')[0] ?? 'data') as 'control' | 'data';
 }
-
-/**
- * Matrice des permissions par rôle.
- * Source : PRD v2.0 — Section V.2
- */
-export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  // Accès total — toutes les permissions
-  TENANT_ADMIN: Object.values(Permission) as Permission[],
-
-  // Planificateur / Responsable d'agence
-  AGENCY_MANAGER: [
-    Permission.ROUTE_MANAGE_TENANT,
-    Permission.TRIP_CREATE_TENANT,
-    Permission.TRIP_UPDATE_AGENCY,
-    Permission.TRIP_READ_OWN,
-    Permission.TICKET_READ_AGENCY,
-    Permission.TICKET_READ_TENANT,
-    Permission.TICKET_CREATE_AGENCY,
-    Permission.TICKET_CANCEL_AGENCY,
-    Permission.PARCEL_CREATE_AGENCY,
-    Permission.PARCEL_UPDATE_AGENCY,
-    Permission.PARCEL_UPDATE_TENANT,
-    Permission.PARCEL_TRACK_GLOBAL,
-    Permission.SHIPMENT_GROUP_AGENCY,
-    Permission.FLEET_STATUS_AGENCY,
-    Permission.FLEET_MANAGE_TENANT,
-    Permission.CASHIER_CLOSE_AGENCY,
-    Permission.MAINTENANCE_APPROVE_TENANT,
-    Permission.MANIFEST_READ_OWN,
-    Permission.USER_READ_AGENCY,
-    Permission.PRICING_READ_AGENCY,
-    Permission.SAV_CLAIM_TENANT,
-    Permission.IAM_AUDIT_TENANT,
-  ],
-
-  // Agent de Gare (vente comptoir + caisse + colis)
-  STATION_AGENT: [
-    Permission.TICKET_CREATE_AGENCY,
-    Permission.TICKET_CANCEL_AGENCY,
-    Permission.TICKET_SCAN_AGENCY,
-    Permission.TICKET_READ_AGENCY,
-    Permission.TRAVELER_VERIFY_AGENCY,
-    Permission.LUGGAGE_WEIGH_AGENCY,
-    Permission.PARCEL_CREATE_AGENCY,
-    Permission.PARCEL_SCAN_AGENCY,
-    Permission.PARCEL_UPDATE_AGENCY,
-    Permission.SHIPMENT_GROUP_AGENCY,
-    Permission.CASHIER_OPEN_OWN,
-    Permission.CASHIER_TRANSACTION_OWN,
-    Permission.CASHIER_CLOSE_AGENCY,
-    Permission.SAV_REPORT_AGENCY,
-  ],
-
-  // Agent de Quai (scan + chargement + SAV)
-  QUAI_AGENT: [
-    Permission.TICKET_SCAN_AGENCY,
-    Permission.TRAVELER_VERIFY_AGENCY,
-    Permission.PARCEL_SCAN_AGENCY,
-    Permission.PARCEL_REPORT_AGENCY,
-    Permission.MANIFEST_READ_OWN,
-    Permission.SAV_REPORT_AGENCY,
-    Permission.SAV_DELIVER_AGENCY,
-  ],
-
-  // Chauffeur
-  DRIVER: [
-    Permission.TRIP_READ_OWN,
-    Permission.TRIP_CHECK_OWN,
-    Permission.TRIP_REPORT_OWN,
-    Permission.TICKET_SCAN_AGENCY,
-    Permission.MANIFEST_READ_OWN,
-    Permission.SAV_REPORT_OWN,
-  ],
-
-  // Mécanicien
-  MECHANIC: [
-    Permission.MAINTENANCE_UPDATE_OWN,
-    Permission.FLEET_STATUS_AGENCY,
-  ],
-
-  // Planificateur (sans accès caisse ni vente)
-  PLANNER: [
-    Permission.ROUTE_MANAGE_TENANT,
-    Permission.TRIP_CREATE_TENANT,
-    Permission.TRIP_UPDATE_AGENCY,
-    Permission.FLEET_MANAGE_TENANT,
-    Permission.FLEET_LAYOUT_TENANT,
-    Permission.BUS_CAPACITY_TENANT,
-    Permission.PRICING_READ_AGENCY,
-    Permission.PRICING_MANAGE_TENANT,
-  ],
-
-  // SuperAdmin (Control Plane — cross-tenant)
-  SUPER_ADMIN: Object.values(Permission) as Permission[],
-};

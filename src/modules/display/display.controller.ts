@@ -20,10 +20,10 @@ export class DisplayController {
         tenantId,
         status:   { in: ['PLANNED', 'BOARDING', 'IN_PROGRESS'] },
         route:    { OR: [{ originId: stationId }, { destinationId: stationId }] },
-        departureTime: { gte: new Date() },
+        departureScheduled: { gte: new Date() },
       },
       include: { route: true, bus: true },
-      orderBy: { departureTime: 'asc' },
+      orderBy: { departureScheduled: 'asc' },
       take:    20,
     });
   }
@@ -38,7 +38,7 @@ export class DisplayController {
       include: {
         trips: {
           where:   { status: { in: ['PLANNED', 'BOARDING', 'IN_PROGRESS'] } },
-          orderBy: { departureTime: 'asc' },
+          orderBy: { departureScheduled: 'asc' },
           take:    1,
           include: { route: true },
         },
@@ -53,13 +53,10 @@ export class DisplayController {
   ) {
     return this.prisma.parcel.findFirst({
       where:   { tenantId, trackingCode: code },
-      include: { origin: true, destination: true },
       select:  {
         trackingCode: true, status: true,
-        origin:       { select: { name: true } },
         destination:  { select: { name: true } },
         createdAt:    true,
-        deliveredAt:  true,
       },
     });
   }

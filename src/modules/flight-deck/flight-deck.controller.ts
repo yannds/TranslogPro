@@ -10,7 +10,7 @@ export class FlightDeckController {
   constructor(private readonly flightDeckService: FlightDeckService) {}
 
   @Get('active-trip')
-  @RequirePermission(Permission.TRIP_READ)
+  @RequirePermission(Permission.TRIP_READ_OWN)
   getActiveTrip(
     @TenantId() tenantId: string,
     @CurrentUser() user: CurrentUserPayload,
@@ -19,29 +19,29 @@ export class FlightDeckController {
   }
 
   @Get('trips/:tripId/checklist')
-  @RequirePermission(Permission.TRIP_READ)
+  @RequirePermission(Permission.TRIP_READ_OWN)
   getChecklist(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.flightDeckService.getChecklist(tenantId, tripId);
   }
 
-  @Patch('checklist/:itemId/check')
-  @RequirePermission(Permission.TRIP_UPDATE)
-  checkItem(
+  @Patch('checklist/:checklistId/complete')
+  @RequirePermission(Permission.TRIP_UPDATE_AGENCY)
+  completeChecklist(
     @TenantId() tenantId: string,
-    @Param('itemId') itemId: string,
+    @Param('checklistId') checklistId: string,
     @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.flightDeckService.checkItem(tenantId, itemId, user.id);
+    return this.flightDeckService.completeChecklist(tenantId, checklistId, user.id);
   }
 
   @Get('trips/:tripId/passengers')
-  @RequirePermission(Permission.TICKET_READ)
+  @RequirePermission(Permission.TICKET_READ_AGENCY)
   getPassengers(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.flightDeckService.getPassengerList(tenantId, tripId);
   }
 
   @Get('schedule')
-  @RequirePermission(Permission.TRIP_READ)
+  @RequirePermission(Permission.TRIP_READ_OWN)
   getSchedule(
     @TenantId() tenantId: string,
     @CurrentUser() user: CurrentUserPayload,

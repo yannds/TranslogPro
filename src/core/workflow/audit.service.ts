@@ -18,18 +18,17 @@ export type AuditLevel = 'info' | 'warn' | 'critical';
 
 export interface AuditEntry {
   tenantId:      string;
-  actorId:       string;
+  userId?:       string;       // DB User.id (optionnel — events système n'ont pas d'acteur)
   /**
    * The permission string exercised — not a free-form label.
    * e.g. "data.ticket.scan.agency", "control.workflow.override.global"
    * This lets the audit trail be filtered by permission plane/scope.
    */
   action:        string;
-  aggregateId:   string;
-  aggregateType: string;
-  before?:       Record<string, unknown>;
-  after?:        Record<string, unknown>;
-  metadata?:     Record<string, unknown>;
+  /** Composite resource identifier: "<AggregateType>:<id>" e.g. "Ticket:clx..." */
+  resource:      string;
+  oldValue?:     Record<string, unknown>;
+  newValue?:     Record<string, unknown>;
   ipAddress?:    string;
   plane?:        AuditPlane;
   level?:        AuditLevel;
@@ -48,31 +47,29 @@ export class AuditService {
     try {
       await this.prisma.auditLog.create({
         data: {
-          tenantId:      entry.tenantId,
-          actorId:       entry.actorId,
-          action:        entry.action,         // permission string exercée
-          aggregateId:   entry.aggregateId,
-          aggregateType: entry.aggregateType,
+          tenantId:  entry.tenantId,
+          userId:    entry.userId   ?? null,
+          action:    entry.action,             // permission string exercée
+          resource:  entry.resource,
           plane,
           level,
-          before:        entry.before ?? {},
-          after:         entry.after  ?? {},
-          metadata:      entry.metadata ?? {},
-          ipAddress:     entry.ipAddress ?? null,
+          oldValue:  entry.oldValue,
+          newValue:  entry.newValue,
+          ipAddress: entry.ipAddress ?? null,
         },
       });
 
       // Critical events are also emitted to application logs for SIEM ingestion
       if (level === 'critical') {
         this.logger.warn(
-          `[AUDIT:CRITICAL] ${entry.action} on ${entry.aggregateType}:${entry.aggregateId} ` +
-          `by actor=${entry.actorId} tenant=${entry.tenantId} ip=${entry.ipAddress ?? 'unknown'}`,
+          `[AUDIT:CRITICAL] ${entry.action} on ${entry.resource} ` +
+          `by actor=${entry.userId ?? 'system'} tenant=${entry.tenantId} ip=${entry.ipAddress ?? 'unknown'}`,
         );
       }
     } catch (err) {
       // Audit failures must NEVER break the business flow, but must be visible
       this.logger.error(
-        `Audit write failed for action="${entry.action}" aggregate=${entry.aggregateType}:${entry.aggregateId} — ${(err as Error).message}`,
+        `Audit write failed for action="${entry.action}" resource=${entry.resource} — ${(err as Error).message}`,
       );
     }
   }

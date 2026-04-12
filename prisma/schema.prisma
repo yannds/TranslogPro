@@ -1,5 +1,5 @@
 // ============================================================
-// TransLog Pro — Prisma Schema v2.0 (Corrigé et Complet)
+// TransLog Pro — Prisma Schema v3.0 (Post-PRD-ADD Integration)
 // ============================================================
 
 generator client {
@@ -56,15 +56,18 @@ model Agency {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  tenantId  String
-  agencyId  String?
-  email     String   @unique
-  name      String?
-  image     String?
-  roleId    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  tenantId    String
+  agencyId    String?
+  email       String   @unique
+  name        String?
+  image       String?
+  roleId      String?
+  userType    String   @default("STAFF") // STAFF | VOYAGEUR | ANONYMOUS
+  preferences Json     @default("{}")    // siège préféré, gares fav (voyageurs)
+  loyaltyScore Float   @default(0)       // calculé — voyageurs uniquement
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id])
   agency                 Agency?                 @relation(fields: [agencyId], references: [id])
@@ -75,9 +78,12 @@ model User {
   checklists             Checklist[]
   staffProfile           Staff?
   notificationPreference NotificationPreference?
+  feedbacks              Feedback[]
+  safetyAlerts           SafetyAlert[]
 
   @@index([tenantId])
   @@index([tenantId, agencyId])
+  @@index([tenantId, userType])
   @@map("users")
 }
 
@@ -85,30 +91,35 @@ model Role {
   id          String           @id @default(cuid())
   tenantId    String
   name        String
+  isSystem    Boolean          @default(false) // rôles système non supprimables
   permissions RolePermission[]
   users       User[]
 
   @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("roles")
 }
 
+// Permission: référence canonique (lookup/description uniquement)
 model Permission {
-  id          String           @id @default(cuid())
-  key         String           @unique
+  id          String  @id @default(cuid())
+  key         String  @unique
   // FORMAT: {plane}.{module}.{action}.{scope}
   description String
-  roles       RolePermission[]
 
   @@map("permissions")
 }
 
+// RolePermission: source de vérité runtime — stocke la string directement
+// Le guard interroge cette table + Redis cache 60s (clé: iam:perm:{roleId}:{permission})
 model RolePermission {
-  roleId       String
-  permissionId String
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  id         String @id @default(cuid())
+  roleId     String
+  permission String // ex: "data.ticket.scan.agency"
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  @@id([roleId, permissionId])
+  @@unique([roleId, permission])
+  @@index([roleId])
   @@map("role_permissions")
 }
 
@@ -405,14 +416,20 @@ model Trip {
   currentLat         Float?
   currentLng         Float?
   lastGpsAt          DateTime?
+  displayNote        String?  // texte court pour écrans d'affichage gare
+  displayColor       String?  // code couleur hex (#FF9800 = ambre retard)
   version            Int      @default(1)
 
-  tenant    Tenant      @relation(fields: [tenantId], references: [id])
-  route     Route       @relation(fields: [routeId], references: [id])
-  bus       Bus         @relation(fields: [busId], references: [id])
-  checklists Checklist[]
-  incidents  Incident[]
-  shipments  Shipment[]
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  route       Route           @relation(fields: [routeId], references: [id])
+  bus         Bus             @relation(fields: [busId], references: [id])
+  checklists  Checklist[]
+  incidents   Incident[]
+  shipments   Shipment[]
+  tripEvents  TripEvent[]
+  crewAssignments CrewAssignment[]
+  feedbacks   Feedback[]
+  travelers   Traveler[]      @relation("TripTravelers")
 
   @@index([tenantId, status])
   @@index([tenantId, departureScheduled])
@@ -436,41 +453,60 @@ model Checklist {
   @@map("checklists")
 }
 
+// Incident: événement exceptionnel nécessitant une réponse humaine (SOS, panne, etc.)
+// Partage l'interface BaseEvent avec TripEvent — voir src/common/types/base-event.type.ts
 model Incident {
-  id          String    @id @default(cuid())
-  tripId      String
-  reporterId  String
-  type        String    // MECHANICAL | SECURITY | HEALTH | LOST_OBJECT | SOS
-  severity    String    // LOW | MEDIUM | HIGH | SOS
-  description String
-  metadata    Json      @default("{}")
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  createdAt   DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  tenantId            String
+  tripId              String
+  busId               String?
+  reportedById        String
+  type                String    // MECHANICAL | SECURITY | HEALTH | LOST_OBJECT | SOS | ACCIDENT
+  severity            String    // LOW | MEDIUM | HIGH | CRITICAL
+  description         String
+  locationDescription String?
+  metadata            Json      @default("{}")
+  isSos               Boolean   @default(false)
+  status              String    @default("OPEN")
+  // OPEN | ASSIGNED | IN_PROGRESS | RESOLVED | CLOSED
+  assigneeId          String?
+  resolution          String?
+  resolvedAt          DateTime?
+  claimId             String?   // FK vers Claim si incident déclenche un SAV
+  createdAt           DateTime  @default(now())
 
   trip Trip @relation(fields: [tripId], references: [id])
 
-  @@index([tripId, type])
-  @@index([severity, resolvedAt])
+  @@index([tenantId, tripId, type])
+  @@index([tenantId, severity, resolvedAt])
+  @@index([tenantId, isSos, status])
   @@map("incidents")
 }
 
 model MaintenanceReport {
-  id          String    @id @default(cuid())
-  tenantId    String
-  busId       String
-  incidentId  String?
-  mechanicId  String
-  description String
-  partsUsed   Json      @default("[]")
-  resolvedAt  DateTime?
-  approvedBy  String?
-  approvedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  tenantId      String
+  busId         String
+  incidentId    String?
+  type          String    // PREVENTIVE | CORRECTIVE | EMERGENCY
+  description   String
+  scheduledAt   DateTime
+  odometer      Float?
+  partsUsed     Json      @default("[]")
+  status        String    @default("SCHEDULED")
+  // SCHEDULED | IN_PROGRESS | COMPLETED | APPROVED
+  notes         String?
+  createdById   String
+  completedAt   DateTime?
+  completedById String?
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
 
   bus Bus @relation(fields: [busId], references: [id])
 
   @@index([tenantId, busId])
+  @@index([tenantId, status])
   @@map("maintenance_reports")
 }
 
@@ -512,6 +548,7 @@ model Traveler {
   version          Int     @default(1)
 
   dropOffStation Station? @relation("TravelerDropOff", fields: [dropOffStationId], references: [id])
+  trip           Trip     @relation("TripTravelers", fields: [tripId], references: [id])
 
   @@index([tenantId, tripId, status])
   @@index([tripId, dropOffStationId])
@@ -665,17 +702,177 @@ model LostFoundItem {
 model Claim {
   id          String    @id @default(cuid())
   tenantId    String
-  type        String    // PARCEL_DAMAGE | PARCEL_LOSS | SERVICE | REFUND_REQUEST
+  type        String    // PARCEL_DAMAGE | PARCEL_LOSS | SERVICE | REFUND_REQUEST | SAFETY
   reporterId  String
   entityId    String    // parcelId ou ticketId
-  entityType  String    // PARCEL | TICKET
+  entityType  String    // PARCEL | TICKET | INCIDENT
   description String
   status      String    @default("OPEN")
-  // OPEN | IN_REVIEW | RESOLVED | REJECTED
+  // OPEN | UNDER_INVESTIGATION | RESOLVED | REJECTED | CLOSED
   resolvedAt  DateTime?
   resolvedBy  String?
   createdAt   DateTime  @default(now())
 
   @@index([tenantId, status])
   @@map("claims")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 13 : TRIP EVENTS (pauses, checkpoints, délais — PRD §IV.11)
+// ─────────────────────────────────────────────────────────────
+
+// TripEvent: événements opérationnels normaux du voyage (pauses, checkpoints GPS, délais)
+// Partage l'interface BaseEvent avec Incident — discriminé par le champ type
+model TripEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tripId      String
+  type        String
+  // PAUSE_START | PAUSE_END | CHECKPOINT_REACHED | DELAY_DECLARED
+  // DELAY_DETECTED | DEPARTURE_ANOMALY | GEOFENCE_EXIT
+  severity    String   @default("LOW")  // LOW | MEDIUM | HIGH | CRITICAL
+  reportedBy  String   // userId du chauffeur ou 'SYSTEM'
+  gpsLat      Float?
+  gpsLng      Float?
+  metadata    Json     @default("{}")   // durée pause, nom checkpoint, etc.
+  claimId     String?                   // FK Claim si l'événement déclenche un SAV
+  createdAt   DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@index([tenantId, tripId, type])
+  @@index([tenantId, createdAt])
+  @@map("trip_events")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 14 : SAFETY & FEEDBACK (PRD §IV.13)
+// ─────────────────────────────────────────────────────────────
+
+model SafetyAlert {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tripId            String?
+  reporterId        String
+  type              String   // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
+  description       String?
+  gpsLat            Float?
+  gpsLng            Float?
+  verificationScore Float    @default(0)  // 0..1 — corrélation GPS bus/déclarant
+  status            String   @default("PENDING")
+  // PENDING | VERIFIED | UNVERIFIED | DISMISSED
+  source            String   @default("IN_APP") // IN_APP | PUBLIC_REPORT
+  createdAt         DateTime @default(now())
+
+  reporter User @relation(fields: [reporterId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, tripId])
+  @@map("safety_alerts")
+}
+
+// Feedback: note brute soumise par un voyageur après un trajet
+model Feedback {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String
+  tripId         String?
+  driverId       String?  // Staff.id
+  busId          String?
+  agencyId       String?
+  ratings        Json     @default("{}")
+  // { conduct: 0-5, punctuality: 0-5, comfort: 0-5, baggage: 0-5 }
+  comment        String?
+  rgpdConsentAt  DateTime // consentement RGPD obligatoire à la soumission
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  trip Trip? @relation(fields: [tripId], references: [id])
+
+  @@index([tenantId, tripId])
+  @@index([driverId])
+  @@index([busId])
+  @@map("feedbacks")
+}
+
+// Rating: agrégat calculé — mis à jour asynchroniquement via side effect trip.completed
+model Rating {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String   // DRIVER | BUS | AGENCY
+  entityId    String   // Staff.id | Bus.id | Agency.id
+  avgScore    Float    @default(0)
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, entityType, entityId])
+  @@index([tenantId, entityType])
+  @@map("ratings")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 15 : CREW OPERATIONS (PRD §IV.15)
+// ─────────────────────────────────────────────────────────────
+
+model CrewAssignment {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tripId    String
+  staffId   String
+  crewRole  String    // CO_PILOT | HOSTESS | SECURITY | MECHANIC_ON_BOARD
+  briefedAt DateTime? // null = pas encore briefé (guard CREW_BRIEFED)
+  createdAt DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@unique([tripId, staffId])
+  @@index([tenantId, tripId])
+  @@map("crew_assignments")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 16 : PUBLIC REPORTER (PRD §IV.16)
+// ─────────────────────────────────────────────────────────────
+
+model PublicReport {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  plateOrParkNumber   String
+  type                String    // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
+  description         String
+  reporterGpsLat      Float?
+  reporterGpsLng      Float?
+  reporterGpsExpireAt DateTime? // RGPD: suppression GPS après 24h
+  verificationScore   Float     @default(0)
+  status              String    @default("PENDING")
+  // PENDING | VERIFIED | UNVERIFIED | DISMISSED
+  correlatedBusId     String?
+  photoUrl            String?
+  reporterIp          String    // pour rate limiting audit
+  createdAt           DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([plateOrParkNumber])
+  @@map("public_reports")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 17 : CRM & CAMPAGNES (PRD §IV.12)
+// ─────────────────────────────────────────────────────────────
+
+model Campaign {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  criteria    Json     @default("{}")  // segments de voyageurs ciblés
+  messageText String
+  status      String   @default("DRAFT")
+  // DRAFT | ACTIVE | PAUSED | COMPLETED
+  sentCount   Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@map("campaigns")
 }

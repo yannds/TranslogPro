@@ -9,13 +9,13 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('dashboard')
-  @RequirePermission(Permission.ANALYTICS_READ)
+  @RequirePermission(Permission.STATS_READ_TENANT)
   dashboard(@TenantId() tenantId: string, @Query('agencyId') agencyId?: string) {
     return this.analyticsService.getDashboard(tenantId, agencyId);
   }
 
   @Get('trips')
-  @RequirePermission(Permission.ANALYTICS_READ)
+  @RequirePermission(Permission.STATS_READ_TENANT)
   tripsReport(
     @TenantId() tenantId: string,
     @Query('from') from: string,
@@ -26,7 +26,7 @@ export class AnalyticsController {
   }
 
   @Get('revenue')
-  @RequirePermission(Permission.ANALYTICS_EXPORT)
+  @RequirePermission(Permission.STATS_READ_TENANT)
   revenueReport(
     @TenantId() tenantId: string,
     @Query('from') from: string,
@@ -36,7 +36,7 @@ export class AnalyticsController {
   }
 
   @Get('trips/:tripId/occupancy')
-  @RequirePermission(Permission.ANALYTICS_READ)
+  @RequirePermission(Permission.STATS_READ_TENANT)
   occupancy(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.analyticsService.getOccupancyRate(tenantId, tripId);
   }

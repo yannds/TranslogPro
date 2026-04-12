@@ -1,10 +1,11 @@
 /**
- * États discrets des entités — source de vérité unique.
- * Aligné sur le PRD v2.0 §III.7 (5 workflows majeurs).
+ * États discrets des entités — RÉFÉRENCES COMPILE-TIME uniquement.
+ * Aligné sur le PRD v3.0 §III.7 (workflows majeurs).
  *
- * RÈGLE : Tout état et toute transition doivent être enregistrés dans
- * WorkflowConfig(DB) par tenant. Ces constantes servent uniquement aux
- * vérifications de type et aux guards applicatifs — jamais à remplacer la DB.
+ * RÈGLE : Les transitions valides sont définies dans WorkflowConfig(DB) par tenant.
+ * Ces constantes servent uniquement comme références de chaînes type-safe dans le code.
+ * La source de vérité runtime est la DB — jamais ces enums.
+ * Même principe que les constantes de Permission.
  */
 
 // ─── Trip ─────────────────────────────────────────────────────────────────────
@@ -143,25 +144,23 @@ export const BusAction = {
 } as const;
 export type BusAction = typeof BusAction[keyof typeof BusAction];
 
-// ─── Incident ─────────────────────────────────────────────────────────────────
-export const IncidentState = {
-  OPEN:        'OPEN',
-  ASSIGNED:    'ASSIGNED',
-  IN_PROGRESS: 'IN_PROGRESS',
-  RESOLVED:    'RESOLVED',
-  CLOSED:      'CLOSED',
-} as const;
-export type IncidentState = typeof IncidentState[keyof typeof IncidentState];
-
-// ─── Claim (SAV) ──────────────────────────────────────────────────────────────
+// ─── Claim (SAV) — PRD §IV.12 workflow réclamation ───────────────────────────
 export const ClaimState = {
-  SUBMITTED:    'SUBMITTED',
-  UNDER_REVIEW: 'UNDER_REVIEW',
-  APPROVED:     'APPROVED',
-  REJECTED:     'REJECTED',
-  CLOSED:       'CLOSED',
+  OPEN:                'OPEN',
+  UNDER_INVESTIGATION: 'UNDER_INVESTIGATION',
+  RESOLVED:            'RESOLVED',
+  REJECTED:            'REJECTED',
+  CLOSED:              'CLOSED',
 } as const;
 export type ClaimState = typeof ClaimState[keyof typeof ClaimState];
+
+export const ClaimAction = {
+  INVESTIGATE: 'INVESTIGATE',
+  RESOLVE:     'RESOLVE',
+  REJECT:      'REJECT',
+  CLOSE:       'CLOSE',
+} as const;
+export type ClaimAction = typeof ClaimAction[keyof typeof ClaimAction];
 
 // ─── Shipment ─────────────────────────────────────────────────────────────────
 export const ShipmentState = {
@@ -177,6 +176,74 @@ export type ShipmentState = typeof ShipmentState[keyof typeof ShipmentState];
 export const CashRegisterState = {
   OPEN:        'OPEN',
   CLOSED:      'CLOSED',
-  DISCREPANCY: 'DISCREPANCY', // Écart à la clôture
+  DISCREPANCY: 'DISCREPANCY',
 } as const;
 export type CashRegisterState = typeof CashRegisterState[keyof typeof CashRegisterState];
+
+// ─── TripEvent (PRD §IV.11 — événements opérationnels normaux) ────────────────
+export const TripEventType = {
+  PAUSE_START:        'PAUSE_START',
+  PAUSE_END:          'PAUSE_END',
+  CHECKPOINT_REACHED: 'CHECKPOINT_REACHED',
+  DELAY_DECLARED:     'DELAY_DECLARED',
+  DELAY_DETECTED:     'DELAY_DETECTED',      // levé par le système (scheduler)
+  DEPARTURE_ANOMALY:  'DEPARTURE_ANOMALY',   // bus déclaré parti mais GPS ≤ 200m gare
+  GEOFENCE_EXIT:      'GEOFENCE_EXIT',
+} as const;
+export type TripEventType = typeof TripEventType[keyof typeof TripEventType];
+
+// ─── IncidentType (PRD §IV.11 — événements exceptionnels → workflow SAV) ──────
+export const IncidentType = {
+  MECHANICAL:    'MECHANICAL',
+  SECURITY:      'SECURITY',
+  HEALTH:        'HEALTH',
+  LOST_OBJECT:   'LOST_OBJECT',
+  SOS:           'SOS',
+  ACCIDENT:      'ACCIDENT',
+  CARGO_DAMAGED: 'CARGO_DAMAGED',
+} as const;
+export type IncidentType = typeof IncidentType[keyof typeof IncidentType];
+
+export const IncidentState = {
+  OPEN:        'OPEN',
+  ASSIGNED:    'ASSIGNED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED:    'RESOLVED',
+  CLOSED:      'CLOSED',
+} as const;
+export type IncidentState = typeof IncidentState[keyof typeof IncidentState];
+
+// ─── PublicReport ─────────────────────────────────────────────────────────────
+export const PublicReportStatus = {
+  PENDING:    'PENDING',
+  VERIFIED:   'VERIFIED',
+  UNVERIFIED: 'UNVERIFIED',
+  DISMISSED:  'DISMISSED',
+} as const;
+export type PublicReportStatus = typeof PublicReportStatus[keyof typeof PublicReportStatus];
+
+// ─── SafetyAlert ─────────────────────────────────────────────────────────────
+export const SafetyAlertStatus = {
+  PENDING:    'PENDING',
+  VERIFIED:   'VERIFIED',
+  UNVERIFIED: 'UNVERIFIED',
+  DISMISSED:  'DISMISSED',
+} as const;
+export type SafetyAlertStatus = typeof SafetyAlertStatus[keyof typeof SafetyAlertStatus];
+
+// ─── UserType ─────────────────────────────────────────────────────────────────
+export const UserType = {
+  STAFF:     'STAFF',
+  VOYAGEUR:  'VOYAGEUR',
+  ANONYMOUS: 'ANONYMOUS',
+} as const;
+export type UserType = typeof UserType[keyof typeof UserType];
+
+// ─── CrewRole ─────────────────────────────────────────────────────────────────
+export const CrewRole = {
+  CO_PILOT:         'CO_PILOT',
+  HOSTESS:          'HOSTESS',
+  SECURITY:         'SECURITY',
+  MECHANIC_ON_BOARD:'MECHANIC_ON_BOARD',
+} as const;
+export type CrewRole = typeof CrewRole[keyof typeof CrewRole];

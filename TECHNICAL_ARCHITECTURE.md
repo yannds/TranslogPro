@@ -1,5 +1,5 @@
 # TransLog Pro — Architecture Technique Complète
-**Dossier Technique de Référence v2.0**
+**Dossier Technique de Référence v3.0**
 
 ---
 
@@ -57,6 +57,7 @@
 ║  ┌─────────────────────────────────────────────────────────────────┐  ║
 ║  │              INFRASTRUCTURE PORTS                                │  ║
 ║  │  IEventBus | ISecretService | IStorageService | IIdentity       │  ║
+║  │  IWeatherService | IGeoService (PostGIS ou Haversine)           │  ║
 ║  └─────────────────────────────────────────────────────────────────┘  ║
 ╚══════════════════════════════╤════════════════════════════════════════╝
                                │
@@ -106,6 +107,15 @@
 | ADR-13 | Parcel/Shipment.destinationId FK | Guard FIELD_MATCH robuste |
 | ADR-14 | Ticket ≠ Traveler | Ticket = financier immuable, Traveler = opérationnel |
 | ADR-15 | WorkflowConfig versioning | Entités in-flight suivent config active |
+| ADR-16 | IAM runtime | DB RolePermission + Redis 60s — zéro hardcode |
+| ADR-17 | User.userType | Discriminateur VOYAGEUR/STAFF/ANONYMOUS — pas d'entité Customer |
+| ADR-18 | TripEvent/Incident | Table unifiée + type discriminateur — BaseEvent partagé |
+| ADR-19 | PostGIS | Optionnel avec fallback haversine — IGeoService interface |
+| ADR-20 | GPS Public Reporter | TTL 24h — RGPD minimisation données |
+| ADR-21 | Public Reporter URL | /public/{slug} séparé — isolation auth vs non-auth, rate limit IP |
+| ADR-22 | IWeatherService | Interface permutable — Smart Bus Display météo |
+| ADR-14 | Ticket ≠ Traveler | Ticket = financier immuable, Traveler = opérationnel |
+| ADR-15 | WorkflowConfig versioning | Entités in-flight suivent config active |
 
 ---
 
@@ -134,6 +144,11 @@ src/
 │   │   │   └── storage.interface.ts # IStorageService
 │   │   ├── minio.service.ts         # Implémentation MinIO
 │   │   └── storage.module.ts
+│   ├── weather/
+│   │   ├── interfaces/
+│   │   │   └── weather.interface.ts # IWeatherService
+│   │   ├── openweathermap.service.ts # Implémentation OpenWeatherMap (permutable)
+│   │   └── weather.module.ts
 │   ├── eventbus/
 │   │   ├── interfaces/
 │   │   │   └── eventbus.interface.ts # IEventBus
@@ -162,16 +177,19 @@ src/
 │   │   └── workflow.module.ts
 │   ├── iam/
 │   │   ├── types/
-│   │   │   └── permission.types.ts  # PermissionString type + enums
+│   │   │   └── permission.types.ts  # Constantes compile-time uniquement (PAS runtime)
 │   │   ├── decorators/
 │   │   │   └── permission.decorator.ts
 │   │   ├── guards/
-│   │   │   └── permission.guard.ts  # Guard global NestJS
+│   │   │   └── permission.guard.ts  # Vérifie prisma.rolePermission + Redis cache 60s
 │   │   ├── middleware/
 │   │   │   └── tenant.middleware.ts
 │   │   ├── services/
-│   │   │   └── rbac.service.ts
+│   │   │   └── rbac.service.ts      # manage roles/permissions via DB
 │   │   └── iam.module.ts
+│   │
+│   │   # Seed initial IAM (exécuté par OnboardingService)
+│   │   # prisma/seeds/iam.seed.ts → insère Role + RolePermission par défaut
 │   ├── pricing/
 │   │   ├── pricing.engine.ts
 │   │   └── pricing.module.ts
@@ -259,23 +277,60 @@ src/
 │   │   ├── display.controller.ts
 │   │   ├── display.gateway.ts       # Socket.io WebSocket Gateway
 │   │   └── display.module.ts
-│   └── analytics/
-│       ├── analytics.controller.ts
-│       ├── analytics.service.ts
-│       └── analytics.module.ts
+│   ├── analytics/
+│   │   ├── analytics.controller.ts
+│   │   ├── analytics.service.ts
+│   │   └── analytics.module.ts
+│   ├── crm/
+│   │   ├── dto/
+│   │   │   ├── update-voyager-profile.dto.ts
+│   │   │   └── create-campaign.dto.ts
+│   │   ├── crm.controller.ts
+│   │   ├── crm.service.ts
+│   │   └── crm.module.ts
+│   ├── feedback/
+│   │   ├── dto/
+│   │   │   └── submit-feedback.dto.ts
+│   │   ├── feedback.controller.ts
+│   │   ├── feedback.service.ts        # calcul Rating agrégé
+│   │   └── feedback.module.ts
+│   ├── safety/
+│   │   ├── dto/
+│   │   │   └── create-safety-alert.dto.ts
+│   │   ├── safety.controller.ts
+│   │   ├── safety.service.ts          # corrélation GPS anti-fraude
+│   │   └── safety.module.ts
+│   ├── crew/
+│   │   ├── dto/
+│   │   │   └── assign-crew.dto.ts
+│   │   ├── crew.controller.ts
+│   │   ├── crew.service.ts
+│   │   └── crew.module.ts
+│   └── public-reporter/
+│       ├── dto/
+│       │   └── create-report.dto.ts
+│       ├── public-reporter.controller.ts  # /public/{slug}/report
+│       ├── public-reporter.service.ts     # validation géo-temporelle + RGPD
+│       └── public-reporter.module.ts
 │
 └── common/
     ├── constants/
     │   ├── workflow-states.ts       # Enums d'états par entité
-    │   └── permissions.ts           # Toutes les permissions string
+    │   └── permissions.ts           # Constantes compile-time (références seulement — PAS source runtime)
     ├── types/
     │   ├── domain-event.type.ts     # DomainEvent interface
+    │   ├── base-event.type.ts       # BaseEvent interface partagée TripEvent/Incident
     │   └── api-response.type.ts     # Response envelopes
     ├── decorators/
     │   ├── tenant-id.decorator.ts   # @TenantId() param decorator
-    │   └── current-user.decorator.ts # @CurrentUser()
+    │   ├── current-user.decorator.ts # @CurrentUser()
+    │   └── scope-context.decorator.ts # @ScopeCtx() param decorator
     ├── filters/
     │   └── http-exception.filter.ts # RFC 7807
+    ├── geo/
+    │   ├── interfaces/
+    │   │   └── geo.interface.ts     # IGeoService (ST_Distance ou haversine)
+    │   └── haversine.service.ts     # Fallback sans PostGIS
     └── interceptors/
         ├── request-id.interceptor.ts
         └── logging.interceptor.ts
@@ -302,6 +357,11 @@ src/
 | `modules/notification` | NotificationPreference | — | Tous events domain |
 | `modules/display` | — (read-only) | — | `trip.*` → Redis → WebSocket |
 | `modules/analytics` | — (read-only agrégée) | — | — |
+| `modules/crm` | Campaign, VoyagerProfile enrichi | — | `trip.completed` |
+| `modules/feedback` | Feedback, Rating | `rating.updated` | `trip.completed` |
+| `modules/safety` | SafetyAlert | `safety.alert` via IEventBus | GPS buffer Redis |
+| `modules/crew` | CrewAssignment | — | — |
+| `modules/public-reporter` | PublicReport | `public.report.created` | GPS buffer Redis |
 
 ---
 
@@ -561,6 +621,16 @@ Formule: delay = min(attempts² × 10s, 600s)
 | NotificationPreference | Préférences notif | id, userId, sms, whatsapp, push |
 | Session | Sessions Better Auth | id, userId, token@unique |
 | Account | Comptes OAuth | id, userId, providerId |
+| **v3.0 — nouvelles tables** | | |
+| Role | Rôle DB-driven par tenant | id, tenantId, name, isSystem |
+| RolePermission | Mapping rôle↔permission | id, roleId, permission (unique) |
+| TripEvent | Événements trip (pauses/checkpoints/incidents) | id, tripId, type, severity, claimId? |
+| Feedback | Note brute voyageur post-trip | id, userId, tripId, driverId?, busId?, ratings JSONB |
+| Rating | Agrégat notes par entité | id, entityType, entityId, avgScore, count |
+| SafetyAlert | Alerte conduite dangereuse | id, tenantId, tripId, reporterId, verificationScore |
+| CrewAssignment | Équipage par trajet | id, tripId, staffId, crewRole, briefedAt? |
+| PublicReport | Signalement citoyen | id, tenantId, plateOrPark, type, reporterGpsExpireAt |
+| Campaign | Campagne marketing tenant | id, tenantId, criteria JSONB, status |
 
 ### 5.2 Politiques RLS (Row Level Security)
 
@@ -658,6 +728,13 @@ Invalidation :
   WorkflowConfig → invalidé sur control.workflow.config.tenant
   Manifest       → invalidé sur ticket.boarded ou parcel.loaded
   Pricing        → invalidé sur control.pricing.manage.tenant
+  IAM Permissions → invalidé sur control.iam.manage.tenant (pattern: iam:perm:{roleId}:*)
+
+Clés supplémentaires v3.0 :
+  iam:perm:{roleId}:{permission}                     TTL: 60s  (cache permission guard)
+  rl:public:{tenantId}:{ip}                          TTL: 3600s (rate limit public reporter)
+  rating:cache:{entityType}:{entityId}               TTL: 300s (cache agrégat notes)
+  safety:gps:{tripId}                                TTL: 30s  (dernière position connue bus)
 ```
 
 ---
@@ -864,7 +941,96 @@ const LIMITS = {
 }
 ```
 
-### 8.5 mTLS Inter-Services
+### 8.5 IAM Zero-Hardcode — Runtime Guard
+
+```typescript
+// PermissionGuard — vérification DB + cache Redis
+@Injectable()
+export class PermissionGuard implements CanActivate {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const requiredPerm = this.reflector.get<string>('permission', context.getHandler())
+    if (!requiredPerm) throw new InternalServerErrorException('Missing @Permission() decorator')
+
+    const user = getSession(context)
+    const cacheKey = `iam:perm:${user.roleId}:${requiredPerm}`
+
+    // Cache Redis TTL 60s
+    const cached = await this.redis.get(cacheKey)
+    if (cached !== null) return cached === '1'
+
+    // Source de vérité : DB
+    const rp = await this.prisma.rolePermission.findFirst({
+      where: { roleId: user.roleId, permission: requiredPerm },
+    })
+    const granted = rp !== null
+    await this.redis.setex(cacheKey, 60, granted ? '1' : '0')
+
+    if (!granted) throw new ForbiddenException()
+    return true
+  }
+}
+
+// Invalidation cache sur modification IAM
+// EventHandler 'control.iam.manage.tenant' → redis.del(`iam:perm:${roleId}:*`)
+```
+
+**Seed IAM — appelé par OnboardingService :**
+```
+prisma/seeds/iam.seed.ts
+  → insère 9 rôles (isSystem=true) avec leurs RolePermission
+  → exécuté atomiquement dans la transaction de provisioning tenant
+  → idempotent : upsert sur Role.name @unique([tenantId, name])
+```
+
+### 8.6 RGPD — Points de Conformité
+
+| Donnée | Rétention | Mécanisme |
+|---|---|---|
+| GPS Public Reporter | 24h | `reporterGpsExpireAt` + pg_cron nightly delete |
+| GPS Voyageur (tracking opt-in) | Session trip + 7j | Supprimé avec TripEvent après 7j |
+| Photo pièce d'identité SAV | URL signée 15min | MinIO TTL + URL expirée automatiquement |
+| Feedback commentaire libre | 2 ans | Policy configurable tenant |
+| AuditLog | 7 ans (légal) | Partitions archivées, pas de delete |
+
+**Annonces permanentes obligatoires :**
+- Formulaire Public Reporter : *"Votre position GPS est utilisée uniquement pour valider ce signalement et sera supprimée sous 24h."*
+- Formulaire Feedback/Notation : *"Votre avis est utilisé pour améliorer le service. Non revendu. Voir politique de confidentialité."*
+- Tracking temps réel Voyageur : *"Votre position est partagée avec le conducteur pour votre sécurité. Désactivable dans les paramètres."*
+
+Ces messages sont des constantes non-configurables côté UI (pas overridables par tenant).
+
+### 8.7 Rate Limiting — Public Reporter
+
+```typescript
+// Endpoint public — pas d'auth — rate limit IP agressif
+// POST /public/{tenantSlug}/report
+
+const PUBLIC_REPORTER_LIMIT = {
+  windowSec:   3600,   // 1 heure
+  maxRequests: 5,      // 5 signalements/IP/heure (configurable par tenant)
+}
+
+// Sliding window Redis
+async checkIpRateLimit(ip: string, tenantId: string): Promise<void> {
+  const key = `rl:public:${tenantId}:${ip}`
+  const count = await this.redis.incr(key)
+  if (count === 1) await this.redis.expire(key, PUBLIC_REPORTER_LIMIT.windowSec)
+  if (count > PUBLIC_REPORTER_LIMIT.maxRequests) {
+    throw new TooManyRequestsException(
+      'Limite de signalements atteinte. Réessayez dans 1 heure.'
+    )
+  }
+}
+```
+
+**Protections supplémentaires sur /public :**
+- Pas de cookie, pas de session
+- `tenantId` extrait de `tenantSlug` (résolution via `Tenant.slug` — pas de path param brut)
+- CORS restreint à `*.translog.app` + domaine custom tenant
+- Corps de requête limité à 10kb
+- Photo optionnelle : validation MIME strict (JPEG/PNG uniquement), max 5Mo, scan antivirus via hook MinIO
+
+### 8.8 mTLS Inter-Services
 
 ```yaml
 # Chaque service obtient un certificat Vault PKI au démarrage
@@ -1017,5 +1183,50 @@ Spans instrumentés :
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v2.0*
-*Révision : Avril 2026 — Architecture Validée*
+---
+
+## 12. PostGIS & Géolocalisation (Optionnel)
+
+### 12.1 IGeoService Interface
+
+```typescript
+// Interface permutable — PostGIS ou haversine applicatif
+interface IGeoService {
+  distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): Promise<number>
+  isWithinRadius(lat: number, lng: number, centerLat: number, centerLng: number, radiusMeters: number): Promise<boolean>
+  autocompleteStations(query: string, tenantId: string, limit?: number): Promise<Station[]>
+}
+
+// Implémentation PostGIS (production)
+// SELECT ST_Distance(ST_MakePoint($1,$2)::geography, ST_MakePoint($3,$4)::geography)
+
+// Implémentation Haversine (dev/test — sans PostGIS)
+// Calcul JS standard — précision ~0.5% acceptable pour use cases de validation
+```
+
+### 12.2 Cas d'Usage Géo
+
+| Use Case | PostGIS | Fallback |
+|---|---|---|
+| Validation géo Public Reporter | `ST_Distance < 2km` | Haversine applicatif |
+| Geofencing départ bus (anomalie) | `ST_DWithin(bus_pos, gare_pos, 200)` | Haversine applicatif |
+| Checkpoint waypoint atteint | `ST_DWithin(bus_pos, waypoint_zone, radius)` | Distance point→point |
+| Autocomplete stations | `Waypoint.gpsZone` PostGIS | `ILIKE '%{query}%'` sur `Station.name` |
+
+### 12.3 Colonnes PostGIS (optionnelles)
+
+```sql
+-- Ajoutées uniquement si PostGIS activé (migration conditionnelle)
+ALTER TABLE "Station" ADD COLUMN IF NOT EXISTS "coordinates" GEOGRAPHY(Point, 4326);
+ALTER TABLE "Waypoint" ADD COLUMN IF NOT EXISTS "gpsZone" GEOGRAPHY(Polygon, 4326);
+
+-- Index spatial
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_station_geo ON "Station" USING GIST ("coordinates");
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_waypoint_zone ON "Waypoint" USING GIST ("gpsZone");
+```
+
+---
+
+*Fin du Dossier Technique TransLog Pro v3.0*
+*Révision v2.0 : Avril 2026 — Architecture Validée*
+*Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*

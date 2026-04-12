@@ -64,7 +64,6 @@ export class PricingEngine {
       where: {
         tenantId: input.tenantId,
         routeId:  trip.routeId,
-        isActive: true,
       },
     });
 
@@ -140,7 +139,7 @@ export class PricingEngine {
 
   private async isYieldEnabled(tenantId: string): Promise<boolean> {
     const mod = await this.prisma.installedModule.findFirst({
-      where: { tenantId, moduleCode: 'YIELD_ENGINE', isActive: true },
+      where: { tenantId, moduleKey: 'YIELD_ENGINE', isActive: true },
     });
     return mod !== null;
   }

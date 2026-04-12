@@ -10,7 +10,7 @@ export class CashierService {
 
   async openRegister(tenantId: string, dto: OpenRegisterDto, actor: CurrentUserPayload) {
     const existing = await this.prisma.cashRegister.findFirst({
-      where: { tenantId, cashierId: actor.id, status: 'OPEN' },
+      where: { tenantId, agentId: actor.id, auditStatus: 'OPEN' },
     });
     if (existing) throw new ConflictException('You already have an open cash register');
 
@@ -18,17 +18,15 @@ export class CashierService {
       data: {
         tenantId,
         agencyId:       dto.agencyId,
-        cashierId:      actor.id,
-        openingBalance: dto.openingBalance,
-        status:         'OPEN',
-        openedAt:       new Date(),
+        agentId:        actor.id,
+        initialBalance: dto.openingBalance,
       },
     });
   }
 
   async closeRegister(tenantId: string, registerId: string, actor: CurrentUserPayload, scope: ScopeContext) {
     const register = await this.prisma.cashRegister.findFirst({
-      where: { id: registerId, tenantId, status: 'OPEN' },
+      where: { id: registerId, tenantId, auditStatus: 'OPEN' },
     });
     if (!register) throw new NotFoundException('Caisse ouverte introuvable');
 
@@ -42,11 +40,11 @@ export class CashierService {
       _sum:  { amount: true },
     });
 
-    const closingBalance = (register.openingBalance as number) + (totals._sum.amount ?? 0);
+    const finalBalance = register.initialBalance + (totals._sum.amount ?? 0);
 
     return this.prisma.cashRegister.update({
       where: { id: registerId },
-      data:  { status: 'CLOSED', closedAt: new Date(), closingBalance },
+      data:  { auditStatus: 'CLOSED', closedAt: new Date(), finalBalance },
     });
   }
 
@@ -60,12 +58,12 @@ export class CashierService {
   }
 
   async recordTransaction(
-    tenantId:    string,
-    registerId:  string,
-    type:        string,
-    amount:      number,
-    referenceId: string,
-    referenceType: string,
+    tenantId:      string,
+    registerId:    string,
+    type:          string,
+    amount:        number,
+    paymentMethod: string,
+    externalRef?:  string,
   ) {
     return this.prisma.transaction.create({
       data: {
@@ -73,8 +71,8 @@ export class CashierService {
         cashRegisterId: registerId,
         type,
         amount,
-        referenceId,
-        referenceType,
+        paymentMethod,
+        externalRef,
       },
     });
   }

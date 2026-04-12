@@ -4,21 +4,19 @@ import {
   ExecutionContext,
   ForbiddenException,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSION_KEY } from '../../../common/decorators/require-permission.decorator';
-import { Permission, ROLE_PERMISSIONS, extractScope, PermissionScope } from '../../../common/constants/permissions';
+import { Permission, extractScope, PermissionScope } from '../../../common/constants/permissions';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { Redis } from 'ioredis';
+import { REDIS_CLIENT } from '../../../infrastructure/eventbus/redis-publisher.service';
 import { Request } from 'express';
 
 /**
  * Injected into every request by the guard.
  * Services read this to build tenant-scoped Prisma WHERE clauses.
- *
- * Examples:
- *   scope = 'own'    → WHERE userId    = scopeCtx.userId
- *   scope = 'agency' → WHERE agencyId  = scopeCtx.agencyId
- *   scope = 'tenant' → WHERE tenantId  = scopeCtx.tenantId   (default)
- *   scope = 'global' → no extra filter (SuperAdmin only)
  */
 export interface ScopeContext {
   scope:    PermissionScope;
@@ -33,7 +31,7 @@ type AuthenticatedRequest = Request & {
   user?: {
     id?:       string;
     tenantId?: string;
-    role?:     string;
+    roleId?:   string;
     agencyId?: string;
   };
   [SCOPE_CONTEXT_KEY]?: ScopeContext;
@@ -41,9 +39,13 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly prisma:    PrismaService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const required = this.reflector.getAllAndOverride<Permission>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -55,37 +57,31 @@ export class PermissionGuard implements CanActivate {
     const req  = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = req.user;
 
-    if (!user?.id || !user.tenantId || !user.role) {
+    if (!user?.id || !user.tenantId || !user.roleId) {
       throw new UnauthorizedException('Authentication required');
     }
 
-    // ── 1. Role-based check ───────────────────────────────────────────────
-    const allowed = ROLE_PERMISSIONS[user.role] ?? [];
-    if (!allowed.includes(required)) {
+    // ── 1. DB check with Redis cache (TTL 60s) ────────────────────────────
+    const granted = await this.hasPermission(user.roleId, required);
+    if (!granted) {
       throw new ForbiddenException(
-        `Role "${user.role}" lacks permission "${required}"`,
+        `Role lacks permission "${required}"`,
       );
     }
 
     // ── 2. Scope derivation ───────────────────────────────────────────────
     const scope = extractScope(required);
 
-    // agency-scoped permission requires the actor to have an agencyId
     if (scope === 'agency' && !user.agencyId) {
       throw new ForbiddenException(
         `Permission "${required}" requires agency scope but actor has no agencyId`,
       );
     }
 
-    // global scope is reserved for SUPER_ADMIN
-    if (scope === 'global' && user.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException(
-        `Permission "${required}" requires global scope (SuperAdmin only)`,
-      );
-    }
+    // global scope: verified via DB (SUPER_ADMIN role has the permission seeded)
+    // No hardcoded role name check — the RolePermission row is the authority.
 
     // ── 3. Attach ScopeContext to the request ─────────────────────────────
-    // Services read req[SCOPE_CONTEXT_KEY] to build Prisma WHERE clauses.
     req[SCOPE_CONTEXT_KEY] = {
       scope,
       tenantId: user.tenantId,
@@ -94,5 +90,27 @@ export class PermissionGuard implements CanActivate {
     };
 
     return true;
+  }
+
+  /**
+   * Vérifie si un rôle possède une permission.
+   * Cache Redis : iam:perm:{roleId}:{permission} — TTL 60s
+   * Invalidé sur control.iam.manage.tenant via RbacService.invalidateCache()
+   */
+  async hasPermission(roleId: string, permission: string): Promise<boolean> {
+    const cacheKey = `iam:perm:${roleId}:${permission}`;
+
+    const cached = await this.redis.get(cacheKey);
+    if (cached !== null) return cached === '1';
+
+    const rp = await this.prisma.rolePermission.findFirst({
+      where: { roleId, permission },
+    });
+
+    const granted = rp !== null;
+    // Fire-and-forget — cache miss cost is one DB query; don't block on cache write
+    this.redis.setex(cacheKey, 60, granted ? '1' : '0').catch(() => {/* non-critical */});
+
+    return granted;
   }
 }

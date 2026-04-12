@@ -8,17 +8,6 @@ import {
 import { ISecretService, SECRET_SERVICE } from '../secret/interfaces/secret.interface';
 import { PrismaService } from '../database/prisma.service';
 
-/**
- * Better Auth integration.
- *
- * Better Auth manages the session store and password hashing.
- * We wrap it here so the rest of the application depends only on
- * IIdentityManager, making it swappable without touching domain code.
- *
- * NOTE: Better Auth is mounted as an Express middleware in main.ts via
- *   `app.use('/api/auth', toNodeHandler(auth.handler))`.
- * This service handles programmatic user/session operations.
- */
 @Injectable()
 export class BetterAuthService implements IIdentityManager, OnModuleInit {
   private readonly logger = new Logger(BetterAuthService.name);
@@ -38,15 +27,14 @@ export class BetterAuthService implements IIdentityManager, OnModuleInit {
   }
 
   async createUser(input: CreateUserInput): Promise<UserIdentity> {
-    // Better Auth creates the session-side user; we mirror it in our Prisma schema
-    // with the same ID so foreign keys stay consistent.
     const user = await this.prisma.user.create({
       data: {
         email:    input.email,
         name:     input.name,
         tenantId: input.tenantId,
-        role:     input.role,
-        agencyId: input.agencyId,
+        roleId:   input.roleId ?? null,
+        agencyId: input.agencyId ?? null,
+        userType: input.userType ?? 'STAFF',
       },
     });
 
@@ -56,24 +44,28 @@ export class BetterAuthService implements IIdentityManager, OnModuleInit {
       email:    user.email,
       name:     user.name,
       tenantId: user.tenantId,
-      role:     user.role,
+      roleId:   user.roleId,
       agencyId: user.agencyId ?? undefined,
+      userType: user.userType,
     };
   }
 
   async verifySession(token: string): Promise<SessionInfo | null> {
     const session = await this.prisma.session.findFirst({
-      where: { token, expiresAt: { gt: new Date() } },
-      include: { user: true },
+      where:   { token, expiresAt: { gt: new Date() } },
+      include: { user: { include: { role: true } } },
     });
 
     if (!session) return null;
+    const { user } = session;
 
     return {
       userId:   session.userId,
-      tenantId: session.user.tenantId,
-      role:     session.user.role,
-      agencyId: session.user.agencyId ?? undefined,
+      tenantId: user.tenantId,
+      roleId:   user.roleId   ?? '',
+      role:     user.role?.name ?? '',
+      agencyId: user.agencyId ?? undefined,
+      userType: user.userType,
       expiresAt: session.expiresAt,
     };
   }
@@ -82,10 +74,8 @@ export class BetterAuthService implements IIdentityManager, OnModuleInit {
     await this.prisma.session.deleteMany({ where: { token } });
   }
 
-  async changePassword(userId: string, newPassword: string): Promise<void> {
-    // Password hashing is delegated to Better Auth's bcrypt layer.
-    // In a full integration this would call the Better Auth admin API.
-    this.logger.warn(`changePassword called for user ${userId} — delegate to Better Auth admin API`);
+  async changePassword(_userId: string, _newPassword: string): Promise<void> {
+    this.logger.warn('changePassword — delegate to Better Auth admin API');
     throw new Error('Not implemented: use Better Auth admin API endpoint');
   }
 }

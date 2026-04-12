@@ -1,1 +1,1 @@
-export { Permission, ROLE_PERMISSIONS } from '../../../common/constants/permissions';
+export { Permission, extractScope, extractPlane, PermissionScope } from '../../../common/constants/permissions';

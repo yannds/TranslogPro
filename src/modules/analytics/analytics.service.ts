@@ -48,8 +48,7 @@ export class AnalyticsService {
       by:     ['status'],
       where:  {
         tenantId,
-        ...(agencyId ? { agencyId } : {}),
-        departureTime: { gte: from, lte: to },
+        departureScheduled: { gte: from, lte: to },
       },
       _count: { _all: true },
     });
