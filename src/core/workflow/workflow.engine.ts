@@ -93,6 +93,20 @@ export class WorkflowEngine {
       );
     }
 
+    // ── 0. Idempotence rapide (hors transaction) ──────────────────────────────
+    // Si la clé est déjà connue, on court-circuite AVANT la validation d'état.
+    // Cas typique : retry HTTP après que l'état ait déjà changé en DB.
+    // Le check atomique dans la transaction (4a) reste la barrière définitive.
+    if (idempotencyKey) {
+      const earlyExisting = await this.prisma.workflowTransition.findUnique({
+        where: { idempotencyKey },
+      });
+      if (earlyExisting) {
+        this.logger.debug(`Idempotent early-exit: key=${idempotencyKey}`);
+        return { entity, toState: earlyExisting.toState, fromState: earlyExisting.fromState };
+      }
+    }
+
     // ── 1. Résolution (tenantId, entityType, fromState, action) → toState ────
     // Hors transaction : lecture seule, pas de side-effects.
     // La clé composite @@unique([tenantId, entityType, fromState, action, version])
