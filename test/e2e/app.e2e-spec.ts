@@ -32,6 +32,9 @@ import {
   FIXTURE_ALERT,
   FIXTURE_NOTIFICATION,
   FIXTURE_REPORT,
+  FIXTURE_BRAND,
+  FIXTURE_COST_PROFILE,
+  FIXTURE_COST_SNAPSHOT,
 } from '../helpers/mock-providers';
 
 // ─── Setup ─────────────────────────────────────────────────────────────────────
@@ -1081,5 +1084,124 @@ describe('[RATE_LIMIT] Endpoints rate-limités', () => {
       .post(`/public/${T}/report`)
       .send({ type: 'DANGEROUS_DRIVING', plateOrParkNumber: 'AB-123-CD', description: 'Test signalement' });
     expect([200, 201]).toContain(res.status);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 29. WHITE LABEL  /tenants/:id/brand
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('[WHITE_LABEL] /tenants/:id/brand', () => {
+  it('403 GET /brand — sans auth', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url('/brand'));
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it('200 GET /brand — retourne la configuration de marque', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url('/brand'))
+      .set(authH);
+    expect([200, 404]).toContain(res.status);
+  });
+
+  it('200 GET /brand/style — retourne le bloc <style> CSS', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url('/brand/style'))
+      .set(authH);
+    expect([200]).toContain(res.status);
+  });
+
+  it('200 GET /brand/tokens — retourne les tokens JSON', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url('/brand/tokens'))
+      .set(authH);
+    expect([200]).toContain(res.status);
+  });
+
+  it('200 PUT /brand — met à jour la marque', async () => {
+    const res = await request(app.getHttpServer())
+      .put(url('/brand'))
+      .set(authH)
+      .send({
+        brandName:     'Mon Transporteur',
+        primaryColor:  '#1e40af',
+        secondaryColor: '#1a3a5c',
+        accentColor:   '#f59e0b',
+        textColor:     '#111827',
+        bgColor:       '#ffffff',
+        fontFamily:    'Inter, sans-serif',
+      });
+    expect([200, 201]).toContain(res.status);
+  });
+
+  it('204 DELETE /brand — supprime la personnalisation', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(url('/brand'))
+      .set(authH);
+    expect([200, 204, 404]).toContain(res.status);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 30. PRICING / PROFITABILITÉ  /tenants/:id/pricing
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('[PRICING] /tenants/:id/pricing', () => {
+  it('403 GET /pricing/buses/:busId/cost-profile — sans auth', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url(`/pricing/buses/${FIXTURE_BUS.id}/cost-profile`));
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it('200 GET /pricing/buses/:busId/cost-profile — retourne le profil de coût', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url(`/pricing/buses/${FIXTURE_BUS.id}/cost-profile`))
+      .set(authH);
+    expect([200, 404]).toContain(res.status);
+  });
+
+  it('200 PUT /pricing/buses/:busId/cost-profile — upsert profil de coût', async () => {
+    const res = await request(app.getHttpServer())
+      .put(url(`/pricing/buses/${FIXTURE_BUS.id}/cost-profile`))
+      .set(authH)
+      .send({
+        fuelConsumptionPer100Km: 28,
+        fuelPricePerLiter:       1.45,
+        maintenanceCostPerKm:    0.05,
+        driverMonthlySalary:     350000,
+        annualInsuranceCost:     1200000,
+        monthlyAgencyFees:       50000,
+        purchasePrice:           45000000,
+      });
+    expect([200, 201]).toContain(res.status);
+  });
+
+  it('201 POST /pricing/trips/:tripId/snapshot — déclenche le calcul de rentabilité', async () => {
+    const res = await request(app.getHttpServer())
+      .post(url(`/pricing/trips/${FIXTURE_TRIP.id}/snapshot`))
+      .set(authH);
+    expect([200, 201, 400]).toContain(res.status);
+  });
+
+  it('200 GET /pricing/trips/:tripId/snapshot — retourne le snapshot', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url(`/pricing/trips/${FIXTURE_TRIP.id}/snapshot`))
+      .set(authH);
+    expect([200, 404]).toContain(res.status);
+  });
+
+  it('200 GET /pricing/trips/:tripId/yield — suggestion de prix Yield', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url(`/pricing/trips/${FIXTURE_TRIP.id}/yield`))
+      .set(authH);
+    expect([200, 404]).toContain(res.status);
+  });
+
+  it('200 GET /pricing/summary — dashboard rentabilité', async () => {
+    const res = await request(app.getHttpServer())
+      .get(url('/pricing/summary?from=2026-01-01&to=2026-12-31'))
+      .set(authH);
+    expect([200]).toContain(res.status);
   });
 });

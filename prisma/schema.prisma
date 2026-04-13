@@ -38,6 +38,7 @@ model Tenant {
   parcels         Parcel[]
   config          TenantConfig?
   brand           TenantBrand?
+  businessConfig  TenantBusinessConfig?
   busCostProfiles BusCostProfile[]
 
   @@map("tenants")
@@ -97,6 +98,30 @@ model TenantBrand {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   @@map("tenant_brands")
+}
+
+// ── Constantes métier globales par tenant (ADR-24) ────────────────────────────
+// Évite les magic numbers dans le code (365, 30, 0.05…).
+// Créé automatiquement lors du provisioning tenant avec les valeurs par défaut.
+model TenantBusinessConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+
+  // Proratisation annuelle → journalière
+  daysPerYear            Int   @default(365)
+  // Fallback trips/mois si BusCostProfile.avgTripsPerMonth absent
+  defaultTripsPerMonth   Int   @default(30)
+  // Seuil tag rentabilité ±% (PROFITABLE / BREAK_EVEN / DEFICIT)
+  breakEvenThresholdPct  Float @default(0.05)
+  // Commission agence sur revenus billets (fraction, ex: 0.03 = 3 %)
+  agencyCommissionRate   Float @default(0.03)
+  // Redevance gare routière par départ (en devise tenant)
+  stationFeePerDeparture Float @default(0.0)
+
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_business_configs")
 }
 
 model Agency {
@@ -1163,21 +1188,27 @@ model BusCostProfile {
   id                      String   @id @default(cuid())
   tenantId                String
   busId                   String   @unique
-  // Coûts variables
+  // Coûts variables directs
   fuelConsumptionPer100Km Float    // litres / 100 km
   fuelPricePerLiter       Float    // prix actuel du carburant (XOF/litre)
-  driverAllowancePerTrip  Float    @default(0)   // indemnités fixes par trajet (XOF)
-  tollFeesPerTrip         Float    @default(0)   // péages fixes par trajet (XOF)
+  // AdBlue — moteurs Euro 6 (Mercedes Actros, Iveco Stralis…)
+  adBlueCostPerLiter      Float    @default(0.18) // coût AdBlue au litre (€)
+  adBlueRatioFuel         Float    @default(0.05) // fraction AdBlue / volume carburant
+  // Maintenance au km (ADR-23 — remplace forfait mensuel biaisé)
+  maintenanceCostPerKm    Float    @default(0.05) // coût d'entretien par km (XOF/km)
+  // Frais de départ
+  stationFeePerDeparture  Float    @default(0)    // redevance gare routière par départ
+  driverAllowancePerTrip  Float    @default(0)    // indemnités fixes par trajet (XOF)
+  tollFeesPerTrip         Float    @default(0)    // péages fixes par trajet (XOF)
   // Coûts fixes mensuels (proratisés par trajet dans ProfitabilityService)
   driverMonthlySalary     Float    // salaire mensuel conducteur assigné (XOF)
   annualInsuranceCost     Float    // assurance annuelle (XOF)
   monthlyAgencyFees       Float    // frais fixes agence / mois (XOF)
-  monthlyMaintenanceAvg   Float    @default(0)   // entretien courant estimé / mois
   // Amortissement simplifié
   purchasePrice           Float    // prix d'achat (XOF)
   depreciationYears       Int      @default(10)
   residualValue           Float    @default(0)
-  // Nombre moyen de trajets par mois (utilisé pour la proratisation)
+  // Nombre moyen de trajets par mois (utilisé pour la proratisation des fixes)
   avgTripsPerMonth        Int      @default(30)
   updatedAt               DateTime @updatedAt
 
@@ -1193,31 +1224,37 @@ model TripCostSnapshot {
   id       String @id @default(cuid())
   tenantId String
   tripId   String @unique
-  // ── Coûts variables ──────────────────────────────────────────
-  fuelCost           Float   // fuelConsumption / 100 * distanceKm * fuelPrice
-  tollFees           Float
-  driverAllowance    Float
-  // ── Coûts fixes proratisés (par trajet) ─────────────────────
-  driverDailyCost    Float   // salaire mensuel / avgTripsPerMonth
-  insuranceDailyCost Float   // assurance annuelle / 365 / trips/jour
-  agencyDailyCost    Float   // frais agence mensuel / avgTripsPerMonth
-  depreciationDaily  Float   // (purchasePrice - residualValue) / years / 365
-  maintenanceDailyCost Float
-  // ── Totaux ──────────────────────────────────────────────────
+  // ── Coûts variables directs ──────────────────────────────────
+  fuelCost          Float
+  adBlueCost        Float   @default(0)
+  maintenanceCost   Float   @default(0)  // km-based (ADR-23)
+  stationFee        Float   @default(0)
+  tollFees          Float
+  driverAllowance   Float
   totalVariableCost Float
-  totalFixedCost    Float
-  totalCost         Float
+  // ── Coûts fixes proratisés (par trajet) ─────────────────────
+  driverDailyCost    Float
+  insuranceDailyCost Float
+  agencyDailyCost    Float
+  depreciationDaily  Float
+  totalFixedCost     Float
+  totalCost          Float
   // ── Revenus ─────────────────────────────────────────────────
   ticketRevenue     Float   @default(0)
   parcelRevenue     Float   @default(0)
   totalRevenue      Float   @default(0)
+  // ── Marges (ADR-27) ─────────────────────────────────────────
+  operationalMargin     Float   @default(0)  // revenu - coûts variables
+  operationalMarginRate Float   @default(0)
+  agencyCommission      Float   @default(0)  // commission agence post-snapshot
+  netTenantRevenue      Float   @default(0)  // totalRevenue - agencyCommission
+  netMargin             Float   // revenu tenant net - coût total
+  marginRate            Float   // netMargin / totalCost
   // ── KPIs ────────────────────────────────────────────────────
   bookedSeats       Int
   totalSeats        Int
   fillRate          Float   // 0.0 – 1.0
-  breakEvenSeats    Int     // ceil(totalCost / avgTicketPrice)
-  netMargin         Float   // totalRevenue - totalCost
-  marginRate        Float   // netMargin / max(totalCost, 1)
+  breakEvenSeats    Int
   profitabilityTag  String  // PROFITABLE | BREAK_EVEN | DEFICIT
   computedAt        DateTime @default(now())
 

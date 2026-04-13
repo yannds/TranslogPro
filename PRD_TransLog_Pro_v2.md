@@ -3,13 +3,14 @@
 
 | Champ | Valeur |
 |---|---|
-| Version | 3.0 — Post-PRD-ADD Integration |
+| Version | 4.0 — Profitabilité · White Label · Templates · 404 UX |
 | Statut | Document de Référence (Single Source of Truth) |
 | Objectif | Digitaliser l'intégralité de la chaîne de valeur du transport de passagers et de colis |
 | Stack | NestJS · PostgreSQL RLS · Prisma · React Native · Next.js · Redis · MinIO · HashiCorp Vault |
 | Modèle | SaaS Multi-Tenant (Architecture Hexagonale, Provider-Agnostic, Event-Driven) |
 | Révisions v2.0 | WorkflowConfig formalisée · Schéma Prisma corrigé · Sécurité renforcée · Modules manquants ajoutés |
 | Révisions v3.0 | IAM DB-driven (zéro hardcode) · Modules CRM/Safety/Crew/PublicReporter · RGPD · Voyageur=User · BaseEvent TripEvent/Incident · PostGIS optionnel |
+| Révisions v4.0 | White Label UI par tenant · Module Profitabilité (BusCostProfile + TripCostSnapshot) · Yield Management · TenantBusinessConfig · ICostCalculator (interface pure) · 10 templates PDF · Pages 404 thématiques |
 
 ---
 
@@ -1130,6 +1131,183 @@ POST   /api/v1/control/workflow/override                control.workflow.overrid
 
 ---
 
+## IX. Modules v4.0 — Détails Nouveaux
+
+### IX.1 White Label UI (Module W)
+
+Chaque tenant peut personnaliser entièrement l'interface de sa plateforme via un modèle `TenantBrand` stocké en base et servi en cache Redis (TTL 5 min).
+
+**Variables CSS injectées dynamiquement :**
+```css
+--color-primary, --color-secondary, --color-accent,
+--color-text, --color-bg, --font-family
+```
+
+**Service WhiteLabelService :**
+| Méthode | Rôle |
+|---|---|
+| `getBrand(tenantId)` | Lecture cache Redis → fallback DB |
+| `upsert(tenantId, dto)` | Mise à jour marque + invalidation cache |
+| `buildStyleTag(brand)` | Génère `<style data-tenant-brand>` injecté dans le layout |
+| `buildThemeTokens(brand)` | Retourne tokens JSON pour composants React |
+
+**Sécurité CSS :** `sanitizeCss()` filtre `@import`, `url()`, `expression()`, `javascript:`, `-moz-binding` avant toute injection.
+
+**Endpoints :** `GET /brand`, `GET /brand/style`, `GET /brand/tokens`, `PUT /brand`, `DELETE /brand`
+
+**Permissions requises :** `SETTINGS_MANAGE_TENANT` sur PUT et DELETE.
+
+**Modèle DB :** `TenantBrand` — `brandName`, `logoUrl?`, `faviconUrl?`, palette couleurs (5 propriétés), `fontFamily`, `customCss?`, `metaTitle?`, `metaDescription?`, `supportEmail?`, `supportPhone?`.
+
+---
+
+### IX.2 Module Profitabilité & Yield Management (Module V étendu)
+
+#### IX.2.1 Calcul de coûts par trajet
+
+**Modèle BusCostProfile** — profil de coût par bus, configurable par tenant :
+
+| Champ | Rôle |
+|---|---|
+| `fuelConsumptionPer100Km` | Consommation (L/100km) |
+| `fuelPricePerLiter` | Prix carburant (€/L) |
+| `adBlueCostPerLiter` | Coût AdBlue (€/L) — Euro 6 |
+| `adBlueRatioFuel` | Fraction AdBlue/carburant (défaut 0.05) |
+| `maintenanceCostPerKm` | **Coût maintenance au km** (€/km) — remplace forfait mensuel |
+| `stationFeePerDeparture` | Redevance gare routière par départ |
+| `agencyCommissionRate` | Commission agence (fraction revenus billets) |
+| `driverAllowancePerTrip` | Indemnités chauffeur par trajet |
+| `tollFeesPerTrip` | Péages forfaitaires |
+| `driverMonthlySalary` | Salaire brut mensuel chauffeur |
+| `annualInsuranceCost` | Assurance annuelle bus |
+| `monthlyAgencyFees` | Frais agence mensuels fixes |
+| `purchasePrice` | Prix d'achat du bus |
+| `depreciationYears` | Durée d'amortissement (défaut 10 ans) |
+| `residualValue` | Valeur résiduelle en fin de vie |
+| `avgTripsPerMonth` | Moyenne trajets/mois pour proratisation |
+
+**Formules appliquées par `CostCalculatorEngine` :**
+```
+Coûts variables (par trajet) :
+  fuelCost        = (consumption/100) × distanceKm × fuelPrice
+  adBlueCost      = fuelCost × adBlueRatioFuel × (adBlueCostPerLiter / fuelPricePerLiter)
+  maintenanceCost = maintenanceCostPerKm × distanceKm   ← km-based, pas mensuel
+  tollFees        = tollFeesPerTrip (forfait)
+  driverAllowance = driverAllowancePerTrip
+  stationFee      = stationFeePerDeparture
+
+Coûts fixes proratisés (par trajet) :
+  driverDailyCost     = driverMonthlySalary / avgTripsPerMonth
+  insuranceDailyCost  = annualInsuranceCost / daysPerYear   ← via TenantBusinessConfig
+  agencyDailyCost     = monthlyAgencyFees / avgTripsPerMonth
+  depreciationDaily   = (purchasePrice - residualValue) / depreciationYears / daysPerYear
+```
+
+**Double hiérarchie de marge :**
+- **Marge Opérationnelle** = Revenu − Coûts Variables (contribution directe)
+- **Marge Nette** = Revenu − Coût Total (rentabilité réelle incluant fixes)
+
+**Tag de rentabilité (configurable via TenantBusinessConfig.breakEvenThresholdPct) :**
+- `PROFITABLE`  → marge nette > totalCost × seuil (défaut +5 %)
+- `BREAK_EVEN`  → abs(marge nette) ≤ totalCost × seuil
+- `DEFICIT`     → marge nette < −totalCost × seuil
+
+#### IX.2.2 Commission agence (post-snapshot)
+
+La commission agence est déduite du revenu billet **après snapshot** pour calculer le revenu net tenant :
+```
+agencyCommission = ticketRevenue × agencyCommissionRate
+netTenantRevenue = totalRevenue - agencyCommission
+```
+
+#### IX.2.3 TenantBusinessConfig — Constantes métier globales
+
+Nouveau modèle évitant les magic numbers dans le code :
+
+| Constante | Défaut | Rôle |
+|---|---|---|
+| `daysPerYear` | 365 | Proratisation coûts annuels → journaliers |
+| `defaultTripsPerMonth` | 30 | Fallback si BusCostProfile absent |
+| `breakEvenThresholdPct` | 0.05 | Seuil rentabilité ±5 % |
+| `adBlueRatioFuel` | 0.05 | Fraction AdBlue du carburant (5 %) |
+| `agencyCommissionRate` | 0.03 | Commission agence (3 %) |
+| `stationFeePerDeparture` | 0.0 | Redevance gare par départ |
+
+Ces constantes sont accessibles via `TenantBusinessConfig` (1:1 avec Tenant) et surchargent les valeurs par défaut du `CostCalculatorEngine`.
+
+#### IX.2.4 ICostCalculator — Interface Pure
+
+L'interface `ICostCalculator` découple la logique de calcul des accès Prisma. La classe `CostCalculatorEngine` implémente cette interface sans aucune dépendance NestJS ni Prisma — testable en isolation totale.
+
+```typescript
+interface ICostCalculator {
+  computeCosts(distanceKm: number, profile: CostInputProfile): CostBreakdown;
+  computeMargins(costs, revenue, constants): MarginBreakdown;
+}
+```
+
+#### IX.2.5 Yield Management
+
+Moteur activable par tenant via `InstalledModule` (clé `YIELD_ENGINE`). 4 règles en cascade :
+
+| Règle | Condition | Effet |
+|---|---|---|
+| GOLDEN_DAY | `isGoldenDay = true` (fillRate historique moyen > 85 %) | `prix × (1 + goldenDayMultiplier)` |
+| BLACK_ROUTE | `isBlackRoute = true` (> 50 % déficitaire sur 90 jours) | `prix → breakEven estimé` |
+| LOW_FILL | `hoursLeft ≤ 48h` et `fillRate < lowFillThreshold` | `prix × (1 − lowFillDiscount)` |
+| HIGH_FILL | `fillRate ≥ highFillThreshold` | `prix × (1 + highFillPremium)` |
+
+Toutes les valeurs de seuils configurables via `InstalledModule.config` (YIELD_ENGINE). Bornes du prix : `[basePrice × 0.70, basePrice × 2.00]` (configurable).
+
+**`TripAnalytics`** : fenêtre glissante 90 jours, agrégé par route/bus/dayOfWeek. Recalculé quotidiennement par le Scheduler.
+
+---
+
+### IX.3 Catalogue de Templates PDF (10 templates)
+
+Tous les templates utilisent le moteur **pdfme** (JSON schema + `basePdf` + `schemas[][]`).
+
+| Slug | Format | Description |
+|---|---|---|
+| `invoice-a4` | A4 | Facture standard avec totaux et QR |
+| `ticket-a5` | A5 | Billet voyageur, siège, QR HMAC |
+| `baggage-tag` | 100×150mm | Étiquette bagage avec code-barres |
+| `parcel-label` | 100×150mm | Étiquette colis standard |
+| `manifest-a4` | A4 | Manifeste de chargement bus |
+| `packing-list-a4` | A4 | Liste de colisage expédition |
+| `receipt-thermal` | 80mm (thermal) | Reçu caisse terrain |
+| `envelope-c5` | C5 229×162mm | Enveloppe expéditeur/destinataire |
+| `envelope-dl` | DL 220×110mm | Enveloppe lettre pliée en 3 |
+| `parcel-label-multi` | A4 | Planche 8 étiquettes colis (2×4) |
+
+Chargement par `TemplatesSeeder` depuis `server/seed/templates/*.template.json`.
+
+---
+
+### IX.4 Pages 404 Thématiques (Frontend)
+
+4 variantes de pages 404 thématisées au domaine transport/logistique, composant switcher `NotFound404` :
+
+| Variante | Thème | Couleur | Illustration |
+|---|---|---|---|
+| `passenger` | Bus manqué | Bleu | Voyageur sur quai, bus qui part |
+| `parcel` | Colis égaré | Ambre | Colis avec jambes qui s'enfuit d'un entrepôt |
+| `driver` | Erreur d'itinéraire | Vert | GPS perdu, route qui disparaît |
+| `maintenance` | Panne sèche | Rouge | Bus en panne, mécanicien sous le capot |
+
+**Props du composant :** `variant` (passenger | parcel | driver | maintenance | random), `onAction?: () => void`, `className?: string`.
+
+Usage Next.js :
+```tsx
+// app/not-found.tsx
+import { NotFound404 } from '@/components/pages/not-found';
+export default function NotFound() {
+  return <NotFound404 variant="random" onAction={() => router.push('/')} />;
+}
+```
+
+---
+
 ## VIII. Décisions Architecturales (ADR)
 
 | # | Décision | Choix | Raison |
@@ -1156,9 +1334,15 @@ POST   /api/v1/control/workflow/override                control.workflow.overrid
 | ADR-20 | PublicReport GPS TTL | reporterGpsExpireAt 24h + pg_cron delete | RGPD : données GPS collectées sans opt-in permanent — durée minimale de rétention. |
 | ADR-21 | Public Reporter isolation | /public/{slug}/... séparé de /api/v1/tenants/ | Pas d'auth, rate limit IP agressif. Isolation claire des endpoints authentifiés vs publics. |
 | ADR-22 | IWeatherService | Interface permutable (OpenWeatherMap default) | Smart Bus Display météo — fournisseur non critique, permutable sans modification code métier. |
+| ADR-23 | Maintenance au km | `maintenanceCostPerKm × distanceKm` (pas forfait mensuel) | Un bus faisant 2 vs 10 trajets/mois a le même forfait mensuel — coût par trajet faussé. Le coût au km reflète la consommation réelle de la mécanique. |
+| ADR-24 | TenantBusinessConfig | Modèle DB 1:1 avec Tenant pour les constantes métier | Les magic numbers (365, 30, 0.05…) dans le code empêchent la personnalisation tenant et rendent les tests fragiles. Un modèle DB permet la surcharge sans redéploiement. |
+| ADR-25 | White Label CSS injection | Variables CSS `--color-*` dans `<style data-tenant-brand>` côté serveur | Évite un round-trip JS pour le thème. Le SSR injecte les tokens avant le premier paint. `sanitizeCss()` protège contre l'injection CSS malveillante. |
+| ADR-26 | ICostCalculator interface | Séparation logique pure / couche Prisma | Permet les tests unitaires du moteur de calcul sans base de données. `CostCalculatorEngine` est une classe pure TypeScript, ProfitabilityService est le seul à dépendre de Prisma. |
+| ADR-27 | Dual Margin hierarchy | Marge Opérationnelle (rev − var) et Marge Nette (rev − total) | Décision de gestion : la marge opérationnelle mesure la contribution d'un trajet à la couverture des fixes ; la marge nette mesure la rentabilité réelle. Les deux métriques sont nécessaires pour piloter les prix. |
 
 ---
 
-*Fin du PRD TransLog Pro v3.0*
+*Fin du PRD TransLog Pro v4.0*
 *Révision v2.0 : Critique architecturale complète — Avril 2026*
 *Révision v3.0 : Intégration PRD-ADD (CRM, Safety, Crew, Public Reporter, IAM DB-driven) — Avril 2026*
+*Révision v4.0 : White Label · Profitabilité · ICostCalculator · TenantBusinessConfig · Templates · 404 — Avril 2026*

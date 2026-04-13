@@ -1,7 +1,7 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-12.
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-13.
 
 ---
 
@@ -9,19 +9,55 @@
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit — Engine** (src/) | `npm test` | 1 | 14 | ✅ PASS |
-| **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 10 | 123 | ✅ PASS |
-| **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 111 | ✅ PASS |
+| **Unit — Engine** (src/) | `npm test` | 2 | 39 | ✅ PASS |
+| **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 12 | 172 | ✅ PASS |
+| **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS |
 
-**Total validé : 284 tests / 0 failure**
+**Total validé : 371 tests / 0 failure**
+
+### Ajouts v4.0 (Avril 2026)
+- `src/modules/pricing/__tests__/cost-calculator.engine.spec.ts` — 25 tests (pure engine)
+- `test/unit/services/profitability.service.spec.ts` — 14 tests
+- `test/unit/services/white-label.service.spec.ts` — 16 tests
+- `test/e2e/app.e2e-spec.ts` — +13 tests (sections 29 WHITE_LABEL + 30 PRICING)
 
 ---
 
-## NIVEAU 1 — Unit : WorkflowEngine (src/)
+## NIVEAU 1 — Unit : WorkflowEngine + CostCalculatorEngine (src/)
 
 **Config** : `package.json#jest` → `rootDir: src`, picks `src/**/*.spec.ts`
 **Commande** : `npm test`
+
+### src/modules/pricing/__tests__/cost-calculator.engine.spec.ts — 25 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | computeCosts() — fuelCost = (consumption/100) × distance × fuelPrice |
+| 2 | computeCosts() — adBlueCost = fuelVolume × ratio × (adBluePrice/fuelPrice) |
+| 3 | computeCosts() — maintenanceCost = maintenanceCostPerKm × distanceKm (km-based ADR-23) |
+| 4 | computeCosts() — maintenanceCost = 0 si distance = 0 |
+| 5 | computeCosts() — stationFee = stationFeePerDeparture (constant par départ) |
+| 6 | computeCosts() — tollFees et driverAllowance = valeurs fixes |
+| 7 | computeCosts() — totalVariableCost = somme des 6 coûts variables |
+| 8 | computeCosts() — driverDailyCost = salary / avgTripsPerMonth |
+| 9 | computeCosts() — insuranceDailyCost = annualInsurance / 365 |
+| 10 | computeCosts() — depreciationDaily = (purchase-residual) / years / 365 |
+| 11 | computeCosts() — totalCost = totalVariable + totalFixed |
+| 12 | computeCosts() — avgTripsPerMonth=0 protégé contre division par zéro |
+| 13 | computeCosts() — depreciationYears=0 protégé contre division par zéro |
+| 14 | computeCosts() — adBlueCost=0 si adBlueRatioFuel=0 |
+| 15 | computeMargins() — operationalMargin = totalRevenue - totalVariableCost |
+| 16 | computeMargins() — agencyCommission = ticketRevenue × rate |
+| 17 | computeMargins() — netTenantRevenue = totalRevenue - agencyCommission |
+| 18 | computeMargins() — netMargin = netTenantRevenue - totalCost |
+| 19 | computeMargins() — fillRate = bookedSeats / totalSeats |
+| 20 | computeMargins() — fillRate = 0 si totalSeats = 0 |
+| 21 | computeMargins() — breakEvenSeats = ceil(totalCost / avgTicketPrice) |
+| 22 | computeMargins() — tag PROFITABLE si marge clairement positive |
+| 23 | computeMargins() — tag DEFICIT si revenu = 0 |
+| 24 | computeMargins() — tag BREAK_EVEN autour du seuil |
+| 25 | DEFAULT_BUSINESS_CONSTANTS — valeurs attendues (365, 0.05, 0.03) |
 
 ### src/core/workflow/__tests__/workflow.engine.spec.ts — 14 tests ✅
 
@@ -203,6 +239,43 @@
 | 8 | sign() — retourne status=SIGNED avec signedById + signedAt |
 | 9 | getDownloadUrl() — délègue à IStorageService |
 
+### test/unit/services/profitability.service.spec.ts — 14 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | upsertCostProfile() — appelle busCostProfile.upsert() avec les bons champs |
+| 2 | upsertCostProfile() — lève NotFoundException si bus introuvable |
+| 3 | upsertCostProfile() — applique les défauts adBlue et maintenanceCostPerKm |
+| 4 | computeAndSnapshot() — retourne le snapshot existant sans recalculer (idempotence) |
+| 5 | computeAndSnapshot() — lève NotFoundException si trip introuvable |
+| 6 | computeAndSnapshot() — lève BadRequestException si pas de BusCostProfile |
+| 7 | computeAndSnapshot() — crée snapshot avec profitabilityTag valide |
+| 8 | computeAndSnapshot() — appelle ticket.aggregate et transaction.aggregate |
+| 9 | computeAndSnapshot() — utilise DEFAULT_BUSINESS_CONSTANTS si TenantBusinessConfig null |
+| 10 | computeAndSnapshot() — appelle tripCostSnapshot.create() une seule fois |
+| 11 | getProfitabilitySummary() — retourne totalRevenue et totalCost agrégés |
+| 12 | getProfitabilitySummary() — retourne byTag avec count par profitabilityTag |
+| 13 | getProfitabilitySummary() — avgFillRate=0 si aucun snapshot |
+| 14 | getProfitabilitySummary() — totalOperationalMargin présent dans le résumé |
+
+### test/unit/services/white-label.service.spec.ts — 16 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | getBrand() — retourne le cache Redis si présent (cache-first) |
+| 2 | getBrand() — lit la DB si cache vide |
+| 3 | getBrand() — stocke en cache Redis TTL 300s après lecture DB |
+| 4 | getBrand() — retourne null si aucune marque configurée |
+| 5 | upsert() — appelle tenantBrand.upsert() avec les bons champs |
+| 6 | upsert() — invalide le cache après upsert |
+| 7 | remove() — supprime la marque et invalide le cache |
+| 8 | buildStyleTag() — génère un bloc `<style data-tenant-brand>` valide |
+| 9 | buildStyleTag() — inclut customCss si présent |
+| 10 | buildStyleTag() — filtre @import dans customCss |
+| 11 | buildStyleTag() — filtre url() dans customCss |
+| 12 | buildStyleTag() — filtre javascript: dans customCss |
+| 13 | buildThemeTokens() — retourne tokens CSS --color-primary et --color-bg |
+
 ### test/unit/services/geo-safety.service.spec.ts — 14 tests ✅
 
 | # | Description |
@@ -261,6 +334,8 @@
 | DISPLAY | 1 | GET display (public) |
 | VALIDATION | 2 | 400 corps invalides |
 | RATE_LIMIT | 3 | Guards mockés passent en test |
+| WHITE_LABEL | 6 | GET brand, GET style, GET tokens, PUT brand, DELETE brand |
+| PRICING | 7 | GET cost-profile, PUT cost-profile, POST snapshot, GET snapshot, GET yield, GET summary |
 
 ---
 
@@ -289,3 +364,4 @@
 | BREAK 4 | Setup integration : Testcontainers + seed + jest.integration.config.ts | ✅ FAIT |
 | BREAK 5 | 4 Integration Specs : engine + 3 lifecycles | ✅ FAIT |
 | BREAK 6 | Validation finale : unit + integration + e2e = 0 failure | ✅ FAIT |
+| **BREAK 7 — v4.0** | CostCalculatorEngine pure spec (25 tests) + ProfitabilityService spec (14) + WhiteLabelService spec (16) + e2e sections 29-30 (13 tests) | ✅ FAIT |

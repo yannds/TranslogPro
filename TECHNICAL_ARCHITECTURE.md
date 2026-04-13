@@ -114,8 +114,11 @@
 | ADR-20 | GPS Public Reporter | TTL 24h — RGPD minimisation données |
 | ADR-21 | Public Reporter URL | /public/{slug} séparé — isolation auth vs non-auth, rate limit IP |
 | ADR-22 | IWeatherService | Interface permutable — Smart Bus Display météo |
-| ADR-14 | Ticket ≠ Traveler | Ticket = financier immuable, Traveler = opérationnel |
-| ADR-15 | WorkflowConfig versioning | Entités in-flight suivent config active |
+| ADR-23 | Maintenance au km | `maintenanceCostPerKm × distanceKm` — coût mécanique réel vs forfait mensuel biaisé |
+| ADR-24 | TenantBusinessConfig | Modèle DB 1:1 Tenant — constantes métier (365, 30, 0.05…) sans magic numbers dans le code |
+| ADR-25 | CSS White Label SSR | `<style data-tenant-brand>` + CSS custom properties + `sanitizeCss()` — pas de round-trip JS |
+| ADR-26 | ICostCalculator interface | `CostCalculatorEngine` pure (sans NestJS/Prisma) — testable sans DB. Seul `ProfitabilityService` dépend de Prisma. |
+| ADR-27 | Dual Margin | Marge Opérationnelle (rev−var) + Marge Nette (rev−total) — piloter prix = piloter les deux niveaux |
 
 ---
 
@@ -306,12 +309,30 @@ src/
 │   │   ├── crew.controller.ts
 │   │   ├── crew.service.ts
 │   │   └── crew.module.ts
-│   └── public-reporter/
+│   ├── public-reporter/
 │       ├── dto/
 │       │   └── create-report.dto.ts
 │       ├── public-reporter.controller.ts  # /public/{slug}/report
 │       ├── public-reporter.service.ts     # validation géo-temporelle + RGPD
 │       └── public-reporter.module.ts
+│   ├── white-label/                       # ── AJOUT v4.0 ──
+│   │   ├── dto/
+│   │   │   └── upsert-brand.dto.ts        # validation couleurs HEX + URLs
+│   │   ├── white-label.controller.ts      # GET/PUT/DELETE /brand + /brand/style + /brand/tokens
+│   │   ├── white-label.middleware.ts      # Attach req.tenantBrand (non-blocking)
+│   │   ├── white-label.service.ts         # getBrand (Redis cache 5min) + buildStyleTag + sanitizeCss
+│   │   └── white-label.module.ts
+│   └── pricing/                           # ── AJOUT v4.0 ──
+│       ├── dto/
+│       │   └── bus-cost-profile.dto.ts    # UpsertBusCostProfileDto
+│       ├── interfaces/
+│       │   └── cost-calculator.interface.ts # ICostCalculator (pure — pas de NestJS)
+│       ├── engines/
+│       │   └── cost-calculator.engine.ts  # Implémentation pure — testable sans DB
+│       ├── profitability.service.ts       # Orchestration Prisma + CostCalculatorEngine
+│       ├── yield.service.ts               # Moteur Yield Management 4 règles
+│       ├── pricing.controller.ts          # 7 endpoints profil coût + snapshot + yield
+│       └── pricing.module.ts              # class ProfitabilityModule (évite conflit core/pricing)
 │
 └── common/
     ├── constants/
@@ -1227,6 +1248,92 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_waypoint_zone ON "Waypoint" USING GI
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v3.0*
+---
+
+## 13. White Label (Module W) — v4.0
+
+### 13.1 WhiteLabelService
+
+```typescript
+// Cache Redis : clé brand:{tenantId}, TTL 300s
+// Injection Redis : @Inject(REDIS_CLIENT) — même token que rbac.service.ts
+async getBrand(tenantId: string): Promise<BrandConfig>       // cache-first
+async upsert(tenantId: string, dto: UpsertBrandDto)          // invalide le cache
+async remove(tenantId: string)                                // invalide le cache
+buildStyleTag(brand: BrandConfig): string                    // <style data-tenant-brand>
+buildThemeTokens(brand: BrandConfig): Record<string, string> // tokens React/CSS
+```
+
+### 13.2 Injection dans le Layout
+
+```html
+<!-- SSR : injecté dans <head> avant le premier paint -->
+<style data-tenant-brand>
+  :root {
+    --color-primary: #2563eb;
+    --color-secondary: #1a3a5c;
+    --color-accent: #f59e0b;
+    --color-text: #111827;
+    --color-bg: #ffffff;
+    --font-family: Inter, sans-serif;
+  }
+</style>
+```
+
+### 13.3 WhiteLabelMiddleware
+
+Résout le `tenantId` depuis la session (auth) ou le path param (`/public/:slug/...`). Attache `req.tenantBrand` de manière non-bloquante (catch → defaults). Appliqué après `TenantMiddleware`.
+
+---
+
+## 14. Profitabilité & Yield Management (Module Pricing) — v4.0
+
+### 14.1 ICostCalculator Interface (Pure Logic)
+
+```typescript
+interface ICostCalculator {
+  computeCosts(distanceKm: number, profile: CostInputProfile): CostBreakdown;
+  computeMargins(costs, totalRevenue, ticketRevenue, totalSeats, bookedSeats, avgTicketPrice, constants): MarginBreakdown;
+}
+```
+
+`CostCalculatorEngine` = implémentation pure TypeScript (pas de NestJS, pas de Prisma). Testable unitairement sans `@Module`, sans DB.
+
+### 14.2 Formules clés
+
+```
+Variable :
+  fuelCost        = (consumPer100Km / 100) × distanceKm × fuelPrice
+  adBlueCost      = fuelCost × adBlueRatioFuel × (adBlueCostPerL / fuelPricePerL)
+  maintenanceCost = maintenanceCostPerKm × distanceKm        ← km-based (ADR-23)
+  stationFee      = stationFeePerDeparture
+
+Fixes proratisés :
+  driverDailyCost    = monthlySalary / avgTripsPerMonth
+  insuranceDailyCost = annualInsurance / daysPerYear         ← TenantBusinessConfig
+  depreciationDaily  = (purchase - residual) / years / daysPerYear
+
+Post-snapshot :
+  agencyCommission   = ticketRevenue × agencyCommissionRate  ← commission séparée
+  operationalMargin  = totalRevenue - totalVariableCost      ← marge opérationnelle
+  netMargin          = totalRevenue - totalCost              ← marge nette
+```
+
+### 14.3 Yield Engine — 4 règles en cascade
+
+```
+GOLDEN_DAY  → isGoldenDay (avgFillRate > 0.85) : prix × (1 + goldenDayMultiplier)
+BLACK_ROUTE → isBlackRoute (>50% déficit 90j)  : prix → breakEven estimé
+LOW_FILL    → J-2 et fillRate < 0.40           : prix × (1 - lowFillDiscount)
+HIGH_FILL   → fillRate ≥ 0.80                  : prix × (1 + highFillPremium)
+Bornes      : [basePrice × 0.70, basePrice × 2.00]
+```
+
+Tous les seuils configurables via `InstalledModule.config` (clé `YIELD_ENGINE`).
+
+---
+
+*Fin du Dossier Technique TransLog Pro v4.0*
 *Révision v2.0 : Avril 2026 — Architecture Validée*
 *Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*
+*Révision v4.0 : Avril 2026 — White Label · Profitabilité (ICostCalculator) · TenantBusinessConfig · Yield Management · ADR-23→27*

@@ -1,89 +1,40 @@
 /**
- * ProfitabilityService — Moteur de calcul de rentabilité par trajet.
+ * ProfitabilityService — Orchestration Prisma + CostCalculatorEngine.
  *
- * Formules appliquées
- * ───────────────────
- * Coûts variables (directs) :
- *   fuel_cost        = fuelConsumptionPer100Km / 100 * distanceKm * fuelPricePerLiter
- *   toll_fees        = tollFeesPerTrip (forfait, configurable par bus)
- *   driver_allowance = driverAllowancePerTrip
+ * Rôle de ce service :
+ *   - Charger BusCostProfile depuis la DB (Prisma)
+ *   - Charger TenantBusinessConfig pour les constantes (daysPerYear, taux…)
+ *   - Déléguer les calculs purs à CostCalculatorEngine (ADR-26)
+ *   - Persister le TripCostSnapshot (immuable, idempotent)
  *
- * Coûts fixes proratisés par trajet :
- *   driver_daily     = driverMonthlySalary / avgTripsPerMonth
- *   insurance_daily  = annualInsuranceCost / 365
- *   agency_daily     = monthlyAgencyFees / avgTripsPerMonth
- *   depreciation     = (purchasePrice - residualValue) / depreciationYears / 365
- *   maintenance      = monthlyMaintenanceAvg / avgTripsPerMonth
+ * Ce service NE contient aucun magic number. Toutes les constantes
+ * proviennent de TenantBusinessConfig (DB) ou de DEFAULT_BUSINESS_CONSTANTS.
  *
- * Indicateurs :
- *   totalCost        = Σ variables + Σ fixes
- *   breakEvenSeats   = ceil(totalCost / avgTicketPrice)
- *   netMargin        = totalRevenue - totalCost
- *   marginRate       = netMargin / max(totalCost, 1)
- *   fillRate         = bookedSeats / totalSeats
- *
- * Tag de rentabilité :
- *   PROFITABLE   → netMargin > totalCost * 0.05   (marge > 5 %)
- *   BREAK_EVEN   → abs(netMargin) <= totalCost * 0.05
- *   DEFICIT      → netMargin < -totalCost * 0.05
+ * Dual margin (ADR-27) :
+ *   - Marge Opérationnelle = revenu − coûts variables
+ *   - Marge Nette          = revenu tenant net − coût total
  */
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService }           from '../../infrastructure/database/prisma.service';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { UpsertBusCostProfileDto } from './dto/bus-cost-profile.dto';
+import { CostCalculatorEngine } from './engines/cost-calculator.engine';
+import {
+  CostInputProfile,
+  BusinessConstants,
+  DEFAULT_BUSINESS_CONSTANTS,
+} from './interfaces/cost-calculator.interface';
 
-// ─── Types internes ─────────────────────────────────────────────────────────
-
-interface CostBreakdown {
-  // Coûts variables
-  fuelCost:           number;
-  tollFees:           number;
-  driverAllowance:    number;
-  // Coûts fixes
-  driverDailyCost:    number;
-  insuranceDailyCost: number;
-  agencyDailyCost:    number;
-  depreciationDaily:  number;
-  maintenanceDailyCost: number;
-  // Totaux
-  totalVariableCost:  number;
-  totalFixedCost:     number;
-  totalCost:          number;
-}
-
-interface TripRevenueContext {
-  ticketRevenue: number;
-  parcelRevenue: number;
-  totalRevenue:  number;
-  bookedSeats:   number;
-  totalSeats:    number;
-}
-
-// ─── Tags ────────────────────────────────────────────────────────────────────
-
-const BREAK_EVEN_THRESHOLD = 0.05; // ±5 % du totalCost
-
-function getProfitabilityTag(netMargin: number, totalCost: number): string {
-  if (totalCost <= 0) return 'PROFITABLE';
-  const ratio = netMargin / totalCost;
-  if (ratio > BREAK_EVEN_THRESHOLD)  return 'PROFITABLE';
-  if (ratio < -BREAK_EVEN_THRESHOLD) return 'DEFICIT';
-  return 'BREAK_EVEN';
-}
-
-// ─── Service ─────────────────────────────────────────────────────────────────
+// ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
 export class ProfitabilityService {
+  private readonly calculator = new CostCalculatorEngine();
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ── Gestion des profils de coût ─────────────────────────────────────────────
 
-  async upsertCostProfile(
-    tenantId: string,
-    busId:    string,
-    dto:      UpsertBusCostProfileDto,
-  ) {
-    // Vérifier que le bus appartient au tenant
+  async upsertCostProfile(tenantId: string, busId: string, dto: UpsertBusCostProfileDto) {
     const bus = await this.prisma.bus.findFirst({ where: { id: busId, tenantId } });
     if (!bus) throw new NotFoundException(`Bus ${busId} introuvable`);
 
@@ -92,29 +43,30 @@ export class ProfitabilityService {
       busId,
       fuelConsumptionPer100Km: dto.fuelConsumptionPer100Km,
       fuelPricePerLiter:       dto.fuelPricePerLiter,
-      driverAllowancePerTrip:  dto.driverAllowancePerTrip  ?? 0,
-      tollFeesPerTrip:         dto.tollFeesPerTrip          ?? 0,
+      adBlueCostPerLiter:      dto.adBlueCostPerLiter      ?? 0.18,
+      adBlueRatioFuel:         dto.adBlueRatioFuel          ?? 0.05,
+      maintenanceCostPerKm:    dto.maintenanceCostPerKm     ?? 0.05,
+      stationFeePerDeparture:  dto.stationFeePerDeparture   ?? 0,
+      driverAllowancePerTrip:  dto.driverAllowancePerTrip   ?? 0,
+      tollFeesPerTrip:         dto.tollFeesPerTrip           ?? 0,
       driverMonthlySalary:     dto.driverMonthlySalary,
       annualInsuranceCost:     dto.annualInsuranceCost,
       monthlyAgencyFees:       dto.monthlyAgencyFees,
-      monthlyMaintenanceAvg:   dto.monthlyMaintenanceAvg   ?? 0,
       purchasePrice:           dto.purchasePrice,
-      depreciationYears:       dto.depreciationYears        ?? 10,
-      residualValue:           dto.residualValue            ?? 0,
-      avgTripsPerMonth:        dto.avgTripsPerMonth         ?? 30,
+      depreciationYears:       dto.depreciationYears         ?? 10,
+      residualValue:           dto.residualValue             ?? 0,
+      avgTripsPerMonth:        dto.avgTripsPerMonth          ?? 30,
     };
 
     return this.prisma.busCostProfile.upsert({
       where:  { busId },
       create: data,
-      update: { ...data, tenantId: undefined }, // tenantId immuable après création
+      update: { ...data, tenantId: undefined },
     });
   }
 
   async getCostProfile(tenantId: string, busId: string) {
-    const profile = await this.prisma.busCostProfile.findFirst({
-      where: { busId, tenantId },
-    });
+    const profile = await this.prisma.busCostProfile.findFirst({ where: { busId, tenantId } });
     if (!profile) throw new NotFoundException(`Aucun profil de coût pour le bus ${busId}`);
     return profile;
   }
@@ -123,8 +75,8 @@ export class ProfitabilityService {
 
   /**
    * Calcule la rentabilité d'un trajet et persiste le snapshot.
-   * Appelé automatiquement par le side-effect Trip.COMPLETED.
    * Idempotent : si le snapshot existe déjà, le retourne sans recalculer.
+   * Appelé automatiquement à la transition Trip → COMPLETED (side effect).
    */
   async computeAndSnapshot(tenantId: string, tripId: string) {
     // Idempotence
@@ -135,96 +87,131 @@ export class ProfitabilityService {
       where:   { id: tripId, tenantId },
       include: { bus: { include: { costProfile: true } }, route: true },
     });
-    if (!trip)                throw new NotFoundException(`Trajet ${tripId} introuvable`);
+    if (!trip)                 throw new NotFoundException(`Trajet ${tripId} introuvable`);
     if (!trip.bus.costProfile) throw new BadRequestException(
-      `Aucun profil de coût configuré pour le bus ${trip.busId} — renseignez BusCostProfile d'abord`,
+      `Bus ${trip.busId} n'a pas de BusCostProfile — configurez-le d'abord`,
     );
 
-    const costs   = this.computeCosts(trip.route.distanceKm, trip.bus.costProfile as any);
+    // Charger les constantes tenant (daysPerYear, taux commission…)
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId },
+    });
+    const constants: BusinessConstants = bizConfig
+      ? {
+          daysPerYear:           bizConfig.daysPerYear,
+          breakEvenThresholdPct: bizConfig.breakEvenThresholdPct,
+          agencyCommissionRate:  bizConfig.agencyCommissionRate,
+        }
+      : DEFAULT_BUSINESS_CONSTANTS;
+
+    // Construire le profil d'entrée pour le moteur pur
+    const cp = trip.bus.costProfile;
+    const profile: CostInputProfile = {
+      fuelConsumptionPer100Km: cp.fuelConsumptionPer100Km,
+      fuelPricePerLiter:       cp.fuelPricePerLiter,
+      adBlueCostPerLiter:      cp.adBlueCostPerLiter,
+      adBlueRatioFuel:         cp.adBlueRatioFuel,
+      maintenanceCostPerKm:    cp.maintenanceCostPerKm,
+      stationFeePerDeparture:  cp.stationFeePerDeparture,
+      driverAllowancePerTrip:  cp.driverAllowancePerTrip,
+      tollFeesPerTrip:         cp.tollFeesPerTrip,
+      driverMonthlySalary:     cp.driverMonthlySalary,
+      annualInsuranceCost:     cp.annualInsuranceCost,
+      monthlyAgencyFees:       cp.monthlyAgencyFees,
+      purchasePrice:           cp.purchasePrice,
+      depreciationYears:       cp.depreciationYears,
+      residualValue:           cp.residualValue,
+      avgTripsPerMonth:        cp.avgTripsPerMonth,
+    };
+
+    // Déléguer les calculs au moteur pur (pas de Prisma dans le moteur)
+    const costs   = this.calculator.computeCosts(trip.route.distanceKm, profile);
     const revenue = await this.computeRevenue(tenantId, tripId, trip.bus.capacity);
 
     const avgTicketPrice = revenue.bookedSeats > 0
       ? revenue.ticketRevenue / revenue.bookedSeats
       : trip.route.basePrice;
 
-    const breakEvenSeats = costs.totalCost > 0 && avgTicketPrice > 0
-      ? Math.ceil(costs.totalCost / avgTicketPrice)
-      : 0;
-
-    const netMargin  = revenue.totalRevenue - costs.totalCost;
-    const marginRate = costs.totalCost > 0 ? netMargin / costs.totalCost : 1;
-    const fillRate   = revenue.totalSeats > 0 ? revenue.bookedSeats / revenue.totalSeats : 0;
+    const margins = this.calculator.computeMargins(
+      costs,
+      revenue.totalRevenue,
+      revenue.ticketRevenue,
+      revenue.totalSeats,
+      revenue.bookedSeats,
+      avgTicketPrice,
+      constants,
+    );
 
     return this.prisma.tripCostSnapshot.create({
       data: {
         tenantId,
         tripId,
         // Coûts variables
-        fuelCost:           costs.fuelCost,
-        tollFees:           costs.tollFees,
-        driverAllowance:    costs.driverAllowance,
+        fuelCost:             costs.fuelCost,
+        adBlueCost:           costs.adBlueCost,
+        maintenanceCost:      costs.maintenanceCost,
+        stationFee:           costs.stationFee,
+        tollFees:             costs.tollFees,
+        driverAllowance:      costs.driverAllowance,
+        totalVariableCost:    costs.totalVariableCost,
         // Coûts fixes
-        driverDailyCost:    costs.driverDailyCost,
-        insuranceDailyCost: costs.insuranceDailyCost,
-        agencyDailyCost:    costs.agencyDailyCost,
-        depreciationDaily:  costs.depreciationDaily,
-        maintenanceDailyCost: costs.maintenanceDailyCost,
-        // Totaux
-        totalVariableCost: costs.totalVariableCost,
-        totalFixedCost:    costs.totalFixedCost,
-        totalCost:         costs.totalCost,
+        driverDailyCost:      costs.driverDailyCost,
+        insuranceDailyCost:   costs.insuranceDailyCost,
+        agencyDailyCost:      costs.agencyDailyCost,
+        depreciationDaily:    costs.depreciationDaily,
+        totalFixedCost:       costs.totalFixedCost,
+        totalCost:            costs.totalCost,
         // Revenus
-        ticketRevenue:     revenue.ticketRevenue,
-        parcelRevenue:     revenue.parcelRevenue,
-        totalRevenue:      revenue.totalRevenue,
+        ticketRevenue:        revenue.ticketRevenue,
+        parcelRevenue:        revenue.parcelRevenue,
+        totalRevenue:         revenue.totalRevenue,
+        // Marges
+        operationalMargin:    margins.operationalMargin,
+        operationalMarginRate: margins.operationalMarginRate,
+        agencyCommission:     margins.agencyCommission,
+        netTenantRevenue:     margins.netTenantRevenue,
+        netMargin:            margins.netMargin,
+        marginRate:           margins.netMarginRate,
         // KPIs
-        bookedSeats:       revenue.bookedSeats,
-        totalSeats:        revenue.totalSeats,
-        fillRate,
-        breakEvenSeats,
-        netMargin,
-        marginRate,
-        profitabilityTag: getProfitabilityTag(netMargin, costs.totalCost),
+        bookedSeats:          revenue.bookedSeats,
+        totalSeats:           revenue.totalSeats,
+        fillRate:             margins.fillRate,
+        breakEvenSeats:       margins.breakEvenSeats,
+        profitabilityTag:     margins.profitabilityTag,
       },
     });
   }
 
   /**
    * Vue agrégée pour le dashboard décideur.
-   * Retourne la marge nette réelle par ligne et par période.
+   * Retourne marge opérationnelle et nette par période.
    */
-  async getProfitabilitySummary(
-    tenantId: string,
-    fromDate: Date,
-    toDate:   Date,
-  ) {
+  async getProfitabilitySummary(tenantId: string, fromDate: Date, toDate: Date) {
     const snapshots = await this.prisma.tripCostSnapshot.findMany({
-      where: {
-        tenantId,
-        computedAt: { gte: fromDate, lte: toDate },
-      },
+      where: { tenantId, computedAt: { gte: fromDate, lte: toDate } },
     });
 
-    // Agréger par tag
     const byTag = snapshots.reduce((acc, s) => {
       acc[s.profitabilityTag] = (acc[s.profitabilityTag] ?? 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const totalRevenue   = snapshots.reduce((s, r) => s + r.totalRevenue,   0);
-    const totalCost      = snapshots.reduce((s, r) => s + r.totalCost,      0);
-    const totalNetMargin = snapshots.reduce((s, r) => s + r.netMargin,       0);
-    const avgFillRate    = snapshots.length > 0
+    const totalRevenue          = snapshots.reduce((s, r) => s + r.totalRevenue,         0);
+    const totalCost             = snapshots.reduce((s, r) => s + r.totalCost,             0);
+    const totalNetMargin        = snapshots.reduce((s, r) => s + r.netMargin,             0);
+    const totalOperationalMargin = snapshots.reduce((s, r) => s + r.operationalMargin,    0);
+    const avgFillRate           = snapshots.length > 0
       ? snapshots.reduce((s, r) => s + r.fillRate, 0) / snapshots.length
       : 0;
 
     return {
-      period:     { from: fromDate, to: toDate },
-      tripCount:  snapshots.length,
+      period:                 { from: fromDate, to: toDate },
+      tripCount:              snapshots.length,
       totalRevenue,
       totalCost,
       totalNetMargin,
-      globalMarginRate: totalCost > 0 ? totalNetMargin / totalCost : 0,
+      totalOperationalMargin,
+      globalNetMarginRate:    totalCost > 0 ? totalNetMargin / totalCost : 0,
       avgFillRate,
       byTag,
     };
@@ -232,58 +219,8 @@ export class ProfitabilityService {
 
   // ── Helpers privés ──────────────────────────────────────────────────────────
 
-  private computeCosts(
-    distanceKm:  number,
-    profile: {
-      fuelConsumptionPer100Km: number;
-      fuelPricePerLiter:       number;
-      tollFeesPerTrip:         number;
-      driverAllowancePerTrip:  number;
-      driverMonthlySalary:     number;
-      annualInsuranceCost:     number;
-      monthlyAgencyFees:       number;
-      monthlyMaintenanceAvg:   number;
-      purchasePrice:           number;
-      depreciationYears:       number;
-      residualValue:           number;
-      avgTripsPerMonth:        number;
-    },
-  ): CostBreakdown {
-    // Coûts variables
-    const fuelCost        = (profile.fuelConsumptionPer100Km / 100) * distanceKm * profile.fuelPricePerLiter;
-    const tollFees        = profile.tollFeesPerTrip;
-    const driverAllowance = profile.driverAllowancePerTrip;
-
-    // Coûts fixes proratisés
-    const tripsPerMonth       = Math.max(profile.avgTripsPerMonth, 1);
-    const driverDailyCost     = profile.driverMonthlySalary / tripsPerMonth;
-    const insuranceDailyCost  = profile.annualInsuranceCost / 365;
-    const agencyDailyCost     = profile.monthlyAgencyFees / tripsPerMonth;
-    const depreciationDaily   = (profile.purchasePrice - profile.residualValue)
-                                / Math.max(profile.depreciationYears, 1)
-                                / 365;
-    const maintenanceDailyCost = profile.monthlyMaintenanceAvg / tripsPerMonth;
-
-    const totalVariableCost = fuelCost + tollFees + driverAllowance;
-    const totalFixedCost    = driverDailyCost + insuranceDailyCost + agencyDailyCost
-                            + depreciationDaily + maintenanceDailyCost;
-
-    return {
-      fuelCost, tollFees, driverAllowance,
-      driverDailyCost, insuranceDailyCost, agencyDailyCost, depreciationDaily, maintenanceDailyCost,
-      totalVariableCost,
-      totalFixedCost,
-      totalCost: totalVariableCost + totalFixedCost,
-    };
-  }
-
-  private async computeRevenue(
-    tenantId: string,
-    tripId:   string,
-    busCapacity: number,
-  ): Promise<TripRevenueContext> {
+  private async computeRevenue(tenantId: string, tripId: string, busCapacity: number) {
     const [ticketAgg, parcelAgg, bookedSeats] = await Promise.all([
-      // Revenus billets (tickets CONFIRMED, CHECKED_IN, BOARDED, COMPLETED)
       this.prisma.ticket.aggregate({
         where: {
           tenantId, tripId,
@@ -292,7 +229,6 @@ export class ProfitabilityService {
         _sum:   { pricePaid: true },
         _count: { id: true },
       }),
-      // Revenus colis (shipments liés au trip)
       this.prisma.transaction.aggregate({
         where: {
           tenantId,

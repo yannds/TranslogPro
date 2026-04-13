@@ -11,6 +11,22 @@ export class UpsertBusCostProfileDto {
   @IsNumber() @IsPositive()
   fuelPricePerLiter!: number;
 
+  /** Coût AdBlue au litre (€) — moteurs Euro 6, défaut 0.18 */
+  @IsOptional() @IsNumber() @Min(0)
+  adBlueCostPerLiter?: number;
+
+  /** Fraction AdBlue / volume carburant — défaut 0.05 (5 %) */
+  @IsOptional() @IsNumber() @Min(0)
+  adBlueRatioFuel?: number;
+
+  /** Coût de maintenance au km (XOF/km) — remplace forfait mensuel (ADR-23) */
+  @IsOptional() @IsNumber() @Min(0)
+  maintenanceCostPerKm?: number;
+
+  /** Redevance gare routière par départ (XOF) */
+  @IsOptional() @IsNumber() @Min(0)
+  stationFeePerDeparture?: number;
+
   /** Indemnités chauffeur par trajet (XOF) */
   @IsOptional() @IsNumber() @Min(0)
   driverAllowancePerTrip?: number;
@@ -30,10 +46,6 @@ export class UpsertBusCostProfileDto {
   /** Frais fixes agence / mois (XOF) — proratisés par trajet */
   @IsNumber() @IsPositive()
   monthlyAgencyFees!: number;
-
-  /** Entretien courant estimé / mois (XOF) */
-  @IsOptional() @IsNumber() @Min(0)
-  monthlyMaintenanceAvg?: number;
 
   /** Prix d'achat du véhicule (XOF) */
   @IsNumber() @IsPositive()

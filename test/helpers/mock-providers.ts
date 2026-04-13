@@ -130,6 +130,82 @@ export const FIXTURE_REPORT = {
   createdAt:  new Date(),
 };
 
+export const FIXTURE_BRAND = {
+  id:             'brd00001-0000-0000-0000-000000000001',
+  tenantId:       TENANT_ID,
+  brandName:      'Test Transport',
+  logoUrl:        null,
+  faviconUrl:     null,
+  primaryColor:   '#2563eb',
+  secondaryColor: '#1a3a5c',
+  accentColor:    '#f59e0b',
+  textColor:      '#111827',
+  bgColor:        '#ffffff',
+  fontFamily:     'Inter, sans-serif',
+  customCss:      null,
+  metaTitle:      null,
+  metaDescription: null,
+  supportEmail:   null,
+  supportPhone:   null,
+  updatedAt:      new Date(),
+};
+
+export const FIXTURE_COST_PROFILE = {
+  id:                      'cp000001-0000-0000-0000-000000000001',
+  tenantId:                TENANT_ID,
+  busId:                   BUS_ID,
+  fuelConsumptionPer100Km: 28,
+  fuelPricePerLiter:       1.45,
+  adBlueCostPerLiter:      0.18,
+  adBlueRatioFuel:         0.05,
+  maintenanceCostPerKm:    0.05,
+  stationFeePerDeparture:  500,
+  driverAllowancePerTrip:  1500,
+  tollFeesPerTrip:         800,
+  driverMonthlySalary:     350000,
+  annualInsuranceCost:     1200000,
+  monthlyAgencyFees:       50000,
+  purchasePrice:           45000000,
+  depreciationYears:       10,
+  residualValue:           5000000,
+  avgTripsPerMonth:        30,
+  updatedAt:               new Date(),
+};
+
+export const FIXTURE_COST_SNAPSHOT = {
+  id:                   'snap0001-0000-0000-0000-000000000001',
+  tenantId:             TENANT_ID,
+  tripId:               TRIP_ID,
+  fuelCost:             23226,
+  adBlueCost:           116,
+  maintenanceCost:      2250,
+  stationFee:           500,
+  tollFees:             800,
+  driverAllowance:      1500,
+  totalVariableCost:    28392,
+  driverDailyCost:      11667,
+  insuranceDailyCost:   3288,
+  agencyDailyCost:      1667,
+  depreciationDaily:    10959,
+  totalFixedCost:       27581,
+  totalCost:            55973,
+  ticketRevenue:        75000,
+  parcelRevenue:        5000,
+  totalRevenue:         80000,
+  operationalMargin:    51608,
+  operationalMarginRate: 1.82,
+  agencyCommission:     2250,
+  netTenantRevenue:     77750,
+  netMargin:            21777,
+  marginRate:           0.39,
+  bookedSeats:          38,
+  totalSeats:           50,
+  fillRate:             0.76,
+  breakEvenSeats:       30,
+  profitabilityTag:     'PROFITABLE',
+  computedAt:           new Date(),
+};
+
 // ─── Prisma mock ──────────────────────────────────────────────────────────────
 
 /**
@@ -204,6 +280,12 @@ export function createPrismaMock() {
     quotaRule:             common({ id: 'quota-01', entityType: 'ticket', limit: 1000 }),
     onboardingStep:        common({ step: 'PROFILE', completed: true }),
     tenantConfig:          common(null),   // null → TenantConfigService retourne DEFAULT_CONFIG
+    tenantBrand:           common(FIXTURE_BRAND),
+    tenantBusinessConfig:  common(null),   // null → DEFAULT_BUSINESS_CONSTANTS dans ProfitabilityService
+    busCostProfile:        common(FIXTURE_COST_PROFILE),
+    tripCostSnapshot:      common(FIXTURE_COST_SNAPSHOT),
+    tripAnalytics:         common({ id: 'ta-01', tenantId: TENANT_ID, routeId: 'route-01', busId: BUS_ID, avgFillRate: 0.76, isGoldenDay: false, isBlackRoute: false, dayOfWeek: 1, tripDate: new Date(), createdAt: new Date() }),
+    installedModule:       common({ id: 'im-01', tenantId: TENANT_ID, moduleKey: 'YIELD_ENGINE', isActive: true, config: {} }),
 
     // Prisma transactions
     $transaction:  jest.fn().mockImplementation((fn: unknown) => typeof fn === 'function' ? fn({}) : Promise.resolve(fn)),
