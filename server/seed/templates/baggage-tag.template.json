@@ -1,0 +1,274 @@
+{
+  "_meta": {
+    "slug": "baggage-tag",
+    "name": "Talon bagage 99×210mm",
+    "docType": "LABEL",
+    "format": "BAGGAGE_TAG",
+    "engine": "PDFME",
+    "description": "Étiquette bagage verticale format IATA avec grand QR de tracking et coupon passager",
+    "variables": [
+      "tenantName",
+      "trackingCode", "weight", "bagNumber", "totalBags", "bagDescription",
+      "passengerName", "passengerPhone", "ticketRef",
+      "origin", "destination", "tripDate", "busPlate",
+      "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": {
+    "width": 99,
+    "height": 210,
+    "padding": [4, 4, 4, 4]
+  },
+  "schemas": [
+    [
+      {
+        "name": "header",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 0 },
+        "width": 99,
+        "height": 18,
+        "color": "#1a3a5c"
+      },
+      {
+        "name": "tenantName",
+        "type": "text",
+        "position": { "x": 5, "y": 4 },
+        "width": 89,
+        "height": 10,
+        "content": "{{tenantName}}",
+        "fontSize": 13,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "tagLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 13 },
+        "width": 89,
+        "height": 4,
+        "content": "TALON BAGAGE — CHECKED BAGGAGE",
+        "fontSize": 5.5,
+        "fontColor": "#bfdbfe",
+        "alignment": "center"
+      },
+      {
+        "name": "qrCode",
+        "type": "qrcode",
+        "position": { "x": 18, "y": 22 },
+        "width": 63,
+        "height": 63,
+        "content": "{{qrCodeValue}}"
+      },
+      {
+        "name": "trackingCode",
+        "type": "text",
+        "position": { "x": 5, "y": 87 },
+        "width": 89,
+        "height": 7,
+        "content": "{{trackingCode}}",
+        "fontSize": 7.5,
+        "fontColor": "#1e40af",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "routeBand",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 97 },
+        "width": 99,
+        "height": 16,
+        "color": "#2563eb"
+      },
+      {
+        "name": "routeOrigin",
+        "type": "text",
+        "position": { "x": 5, "y": 101 },
+        "width": 38,
+        "height": 8,
+        "content": "{{origin}}",
+        "fontSize": 11,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "routeArrow",
+        "type": "text",
+        "position": { "x": 40, "y": 101 },
+        "width": 18,
+        "height": 8,
+        "content": "→",
+        "fontSize": 12,
+        "fontColor": "#bfdbfe",
+        "alignment": "center"
+      },
+      {
+        "name": "routeDest",
+        "type": "text",
+        "position": { "x": 56, "y": 101 },
+        "width": 38,
+        "height": 8,
+        "content": "{{destination}}",
+        "fontSize": 11,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "right"
+      },
+      {
+        "name": "passengerLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 117 },
+        "width": 89,
+        "height": 4,
+        "content": "PASSAGER",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "passengerName",
+        "type": "text",
+        "position": { "x": 5, "y": 122 },
+        "width": 89,
+        "height": 8,
+        "content": "{{passengerName}}",
+        "fontSize": 10,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "passengerPhone",
+        "type": "text",
+        "position": { "x": 5, "y": 131 },
+        "width": 89,
+        "height": 5,
+        "content": "{{passengerPhone}}",
+        "fontSize": 7.5,
+        "fontColor": "#6b7280"
+      },
+      {
+        "name": "dateLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 140 },
+        "width": 89,
+        "height": 4,
+        "content": "DATE DE DÉPART",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "tripDate",
+        "type": "text",
+        "position": { "x": 5, "y": 145 },
+        "width": 89,
+        "height": 7,
+        "content": "{{tripDate}}",
+        "fontSize": 9,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "weightBg",
+        "type": "rectangle",
+        "position": { "x": 5, "y": 155 },
+        "width": 38,
+        "height": 10,
+        "color": "#dc2626",
+        "borderRadius": 2
+      },
+      {
+        "name": "weight",
+        "type": "text",
+        "position": { "x": 5, "y": 157 },
+        "width": 38,
+        "height": 7,
+        "content": "{{weight}} kg",
+        "fontSize": 10,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "bagNum",
+        "type": "text",
+        "position": { "x": 52, "y": 157 },
+        "width": 42,
+        "height": 7,
+        "content": "Bagage {{bagNumber}} / {{totalBags}}",
+        "fontSize": 8.5,
+        "fontColor": "#1e40af",
+        "fontName": "NotoSans-Bold",
+        "alignment": "right"
+      },
+      {
+        "name": "bagDescription",
+        "type": "text",
+        "position": { "x": 5, "y": 168 },
+        "width": 89,
+        "height": 6,
+        "content": "{{bagDescription}}",
+        "fontSize": 7.5,
+        "fontColor": "#6b7280"
+      },
+      {
+        "name": "perforationLine",
+        "type": "line",
+        "position": { "x": 5, "y": 177 },
+        "width": 89,
+        "height": 0.5,
+        "color": "#9ca3af",
+        "dashArray": [2, 2]
+      },
+      {
+        "name": "couponLabel",
+        "type": "text",
+        "position": { "x": 22, "y": 174 },
+        "width": 55,
+        "height": 4,
+        "content": "✂  COUPON PASSAGER",
+        "fontSize": 5.5,
+        "fontColor": "#9ca3af",
+        "alignment": "center"
+      },
+      {
+        "name": "couponBg",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 179 },
+        "width": 99,
+        "height": 31,
+        "color": "#f8fafc"
+      },
+      {
+        "name": "couponPassenger",
+        "type": "text",
+        "position": { "x": 5, "y": 182 },
+        "width": 68,
+        "height": 7,
+        "content": "{{passengerName}}",
+        "fontSize": 9,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "couponRoute",
+        "type": "text",
+        "position": { "x": 5, "y": 190 },
+        "width": 68,
+        "height": 12,
+        "content": "{{origin}} → {{destination}}\n{{tripDate}}",
+        "fontSize": 7,
+        "fontColor": "#374151",
+        "lineHeight": 1.5
+      },
+      {
+        "name": "couponQr",
+        "type": "qrcode",
+        "position": { "x": 74, "y": 181 },
+        "width": 20,
+        "height": 20,
+        "content": "{{qrCodeValue}}"
+      }
+    ]
+  ]
+}

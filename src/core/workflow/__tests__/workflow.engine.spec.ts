@@ -22,6 +22,7 @@ const ACTOR = {
   id:       'user-driver-01',
   tenantId: TENANT_ID,
   roleId:   'role-driver-01',
+  roleName: 'DRIVER',
   agencyId: 'agency-01',
 };
 

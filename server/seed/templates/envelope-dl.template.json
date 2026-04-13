@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "slug": "envelope-dl",
+    "name": "Enveloppe DL",
+    "docType": "ENVELOPE",
+    "format": "ENVELOPE_DL",
+    "engine": "PDFME",
+    "description": "Enveloppe DL 220×110mm paysage — format lettre standard A4 plié en 3",
+    "variables": [
+      "tenantName",
+      "senderName", "senderAddress", "senderCity", "senderZip",
+      "recipientName", "recipientAddress", "recipientCity", "recipientZip", "recipientCountry",
+      "reference", "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": { "width": 220, "height": 110, "padding": [4, 4, 4, 4] },
+  "schemas": [[
+    {
+      "name": "tenantLabel",
+      "type": "text",
+      "position": { "x": 6, "y": 5 },
+      "width": 55, "height": 4,
+      "content": "{{tenantName}}",
+      "fontSize": 5.5, "fontColor": "#9ca3af", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "senderName",
+      "type": "text",
+      "position": { "x": 6, "y": 10 },
+      "width": 60, "height": 6,
+      "content": "{{senderName}}",
+      "fontSize": 7.5, "fontColor": "#1a3a5c", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "senderInfo",
+      "type": "text",
+      "position": { "x": 6, "y": 17 },
+      "width": 60, "height": 12,
+      "content": "{{senderAddress}}\n{{senderZip}} {{senderCity}}",
+      "fontSize": 6.5, "fontColor": "#6b7280", "lineHeight": 1.5
+    },
+    {
+      "name": "stampBg",
+      "type": "rectangle",
+      "position": { "x": 184, "y": 6 },
+      "width": 28, "height": 22,
+      "color": "#f1f5f9"
+    },
+    {
+      "name": "stampText",
+      "type": "text",
+      "position": { "x": 184, "y": 16 },
+      "width": 28, "height": 5,
+      "content": "AFFRANCHISSEMENT",
+      "fontSize": 5, "fontColor": "#94a3b8", "alignment": "center"
+    },
+    {
+      "name": "dateText",
+      "type": "text",
+      "position": { "x": 148, "y": 32 },
+      "width": 64, "height": 4,
+      "content": "{{generatedAt}}",
+      "fontSize": 5.5, "fontColor": "#9ca3af", "alignment": "right"
+    },
+    {
+      "name": "windowBg",
+      "type": "rectangle",
+      "position": { "x": 20, "y": 42 },
+      "width": 80, "height": 36,
+      "color": "#f8fafc"
+    },
+    {
+      "name": "toLabel",
+      "type": "text",
+      "position": { "x": 24, "y": 44 },
+      "width": 72, "height": 4,
+      "content": "DESTINATAIRE",
+      "fontSize": 5.5, "fontColor": "#9ca3af", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "toName",
+      "type": "text",
+      "position": { "x": 24, "y": 49 },
+      "width": 72, "height": 7,
+      "content": "{{recipientName}}",
+      "fontSize": 10, "fontColor": "#1a3a5c", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "toAddr",
+      "type": "text",
+      "position": { "x": 24, "y": 57 },
+      "width": 72, "height": 13,
+      "content": "{{recipientAddress}}\n{{recipientZip}} {{recipientCity}}\n{{recipientCountry}}",
+      "fontSize": 8, "fontColor": "#374151", "lineHeight": 1.5
+    },
+    {
+      "name": "reference",
+      "type": "text",
+      "position": { "x": 20, "y": 82 },
+      "width": 80, "height": 4,
+      "content": "Réf : {{reference}}",
+      "fontSize": 6, "fontColor": "#6b7280"
+    },
+    {
+      "name": "qrCode",
+      "type": "qrcode",
+      "position": { "x": 192, "y": 84 },
+      "width": 18, "height": 18,
+      "content": "{{qrCodeValue}}"
+    }
+  ]]
+}

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Talon bagage — SATR-BAG-00123-1</title>
+  <style>
+    @page { size: 99mm 210mm; margin: 4mm; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body { padding: 0; }
+
+  /* ── Conteneur principal ─────────────────────────────────── */
+  .bag-tag {
+    width: 100%;
+    border: 2pt solid var(--c-brand);
+    border-radius: 3pt;
+    overflow: hidden;
+    font-size: 9pt;
+  }
+
+  /* ── Header transporteur ─────────────────────────────────── */
+  .bag-header {
+    background: var(--c-brand);
+    color: #fff;
+    padding: 4mm 5mm 3mm;
+    text-align: center;
+  }
+  .bag-header .tenant-name {
+    font-size: 13pt; font-weight: 700; letter-spacing: -.3pt; line-height: 1.1;
+  }
+  .bag-header .ref {
+    font-size: 7pt; letter-spacing: .12em; text-transform: uppercase;
+    opacity: .75; margin-top: 1mm;
+  }
+
+  /* ── QR principal ────────────────────────────────────────── */
+  .bag-qr-zone {
+    background: #fff; padding: 5mm 4mm 2mm;
+    display: flex; flex-direction: column; align-items: center; gap: 2mm;
+    border-bottom: 1pt solid var(--c-line);
+  }
+  .bag-qr-zone img {
+    width: 62mm; height: 62mm;
+    border: 1pt solid var(--c-line);
+  }
+  .bag-tracking {
+    font-family: var(--font-mono); font-size: 8.5pt; font-weight: 700;
+    color: var(--c-brand2); text-align: center; letter-spacing: .04em;
+    word-break: break-all;
+  }
+
+  /* ── Infos passager ──────────────────────────────────────── */
+  .bag-section {
+    padding: 3.5mm 4mm;
+    border-bottom: 0.5pt solid var(--c-line);
+  }
+  .bag-section:last-child { border-bottom: none; }
+  .bag-label {
+    font-size: 6.5pt; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); font-weight: 700; margin-bottom: 0.5mm;
+  }
+  .bag-value {
+    font-size: 10pt; font-weight: 700; color: var(--c-brand);
+  }
+  .bag-value-sm {
+    font-size: 8.5pt; font-weight: 400; color: var(--c-muted);
+  }
+
+  /* ── Trajet (accent band) ────────────────────────────────── */
+  .bag-route {
+    background: var(--c-brand2); color: #fff;
+    padding: 3mm 4mm;
+    display: flex; align-items: center; justify-content: space-between; gap: 3mm;
+  }
+  .bag-route .city {
+    font-size: 14pt; font-weight: 700; letter-spacing: -.3pt; line-height: 1;
+  }
+  .bag-route .arrow {
+    font-size: 16pt; opacity: .6; flex-shrink: 0;
+  }
+  .bag-route .city-label {
+    font-size: 6.5pt; opacity: .7; text-transform: uppercase; letter-spacing: .08em;
+  }
+
+  /* ── Poids / N° colis ────────────────────────────────────── */
+  .bag-weight-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3mm 4mm; background: #f8fafc; border-bottom: 0.5pt solid var(--c-line);
+  }
+  .bag-weight-badge {
+    background: var(--c-accent); color: #fff;
+    font-size: 11pt; font-weight: 700;
+    padding: 1mm 3mm; border-radius: 2pt;
+  }
+  .bag-num {
+    font-size: 9pt; font-weight: 700; color: var(--c-brand2);
+  }
+  .bag-num .total {
+    font-weight: 400; color: var(--c-muted);
+  }
+
+  /* ── Coupon talon ────────────────────────────────────────── */
+  .bag-stub {
+    padding: 3mm 4mm;
+    display: flex; align-items: center; justify-content: space-between; gap: 3mm;
+    break-inside: avoid;
+  }
+  .bag-stub .stub-info { flex: 1; min-width: 0; }
+  .bag-stub .stub-info .stub-label {
+    font-size: 6pt; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); font-weight: 700; margin-bottom: 0.5mm;
+  }
+  .bag-stub .stub-code {
+    font-family: var(--font-mono); font-size: 7pt; color: var(--c-brand2);
+    word-break: break-all;
+  }
+  .bag-stub img {
+    width: 18mm; height: 18mm; flex-shrink: 0;
+    border: 0.5pt solid var(--c-line);
+  }
+
+  </style>
+</head>
+<body>
+
+
+
+<div class="bag-tag">
+
+  <!-- ═══ HEADER TRANSPORTEUR ═══ -->
+  <div class="bag-header">
+    <div class="tenant-name">SATR Express</div>
+    <div class="ref">Talon Bagage · Checked Baggage</div>
+  </div>
+
+  <!-- ═══ QR PRINCIPAL ═══ -->
+  <div class="bag-qr-zone">
+    <img src="data:image/png;base64,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"  alt="QR tracking bagage" />
+    <div class="bag-tracking">SATR-BAG-00123-1</div>
+  </div>
+
+  <!-- ═══ TRAJET ═══ -->
+  <div class="bag-route">
+    <div>
+      <div class="city-label">Départ</div>
+      <div class="city">DAK</div>
+      <div style="font-size:7.5pt;opacity:.8;margin-top:0.5mm;">Dakar, Sénégal</div>
+    </div>
+    <div class="arrow">→</div>
+    <div style="text-align:right;">
+      <div class="city-label">Destination</div>
+      <div class="city">BAM</div>
+      <div style="font-size:7.5pt;opacity:.8;margin-top:0.5mm;">Bamako, Mali</div>
+    </div>
+  </div>
+
+  <!-- ═══ PASSAGER ═══ -->
+  <div class="bag-section">
+    <div class="bag-label">Passager</div>
+    <div class="bag-value">Ibrahima DIALLO</div>
+    <div class="bag-value-sm">+221 77 456 78 90</div>
+    <div class="bag-value-sm mono" style="font-size:7pt;">Billet : TKT-2026-00123</div>
+  </div>
+
+  <!-- ═══ DATE & BUS ═══ -->
+  <div class="bag-section">
+    <div class="bag-label">Date de départ</div>
+    <div class="bag-value">14/04/2026 07:30</div>
+    <div class="bag-value-sm">Dakar — Bamako Express</div>
+    <div class="bag-value-sm">Bus : DK 4521 AB</div>
+  </div>
+
+  <!-- ═══ POIDS & N° ═══ -->
+  <div class="bag-weight-row">
+    <div>
+      <div class="bag-label">Poids</div>
+      <div class="bag-weight-badge">22.5 kg</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="bag-label">Bagage</div>
+      <div class="bag-num">1 <span class="total">/ 2</span></div>
+    </div>
+  </div>
+
+  
+  <div class="bag-section">
+    <div class="bag-label">Description</div>
+    <div class="bag-value-sm">Valise rigide 24&quot; — couleur bordeaux</div>
+  </div>
+
+  <!-- ═══ PERFORATION + COUPON ═══ -->
+  <div class="perf"><span class="perf-label no-print">Coupon passager — à conserver</span></div>
+
+  <div class="bag-stub">
+    <div class="stub-info">
+      <div class="stub-label">Transporteur</div>
+      <div style="font-size:8.5pt;font-weight:700;">SATR Express</div>
+      <div class="stub-label" style="margin-top:2mm;">Référence tracking</div>
+      <div class="stub-code">SATR-BAG-00123-1</div>
+      <div class="stub-label" style="margin-top:2mm;">Trajet</div>
+      <div style="font-size:8pt;">Dakar, Sénégal → Bamako, Mali</div>
+      <div style="font-size:7.5pt;color:var(--c-muted);">14/04/2026 07:30</div>
+    </div>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAAO0SURBVO3BwW0kMQxFwbdCB8Ajc2D+ofwceGQGu+sDgYEhW9OjsU+q+vP3P46XDY4tg2PLxQPz4N0qRTMPWqVo5sFMpZgxD1qlaOZBqxTNPHi3SvFhcGwZHFsuvlApXmUezFSKlUrRzINWKWbMgzsqxavMg88Gx5bBseXiCebBSqV4B/OgVYo7KsUd5sFKpfjO4NgyOLZc/CLzYKVSNPPgDvOgVYrfMDi2DI4tF7+oUjTz4I5K0cyDVimaefDbBseWwbHl4gmV4t0qxUqlaObBu1WKXYNjy+DYcvEF8+DdzINWKZp50CpFMw9apWjmwavMg3caHFsGx5aLB5XiJ1WKZh60StHMgzvMg5VK8VMGx5bBseXiCeZBqxTNPFipFM08aJXiVZWimQetUjTzoFWKFfOgVYoZ86BVig+DY8vg2HLxBfNgxjxolWLFPGiVopkHrVLMVIpmHrRKsVIpmnnQKsWKefCswbFlcGy5eEKlmDEPWqVo5sFKpWjmQasUzTxolaKZB61SNPNgxTx4p8GxZXBsuXiCedAqRasUM5VixjxolaJVimYevKpSzJgHM5Vixjx41uDYMji2XDwwD1qlWDEP3sE8aJVixjxolaKZB61SzFSKFfNgplJ8Z3BsGRxbLh5UihXzoFWKO8yDdzAPXmUetEoxUymaeTBTKT4Mji2DY8vFA/OgVYpmHtxhHsxUimYerJgHK5XijkrRzINWKZp58KzBsWVwbLl4UCmaedAqxYx50CpFqxR3VIpmHrRKMWMeNPOgVYoZ82CmUjTzoFWKGfPgs8GxZXBsuXhgHrRK0cyDVilWzINWKZp5MGMetErRzIOVStHMgzvMg1YpmnkwUyk+GxxbBseWiweVYqZSzFSKmUpxR6Vo5sFMpWjmQTMPZirFinmwa3BsGRxbLh6YB+9WKVqlaOZBMw9apWjmwUqlaObBjHnQKsVKpWjmQTMPWqX4MDi2DI4tF1+oFK8yD2bMg1YpVipFMw9eVSlWzIOVSvHZ4NgyOLZcPME8WKkUd5gHrVI086BVilYpmnnQzIMZ8+AdKsV3BseWwbHl4hdVihnzYMU8aJWimQcrlaKZB61SrJgHrVJ8Nji2DI4tF7/IPHhVpVipFDPmQasUzTyYqRStUjTzoFWKD4Njy+DYcvGESvEOlaKZByvmQasUd5gHrVLMVIpmHsyYB98ZHFsGx5aLL5gHP6lSrJgHzTxolaJVimYetErRzINXVYpmHnw2OLYMji1//v7H8bLBseUf4HKfjBAOBl4AAAAASUVORK5CYII=" alt="QR mini" />
+  </div>
+
+</div>
+
+<div class="fp">SHA-256 14d288a319087c6b2cd2ad691c8aefe88115328478139e2d9b8b8370886b4997 · 2026-04-13T11:33:40.870Z · acteur admin-demo-001</div>
+<!-- fp:14d288a319087c6b2cd2ad691c8aefe88115328478139e2d9b8b8370886b4997:1776080020870:admin-demo-001 -->
+</body>
+</html>

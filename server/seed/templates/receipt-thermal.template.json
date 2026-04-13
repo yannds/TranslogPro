@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "slug": "receipt-thermal",
+    "name": "Reçu de caisse thermique 80mm",
+    "docType": "TICKET",
+    "format": "THERMAL_80MM",
+    "engine": "PDFME",
+    "description": "Reçu immédiat imprimante thermique après paiement caissier",
+    "variables": [
+      "tenantName", "tenantAddress", "tenantPhone",
+      "ticketRef", "passengerName", "seatNumber",
+      "origin", "destination", "tripDate",
+      "price", "currency", "paymentMethod",
+      "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": { "width": 80, "height": 200, "padding": [4, 4, 4, 4] },
+  "schemas": [[
+    {
+      "name": "tenantName", "type": "text",
+      "position": {"x":4,"y":4}, "width":72, "height":10,
+      "content": "{{tenantName}}", "fontSize":13, "fontColor":"#1a3a5c",
+      "fontName":"NotoSans-Bold", "alignment":"center"
+    },
+    {
+      "name": "tenantPhone", "type": "text",
+      "position": {"x":4,"y":15}, "width":72, "height":5,
+      "content": "{{tenantPhone}}", "fontSize":7, "fontColor":"#6b7280", "alignment":"center"
+    },
+    {
+      "name": "divider1", "type": "line",
+      "position": {"x":4,"y":23}, "width":72, "height":0.3, "color":"#d1d5db"
+    },
+    {
+      "name": "routeText", "type": "text",
+      "position": {"x":4,"y":26}, "width":72, "height":8,
+      "content": "{{origin}} → {{destination}}", "fontSize":11, "fontColor":"#1a3a5c",
+      "fontName":"NotoSans-Bold", "alignment":"center"
+    },
+    {
+      "name": "tripDate", "type": "text",
+      "position": {"x":4,"y":35}, "width":72, "height":6,
+      "content": "{{tripDate}}", "fontSize":8, "fontColor":"#374151", "alignment":"center"
+    },
+    {
+      "name": "divider2", "type": "line",
+      "position": {"x":4,"y":44}, "width":72, "height":0.3, "color":"#d1d5db"
+    },
+    {
+      "name": "passengerLabel", "type": "text",
+      "position": {"x":4,"y":47}, "width":30, "height":5,
+      "content": "Passager", "fontSize":7, "fontColor":"#9ca3af"
+    },
+    {
+      "name": "passengerName", "type": "text",
+      "position": {"x":36,"y":47}, "width":40, "height":5,
+      "content": "{{passengerName}}", "fontSize":8, "fontColor":"#111827",
+      "fontName":"NotoSans-Bold", "alignment":"right"
+    },
+    {
+      "name": "seatLabel", "type": "text",
+      "position": {"x":4,"y":54}, "width":30, "height":5,
+      "content": "Siège", "fontSize":7, "fontColor":"#9ca3af"
+    },
+    {
+      "name": "seatNumber", "type": "text",
+      "position": {"x":36,"y":54}, "width":40, "height":5,
+      "content": "{{seatNumber}}", "fontSize":8, "fontColor":"#111827", "alignment":"right"
+    },
+    {
+      "name": "divider3", "type": "line",
+      "position": {"x":4,"y":62}, "width":72, "height":0.3, "color":"#d1d5db"
+    },
+    {
+      "name": "totalBg", "type": "rectangle",
+      "position": {"x":4,"y":65}, "width":72, "height":14, "color":"#1a3a5c", "borderRadius":2
+    },
+    {
+      "name": "totalLabel", "type": "text",
+      "position": {"x":6,"y":69}, "width":35, "height":7,
+      "content": "TOTAL", "fontSize":10, "fontColor":"#fff", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "price", "type": "text",
+      "position": {"x":40,"y":69}, "width":34, "height":7,
+      "content": "{{price}} {{currency}}", "fontSize":10, "fontColor":"#fff",
+      "fontName":"NotoSans-Bold", "alignment":"right"
+    },
+    {
+      "name": "paymentMethod", "type": "text",
+      "position": {"x":4,"y":83}, "width":72, "height":5,
+      "content": "Mode: {{paymentMethod}}", "fontSize":7, "fontColor":"#6b7280", "alignment":"center"
+    },
+    {
+      "name": "qrCode", "type": "qrcode",
+      "position": {"x":22,"y":91}, "width":36, "height":36,
+      "content": "{{qrCodeValue}}"
+    },
+    {
+      "name": "ticketRef", "type": "text",
+      "position": {"x":4,"y":129}, "width":72, "height":6,
+      "content": "Réf: {{ticketRef}}", "fontSize":7, "fontColor":"#374151",
+      "fontName":"NotoSans-Bold", "alignment":"center"
+    },
+    {
+      "name": "footer", "type": "text",
+      "position": {"x":4,"y":138}, "width":72, "height":10,
+      "content": "Merci de votre confiance\n{{generatedAt}}",
+      "fontSize":6.5, "fontColor":"#9ca3af", "alignment":"center", "lineHeight":1.5
+    }
+  ]]
+}

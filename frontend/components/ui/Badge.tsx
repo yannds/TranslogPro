@@ -11,7 +11,7 @@
  * Mapping statuts métier → variant :
  *   statusToVariant('CONFIRMED') → 'success'
  */
-import React, { type HTMLAttributes } from 'react';
+import { type HTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 

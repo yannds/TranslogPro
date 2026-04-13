@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Étiquettes (8) — SATR Express</title>
+  <style>
+    @page { size: 210mm 297mm; margin: 12mm 14mm; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body { padding: 0; }
+
+  /* ── Grille d'étiquettes ───────────────────────────────────── */
+  .label-grid {
+    display: grid;
+    gap: 0;          /* Le gap est simulé par la bordure des cellules */
+    width: 100%;
+  }
+  .label-grid.layout-2x4 { grid-template-columns: 1fr 1fr; }
+  .label-grid.layout-2x2 { grid-template-columns: 1fr 1fr; }
+
+  /* ── Étiquette individuelle ─────────────────────────────────── */
+  .label-cell {
+    border: 0.5pt solid #94a3b8;
+    padding: 3mm;
+    break-inside: avoid;
+    overflow: hidden;
+    position: relative;
+    /* Tirets de coupe sur les bords */
+    outline: 0.3pt dashed #cbd5e1;
+    outline-offset: -1.5mm;
+  }
+  .layout-2x4 .label-cell { height: 36mm; }
+  .layout-2x2 .label-cell { height: 65mm; }
+
+  /* Header étiquette */
+  .lbl-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1pt solid var(--c-brand); padding-bottom: 1.5mm; margin-bottom: 2mm;
+  }
+  .lbl-company { font-size: 6pt; font-weight: 700; color: var(--c-muted); text-transform: uppercase; letter-spacing: .08em; }
+  .lbl-date    { font-size: 5.5pt; color: var(--c-muted); }
+
+  /* Corps : QR gauche + infos droite */
+  .lbl-body {
+    display: grid; gap: 2mm; align-items: start;
+    flex: 1;
+  }
+  .layout-2x4 .lbl-body { grid-template-columns: 20mm 1fr; }
+  .layout-2x2 .lbl-body { grid-template-columns: 30mm 1fr; }
+
+  /* QR */
+  .lbl-qr img  { display: block; }
+  .lbl-qr .tc  { font-size: 5pt; font-family: var(--font-mono); text-align: center; margin-top: 0.5mm; word-break: break-all; }
+  .layout-2x4 .lbl-qr img { width: 20mm; height: 20mm; }
+  .layout-2x2 .lbl-qr img { width: 30mm; height: 30mm; }
+
+  /* Infos */
+  .lbl-info    { font-size: 7pt; }
+  .lbl-section { margin-bottom: 1.5mm; }
+  .lbl-section .s-title { font-size: 5.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c-muted); font-weight: 700; margin-bottom: 0.5mm; }
+  .lbl-section .s-name  { font-size: 8pt; font-weight: 700; }
+  .lbl-section .s-sub   { font-size: 6pt; color: var(--c-muted); }
+
+  /* Pied étiquette */
+  .lbl-footer {
+    border-top: 0.5pt solid var(--c-line); padding-top: 1mm; margin-top: 1mm;
+    display: flex; justify-content: space-between; align-items: center; font-size: 6pt;
+  }
+  .lbl-footer .weight { font-weight: 700; color: var(--c-brand2); }
+  .lbl-footer .dest   { color: var(--c-muted); }
+  .status-dot {
+    width: 5mm; height: 5mm; border-radius: 50%;
+    position: absolute; top: 3mm; right: 3mm;
+  }
+  .status-ok   { background: #16a34a; }
+  .status-warn { background: #d97706; }
+  .status-err  { background: #dc2626; }
+
+  /* Étiquette vide (slot non utilisé) */
+  .label-empty { background: #f8fafc; }
+
+  </style>
+</head>
+<body>
+
+
+
+<!-- ═══ FEUILLE D'ÉTIQUETTES 2X4 ═══ -->
+<div class="label-grid layout-2x4">
+  
+      <div class="label-cell">
+        <div class="status-dot status-warn"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAAPCSURBVO3BwW0kSQxFwadEGfCP9IH+m0IfeKQHWulAQBA4U+rOHh0WGfH2/oHjaYtjy+LYcvGFzHm1yqDJnFYZTGTOpDKYyJxJZdBkzqtVBp8Wx5bFseXiDyqDZ8mcSWUwkTmtMpjInEll0GTOncrgWTLnu8WxZXFsufgBmXOnMnhWZTCROa0yaDLnFWTOncrgbxbHlsWx5eIXyZxWGUxkzp3KoMmcVhn8tsWxZXFsufhFlUGTOa0yeITMaZVBkzmtMvgNi2PL4thy8QOVwatVBpPKYCJzJjKnVQaPqAx2LY4ti2PLxR/InFeTOa0yaDKnVQZN5rTKoMmcVhk0mdMqg4nMeaXFsWVxbHl7/8D/hMxplcFvWBxbFseWix+QOa0yaDLnTmXQZM6kMpjInFYZNJnTKoOJzGmVwR2Z0yqDicxplcGnxbFlcWy5+ELm3JE5k8pgInMmlcG/VBlMZE6rDFplMJE5rTL4bnFsWRxb3t4/MJA5rTJ4hMyZVAYTmdMqg4nMaZXBI2ROqwyazJlUBj+1OLYsji0XPyBzWmVwpzJoMmcicyYyZ1IZPELmtMqgyZxWGTxC5rTK4NPi2LI4tlx8IXNaZdBkTpM5k8qgyZyJzGmVQZM5k8qgyZw7lcFE5rTK4I7M+anFsWVxbLn4ojJ4hcqgyZxWGUwqgyZzXqEyaDKnyZxJZdAqgyZzWmXw3eLYsji2XHwhc1pl0CqDOzLnjsx5tcrgEZXBRObckTmtMvi0OLYsji1v7x8YyJxWGTSZM6kMJjKnVQYTmdMqgyZzHlEZ/Esyp1UGnxbHlsWx5eILmdMqgyZzWmXQZE6TOc+qDCaVwUTmtMqgyZxnVQZN5rTK4G8Wx5bFseXt/QO/ROa0yqDJnFYZNJnTKoOJzJlUBndkzqQyaDJnUhl8WhxbFseWiy9kzqtVBq0yaDKnVQZN5rTKYCJzWmXQZM5E5rTKYFIZTCqDJnO+WxxbFseWiz+oDJ4lcyYyp1UGTea0yqDJnFYZPKsyeITMmVQG3y2OLYtjy8UPyJw7lcEjZE6rDJrMaZVBkzkTmTOROY+QOZPK4G8Wx5bFseXiF1UGTeY8ojJoMucRlUGTOXcqgyZzWmXw3eLYsji2XPwimfMImfOIymAicyaVwUTmtMqgyZxWGXxaHFsWx5aLH6gMXqEyaDKnyZxJZdBkziNkTqsMmsy5Uxk0mfM3i2PL4thy8Qcy51+qDCYyp8mcSWUwkTmtMmgyp1UGTea0ymBSGTSZ893i2LI4try9f+B42uLY8h9lcKsP1o0VdQAAAABJRU5ErkJggg==" alt="QR COLIS-2026-00451" />
+            <div class="tc">COLIS-2026-00451</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Boutique Dakar Mode</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Mariama Kouyaté</div>
+              <div class="s-sub">
+                Koloma, Conakry<br>
+                +224 62 345 67 89
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">8.5 kg</span>
+          <span class="dest">Agence Conakry Centre (Conakry)</span>
+          <span style="color:var(--c-muted);">12 000 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-err"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAAN1SURBVO3BwW2jOwyF0S/CXwCX7IH9l3J74JId5CXAIxAYSmRbzswsdM7b+weOpw2OLYNjy8UX5sGrVYpHmAczlWLGPJipFM08eLVK8WlwbBkcWy6+USmeZR7MmAczlaJVihnzoFWKVikeUSmeZR7cGhxbBseWizuYByuV4hGVopkHrVKsmAetUjzLPFipFD8ZHFsGx5aLv8Q8aJWimQcrleJfMTi2DI4tF/+wStHMgxnzYKZS/AmDY8vg2HJxh0rxapWimQcz5sFvqhS7BseWwbHl4hvmwd9QKZp50CpFMw9apWjmwYp58EqDY8vg2HLxRaX4TZViplI086BVimYePKtS/JbBsWVwbLm4g3nQKsWMefAKlaKZB61SNPNgplI086BVimYePKtS3BocWwbHlos7VIpmHrRKMVMpmnnQKkUzD1qlaOZBqxTNPGiV4lmVYsY8aJXiXoNjy+DYcnEH82DGPGiVopkHrVLMVIpmHryCeTBjHqxUihnzoFWKW4Njy+DYcnGHSjFjHjTzoFWKZh60SvFq5sFMpXiEedAqxYx50CrFp8GxZXBsufgF5sEjKkUzD5p5MGMezFSKGfNgplLMmAetUjTz4Nbg2DI4tlz8gkrRzINnVYpmHrRKsWIezFSKZh7MVIqZSnFrcGwZHFsuvjAPnlUpmnnQKsWKebBSKWbMg1YpVsyDVilmzINWKZp50CrFp8GxZXBsufiiUjzCPGjmQasUzTxolaKZByvmwUqlWKkUzTyYMQ9apWjmwU8Gx5bBseXt/QP/Mw9WKsWKebBSKZp5MFMpmnnwL6kUnwbHlsGx5e39A3+IebBSKZp50CrFinnQKsWKedAqxYp50CrFp8GxZXBsufjCPHi1SrFSKR5hHjzCPGiVYsY8aJWimQc/GRxbBseWi29UimeZB69QKWYqRTMPVirFI8yDVil+Mji2DI4tF3cwD1YqxUqlaOZBMw9WKkUzD1qlaOZBMw8eUSmaedDMg1Ypbg2OLYNjy8VfUimaedAqRTMPmnnwiErRzINWKZp5MFMp7jU4tgyOLRd/kHnQKkWrFM08aJVixjyYqRTNPFipFM08eESl+DQ4tgyOLRd3qBSvUClmzINHVIqVSvGsSjFjHtwaHFsGx5aLb5gHv8k8eAXz4DeZBz8ZHFsGx5a39w8cTxscW/4DKKl1JC66LpYAAAAASUVORK5CYII=" alt="QR COLIS-2026-00452" />
+            <div class="tc">COLIS-2026-00452</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Pharmacie Centrale</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Oumar Traoré</div>
+              <div class="s-sub">
+                Lafiabougou, Bamako<br>
+                +223 76 123 45 67
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">2.1 kg</span>
+          <span class="dest">Agence Bamako Nord (Bamako)</span>
+          <span style="color:var(--c-muted);">4 500 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-err"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAAOASURBVO3BwW1kOwxFwWPhBcAlc2D+odwcuGQG/vaCQMOQR36t/p5ZqOrt/QPH0wbHlsGx5eKBefBqlaKZBzOV4g7zYKVSNPPg1SrFp8GxZXBsufhGpXiWeXCHedAqxYx50CrFsyrFs8yDrwbHlsGx5eIHzIOVSrFSKZp50CpFMw9apZgxD1qlaOZBqxQr5sFKpfiTwbFlcGy5+EXmwbMqRTMPmnnwNw2OLYNjy8U/wDxolaKZB/+6wbFlcGy5+IFK8WqVopkHzTyYqRQz5sGzKsWuwbFlcGy5+IZ58DdUimYezJgHrVI082DFPHilwbFlcGx5e//AX2AetEoxYx7cUSl+2+DYMji2vL1/4AbzoFWKGfOgVYoV8+DVKsWMebBSKZp5MFMpPg2OLYNjy8UD82CmUrRK0cyDmUoxYx7MVIpmHqxUihnz4I5KcUel+GpwbBkcWy6+USmaeXCHedAqxUylaOZBqxQr5sFMpZgxD2bMg5VK8SeDY8vg2PL2/oEbzIOVSrFiHrRK0cyDVimaeXBHpZgxD2YqxYx5MFMpPg2OLYNjy8UD8+COSjFjHrRKMVMp7qgUzTxolWLGPJipFCvmwU8Nji2DY8vFg0oxYx60StHMg1YpWqWYMQ9apWjmQasUM+bBjHkwUymaeTBjHrRKsVIpvhocWwbHlosH5kGrFK1SNPOgVYpmHsxUilYpVsyDlUqxYh7cYR7MVIpmHrRK8WlwbBkcWy4eVIpmHtxRKWbMg1YpZipFMw9mKkUzD2YqxR2VYtfg2DI4tlw8MA9WKkUzD55lHsxUijsqRTMPVsyDmUrxjMGxZXBseXv/wC8xD2YqxYp5cEelWDEPZirFjHnQKsWnwbFlcGy5eGAevFqlaJVixTy4o1I082DGPGiVYqZSPGNwbBkcWy6+USmeZR7cYR60StHMg5lKcUeleJZ50CrFV4Njy+DYcvED5sFKpXhWpVipFM08WDEP7jAPnjE4tgyOLRe/yDyYqRTNPGiVYqZSNPNgpVI082ClUjTz4E8Gx5bBseXiF1WKZh4086BVimYezFSKlUrRzINWKe6oFM08aJXi0+DYMji2XPxApXi1SjFjHrRK0cyDlUoxUymaeTBTKZ4xOLYMji0X3zAP/k/mwUylaOZBqxTNPGiVopkHrVI086BVimYe7BocWwbHlrf3DxxPGxxb/gOrhod3Dzgb7gAAAABJRU5ErkJggg==" alt="QR COLIS-2026-00453" />
+            <div class="tc">COLIS-2026-00453</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">SATR Logistics</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Aissatou Barry</div>
+              <div class="s-sub">
+                Matam, Conakry<br>
+                +224 65 987 65 43
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">14 kg</span>
+          <span class="dest">Agence Conakry Port (Conakry)</span>
+          <span style="color:var(--c-muted);">22 500 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-err"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAAOqSURBVO3BwW0jQQxFwafGBMAjc2D+ofwceGQGWhlYAobR9njUsk5ddbs/sD1tsC0ZbEsOPjEPXq1SNPOgVYoZ86BVimYezFSKZh60StHMg1erFB8G25LBtuTgG5XiWebBTKVo5sErmAetUpypFM8yD74abEsG25KDXzAPzlSKKypFMw9mzIOZStHMg2eZB2cqxU8G25LBtuTgjcyDmUpxhXkwYx60SvEOg23JYFty8EaV4ox50CrFTKVo5kGrFO822JYMtiUHv1ApXs08aJWiVYoZ86BVilYpnlUpVg22JYNtycE3zINXMw9apWjmQasUzTxolaKZB61SNPOgVYoZ8+CVBtuSwbbk4JNK8ZcqxStUiisqxV8ZbEsG25KDXzAPWqVo5sGZStHMg5lK0cyDZ1WKZh60SnHGPGiVYsY8aJXiw2BbMtiWHHzDPJgxD1qlaOZBqxTNPGiVopkHZypFMw/OVIpWKWbMg1YpWqWYMQ9apfhqsC0ZbEtu9wf+Mw9mKkUzD2YqRTMPrqgUV5gHrVKcMQ9apWjmwUyl+K3BtmSwLbndH/hD5sGZStHMgzOVopkHrVI086BVimYetEpxhXnQKsWHwbZksC05uMg8aJVixjy4wjxolaKZBzPmwRXmQasUZ8yD3xpsSwbbktv9gTcxD2YqRTMPWqVo5kGrFM08aJVixjw4UylmzINWKb4abEsG25Lb/YH/zINWKWbMg5lK0cyDVinOmAdXVIorzINWKWbMgysqxYfBtmSwLbndH5gwD85UilczD55VKZp5MFMpnmUetErxYbAtGWxLDj4xD1qlaObBjHnwrErRzINWKWbMg5lK0cyDM+bBTKVo5kGrFD8ZbEsG25Lb/YE3MQ9mKsWzzIOZSnHGPJipFM08mKkUHwbbksG25OAT8+DVKkWrFM08mDEPWqWYMQ9apWjmwYx50CrFTKWYqRTNPPhqsC0ZbEsOvlEpnmUezJgHrVI08+CMefCsSnGFeTBTKb4abEsG25KDXzAPzlSKK8yDmUoxUylmzIMZ8+AK82CmUvxksC0ZbEsO3qhSNPNgxjyYqRTvUimaedAqxVeDbclgW3LwRubBTKVo5kGrFFdUihnzYKZSzJgHrVI086BVig+DbclgW3LwC5XiFSrFs8yDVinOmAetUjTz4EylaObBTwbbksG25OAb5sFfMg9apThTKZp50CpFMw9apWjmQasUzTxolWKmUjTz4KvBtmSwLbndH9ieNtiW/AP7p6MIxNR7aQAAAABJRU5ErkJggg==" alt="QR COLIS-2026-00454" />
+            <div class="tc">COLIS-2026-00454</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Import Bamako</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Cheikh Ndiaye</div>
+              <div class="s-sub">
+                Pikine, Dakar<br>
+                +221 77 654 32 10
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">5.3 kg</span>
+          <span class="dest">Agence Pikine (Dakar)</span>
+          <span style="color:var(--c-muted);">8 000 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-ok"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAANsSURBVO3BwU20OwyG0YfoK8BL9+D+S3EP79IdcEH6LSEUyMxkgLvIOS+vbzgeNji2DI4tFx+YB89WSmbMg5VSMmMetFKyYh48Wyl5Nzi2DI4tF18oJY8yD2bMg5lSsmIezJgHrZSslJJHmQefDY4tg2PLxQ3Mg5VS8gzmwT1KyaPMg5VS8p3BsWVwbLn4I6WkmQcrpWTGPGil5LcNji2DY8vFHzEPnqGUNPOglZLfMDi2DI4tFzcoJT+plDTzoJWSFfPgUaVk1+DYMji2XHzBPPhJpaSZB62UNPOglZJmHrRS0syDFfPgmQbHlsGx5eX1DX/MPGilpJkH9yglv21wbBkcWy5uYB60UjJjHjyDedBKSTMPZkrJjHnQSkkzDx5VSj4bHFsGx5aLD8yDmVLSzINWSmZKSTMPZkpJMw9aKZkpJSvmwUopmTEPWim51eDYMji2XHyhlDTzoJWSFfOglZIZ82DGPJgpJY8yD1ZKyYx50ErJZ4Njy+DYcvFBKVkxD1opmSklzTxopWSmlDTz4B7mwUwpuYd50ErJjHnQSsm7wbFlcGx5eX3Dk5kHz1BKnsE8mCklzTyYKSXNPGil5N3g2DI4try8vmHCPJgpJfcwD1ZKyYx50EpJMw9aKZkxD2ZKSTMPZkrJrQbHlsGx5eX1Df+YB/coJTPmQSslM+bBSimZMQ9mSkkzD1ZKyYx50EpJMw9aKXk3OLYMji0XH5SSGfOglZIZ86CVkmYe3KOUNPOglZKZUvIM5kErJc08+M7g2DI4try8vuEf8+AnlZIV82CmlMyYB3+hlLwbHFsGx5aLD0rJTzIPWilp5kErJSvmQSslzTxopWTFPGilZMU8+GxwbBkcWy4+MA+erZTcwzxopaSZB62UNPNgxTxopWTGPGilpJkH3xkcWwbHlosvlJJHmQf3KCUrpeRRpeQe5kErJd8ZHFsGx5aLG5gHK6VkpZTMmAczpaSZBzOlpJkHzTy4Rylp5kEzD1op+WxwbBkcWy7+B0pJMw+aefCoUrJiHsyUklsNji2DY8vFLzIPWim5RylZKSXNPJgpJa2UNPPgHqXk3eDYMji2XNyglDxDKVkpJc08mDEPWimZKSWPKiUz5sFng2PL4Nhy8QXz4CeZB89gHvwk8+A7g2PL4Njy8vqG42GDY8t/hy55w3t4eREAAAAASUVORK5CYII=" alt="QR COLIS-2026-00455" />
+            <div class="tc">COLIS-2026-00455</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Boutique Kaolack</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Fatou Sow</div>
+              <div class="s-sub">
+                Ziguinchor<br>
+                +221 70 111 22 33
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">1.8 kg</span>
+          <span class="dest">Agence Ziguinchor (Ziguinchor)</span>
+          <span style="color:var(--c-muted);">3 200 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-ok"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAANfSURBVO3BwW1cOwyG0S/CLYBL9sD+S/l74JId+CULAgNDtuaO5jlZ6JxfH79xvGxwbBkcWy4emAfvVilWzINWKWbMg5VKMWMevFul+GNwbBkcWy6+UCleZR7MmAcr5kGrFK1SrJgHrVLMVIpXmQefDY4tg2PLxRPMg5VKcUelaOZBqxQz5sG7mQcrleI7g2PL4Nhy8Q8zD1qlmDEPWqX4aYNjy+DYcvEPqxQz5kGrFM08aJXiJwyOLYNjy8UTKsVPMQ9eVSnuqBS7BseWwbHl4gvmwd9QKZp50CpFMw9mzINWKWbMg3caHFsGx5ZfH7/xF5gHM5WimQczleJfMTi2DI4tF08wD1qlmDEP7qgUK5Vixjy4o1I08+BVleKzwbFlcGy5+IJ5sGIezFSKO8yDVimaedAqxUqlaObBTKWYMQ9apXjW4NgyOLZcPDAPWqW4o1I086BVijvMgxnzoFWKZh6smAcrlWLGPGiV4rPBsWVwbLl4UCleZR60SrFiHrRK8W6V4g7zoFWKGfOgVYo/BseWwbHl4oF5sFIpWqWYMQ9apZipFCvmwUyluMM8mKkUM+ZBqxTNPPhscGwZHFt+ffzGDzEPWqWYMQ9WKsWKeTBTKZp5MFMpnjU4tgyOLRcPzIOZStHMg5lK0cyDVilmzIOZSnGHedAqxYp50CrFjHnQKkUzD1ql+GNwbBkcWy4eVIoZ86BVihnzoFWKdzAPVirFO5gHrVI08+A7g2PL4Nhy8cA8eAfzoFWKO8yDmUoxYx68yjyYMQ+eNTi2DI4tFw8qxasqxR2VopkHM5WimQczlaKZB61SrJgHrVKsmAefDY4tg2PLxQPz4N0qxYx5sGIetEoxYx6smAetUsyYB61SNPPgO4Njy+DYcvGFSvEq82ClUjTzYMU8eFWluMM8aJXiO4Njy+DYcvEE82ClUqxUimYetEoxYx6sVIpmHjTz4I5K0cyDZh60SvHZ4NgyOLZc/CWVopkHM5WimQd3VIpmHrRK0cyDmUrxrMGxZXBsufhB5kGrFK1SrFSKlUrRzIOVStHMgzsqxR+DY8vg2HLxhErxDpVixTyYqRR3VIpXVYoZ8+CzwbFlcGy5+IJ58H8yD1qlaJVixTz4KebBdwbHlsGx5dfHbxwvGxxb/gMLNWXRKxxsHgAAAABJRU5ErkJggg==" alt="QR COLIS-2026-00456" />
+            <div class="tc">COLIS-2026-00456</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Sarl Tekki</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Alpha Camara</div>
+              <div class="s-sub">
+                Kaloum, Conakry<br>
+                +224 64 555 66 77
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">22.5 kg</span>
+          <span class="dest">Agence Kaloum (Conakry)</span>
+          <span style="color:var(--c-muted);">35 000 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-warn"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAANwSURBVO3BwW0rSQxF0atCB8Alc2D+obwcuGQGGhsYAoJRdktd8vemzrndP7BdNtiWDLYlBw/Mg3erFDPmQasUzTyYqRTNPDhTKZp58G6V4tNgWzLYlhx8o1JcZR7MmAetUjTzoFWK31QprjIPvhpsSwbbkoMnmAdnKsUrzINWKZp50CpFMw/ezTw4Uyl+MtiWDLYlB3+kUrxDpfhLg23JYFty8EfMg5lK8QrzoFWKf22wLRlsSw6eUCnerVI086CZBzOV4t0qxarBtmSwLTn4hnnwFypFMw9mzINWKZp50CrFjHnwToNtyWBbcvCgUvymStHMg1YprjIPWqWYqRS/ZbAtGWxLDp5gHrRKMWMe/CbzYKZSzJgHrVI08+CqSvHVYFsy2JYcPDAPWqVoleIVlWLGPHhFpWjmQasUzTxoleJMpZgxD1qleNZgWzLYltzuH5gwD1qlaOZBqxQz5sFMpThjHrRKMWMevFulmDEPWqX4arAtGWxLbvcP/M88mKkUM+ZBqxRXmQevqBTNPGiV4irzoFWKZh7MVIpPg23JYFtyu3/gzcyDVimaefCKStHMg5lKccY8mKkUzTyYqRTNPGiV4tNgWzLYltzuHzhhHryiUjTzoFWKZh5cVSnOmAczlaKZBzOV4lmDbclgW3K7f+B/5sFMpWjmQasUzTx4RaWYMQ9apZgxD2YqxYx5MFMpZsyDVimaedAqxafBtmSwLTl4UCleYR7MVIoz5kGrFFdVijOVopkHM+ZBqxTNPPjJYFsy2JYcPDAPzlSKM+bBTKWYMQ+uMg+uMg9mzINnDbYlg23JwYNK8Q6VYsY8aJXijHnQKsVMpWjmQasUZ8yDVinOmAdfDbYlg23JwQPz4N0qxRnz4Ix50CpFMw/OmAetUsyYB61SNPPgJ4NtyWBbcvCNSnGVeXBVpWjmwYx58IpK8QrzoFWKnwy2JYNtycETzIMzleJMpWjmQasUM5XiFeZBMw9eUSmaedDMg1YpvhpsSwbbkoM/UimaeXCmUjTzoFWKmUpxxjyYqRTPGmxLBtuSg3/IPJipFDPmQTMPzlSKZh7MVIpWKZp58IpK8WmwLRlsSw6eUCneoVLMmAfvVimuqhQz5sFXg23JYFty8A3z4F+pFM08OFMpmnnwm8yDnwy2JYNtye3+ge2ywbbkP3K/emmWJ5/FAAAAAElFTkSuQmCC" alt="QR COLIS-2026-00457" />
+            <div class="tc">COLIS-2026-00457</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">—</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Mamadou Balde</div>
+              <div class="s-sub">
+                Hamdallaye, Conakry<br>
+                +224 61 444 33 22
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">0.9 kg</span>
+          <span class="dest">Agence Hamdallaye (Conakry)</span>
+          <span style="color:var(--c-muted);">1 500 FCFA</span>
+        </div>
+      </div>
+      <div class="label-cell">
+        <div class="status-dot status-err"></div>
+
+        <div class="lbl-header">
+          <div class="lbl-company">SATR Express</div>
+          <div class="lbl-date">13/04/2026 09:00</div>
+        </div>
+
+        <div class="lbl-body">
+          <div class="lbl-qr">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAAklEQVR4AewaftIAAANzSURBVO3BwW2jOwyF0S/CXwCX7OH2Xwp74JIdZBLgEQgMJbItz7wsdM7b+weOpw2OLYNjy8UX5uLVKoNnmYuVyqCZi1YZNHPxapXBp8GxZXBsufhGZfAsczFjLlplMGMuWmXQzEWrDGYqg5XK4Fnm4tbg2DI4tlzcwVysVAbPMhetMmjmYsZctMrgWeZipTL4yeDYMji2XPwClcFMZdDMxW80OLYMji0Xv4C5eERl0MxFqwz+tcGxZXBsubhDZfBq5qJVBs1ctMqgmYtmLmbMRasMViqDXYNjy+DYcvENc/E3VQbNXLTKoJmLVhk0c9Eqg2YuVszFKw2OLYNjy9v7B34pc9Eqg99ocGwZHFsu7mAuWmUwYy4eURk0c/EIc/GIyqCZi2dVBrcGx5bBseXiQeZipTJo5qJVBs1ctMpgxlw0czFTGTRzsVIZzJiLVhnca3BsGRxbLr5hLp5lLp5lLlpl0MzFSmXQzEUzFyuVwYy5aJXBrcGxZXBsufjCXDyiMlgxFzOVQTMXrTJYqQyauZipDB5hLlplMGMuWmXwaXBsGRxbLh5UGayYi0dUBjPmolUGzVzMVAYz5mKmMpgxF60yaObi1uDYMji2XHxRGTRz0SqDZi5WKoNHmItWGTyiMpgxFzOVQTMXM5XBTGVwa3BsGRxb3t4/8B9z8TdVBq9mLlplMGMuZiqDGXPRKoNmLlpl8GlwbBkcWy6+qAxWzMVKZdDMxYy5aJVBMxetMmjmYqYyWKkMmrmYMRetMmjm4ieDY8vg2HLxhbl4VmXQzEWrDJq5aJXBIyqDZi6auXiWuZgxF/caHFsGx5aLLyqDV6gMXsFcrFQGzVy0ymDFXLTKYMVc3BocWwbHlosvzMWrVQYz5mKlMlgxFyvmolUGM+aiVQbNXPxkcGwZHFsuvlEZPMtcrFQGM+bi1SqDR5iLVhn8ZHBsGRxbLu5gLlYqg5XKYMZczJiLVhnMVAbNXDRz8YjKoJmLZi5aZXBrcGwZHFsufoHKoJmLVhnMmItWGcxUBs1ctMqgmYuZyuBeg2PL4Nhy8Q+Zi5nKYMVcrFQGzVysVAbNXDyiMvg0OLYMji0Xd6gMXqEymDEXrTJo5mKmMlipDJ5VGcyYi1uDY8vg2HLxDXPxf6sMmrmYMRd/k7n4yeDYMji2vL1/4Hja4NjyB6TTa2mnqoeQAAAAAElFTkSuQmCC" alt="QR COLIS-2026-00458" />
+            <div class="tc">COLIS-2026-00458</div>
+          </div>
+
+          <div class="lbl-info">
+            <div class="lbl-section">
+              <div class="s-title">Expéditeur</div>
+              <div class="s-name">Express Shop</div>
+            </div>
+            <div class="lbl-section">
+              <div class="s-title">Destinataire</div>
+              <div class="s-name">Seydou Keïta</div>
+              <div class="s-sub">
+                Badalabougou, Bamako<br>
+                +223 79 888 77 66
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-footer">
+          <span class="weight">6.7 kg</span>
+          <span class="dest">Agence Bamako Sud (Bamako)</span>
+          <span style="color:var(--c-muted);">10 000 FCFA</span>
+        </div>
+      </div>
+</div>
+
+<div class="fp">SHA-256 fc0bd637f29a1f69c45f69ca137ee9113ff8f8caa8d41d49486c831f2429205f · 2026-04-13T11:33:40.853Z · acteur admin-demo-001</div>
+<!-- fp:fc0bd637f29a1f69c45f69ca137ee9113ff8f8caa8d41d49486c831f2429205f:1776080020853:admin-demo-001 -->
+</body>
+</html>

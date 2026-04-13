@@ -1,0 +1,124 @@
+{
+  "name": "Trajet Standard",
+  "slug": "trip-standard",
+  "description": "Workflow de gestion d'un trajet : préparation, vérification bus et chauffeur, départ, arrivée, clôture avec réconciliation.",
+  "entityType": "Trip",
+  "isPublic": true,
+  "isSystem": true,
+  "tags": ["trip", "standard", "driver", "bus"],
+  "graph": {
+    "entityType": "Trip",
+    "version": "1.0.0",
+    "nodes": [
+      { "id": "SCHEDULED",     "label": "Planifié",          "type": "initial",  "position": { "x": 60,  "y": 120 }, "metadata": {} },
+      { "id": "PREPARING",     "label": "En préparation",    "type": "state",    "position": { "x": 280, "y": 120 }, "metadata": {} },
+      { "id": "READY",         "label": "Prêt au départ",    "type": "state",    "position": { "x": 500, "y": 120 }, "metadata": {} },
+      { "id": "BOARDING",      "label": "Embarquement",      "type": "state",    "position": { "x": 720, "y": 60  }, "metadata": {} },
+      { "id": "IN_PROGRESS",   "label": "En route",          "type": "state",    "position": { "x": 940, "y": 120 }, "metadata": {} },
+      { "id": "DELAYED",       "label": "Retardé",           "type": "state",    "position": { "x": 720, "y": 240 }, "metadata": {} },
+      { "id": "ARRIVED",       "label": "Arrivé",            "type": "state",    "position": { "x": 940, "y": 240 }, "metadata": {} },
+      { "id": "CLOSED",        "label": "Clôturé",           "type": "terminal", "position": { "x": 940, "y": 360 }, "metadata": {} },
+      { "id": "CANCELLED",     "label": "Annulé",            "type": "terminal", "position": { "x": 280, "y": 260 }, "metadata": {} }
+    ],
+    "edges": [
+      {
+        "id": "SCHEDULED___PREPARE___PREPARING",
+        "source": "SCHEDULED", "target": "PREPARING", "label": "PREPARE",
+        "guards": ["checkBusOperational", "checkDriverAssigned"],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["notifyDriver"],
+        "metadata": {}
+      },
+      {
+        "id": "PREPARING___READY___READY",
+        "source": "PREPARING", "target": "READY", "label": "MARK_READY",
+        "guards": ["checkManifestSigned"],
+        "permission": "data.manifest.sign.agency",
+        "sideEffects": ["notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "READY___OPEN_BOARDING___BOARDING",
+        "source": "READY", "target": "BOARDING", "label": "OPEN_BOARDING",
+        "guards": [],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["updateManifest"],
+        "metadata": {}
+      },
+      {
+        "id": "BOARDING___DEPART___IN_PROGRESS",
+        "source": "BOARDING", "target": "IN_PROGRESS", "label": "DEPART",
+        "guards": [],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["notifyPassenger", "updateManifest"],
+        "metadata": {}
+      },
+      {
+        "id": "IN_PROGRESS___ARRIVE___ARRIVED",
+        "source": "IN_PROGRESS", "target": "ARRIVED", "label": "ARRIVE",
+        "guards": [],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["notifyPassenger", "notifyAgency", "updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "IN_PROGRESS___DELAY___DELAYED",
+        "source": "IN_PROGRESS", "target": "DELAYED", "label": "REPORT_DELAY",
+        "guards": [],
+        "permission": "control.trip.delay.agency",
+        "sideEffects": ["notifyPassenger", "notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "DELAYED___RESUME___IN_PROGRESS",
+        "source": "DELAYED", "target": "IN_PROGRESS", "label": "RESUME",
+        "guards": [],
+        "permission": "control.trip.delay.agency",
+        "sideEffects": ["notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "DELAYED___ARRIVE___ARRIVED",
+        "source": "DELAYED", "target": "ARRIVED", "label": "ARRIVE",
+        "guards": [],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["notifyPassenger", "notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "ARRIVED___CLOSE___CLOSED",
+        "source": "ARRIVED", "target": "CLOSED", "label": "CLOSE",
+        "guards": [],
+        "permission": "data.trip.update.agency",
+        "sideEffects": ["archiveTicket"],
+        "metadata": {}
+      },
+      {
+        "id": "SCHEDULED___CANCEL___CANCELLED",
+        "source": "SCHEDULED", "target": "CANCELLED", "label": "CANCEL",
+        "guards": [],
+        "permission": "control.trip.cancel.tenant",
+        "sideEffects": ["notifyPassenger", "releaseSeat"],
+        "metadata": {}
+      },
+      {
+        "id": "PREPARING___CANCEL___CANCELLED",
+        "source": "PREPARING", "target": "CANCELLED", "label": "CANCEL",
+        "guards": [],
+        "permission": "control.trip.cancel.tenant",
+        "sideEffects": ["notifyPassenger", "releaseSeat"],
+        "metadata": {}
+      },
+      {
+        "id": "READY___CANCEL___CANCELLED",
+        "source": "READY", "target": "CANCELLED", "label": "CANCEL",
+        "guards": [],
+        "permission": "control.trip.cancel.tenant",
+        "sideEffects": ["notifyPassenger", "releaseSeat"],
+        "metadata": {}
+      }
+    ],
+    "checksum": "",
+    "metadata": {}
+  }
+}

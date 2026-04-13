@@ -1,9 +1,9 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body,
+  Controller, Get, Post, Put, Delete, Param, Body, Query,
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { TemplatesService }                from './templates.service';
-import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto';
+import { CreateTemplateDto, UpdateTemplateDto, DuplicateTemplateDto } from './dto/create-template.dto';
 import { PermissionGuard }                 from '../../core/iam/guards/permission.guard';
 import { RequirePermission }               from '../../common/decorators/require-permission.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -59,5 +59,63 @@ export class TemplatesController {
   @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
   getUploadUrl(@Param('tenantId') tenantId: string, @Param('id') id: string) {
     return this.templates.getUploadUrl(tenantId, id);
+  }
+
+  // ─── Templates système (inspiration / base) ────────────────────────────────
+
+  /** Liste les templates système disponibles (inspirations / bases de départ). */
+  @Get('system')
+  @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
+  findSystem(
+    @Param('tenantId') _tenantId: string,
+    @Query('docType') docType?: string,
+  ) {
+    return this.templates.findSystemTemplates(docType);
+  }
+
+  // ─── Duplication ──────────────────────────────────────────────────────────
+
+  /**
+   * Duplique un template (système ou tenant) pour créer une version personnalisable.
+   * POST /tenants/:tenantId/templates/:id/duplicate
+   */
+  @Post(':id/duplicate')
+  @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
+  duplicate(
+    @Param('tenantId') tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: DuplicateTemplateDto,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.templates.duplicate(tenantId, id, dto, actor);
+  }
+
+  // ─── pdfme Designer ───────────────────────────────────────────────────────
+
+  /**
+   * Sauvegarde le schéma pdfme édité par le Designer frontend.
+   * PUT /tenants/:tenantId/templates/:id/schema
+   * Body : { schemaJson: Template (objet pdfme) }
+   */
+  @Put(':id/schema')
+  @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
+  savePdfmeSchema(
+    @Param('tenantId') tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { schemaJson: Record<string, unknown> },
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.templates.savePdfmeSchema(tenantId, id, body.schemaJson, actor);
+  }
+
+  /**
+   * Retourne le schéma pdfme résolu (tenant ou système) pour le Designer.
+   * GET /tenants/:tenantId/templates/:id/schema
+   */
+  @Get(':id/schema')
+  @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
+  async getPdfmeSchema(@Param('tenantId') tenantId: string, @Param('id') id: string) {
+    const template = await this.templates.findOne(tenantId, id);
+    return { schemaJson: template.schemaJson, engine: template.engine };
   }
 }

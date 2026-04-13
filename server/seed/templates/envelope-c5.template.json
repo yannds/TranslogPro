@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "slug": "envelope-c5",
+    "name": "Enveloppe C5",
+    "docType": "ENVELOPE",
+    "format": "ENVELOPE_C5",
+    "engine": "PDFME",
+    "description": "Enveloppe C5 229×162mm paysage avec fenêtre destinataire et zone affranchissement",
+    "variables": [
+      "tenantName",
+      "senderName", "senderAddress", "senderCity", "senderZip",
+      "recipientName", "recipientAddress", "recipientCity", "recipientZip", "recipientCountry",
+      "reference", "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": { "width": 229, "height": 162, "padding": [5, 5, 5, 5] },
+  "schemas": [[
+    {
+      "name": "tenantLabel",
+      "type": "text",
+      "position": { "x": 8, "y": 6 },
+      "width": 65, "height": 4,
+      "content": "{{tenantName}}",
+      "fontSize": 6, "fontColor": "#9ca3af", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "senderName",
+      "type": "text",
+      "position": { "x": 8, "y": 11 },
+      "width": 70, "height": 7,
+      "content": "{{senderName}}",
+      "fontSize": 8.5, "fontColor": "#1a3a5c", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "senderInfo",
+      "type": "text",
+      "position": { "x": 8, "y": 19 },
+      "width": 70, "height": 14,
+      "content": "{{senderAddress}}\n{{senderZip}} {{senderCity}}",
+      "fontSize": 7, "fontColor": "#6b7280", "lineHeight": 1.5
+    },
+    {
+      "name": "stampBg",
+      "type": "rectangle",
+      "position": { "x": 186, "y": 8 },
+      "width": 35, "height": 28,
+      "color": "#f1f5f9"
+    },
+    {
+      "name": "stampText",
+      "type": "text",
+      "position": { "x": 186, "y": 22 },
+      "width": 35, "height": 6,
+      "content": "AFFRANCHISSEMENT",
+      "fontSize": 5.5, "fontColor": "#94a3b8", "alignment": "center"
+    },
+    {
+      "name": "dateText",
+      "type": "text",
+      "position": { "x": 160, "y": 42 },
+      "width": 61, "height": 5,
+      "content": "{{generatedAt}}",
+      "fontSize": 6, "fontColor": "#9ca3af", "alignment": "right"
+    },
+    {
+      "name": "windowBg",
+      "type": "rectangle",
+      "position": { "x": 24, "y": 60 },
+      "width": 90, "height": 42,
+      "color": "#f8fafc"
+    },
+    {
+      "name": "toLabel",
+      "type": "text",
+      "position": { "x": 28, "y": 63 },
+      "width": 82, "height": 4,
+      "content": "DESTINATAIRE",
+      "fontSize": 6, "fontColor": "#9ca3af", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "toName",
+      "type": "text",
+      "position": { "x": 28, "y": 68 },
+      "width": 82, "height": 8,
+      "content": "{{recipientName}}",
+      "fontSize": 11, "fontColor": "#1a3a5c", "fontName": "NotoSans-Bold"
+    },
+    {
+      "name": "toAddr",
+      "type": "text",
+      "position": { "x": 28, "y": 77 },
+      "width": 82, "height": 16,
+      "content": "{{recipientAddress}}\n{{recipientZip}} {{recipientCity}}\n{{recipientCountry}}",
+      "fontSize": 8.5, "fontColor": "#374151", "lineHeight": 1.5
+    },
+    {
+      "name": "reference",
+      "type": "text",
+      "position": { "x": 24, "y": 106 },
+      "width": 90, "height": 5,
+      "content": "Réf : {{reference}}",
+      "fontSize": 6.5, "fontColor": "#6b7280"
+    },
+    {
+      "name": "qrCode",
+      "type": "qrcode",
+      "position": { "x": 199, "y": 130 },
+      "width": 22, "height": 22,
+      "content": "{{qrCodeValue}}"
+    }
+  ]]
+}

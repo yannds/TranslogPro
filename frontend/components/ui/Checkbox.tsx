@@ -9,7 +9,7 @@
  *
  * WCAG : role="checkbox", aria-checked, focus-visible ring
  */
-import React, { useId, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import { cn } from '../../lib/utils';
 

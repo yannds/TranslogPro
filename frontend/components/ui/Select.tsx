@@ -11,7 +11,7 @@
  *   label    : label accessible
  *   placeholder : texte vide (disabled option)
  */
-import React, { forwardRef, type SelectHTMLAttributes, useId, type ReactNode } from 'react';
+import { forwardRef, type SelectHTMLAttributes, useId, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
 export interface SelectOption {

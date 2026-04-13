@@ -10,7 +10,7 @@
  *
  * Utilisé directement ou via <FormField> avec react-hook-form.
  */
-import React, { forwardRef, type InputHTMLAttributes, type ReactNode, useId } from 'react';
+import { forwardRef, type InputHTMLAttributes, type ReactNode, useId } from 'react';
 import { cn } from '../../lib/utils';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {

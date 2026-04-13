@@ -19,7 +19,7 @@ import {
   IStorageService, STORAGE_SERVICE, DocumentType,
 } from '../../infrastructure/storage/interfaces/storage.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto';
+import { CreateTemplateDto, UpdateTemplateDto, DuplicateTemplateDto } from './dto/create-template.dto';
 
 @Injectable()
 export class TemplatesService {
@@ -50,6 +50,7 @@ export class TemplatesService {
         format:     dto.format,
         engine:     dto.engine ?? 'HBS',
         body:       dto.body ?? null,
+        schemaJson: dto.schemaJson ? (dto.schemaJson as object) : undefined,
         varsSchema: (dto.varsSchema ?? {}) as object,
         createdById: actor.id,
       },
@@ -93,6 +94,7 @@ export class TemplatesService {
         format:      template.format,
         engine:      template.engine,
         body:        dto.body        ?? template.body,
+        schemaJson:  dto.schemaJson  ? (dto.schemaJson as object) : (template.schemaJson as object | undefined),
         varsSchema:  (dto.varsSchema ?? template.varsSchema ?? {}) as object,
         version:     template.version + 1,
         isSystem:    false,
@@ -116,6 +118,139 @@ export class TemplatesService {
       data:  { isActive: false },
     });
     return { deleted: true };
+  }
+
+  // ─── Duplication depuis un template système ──────────────────────────────────
+
+  /**
+   * Duplique un template (système ou tenant) comme nouveau template éditable.
+   * Utilisé pour partir d'un template de base et le personnaliser.
+   */
+  async duplicate(
+    tenantId: string,
+    sourceId: string,
+    dto: DuplicateTemplateDto,
+    actor: CurrentUserPayload,
+  ) {
+    const source = await this.prisma.documentTemplate.findFirst({
+      where: { id: sourceId },
+    });
+    if (!source) throw new NotFoundException(`Template source ${sourceId} introuvable`);
+
+    const slug = dto.slug ?? `${source.slug}-custom-${Date.now()}`;
+
+    const existing = await this.prisma.documentTemplate.findFirst({
+      where: { tenantId, slug, isActive: true },
+    });
+    if (existing) {
+      throw new ConflictException(`Un template avec le slug "${slug}" existe déjà`);
+    }
+
+    const copy = await this.prisma.documentTemplate.create({
+      data: {
+        tenantId,
+        name:        dto.name,
+        slug,
+        docType:     source.docType,
+        format:      source.format,
+        engine:      source.engine,
+        body:        source.body,
+        schemaJson:  source.schemaJson as object | undefined,
+        varsSchema:  source.varsSchema as object,
+        version:     1,
+        isSystem:    false,
+        isActive:    true,
+        createdById: actor.id,
+      },
+    });
+
+    this.logger.log(`Template dupliqué: source=${sourceId} → new=${copy.id} slug=${slug}`);
+    return copy;
+  }
+
+  // ─── pdfme schema save / resolve ─────────────────────────────────────────────
+
+  /**
+   * Enregistre le schéma pdfme édité par le Designer UI.
+   * Crée une nouvelle version du template avec engine=PDFME et schemaJson mis à jour.
+   */
+  async savePdfmeSchema(
+    tenantId: string,
+    id: string,
+    schemaJson: Record<string, unknown>,
+    actor: CurrentUserPayload,
+  ) {
+    const template = await this.findOne(tenantId, id);
+    if (template.isSystem) {
+      throw new ForbiddenException(
+        'Template système — dupliquez-le avant de modifier le schéma',
+      );
+    }
+
+    await this.prisma.documentTemplate.update({
+      where: { id },
+      data:  { isActive: false },
+    });
+
+    const next = await this.prisma.documentTemplate.create({
+      data: {
+        tenantId:    template.tenantId,
+        name:        template.name,
+        slug:        template.slug,
+        docType:     template.docType,
+        format:      template.format,
+        engine:      'PDFME',
+        body:        null,
+        schemaJson:  schemaJson as object,
+        varsSchema:  template.varsSchema as object,
+        version:     template.version + 1,
+        isSystem:    false,
+        isActive:    true,
+        createdById: actor.id,
+      },
+    });
+
+    this.logger.log(`Schéma pdfme sauvegardé: id=${next.id} v${next.version} slug=${next.slug}`);
+    return next;
+  }
+
+  /**
+   * Résout le schéma pdfme pour un slug :
+   *   1. Template tenant actif engine=PDFME (version max)
+   *   2. Template système engine=PDFME
+   * Retourne null si aucun template pdfme disponible (fallback vers Puppeteer).
+   */
+  async resolvePdfmeSchema(
+    tenantId: string,
+    slug: string,
+  ): Promise<{ schemaJson: Record<string, unknown>; template: any } | null> {
+    const template =
+      (await this.prisma.documentTemplate.findFirst({
+        where:   { tenantId, slug, engine: 'PDFME', isActive: true },
+        orderBy: { version: 'desc' },
+      })) ??
+      (await this.prisma.documentTemplate.findFirst({
+        where:   { tenantId: null, slug, engine: 'PDFME', isActive: true, isSystem: true },
+        orderBy: { version: 'desc' },
+      }));
+
+    if (!template?.schemaJson) return null;
+    return { schemaJson: template.schemaJson as Record<string, unknown>, template };
+  }
+
+  /**
+   * Retourne tous les templates système (tenantId=null) visibles pour inspiration.
+   */
+  async findSystemTemplates(docType?: string) {
+    return this.prisma.documentTemplate.findMany({
+      where: {
+        tenantId: null,
+        isSystem: true,
+        isActive: true,
+        ...(docType ? { docType } : {}),
+      },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   // ─── Upload source .hbs ──────────────────────────────────────────────────────

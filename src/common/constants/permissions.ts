@@ -153,6 +153,15 @@ export const P_TEMPLATE_READ_AGENCY         = 'data.template.read.agency';
 export const P_TEMPLATE_WRITE_AGENCY        = 'data.template.write.agency';
 export const P_TEMPLATE_DELETE_AGENCY       = 'data.template.delete.agency';
 
+// ─── Workflow Studio & Marketplace ────────────────────────────────────────────
+// Conception et gestion des blueprints de workflow.
+export const P_WORKFLOW_STUDIO_READ_TENANT  = 'control.workflow.studio.read.tenant';
+export const P_WORKFLOW_STUDIO_WRITE_TENANT = 'control.workflow.studio.write.tenant';
+export const P_WORKFLOW_MARKETPLACE_READ    = 'control.workflow.marketplace.read.tenant';
+export const P_WORKFLOW_MARKETPLACE_PUBLISH = 'control.workflow.marketplace.publish.tenant';
+export const P_WORKFLOW_BLUEPRINT_IMPORT    = 'control.workflow.blueprint.import.tenant';
+export const P_WORKFLOW_SIMULATE_TENANT     = 'control.workflow.simulate.tenant';
+
 // ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
@@ -257,6 +266,13 @@ export const Permission = {
   TEMPLATE_READ_AGENCY:        P_TEMPLATE_READ_AGENCY,
   TEMPLATE_WRITE_AGENCY:       P_TEMPLATE_WRITE_AGENCY,
   TEMPLATE_DELETE_AGENCY:      P_TEMPLATE_DELETE_AGENCY,
+  // Workflow Studio & Marketplace
+  WORKFLOW_STUDIO_READ_TENANT:  P_WORKFLOW_STUDIO_READ_TENANT,
+  WORKFLOW_STUDIO_WRITE_TENANT: P_WORKFLOW_STUDIO_WRITE_TENANT,
+  WORKFLOW_MARKETPLACE_READ:    P_WORKFLOW_MARKETPLACE_READ,
+  WORKFLOW_MARKETPLACE_PUBLISH: P_WORKFLOW_MARKETPLACE_PUBLISH,
+  WORKFLOW_BLUEPRINT_IMPORT:    P_WORKFLOW_BLUEPRINT_IMPORT,
+  WORKFLOW_SIMULATE_TENANT:     P_WORKFLOW_SIMULATE_TENANT,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];

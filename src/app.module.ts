@@ -46,13 +46,17 @@ import { TravelerModule } from './modules/traveler/traveler.module';
 import { DlqModule } from './modules/dlq/dlq.module';
 import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.module';
 import { PlatformModule }   from './modules/platform/platform.module';
-import { DocumentsModule }  from './modules/documents/documents.module';
-import { TemplatesModule }  from './modules/templates/templates.module';
+import { DocumentsModule }      from './modules/documents/documents.module';
+import { TemplatesModule }       from './modules/templates/templates.module';
+import { WorkflowStudioModule }  from './modules/workflow-studio/workflow-studio.module';
+import { WhiteLabelModule }      from './modules/white-label/white-label.module';
+import { ProfitabilityModule }   from './modules/pricing/pricing.module';
 
 // Guards & Middleware
-import { PermissionGuard } from './core/iam/guards/permission.guard';
-import { RedisRateLimitGuard } from './common/guards/redis-rate-limit.guard';
-import { TenantMiddleware } from './core/iam/middleware/tenant.middleware';
+import { PermissionGuard }       from './core/iam/guards/permission.guard';
+import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
+import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
+import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
 
 @Module({
   imports: [
@@ -116,6 +120,12 @@ import { TenantMiddleware } from './core/iam/middleware/tenant.middleware';
     DocumentsModule,
     // Templates de documents (CRUD + stockage MinIO)
     TemplatesModule,
+    // Workflow Studio & Marketplace (blueprints, designer, simulation)
+    WorkflowStudioModule,
+    // Marque Blanche (UI par tenant — CSS variables, logos, couleurs)
+    WhiteLabelModule,
+    // Rentabilité & Yield Management (coûts, snapshots, suggestions de prix)
+    ProfitabilityModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes
@@ -130,6 +140,12 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenantMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+
+    // WhiteLabelMiddleware — charge la config visuelle du tenant (cache Redis L1)
+    // Appliqué après TenantMiddleware pour bénéficier du req.user déjà résolu
+    consumer
+      .apply(WhiteLabelMiddleware)
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

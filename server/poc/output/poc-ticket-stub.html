@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Billet TKT-2026-001 — SATR Express</title>
+  <style>
+    @page { size: 148mm 210mm; margin: 10mm 12mm; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body { padding: 0; }
+
+  /* ── Billet principal ──────────────────────────────────────── */
+  .ticket-wrap {
+    border: 1.5pt solid var(--c-brand);
+    border-radius: 3pt;
+    overflow: hidden;
+    break-inside: avoid;
+  }
+
+  /* Header sombre */
+  .ticket-header {
+    background: var(--c-brand); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3mm 5mm;
+  }
+  .ticket-header .company { font-size: 11pt; font-weight: 700; letter-spacing: -.2pt; }
+  .ticket-header .doctype { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
+  .ticket-header .number  { font-size: 8pt; font-family: var(--font-mono); opacity: .9; }
+
+  /* Accent route */
+  .ticket-route {
+    background: var(--c-brand2); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2.5mm 5mm;
+  }
+  .ticket-route .city    { font-size: 13pt; font-weight: 700; }
+  .ticket-route .arrow   { font-size: 16pt; color: var(--c-accent); }
+  .ticket-route .subinfo { font-size: 7pt; opacity: .8; margin-top: 0.5mm; }
+
+  /* Corps principal */
+  .ticket-body {
+    padding: 4mm 5mm; display: grid; grid-template-columns: 1fr auto; gap: 5mm; align-items: start;
+  }
+  .ticket-fields { display: flex; flex-direction: column; gap: 2mm; }
+  .tf-row { display: flex; gap: 4mm; }
+  .tf {
+    flex: 1; border-bottom: 0.5pt solid var(--c-line); padding-bottom: 1.5mm;
+  }
+  .tf label { display: block; font-size: 6.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c-muted); margin-bottom: 0.5mm; }
+  .tf span  { font-size: 9pt; font-weight: 700; }
+  .tf.seat span { font-size: 14pt; color: var(--c-brand2); }
+  .tf.class span {
+    font-size: 7.5pt; font-weight: 700; padding: 1pt 5pt;
+    background: var(--c-accent); color: #fff; border-radius: 2pt;
+  }
+
+  /* QR zone */
+  .ticket-qr { text-align: center; }
+  .ticket-qr img { width: 32mm; height: 32mm; }
+  .ticket-qr .caption {
+    font-size: 6pt; color: var(--c-muted); margin-top: 1mm;
+    font-family: var(--font-mono);
+  }
+
+  /* Prix */
+  .ticket-price {
+    border-top: 0.5pt solid var(--c-line);
+    padding: 2.5mm 5mm;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ticket-price .label { font-size: 7.5pt; color: var(--c-muted); }
+  .ticket-price .amount { font-size: 12pt; font-weight: 700; color: var(--c-brand2); }
+  .ticket-price .status {
+    font-size: 7pt; padding: 1pt 5pt; border-radius: 2pt;
+    font-weight: 700; background: #dcfce7; color: #166534;
+  }
+
+  /* ── Talon ─────────────────────────────────────────────────── */
+  .stub-wrap {
+    border: 1.5pt solid var(--c-brand); border-radius: 3pt;
+    overflow: hidden; break-inside: avoid; margin-top: 0;
+  }
+  .stub-header {
+    background: var(--c-accent); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2mm 5mm;
+  }
+  .stub-header .sh-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  .stub-header .sh-note  { font-size: 6.5pt; opacity: .9; }
+
+  .stub-body {
+    padding: 3mm 5mm;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 5mm; align-items: center;
+  }
+  .stub-info { display: flex; flex-direction: column; gap: 2mm; }
+  .si-row { display: flex; gap: 5mm; }
+  .sf { flex: 1; }
+  .sf label { display: block; font-size: 6pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c-muted); }
+  .sf span  { font-size: 8.5pt; font-weight: 700; }
+  .sf.big span { font-size: 11pt; color: var(--c-brand2); }
+
+  .stub-qr { text-align: center; }
+  .stub-qr img { width: 24mm; height: 24mm; }
+  .stub-qr .mono { font-size: 5.5pt; font-family: var(--font-mono); color: var(--c-muted); }
+
+  .stub-scan {
+    border-top: 0.5pt dashed var(--c-line); margin: 2mm 5mm 0;
+    padding: 2mm 0; font-size: 6.5pt; color: var(--c-muted);
+    display: flex; justify-content: space-between;
+  }
+  .scan-box {
+    border: 1pt dashed #94a3b8; border-radius: 2pt;
+    width: 28mm; height: 8mm; display: flex; align-items: center;
+    justify-content: center; font-size: 6pt; color: #94a3b8;
+  }
+
+  </style>
+</head>
+<body>
+
+
+
+<!-- ═══════════════════ BILLET PRINCIPAL ═══════════════════ -->
+<div class="ticket-wrap">
+
+  <!-- Header sombre -->
+  <div class="ticket-header">
+    <div>
+      <div class="company">SATR Express</div>
+      <div class="doctype">Billet de Voyage</div>
+    </div>
+    <div class="number">N° TKT-2026-001</div>
+  </div>
+
+  <!-- Route accent -->
+  <div class="ticket-route">
+    <div>
+      <div class="city">Dakar, Sénégal</div>
+      <div class="subinfo">14/04/2026 07:30</div>
+    </div>
+    <div class="arrow">→</div>
+    <div style="text-align:right;">
+      <div class="city">Bamako, Mali</div>
+      <div class="subinfo">Arr. 14/04/2026 13:15</div>
+    </div>
+  </div>
+
+  <!-- Corps -->
+  <div class="ticket-body">
+    <div class="ticket-fields">
+      <!-- Passager + Siège -->
+      <div class="tf-row">
+        <div class="tf" style="flex:2;">
+          <label>Passager</label>
+          <span>Ibrahima DIALLO</span>
+        </div>
+        <div class="tf seat">
+          <label>Siège</label>
+          <span>14C</span>
+        </div>
+        
+        <div class="tf class">
+          <label>Classe</label>
+          <span>ECONOMY</span>
+        </div>
+      </div>
+      <!-- Ligne + Bus -->
+      <div class="tf-row">
+        <div class="tf" style="flex:2;">
+          <label>Ligne</label>
+          <span>Dakar — Bamako Express</span>
+        </div>
+        <div class="tf">
+          <label>Véhicule</label>
+          <span>DK 4521 AB</span>
+        </div>
+      </div>
+      <!-- Émission + Expiration -->
+      <div class="tf-row">
+        <div class="tf">
+          <label>Émis le</label>
+          <span>13/04/2026 09:00</span>
+        </div>
+        
+      </div>
+    </div>
+
+    <!-- QR code -->
+    <div class="ticket-qr">
+      <img src="data:image/png;base64,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" alt="QR billet" />
+      <div class="caption">Présenter à l'embarquement<br>TKT-2026-001</div>
+    </div>
+  </div>
+
+  <!-- Prix + statut -->
+  <div class="ticket-price">
+    <div>
+      <div class="label">Tarif payé</div>
+      <div class="amount">28 000 FCFA</div>
+    </div>
+    <div class="status">CONFIRMED</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PERFORATION ═══════════════════ -->
+<div class="perf"><span class="perf-label no-print">Conserver le talon — À remettre au contrôleur</span></div>
+
+<!-- ═══════════════════ TALON EMBARQUEMENT ═══════════════════ -->
+<div class="stub-wrap">
+  <div class="stub-header">
+    <div class="sh-title">Coupon d'embarquement</div>
+    <div class="sh-note">Ne pas séparer avant le contrôle</div>
+  </div>
+
+  <div class="stub-body">
+    <div class="stub-info">
+      <div class="si-row">
+        <div class="sf big"><label>Passager</label><span>Ibrahima DIALLO</span></div>
+        <div class="sf big"><label>Siège</label><span>14C</span></div>
+      </div>
+      <div class="si-row">
+        <div class="sf"><label>De</label><span>Dakar, Sénégal</span></div>
+        <div class="sf"><label>À</label><span>Bamako, Mali</span></div>
+        <div class="sf"><label>Départ</label><span>14/04/2026 07:30</span></div>
+      </div>
+      <div class="si-row">
+        <div class="sf"><label>N° Billet</label><span class="mono">TKT-2026-001</span></div>
+        <div class="sf"><label>Véhicule</label><span>DK 4521 AB</span></div>
+      </div>
+    </div>
+
+    <div class="stub-qr">
+      <img src="data:image/png;base64,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" alt="QR talon" width="96" height="96" />
+      <div class="mono">TKT-2026-001</div>
+    </div>
+  </div>
+
+  <div class="stub-scan">
+    <span>✓ Billet valide pour ce voyage uniquement — Non remboursable</span>
+    <div class="scan-box">Visa contrôleur</div>
+  </div>
+</div>
+
+<div class="fp">SHA-256 b661592a40960d41d59b3f426f26bc17ee70f48bda98953b5a1fbbbda0890af4 · 2026-04-13T11:33:40.843Z · acteur admin-demo-001</div>
+<!-- fp:b661592a40960d41d59b3f426f26bc17ee70f48bda98953b5a1fbbbda0890af4:1776080020843:admin-demo-001 -->
+</body>
+</html>

@@ -1,0 +1,178 @@
+{
+  "name": "Colis Complexe (incidents + réclamations)",
+  "slug": "parcel-complex",
+  "description": "Workflow avancé pour la logistique colis : tracking multi-étapes, gestion d'incidents (colis endommagé/perdu), procédure de réclamation et remboursement.",
+  "entityType": "Parcel",
+  "isPublic": true,
+  "isSystem": true,
+  "tags": ["parcel", "logistics", "incidents", "claims", "advanced"],
+  "graph": {
+    "entityType": "Parcel",
+    "version": "1.0.0",
+    "nodes": [
+      { "id": "CREATED",         "label": "Créé",               "type": "initial",  "position": { "x": 60,  "y": 140 }, "metadata": {} },
+      { "id": "LABELLED",        "label": "Étiqueté",           "type": "state",    "position": { "x": 280, "y": 140 }, "metadata": {} },
+      { "id": "COLLECTED",       "label": "Collecté",           "type": "state",    "position": { "x": 500, "y": 140 }, "metadata": {} },
+      { "id": "IN_TRANSIT",      "label": "En transit",         "type": "state",    "position": { "x": 720, "y": 140 }, "metadata": {} },
+      { "id": "AT_DESTINATION",  "label": "À destination",      "type": "state",    "position": { "x": 940, "y": 140 }, "metadata": {} },
+      { "id": "OUT_FOR_DELIVERY","label": "En livraison",       "type": "state",    "position": { "x": 940, "y": 280 }, "metadata": {} },
+      { "id": "DELIVERED",       "label": "Livré",              "type": "terminal", "position": { "x": 940, "y": 420 }, "metadata": {} },
+      { "id": "DELIVERY_FAILED", "label": "Livraison échouée",  "type": "state",    "position": { "x": 720, "y": 420 }, "metadata": {} },
+      { "id": "RETURNED",        "label": "Retourné",           "type": "state",    "position": { "x": 500, "y": 420 }, "metadata": {} },
+      { "id": "INCIDENT",        "label": "Incident signalé",   "type": "state",    "position": { "x": 720, "y": 280 }, "metadata": {} },
+      { "id": "LOST",            "label": "Perdu",              "type": "state",    "position": { "x": 500, "y": 280 }, "metadata": {} },
+      { "id": "CLAIM_PENDING",   "label": "Réclamation en cours","type": "state",   "position": { "x": 280, "y": 280 }, "metadata": {} },
+      { "id": "CLAIM_APPROVED",  "label": "Réclamation approuvée","type": "state",  "position": { "x": 60,  "y": 280 }, "metadata": {} },
+      { "id": "REFUNDED",        "label": "Remboursé",          "type": "terminal", "position": { "x": 60,  "y": 420 }, "metadata": {} },
+      { "id": "ARCHIVED",        "label": "Archivé",            "type": "terminal", "position": { "x": 280, "y": 420 }, "metadata": {} }
+    ],
+    "edges": [
+      {
+        "id": "CREATED___LABEL___LABELLED",
+        "source": "CREATED", "target": "LABELLED", "label": "LABEL",
+        "guards": ["checkSenderVerified", "checkWeightLimit"],
+        "permission": "data.parcel.create.agency",
+        "sideEffects": ["generateParcelLabel", "updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "LABELLED___COLLECT___COLLECTED",
+        "source": "LABELLED", "target": "COLLECTED", "label": "COLLECT",
+        "guards": [],
+        "permission": "data.parcel.scan.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "COLLECTED___LOAD___IN_TRANSIT",
+        "source": "COLLECTED", "target": "IN_TRANSIT", "label": "LOAD",
+        "guards": [],
+        "permission": "data.parcel.scan.agency",
+        "sideEffects": ["updateParcelTracking", "updateManifest"],
+        "metadata": {}
+      },
+      {
+        "id": "IN_TRANSIT___ARRIVE___AT_DESTINATION",
+        "source": "IN_TRANSIT", "target": "AT_DESTINATION", "label": "ARRIVE",
+        "guards": [],
+        "permission": "data.parcel.scan.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "AT_DESTINATION___DISPATCH___OUT_FOR_DELIVERY",
+        "source": "AT_DESTINATION", "target": "OUT_FOR_DELIVERY", "label": "DISPATCH",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "OUT_FOR_DELIVERY___DELIVER___DELIVERED",
+        "source": "OUT_FOR_DELIVERY", "target": "DELIVERED", "label": "DELIVER",
+        "guards": ["checkParcelNotDelivered"],
+        "permission": "data.parcel.scan.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger", "archiveParcel"],
+        "metadata": {}
+      },
+      {
+        "id": "OUT_FOR_DELIVERY___FAIL___DELIVERY_FAILED",
+        "source": "OUT_FOR_DELIVERY", "target": "DELIVERY_FAILED", "label": "FAIL_DELIVERY",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger", "notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "DELIVERY_FAILED___RETRY___OUT_FOR_DELIVERY",
+        "source": "DELIVERY_FAILED", "target": "OUT_FOR_DELIVERY", "label": "RETRY_DELIVERY",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "DELIVERY_FAILED___RETURN___RETURNED",
+        "source": "DELIVERY_FAILED", "target": "RETURNED", "label": "RETURN",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "RETURNED___ARCHIVE___ARCHIVED",
+        "source": "RETURNED", "target": "ARCHIVED", "label": "ARCHIVE",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["archiveParcel"],
+        "metadata": {}
+      },
+      {
+        "id": "IN_TRANSIT___INCIDENT___INCIDENT",
+        "source": "IN_TRANSIT", "target": "INCIDENT", "label": "REPORT_INCIDENT",
+        "guards": [],
+        "permission": "data.parcel.report.agency",
+        "sideEffects": ["notifyAgency", "createAuditEntry", "updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "AT_DESTINATION___INCIDENT___INCIDENT",
+        "source": "AT_DESTINATION", "target": "INCIDENT", "label": "REPORT_INCIDENT",
+        "guards": [],
+        "permission": "data.parcel.report.agency",
+        "sideEffects": ["notifyAgency", "createAuditEntry", "updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "INCIDENT___DECLARE_LOST___LOST",
+        "source": "INCIDENT", "target": "LOST", "label": "DECLARE_LOST",
+        "guards": [],
+        "permission": "data.sav.claim.tenant",
+        "sideEffects": ["notifyPassenger", "notifyAgency", "updateParcelTracking"],
+        "metadata": {}
+      },
+      {
+        "id": "INCIDENT___RESOLVE___IN_TRANSIT",
+        "source": "INCIDENT", "target": "IN_TRANSIT", "label": "RESOLVE_INCIDENT",
+        "guards": [],
+        "permission": "data.parcel.update.agency",
+        "sideEffects": ["updateParcelTracking", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "LOST___CLAIM___CLAIM_PENDING",
+        "source": "LOST", "target": "CLAIM_PENDING", "label": "OPEN_CLAIM",
+        "guards": ["checkClaimDeadline"],
+        "permission": "data.sav.claim.tenant",
+        "sideEffects": ["notifyPassenger", "createAuditEntry"],
+        "metadata": {}
+      },
+      {
+        "id": "CLAIM_PENDING___APPROVE___CLAIM_APPROVED",
+        "source": "CLAIM_PENDING", "target": "CLAIM_APPROVED", "label": "APPROVE_CLAIM",
+        "guards": [],
+        "permission": "data.sav.claim.tenant",
+        "sideEffects": ["notifyPassenger", "notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "CLAIM_APPROVED___REFUND___REFUNDED",
+        "source": "CLAIM_APPROVED", "target": "REFUNDED", "label": "ISSUE_REFUND",
+        "guards": [],
+        "permission": "data.cashier.transaction.own",
+        "sideEffects": ["triggerRefund", "markCashierTransaction", "notifyPassenger", "archiveParcel"],
+        "metadata": {}
+      },
+      {
+        "id": "CLAIM_PENDING___REJECT___ARCHIVED",
+        "source": "CLAIM_PENDING", "target": "ARCHIVED", "label": "REJECT_CLAIM",
+        "guards": [],
+        "permission": "data.sav.claim.tenant",
+        "sideEffects": ["notifyPassenger", "archiveParcel"],
+        "metadata": {}
+      }
+    ],
+    "checksum": "",
+    "metadata": {}
+  }
+}

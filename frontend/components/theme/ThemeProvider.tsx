@@ -19,7 +19,7 @@
  *   // Dans un composant :
  *   const { theme, toggle } = useTheme();
  */
-import React, {
+import {
   createContext, useContext, useEffect, useState, useCallback,
   type ReactNode,
 } from 'react';

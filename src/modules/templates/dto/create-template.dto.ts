@@ -20,6 +20,7 @@ export enum TemplateFormat {
 export enum TemplateEngine {
   HBS       = 'HBS',
   PUPPETEER = 'PUPPETEER',
+  PDFME     = 'PDFME',
 }
 
 export class CreateTemplateDto {
@@ -44,6 +45,11 @@ export class CreateTemplateDto {
   @IsOptional()
   body?: string;
 
+  /** Schéma pdfme JSON (engine=PDFME). */
+  @IsObject()
+  @IsOptional()
+  schemaJson?: Record<string, unknown>;
+
   @IsObject()
   @IsOptional()
   varsSchema?: Record<string, unknown>;
@@ -58,6 +64,11 @@ export class UpdateTemplateDto {
   @IsOptional()
   body?: string;
 
+  /** Mise à jour du schéma pdfme (engine=PDFME). */
+  @IsObject()
+  @IsOptional()
+  schemaJson?: Record<string, unknown>;
+
   @IsObject()
   @IsOptional()
   varsSchema?: Record<string, unknown>;
@@ -65,4 +76,14 @@ export class UpdateTemplateDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+}
+
+/** DTO pour dupliquer un template système et le personnaliser. */
+export class DuplicateTemplateDto {
+  @IsString()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  slug?: string;
 }

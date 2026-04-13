@@ -1,0 +1,223 @@
+{
+  "_meta": {
+    "slug": "parcel-label",
+    "name": "Étiquette colis A6",
+    "docType": "LABEL",
+    "format": "LABEL_62MM",
+    "engine": "PDFME",
+    "description": "Étiquette colis format A6 avec QR de tracking et informations expéditeur/destinataire",
+    "variables": [
+      "tenantName",
+      "parcelRef", "trackingCode", "weight", "dimensions",
+      "senderName", "senderAddress", "senderPhone",
+      "recipientName", "recipientAddress", "recipientPhone",
+      "origin", "destination", "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": {
+    "width": 105,
+    "height": 148,
+    "padding": [5, 5, 5, 5]
+  },
+  "schemas": [
+    [
+      {
+        "name": "header",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 0 },
+        "width": 105,
+        "height": 14,
+        "color": "#1a3a5c"
+      },
+      {
+        "name": "tenantName",
+        "type": "text",
+        "position": { "x": 5, "y": 3 },
+        "width": 95,
+        "height": 8,
+        "content": "{{tenantName}}",
+        "fontSize": 10,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "qrCode",
+        "type": "qrcode",
+        "position": { "x": 72, "y": 16 },
+        "width": 28,
+        "height": 28,
+        "content": "{{qrCodeValue}}"
+      },
+      {
+        "name": "parcelRefLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 17 },
+        "width": 65,
+        "height": 4,
+        "content": "RÉFÉRENCE COLIS",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "parcelRef",
+        "type": "text",
+        "position": { "x": 5, "y": 22 },
+        "width": 65,
+        "height": 8,
+        "content": "{{parcelRef}}",
+        "fontSize": 10,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "trackingCode",
+        "type": "text",
+        "position": { "x": 5, "y": 31 },
+        "width": 65,
+        "height": 5,
+        "content": "{{trackingCode}}",
+        "fontSize": 7,
+        "fontColor": "#1e40af"
+      },
+      {
+        "name": "routeBand",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 47 },
+        "width": 105,
+        "height": 12,
+        "color": "#2563eb"
+      },
+      {
+        "name": "routeText",
+        "type": "text",
+        "position": { "x": 5, "y": 51 },
+        "width": 95,
+        "height": 6,
+        "content": "{{origin}}  →  {{destination}}",
+        "fontSize": 9,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "recipientLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 63 },
+        "width": 95,
+        "height": 4,
+        "content": "DESTINATAIRE",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "recipientName",
+        "type": "text",
+        "position": { "x": 5, "y": 68 },
+        "width": 95,
+        "height": 8,
+        "content": "{{recipientName}}",
+        "fontSize": 11,
+        "fontColor": "#111827",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "recipientAddress",
+        "type": "text",
+        "position": { "x": 5, "y": 77 },
+        "width": 95,
+        "height": 12,
+        "content": "{{recipientAddress}}\nTél: {{recipientPhone}}",
+        "fontSize": 8,
+        "fontColor": "#374151",
+        "lineHeight": 1.5
+      },
+      {
+        "name": "divider",
+        "type": "line",
+        "position": { "x": 5, "y": 93 },
+        "width": 95,
+        "height": 0.3,
+        "color": "#e5e7eb"
+      },
+      {
+        "name": "senderLabel",
+        "type": "text",
+        "position": { "x": 5, "y": 97 },
+        "width": 60,
+        "height": 4,
+        "content": "EXPÉDITEUR",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "senderName",
+        "type": "text",
+        "position": { "x": 5, "y": 102 },
+        "width": 95,
+        "height": 6,
+        "content": "{{senderName}}",
+        "fontSize": 8.5,
+        "fontColor": "#374151",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "senderContact",
+        "type": "text",
+        "position": { "x": 5, "y": 109 },
+        "width": 95,
+        "height": 10,
+        "content": "{{senderAddress}}\nTél: {{senderPhone}}",
+        "fontSize": 7,
+        "fontColor": "#6b7280",
+        "lineHeight": 1.5
+      },
+      {
+        "name": "weightBg",
+        "type": "rectangle",
+        "position": { "x": 5, "y": 124 },
+        "width": 35,
+        "height": 9,
+        "color": "#dc2626",
+        "borderRadius": 2
+      },
+      {
+        "name": "weight",
+        "type": "text",
+        "position": { "x": 5, "y": 126 },
+        "width": 35,
+        "height": 6,
+        "content": "{{weight}} kg",
+        "fontSize": 8.5,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "center"
+      },
+      {
+        "name": "dimensions",
+        "type": "text",
+        "position": { "x": 46, "y": 126 },
+        "width": 54,
+        "height": 6,
+        "content": "{{dimensions}}",
+        "fontSize": 7.5,
+        "fontColor": "#374151",
+        "alignment": "right"
+      },
+      {
+        "name": "footer",
+        "type": "text",
+        "position": { "x": 5, "y": 138 },
+        "width": 95,
+        "height": 5,
+        "content": "{{generatedAt}} — {{tenantName}}",
+        "fontSize": 5.5,
+        "fontColor": "#9ca3af",
+        "alignment": "center"
+      }
+    ]
+  ]
+}

@@ -37,6 +37,8 @@ model Tenant {
   stations        Station[]
   parcels         Parcel[]
   config          TenantConfig?
+  brand           TenantBrand?
+  busCostProfiles BusCostProfile[]
 
   @@map("tenants")
 }
@@ -66,6 +68,35 @@ model TenantConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("tenant_configs")
+}
+
+// ── Marque Blanche (White Label) — configuration visuelle par tenant ──────────
+// Chargée en cache Redis TTL 5 min pour ne pas pénaliser chaque requête.
+model TenantBrand {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  // Identité
+  brandName       String
+  logoUrl         String?
+  faviconUrl      String?
+  // Palette CSS (variables injectées dans le layout)
+  primaryColor    String   @default("#2563eb")
+  secondaryColor  String   @default("#1a3a5c")
+  accentColor     String   @default("#f59e0b")
+  textColor       String   @default("#111827")
+  bgColor         String   @default("#ffffff")
+  fontFamily      String   @default("Inter, sans-serif")
+  // CSS additionnel (non-sanitisé en DB, sanitisé à l'injection)
+  customCss       String?  @db.Text
+  // SEO / support
+  metaTitle       String?
+  metaDescription String?
+  supportEmail    String?
+  supportPhone    String?
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@map("tenant_brands")
 }
 
 model Agency {
@@ -475,6 +506,7 @@ model Bus {
   tenant             Tenant              @relation(fields: [tenantId], references: [id])
   trips              Trip[]
   maintenanceReports MaintenanceReport[]
+  costProfile        BusCostProfile?
 
   @@index([tenantId, status])
   @@map("buses")
@@ -526,13 +558,14 @@ model Trip {
   tenant      Tenant          @relation(fields: [tenantId], references: [id])
   route       Route           @relation(fields: [routeId], references: [id])
   bus         Bus             @relation(fields: [busId], references: [id])
-  checklists  Checklist[]
-  incidents   Incident[]
-  shipments   Shipment[]
-  tripEvents  TripEvent[]
+  checklists      Checklist[]
+  incidents       Incident[]
+  shipments       Shipment[]
+  tripEvents      TripEvent[]
   crewAssignments CrewAssignment[]
-  feedbacks   Feedback[]
-  travelers   Traveler[]      @relation("TripTravelers")
+  feedbacks       Feedback[]
+  travelers       Traveler[]         @relation("TripTravelers")
+  costSnapshot    TripCostSnapshot?
 
   @@index([tenantId, status])
   @@index([tenantId, departureScheduled])
@@ -1016,6 +1049,77 @@ model TripTemplate {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SECTION 19 : WORKFLOW STUDIO & MARKETPLACE (PRD §V.5)
+// ─────────────────────────────────────────────────────────────
+
+/// Catégorie de blueprint (ex: "Billetterie", "Logistique", "Support")
+model BlueprintCategory {
+  id         String              @id @default(cuid())
+  name       String              @unique
+  slug       String              @unique
+  icon       String?
+  sortOrder  Int                 @default(0)
+  blueprints WorkflowBlueprint[]
+
+  @@map("blueprint_categories")
+}
+
+/// Blueprint réutilisable de workflow — modèle de machine d'état exportable/importable.
+/// Un blueprint est un snapshot figé d'un graphe de workflow : il ne change jamais
+/// une fois publié (immutable history). Pour modifier, on publie une nouvelle version.
+model WorkflowBlueprint {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String
+  description    String?
+  entityType     String   // Ticket | Parcel | Trip | Claim
+  /// Graphe sérialisé comme WorkflowGraph JSON (nodes + edges)
+  graphJson      Json
+  /// SHA-256 de graphJson — tamper detection à l'import
+  checksum       String
+  version        String   @default("1.0.0")
+  isPublic       Boolean  @default(false)  // false = PRIVATE (visible qu'à authorTenantId)
+  isSystem       Boolean  @default(false)  // true = seed système non supprimable
+  categoryId     String?
+  category       BlueprintCategory? @relation(fields: [categoryId], references: [id])
+  /// Tenant auteur (null = blueprint système)
+  authorTenantId String?
+  /// Tags de recherche
+  tags           Json     @default("[]")   // string[]
+  /// Compteur installations (dénormalisé pour ranking marketplace)
+  usageCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  installs       BlueprintInstall[]
+
+  @@unique([authorTenantId, slug, version])
+  @@index([entityType, isPublic])
+  @@index([isSystem])
+  @@map("workflow_blueprints")
+}
+
+/// Installation d'un blueprint par un tenant.
+/// Chaque installation snapshot le graphJson au moment de l'install
+/// pour que les mises à jour du blueprint n'affectent pas les tenants existants.
+model BlueprintInstall {
+  id           String   @id @default(cuid())
+  tenantId     String
+  blueprintId  String
+  blueprint    WorkflowBlueprint @relation(fields: [blueprintId], references: [id])
+  /// Snapshot du graphJson au moment de l'installation
+  snapshotJson Json
+  /// Indique si le tenant a personnalisé le workflow après l'installation
+  isDirty      Boolean  @default(false)
+  installedAt  DateTime @default(now())
+  installedBy  String   // userId
+
+  @@unique([tenantId, blueprintId])
+  @@index([tenantId])
+  @@map("blueprint_installs")
+}
+
+// ─────────────────────────────────────────────────────────────
 // SECTION 18 : DOCUMENT TEMPLATES (PRD §Render Engine)
 // ─────────────────────────────────────────────────────────────
 
@@ -1027,11 +1131,13 @@ model DocumentTemplate {
   slug        String                   // Identifiant machine : "ticket-a4-fr"
   docType     String                   // TICKET | MANIFEST | INVOICE | LABEL | PACKING_LIST
   format      String                   // A4 | A5 | THERMAL_80MM | LABEL_62MM | ENVELOPE_C5 | BAGGAGE_TAG
-  engine      String   @default("HBS") // HBS | PUPPETEER
+  engine      String   @default("HBS") // HBS | PUPPETEER | PDFME
   // Chemin MinIO vers le fichier source .hbs (null = template inline stocké dans `body`)
   storageKey  String?
   // Template source inline (utilisé si storageKey null — évite un round-trip MinIO)
   body        String?
+  // Schéma pdfme JSON (engine=PDFME uniquement) — Template + schemas au format @pdfme/common
+  schemaJson  Json?
   // Variables requises déclarées comme JSON Schema
   varsSchema  Json     @default("{}")
   version     Int      @default(1)
@@ -1045,4 +1151,110 @@ model DocumentTemplate {
   @@index([docType, isActive])
   @@index([tenantId, isActive])
   @@map("document_templates")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 20 : RENTABILITÉ & YIELD MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+
+// ── Profil de coût par véhicule (paramétrable par le tenant) ──────────────────
+// Sert de base au calcul ProfitabilityService pour chaque trajet.
+model BusCostProfile {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  busId                   String   @unique
+  // Coûts variables
+  fuelConsumptionPer100Km Float    // litres / 100 km
+  fuelPricePerLiter       Float    // prix actuel du carburant (XOF/litre)
+  driverAllowancePerTrip  Float    @default(0)   // indemnités fixes par trajet (XOF)
+  tollFeesPerTrip         Float    @default(0)   // péages fixes par trajet (XOF)
+  // Coûts fixes mensuels (proratisés par trajet dans ProfitabilityService)
+  driverMonthlySalary     Float    // salaire mensuel conducteur assigné (XOF)
+  annualInsuranceCost     Float    // assurance annuelle (XOF)
+  monthlyAgencyFees       Float    // frais fixes agence / mois (XOF)
+  monthlyMaintenanceAvg   Float    @default(0)   // entretien courant estimé / mois
+  // Amortissement simplifié
+  purchasePrice           Float    // prix d'achat (XOF)
+  depreciationYears       Int      @default(10)
+  residualValue           Float    @default(0)
+  // Nombre moyen de trajets par mois (utilisé pour la proratisation)
+  avgTripsPerMonth        Int      @default(30)
+  updatedAt               DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bus    Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("bus_cost_profiles")
+}
+
+// ── Snapshot de rentabilité calculé par trajet (immuable après clôture) ───────
+// Généré automatiquement à la transition Trip → COMPLETED.
+model TripCostSnapshot {
+  id       String @id @default(cuid())
+  tenantId String
+  tripId   String @unique
+  // ── Coûts variables ──────────────────────────────────────────
+  fuelCost           Float   // fuelConsumption / 100 * distanceKm * fuelPrice
+  tollFees           Float
+  driverAllowance    Float
+  // ── Coûts fixes proratisés (par trajet) ─────────────────────
+  driverDailyCost    Float   // salaire mensuel / avgTripsPerMonth
+  insuranceDailyCost Float   // assurance annuelle / 365 / trips/jour
+  agencyDailyCost    Float   // frais agence mensuel / avgTripsPerMonth
+  depreciationDaily  Float   // (purchasePrice - residualValue) / years / 365
+  maintenanceDailyCost Float
+  // ── Totaux ──────────────────────────────────────────────────
+  totalVariableCost Float
+  totalFixedCost    Float
+  totalCost         Float
+  // ── Revenus ─────────────────────────────────────────────────
+  ticketRevenue     Float   @default(0)
+  parcelRevenue     Float   @default(0)
+  totalRevenue      Float   @default(0)
+  // ── KPIs ────────────────────────────────────────────────────
+  bookedSeats       Int
+  totalSeats        Int
+  fillRate          Float   // 0.0 – 1.0
+  breakEvenSeats    Int     // ceil(totalCost / avgTicketPrice)
+  netMargin         Float   // totalRevenue - totalCost
+  marginRate        Float   // netMargin / max(totalCost, 1)
+  profitabilityTag  String  // PROFITABLE | BREAK_EVEN | DEFICIT
+  computedAt        DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, profitabilityTag])
+  @@index([tenantId, computedAt])
+  @@map("trip_cost_snapshots")
+}
+
+// ── Statistiques agrégées par route / véhicule / jour ────────────────────────
+// Alimentées par un job quotidien (Scheduler) pour le Yield Engine et le dashboard.
+model TripAnalytics {
+  id        String   @id @default(cuid())
+  tenantId  String
+  routeId   String
+  busId     String
+  // Date du trajet (tronquée à minuit UTC pour agrégation journalière)
+  tripDate  DateTime
+  dayOfWeek Int      // 0=Lundi … 6=Dimanche
+
+  avgFillRate      Float
+  avgNetMargin     Float
+  avgTicketRevenue Float
+  avgParcelRevenue Float
+  tripCount        Int   @default(1)
+  profitableCount  Int   @default(0)
+  deficitCount     Int   @default(0)
+
+  // Flags calculés sur fenêtre glissante 12 semaines
+  isGoldenDay  Boolean @default(false) // fillRate > 0.85 sur ce jour-de-semaine historiquement
+  isBlackRoute Boolean @default(false) // > 50 % des trajets déficitaires sur les 90 derniers jours
+  // Prix de référence moyen (base pour le yield)
+  referencePrice Float?
+
+  @@unique([tenantId, routeId, busId, tripDate])
+  @@index([tenantId, routeId, isGoldenDay])
+  @@index([tenantId, isBlackRoute])
+  @@map("trip_analytics")
 }

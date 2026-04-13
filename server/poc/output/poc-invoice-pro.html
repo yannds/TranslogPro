@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Facture FAC-2026-00847 — SATR Express</title>
+  <style>
+    @page { size: 210mm 297mm; margin: 12mm 14mm; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body { padding: 0; }
+
+  /* ── En-tête ────────────────────────────────────────────────── */
+  .inv-header {
+    display: grid; grid-template-columns: 1fr auto; gap: 8mm;
+    align-items: start; padding-bottom: 5mm;
+    border-bottom: 3pt solid var(--c-brand);
+    margin-bottom: 6mm;
+  }
+  .inv-company { }
+  .inv-company .name {
+    font-size: 18pt; font-weight: 700; color: var(--c-brand2);
+    letter-spacing: -.3pt; line-height: 1.1;
+  }
+  .inv-company .coords { font-size: 8pt; color: var(--c-muted); margin-top: 2mm; line-height: 1.7; }
+  .inv-meta {
+    text-align: right; background: var(--c-brand); color: #fff;
+    padding: 5mm 6mm; border-radius: 2pt; min-width: 52mm;
+  }
+  .inv-meta .label  { font-size: 7pt; text-transform: uppercase; letter-spacing: .1em; opacity: .7; }
+  .inv-meta .number { font-size: 14pt; font-weight: 700; margin: 1mm 0; }
+  .inv-meta .date   { font-size: 8pt; opacity: .85; }
+
+  /* ── Bloc client/vendeur ───────────────────────────────────── */
+  .inv-parties {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6mm;
+    margin-bottom: 6mm;
+  }
+  .inv-party {
+    border: 0.5pt solid var(--c-line); border-radius: 2pt; padding: 4mm;
+  }
+  .inv-party .party-title {
+    font-size: 7pt; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); margin-bottom: 2mm; font-weight: 700;
+  }
+  .inv-party .party-name  { font-size: 10.5pt; font-weight: 700; margin-bottom: 1mm; }
+  .inv-party .party-info  { font-size: 8pt; line-height: 1.7; color: var(--c-muted); }
+
+  /* ── Tableau facture ──────────────────────────────────────── */
+  .inv-table { margin-bottom: 5mm; }
+  .inv-table table { font-size: 8.5pt; }
+  .inv-table th {
+    background: var(--c-brand); color: #fff; padding: 2.5mm 3mm;
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em;
+  }
+  .inv-table td { padding: 2.5mm 3mm; border-bottom: 0.5pt solid var(--c-line); }
+  .inv-table tr:last-child td { border-bottom: none; }
+
+  /* ── Récapitulatif ──────────────────────────────────────── */
+  .inv-totals {
+    display: flex; justify-content: flex-end; margin-bottom: 6mm;
+  }
+  .inv-totals-box {
+    width: 72mm; border: 0.5pt solid var(--c-line); border-radius: 2pt;
+    overflow: hidden;
+  }
+  .tot-row {
+    display: flex; justify-content: space-between;
+    padding: 2mm 3.5mm; font-size: 8.5pt;
+    border-bottom: 0.5pt solid var(--c-line);
+  }
+  .tot-row:last-child { border-bottom: none; }
+  .tot-row.ttc {
+    background: var(--c-brand); color: #fff;
+    font-size: 11pt; font-weight: 700;
+    padding: 3mm 3.5mm;
+  }
+
+  /* ── Paiement ───────────────────────────────────────────── */
+  .inv-payment {
+    border-left: 3pt solid var(--c-accent);
+    padding: 3mm 4mm; margin-bottom: 6mm;
+    font-size: 8pt; background: #fffbeb;
+    border-radius: 0 2pt 2pt 0;
+  }
+  .inv-payment .pay-title { font-weight: 700; margin-bottom: 1.5mm; font-size: 9pt; }
+  .inv-payment .pay-bank  { font-family: var(--font-mono); color: var(--c-brand2); font-size: 8pt; }
+
+  /* ── Notes ──────────────────────────────────────────────── */
+  .inv-notes {
+    font-size: 7.5pt; color: var(--c-muted);
+    border-top: 0.5pt dashed var(--c-line); padding-top: 3mm; margin-bottom: 4mm;
+  }
+
+  /* ── Mentions légales ────────────────────────────────────── */
+  .inv-legal {
+    font-size: 6.5pt; color: #94a3b8; text-align: center;
+    border-top: 0.5pt solid var(--c-line); padding-top: 2mm;
+  }
+
+  /* ── Talon ───────────────────────────────────────────────── */
+  .inv-stub {
+    border: 1pt solid var(--c-line); border-radius: 3pt;
+    padding: 4mm 5mm; margin-top: 2mm;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 6mm; align-items: center;
+    break-inside: avoid;
+  }
+  .stub-title {
+    font-size: 7pt; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); margin-bottom: 1.5mm; font-weight: 700;
+  }
+  .stub-fields { display: flex; flex-direction: column; gap: 1mm; font-size: 8.5pt; }
+  .stub-field  { display: flex; gap: 3mm; align-items: baseline; }
+  .stub-field label { font-size: 7pt; color: var(--c-muted); min-width: 26mm; }
+  .stub-field span  { font-weight: 700; }
+  .stub-qr { text-align: center; }
+  .stub-qr img { width: 22mm; height: 22mm; }
+  .stub-qr .mono { font-size: 6pt; margin-top: 1mm; }
+  .stub-note {
+    grid-column: 1 / -1; font-size: 7pt; color: var(--c-muted);
+    font-style: italic; padding-top: 2mm;
+    border-top: 0.5pt dashed var(--c-line);
+  }
+
+  </style>
+</head>
+<body>
+
+
+
+<!-- ═══ EN-TÊTE ═══ -->
+<div class="inv-header">
+  <div class="inv-company">
+    <div class="name">SATR Express</div>
+    <div class="coords">
+      Avenue de la République, Dakar, Sénégal<br>
+      Tél : +221 33 123 45 67<br>
+      facturation@satr-express.sn<br>
+      NIF : SN-2024-00123<br>
+      RCCM : DKR/2024/B/01234
+    </div>
+  </div>
+  <div class="inv-meta">
+    <div class="label">Facture</div>
+    <div class="number">FAC-2026-00847</div>
+    <div class="date">Émise le 13/04/2026 09:00</div>
+    <div class="date" style="margin-top:1mm;">Échéance 20/04/2026 01:00</div>
+  </div>
+</div>
+
+<!-- ═══ PARTIES ═══ -->
+<div class="inv-parties">
+  <div class="inv-party">
+    <div class="party-title">Facturé à</div>
+    <div class="party-name">Ibrahima Diallo</div>
+    <div class="party-info">
+      12 Rue des Almadies, Dakar<br>
+      Tél : +221 77 456 78 90<br>
+      i.diallo@email.sn<br>
+      
+    </div>
+  </div>
+  <div class="inv-party">
+    <div class="party-title">Récapitulatif</div>
+    <div class="party-info" style="font-size:8.5pt;">
+      <strong>N° Facture</strong> FAC-2026-00847<br>
+      <strong>Date</strong> 13/04/2026 09:00<br>
+      <strong>Devise</strong> FCFA<br>
+      <strong>Échéance</strong> 20/04/2026 01:00<br>
+      <strong style="font-size:11pt;color:var(--c-brand);">Total TTC</strong>
+      <span style="font-size:11pt;font-weight:700;">131 400 FCFA</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TABLEAU PRESTATIONS ═══ -->
+<div class="inv-table">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:44%">Description</th>
+        <th style="text-align:center;width:8%">Qté</th>
+        <th style="text-align:right;width:14%">P.U. HT</th>
+        <th style="text-align:center;width:8%">TVA</th>
+        <th style="text-align:right;width:12%">TVA</th>
+        <th style="text-align:right;width:14%">Total TTC</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="text-align:left">Billet Dakar → Bamako (Classe Économie)</td><td style="text-align:center">2</td><td style="text-align:right">25 000 FCFA</td><td style="text-align:center">18%</td><td style="text-align:right">9 000 FCFA</td><td style="text-align:right"><strong>59 000 FCFA</strong></td></tr><tr><td style="text-align:left">Billet Dakar → Bamako (Classe Business)</td><td style="text-align:center">1</td><td style="text-align:right">45 000 FCFA</td><td style="text-align:center">18%</td><td style="text-align:right">8 100 FCFA</td><td style="text-align:right"><strong>53 100 FCFA</strong></td></tr><tr><td style="text-align:left">Supplément bagage 23 kg (x2)</td><td style="text-align:center">2</td><td style="text-align:right">5 000 FCFA</td><td style="text-align:center">18%</td><td style="text-align:right">1 800 FCFA</td><td style="text-align:right"><strong>11 800 FCFA</strong></td></tr><tr><td style="text-align:left">Assurance voyage (forfait)</td><td style="text-align:center">3</td><td style="text-align:right">2 500 FCFA</td><td style="text-align:center">0%</td><td style="text-align:right">0 FCFA</td><td style="text-align:right"><strong>7 500 FCFA</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══ TOTAUX ═══ -->
+<div class="inv-totals">
+  <div class="inv-totals-box">
+    <div class="tot-row"><span>Sous-total HT</span><span>112 500 FCFA</span></div>
+    <div class="tot-row"><span>TVA</span><span>18 900 FCFA</span></div>
+    <div class="tot-row ttc"><span>TOTAL TTC</span><span>131 400 FCFA</span></div>
+  </div>
+</div>
+
+<!-- ═══ PAIEMENT ═══ -->
+
+<div class="inv-payment">
+  <div class="pay-title">Informations de paiement</div>
+  <div>Banque : <span class="pay-bank">CBAO Groupe Attijariwafa Bank</span></div>
+  <div>IBAN / Compte : <span class="pay-bank">SN28 A 00101 152000 00001234567</span></div>
+</div>
+
+<!-- ═══ NOTES ═══ -->
+<div class="inv-notes"><strong>Notes :</strong> Réservation confirmée sous 48h. Annulation remboursable à 80% avant 7 jours.</div>
+
+<!-- ═══ SIGNATURES ═══ -->
+<div class="sig-row" style="margin-top:8mm;">
+  <div class="sig-line">Cachet &amp; Signature vendeur</div>
+  <div class="sig-line">Signature client</div>
+</div>
+
+<!-- ═══ MENTIONS LÉGALES ═══ -->
+<div class="inv-legal" style="margin-top:6mm;">
+  TVA appliquée conformément à la législation UEMOA. En cas de litige : SATR Express.
+  Tout paiement après émission est définitif.
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     TALON DÉTACHABLE — à retourner avec le règlement
+     ══════════════════════════════════════════════════ -->
+<div class="perf"><span class="perf-label no-print">Détacher et retourner avec votre règlement</span></div>
+
+<div class="inv-stub">
+  <div>
+    <div class="stub-title">Coupon de paiement</div>
+    <div class="stub-fields">
+      <div class="stub-field"><label>N° Facture</label><span class="mono">FAC-2026-00847</span></div>
+      <div class="stub-field"><label>Client</label><span>Ibrahima Diallo</span></div>
+      <div class="stub-field"><label>Montant TTC</label><span>131 400 FCFA</span></div>
+      <div class="stub-field"><label>Échéance</label><span>20/04/2026 01:00</span></div>
+      <div class="stub-field"><label>Devise</label><span>FCFA</span></div>
+    </div>
+  </div>
+  <div class="stub-qr">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABYCAYAAABxlTA0AAAAAklEQVR4AewaftIAAAPUSURBVO3BwW3lUAhA0ZsnF8CSHui/FHpgSQeZbJCsr+d8WwmTDed8fH5htFmMVovRajFaHbwQNbpkOEXUKBnOFVFjJ8P5CVGjS4ZTFqPVYrQ6+EaG8xOixpUMZ0fUOMtwdkSNpzKcKxnOT4gaO4vRajFaHdwkatyR4fwmUWMnw7kiapQM5ylR444M553FaLUYrRaj1cEfETVKhlMynCuixh0ZThE1Sobzvy1Gq8VodfBHMpwianTJcP7SYrRajFYHN2U4XTKcImqcZThPiRolw3kqw/kti9FqMVodfEPU6CJqlAznDlGjZDhF1DjLcIqoUTKcK6JGh8VotRitFqPVwYsM53/IcLqIGu9kOP/DYrRajFYHN4kaZxlOETXuyHCKqFEynCuixlMZThE1iqhRMpw7RI2S4VwRNUqGUxaj1WK0+vj8womoUTKcp0SNkuFcETWeynCKqFEynCuixh0ZThE1nspwdhaj1WK0OniR4eyIGk+JGmcZzk6GU0SNswznHVHjLMN5J8O5kuH8lsVotRitFqPVwQtRo2Q4JcM5EzVKhlNEjZLhnIkaO6LGHaJGF1GjZDhF1CgZzpmoUTKcncVotRitPj6/cIOocZbhFFHjjgznHVHjLMPZETXuyHB2RI2zDKeIGj+R4ZTFaLUYrQ6+IWqUDOeODOcpUaNkOE9lOGeixo6oUTKcM1GjZDi/ZTFaLUargxeiRslwiqjxlKhxluHsZDhXRI2S4ZQMp4gaZxnOT4gaJcO5ImqUDGdnMVotRqvFaPXx+YULokbJcM5EjZLhFFGjZDhnokbJcIqocUeGU0SNOzKcImrckeEUUeOpDKcsRqvFaHXwQtQoGU4RNZ4SNa6IGiXDKaLGWYbzToZzRdR4StQoGU4RNc4ynHcWo9VitPr4/MIfEDVKhnNF1NjJcK6IGjsZzh2ixk6GcyZq7GQ4ZTFaLUargxeiRpcMp2Q4RdQoGc5TosZZhlNEjR1R4yzDeSrDKaLGzmK0WoxWi9Hq4BsZzk+IGldEjR1R40qGs5PhPJXh/A+L0WoxWh3cJGrckeE8leEUUeMswymixk6GcyZq7IgaT2U4RdR4ajFaLUargz+S4RRR44qo8VsynCJqXMlwdjKcM1GjZDg7i9FqMVod/BFRYyfDuSJqPJXh3JHhFFFjJ8M5y3CKqFEynLIYrRaj1WK0Orgpw/lNGc6OqHGW4ZQMZ0fUOMtwdkSNkuFcyXCKqHFF1HhnMVotRquDb4ga/1uGcyZq7GQ4JcO5ImrsiBo/leEUUWNnMVotRquPzy+MNovRajFa/QOBdKeOT7n0pgAAAABJRU5ErkJggg==" alt="QR facture" />
+    <div class="mono">FAC-2026-00847</div>
+  </div>
+  <div class="stub-note">
+    Merci de mentionner le numéro de facture sur votre virement. — SATR Express
+  </div>
+</div>
+
+<div class="fp">SHA-256 53941192540d35dd660d18fcb66e4b0ebc6eb5d4aca78dba4270b3a187951423 · 2026-04-13T11:33:40.838Z · acteur admin-demo-001</div>
+<!-- fp:53941192540d35dd660d18fcb66e4b0ebc6eb5d4aca78dba4270b3a187951423:1776080020838:admin-demo-001 -->
+</body>
+</html>

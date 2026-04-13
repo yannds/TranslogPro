@@ -1,0 +1,317 @@
+{
+  "_meta": {
+    "slug": "ticket-a5",
+    "name": "Billet A5 avec coupon",
+    "docType": "TICKET",
+    "format": "A5",
+    "engine": "PDFME",
+    "description": "Billet de voyage A5 avec coupon embarquement détachable et QR HMAC",
+    "variables": [
+      "tenantName", "tenantAddress", "tenantPhone",
+      "ticketRef", "passengerName", "passengerPhone", "seatNumber",
+      "origin", "destination", "tripDate", "busPlate", "routeName",
+      "price", "currency", "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": {
+    "width": 148,
+    "height": 210,
+    "padding": [10, 12, 10, 12]
+  },
+  "schemas": [
+    [
+      {
+        "name": "header",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 0 },
+        "width": 148,
+        "height": 22,
+        "color": "#1a3a5c"
+      },
+      {
+        "name": "tenantName",
+        "type": "text",
+        "position": { "x": 12, "y": 6 },
+        "width": 80,
+        "height": 10,
+        "content": "{{tenantName}}",
+        "fontSize": 14,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "ticketLabel",
+        "type": "text",
+        "position": { "x": 96, "y": 8 },
+        "width": 40,
+        "height": 7,
+        "content": "BILLET DE VOYAGE",
+        "fontSize": 6.5,
+        "fontColor": "#93c5fd",
+        "alignment": "right"
+      },
+      {
+        "name": "routeBand",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 22 },
+        "width": 148,
+        "height": 16,
+        "color": "#2563eb"
+      },
+      {
+        "name": "routeOrigin",
+        "type": "text",
+        "position": { "x": 12, "y": 27 },
+        "width": 50,
+        "height": 8,
+        "content": "{{origin}}",
+        "fontSize": 13,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "routeArrow",
+        "type": "text",
+        "position": { "x": 60, "y": 27 },
+        "width": 28,
+        "height": 8,
+        "content": "→",
+        "fontSize": 14,
+        "fontColor": "#bfdbfe",
+        "alignment": "center"
+      },
+      {
+        "name": "routeDest",
+        "type": "text",
+        "position": { "x": 86, "y": 27 },
+        "width": 50,
+        "height": 8,
+        "content": "{{destination}}",
+        "fontSize": 13,
+        "fontColor": "#fff",
+        "fontName": "NotoSans-Bold",
+        "alignment": "right"
+      },
+      {
+        "name": "passengerLabel",
+        "type": "text",
+        "position": { "x": 12, "y": 44 },
+        "width": 50,
+        "height": 5,
+        "content": "PASSAGER",
+        "fontSize": 6.5,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "passengerName",
+        "type": "text",
+        "position": { "x": 12, "y": 50 },
+        "width": 100,
+        "height": 9,
+        "content": "{{passengerName}}",
+        "fontSize": 13,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "passengerPhone",
+        "type": "text",
+        "position": { "x": 12, "y": 60 },
+        "width": 80,
+        "height": 6,
+        "content": "{{passengerPhone}}",
+        "fontSize": 8,
+        "fontColor": "#6b7280"
+      },
+      {
+        "name": "seatLabel",
+        "type": "text",
+        "position": { "x": 12, "y": 72 },
+        "width": 30,
+        "height": 5,
+        "content": "SIÈGE",
+        "fontSize": 6.5,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "seatNumber",
+        "type": "text",
+        "position": { "x": 12, "y": 78 },
+        "width": 30,
+        "height": 10,
+        "content": "{{seatNumber}}",
+        "fontSize": 16,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "dateLabel",
+        "type": "text",
+        "position": { "x": 50, "y": 72 },
+        "width": 50,
+        "height": 5,
+        "content": "DATE DE DÉPART",
+        "fontSize": 6.5,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "tripDate",
+        "type": "text",
+        "position": { "x": 50, "y": 78 },
+        "width": 60,
+        "height": 8,
+        "content": "{{tripDate}}",
+        "fontSize": 11,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "busLabel",
+        "type": "text",
+        "position": { "x": 12, "y": 96 },
+        "width": 50,
+        "height": 5,
+        "content": "VÉHICULE",
+        "fontSize": 6.5,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "busPlate",
+        "type": "text",
+        "position": { "x": 12, "y": 102 },
+        "width": 60,
+        "height": 7,
+        "content": "{{busPlate}}",
+        "fontSize": 9,
+        "fontColor": "#374151"
+      },
+      {
+        "name": "priceLabel",
+        "type": "text",
+        "position": { "x": 100, "y": 96 },
+        "width": 36,
+        "height": 5,
+        "content": "PRIX",
+        "fontSize": 6.5,
+        "fontColor": "#9ca3af",
+        "fontName": "NotoSans-Bold",
+        "alignment": "right"
+      },
+      {
+        "name": "price",
+        "type": "text",
+        "position": { "x": 100, "y": 102 },
+        "width": 36,
+        "height": 8,
+        "content": "{{price}} {{currency}}",
+        "fontSize": 12,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold",
+        "alignment": "right"
+      },
+      {
+        "name": "qrCode",
+        "type": "qrcode",
+        "position": { "x": 12, "y": 115 },
+        "width": 36,
+        "height": 36,
+        "content": "{{qrCodeValue}}"
+      },
+      {
+        "name": "ticketRef",
+        "type": "text",
+        "position": { "x": 52, "y": 118 },
+        "width": 84,
+        "height": 7,
+        "content": "Réf: {{ticketRef}}",
+        "fontSize": 8,
+        "fontColor": "#374151",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "routeInfo",
+        "type": "text",
+        "position": { "x": 52, "y": 126 },
+        "width": 84,
+        "height": 12,
+        "content": "{{routeName}}\n{{origin}} → {{destination}}",
+        "fontSize": 7.5,
+        "fontColor": "#6b7280",
+        "lineHeight": 1.5
+      },
+      {
+        "name": "perforationLine",
+        "type": "line",
+        "position": { "x": 12, "y": 158 },
+        "width": 124,
+        "height": 0.5,
+        "color": "#9ca3af",
+        "dashArray": [3, 2]
+      },
+      {
+        "name": "couponcLabel",
+        "type": "text",
+        "position": { "x": 50, "y": 155 },
+        "width": 50,
+        "height": 5,
+        "content": "✂  COUPON EMBARQUEMENT",
+        "fontSize": 6,
+        "fontColor": "#9ca3af",
+        "alignment": "center"
+      },
+      {
+        "name": "couponBg",
+        "type": "rectangle",
+        "position": { "x": 0, "y": 162 },
+        "width": 148,
+        "height": 48,
+        "color": "#f8fafc"
+      },
+      {
+        "name": "couponPassenger",
+        "type": "text",
+        "position": { "x": 12, "y": 166 },
+        "width": 80,
+        "height": 8,
+        "content": "{{passengerName}}",
+        "fontSize": 11,
+        "fontColor": "#1a3a5c",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "couponRoute",
+        "type": "text",
+        "position": { "x": 12, "y": 175 },
+        "width": 80,
+        "height": 12,
+        "content": "{{origin}} → {{destination}}\n{{tripDate}} | Siège {{seatNumber}}",
+        "fontSize": 8,
+        "fontColor": "#374151",
+        "lineHeight": 1.5
+      },
+      {
+        "name": "couponQr",
+        "type": "qrcode",
+        "position": { "x": 118, "y": 164 },
+        "width": 22,
+        "height": 22,
+        "content": "{{qrCodeValue}}"
+      },
+      {
+        "name": "footer",
+        "type": "text",
+        "position": { "x": 12, "y": 198 },
+        "width": 124,
+        "height": 5,
+        "content": "{{tenantName}} — {{generatedAt}}",
+        "fontSize": 5.5,
+        "fontColor": "#9ca3af",
+        "alignment": "center"
+      }
+    ]
+  ]
+}

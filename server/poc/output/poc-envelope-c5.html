@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Enveloppe C5 — SATR Express</title>
+  <style>
+    @page { size: 229mm 162mm landscape; margin: 0; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body {
+    padding: 0; margin: 0;
+    width: 229mm; height: 162mm;
+    position: relative; overflow: hidden;
+  }
+  /* Guide de pliage (non imprimé — aide à la mise en enveloppe) */
+  .fold-guide {
+    position: absolute; top: 0; bottom: 0;
+    left: 50%; width: 0.3pt; background: #e2e8f0;
+  }
+
+  /* Zone expéditeur — haut gauche */
+  .env-sender {
+    position: absolute; top: 8mm; left: 8mm;
+    font-size: 7.5pt; line-height: 1.6; color: var(--c-muted);
+    max-width: 65mm;
+  }
+  .env-sender .sname { font-size: 8pt; font-weight: 700; color: var(--c-brand); }
+
+  /* Zone affranchissement — haut droite */
+  .env-stamp {
+    position: absolute; top: 8mm; right: 8mm;
+    width: 35mm; height: 28mm;
+    border: 1pt dashed #94a3b8;
+    border-radius: 2pt;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 1mm;
+    color: #94a3b8; font-size: 7pt; text-align: center;
+  }
+  .env-stamp .stamp-icon { font-size: 18pt; }
+
+  /* Fenêtre destinataire — centre-gauche */
+  .env-window {
+    position: absolute; left: 24mm; top: 60mm;
+    width: 90mm; height: 40mm;
+    border: 1.5pt solid var(--c-brand);
+    border-radius: 2pt;
+    padding: 4mm 5mm;
+    background: #f8fafc;
+  }
+  .env-window .to-label {
+    font-size: 6pt; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); font-weight: 700; margin-bottom: 2mm;
+  }
+  .env-window .to-name {
+    font-size: 11pt; font-weight: 700; color: var(--c-brand); margin-bottom: 1mm;
+  }
+  .env-window .to-addr { font-size: 8.5pt; line-height: 1.7; }
+
+  /* Référence sous la fenêtre */
+  .env-ref {
+    position: absolute; left: 24mm; top: 104mm;
+    font-size: 6.5pt; color: var(--c-muted); font-family: var(--font-mono);
+  }
+
+  /* QR code postal — bas droite */
+  .env-qr {
+    position: absolute; right: 10mm; bottom: 8mm;
+    text-align: center;
+  }
+  .env-qr img { width: 20mm; height: 20mm; }
+  .env-qr .qr-ref { font-size: 5.5pt; font-family: var(--font-mono); color: var(--c-muted); margin-top: 0.5mm; }
+
+  /* Date imprimée */
+  .env-date {
+    position: absolute; right: 10mm; top: 42mm;
+    font-size: 6pt; color: var(--c-muted);
+  }
+
+  </style>
+</head>
+<body>
+
+
+<div class="fold-guide no-print"></div>
+
+<!-- ═══ EXPÉDITEUR ═══ -->
+<div class="env-sender">
+  <div class="sname">SATR Express</div>
+  Avenue de la République, BP 1234<br>
+  BP 1234 Dakar
+</div>
+
+<!-- ═══ ZONE AFFRANCHISSEMENT ═══ -->
+<div class="env-stamp">
+  <div class="stamp-icon">✉</div>
+  Affranchissement
+</div>
+
+<!-- ═══ DATE ═══ -->
+<div class="env-date">13/04/2026 12:33</div>
+
+<!-- ═══ FENÊTRE DESTINATAIRE ═══ -->
+<div class="env-window">
+  <div class="to-label">Destinataire</div>
+  <div class="to-name">Mariama Kouyaté</div>
+  <div class="to-addr">
+    Quartier Koloma, Conakry<br>
+    BP 5678 Conakry<br>
+    Guinée
+  </div>
+</div>
+
+<!-- ═══ RÉFÉRENCE ═══ -->
+<div class="env-ref">Réf : COLIS-2026-00451</div>
+
+<!-- ═══ QR POSTAL ═══ -->
+<div class="env-qr"><img src="data:image/png;base64,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" alt="Code postal" /><div class="qr-ref">https://track.satr-express.sn/COLIS-2026-00451</div></div>
+
+<div class="fp">SHA-256 9b495256b120d04e75490455e298ab1dbd6c1cc3f946ddf70d587ef1750c038d · 2026-04-13T11:33:40.862Z · acteur admin-demo-001</div>
+<!-- fp:9b495256b120d04e75490455e298ab1dbd6c1cc3f946ddf70d587ef1750c038d:1776080020862:admin-demo-001 -->
+</body>
+</html>

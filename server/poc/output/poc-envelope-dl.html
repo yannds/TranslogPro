@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Enveloppe DL — SATR Express</title>
+  <style>
+    @page { size: 220mm 110mm landscape; margin: 0; }
+    
+  :root {
+    --c-brand:    #0f172a;   /* Slate-900 — fond sombre */
+    --c-brand2:   #1e3a5f;   /* Bleu marine accent */
+    --c-accent:   #f59e0b;   /* Ambre — accent chaud UEMOA */
+    --c-muted:    #64748b;   /* Texte secondaire */
+    --c-line:     #e2e8f0;   /* Séparateur léger */
+    --c-ok:       #16a34a;
+    --c-warn:     #d97706;
+    --c-danger:   #dc2626;
+    --font-sans:  'Helvetica Neue', Arial, 'Nimbus Sans L', sans-serif;
+    --font-mono:  'Courier New', Courier, monospace;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html, body {
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    color: var(--c-brand);
+    background: #fff;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Empêche les coupures intempestives */
+  table { border-collapse: collapse; width: 100%; }
+  thead { display: table-header-group; }
+  tr    { break-inside: avoid; page-break-inside: avoid; }
+  img   { display: block; }
+
+  /* Utilitaires position */
+  .flex  { display: flex; }
+  .grid  { display: grid; }
+  .col   { flex-direction: column; }
+  .sb    { justify-content: space-between; }
+  .ac    { align-items: center; }
+  .gap4  { gap: 4mm; }
+  .gap6  { gap: 6mm; }
+  .gap8  { gap: 8mm; }
+  .w100  { width: 100%; }
+  .ta-r  { text-align: right; }
+  .ta-c  { text-align: center; }
+  .bold  { font-weight: 700; }
+  .mono  { font-family: var(--font-mono); }
+  .muted { color: var(--c-muted); font-size: 8pt; }
+  .upper { text-transform: uppercase; letter-spacing: .06em; }
+  .nowrap{ white-space: nowrap; }
+
+  /* Badge statut */
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 2pt;
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-ok   { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+  .badge-err  { background: #fee2e2; color: #991b1b; }
+
+  /* Impersonation banner */
+  .imp-banner {
+    background: #fef3c7; border: 1.5pt solid #f59e0b;
+    padding: 4pt 8pt; margin-bottom: 6mm;
+    font-size: 8pt; font-weight: 700; color: #92400e;
+    border-radius: 2pt;
+  }
+
+  /* Perforation */
+  .perf {
+    position: relative; margin: 4mm 0;
+    border-top: 1.5pt dashed #94a3b8;
+  }
+  .perf::before {
+    content: '✂';
+    position: absolute; left: -5mm; top: -6pt;
+    font-size: 10pt; color: #94a3b8; line-height: 1;
+  }
+  .perf-label {
+    position: absolute; left: 0; right: 0; top: -7pt;
+    text-align: center; font-size: 7pt; color: #94a3b8;
+    background: #fff; display: inline-block; width: 60mm; margin: 0 auto;
+    line-height: 1;
+  }
+
+  /* Fingerprint */
+  .fp {
+    margin-top: 6mm; padding-top: 3mm;
+    border-top: 0.5pt dashed #cbd5e1;
+    font-size: 6pt; color: #94a3b8; word-break: break-all;
+    font-family: var(--font-mono);
+  }
+  @media print { .no-print { display: none !important; } }
+
+    
+  .sig-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20mm;
+    margin-top: 10mm;
+  }
+  .sig-line {
+    border-top: 0.5pt solid var(--c-brand); padding-top: 2mm;
+    font-size: 7.5pt; color: var(--c-muted);
+  }
+
+    
+  body {
+    padding: 0; margin: 0;
+    width: 220mm; height: 110mm;
+    position: relative; overflow: hidden;
+  }
+  .env-sender {
+    position: absolute; top: 6mm; left: 6mm;
+    font-size: 7pt; line-height: 1.6; color: var(--c-muted); max-width: 55mm;
+  }
+  .env-sender .sname { font-size: 7.5pt; font-weight: 700; color: var(--c-brand); }
+  .env-stamp {
+    position: absolute; top: 6mm; right: 6mm;
+    width: 28mm; height: 22mm;
+    border: 1pt dashed #94a3b8; border-radius: 2pt;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; color: #94a3b8; font-size: 6pt; text-align: center;
+  }
+  .env-stamp .stamp-icon { font-size: 14pt; }
+  .env-window {
+    position: absolute; left: 20mm; top: 42mm;
+    width: 80mm; height: 34mm;
+    border: 1.5pt solid var(--c-brand); border-radius: 2pt;
+    padding: 3mm 4mm; background: #f8fafc;
+  }
+  .env-window .to-label { font-size: 6pt; text-transform: uppercase; letter-spacing: .1em; color: var(--c-muted); font-weight: 700; margin-bottom: 1.5mm; }
+  .env-window .to-name  { font-size: 10pt; font-weight: 700; color: var(--c-brand); margin-bottom: 0.5mm; }
+  .env-window .to-addr  { font-size: 8pt; line-height: 1.6; }
+  .env-ref  { position: absolute; left: 20mm; top: 80mm; font-size: 6pt; color: var(--c-muted); font-family: var(--font-mono); }
+  .env-qr   { position: absolute; right: 8mm; bottom: 6mm; text-align: center; }
+  .env-qr img { width: 18mm; height: 18mm; }
+  .env-qr .qr-ref { font-size: 5pt; font-family: var(--font-mono); color: var(--c-muted); }
+  .env-date { position: absolute; right: 8mm; top: 32mm; font-size: 6pt; color: var(--c-muted); }
+  .fold-guide { position: absolute; top: 0; bottom: 0; left: 33%; width: 0.3pt; background: #e2e8f0; }
+  .fold-guide-2 { position: absolute; top: 0; bottom: 0; left: 66%; width: 0.3pt; background: #e2e8f0; }
+
+  </style>
+</head>
+<body>
+
+
+<div class="fold-guide no-print"></div><div class="fold-guide-2 no-print"></div>
+
+<!-- ═══ EXPÉDITEUR ═══ -->
+<div class="env-sender">
+  <div class="sname">SATR Express</div>
+  Avenue de la République, BP 1234<br>
+  Dakar
+</div>
+
+<!-- ═══ ZONE AFFRANCHISSEMENT ═══ -->
+<div class="env-stamp">
+  <div class="stamp-icon">✉</div>
+  Affranchissement
+</div>
+
+<!-- ═══ DATE ═══ -->
+<div class="env-date">13/04/2026 12:33</div>
+
+<!-- ═══ FENÊTRE DESTINATAIRE ═══ -->
+<div class="env-window">
+  <div class="to-label">Destinataire</div>
+  <div class="to-name">Ibrahima Diallo</div>
+  <div class="to-addr">
+    12 Rue des Almadies, Dakar<br>
+    Dakar<br>
+    Sénégal
+  </div>
+</div>
+
+<!-- ═══ RÉFÉRENCE ═══ -->
+<div class="env-ref">Réf : FAC-2026-00847</div>
+
+<!-- ═══ QR POSTAL ═══ -->
+<div class="env-qr"><img src="data:image/png;base64,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" alt="Code postal" /><div class="qr-ref">https://factures.satr-express.sn/FAC-2026-00847</div></div>
+
+<div class="fp">SHA-256 97d0c45a4efe690d7e2352a8356139e518ca3465c801b5bf2b38091b8910ff02 · 2026-04-13T11:33:40.863Z · acteur admin-demo-001</div>
+<!-- fp:97d0c45a4efe690d7e2352a8356139e518ca3465c801b5bf2b38091b8910ff02:1776080020863:admin-demo-001 -->
+</body>
+</html>

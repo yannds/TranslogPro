@@ -8,7 +8,7 @@
  * Dark mode : automatique via Tailwind dark: variants
  * WCAG      : aria-disabled si loading, focus-visible ring
  */
-import React, { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';

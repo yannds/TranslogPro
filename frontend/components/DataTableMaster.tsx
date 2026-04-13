@@ -34,8 +34,8 @@
  * />
  * ```
  */
-import React, {
-  useState, useMemo, useCallback, useRef, useEffect, ChangeEvent, KeyboardEvent,
+import {
+  useState, useMemo, useCallback, useEffect, ChangeEvent, KeyboardEvent,
 } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

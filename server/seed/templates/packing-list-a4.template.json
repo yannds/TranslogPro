@@ -1,0 +1,143 @@
+{
+  "_meta": {
+    "slug": "packing-list-a4",
+    "name": "Bordereau de colisage A4",
+    "docType": "PACKING_LIST",
+    "format": "A4",
+    "engine": "PDFME",
+    "description": "Bordereau récapitulatif d'un shipment complet avec liste de colis",
+    "variables": [
+      "tenantName", "tenantAddress", "tenantPhone", "tenantNif", "tenantRccm",
+      "shipmentId", "shipmentDate",
+      "senderName", "senderAddress", "senderPhone",
+      "recipientName", "recipientAddress", "recipientPhone",
+      "origin", "destination",
+      "parcelCount", "totalWeight",
+      "qrCodeValue", "generatedAt"
+    ]
+  },
+  "basePdf": { "width": 210, "height": 297, "padding": [15, 14, 15, 14] },
+  "schemas": [[
+    {
+      "name": "tenantName", "type": "text",
+      "position": {"x":14,"y":12}, "width":100, "height":10,
+      "content": "{{tenantName}}", "fontSize":18, "fontColor":"#1a3a5c", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "tenantInfo", "type": "text",
+      "position": {"x":14,"y":23}, "width":100, "height":10,
+      "content": "NIF: {{tenantNif}}  ·  RCCM: {{tenantRccm}}\n{{tenantAddress}}  ·  {{tenantPhone}}",
+      "fontSize":7, "fontColor":"#6b7280", "lineHeight":1.5
+    },
+    {
+      "name": "docTitle", "type": "text",
+      "position": {"x":130,"y":12}, "width":66, "height":12,
+      "content": "BORDEREAU\nDE COLISAGE",
+      "fontSize":14, "fontColor":"#1a3a5c", "fontName":"NotoSans-Bold",
+      "alignment":"right", "lineHeight":1.3
+    },
+    {
+      "name": "shipmentRef", "type": "text",
+      "position": {"x":130,"y":28}, "width":66, "height":6,
+      "content": "Réf: {{shipmentId}}\nDate: {{shipmentDate}}",
+      "fontSize":8, "fontColor":"#374151", "alignment":"right", "lineHeight":1.4
+    },
+    {
+      "name": "divider1", "type": "line",
+      "position": {"x":14,"y":42}, "width":182, "height":0.5, "color":"#1a3a5c"
+    },
+    {
+      "name": "senderLabel", "type": "text",
+      "position": {"x":14,"y":46}, "width":85, "height":4,
+      "content": "EXPÉDITEUR", "fontSize":6.5, "fontColor":"#9ca3af", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "recipientLabel", "type": "text",
+      "position": {"x":111,"y":46}, "width":85, "height":4,
+      "content": "DESTINATAIRE", "fontSize":6.5, "fontColor":"#9ca3af", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "senderName", "type": "text",
+      "position": {"x":14,"y":51}, "width":85, "height":7,
+      "content": "{{senderName}}", "fontSize":10, "fontColor":"#111827", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "senderContact", "type": "text",
+      "position": {"x":14,"y":59}, "width":85, "height":10,
+      "content": "{{senderAddress}}\n{{senderPhone}}",
+      "fontSize":8, "fontColor":"#374151", "lineHeight":1.5
+    },
+    {
+      "name": "recipientName", "type": "text",
+      "position": {"x":111,"y":51}, "width":85, "height":7,
+      "content": "{{recipientName}}", "fontSize":10, "fontColor":"#111827", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "recipientContact", "type": "text",
+      "position": {"x":111,"y":59}, "width":85, "height":10,
+      "content": "{{recipientAddress}}\n{{recipientPhone}}",
+      "fontSize":8, "fontColor":"#374151", "lineHeight":1.5
+    },
+    {
+      "name": "routeBand", "type": "rectangle",
+      "position": {"x":0,"y":76}, "width":210, "height":12, "color":"#2563eb"
+    },
+    {
+      "name": "routeText", "type": "text",
+      "position": {"x":14,"y":80}, "width":182, "height":6,
+      "content": "{{origin}}  →  {{destination}}",
+      "fontSize":9, "fontColor":"#fff", "fontName":"NotoSans-Bold", "alignment":"center"
+    },
+    {
+      "name": "tableHeaderBg", "type": "rectangle",
+      "position": {"x":14,"y":94}, "width":182, "height":8, "color":"#e2e8f0"
+    },
+    {
+      "name": "colRef", "type": "text",
+      "position": {"x":16,"y":96}, "width":50, "height":5,
+      "content": "RÉFÉRENCE COLIS", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "colDesc", "type": "text",
+      "position": {"x":70,"y":96}, "width":60, "height":5,
+      "content": "DESCRIPTION", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "colWeight", "type": "text",
+      "position": {"x":134,"y":96}, "width":25, "height":5,
+      "content": "POIDS", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "colStatus", "type": "text",
+      "position": {"x":162,"y":96}, "width":32, "height":5,
+      "content": "STATUT", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "summaryBg", "type": "rectangle",
+      "position": {"x":120,"y":255}, "width":76, "height":20, "color":"#f8fafc"
+    },
+    {
+      "name": "totalColis", "type": "text",
+      "position": {"x":122,"y":257}, "width":72, "height":6,
+      "content": "Nombre de colis : {{parcelCount}}",
+      "fontSize":8, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "totalWeight", "type": "text",
+      "position": {"x":122,"y":265}, "width":72, "height":6,
+      "content": "Poids total : {{totalWeight}} kg",
+      "fontSize":8, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+    },
+    {
+      "name": "qrCode", "type": "qrcode",
+      "position": {"x":14,"y":252}, "width":24, "height":24,
+      "content": "{{qrCodeValue}}"
+    },
+    {
+      "name": "footer", "type": "text",
+      "position": {"x":14,"y":279}, "width":182, "height":6,
+      "content": "{{tenantName}} — Bordereau généré le {{generatedAt}}",
+      "fontSize":6.5, "fontColor":"#9ca3af", "alignment":"center"
+    }
+  ]]
+}

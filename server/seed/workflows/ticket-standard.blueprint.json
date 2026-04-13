@@ -1,0 +1,125 @@
+{
+  "name": "Billet Standard",
+  "slug": "ticket-standard",
+  "description": "Workflow complet pour agences moyennes : paiement séparé, vérification identité, remboursement sous 24h, gestion no-show.",
+  "entityType": "Ticket",
+  "isPublic": true,
+  "isSystem": true,
+  "tags": ["ticket", "standard", "payment", "refund"],
+  "graph": {
+    "entityType": "Ticket",
+    "version": "1.0.0",
+    "nodes": [
+      { "id": "DRAFT",            "label": "Brouillon",           "type": "initial",  "position": { "x": 60,  "y": 120 }, "metadata": {} },
+      { "id": "PENDING_PAYMENT",  "label": "Attente paiement",    "type": "state",    "position": { "x": 280, "y": 60  }, "metadata": {} },
+      { "id": "CONFIRMED",        "label": "Confirmé",            "type": "state",    "position": { "x": 500, "y": 60  }, "metadata": {} },
+      { "id": "IDENTITY_CHECK",   "label": "Vérif. identité",     "type": "state",    "position": { "x": 500, "y": 200 }, "metadata": {} },
+      { "id": "BOARDED",          "label": "Embarqué",            "type": "state",    "position": { "x": 720, "y": 120 }, "metadata": {} },
+      { "id": "NO_SHOW",          "label": "No-Show",             "type": "state",    "position": { "x": 720, "y": 260 }, "metadata": {} },
+      { "id": "PENDING_REFUND",   "label": "Remboursement en cours","type": "state",  "position": { "x": 280, "y": 260 }, "metadata": {} },
+      { "id": "REFUNDED",         "label": "Remboursé",           "type": "terminal", "position": { "x": 60,  "y": 260 }, "metadata": {} },
+      { "id": "ARCHIVED",         "label": "Archivé",             "type": "terminal", "position": { "x": 940, "y": 120 }, "metadata": {} },
+      { "id": "CANCELLED",        "label": "Annulé",              "type": "terminal", "position": { "x": 500, "y": 380 }, "metadata": {} }
+    ],
+    "edges": [
+      {
+        "id": "DRAFT___SUBMIT___PENDING_PAYMENT",
+        "source": "DRAFT", "target": "PENDING_PAYMENT", "label": "SUBMIT",
+        "guards": ["checkCapacityAvailable"],
+        "permission": "data.ticket.create.agency",
+        "sideEffects": ["notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "PENDING_PAYMENT___PAY___CONFIRMED",
+        "source": "PENDING_PAYMENT", "target": "CONFIRMED", "label": "PAY",
+        "guards": ["checkSoldeAgent", "checkPaymentConfirmed"],
+        "permission": "data.cashier.transaction.own",
+        "sideEffects": ["generateTicketQR", "markCashierTransaction", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "PENDING_PAYMENT___CANCEL___CANCELLED",
+        "source": "PENDING_PAYMENT", "target": "CANCELLED", "label": "CANCEL",
+        "guards": [],
+        "permission": "data.ticket.cancel.agency",
+        "sideEffects": ["releaseSeat"],
+        "metadata": {}
+      },
+      {
+        "id": "CONFIRMED___REQUEST_ID_CHECK___IDENTITY_CHECK",
+        "source": "CONFIRMED", "target": "IDENTITY_CHECK", "label": "REQUEST_ID_CHECK",
+        "guards": [],
+        "permission": "data.traveler.verify.agency",
+        "sideEffects": [],
+        "metadata": {}
+      },
+      {
+        "id": "IDENTITY_CHECK___VERIFY___BOARDED",
+        "source": "IDENTITY_CHECK", "target": "BOARDED", "label": "VERIFY",
+        "guards": ["checkTicketNotScanned"],
+        "permission": "data.traveler.verify.agency",
+        "sideEffects": ["updateManifest", "notifyDriver"],
+        "metadata": {}
+      },
+      {
+        "id": "CONFIRMED___SCAN___BOARDED",
+        "source": "CONFIRMED", "target": "BOARDED", "label": "SCAN",
+        "guards": ["checkTicketNotScanned"],
+        "permission": "data.ticket.scan.agency",
+        "sideEffects": ["updateManifest", "notifyDriver"],
+        "metadata": {}
+      },
+      {
+        "id": "BOARDED___COMPLETE___ARCHIVED",
+        "source": "BOARDED", "target": "ARCHIVED", "label": "COMPLETE",
+        "guards": [],
+        "permission": "data.ticket.create.agency",
+        "sideEffects": ["archiveTicket"],
+        "metadata": {}
+      },
+      {
+        "id": "CONFIRMED___NO_SHOW___NO_SHOW",
+        "source": "CONFIRMED", "target": "NO_SHOW", "label": "MARK_NO_SHOW",
+        "guards": ["checkTripDeparted"],
+        "permission": "data.ticket.scan.agency",
+        "sideEffects": ["releaseSeat", "notifyAgency"],
+        "metadata": {}
+      },
+      {
+        "id": "CONFIRMED___CANCEL___PENDING_REFUND",
+        "source": "CONFIRMED", "target": "PENDING_REFUND", "label": "CANCEL",
+        "guards": ["checkRefundWindow"],
+        "permission": "data.ticket.cancel.agency",
+        "sideEffects": ["releaseSeat", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "PENDING_REFUND___PROCESS_REFUND___REFUNDED",
+        "source": "PENDING_REFUND", "target": "REFUNDED", "label": "PROCESS_REFUND",
+        "guards": [],
+        "permission": "data.cashier.transaction.own",
+        "sideEffects": ["triggerRefund", "markCashierTransaction", "notifyPassenger"],
+        "metadata": {}
+      },
+      {
+        "id": "NO_SHOW___ARCHIVE___ARCHIVED",
+        "source": "NO_SHOW", "target": "ARCHIVED", "label": "ARCHIVE",
+        "guards": [],
+        "permission": "data.ticket.create.agency",
+        "sideEffects": ["archiveTicket"],
+        "metadata": {}
+      },
+      {
+        "id": "IDENTITY_CHECK___CANCEL___CANCELLED",
+        "source": "IDENTITY_CHECK", "target": "CANCELLED", "label": "CANCEL",
+        "guards": [],
+        "permission": "data.ticket.cancel.agency",
+        "sideEffects": ["releaseSeat", "notifyPassenger"],
+        "metadata": {}
+      }
+    ],
+    "checksum": "",
+    "metadata": {}
+  }
+}
