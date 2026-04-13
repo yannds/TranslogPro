@@ -1014,3 +1014,35 @@ model TripTemplate {
   @@index([tenantId, isActive])
   @@map("trip_templates")
 }
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 18 : DOCUMENT TEMPLATES (PRD §Render Engine)
+// ─────────────────────────────────────────────────────────────
+
+model DocumentTemplate {
+  id          String   @id @default(cuid())
+  // tenantId null = template système (partagé entre tous les tenants)
+  tenantId    String?
+  name        String                   // Nom lisible : "Billet A4 FR"
+  slug        String                   // Identifiant machine : "ticket-a4-fr"
+  docType     String                   // TICKET | MANIFEST | INVOICE | LABEL | PACKING_LIST
+  format      String                   // A4 | A5 | THERMAL_80MM | LABEL_62MM | ENVELOPE_C5 | BAGGAGE_TAG
+  engine      String   @default("HBS") // HBS | PUPPETEER
+  // Chemin MinIO vers le fichier source .hbs (null = template inline stocké dans `body`)
+  storageKey  String?
+  // Template source inline (utilisé si storageKey null — évite un round-trip MinIO)
+  body        String?
+  // Variables requises déclarées comme JSON Schema
+  varsSchema  Json     @default("{}")
+  version     Int      @default(1)
+  isSystem    Boolean  @default(false) // Ne peut pas être supprimé par un tenant
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, slug, version])
+  @@index([docType, isActive])
+  @@index([tenantId, isActive])
+  @@map("document_templates")
+}

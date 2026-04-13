@@ -36,6 +36,8 @@ const SUPER_ADMIN_PERMISSIONS = [
   'control.workflow.override.global',
   'control.safety.monitor.global',
   'control.stats.read.tenant',
+  // Platform staff management
+  'control.platform.staff.global',
   // Data Plane — accès global en lecture
   'data.traveler.track.global',
   'data.parcel.track.global',
@@ -46,6 +48,11 @@ const SUPER_ADMIN_PERMISSIONS = [
   // Impersonation — switch de session JIT
   'control.impersonation.switch.global',
   'control.impersonation.revoke.global',
+  // Documents imprimables (accès global pour assistance)
+  'data.ticket.print.agency',
+  'data.manifest.print.global',
+  'data.parcel.print.agency',
+  'data.invoice.print.agency',
 ];
 
 // ─── Permissions SUPPORT_L1 : lecture Data Plane uniquement ──────────────────
@@ -66,6 +73,8 @@ const SUPPORT_L1_PERMISSIONS = [
   // Notifications propres
   'data.notification.read.own',
   'data.session.revoke.own',
+  // Documents — lecture manifeste global (diagnostic support)
+  'data.manifest.print.global',
 ];
 
 // ─── Permissions SUPPORT_L2 : L1 + debug technique ───────────────────────────
@@ -151,6 +160,11 @@ const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'control.iam.manage.tenant',
       'control.iam.audit.tenant',
+      // Documents imprimables
+      'data.ticket.print.agency',
+      'data.manifest.print.agency',
+      'data.parcel.print.agency',
+      'data.invoice.print.agency',
     ],
   },
   {
@@ -186,6 +200,11 @@ const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'data.notification.read.own',
       'data.session.revoke.own',
+      // Documents imprimables
+      'data.ticket.print.agency',
+      'data.manifest.print.agency',
+      'data.parcel.print.agency',
+      'data.invoice.print.agency',
     ],
   },
   {
@@ -202,6 +221,10 @@ const TENANT_ROLES: Array<{
       'data.pricing.read.agency',
       'data.notification.read.own',
       'data.session.revoke.own',
+      // Documents imprimables
+      'data.ticket.print.agency',
+      'data.parcel.print.agency',
+      'data.invoice.print.agency',
     ],
   },
   {
@@ -220,6 +243,7 @@ const TENANT_ROLES: Array<{
       'data.sav.report.own',
       'data.notification.read.own',
       'data.session.revoke.own',
+      'data.manifest.print.agency',
     ],
   },
   {
@@ -234,6 +258,7 @@ const TENANT_ROLES: Array<{
       'data.sav.report.own',
       'data.notification.read.own',
       'data.session.revoke.own',
+      'data.manifest.print.agency',
     ],
   },
   {

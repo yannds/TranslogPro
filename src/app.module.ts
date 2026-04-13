@@ -45,6 +45,9 @@ import { StaffModule } from './modules/staff/staff.module';
 import { TravelerModule } from './modules/traveler/traveler.module';
 import { DlqModule } from './modules/dlq/dlq.module';
 import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.module';
+import { PlatformModule }   from './modules/platform/platform.module';
+import { DocumentsModule }  from './modules/documents/documents.module';
+import { TemplatesModule }  from './modules/templates/templates.module';
 
 // Guards & Middleware
 import { PermissionGuard } from './core/iam/guards/permission.guard';
@@ -107,6 +110,12 @@ import { TenantMiddleware } from './core/iam/middleware/tenant.middleware';
     TravelerModule,
     DlqModule,
     WorkflowDispatchModule,
+    // Platform SaaS (bootstrap + staff interne)
+    PlatformModule,
+    // Documents imprimables (billets, manifestes, colis, factures)
+    DocumentsModule,
+    // Templates de documents (CRUD + stockage MinIO)
+    TemplatesModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

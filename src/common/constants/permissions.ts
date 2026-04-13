@@ -134,6 +134,25 @@ export const P_MANIFEST_READ_GLOBAL         = 'data.manifest.read.global';
 export const P_WORKFLOW_DEBUG_GLOBAL        = 'data.workflow.debug.global';
 export const P_OUTBOX_REPLAY_GLOBAL         = 'data.outbox.replay.global';
 
+// ─── Platform — gestion du staff interne ─────────────────────────────────────
+// Réservé au SUPER_ADMIN du tenant plateforme.
+// Permet de créer/lister/supprimer les comptes SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2.
+export const P_PLATFORM_STAFF_GLOBAL        = 'control.platform.staff.global';
+
+// ─── Documents imprimables ────────────────────────────────────────────────────
+// Génération d'états imprimables certifiés (HTML signé stocké dans MinIO).
+// Le Frontend ne construit JAMAIS ces documents — il reçoit une URL présignée.
+export const P_TICKET_PRINT_AGENCY          = 'data.ticket.print.agency';
+export const P_MANIFEST_PRINT_AGENCY        = 'data.manifest.print.agency';
+export const P_MANIFEST_PRINT_GLOBAL        = 'data.manifest.print.global';
+export const P_PARCEL_PRINT_AGENCY          = 'data.parcel.print.agency';
+export const P_INVOICE_PRINT_AGENCY         = 'data.invoice.print.agency';
+
+// Templates de documents (CRUD modèles d'impression)
+export const P_TEMPLATE_READ_AGENCY         = 'data.template.read.agency';
+export const P_TEMPLATE_WRITE_AGENCY        = 'data.template.write.agency';
+export const P_TEMPLATE_DELETE_AGENCY       = 'data.template.delete.agency';
+
 // ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
@@ -226,6 +245,18 @@ export const Permission = {
   // Support L2 debug
   WORKFLOW_DEBUG_GLOBAL:       P_WORKFLOW_DEBUG_GLOBAL,
   OUTBOX_REPLAY_GLOBAL:        P_OUTBOX_REPLAY_GLOBAL,
+  // Platform staff (SUPER_ADMIN only)
+  PLATFORM_STAFF_GLOBAL:       P_PLATFORM_STAFF_GLOBAL,
+  // Documents imprimables
+  TICKET_PRINT_AGENCY:         P_TICKET_PRINT_AGENCY,
+  MANIFEST_PRINT_AGENCY:       P_MANIFEST_PRINT_AGENCY,
+  MANIFEST_PRINT_GLOBAL:       P_MANIFEST_PRINT_GLOBAL,
+  PARCEL_PRINT_AGENCY:         P_PARCEL_PRINT_AGENCY,
+  INVOICE_PRINT_AGENCY:        P_INVOICE_PRINT_AGENCY,
+  // Templates
+  TEMPLATE_READ_AGENCY:        P_TEMPLATE_READ_AGENCY,
+  TEMPLATE_WRITE_AGENCY:       P_TEMPLATE_WRITE_AGENCY,
+  TEMPLATE_DELETE_AGENCY:      P_TEMPLATE_DELETE_AGENCY,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];
