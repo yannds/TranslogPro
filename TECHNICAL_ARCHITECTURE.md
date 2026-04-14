@@ -125,6 +125,9 @@
 | ADR-31 | Cache module Redis TTL 300s | TTL long (modules rarement modifiés) + `invalidateModuleCache()` sur changement |
 | ADR-32 | allEquipmentOk côté serveur | Intégrité — le client ne peut pas forcer allEquipmentOk=true |
 | ADR-33 | Remédiation anti-doublon | Idempotence — vérification PENDING/IN_PROGRESS avant create |
+| ADR-34 | `apiFetch` redirect 401 | Session-cookie → redirect automatique `/login` sur 401 (no JWT refresh) |
+| ADR-35 | `versionRef` anti-race | `useFetch` ignore les réponses obsolètes via compteur de version |
+| ADR-36 | Entity-type tabs ARIA | `PageWorkflowStudio` : `role="tablist/tab/tabpanel"` sans router |
 
 ---
 
@@ -1577,8 +1580,98 @@ Sections et items ajoutés :
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v5.0*
+## 16. Frontend Infrastructure — v6.0
+
+### 16.1 Vue d'ensemble
+
+Sprint 1 (Workflow Studio) et Sprint 2 (Admin Panel réel) ajoutent :
+- `PageWorkflowStudio` : sélecteur d'entité + `WorkflowDesigner` (React Flow)
+- Couche API centralisée : `apiFetch` + raccourcis + gestion 401
+- Hook `useFetch<T>` : loading/error/data/refetch avec anti-race-condition
+- Auth context + `LoginPage` + `ProtectedRoute`
+- Pages connectées API : `PageProfitability` (GET /analytics/profitability) + `PageBranding` (GET/PUT /brand)
+
+### 16.2 Workflow Studio (`frontend/components/pages/PageWorkflowStudio.tsx`)
+
+Sélecteur de type d'entité (tabs ARIA `role="tablist"`).
+Entités disponibles : **Ticket | Trip | Parcel | Bus**.
+Délègue entièrement au `WorkflowDesigner` (ReactFlow + SimulationPanel + BlueprintPanel intégrés).
+`DEMO_TENANT_ID` jusqu'à intégration auth complète.
+
+```tsx
+<WorkflowDesigner tenantId={tenantId} entityType={selectedType} />
+```
+
+### 16.3 Client API centralisé (`frontend/lib/api.ts`)
+
+```typescript
+// Point d'entrée unique
+apiFetch<T>(path, opts?) → Promise<T>
+
+// Raccourcis
+apiGet / apiPost / apiPut / apiPatch / apiDelete
+
+// Comportement 401
+window.location.href = '/login';   // redirect automatique
+```
+
+Session-cookie : `credentials: 'include'` sur toutes les requêtes.
+`ApiError` : status + body pour les composants.
+
+### 16.4 Hook `useFetch<T>` (`frontend/lib/hooks/useFetch.ts`)
+
+```typescript
+const { data, loading, error, refetch } = useFetch<T>(url, deps?)
+```
+
+- Anti race-condition : `versionRef` — ignore les réponses obsolètes
+- `url: null` → ne déclenche pas de requête (utile avant que le tenantId soit connu)
+- `refetch()` : re-fetch manuel (ex: après mutation)
+
+### 16.5 Auth (`frontend/lib/auth/auth.context.tsx`)
+
+```typescript
+const { user, loading, login, logout } = useAuth();
+```
+
+- `AuthProvider` : vérifie `GET /api/auth/me` au montage
+- `login(email, password)` : POST /api/auth/sign-in → cookie session
+- `logout()` : POST /api/auth/sign-out → `window.location.href = '/login'`
+
+### 16.6 Route protection (`frontend/components/auth/`)
+
+```tsx
+<AuthProvider>
+  <ProtectedRoute>
+    <AdminDashboard />
+  </ProtectedRoute>
+</AuthProvider>
+```
+
+`ProtectedRoute` : loading → spinner / no user → `<LoginPage />` / user → children.
+
+### 16.7 Pages connectées
+
+| Page | Fichier | Endpoints |
+|------|---------|-----------|
+| Rentabilité | `PageProfitability.tsx` | GET /api/v1/tenants/:tid/analytics/profitability |
+| White-label | `PageBranding.tsx` | GET/PUT /api/v1/tenants/:tid/brand |
+
+Remplacent les `PageWip` stubs pour `pricing-yield` et `white-label`.
+
+### 16.8 Nouvelles Décisions Architecturales
+
+| ADR | Titre | Décision |
+|-----|-------|----------|
+| ADR-34 | `apiFetch` avec redirect 401 | Session-cookie + redirect automatique /login sur 401 — pas de refresh token JWT (Better Auth gère la session) |
+| ADR-35 | `versionRef` anti-race dans `useFetch` | Compteur d'appels — ignore les réponses si une version plus récente est en cours |
+| ADR-36 | `PageWorkflowStudio` entity-type tabs | ARIA `role="tablist/tab/tabpanel"` — sélecteur accessible sans router |
+
+---
+
+*Fin du Dossier Technique TransLog Pro v6.0*
 *Révision v2.0 : Avril 2026 — Architecture Validée*
 *Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*
 *Révision v4.0 : Avril 2026 — White Label · Profitabilité (ICostCalculator) · TenantBusinessConfig · Yield Management · ADR-23→27*
 *Révision v5.0 : Avril 2026 — FleetDocs · DriverProfile · CrewBriefing · QHSE · SchedulingGuard · ModuleGuard · Frontend QHSE/HR · ADR-28→33*
+*Révision v6.0 : Avril 2026 — Workflow Studio Frontend · API client centralisé · useFetch hook · Auth context · PageProfitability/PageBranding connectées · ADR-34→36*

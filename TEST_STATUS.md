@@ -9,14 +9,14 @@
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit — Engine** (src/) | `npm test` | 7 | 96 | ⚠️ 94 PASS / 2 pre-existing failures (WorkflowEngine audit) |
+| **Unit — Engine** (src/) | `npm test` | 11 | 129 | ⚠️ 127 PASS / 2 pre-existing failures (WorkflowEngine audit) |
 | **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 12 | 172 | ✅ PASS |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS |
 
-**Total validé (hors pre-existing) : 426 tests / 0 new failure**
+**Total validé (hors pre-existing) : 459 tests / 0 new failure**
 
-> ⚠️ **2 failures pre-existing** dans `workflow.engine.spec.ts` (tests n°3 et 14 — WorkflowTransition idempotencyKey et audit.record) — présents avant cette session, non introduits par les changements v5.0.
+> ⚠️ **2 failures pre-existing** dans `workflow.engine.spec.ts` (tests n°3 et 14 — WorkflowTransition idempotencyKey et audit.record) — présents avant cette session, non introduits par les changements v5.0 / v6.0.
 
 ### Ajouts v4.0 (Avril 2026)
 - `src/modules/pricing/__tests__/cost-calculator.engine.spec.ts` — 25 tests (pure engine)
@@ -30,6 +30,12 @@
 - `src/modules/crew-briefing/__tests__/crew-briefing.service.spec.ts` — 13 tests (allEquipmentOk, erreurs)
 - `src/modules/driver-profile/__tests__/driver-profile.service.spec.ts` — 13 tests (_computeLicenseStatus, checkRestCompliance, evaluateRemediationForDriver)
 - `src/core/iam/guards/__tests__/module.guard.spec.ts` — 8 tests (cache hit/miss, DB active/inactive, invalidation)
+
+### Ajouts v6.0 (Avril 2026 — Sprint 1 Workflow Studio + Sprint 2 Admin Panel)
+- `src/modules/workflow-studio/__tests__/workflow-studio.service.spec.ts` — 13 tests (simulateWorkflow paths/blocages, createBlueprint validation/slug, getBlueprint/delete)
+- `src/modules/analytics/__tests__/analytics.service.spec.ts` — 4 tests (getDashboard agrégats, scope agency, revenue null)
+- `src/modules/pricing/__tests__/profitability.service.spec.ts` — 7 tests (getProfitabilitySummary agrégats/byTag/période vide, upsertCostProfile NotFoundException)
+- `src/modules/white-label/__tests__/white-label.service.spec.ts` — 9 tests (getBrand cache hit/miss/défauts, upsert cache invalidation, remove NotFoundException, buildStyleTag CSS)
 
 ---
 
@@ -451,6 +457,63 @@
 
 ---
 
+## NIVEAU 1 — Ajouts v6.0 (Sprint 1 Workflow Studio + Sprint 2 Admin Panel)
+
+### src/modules/workflow-studio/__tests__/workflow-studio.service.spec.ts — 13 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | simulateWorkflow() — retourne le chemin complet quand toutes les transitions réussissent |
+| 2 | simulateWorkflow() — stoppe au premier blocage de permission |
+| 3 | simulateWorkflow() — retourne reachable=false pour une transition inexistante dans l'état courant |
+| 4 | simulateWorkflow() — simule depuis un blueprint (blueprintId fourni) |
+| 5 | simulateWorkflow() — lance NotFoundException si blueprintId fourni mais blueprint introuvable |
+| 6 | createBlueprint() — crée un blueprint valide |
+| 7 | createBlueprint() — lance BadRequestException si slug déjà existant pour ce tenant |
+| 8 | createBlueprint() — lance BadRequestException si le graphe est invalide (graphe vide) |
+| 9 | getBlueprint() — lance NotFoundException si le blueprint est introuvable |
+| 10 | getBlueprint() — retourne le blueprint si accessible |
+| 11 | deleteBlueprint() — lance ForbiddenException quand on tente de supprimer un blueprint système |
+| 12 | deleteBlueprint() — supprime un blueprint non-système possédé par le tenant |
+| 13 | listEntityTypes() — retourne les entityTypes distincts du tenant |
+
+### src/modules/analytics/__tests__/analytics.service.spec.ts — 4 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | getDashboard() — retourne les agrégats corrects pour un tenant |
+| 2 | getDashboard() — retourne revenue.total=0 quand transaction.aggregate retourne null |
+| 3 | getDashboard() — filtre les tickets/transactions par agencyId quand le scope est agency |
+| 4 | getDashboard() — ne filtre pas par agencyId quand l'agencyId n'est pas fourni |
+
+### src/modules/pricing/__tests__/profitability.service.spec.ts — 7 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | getProfitabilitySummary() — retourne les agrégats corrects sur une période avec données |
+| 2 | getProfitabilitySummary() — calcule globalNetMarginRate = totalNetMargin / totalCost |
+| 3 | getProfitabilitySummary() — retourne globalNetMarginRate=0 quand totalCost=0 |
+| 4 | getProfitabilitySummary() — agrège correctement les counts par tag |
+| 5 | getProfitabilitySummary() — retourne zéros et byTag vide quand aucun snapshot sur la période |
+| 6 | getProfitabilitySummary() — retourne la période passée en paramètre |
+| 7 | upsertCostProfile() — lance NotFoundException si le bus est introuvable |
+
+### src/modules/white-label/__tests__/white-label.service.spec.ts — 9 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | getBrand() — retourne le brand depuis le cache Redis si présent |
+| 2 | getBrand() — charge depuis la DB si pas de cache et met en cache (TTL 300s) |
+| 3 | getBrand() — retourne les valeurs par défaut si aucun TenantBrand en DB |
+| 4 | upsert() — invalide le cache après mise à jour |
+| 5 | upsert() — appelle prisma.tenantBrand.upsert avec les données du DTO |
+| 6 | remove() — lance NotFoundException si aucune config de marque pour ce tenant |
+| 7 | remove() — invalide le cache après suppression |
+| 8 | buildStyleTag() — génère un bloc `<style>` avec les CSS custom properties |
+| 9 | buildStyleTag() — injecte le customCss du tenant après les variables |
+
+---
+
 ## Roadmap tests
 
 | Break | Contenu | Statut |
@@ -463,3 +526,4 @@
 | BREAK 6 | Validation finale : unit + integration + e2e = 0 failure | ✅ FAIT |
 | **BREAK 7 — v4.0** | CostCalculatorEngine pure spec (25 tests) + ProfitabilityService spec (14) + WhiteLabelService spec (16) + e2e sections 29-30 (13 tests) | ✅ FAIT |
 | **BREAK 8 — v5.0** | FleetDocsService spec (14) + SchedulingGuardService spec (17) + CrewBriefingService spec (13) + DriverProfileService spec (13) + ModuleGuard spec (8) = 65 nouveaux tests | ✅ FAIT |
+| **BREAK 9 — v6.0** | WorkflowStudioService spec (13) + AnalyticsService spec (4) + ProfitabilityService spec (7) + WhiteLabelService spec (9) = 33 nouveaux tests | ✅ FAIT |

@@ -70,6 +70,9 @@ import { PageFleetDocs }         from '../pages/PageFleetDocs';
 import { PageDriverProfile }     from '../pages/PageDriverProfile';
 import { PageCrewBriefing }      from '../pages/PageCrewBriefing';
 import { PageQhse }              from '../pages/PageQhse';
+import { PageWorkflowStudio }    from '../pages/PageWorkflowStudio';
+import { PageProfitability }     from '../pages/PageProfitability';
+import { PageBranding }          from '../pages/PageBranding';
 
 // ─── Lucide icon resolver ─────────────────────────────────────────────────────
 
@@ -538,41 +541,6 @@ function PageCrm() {
   );
 }
 
-function PageWorkflowStudio() {
-  return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-white">Workflow Studio</h1>
-      <p className="text-slate-400 text-sm">Concevez et simulez vos workflows métier. Les blueprints sont appliqués en temps réel via le moteur d'état TranslogPro.</p>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {[
-          { name: 'Cycle vie Trajet',       states: 9,  transitions: 14, version: 'v3.1', status: 'Actif',    color: 'text-emerald-400' },
-          { name: 'Workflow Billet',        states: 6,  transitions: 10, version: 'v2.0', status: 'Actif',    color: 'text-emerald-400' },
-          { name: 'Gestion Colis',          states: 7,  transitions: 11, version: 'v1.5', status: 'Actif',    color: 'text-emerald-400' },
-          { name: 'Onboarding Chauffeur',   states: 4,  transitions: 5,  version: 'v1.0', status: 'Actif',    color: 'text-emerald-400' },
-          { name: 'Réclamation SAV',        states: 5,  transitions: 8,  version: 'v1.2-beta', status: 'Draft', color: 'text-amber-400' },
-          { name: 'Maintenance Préventive', states: 3,  transitions: 4,  version: 'v0.9', status: 'Draft',    color: 'text-amber-400' },
-        ].map((wf, i) => (
-          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors cursor-pointer">
-            <div className="flex items-start justify-between mb-3">
-              <p className="font-semibold text-white">{wf.name}</p>
-              <span className={cn('text-xs font-semibold', wf.color)}>{wf.status}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs text-center">
-              <div><p className="text-slate-600">États</p><p className="text-slate-300 font-bold">{wf.states}</p></div>
-              <div><p className="text-slate-600">Transitions</p><p className="text-slate-300 font-bold">{wf.transitions}</p></div>
-              <div><p className="text-slate-600">Version</p><p className="text-slate-300 font-bold">{wf.version}</p></div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button className="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 rounded-lg transition-colors">Éditer</button>
-              <button className="flex-1 text-xs bg-teal-900/40 hover:bg-teal-800/60 text-teal-400 py-1.5 rounded-lg transition-colors">Simuler</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PageIam() {
   return (
     <div className="p-6 space-y-4">
@@ -710,7 +678,7 @@ function PageRouter({ activeId }: { activeId: string | null }) {
     case 'sav-returns':        return <PageWip title="Remboursements" />;
     case 'cashier':            return <PageCashier />;
     case 'pricing-grid':       return <PageWip title="Grille tarifaire" />;
-    case 'pricing-yield':      return <PageWip title="Yield Management" />;
+    case 'pricing-yield':      return <PageProfitability />;
     case 'pricing-promo':      return <PageWip title="Promotions" />;
     case 'invoices':           return <PageWip title="Facturation" />;
     case 'analytics':          return <PageAnalytics />;
@@ -752,11 +720,11 @@ function PageRouter({ activeId }: { activeId: string | null }) {
     case 'safety-monitor':     return <PageWip title="Suivi temps réel" />;
     case 'safety-sos':         return <PageWip title="Alertes SOS" />;
     case 'workflow-studio':    return <PageWorkflowStudio />;
-    case 'wf-blueprints':      return <PageWip title="Blueprints" />;
-    case 'wf-marketplace':     return <PageWip title="Marketplace" />;
-    case 'wf-simulate':        return <PageWip title="Simulateur" />;
+    case 'wf-blueprints':      return <PageWorkflowStudio />;
+    case 'wf-marketplace':     return <PageWorkflowStudio />;
+    case 'wf-simulate':        return <PageWorkflowStudio />;
     case 'modules':            return <PageWip title="Modules & Extensions" />;
-    case 'white-label':        return <PageWip title="White-label & Thème" />;
+    case 'white-label':        return <PageBranding />;
     case 'integrations':       return <PageWip title="Intégrations API" />;
     case 'documents-templates': return <PageWip title="Modèles de documents" />;
     case 'iam-users':          return <PageIam />;
