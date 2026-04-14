@@ -1,106 +1,60 @@
 /**
- * QuaiScreen — Écran d'information quai (kiosque quai gare)
+ * QuaiScreen — Panneau d'information quai (TV/LED)
  *
- * Affiché sur un écran TV ou panneau LED au niveau du quai de départ.
- * Identifie clairement la destination et le statut de l'embarquement.
- *
- * Structure :
- *   Header      → numéro de quai + badge EMBARQUEMENT clignotant
- *   DestCard    → destination principale + heure + agence
- *   StatCards   → 4 stats : Bus / Passagers / Colis / Chauffeur
- *   StatusText  → message d'état grand format
- *   Timer       → compte à rebours jusqu'au départ
- *   Ticker      → annonces
+ * Principes cardinaux :
+ *   ✓ i18n 8 langues + rotation automatique
+ *   ✓ Statuts via StatusRegistry
+ *   ✓ Météo à destination via useWeather
+ *   ✓ Notifications WebSocket dans le ticker
+ *   ✓ Dark mode natif
+ *   ✓ WCAG : aria-live, rôles, labels
+ *   ✓ Responsive TV (4K ↔ terminal)
  */
 
 import { useState, useEffect } from 'react';
-import { cn } from '../../lib/utils';
+import { cn }                  from '../../lib/utils';
+import { useI18n }             from '../../lib/i18n/useI18n';
+import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
+import { useNotifications }    from '../../lib/hooks/useNotifications';
+import { useTenantConfig }     from '../../providers/TenantConfigProvider';
+import type { Language }       from '../../lib/i18n/types';
+import { LANGUAGE_META }       from '../../lib/i18n/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type QuaiStatus =
-  | 'ATTENTE'       // Bus pas encore là
-  | 'EMBARQUEMENT'  // Embarquement ouvert
-  | 'DERNIER_APPEL' // Dernier appel avant fermeture
-  | 'PORTE_FERMEE'  // Embarquement terminé
-  | 'PARTI';        // Bus parti
-
-interface QuaiInfo {
-  numero:       string;
-  destination:  string;
-  via?:         string;
-  heureDepart:  string;    // HH:MM
-  agence:       string;
-  bus:          string;    // plaque
-  busModele:    string;
-  chauffeur:    string;
-  passagersConfirmes: number;
-  passagersABord:     number;
-  capacite:     number;
-  colisEnSoute: number;
-  status:       QuaiStatus;
-  departAt:     Date;      // utilisé pour le compte à rebours
+interface QuaiScreenProps {
+  platform:          string;
+  destination:       string;
+  destinationCode?:  string;
+  via?:              string;
+  departureTime:     string;
+  agencyName:        string;
+  busPlate:          string;
+  busModel:          string;
+  driverName:        string;
+  passengersConfirmed: number;
+  passengersOnBoard:  number;
+  capacity:          number;
+  parcelsLoaded:     number;
+  statusId:          string;
+  departAt:          Date;
+  tenantId?:         string;
+  autoRotateLang?:   boolean;
 }
 
-// ─── Données de démo ─────────────────────────────────────────────────────────
+// ─── Countdown ────────────────────────────────────────────────────────────────
 
-const DEMO_QUAI: QuaiInfo = {
-  numero:      'A3',
-  destination: 'ZIGUINCHOR',
-  via:         'Kaolack · Kolda · Vélingara',
-  heureDepart: '08:15',
-  agence:      'Senbus',
-  bus:         'DK 4321 EF',
-  busModele:   'King Long XMQ6130Y',
-  chauffeur:   'Ousmane Faye',
-  passagersConfirmes: 47,
-  passagersABord:     31,
-  capacite:    50,
-  colisEnSoute: 18,
-  status:      'EMBARQUEMENT',
-  departAt:    (() => {
-    const d = new Date();
-    d.setHours(8, 15, 0, 0);
-    return d;
-  })(),
-};
-
-const TICKER_MESSAGES = [
-  `Quai A3 — EMBARQUEMENT EN COURS pour ZIGUINCHOR — Présentez votre billet à l'agent.`,
-  'Bagages en soute : déposez vos bagages avant de monter à bord.',
-  'Rappel : Les bagages à main ne doivent pas dépasser le coffre supérieur.',
-  `Départ prévu à ${DEMO_QUAI.heureDepart} — Tout retard sera annoncé par haut-parleur.`,
-];
-
-// ─── Config statut ────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<QuaiStatus, {
-  label: string;
-  sub:   string;
-  badgeCls: string;
-  mainCls:  string;
-  blink:    boolean;
-}> = {
-  ATTENTE:       { label: 'EN ATTENTE',      sub: 'Le bus n\'est pas encore arrivé.',          badgeCls: 'bg-sky-900 text-sky-300 border-sky-700',     mainCls: 'text-sky-300',    blink: false },
-  EMBARQUEMENT:  { label: 'EMBARQUEMENT',    sub: 'Présentez votre billet à l\'agent du quai.', badgeCls: 'bg-amber-500 text-slate-900 border-amber-400', mainCls: 'text-amber-400',  blink: true  },
-  DERNIER_APPEL: { label: 'DERNIER APPEL',   sub: 'Dernière chance d\'embarquer !',             badgeCls: 'bg-red-600 text-white border-red-500',          mainCls: 'text-red-400',    blink: true  },
-  PORTE_FERMEE:  { label: 'PORTE FERMÉE',    sub: 'L\'embarquement est terminé.',               badgeCls: 'bg-slate-700 text-slate-300 border-slate-600', mainCls: 'text-slate-400',  blink: false },
-  PARTI:         { label: 'PARTI',           sub: 'Le bus a quitté le quai.',                   badgeCls: 'bg-slate-800 text-slate-500 border-slate-700', mainCls: 'text-slate-600',  blink: false },
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function useTime() {
+function Countdown({ targetDate, t, dict }: {
+  targetDate: Date;
+  t:   (m: Record<Language, string>) => string;
+  dict: ReturnType<typeof useI18n>['dict'];
+}) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const id = setInterval(() => setNow(new Date()), 1_000);
     return () => clearInterval(id);
   }, []);
-  return now;
-}
 
-function Countdown({ targetDate }: { targetDate: Date }) {
-  const now  = useTime();
   const diff = Math.max(0, targetDate.getTime() - now.getTime());
   const h    = Math.floor(diff / 3_600_000);
   const m    = Math.floor((diff % 3_600_000) / 60_000);
@@ -108,39 +62,82 @@ function Countdown({ targetDate }: { targetDate: Date }) {
   const pad  = (n: number) => String(n).padStart(2, '0');
 
   if (diff === 0) {
-    return <span className="text-green-400">DÉPART</span>;
+    return (
+      <span className="text-emerald-400 text-5xl xl:text-6xl font-black animate-pulse">
+        {t(dict.status.DEPARTED)}
+      </span>
+    );
   }
 
   return (
-    <span className="tabular-nums">
-      {h > 0 && <>{pad(h)}<span className="text-slate-500 text-3xl">h</span></>}
-      {pad(m)}<span className="text-slate-500 text-3xl">m</span>
-      {pad(s)}<span className="text-slate-500 text-3xl">s</span>
+    <span className="tabular-nums text-[var(--color-accent)]" aria-live="off">
+      {h > 0 && <span>{pad(h)}<span className="text-slate-500 text-2xl xl:text-3xl">h</span></span>}
+      <span className="text-4xl xl:text-5xl font-black">{pad(m)}</span>
+      <span className="text-slate-500 text-2xl xl:text-3xl">m</span>
+      <span className="text-4xl xl:text-5xl font-black">{pad(s)}</span>
+      <span className="text-slate-500 text-2xl xl:text-3xl">s</span>
     </span>
   );
 }
 
-function OccupancyBar({ value, max, cls = 'bg-teal-500' }: { value: number; max: number; cls?: string }) {
+// ─── Occupancy bar ────────────────────────────────────────────────────────────
+
+function OccupancyBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const cls = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-[var(--color-primary)]';
   return (
-    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1">
-      <div
-        className={cn('h-full rounded-full transition-all', cls)}
-        style={{ width: `${pct}%` }}
-      />
+    <div
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1"
+    >
+      <div className={cn('h-full rounded-full transition-all', cls)} style={{ width: `${pct}%` }} />
     </div>
   );
 }
 
-function Ticker() {
-  const text = TICKER_MESSAGES.join('   ·   ');
+// ─── Live Clock ───────────────────────────────────────────────────────────────
+
+function LiveClock({ dateLocale }: { dateLocale: string }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 1_000); return () => clearInterval(id); }, []);
   return (
-    <div className="bg-amber-500 text-slate-900 flex items-center overflow-hidden shrink-0 h-10">
-      <div className="shrink-0 bg-amber-700 text-white px-3 h-full flex items-center font-bold text-xs uppercase tracking-widest">
-        INFO
+    <time dateTime={now.toISOString()} className="tabular-nums text-right">
+      <p className="text-3xl xl:text-4xl font-black text-white leading-none">
+        {now.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </p>
+      <p className="text-xs text-slate-400 mt-0.5 capitalize">
+        {now.toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric', month: 'short' })}
+      </p>
+    </time>
+  );
+}
+
+// ─── Ticker ───────────────────────────────────────────────────────────────────
+
+function Ticker({ notifications, lang, t, dict }: {
+  notifications: ReturnType<typeof useNotifications>['notifications'];
+  lang:  Language;
+  t:     (m: Record<Language, string>) => string;
+  dict:  ReturnType<typeof useI18n>['dict'];
+}) {
+  const texts = notifications.map(n => n.message[lang] ?? n.message['fr'] ?? '');
+  const text  = texts.join('   ·   ');
+  if (!text) return null;
+  return (
+    <div
+      role="marquee"
+      aria-live="polite"
+      className="flex items-center overflow-hidden shrink-0 h-10 bg-[var(--color-accent)] text-slate-900 dark:text-slate-950"
+    >
+      <div className="shrink-0 px-3 h-full flex items-center font-black text-xs uppercase tracking-widest bg-amber-600 text-white">
+        {t(dict.notifications.info)}
       </div>
-      <div className="flex-1 overflow-hidden">
-        <p className="whitespace-nowrap text-sm font-semibold" style={{ animation: 'ticker 20s linear infinite' }}>
+      <div className="flex-1 overflow-hidden" aria-hidden>
+        <p className="whitespace-nowrap text-sm font-semibold leading-10"
+           style={{ animation: 'board-ticker 22s linear infinite' }}>
           {text}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{text}
         </p>
       </div>
@@ -150,136 +147,215 @@ function Ticker() {
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-export function QuaiScreen({ quai = DEMO_QUAI }: { quai?: QuaiInfo }) {
-  const now = useTime();
-  const cfg = STATUS_CONFIG[quai.status];
+const DEMO_PROPS: QuaiScreenProps = {
+  platform:            'A2',
+  destination:         'POINTE-NOIRE',
+  destinationCode:     'PNR',
+  via:                 'Dolisie · Loubomo · Mossendjo',
+  departureTime:       '08:00',
+  agencyName:          'Transco',
+  busPlate:            'BZV 7732 GH',
+  busModel:            'Mercedes-Benz Actros',
+  driverName:          'Jean-Baptiste Mavoungou',
+  passengersConfirmed: 47,
+  passengersOnBoard:   31,
+  capacity:            50,
+  parcelsLoaded:       18,
+  statusId:            'BOARDING',
+  departAt:            (() => { const d = new Date(); d.setHours(8, 0, 0, 0); return d; })(),
+};
+
+export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
+  const p = { ...DEMO_PROPS, ...props };
+  const { lang, setLang, t, dir, dateLocale, dict } = useI18n();
+  const tenantConfig   = useTenantConfig();
+  const { notifications } = useNotifications({ tenantId: p.tenantId ?? 'demo' });
+  const { weather }    = useWeather(p.destinationCode);
+
+  const statusCfg = tenantConfig.statuses[p.statusId];
+
+  // Rotation auto lang
+  useEffect(() => {
+    if (!p.autoRotateLang) return;
+    const langs = tenantConfig.operational.rotateLanguages;
+    const ms    = tenantConfig.operational.displayLangRotateMs;
+    let idx     = langs.indexOf(lang);
+    const id    = setInterval(() => { idx = (idx + 1) % langs.length; setLang(langs[idx]); }, ms);
+    return () => clearInterval(id);
+  }, [p.autoRotateLang, tenantConfig, lang, setLang]);
 
   return (
     <div
-      className="flex flex-col h-screen bg-slate-950 text-white select-none overflow-hidden"
-      style={{ fontFamily: "'Inter', sans-serif" }}
+      dir={dir}
+      lang={lang}
+      aria-label={`Quai ${p.platform} — ${p.destination}`}
+      className="flex flex-col h-screen overflow-hidden select-none bg-slate-950 dark:bg-slate-950 text-white"
+      style={{ fontFamily: 'var(--font-family)' }}
     >
-      {/* ── Header : numéro de quai ──────────────────────────────────── */}
-      <header className="flex items-center justify-between px-8 py-5 bg-slate-900 border-b-2 border-teal-700 shrink-0">
-        <div className="flex items-center gap-6">
-          {/* Giant quai number */}
-          <div className="flex flex-col items-center bg-teal-700 rounded-2xl w-28 h-24 justify-center shadow-lg shadow-teal-900/60">
-            <p className="text-xs font-bold uppercase tracking-widest text-teal-200">Quai</p>
-            <p className="text-6xl font-black text-white leading-none">{quai.numero}</p>
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <header className={cn(
+        'flex items-center justify-between gap-4 px-6 xl:px-8 py-4 xl:py-5 shrink-0',
+        'bg-slate-900 dark:bg-slate-900 border-b-2 border-[var(--color-primary)]',
+      )}>
+        {/* Numéro de quai */}
+        <div className="flex items-center gap-4 xl:gap-6">
+          <div
+            className={cn(
+              'flex flex-col items-center justify-center rounded-2xl',
+              'w-24 h-20 xl:w-28 xl:h-24 shadow-lg shrink-0',
+            )}
+            style={{ backgroundColor: 'var(--color-primary)' }}
+            aria-label={`${t(dict.ui.platform_label)} ${p.platform}`}
+          >
+            <p className="text-xs font-bold uppercase tracking-widest text-white/70">
+              {t(dict.ui.platform_label)}
+            </p>
+            <p className="text-5xl xl:text-6xl font-black text-white leading-none">{p.platform}</p>
           </div>
 
-          {/* Status badge */}
+          {/* Badge statut */}
           <div>
-            <span className={cn(
-              'inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xl font-black uppercase tracking-widest border-2',
-              cfg.badgeCls,
-              cfg.blink && 'animate-pulse',
-            )}>
-              {cfg.label}
-            </span>
-            <p className="text-slate-400 text-sm mt-2">{cfg.sub}</p>
+            {statusCfg && (
+              <span
+                role="status"
+                aria-live="polite"
+                className={cn(
+                  'inline-flex items-center justify-center rounded-xl px-5 py-2.5',
+                  'text-xl xl:text-2xl font-black uppercase tracking-widest border-2',
+                  statusCfg.visual.badgeCls,
+                  statusCfg.visual.animateCls,
+                )}
+              >
+                {statusCfg.label[lang] ?? statusCfg.label['fr']}
+              </span>
+            )}
+            <p className="text-slate-400 text-sm mt-2">
+              {t(dict.ui.departure_in)}&nbsp;
+              <Countdown targetDate={p.departAt} t={t} dict={dict} />
+            </p>
           </div>
         </div>
 
-        {/* Clock + countdown */}
-        <div className="text-right">
-          <p className="text-4xl font-black tabular-nums">
-            {now.toLocaleTimeString('fr-SN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </p>
-          <p className="text-slate-400 text-sm mt-1">Départ dans&nbsp;
-            <span className="text-5xl font-black text-amber-400">
-              <Countdown targetDate={quai.departAt} />
-            </span>
-          </p>
+        {/* Horloge + langue */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-1">
+            {tenantConfig.operational.rotateLanguages.map(l => (
+              <span key={l} className="text-xs opacity-50 hover:opacity-100 cursor-pointer"
+                    title={LANGUAGE_META[l].label}>{LANGUAGE_META[l].flag}</span>
+            ))}
+          </div>
+          <LiveClock dateLocale={dateLocale} />
         </div>
       </header>
 
-      {/* ── Destination principale ───────────────────────────────────── */}
-      <div className="px-8 py-6 bg-gradient-to-r from-teal-900/40 to-slate-950 border-b border-slate-800 shrink-0">
+      {/* ── Destination ─────────────────────────────────────────── */}
+      <section
+        aria-label={t(dict.col.destination)}
+        className={cn(
+          'px-6 xl:px-8 py-5 xl:py-6 shrink-0',
+          'bg-gradient-to-r from-[var(--color-primary)]/10 to-transparent',
+          'border-b border-slate-800',
+        )}
+      >
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-teal-400 mb-1">Destination</p>
-            <p className="text-6xl font-black uppercase tracking-wider text-white">{quai.destination}</p>
-            {quai.via && (
-              <p className="text-slate-400 text-base mt-1.5">via&nbsp;{quai.via}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-primary)] mb-1">
+              {t(dict.col.destination)}
+            </p>
+            <p className="text-5xl xl:text-6xl font-black uppercase tracking-wide text-white">
+              {p.destination}
+            </p>
+            {p.via && (
+              <p className="text-slate-400 text-base mt-1.5">via&nbsp;{p.via}</p>
             )}
           </div>
-          <div className="text-right">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Départ</p>
-            <p className="text-7xl font-black text-teal-300 tabular-nums leading-none">{quai.heureDepart}</p>
+          <div className="text-right flex flex-col items-end gap-2">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-widest">{t(dict.col.time)}</p>
+              <p className="text-6xl xl:text-7xl font-black text-[var(--color-primary)] tabular-nums leading-none">
+                {p.departureTime}
+              </p>
+            </div>
+            {/* Météo destination mini */}
+            {weather && (
+              <div className="flex items-center gap-2 text-sm bg-slate-800 rounded-xl px-3 py-1.5 border border-slate-700">
+                <span>{WEATHER_ICONS[weather.condition]}</span>
+                <span className="font-bold text-white">{weather.tempC}°C</span>
+                <span className="text-slate-400">{weather.cityName}</span>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Stat cards ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-4 px-8 py-5 flex-1">
+      {/* ── Stat cards ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-4 px-6 xl:px-8 py-5 flex-1">
+
         {/* Bus */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 flex flex-col justify-between">
+        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Véhicule</p>
-            <p className="text-2xl font-black text-white font-mono">{quai.bus}</p>
-            <p className="text-sm text-slate-400 mt-1">{quai.busModele}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.bus)}</p>
+            <p className="text-xl xl:text-2xl font-black text-white font-mono">{p.busPlate}</p>
+            <p className="text-sm text-slate-400 mt-1">{p.busModel}</p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-emerald-400 font-semibold">Bus en position</span>
+            <span className="text-xs text-emerald-400 font-semibold">En position</span>
           </div>
         </div>
 
         {/* Passagers */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 flex flex-col justify-between">
+        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Passagers</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.passengers)}</p>
             <div className="flex items-end gap-1">
-              <p className="text-5xl font-black text-white tabular-nums">{quai.passagersABord}</p>
-              <p className="text-2xl text-slate-500 mb-1">/{quai.capacite}</p>
+              <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.passengersOnBoard}</p>
+              <p className="text-xl text-slate-500 mb-1">/{p.capacity}</p>
             </div>
           </div>
           <div>
             <div className="flex justify-between text-xs text-slate-400 mb-1">
-              <span>{quai.passagersConfirmes} confirmés</span>
-              <span>{Math.round((quai.passagersABord / quai.capacite) * 100)}%</span>
+              <span>{p.passengersConfirmed} confirmés</span>
+              <span>{Math.round((p.passengersOnBoard / p.capacity) * 100)}%</span>
             </div>
-            <OccupancyBar
-              value={quai.passagersABord}
-              max={quai.capacite}
-              cls={quai.passagersABord / quai.capacite > 0.9 ? 'bg-red-500' : 'bg-teal-500'}
-            />
+            <OccupancyBar value={p.passengersOnBoard} max={p.capacity} />
           </div>
         </div>
 
         {/* Colis */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 flex flex-col justify-between">
+        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Colis en soute</p>
-            <p className="text-5xl font-black text-white tabular-nums">{quai.colisEnSoute}</p>
-            <p className="text-sm text-slate-400 mt-1">Paquets chargés</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.parcels)}</p>
+            <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.parcelsLoaded}</p>
+            <p className="text-sm text-slate-400 mt-1">chargés</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-purple-400" />
-            <span className="text-xs text-purple-400 font-semibold">Chargement en cours</span>
+            <span className="text-xs text-purple-400 font-semibold">Chargement</span>
           </div>
         </div>
 
         {/* Chauffeur */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 flex flex-col justify-between">
+        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Chauffeur</p>
-            <p className="text-2xl font-bold text-white leading-tight">{quai.chauffeur}</p>
-            <p className="text-sm text-slate-400 mt-1">{quai.agence}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.driver)}</p>
+            <p className="text-xl xl:text-2xl font-bold text-white leading-tight">{p.driverName}</p>
+            <p className="text-sm text-slate-400 mt-1">{p.agencyName}</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
-            <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            <span className="text-xs text-teal-400 font-semibold">À bord</span>
+            <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
+              {t(dict.ui.on_board)}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── Ticker ──────────────────────────────────────────────────── */}
-      <Ticker />
+      {/* ── Ticker ──────────────────────────────────────────────── */}
+      <Ticker notifications={notifications} lang={lang} t={t} dict={dict} />
 
       <style>{`
-        @keyframes ticker {
+        @keyframes board-ticker {
           from { transform: translateX(0); }
           to   { transform: translateX(-50%); }
         }

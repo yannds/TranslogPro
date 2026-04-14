@@ -21,10 +21,38 @@
 
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
+import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type DriverTab = 'trajets' | 'checklists' | 'incidents';
+
+/** Permissions pertinentes pour cet écran */
+const P_TRIP_READ_OWN      = 'data.trip.read.own';
+const P_TRIP_CHECK_OWN     = 'data.trip.check.own';
+const P_TRIP_REPORT_OWN    = 'data.trip.report.own';
+const P_MAINTENANCE_UPDATE = 'data.maintenance.update.own';
+
+interface DriverTabDef {
+  id:    DriverTab;
+  label: string;
+  icon:  string;
+  anyOf: string[];
+}
+
+const ALL_DRIVER_TABS: DriverTabDef[] = [
+  { id: 'trajets',    label: 'Mes Trajets',  icon: '🗺️', anyOf: [P_TRIP_READ_OWN] },
+  { id: 'checklists', label: 'Checklists',   icon: '✅', anyOf: [P_TRIP_CHECK_OWN] },
+  { id: 'incidents',  label: 'Incidents',    icon: '⚠️', anyOf: [P_TRIP_REPORT_OWN, P_MAINTENANCE_UPDATE] },
+];
+
+function filterDriverTabs(permissions: string[]): DriverTabDef[] {
+  const perms = new Set(permissions);
+  return ALL_DRIVER_TABS.filter(t => t.anyOf.some(p => perms.has(p)));
+}
+
+type DemoRoleKeyD = keyof typeof ROLE_PERMISSIONS;
+const DEMO_ROLES_D: DemoRoleKeyD[] = ['DRIVER', 'SUPERVISOR'];
 
 type TripDriverStatus = 'EN_COURS' | 'PREVU' | 'TERMINE';
 
@@ -411,14 +439,16 @@ function TabIncidents() {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function DriverSpace() {
+  const [roleIdx, setRoleIdx] = useState(0);
+  const roleKey               = DEMO_ROLES_D[roleIdx] as DemoRoleKeyD;
+  const permissions           = ROLE_PERMISSIONS[roleKey] ?? [];
+  const TABS                  = filterDriverTabs(permissions);
+
   const [tab, setTab] = useState<DriverTab>('trajets');
   const [sos, setSos]  = useState(false);
 
-  const TABS: { id: DriverTab; label: string; icon: string }[] = [
-    { id: 'trajets',    label: 'Mes Trajets',  icon: '🗺️' },
-    { id: 'checklists', label: 'Checklists',   icon: '✅' },
-    { id: 'incidents',  label: 'Incidents',    icon: '⚠️' },
-  ];
+  const visibleIds = TABS.map(t => t.id);
+  const effectiveTab: DriverTab = visibleIds.includes(tab) ? tab : (visibleIds[0] ?? 'trajets');
 
   return (
     <div
@@ -430,16 +460,24 @@ export function DriverSpace() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-teal-700 flex items-center justify-center font-black text-sm">
-              OF
+              CM
             </div>
             <div>
-              <p className="font-bold text-white text-sm">Ousmane Faye</p>
+              <p className="font-bold text-white text-sm">Christophe Mabou</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                 <p className="text-xs text-emerald-400 font-semibold">En service</p>
               </div>
             </div>
           </div>
+          {/* Role switcher démo */}
+          <select
+            value={roleIdx}
+            onChange={e => { const idx = Number(e.target.value); setRoleIdx(idx); const tabs = filterDriverTabs(ROLE_PERMISSIONS[DEMO_ROLES_D[idx]!] ?? []); setTab(tabs[0]?.id ?? 'trajets'); }}
+            className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none"
+          >
+            {DEMO_ROLES_D.map((r, i) => <option key={r} value={i}>{r}</option>)}
+          </select>
 
           {/* SOS button */}
           <button
@@ -487,7 +525,7 @@ export function DriverSpace() {
         );
       })()}
 
-      {/* ── Tabs ────────────────────────────────────────────────────── */}
+      {/* ── Tabs — filtrés par permissions ───────────────────────── */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
         {TABS.map(t => (
           <button
@@ -495,7 +533,7 @@ export function DriverSpace() {
             onClick={() => setTab(t.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors',
-              tab === t.id
+              effectiveTab === t.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300',
             )}
@@ -508,9 +546,9 @@ export function DriverSpace() {
 
       {/* ── Content ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'trajets'    && <TabTrajets />}
-        {tab === 'checklists' && <TabChecklists />}
-        {tab === 'incidents'  && <TabIncidents />}
+        {effectiveTab === 'trajets'    && <TabTrajets />}
+        {effectiveTab === 'checklists' && <TabChecklists />}
+        {effectiveTab === 'incidents'  && <TabIncidents />}
       </div>
     </div>
   );

@@ -1,46 +1,129 @@
 /**
- * AdminDashboard — Panneau d'administration TranslogPro (desktop)
+ * AdminDashboard — Portail d'administration TranslogPro
  *
- * Interface complète de gestion pour les administrateurs de l'agence/plateforme.
- * Intègre le SidebarLayout existant.
- *
+ * Navigation entièrement conditionnée par les permissions du user connecté.
  * Structure :
- *   SidebarLayout  → navigation principale
- *   Pages :
- *     Dashboard    → KPIs + graphiques + activité récente
- *     Flotte       → liste des bus avec statuts
- *     Trajets      → tableau des trajets + filtres
- *     Billetterie  → ventes et remboursements
- *     Rentabilité  → snapshots coûts/marges par trajet
- *     Paramètres   → white-label + config tarifs
+ *   SidebarLayout (navigation filtrée) → page active
+ *
+ * Pages disponibles selon profil :
+ *   dashboard        → KPIs + graphiques (STATS_READ ou tout admin)
+ *   trips            → Trajets du jour
+ *   trips-planning   → Planning hebdomadaire
+ *   routes           → Lignes & routes
+ *   trips-delays     → Retards & alertes
+ *   tickets-new      → Vendre un billet
+ *   tickets-list     → Billets émis
+ *   tickets-cancel   → Annulations
+ *   manifests        → Manifestes
+ *   parcels-list     → Suivi colis
+ *   parcel-new       → Enregistrer colis
+ *   shipments        → Expéditions groupées
+ *   sav-claims       → Réclamations SAV
+ *   cashier          → Caisse
+ *   pricing-grid     → Grille tarifaire
+ *   pricing-yield    → Yield Management
+ *   invoices         → Facturation
+ *   analytics        → Tableaux analytiques
+ *   ai-routes        → Lignes rentables
+ *   ai-fleet         → Optimisation flotte
+ *   fleet-vehicles   → Véhicules
+ *   fleet-seats      → Plans de sièges
+ *   maintenance-list → Maintenance
+ *   drivers          → Chauffeurs
+ *   staff-list       → Personnel
+ *   crm-clients      → CRM clients
+ *   crm-campaigns    → Campagnes
+ *   crm-feedback     → Feedbacks
+ *   display-screens  → Écrans gare
+ *   display-quais    → Gestion quais
+ *   safety-incidents → Incidents
+ *   workflow-studio  → Workflow Studio
+ *   wf-blueprints    → Blueprints
+ *   modules          → Modules & extensions
+ *   white-label      → White-label & thème
+ *   integrations     → Intégrations API
+ *   documents-templates → Modèles de documents
+ *   iam-users        → Utilisateurs
+ *   iam-roles        → Rôles
+ *   tenants          → Gestion tenants (SUPER_ADMIN)
+ *   impersonation    → Impersonation JIT (SUPER_ADMIN)
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import {
+  LayoutDashboard, Bell, MapPin, Ticket, Package, MessageSquareWarning,
+  Landmark, Tags, Receipt, BarChart3, Brain, Bus, Wrench, Users, Users2,
+  Megaphone, Star, MessageCircle, Monitor, ShieldAlert, GitFork, Puzzle,
+  Palette, Link2, ShieldCheck, Building2, Terminal, TrendingUp, Activity,
+  CalendarDays, Route, AlertTriangle, ScanLine, ClipboardList, Truck,
+  Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
+  Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
+  PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
+  UserCheck, Bug, RefreshCw, type LucideIcon,
+} from 'lucide-react';
 import { SidebarLayout } from '../layout/SidebarLayout';
-import { StatusBadge }   from '../ui/Badge';
-import { cn }            from '../../lib/utils';
+import { cn } from '../../lib/utils';
+import { useNavigation, ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
+import { ADMIN_NAV } from '../../lib/navigation/nav.config';
+import type { ResolvedNavSection, ResolvedNavItem } from '../../lib/navigation/nav.types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Lucide icon resolver ─────────────────────────────────────────────────────
 
-type AdminPage =
-  | 'dashboard'
-  | 'flotte'
-  | 'trajets'
-  | 'billetterie'
-  | 'rentabilite'
-  | 'parametres';
+const ICONS: Record<string, LucideIcon> = {
+  LayoutDashboard, Bell, MapPin, Ticket, Package, MessageSquareWarning,
+  Landmark, Tags, Receipt, BarChart3, Brain, Bus, Wrench, Users, Users2,
+  Megaphone, Star, MessageCircle, Monitor, ShieldAlert, GitFork, Puzzle,
+  Palette, Link2, ShieldCheck, Building2, Terminal, TrendingUp, Activity,
+  CalendarDays, Route, AlertTriangle, ScanLine, ClipboardList, Truck,
+  Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
+  Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
+  PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
+  UserCheck, Bug, RefreshCw,
+  // aliases
+  Steer: Bus, CalendarRange: CalendarDays, CalendarClock: CalendarDays,
+  FileType: ScrollText, List: ClipboardList, PackagePlus: Package,
+  FileText: ScrollText, FileCheck: ClipboardList, FileWarningIcon: FileWarning,
+  PlusCircle: TrendingUp, XCircle: AlertTriangle, Luggage: Package,
+};
+
+function NavIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = ICONS[name] ?? LayoutDashboard;
+  return <Icon className={cn('w-4 h-4', className)} aria-hidden />;
+}
+
+// ─── Types locaux ──────────────────────────────────────────────────────────────
+
+type RoleKey = keyof typeof ROLE_PERMISSIONS;
+
+interface MockUser {
+  name:        string;
+  role:        RoleKey;
+  agence:      string;
+  avatar:      string;
+}
+
+// ─── Données de démo ──────────────────────────────────────────────────────────
+
+const DEMO_USERS: MockUser[] = [
+  { name: 'Evariste Moukala',     role: 'SUPER_ADMIN',    agence: 'Plateforme',               avatar: 'EM' },
+  { name: 'Christelle Itoua',     role: 'TENANT_ADMIN',   agence: 'Congo Express — Direction', avatar: 'CI' },
+  { name: 'Patrick Ngouabi',      role: 'AGENCY_MANAGER', agence: 'Congo Express — BZV',       avatar: 'PN' },
+  { name: 'Aurore Batéké',        role: 'SUPERVISOR',     agence: 'Congo Express — BZV',       avatar: 'AB' },
+  { name: 'Sylvère Makosso',      role: 'CASHIER',        agence: 'Congo Express — BZV',       avatar: 'SM' },
+  { name: 'Nadège Nkounkou',      role: 'STATION_AGENT',  agence: 'Congo Express — PNR',       avatar: 'NN' },
+];
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
   label, value, sub, delta, icon, accent = 'teal',
 }: {
-  label:  string;
-  value:  string;
-  sub?:   string;
-  delta?: { value: string; up: boolean };
-  icon:   string;
-  accent?: 'teal' | 'amber' | 'emerald' | 'purple' | 'red';
+  label:   string;
+  value:   string;
+  sub?:    string;
+  delta?:  { value: string; up: boolean };
+  icon:    string;
+  accent?: 'teal' | 'amber' | 'emerald' | 'purple' | 'red' | 'blue';
 }) {
   const colors: Record<string, string> = {
     teal:    'bg-teal-500/10 text-teal-400',
@@ -48,19 +131,18 @@ function KpiCard({
     emerald: 'bg-emerald-500/10 text-emerald-400',
     purple:  'bg-purple-500/10 text-purple-400',
     red:     'bg-red-500/10 text-red-400',
+    blue:    'bg-blue-500/10 text-blue-400',
   };
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors">
       <div className="flex items-start justify-between mb-4">
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-lg', colors[accent])}>
-          {icon}
+        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', colors[accent])}>
+          <NavIcon name={icon} className="w-5 h-5" />
         </div>
         {delta && (
           <span className={cn(
             'text-xs font-semibold px-2 py-0.5 rounded-full',
-            delta.up
-              ? 'bg-emerald-900/60 text-emerald-400'
-              : 'bg-red-900/60 text-red-400',
+            delta.up ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400',
           )}>
             {delta.up ? '↑' : '↓'} {delta.value}
           </span>
@@ -73,22 +155,22 @@ function KpiCard({
   );
 }
 
-// ─── Mini Bar Chart ───────────────────────────────────────────────────────────
+// ─── Mini bar chart ───────────────────────────────────────────────────────────
 
 function MiniBarChart({ data, label }: { data: { label: string; value: number }[]; label: string }) {
   const max = Math.max(...data.map(d => d.value));
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <p className="text-sm font-semibold text-slate-300 mb-4">{label}</p>
-      <div className="flex items-end gap-2 h-24">
+    <div>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{label}</p>
+      <div className="flex items-end gap-1.5 h-24">
         {data.map((d, i) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
             <div
-              className="w-full bg-teal-600 rounded-t-sm hover:bg-teal-500 transition-colors cursor-pointer"
-              style={{ height: `${max > 0 ? (d.value / max) * 100 : 0}%` }}
+              className="w-full rounded-t-sm bg-teal-500/70 hover:bg-teal-400 transition-colors"
+              style={{ height: `${(d.value / max) * 100}%` }}
               title={`${d.label}: ${d.value}`}
             />
-            <span className="text-[9px] text-slate-500 truncate w-full text-center">{d.label}</span>
+            <span className="text-[9px] text-slate-600">{d.label}</span>
           </div>
         ))}
       </div>
@@ -96,559 +178,791 @@ function MiniBarChart({ data, label }: { data: { label: string; value: number }[
   );
 }
 
-// ─── Page: Dashboard ─────────────────────────────────────────────────────────
+// ─── Pages ────────────────────────────────────────────────────────────────────
 
 function PageDashboard() {
-  const recent = [
-    { id: 't1', time: '08:15', route: 'Dakar → Ziguinchor', passagers: 47, revenue: 376000, status: 'EN_COURS' },
-    { id: 't2', time: '07:00', route: 'Dakar → Saint-Louis', passagers: 38, revenue: 133000, status: 'ARRIVED' },
-    { id: 't3', time: '06:30', route: 'Dakar → Kaolack',    passagers: 42, revenue: 117600, status: 'ARRIVED' },
-    { id: 't4', time: '09:00', route: 'Dakar → Tambacounda', passagers: 0,  revenue: 0,      status: 'SCHEDULED' },
-    { id: 't5', time: '09:15', route: 'Dakar → Diourbel',   passagers: 0,  revenue: 0,      status: 'SCHEDULED' },
-  ];
-
-  const chartData = [
-    { label: 'Lun', value: 42 },
-    { label: 'Mar', value: 38 },
-    { label: 'Mer', value: 51 },
-    { label: 'Jeu', value: 45 },
-    { label: 'Ven', value: 63 },
-    { label: 'Sam', value: 78 },
-    { label: 'Dim', value: 56 },
-  ];
-
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Tableau de bord</h1>
+        <p className="text-slate-400 text-sm mt-1">Aujourd'hui — Mardi 14 avril 2026</p>
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Revenus aujourd'hui"   value="628 300 FCFA" delta={{ value: '12%', up: true }}   icon="💰" accent="emerald" />
-        <KpiCard label="Trajets actifs"         value="4"           sub="sur 7 prévus"                   icon="🚌" accent="teal" />
-        <KpiCard label="Passagers transportés" value="127"          delta={{ value: '8%', up: true }}    icon="👥" accent="purple" />
-        <KpiCard label="Taux d'occupation moy." value="76%"         delta={{ value: '3%', up: false }}   icon="📊" accent="amber" />
+        <KpiCard label="Trajets du jour"         value="24"     sub="6 en cours"      delta={{ value: '8%', up: true }}  icon="MapPin"    accent="teal" />
+        <KpiCard label="Billets vendus"           value="1 284"  sub="depuis 06:00"    delta={{ value: '12%', up: true }} icon="Ticket"    accent="emerald" />
+        <KpiCard label="Recette brute"            value="6,8 M"  sub="FCFA aujourd'hui" delta={{ value: '3%', up: true }} icon="Landmark"  accent="amber" />
+        <KpiCard label="Taux remplissage moyen"   value="78 %"   sub="sur 24 bus"      delta={{ value: '2%', up: false }} icon="BarChart3" accent="purple" />
       </div>
 
+      {/* Second row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Colis enregistrés"  value="312"  sub="18 en retard"    icon="Package"   accent="blue" />
+        <KpiCard label="Réclamations SAV"   value="7"    sub="3 critiques"     delta={{ value: '2', up: false }} icon="MessageSquareWarning" accent="red" />
+        <KpiCard label="Bus en maintenance" value="3"    sub="1 urgent"        icon="Wrench"    accent="amber" />
+        <KpiCard label="Agents connectés"   value="14"   sub="sur 18 prévus"   icon="Users"     accent="teal" />
+      </div>
+
+      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Chart */}
-        <div className="lg:col-span-2">
-          <MiniBarChart data={chartData} label="Passagers transportés — 7 derniers jours" />
-        </div>
-
-        {/* Status summary */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <p className="text-sm font-semibold text-slate-300 mb-4">Flotte aujourd'hui</p>
-          <div className="space-y-3">
-            {[
-              { label: 'Bus en service',   count: 4,  color: 'bg-teal-500' },
-              { label: 'En maintenance',   count: 1,  color: 'bg-amber-500' },
-              { label: 'Disponibles',      count: 3,  color: 'bg-slate-700' },
-              { label: 'Hors service',     count: 0,  color: 'bg-red-500' },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={cn('w-2 h-2 rounded-full', item.color)} />
-                  <span className="text-sm text-slate-400">{item.label}</span>
-                </div>
-                <span className="text-sm font-bold text-white">{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent trips */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <p className="text-sm font-semibold text-slate-300">Activité récente</p>
-          <button className="text-xs text-teal-400 hover:underline">Voir tout →</button>
-        </div>
-        <div className="divide-y divide-slate-800">
-          {recent.map(t => (
-            <div key={t.id} className="flex items-center gap-4 px-5 py-3">
-              <span className="text-sm font-mono text-slate-500 w-10 shrink-0 tabular-nums">{t.time}</span>
-              <span className="flex-1 text-sm text-white font-medium">{t.route}</span>
-              <span className="text-sm text-slate-400 hidden md:block">
-                {t.passagers > 0 ? `${t.passagers} pax` : '—'}
-              </span>
-              <span className="text-sm font-semibold text-teal-300 hidden lg:block tabular-nums w-28 text-right">
-                {t.revenue > 0 ? `${t.revenue.toLocaleString('fr-SN')} F` : '—'}
-              </span>
-              <StatusBadge status={t.status} size="sm" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page: Flotte ─────────────────────────────────────────────────────────────
-
-function PageFlotte() {
-  const buses = [
-    { id: 'b1', plaque: 'DK 4321 EF', modele: 'Mercedes Actros', capacite: 50, statut: 'IN_SERVICE',  chauffeur: 'Ousmane Faye',     km: 145000 },
-    { id: 'b2', plaque: 'DK 1234 AB', modele: 'King Long XMQ6130Y', capacite: 50, statut: 'IN_SERVICE', chauffeur: 'Mamadou Diallo', km: 89000 },
-    { id: 'b3', plaque: 'TH 0011 CD', modele: 'Yutong ZK6122HQ',    capacite: 44, statut: 'MAINTENANCE', chauffeur: '—',             km: 201000 },
-    { id: 'b4', plaque: 'DK 7722 IJ', modele: 'Mercedes Actros',    capacite: 50, statut: 'AVAILABLE',  chauffeur: '—',              km: 67000 },
-    { id: 'b5', plaque: 'SL 9900 GH', modele: 'King Long XMQ6130Y', capacite: 50, statut: 'AVAILABLE',  chauffeur: '—',              km: 134000 },
-  ];
-
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-        <p className="text-sm font-semibold text-slate-300">Gestion de la flotte</p>
-        <button className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-teal-700">
-          + Ajouter un bus
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800 text-left">
-              {['Plaque', 'Modèle', 'Capacité', 'Kilométrage', 'Chauffeur', 'Statut', ''].map(h => (
-                <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {buses.map(b => (
-              <tr key={b.id} className="hover:bg-slate-800/30 transition-colors">
-                <td className="px-5 py-3 font-mono font-semibold text-white">{b.plaque}</td>
-                <td className="px-5 py-3 text-slate-300">{b.modele}</td>
-                <td className="px-5 py-3 text-slate-400">{b.capacite} sièges</td>
-                <td className="px-5 py-3 text-slate-400 tabular-nums">{b.km.toLocaleString('fr-SN')} km</td>
-                <td className="px-5 py-3 text-slate-300">{b.chauffeur}</td>
-                <td className="px-5 py-3">
-                  <StatusBadge status={b.statut} size="sm" />
-                </td>
-                <td className="px-5 py-3">
-                  <button className="text-xs text-teal-400 hover:underline">Détails</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page: Rentabilité ────────────────────────────────────────────────────────
-
-function PageRentabilite() {
-  const snapshots = [
-    { id: 's1', date: '14/04/2026', route: 'Dakar → Ziguinchor',  revenue: 376000, cost: 280000, margin: 96000,  fillRate: 0.94, tag: 'PROFITABLE' },
-    { id: 's2', date: '14/04/2026', route: 'Dakar → Saint-Louis', revenue: 133000, cost: 112000, margin: 21000,  fillRate: 0.76, tag: 'PROFITABLE' },
-    { id: 's3', date: '13/04/2026', route: 'Dakar → Tambacounda', revenue: 88000,  cost: 95000,  margin: -7000,  fillRate: 0.32, tag: 'DEFICIT' },
-    { id: 's4', date: '13/04/2026', route: 'Dakar → Kaolack',     revenue: 117600, cost: 115000, margin: 2600,   fillRate: 0.84, tag: 'BREAK_EVEN' },
-    { id: 's5', date: '12/04/2026', route: 'Dakar → Diourbel',    revenue: 96800,  cost: 82000,  margin: 14800,  fillRate: 0.88, tag: 'PROFITABLE' },
-  ];
-
-  const tagConfig: Record<string, string> = {
-    PROFITABLE: 'bg-emerald-900/60 text-emerald-300 border-emerald-700',
-    BREAK_EVEN: 'bg-amber-900/60 text-amber-300 border-amber-700',
-    DEFICIT:    'bg-red-900/60 text-red-300 border-red-700',
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-3 gap-4">
-        <KpiCard label="Marge nette totale" value="126 400 F" delta={{ value: '4%', up: true }} icon="📈" accent="emerald" />
-        <KpiCard label="Trajets rentables"  value="4/5"       sub="80% cette semaine"          icon="✅" accent="teal" />
-        <KpiCard label="Taux remplissage moyen" value="74.8%"  delta={{ value: '2%', up: false }}  icon="💺" accent="amber" />
-      </div>
-
-      {/* Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-800">
-          <p className="text-sm font-semibold text-slate-300">Snapshots de rentabilité</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-800">
-                {['Date', 'Trajet', 'Revenu', 'Coûts', 'Marge nette', 'Taux remplissage', 'Tag'].map(h => (
-                  <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {snapshots.map(s => (
-                <tr key={s.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-5 py-3 text-slate-500 tabular-nums text-xs">{s.date}</td>
-                  <td className="px-5 py-3 text-white font-medium">{s.route}</td>
-                  <td className="px-5 py-3 text-slate-300 tabular-nums">{s.revenue.toLocaleString('fr-SN')} F</td>
-                  <td className="px-5 py-3 text-slate-300 tabular-nums">{s.cost.toLocaleString('fr-SN')} F</td>
-                  <td className={cn('px-5 py-3 font-bold tabular-nums', s.margin >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                    {s.margin >= 0 ? '+' : ''}{s.margin.toLocaleString('fr-SN')} F
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={cn('h-full rounded-full', s.fillRate >= 0.8 ? 'bg-emerald-500' : s.fillRate >= 0.5 ? 'bg-amber-500' : 'bg-red-500')}
-                          style={{ width: `${s.fillRate * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-slate-400 tabular-nums text-xs">{Math.round(s.fillRate * 100)}%</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={cn('text-[10px] font-bold px-2 py-1 rounded border uppercase', tagConfig[s.tag])}>
-                      {s.tag.replace('_', ' ')}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page: Paramètres (White Label) ──────────────────────────────────────────
-
-function PageParametres() {
-  const [brand, setBrand] = useState({
-    brandName:    'Dakar Dem Dikk',
-    primaryColor: '#0d9488',
-    secondaryColor: '#1a3a5c',
-    accentColor:  '#f59e0b',
-    bgColor:      '#ffffff',
-    textColor:    '#111827',
-    fontFamily:   'Inter, sans-serif',
-    metaTitle:    'Dakar Dem Dikk — Réservez votre billet',
-  });
-  const [saved, setSaved] = useState(false);
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* White-label form */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <p className="text-sm font-semibold text-slate-300">Personnalisation de la marque</p>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Nom de la marque</label>
-          <input
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            value={brand.brandName}
-            onChange={e => setBrand(b => ({ ...b, brandName: e.target.value }))}
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <MiniBarChart
+            label="Ventes par heure"
+            data={[
+              { label: '6h', value: 42 }, { label: '7h', value: 87 }, { label: '8h', value: 134 },
+              { label: '9h', value: 156 }, { label: '10h', value: 98 }, { label: '11h', value: 110 },
+              { label: '12h', value: 76 }, { label: '13h', value: 88 }, { label: '14h', value: 145 },
+            ]}
           />
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top lignes du jour</p>
           {[
-            { label: 'Couleur primaire',   key: 'primaryColor' },
-            { label: 'Couleur secondaire', key: 'secondaryColor' },
-            { label: 'Couleur accent',     key: 'accentColor' },
-            { label: 'Couleur texte',      key: 'textColor' },
-          ].map(({ label, key }) => (
-            <div key={key}>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</label>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="color"
-                  className="w-8 h-8 rounded border border-slate-700 bg-slate-800 cursor-pointer"
-                  value={(brand as any)[key]}
-                  onChange={e => setBrand(b => ({ ...b, [key]: e.target.value }))}
-                />
-                <input
-                  className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  value={(brand as any)[key]}
-                  onChange={e => setBrand(b => ({ ...b, [key]: e.target.value }))}
-                />
+            { route: 'BZV → PNR', pax: 312, pct: 92 },
+            { route: 'BZV → DOL', pax: 198, pct: 74 },
+            { route: 'PNR → BZV', pax: 287, pct: 88 },
+            { route: 'BZV → NKY', pax: 156, pct: 65 },
+          ].map((r, i) => (
+            <div key={i}>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-300 font-medium">{r.route}</span>
+                <span className="text-slate-500">{r.pax} pax</span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5">
+                <div className="bg-teal-500 h-1.5 rounded-full" style={{ width: `${r.pct}%` }} />
               </div>
             </div>
           ))}
         </div>
+      </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Titre de page (SEO)</label>
-          <input
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            value={brand.metaTitle}
-            onChange={e => setBrand(b => ({ ...b, metaTitle: e.target.value }))}
+      {/* Recent activity */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Activité récente</p>
+        <div className="space-y-2">
+          {[
+            { time: '14:22', msg: 'Trajet BZV→PNR 14:00 — Embarquement terminé (48/50 pax)', type: 'ok' },
+            { time: '14:18', msg: 'Retard 25 min signalé — BZV→DOL départ 14:15',            type: 'warn' },
+            { time: '14:05', msg: 'Nouvelle réclamation SAV #1284 — Bagage manquant',          type: 'err' },
+            { time: '13:58', msg: 'Caisse #3 ouverte par Sylvère Makosso',                    type: 'ok' },
+            { time: '13:45', msg: 'Bus KA-4421-B affecté au garage — maintenance préventive',  type: 'warn' },
+          ].map((e, i) => (
+            <div key={i} className="flex items-start gap-3 text-sm">
+              <span className="text-slate-600 tabular-nums shrink-0 pt-0.5">{e.time}</span>
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full mt-1.5 shrink-0',
+                e.type === 'ok' ? 'bg-emerald-500' : e.type === 'warn' ? 'bg-amber-500' : 'bg-red-500',
+              )} />
+              <span className="text-slate-300">{e.msg}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PageTrips() {
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Trajets du jour</h1>
+        <button className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <NavIcon name="MapPin" /> Nouveau trajet
+        </button>
+      </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className="text-left p-4 text-slate-500 font-medium">Départ</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Destination</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Heure</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Quai</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Pax</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { from: 'Brazzaville', to: 'Pointe-Noire', time: '08:00', quai: 'A2', pax: '48/50', status: 'En route',     color: 'text-blue-400' },
+              { from: 'Brazzaville', to: 'Dolisie',      time: '08:30', quai: 'B3', pax: '32/45', status: 'En route',     color: 'text-blue-400' },
+              { from: 'Brazzaville', to: 'Nkayi',        time: '09:15', quai: 'C1', pax: '50/50', status: 'Embarquement', color: 'text-amber-400' },
+              { from: 'Brazzaville', to: 'Pointe-Noire', time: '10:00', quai: 'A3', pax: '22/50', status: 'Prévu',        color: 'text-sky-400' },
+              { from: 'Pointe-Noire','to': 'Brazzaville',time: '07:00', quai: 'D1', pax: '50/50', status: 'Arrivé',       color: 'text-teal-400' },
+              { from: 'Brazzaville', to: 'Ouesso',       time: '06:00', quai: 'B1', pax: '38/42', status: 'Retard',       color: 'text-orange-400' },
+            ].map((r, i) => (
+              <tr key={i} className="border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors">
+                <td className="p-4 text-slate-300">{r.from}</td>
+                <td className="p-4 text-slate-100 font-medium">{r.to}</td>
+                <td className="p-4 text-slate-400 tabular-nums">{r.time}</td>
+                <td className="p-4 text-slate-400">{r.quai}</td>
+                <td className="p-4 text-slate-400 tabular-nums">{r.pax}</td>
+                <td className="p-4"><span className={cn('font-medium', r.color)}>{r.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PageAnalytics() {
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold text-white">Tableaux analytiques</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <MiniBarChart
+            label="Recette 7 derniers jours (FCFA ×1M)"
+            data={[
+              { label: 'Lun', value: 5.2 }, { label: 'Mar', value: 6.8 }, { label: 'Mer', value: 4.9 },
+              { label: 'Jeu', value: 7.1 }, { label: 'Ven', value: 8.4 }, { label: 'Sam', value: 9.2 },
+              { label: 'Dim', value: 6.7 },
+            ]}
           />
         </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <MiniBarChart
+            label="Passagers par ligne (milliers)"
+            data={[
+              { label: 'BZV↔PNR', value: 42 }, { label: 'BZV↔DOL', value: 28 }, { label: 'BZV↔NKY', value: 18 },
+              { label: 'PNR↔DOL', value: 14 }, { label: 'BZV↔OUE', value: 9 },
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <button
-          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }}
-          className="w-full py-2.5 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 text-sm"
-        >
-          {saved ? '✓ Enregistré !' : 'Sauvegarder les modifications'}
+function PageAiRoutes() {
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold text-white">Lignes rentables — Recommandations IA</h1>
+      <div className="grid gap-4">
+        {[
+          { route: 'BZV → PNR', score: 94, marge: '+38%', freq: '8x/j', conseil: 'Augmenter la fréquence le vendredi soir. Envisager un bus premium.' },
+          { route: 'BZV → DOL', score: 78, marge: '+22%', freq: '4x/j', conseil: 'Taux remplissage 82%. Ajouter 1 départ à 17h pour capter retour travail.' },
+          { route: 'PNR → DOL', score: 71, marge: '+18%', freq: '2x/j', conseil: 'Faible concurrence. Potentiel d\'augmentation tarifaire de 10-15%.' },
+          { route: 'BZV → NKY', score: 62, marge: '+12%', freq: '3x/j', conseil: 'Envisager bus de 30 places au lieu de 50. Économies carburant +8%.' },
+          { route: 'BZV → OUE', score: 41, marge: '-4%',  freq: '1x/j', conseil: 'Ligne déficitaire. Recommandation : supprimer ou réduire à 3x/semaine.' },
+        ].map((r, i) => (
+          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="font-bold text-white text-lg">{r.route}</span>
+                  <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full',
+                    r.marge.startsWith('+') ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'
+                  )}>{r.marge} marge</span>
+                  <span className="text-xs text-slate-500">{r.freq}</span>
+                </div>
+                <p className="text-slate-400 text-sm">{r.conseil}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className={cn('text-3xl font-black tabular-nums',
+                  r.score >= 80 ? 'text-emerald-400' : r.score >= 60 ? 'text-amber-400' : 'text-red-400'
+                )}>{r.score}</div>
+                <div className="text-xs text-slate-600">score</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PageFleet() {
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Flotte de véhicules</h1>
+        <button className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <NavIcon name="Bus" /> Ajouter bus
         </button>
       </div>
-
-      {/* Live preview */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Aperçu en temps réel</p>
-        <div
-          className="rounded-xl overflow-hidden border border-slate-700 shadow-lg"
-          style={{ fontFamily: brand.fontFamily, backgroundColor: brand.bgColor, color: brand.textColor }}
-        >
-          {/* Mini navbar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#e2e8f0' }}>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: brand.primaryColor }}>
-                {brand.brandName.charAt(0)}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { id: 'KA-4421-B', model: 'Yutong ZK6122H', capacity: 50, status: 'En route',    km: '124 540', nextMaint: 'dans 2 200 km', color: 'text-blue-400' },
+          { id: 'KA-2218-C', model: 'King Long XMQ',  capacity: 45, status: 'Disponible',  km: '89 320',  nextMaint: 'dans 8 100 km', color: 'text-emerald-400' },
+          { id: 'KA-0033-A', model: 'Golden Dragon',  capacity: 42, status: 'Maintenance', km: '201 800', nextMaint: 'En cours',      color: 'text-red-400' },
+          { id: 'KA-1876-D', model: 'Yutong ZK6852H', capacity: 35, status: 'Disponible',  km: '56 000',  nextMaint: 'dans 12 000 km', color: 'text-emerald-400' },
+          { id: 'KA-5544-E', model: 'Higer KLQ6122',  capacity: 50, status: 'En route',    km: '148 000', nextMaint: 'dans 500 km',   color: 'text-amber-400' },
+        ].map((v, i) => (
+          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="font-bold text-white">{v.id}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{v.model}</p>
               </div>
-              <span className="text-sm font-bold">{brand.brandName}</span>
+              <span className={cn('text-xs font-semibold', v.color)}>{v.status}</span>
             </div>
-            <div className="w-14 h-5 rounded text-[10px] font-semibold flex items-center justify-center text-white" style={{ backgroundColor: brand.primaryColor }}>
-              Connexion
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <p className="text-slate-600 text-xs">Capacité</p>
+                <p className="text-slate-300">{v.capacity} sièges</p>
+              </div>
+              <div>
+                <p className="text-slate-600 text-xs">Kilométrage</p>
+                <p className="text-slate-300 tabular-nums">{v.km} km</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-slate-600 text-xs">Prochaine maintenance</p>
+                <p className={cn('text-sm font-medium',
+                  v.nextMaint.includes('500') || v.nextMaint === 'En cours' ? 'text-red-400' : 'text-slate-300'
+                )}>{v.nextMaint}</p>
+              </div>
             </div>
           </div>
-          {/* Mini hero */}
-          <div className="px-4 py-5 text-white text-center" style={{ background: `linear-gradient(135deg, ${brand.primaryColor}, ${brand.secondaryColor})` }}>
-            <p className="text-sm font-bold">Voyagez partout</p>
-            <p className="text-xs opacity-80 mt-0.5">Réservez vos billets</p>
-            <div className="mt-3 bg-white rounded-lg px-3 py-1.5 inline-block">
-              <span className="text-xs font-semibold" style={{ color: brand.primaryColor }}>Rechercher un trajet</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PageCashier() {
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">Caisse</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-slate-400 text-sm">Caisse #2 — ouverture 08:00</p>
+              <p className="text-3xl font-black text-white tabular-nums mt-1">1 248 500 <span className="text-sm font-normal text-slate-500">FCFA</span></p>
             </div>
+            <button className="bg-red-900/40 hover:bg-red-800/60 text-red-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              Clôturer caisse
+            </button>
           </div>
-          {/* Mini button preview */}
-          <div className="px-4 py-3 flex gap-2">
-            <div className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold" style={{ backgroundColor: brand.primaryColor }}>
-              Réserver
-            </div>
-            <div className="px-3 py-1.5 rounded-lg text-xs font-semibold border" style={{ borderColor: brand.accentColor, color: brand.accentColor }}>
-              En savoir plus
-            </div>
+          <div className="border-t border-slate-800 pt-4 space-y-2">
+            {[
+              { time: '14:20', op: 'Vente billet BZV→PNR — M. Loemba',    montant: '+8 500', ok: true },
+              { time: '14:18', op: 'Vente billet BZV→DOL — Mme Nzinga',   montant: '+5 200', ok: true },
+              { time: '14:10', op: 'Remboursement #1281 — M. Tchibamba',   montant: '-8 500', ok: false },
+              { time: '13:55', op: 'Colis enregistré — Expéditeur Bakala', montant: '+2 500', ok: true },
+              { time: '13:45', op: 'Vente billet BZV→NKY — M. Kimbuta',   montant: '+4 000', ok: true },
+            ].map((t, i) => (
+              <div key={i} className="flex items-center justify-between text-sm py-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-600 tabular-nums w-12 shrink-0">{t.time}</span>
+                  <span className="text-slate-300">{t.op}</span>
+                </div>
+                <span className={cn('tabular-nums font-semibold shrink-0', t.ok ? 'text-emerald-400' : 'text-red-400')}>
+                  {t.montant}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-        <p className="text-xs text-slate-600 mt-3 text-center">
-          {brand.metaTitle}
-        </p>
+        <div className="space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Résumé du jour</p>
+            {[
+              { label: 'Ventes billets',  value: '1 324 000', color: 'text-emerald-400' },
+              { label: 'Ventes colis',    value: '87 500',    color: 'text-emerald-400' },
+              { label: 'Remboursements',  value: '-163 000',  color: 'text-red-400' },
+              { label: 'Net',             value: '1 248 500', color: 'text-white font-bold' },
+            ].map((r, i) => (
+              <div key={i} className="flex justify-between py-1.5 border-b border-slate-800 last:border-0 text-sm">
+                <span className="text-slate-400">{r.label}</span>
+                <span className={cn('tabular-nums', r.color)}>{r.value} FCFA</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Page: Trajets ────────────────────────────────────────────────────────────
-
-function PageTrajets() {
-  const trips = [
-    { id: 't1', ref: 'TRP-20260414-001', route: 'Dakar → Ziguinchor',  heure: '08:15', bus: 'DK 4321 EF', chauffeur: 'Ousmane Faye',     pax: 47, status: 'IN_TRANSIT' },
-    { id: 't2', ref: 'TRP-20260414-002', route: 'Dakar → Saint-Louis', heure: '07:00', bus: 'DK 1234 AB', chauffeur: 'Mamadou Diallo',    pax: 38, status: 'COMPLETED' },
-    { id: 't3', ref: 'TRP-20260414-003', route: 'Dakar → Tambacounda', heure: '09:00', bus: 'DK 7722 IJ', chauffeur: 'Abdoulaye Ndiaye',  pax: 0,  status: 'SCHEDULED' },
-    { id: 't4', ref: 'TRP-20260414-004', route: 'Dakar → Diourbel',    heure: '09:15', bus: 'DB 5544 KL', chauffeur: 'Alassane Mbaye',    pax: 0,  status: 'SCHEDULED' },
-  ];
-
+function PageCrm() {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-        <p className="text-sm font-semibold text-slate-300">Trajets — 14 avril 2026</p>
-        <button className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-teal-700">
-          + Planifier un trajet
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">CRM — Clients</h1>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Clients actifs"     value="18 432" sub="ce mois"       icon="Users2"    accent="teal" />
+        <KpiCard label="Nouveaux ce mois"   value="1 284"  sub="+12% vs N-1"   icon="TrendingUp" accent="emerald" />
+        <KpiCard label="NPS Score"          value="72"     sub="cible : 75"    icon="Star"       accent="amber" />
+        <KpiCard label="Réclamations"       value="48"     sub="7 non résolues" icon="MessageCircle" accent="red" />
+      </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Clients récents</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className="text-left p-3 text-slate-500 font-medium">Nom</th>
+              <th className="text-left p-3 text-slate-500 font-medium">Téléphone</th>
+              <th className="text-left p-3 text-slate-500 font-medium">Trajets</th>
+              <th className="text-left p-3 text-slate-500 font-medium">Fidélité</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { name: 'Alphonse Moubamba', tel: '+242 06 123 4567', trips: 24, points: 2400, tier: 'Gold' },
+              { name: 'Berthe Louzolo',    tel: '+242 05 987 6543', trips: 8,  points: 800,  tier: 'Silver' },
+              { name: 'Constant Nkounkou', tel: '+242 06 456 7890', trips: 42, points: 4200, tier: 'Platinum' },
+              { name: 'Denise Batsimba',   tel: '+242 05 321 0987', trips: 3,  points: 300,  tier: 'Bronze' },
+            ].map((c, i) => (
+              <tr key={i} className="border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors">
+                <td className="p-3 text-slate-100 font-medium">{c.name}</td>
+                <td className="p-3 text-slate-400 tabular-nums">{c.tel}</td>
+                <td className="p-3 text-slate-400 tabular-nums">{c.trips}</td>
+                <td className="p-3">
+                  <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full',
+                    c.tier === 'Platinum' ? 'bg-purple-900/60 text-purple-300' :
+                    c.tier === 'Gold'     ? 'bg-amber-900/60 text-amber-300' :
+                    c.tier === 'Silver'   ? 'bg-slate-700 text-slate-300' :
+                                           'bg-amber-950/40 text-amber-700',
+                  )}>{c.tier}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PageWorkflowStudio() {
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">Workflow Studio</h1>
+      <p className="text-slate-400 text-sm">Concevez et simulez vos workflows métier. Les blueprints sont appliqués en temps réel via le moteur d'état TranslogPro.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {[
+          { name: 'Cycle vie Trajet',       states: 9,  transitions: 14, version: 'v3.1', status: 'Actif',    color: 'text-emerald-400' },
+          { name: 'Workflow Billet',        states: 6,  transitions: 10, version: 'v2.0', status: 'Actif',    color: 'text-emerald-400' },
+          { name: 'Gestion Colis',          states: 7,  transitions: 11, version: 'v1.5', status: 'Actif',    color: 'text-emerald-400' },
+          { name: 'Onboarding Chauffeur',   states: 4,  transitions: 5,  version: 'v1.0', status: 'Actif',    color: 'text-emerald-400' },
+          { name: 'Réclamation SAV',        states: 5,  transitions: 8,  version: 'v1.2-beta', status: 'Draft', color: 'text-amber-400' },
+          { name: 'Maintenance Préventive', states: 3,  transitions: 4,  version: 'v0.9', status: 'Draft',    color: 'text-amber-400' },
+        ].map((wf, i) => (
+          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors cursor-pointer">
+            <div className="flex items-start justify-between mb-3">
+              <p className="font-semibold text-white">{wf.name}</p>
+              <span className={cn('text-xs font-semibold', wf.color)}>{wf.status}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs text-center">
+              <div><p className="text-slate-600">États</p><p className="text-slate-300 font-bold">{wf.states}</p></div>
+              <div><p className="text-slate-600">Transitions</p><p className="text-slate-300 font-bold">{wf.transitions}</p></div>
+              <div><p className="text-slate-600">Version</p><p className="text-slate-300 font-bold">{wf.version}</p></div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button className="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 rounded-lg transition-colors">Éditer</button>
+              <button className="flex-1 text-xs bg-teal-900/40 hover:bg-teal-800/60 text-teal-400 py-1.5 rounded-lg transition-colors">Simuler</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PageIam() {
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">Utilisateurs & Rôles</h1>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className="text-left p-4 text-slate-500 font-medium">Nom</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Rôle</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Agence</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Statut</th>
+              <th className="text-left p-4 text-slate-500 font-medium">Dernière connexion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DEMO_USERS.map((u, i) => (
+              <tr key={i} className="border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors">
+                <td className="p-4 text-slate-100 font-medium">{u.name}</td>
+                <td className="p-4">
+                  <span className="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded">{u.role}</span>
+                </td>
+                <td className="p-4 text-slate-400">{u.agence}</td>
+                <td className="p-4"><span className="text-xs text-emerald-400 font-semibold">Actif</span></td>
+                <td className="p-4 text-slate-500 tabular-nums">14/04/2026 14:22</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PageSafety() {
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">Sécurité & Incidents</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-red-950/30 border border-red-900/50 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-red-900/60 flex items-center justify-center">
+              <NavIcon name="Siren" className="text-red-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-white text-sm">Alerte active — RN1 km 145</p>
+              <p className="text-xs text-red-400">Il y a 18 minutes</p>
+            </div>
+          </div>
+          <p className="text-sm text-slate-300">Ralentissement important dû à des travaux. 3 bus TranslogPro actuellement sur ce tronçon. Délai estimé : +30 min.</p>
+        </div>
+        <div className="bg-amber-950/20 border border-amber-900/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-amber-900/40 flex items-center justify-center">
+              <NavIcon name="AlertTriangle" className="text-amber-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-white text-sm">Signalement — Bus KA-4421-B</p>
+              <p className="text-xs text-amber-400">Il y a 1h 42min</p>
+            </div>
+          </div>
+          <p className="text-sm text-slate-300">Chauffeur Mabou signale une vibration anormale. Bus redirigé vers Dolisie pour inspection technique.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PageDisplay() {
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold text-white">Écrans & Afficheurs</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { name: 'Grand Hall — Tableaux Départs',  type: 'DepartureBoard',  status: 'En ligne',  last: '14:22:01' },
+          { name: 'Quai A — Écran Bus',             type: 'BusScreen',       status: 'En ligne',  last: '14:22:18' },
+          { name: 'Quai B — Écran Bus',             type: 'BusScreen',       status: 'En ligne',  last: '14:21:55' },
+          { name: 'Quai C — Écran Quai',            type: 'QuaiScreen',      status: 'En ligne',  last: '14:22:10' },
+          { name: 'Salle Attente — Infos',          type: 'InfoBoard',       status: 'Hors ligne', last: '10:15:44' },
+          { name: 'Entrée — Kiosque',               type: 'Kiosk',           status: 'En ligne',  last: '14:21:58' },
+        ].map((s, i) => (
+          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="font-semibold text-white text-sm">{s.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{s.type}</p>
+              </div>
+              <span className={cn('text-xs font-semibold', s.status === 'En ligne' ? 'text-emerald-400' : 'text-red-400')}>
+                {s.status}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">Dernière mise à jour : {s.last}</p>
+            <button className="mt-3 w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 rounded-lg transition-colors">
+              Configurer
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PageWip({ title }: { title: string }) {
+  return (
+    <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center">
+        <NavIcon name="Puzzle" className="w-8 h-8 text-slate-500" />
+      </div>
+      <h1 className="text-xl font-bold text-white">{title}</h1>
+      <p className="text-slate-500 max-w-sm text-sm">Cette page est en cours de développement. Elle sera disponible dans le prochain sprint.</p>
+      <span className="text-xs bg-amber-900/40 text-amber-400 px-3 py-1 rounded-full font-semibold">En développement</span>
+    </div>
+  );
+}
+
+// ─── Routeur local (SPA sans react-router) ────────────────────────────────────
+
+function PageRouter({ activeId }: { activeId: string | null }) {
+  switch (activeId) {
+    case 'dashboard':          return <PageDashboard />;
+    case 'trips':
+    case 'trips-list':         return <PageTrips />;
+    case 'trips-planning':     return <PageWip title="Planning hebdomadaire" />;
+    case 'routes':             return <PageWip title="Lignes & Routes" />;
+    case 'trips-delays':       return <PageWip title="Retards & Alertes" />;
+    case 'tickets-new':        return <PageWip title="Vendre un billet" />;
+    case 'tickets-list':       return <PageWip title="Billets émis" />;
+    case 'tickets-cancel':     return <PageWip title="Annulations" />;
+    case 'manifests':          return <PageWip title="Manifestes" />;
+    case 'parcel-new':         return <PageWip title="Enregistrer un colis" />;
+    case 'parcels-list':       return <PageWip title="Suivi colis" />;
+    case 'shipments':          return <PageWip title="Expéditions groupées" />;
+    case 'sav-claims':         return <PageWip title="Réclamations SAV" />;
+    case 'sav-reports':        return <PageWip title="Signalements" />;
+    case 'sav-returns':        return <PageWip title="Remboursements" />;
+    case 'cashier':            return <PageCashier />;
+    case 'pricing-grid':       return <PageWip title="Grille tarifaire" />;
+    case 'pricing-yield':      return <PageWip title="Yield Management" />;
+    case 'pricing-promo':      return <PageWip title="Promotions" />;
+    case 'invoices':           return <PageWip title="Facturation" />;
+    case 'analytics':          return <PageAnalytics />;
+    case 'ai-routes':          return <PageAiRoutes />;
+    case 'ai-fleet':           return <PageWip title="Optimisation flotte" />;
+    case 'ai-demand':          return <PageWip title="Prévisions demande" />;
+    case 'ai-pricing':         return <PageWip title="Tarifs dynamiques" />;
+    case 'reports':            return <PageWip title="Rapports périodiques" />;
+    case 'fleet-vehicles':     return <PageFleet />;
+    case 'fleet-seats':        return <PageWip title="Plans de sièges" />;
+    case 'maintenance-list':   return <PageWip title="Fiches de maintenance" />;
+    case 'maintenance-planning': return <PageWip title="Planning garage" />;
+    case 'maintenance-alerts': return <PageWip title="Alertes techniques" />;
+    case 'drivers':            return <PageWip title="Chauffeurs" />;
+    case 'staff-list':         return <PageWip title="Personnel" />;
+    case 'crew-planning':      return <PageWip title="Planning équipages" />;
+    case 'crm-clients':        return <PageCrm />;
+    case 'crm-campaigns':      return <PageWip title="Campagnes marketing" />;
+    case 'crm-loyalty':        return <PageWip title="Programme fidélité" />;
+    case 'crm-feedback':       return <PageWip title="Avis & Feedbacks" />;
+    case 'display-screens':    return <PageDisplay />;
+    case 'display-quais':      return <PageWip title="Gestion des quais" />;
+    case 'display-announcements': return <PageWip title="Annonces gare" />;
+    case 'safety-incidents':   return <PageSafety />;
+    case 'safety-monitor':     return <PageWip title="Suivi temps réel" />;
+    case 'safety-sos':         return <PageWip title="Alertes SOS" />;
+    case 'workflow-studio':    return <PageWorkflowStudio />;
+    case 'wf-blueprints':      return <PageWip title="Blueprints" />;
+    case 'wf-marketplace':     return <PageWip title="Marketplace" />;
+    case 'wf-simulate':        return <PageWip title="Simulateur" />;
+    case 'modules':            return <PageWip title="Modules & Extensions" />;
+    case 'white-label':        return <PageWip title="White-label & Thème" />;
+    case 'integrations':       return <PageWip title="Intégrations API" />;
+    case 'documents-templates': return <PageWip title="Modèles de documents" />;
+    case 'iam-users':          return <PageIam />;
+    case 'iam-roles':          return <PageWip title="Rôles" />;
+    case 'iam-audit':          return <PageWip title="Journal d'accès" />;
+    case 'iam-sessions':       return <PageWip title="Sessions" />;
+    case 'tenants':            return <PageWip title="Gestion des tenants" />;
+    case 'platform-staff':     return <PageWip title="Staff plateforme" />;
+    case 'impersonation':      return <PageWip title="Impersonation JIT" />;
+    case 'debug-workflow':     return <PageWip title="Workflow debug" />;
+    case 'debug-outbox':       return <PageWip title="Outbox replay" />;
+    case 'notifications':      return <PageWip title="Notifications" />;
+    default:                   return <PageDashboard />;
+  }
+}
+
+// ─── Sidebar nav items renderer ──────────────────────────────────────────────
+
+function SidebarNavItem({
+  item, activeId, onSelect, depth = 0,
+}: {
+  item:     ResolvedNavItem;
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  depth?:   number;
+}) {
+  const [expanded, setExpanded] = useState(() => {
+    if (!item.children) return false;
+    return item.children.some(c => c.id === activeId);
+  });
+  const isActive = item.id === activeId || item.children?.some(c => c.id === activeId);
+
+  if (item.children) {
+    return (
+      <li>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className={cn(
+            'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
+            isActive ? 'bg-slate-700/60 text-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
+          )}
+        >
+          <NavIcon name={item.icon} />
+          <span className="flex-1 truncate">{item.label}</span>
+          <svg
+            className={cn('w-3.5 h-3.5 shrink-0 transition-transform', expanded ? 'rotate-180' : '')}
+            viewBox="0 0 20 20" fill="currentColor" aria-hidden
+          >
+            <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+          </svg>
         </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800">
-              {['Référence', 'Trajet', 'Heure', 'Bus', 'Chauffeur', 'Passagers', 'Statut'].map(h => (
-                <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-left">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {trips.map(t => (
-              <tr key={t.id} className="hover:bg-slate-800/30 transition-colors cursor-pointer">
-                <td className="px-5 py-3 font-mono text-xs text-slate-500">{t.ref}</td>
-                <td className="px-5 py-3 text-white font-medium">{t.route}</td>
-                <td className="px-5 py-3 text-slate-300 tabular-nums font-semibold">{t.heure}</td>
-                <td className="px-5 py-3 font-mono text-slate-400 text-xs">{t.bus}</td>
-                <td className="px-5 py-3 text-slate-300">{t.chauffeur}</td>
-                <td className="px-5 py-3 text-slate-400 tabular-nums">{t.pax > 0 ? t.pax : '—'}</td>
-                <td className="px-5 py-3"><StatusBadge status={t.status} size="sm" /></td>
-              </tr>
+        {expanded && (
+          <ul className="mt-0.5 ml-3 pl-3 border-l border-slate-800 space-y-0.5">
+            {item.children.map(child => (
+              <li key={child.id}>
+                <button
+                  onClick={() => onSelect(child.id)}
+                  disabled={child.wip}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors text-left',
+                    child.id === activeId
+                      ? 'bg-teal-900/40 text-teal-300 font-medium'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60',
+                    child.wip && 'opacity-40 cursor-not-allowed',
+                  )}
+                >
+                  <NavIcon name={child.icon} className="w-3.5 h-3.5" />
+                  <span className="flex-1 truncate">{child.label}</span>
+                  {child.wip && <span className="text-[9px] bg-amber-900/40 text-amber-500 px-1 rounded">WIP</span>}
+                  {child.badge != null && (
+                    <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {child.badge}
+                    </span>
+                  )}
+                </button>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page: Billetterie ────────────────────────────────────────────────────────
-
-function PageBilletterie() {
-  const tickets = [
-    { id: 'TLP-A1B2C3', passager: 'Moussa Diallo',   route: 'Dakar → Ziguinchor',  prix: 8000,  mode: 'Wave',         status: 'CONFIRMED' },
-    { id: 'TLP-D4E5F6', passager: 'Fatou Ba',         route: 'Dakar → Kaolack',     prix: 2800,  mode: 'Cash',         status: 'BOARDED' },
-    { id: 'TLP-G7H8I9', passager: 'Ibrahima Seck',    route: 'Dakar → Saint-Louis', prix: 3500,  mode: 'Orange Money', status: 'CONFIRMED' },
-    { id: 'TLP-J1K2L3', passager: 'Aissatou Diallo',  route: 'Dakar → Tambacounda', prix: 5500,  mode: 'Wave',         status: 'PENDING' },
-    { id: 'TLP-M4N5O6', passager: 'Cheikh Touré',     route: 'Dakar → Ziguinchor',  prix: 8000,  mode: 'Cash',         status: 'CANCELLED' },
-  ];
+          </ul>
+        )}
+      </li>
+    );
+  }
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-800">
-        <p className="text-sm font-semibold text-slate-300">Billets du jour</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800">
-              {['Code', 'Passager', 'Trajet', 'Prix', 'Mode', 'Statut'].map(h => (
-                <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-left">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {tickets.map(t => (
-              <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
-                <td className="px-5 py-3 font-mono text-xs text-teal-400">{t.id}</td>
-                <td className="px-5 py-3 text-white font-medium">{t.passager}</td>
-                <td className="px-5 py-3 text-slate-300">{t.route}</td>
-                <td className="px-5 py-3 text-slate-300 tabular-nums">{t.prix.toLocaleString('fr-SN')} F</td>
-                <td className="px-5 py-3 text-slate-400 text-xs">{t.mode}</td>
-                <td className="px-5 py-3"><StatusBadge status={t.status} size="sm" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <li>
+      <button
+        onClick={() => onSelect(item.id)}
+        disabled={item.wip}
+        className={cn(
+          'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
+          item.id === activeId
+            ? 'bg-teal-900/40 text-teal-300'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
+          item.wip && 'opacity-40 cursor-not-allowed',
+        )}
+      >
+        <NavIcon name={item.icon} />
+        <span className="flex-1 truncate">{item.label}</span>
+        {item.wip && <span className="text-[9px] bg-amber-900/40 text-amber-500 px-1 rounded">WIP</span>}
+        {item.badge != null && (
+          <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {item.badge}
+          </span>
+        )}
+      </button>
+    </li>
   );
 }
 
-// ─── Icônes SVG mini ─────────────────────────────────────────────────────────
-
-function Icon({ name }: { name: string }) {
-  const paths: Record<string, string> = {
-    dashboard:     'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-    bus:           'M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM4 10h16M4 6h16M6 6v4m12-4v4M3 10l1 7h16l1-7',
-    tickets:       'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z',
-    chart:         'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-    settings:      'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    route:         'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7',
-  };
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d={paths[name] || paths['dashboard']} />
-    </svg>
-  );
+function buildNavGroups(sections: ResolvedNavSection[], activeId: string | null, onSelect: (id: string) => void) {
+  return sections.map(section => ({
+    title: section.title,
+    items: section.items.map(item => ({
+      label:  item.label,
+      href:   '#',
+      icon:   <NavIcon name={item.icon} />,
+      active: item.id === activeId || item.children?.some(c => c.id === activeId),
+      badge:  item.badge,
+      // override rendering via customItems
+      _item:  item,
+    })),
+    _section: section,
+  }));
 }
 
-// ─── Composant principal ──────────────────────────────────────────────────────
+// ─── AdminDashboard ───────────────────────────────────────────────────────────
 
 export function AdminDashboard() {
-  const [page, setPage] = useState<AdminPage>('dashboard');
+  const [currentUserIdx, setCurrentUserIdx] = useState(0);
+  const currentUser = DEMO_USERS[currentUserIdx]!;
+  const permissions = ROLE_PERMISSIONS[currentUser.role] ?? [];
 
-  const PAGE_TITLES: Record<AdminPage, string> = {
-    dashboard:    'Tableau de bord',
-    flotte:       'Gestion de la flotte',
-    trajets:      'Trajets',
-    billetterie:  'Billetterie',
-    rentabilite:  'Rentabilité',
-    parametres:   'Paramètres',
-  };
+  const { sections, activeId, setActiveId } = useNavigation({
+    config:      ADMIN_NAV,
+    permissions,
+    currentHref: '/admin',
+  });
 
-  const navGroups = [
-    {
-      items: [
-        { label: 'Tableau de bord', href: '#', icon: <Icon name="dashboard" />,  active: page === 'dashboard',   onClick: () => setPage('dashboard') },
-      ],
-    },
-    {
-      title: 'Opérations',
-      items: [
-        { label: 'Flotte',       href: '#', icon: <Icon name="bus" />,   active: page === 'flotte',      onClick: () => setPage('flotte') },
-        { label: 'Trajets',      href: '#', icon: <Icon name="route" />, active: page === 'trajets',     onClick: () => setPage('trajets') },
-        { label: 'Billetterie',  href: '#', icon: <Icon name="tickets" />, active: page === 'billetterie', onClick: () => setPage('billetterie') },
-      ],
-    },
-    {
-      title: 'Analytique',
-      items: [
-        { label: 'Rentabilité', href: '#', icon: <Icon name="chart" />,    active: page === 'rentabilite', onClick: () => setPage('rentabilite') },
-      ],
-    },
-    {
-      title: 'Configuration',
-      items: [
-        { label: 'Paramètres', href: '#', icon: <Icon name="settings" />, active: page === 'parametres',  onClick: () => setPage('parametres') },
-      ],
-    },
-  ];
+  const [localActiveId, setLocalActiveId] = useState<string | null>('dashboard');
 
-  // Wrap nav items to intercept clicks (SidebarLayout uses <a> tags)
-  const navGroupsWithClick = navGroups.map(group => ({
-    ...group,
-    items: group.items.map(item => ({
-      ...item,
-      href: '#',
-    })),
-  }));
+  const effectiveActiveId = localActiveId ?? activeId;
+
+  const handleSelect = (id: string) => setLocalActiveId(id);
+
+  // Build custom sidebar content from resolved sections
+  const sidebarContent = useMemo(() => (
+    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4" aria-label="Navigation principale">
+      {sections.map(section => (
+        <div key={section.id}>
+          {section.title && (
+            <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              {section.title}
+            </div>
+          )}
+          <ul role="list" className="space-y-0.5">
+            {section.items.map(item => (
+              <SidebarNavItem
+                key={item.id}
+                item={item}
+                activeId={effectiveActiveId}
+                onSelect={handleSelect}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  ), [sections, effectiveActiveId]);
 
   const logo = (
     <div className="flex items-center gap-2">
-      <div className="w-7 h-7 bg-teal-600 rounded-md flex items-center justify-center text-white font-black text-xs">T</div>
-      <span className="font-bold text-white text-sm">TranslogPro</span>
+      <div className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center text-white font-black text-sm">T</div>
+      <span className="font-bold text-white text-sm tracking-wide">TranslogPro</span>
     </div>
   );
 
   const userPanel = (
-    <div className="flex items-center gap-2">
-      <div className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-        AD
+    <div className="space-y-3">
+      {/* Role switcher (démo uniquement) */}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Démo — profil</p>
+        <select
+          value={currentUserIdx}
+          onChange={e => { setCurrentUserIdx(Number(e.target.value)); setLocalActiveId('dashboard'); }}
+          className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
+        >
+          {DEMO_USERS.map((u, i) => (
+            <option key={i} value={i}>{u.role}</option>
+          ))}
+        </select>
       </div>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-slate-200 truncate">Admin Dakar Dem Dikk</p>
-        <p className="text-[10px] text-slate-500 truncate">admin@ddd.sn</p>
+      {/* User info */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          {currentUser.avatar}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-200 truncate">{currentUser.name}</p>
+          <p className="text-[10px] text-slate-500 truncate">{currentUser.agence}</p>
+        </div>
+      </div>
+      <div className="text-[10px] text-slate-600 tabular-nums">
+        {sections.reduce((acc, s) => acc + s.items.reduce((a, i) => a + 1 + (i.children?.length ?? 0), 0), 0)} items visibles
+        {' '}· {permissions.length} permissions
       </div>
     </div>
   );
 
+  // Custom sidebar bypassing SidebarLayout's internal nav rendering
   return (
-    <div onClick={e => {
-      // Capture nav link clicks
-      const target = (e.target as HTMLElement).closest('a');
-      if (target) {
-        e.preventDefault();
-        const label = target.querySelector('span.flex-1')?.textContent;
-        const map: Record<string, AdminPage> = {
-          'Tableau de bord': 'dashboard',
-          'Flotte': 'flotte',
-          'Trajets': 'trajets',
-          'Billetterie': 'billetterie',
-          'Rentabilité': 'rentabilite',
-          'Paramètres': 'parametres',
-        };
-        if (label && map[label]) setPage(map[label]);
-      }
-    }}>
-      <SidebarLayout
-        logo={logo}
-        navGroups={navGroupsWithClick}
-        userPanel={userPanel}
+    <div className="flex h-screen overflow-hidden bg-slate-950">
+      {/* Sidebar desktop */}
+      <aside
+        aria-label="Navigation principale"
+        className="hidden lg:flex flex-col w-64 shrink-0 bg-slate-900 border-r border-slate-800"
       >
-        {/* Page content */}
-        <div className="p-6 space-y-6 min-h-screen bg-slate-950">
-          {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-white">{PAGE_TITLES[page]}</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                {new Date().toLocaleDateString('fr-SN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-          </div>
-
-          {/* Page body */}
-          {page === 'dashboard'   && <PageDashboard />}
-          {page === 'flotte'      && <PageFlotte />}
-          {page === 'trajets'     && <PageTrajets />}
-          {page === 'billetterie' && <PageBilletterie />}
-          {page === 'rentabilite' && <PageRentabilite />}
-          {page === 'parametres'  && <PageParametres />}
+        <div className="flex h-14 items-center px-4 border-b border-slate-800 shrink-0">
+          {logo}
         </div>
-      </SidebarLayout>
+        {sidebarContent}
+        <div className="shrink-0 border-t border-slate-800 p-3">
+          {userPanel}
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 overflow-y-auto bg-slate-950" role="main">
+        <PageRouter activeId={effectiveActiveId} />
+      </main>
     </div>
   );
 }
-
-export default AdminDashboard;

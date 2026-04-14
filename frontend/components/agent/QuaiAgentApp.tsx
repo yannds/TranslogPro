@@ -22,10 +22,40 @@
 
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
+import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabQ = 'manifeste' | 'chargement' | 'scanner';
+
+/** Permissions pertinentes pour cet écran */
+const P_MANIFEST_SIGN    = 'data.manifest.sign.agency';
+const P_MANIFEST_GENERATE = 'data.manifest.generate.agency';
+const P_PARCEL_SCAN      = 'data.parcel.scan.agency';
+const P_TICKET_SCAN      = 'data.ticket.scan.agency';
+const P_TRIP_UPDATE      = 'data.trip.update.agency';
+
+interface TabQDef {
+  id:    TabQ;
+  label: string;
+  icon:  string;
+  badge?: number;
+  anyOf: string[];
+}
+
+type DemoRoleKeyQ = keyof typeof ROLE_PERMISSIONS;
+
+const DEMO_ROLES_Q: DemoRoleKeyQ[] = ['QUAI_AGENT', 'SUPERVISOR', 'STATION_AGENT'];
+
+function filterTabsQ(permissions: string[], badges: Record<TabQ, number | undefined>): TabQDef[] {
+  const perms = new Set(permissions);
+  const all: TabQDef[] = [
+    { id: 'manifeste',  label: 'Manifeste',  icon: '💺', badge: badges.manifeste,  anyOf: [P_MANIFEST_SIGN, P_MANIFEST_GENERATE, P_TRIP_UPDATE] },
+    { id: 'chargement', label: 'Chargement', icon: '📦', badge: badges.chargement, anyOf: [P_PARCEL_SCAN] },
+    { id: 'scanner',    label: 'Scanner',    icon: '📷', anyOf: [P_TICKET_SCAN, P_PARCEL_SCAN] },
+  ];
+  return all.filter(t => t.anyOf.some(p => perms.has(p)));
+}
 
 type SeatStatus = 'LIBRE' | 'CONFIRME' | 'BORDE' | 'ABSENT' | 'BLOQUE';
 
@@ -331,13 +361,21 @@ function TabScanner() {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function QuaiAgentApp() {
-  const [tab, setTab] = useState<TabQ>('manifeste');
+  const [roleIdx, setRoleIdx] = useState(0);
+  const roleKey               = DEMO_ROLES_Q[roleIdx] as DemoRoleKeyQ;
+  const permissions           = ROLE_PERMISSIONS[roleKey] ?? [];
 
-  const TABS: { id: TabQ; label: string; icon: string; badge?: number }[] = [
-    { id: 'manifeste',  label: 'Manifeste',  icon: '💺', badge: SEATS.filter(s => s.status === 'ABSENT').length },
-    { id: 'chargement', label: 'Chargement', icon: '📦', badge: COLIS_LIST.filter(c => c.status === 'EN_ATTENTE').length },
-    { id: 'scanner',    label: 'Scanner',    icon: '📷' },
-  ];
+  const badges: Record<TabQ, number | undefined> = {
+    manifeste:  SEATS.filter(s => s.status === 'ABSENT').length,
+    chargement: COLIS_LIST.filter(c => c.status === 'EN_ATTENTE').length,
+    scanner:    undefined,
+  };
+
+  const TABS = filterTabsQ(permissions, badges);
+  const [tab, setTab] = useState<TabQ>(() => filterTabsQ(ROLE_PERMISSIONS[DEMO_ROLES_Q[0]!] ?? [], badges)[0]?.id ?? 'manifeste');
+
+  const visibleIds = TABS.map(t => t.id);
+  const effectiveTab: TabQ = visibleIds.includes(tab) ? tab : (visibleIds[0] ?? 'manifeste');
 
   const boarded  = SEATS.filter(s => s.status === 'BORDE').length;
   const capacity = SEATS.length;
@@ -351,12 +389,22 @@ export function QuaiAgentApp() {
       <header className="px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <p className="font-bold text-white">Quai A3 — Ziguinchor</p>
-            <p className="text-xs text-slate-400">Départ 08:15 · Senbus · DK 4321 EF</p>
+            <p className="font-bold text-white">Quai A2 — Pointe-Noire</p>
+            <p className="text-xs text-slate-400">Départ 10:00 · Congo Express · KA-1876-D</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 bg-amber-900/60 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg text-xs font-bold uppercase animate-pulse">
-            Embarquement
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Role switcher démo */}
+            <select
+              value={roleIdx}
+              onChange={e => { const idx = Number(e.target.value); setRoleIdx(idx); const tabs = filterTabsQ(ROLE_PERMISSIONS[DEMO_ROLES_Q[idx]!] ?? [], badges); setTab(tabs[0]?.id ?? 'manifeste'); }}
+              className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none"
+            >
+              {DEMO_ROLES_Q.map((r, i) => <option key={r} value={i}>{r}</option>)}
+            </select>
+            <span className="inline-flex items-center gap-1.5 bg-amber-900/60 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg text-xs font-bold uppercase animate-pulse">
+              Embarquement
+            </span>
+          </div>
         </div>
         {/* Occupancy mini-bar */}
         <div className="flex items-center gap-2">
@@ -372,7 +420,7 @@ export function QuaiAgentApp() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs — filtrés par permissions */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
         {TABS.map(t => (
           <button
@@ -380,7 +428,7 @@ export function QuaiAgentApp() {
             onClick={() => setTab(t.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors relative',
-              tab === t.id
+              effectiveTab === t.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300',
             )}
@@ -398,9 +446,9 @@ export function QuaiAgentApp() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'manifeste'  && <TabManifeste />}
-        {tab === 'chargement' && <TabChargement />}
-        {tab === 'scanner'    && <TabScanner />}
+        {effectiveTab === 'manifeste'  && <TabManifeste />}
+        {effectiveTab === 'chargement' && <TabChargement />}
+        {effectiveTab === 'scanner'    && <TabScanner />}
       </div>
     </div>
   );

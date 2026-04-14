@@ -26,10 +26,39 @@
 
 import { useState, type FormEvent } from 'react';
 import { cn } from '../../lib/utils';
+import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'vente' | 'checkin' | 'colis' | 'caisse';
+
+/** Permissions pertinentes pour cet écran */
+const P_TICKET_CREATE   = 'data.ticket.create.agency';
+const P_TICKET_SCAN     = 'data.ticket.scan.agency';
+const P_TRAVELER_VERIFY = 'data.traveler.verify.agency';
+const P_PARCEL_CREATE   = 'data.parcel.create.agency';
+const P_PARCEL_SCAN     = 'data.parcel.scan.agency';
+const P_CASHIER_OPEN    = 'data.cashier.open.own';
+const P_CASHIER_TX      = 'data.cashier.transaction.own';
+
+interface TabDef {
+  id:    Tab;
+  label: string;
+  icon:  string;
+  anyOf: string[];
+}
+
+const ALL_TABS: TabDef[] = [
+  { id: 'vente',   label: 'Vente',    icon: '🎫', anyOf: [P_TICKET_CREATE] },
+  { id: 'checkin', label: 'Check-in', icon: '✅', anyOf: [P_TICKET_SCAN, P_TRAVELER_VERIFY] },
+  { id: 'colis',   label: 'Colis',    icon: '📦', anyOf: [P_PARCEL_CREATE, P_PARCEL_SCAN] },
+  { id: 'caisse',  label: 'Caisse',   icon: '💰', anyOf: [P_CASHIER_OPEN, P_CASHIER_TX] },
+];
+
+function filterTabs(permissions: string[]): TabDef[] {
+  const perms = new Set(permissions);
+  return ALL_TABS.filter(t => t.anyOf.some(p => perms.has(p)));
+}
 
 interface UpcomingTrip {
   id:          string;
@@ -460,15 +489,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-export function StationAgentApp() {
-  const [tab, setTab] = useState<Tab>('vente');
+type DemoRoleKey = keyof typeof ROLE_PERMISSIONS;
 
-  const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: 'vente',   label: 'Vente',    icon: '🎫' },
-    { id: 'checkin', label: 'Check-in', icon: '✅' },
-    { id: 'colis',   label: 'Colis',    icon: '📦' },
-    { id: 'caisse',  label: 'Caisse',   icon: '💰' },
-  ];
+const DEMO_ROLES: DemoRoleKey[] = ['STATION_AGENT', 'SUPERVISOR', 'CASHIER', 'AGENCY_MANAGER'];
+
+export function StationAgentApp() {
+  const [roleIdx, setRoleIdx]   = useState(0);
+  const roleKey                  = DEMO_ROLES[roleIdx] as DemoRoleKey;
+  const permissions              = ROLE_PERMISSIONS[roleKey] ?? [];
+  const TABS                     = filterTabs(permissions);
+  const [tab, setTab]            = useState<Tab>(() => filterTabs(permissions)[0]?.id ?? 'vente');
+
+  // Reset tab when role changes and tab is no longer visible
+  const visibleIds = TABS.map(t => t.id);
+  const effectiveTab: Tab = visibleIds.includes(tab) ? tab : (visibleIds[0] ?? 'vente');
 
   return (
     <div
@@ -478,23 +512,31 @@ export function StationAgentApp() {
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-teal-600 rounded-full flex items-center justify-center font-bold text-sm">MA</div>
+          <div className="w-9 h-9 bg-teal-600 rounded-full flex items-center justify-center font-bold text-sm">NA</div>
           <div>
-            <p className="text-sm font-bold text-white">Mamadou Aliou Ndiaye</p>
-            <p className="text-xs text-slate-400">Agent · Gare Routière de Dakar</p>
+            <p className="text-sm font-bold text-white">Nadège Nkounkou</p>
+            <p className="text-xs text-slate-400">Gare Routière de Pointe-Noire</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Role switcher démo */}
+          <select
+            value={roleIdx}
+            onChange={e => { const idx = Number(e.target.value); setRoleIdx(idx); const tabs = filterTabs(ROLE_PERMISSIONS[DEMO_ROLES[idx]!] ?? []); setTab(tabs[0]?.id ?? 'vente'); }}
+            className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none"
+          >
+            {DEMO_ROLES.map((r, i) => <option key={r} value={i}>{r}</option>)}
+          </select>
           <span className="text-xs bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-2 py-1 rounded-lg font-semibold">
             En service
           </span>
           <span className="text-sm font-mono text-slate-400">
-            {new Date().toLocaleTimeString('fr-SN', { hour: '2-digit', minute: '2-digit' })}
+            {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs — filtrés par permissions */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
         {TABS.map(t => (
           <button
@@ -502,7 +544,7 @@ export function StationAgentApp() {
             onClick={() => setTab(t.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-1 py-3 text-xs font-semibold uppercase tracking-wide transition-colors',
-              tab === t.id
+              effectiveTab === t.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50',
             )}
@@ -511,14 +553,19 @@ export function StationAgentApp() {
             {t.label}
           </button>
         ))}
+        {TABS.length === 0 && (
+          <div className="flex-1 flex items-center justify-center py-3 text-xs text-slate-600">
+            Aucune permission configurée
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'vente'   && <TabVente />}
-        {tab === 'checkin' && <TabCheckin />}
-        {tab === 'colis'   && <TabColis />}
-        {tab === 'caisse'  && <TabCaisse />}
+        {effectiveTab === 'vente'   && <TabVente />}
+        {effectiveTab === 'checkin' && <TabCheckin />}
+        {effectiveTab === 'colis'   && <TabColis />}
+        {effectiveTab === 'caisse'  && <TabCaisse />}
       </div>
     </div>
   );
