@@ -51,6 +51,29 @@ export const EventTypes = {
 
   // GPS
   GPS_UPDATED:            'gps.updated',
+
+  // Fleet docs & consumables
+  FLEET_DOCUMENT_ALERT:   'fleet.document.alert',
+  FLEET_CONSUMABLE_ALERT: 'fleet.consumable.alert',
+
+  // Driver & HR
+  DRIVER_REST_STARTED:            'driver.rest.started',
+  DRIVER_REST_VIOLATION:          'driver.rest.violation',
+  DRIVER_REMEDIATION_TRIGGERED:   'driver.remediation.triggered',
+  DRIVER_TRAINING_DUE:            'driver.training.due',
+  DRIVER_LICENSE_EXPIRING:        'driver.license.expiring',
+
+  // Crew briefing
+  CREW_BRIEFING_COMPLETED:        'crew.briefing.completed',
+  CREW_BRIEFING_EQUIPMENT_MISSING:'crew.briefing.equipment_missing',
+
+  // QHSE & Accidents
+  ACCIDENT_REPORTED:              'accident.reported',
+  ACCIDENT_UPDATED:               'accident.updated',
+  QHSE_PROCEDURE_STARTED:         'qhse.procedure.started',
+  QHSE_PROCEDURE_COMPLETED:       'qhse.procedure.completed',
+  DISPUTE_OPENED:                 'dispute.opened',
+  DISPUTE_SETTLED:                'dispute.settled',
 } as const;
 
 export type EventType = typeof EventTypes[keyof typeof EventTypes];

@@ -51,6 +51,11 @@ import { TemplatesModule }       from './modules/templates/templates.module';
 import { WorkflowStudioModule }  from './modules/workflow-studio/workflow-studio.module';
 import { WhiteLabelModule }      from './modules/white-label/white-label.module';
 import { ProfitabilityModule }   from './modules/pricing/pricing.module';
+import { FleetDocsModule }       from './modules/fleet-docs/fleet-docs.module';
+import { DriverProfileModule }   from './modules/driver-profile/driver-profile.module';
+import { CrewBriefingModule }    from './modules/crew-briefing/crew-briefing.module';
+import { QhseModule }            from './modules/qhse/qhse.module';
+import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 
 // Guards & Middleware
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
@@ -126,6 +131,16 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     WhiteLabelModule,
     // Rentabilité & Yield Management (coûts, snapshots, suggestions de prix)
     ProfitabilityModule,
+    // Fleet docs, documents réglementaires véhicules & consommables
+    FleetDocsModule,
+    // Driver & HR — dossier chauffeur, repos, formations, remédiation CRM
+    DriverProfileModule,
+    // Crew Briefing — checklist équipements pré-départ
+    CrewBriefingModule,
+    // QHSE — accidents, litiges, procédures QHSE
+    QhseModule,
+    // Scheduling Guard — garde-fou avant affectation trajet/bus/chauffeur
+    SchedulingGuardModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

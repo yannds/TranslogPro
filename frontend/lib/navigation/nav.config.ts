@@ -36,6 +36,8 @@ const P = {
   TRIP_DELAY:            'control.trip.delay.agency',
   TRIP_CANCEL:           'control.trip.cancel.tenant',
   TRIP_READ_OWN:         'data.trip.read.own',
+  TRIP_CHECK_OWN:        'data.trip.check.own',
+  TRIP_REPORT_OWN:       'data.trip.report.own',
   TRIP_LOG_EVENT:        'control.trip.log_event.own',
   // Tickets
   TICKET_CREATE:         'data.ticket.create.agency',
@@ -101,6 +103,13 @@ const P = {
   OUTBOX_REPLAY:         'data.outbox.replay.global',
   // Session
   SESSION_REVOKE_TENANT: 'data.session.revoke.tenant',
+  // Driver & HR (Fleet Docs, rest, training, remediation)
+  DRIVER_MANAGE:         'control.driver.manage.tenant',
+  DRIVER_PROFILE:        'data.driver.profile.agency',
+  DRIVER_REST_OWN:       'data.driver.rest.own',
+  // QHSE & Accidents
+  QHSE_MANAGE:           'control.qhse.manage.tenant',
+  ACCIDENT_REPORT:       'data.accident.report.own',
 };
 
 // ─── Portail Admin ─────────────────────────────────────────────────────────────
@@ -271,7 +280,7 @@ export const ADMIN_NAV: PortalNavConfig = {
     {
       id: 'fleet',
       title: 'Flotte',
-      anyOf: [P.FLEET_MANAGE, P.FLEET_LAYOUT, P.FLEET_STATUS, P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE],
+      anyOf: [P.FLEET_MANAGE, P.FLEET_LAYOUT, P.FLEET_STATUS, P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE, P.DRIVER_MANAGE],
       items: [
         {
           kind: 'leaf',
@@ -301,6 +310,18 @@ export const ADMIN_NAV: PortalNavConfig = {
             { kind: 'leaf', id: 'maintenance-alerts',   label: 'Alertes techniques',      href: '/admin/maintenance/alerts',   icon: 'AlertCircle',    anyOf: [P.MAINTENANCE_APPROVE, P.FLEET_STATUS] },
           ],
         },
+        {
+          kind: 'group',
+          id: 'fleet-docs',
+          label: 'Documents & Consommables',
+          icon: 'FileCheck',
+          anyOf: [P.FLEET_MANAGE, P.DRIVER_MANAGE],
+          children: [
+            { kind: 'leaf', id: 'fleet-docs-alerts',      label: 'Documents en alerte',   href: '/admin/fleet-docs',                icon: 'FileWarning',    anyOf: [P.FLEET_MANAGE] },
+            { kind: 'leaf', id: 'fleet-docs-consumables', label: 'Consommables',           href: '/admin/fleet-docs/consumables',    icon: 'Gauge',          anyOf: [P.FLEET_MANAGE] },
+            { kind: 'leaf', id: 'fleet-docs-config',      label: 'Configuration docs',     href: '/admin/fleet-docs/config',         icon: 'Settings',       anyOf: [P.FLEET_MANAGE] },
+          ],
+        },
       ],
     },
 
@@ -308,15 +329,21 @@ export const ADMIN_NAV: PortalNavConfig = {
     {
       id: 'staff',
       title: 'Personnel',
-      anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ],
+      anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
       items: [
         {
-          kind: 'leaf',
+          kind: 'group',
           id: 'drivers',
           label: 'Chauffeurs',
-          href: '/admin/drivers',
           icon: 'Steer',
-          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE],
+          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
+          children: [
+            { kind: 'leaf', id: 'drivers-list',        label: 'Liste des chauffeurs',   href: '/admin/drivers',                  icon: 'Users',          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE] },
+            { kind: 'leaf', id: 'driver-licenses',     label: 'Permis & Habilitations', href: '/admin/drivers/licenses',         icon: 'IdCard',         anyOf: [P.DRIVER_MANAGE, P.DRIVER_PROFILE] },
+            { kind: 'leaf', id: 'driver-rest',         label: 'Temps de repos',         href: '/admin/drivers/rest',             icon: 'Coffee',         anyOf: [P.DRIVER_MANAGE] },
+            { kind: 'leaf', id: 'driver-trainings',    label: 'Formations',             href: '/admin/drivers/trainings',        icon: 'GraduationCap',  anyOf: [P.DRIVER_MANAGE] },
+            { kind: 'leaf', id: 'driver-remediation',  label: 'Remédiation',            href: '/admin/drivers/remediation',      icon: 'AlertOctagon',   anyOf: [P.DRIVER_MANAGE] },
+          ],
         },
         {
           kind: 'leaf',
@@ -327,12 +354,51 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.STAFF_MANAGE, P.STAFF_READ],
         },
         {
-          kind: 'leaf',
-          id: 'crew-planning',
-          label: 'Planning équipages',
-          href: '/admin/crew/planning',
-          icon: 'CalendarRange',
+          kind: 'group',
+          id: 'crew',
+          label: 'Équipages',
+          icon: 'UsersRound',
           anyOf: [P.CREW_MANAGE],
+          children: [
+            { kind: 'leaf', id: 'crew-planning',   label: 'Planning équipages',  href: '/admin/crew/planning',  icon: 'CalendarRange',  anyOf: [P.CREW_MANAGE] },
+            { kind: 'leaf', id: 'crew-briefing',   label: 'Briefings pré-départ', href: '/admin/crew/briefing', icon: 'ClipboardCheck', anyOf: [P.CREW_MANAGE] },
+          ],
+        },
+      ],
+    },
+
+    // ── QHSE & Sécurité opérationnelle ────────────────────────────────────────
+    {
+      id: 'qhse',
+      title: 'QHSE',
+      anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT],
+      items: [
+        {
+          kind: 'group',
+          id: 'qhse-accidents',
+          label: 'Accidents & Incidents',
+          icon: 'AlertOctagon',
+          anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT],
+          children: [
+            { kind: 'leaf', id: 'qhse-accidents-list',   label: 'Rapports d\'accidents', href: '/admin/qhse/accidents',          icon: 'FileWarning',    anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT] },
+            { kind: 'leaf', id: 'qhse-disputes',         label: 'Litiges & Sinistres',    href: '/admin/qhse/disputes',          icon: 'Gavel',          anyOf: [P.QHSE_MANAGE] },
+          ],
+        },
+        {
+          kind: 'leaf',
+          id: 'qhse-procedures',
+          label: 'Procédures QHSE',
+          href: '/admin/qhse/procedures',
+          icon: 'ListChecks',
+          anyOf: [P.QHSE_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'qhse-config',
+          label: 'Configuration QHSE',
+          href: '/admin/qhse/config',
+          icon: 'Settings',
+          anyOf: [P.QHSE_MANAGE],
         },
       ],
     },
@@ -665,7 +731,8 @@ export const DRIVER_NAV: PortalNavConfig = {
       title: 'Mon espace',
       items: [
         { kind: 'leaf', id: 'drv-schedule', label: 'Mon planning',      href: '/driver/schedule',    icon: 'Calendar' },
-        { kind: 'leaf', id: 'drv-docs',     label: 'Mes documents',     href: '/driver/documents',   icon: 'FileCheck' },
+        { kind: 'leaf', id: 'drv-docs',     label: 'Mes documents',     href: '/driver/documents',   icon: 'FileCheck',     anyOf: [P.DRIVER_REST_OWN, P.DRIVER_PROFILE] },
+        { kind: 'leaf', id: 'drv-rest',     label: 'Mes temps de repos', href: '/driver/rest',       icon: 'Coffee',        anyOf: [P.DRIVER_REST_OWN] },
         { kind: 'leaf', id: 'drv-feedback', label: 'Feedback voyageur', href: '/driver/feedback',    icon: 'Star',          anyOf: [P.FEEDBACK_SUBMIT] },
       ],
     },

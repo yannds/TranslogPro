@@ -153,6 +153,15 @@ export const P_TEMPLATE_READ_AGENCY         = 'data.template.read.agency';
 export const P_TEMPLATE_WRITE_AGENCY        = 'data.template.write.agency';
 export const P_TEMPLATE_DELETE_AGENCY       = 'data.template.delete.agency';
 
+// ─── Driver & HR ──────────────────────────────────────────────────────────────
+export const P_DRIVER_MANAGE_TENANT         = 'control.driver.manage.tenant';
+export const P_DRIVER_PROFILE_AGENCY        = 'data.driver.profile.agency';
+export const P_DRIVER_REST_OWN              = 'data.driver.rest.own';
+
+// ─── QHSE & Accidents ────────────────────────────────────────────────────────
+export const P_QHSE_MANAGE_TENANT           = 'control.qhse.manage.tenant';
+export const P_ACCIDENT_REPORT_OWN          = 'data.accident.report.own';
+
 // ─── Workflow Studio & Marketplace ────────────────────────────────────────────
 // Conception et gestion des blueprints de workflow.
 export const P_WORKFLOW_STUDIO_READ_TENANT  = 'control.workflow.studio.read.tenant';
@@ -266,6 +275,13 @@ export const Permission = {
   TEMPLATE_READ_AGENCY:        P_TEMPLATE_READ_AGENCY,
   TEMPLATE_WRITE_AGENCY:       P_TEMPLATE_WRITE_AGENCY,
   TEMPLATE_DELETE_AGENCY:      P_TEMPLATE_DELETE_AGENCY,
+  // Driver & HR
+  DRIVER_MANAGE_TENANT:         P_DRIVER_MANAGE_TENANT,
+  DRIVER_PROFILE_AGENCY:        P_DRIVER_PROFILE_AGENCY,
+  DRIVER_REST_OWN:              P_DRIVER_REST_OWN,
+  // QHSE & Accidents
+  QHSE_MANAGE_TENANT:           P_QHSE_MANAGE_TENANT,
+  ACCIDENT_REPORT_OWN:          P_ACCIDENT_REPORT_OWN,
   // Workflow Studio & Marketplace
   WORKFLOW_STUDIO_READ_TENANT:  P_WORKFLOW_STUDIO_READ_TENANT,
   WORKFLOW_STUDIO_WRITE_TENANT: P_WORKFLOW_STUDIO_WRITE_TENANT,

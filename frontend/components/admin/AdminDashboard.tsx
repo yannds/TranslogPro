@@ -59,13 +59,18 @@ import {
   Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
   Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
   PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
-  UserCheck, Bug, RefreshCw, type LucideIcon,
+  UserCheck, Bug, RefreshCw, Coffee, GraduationCap, ClipboardCheck,
+  AlertOctagon, Gavel, FileText, type LucideIcon,
 } from 'lucide-react';
-import { SidebarLayout } from '../layout/SidebarLayout';
-import { cn } from '../../lib/utils';
+import { SidebarLayout }         from '../layout/SidebarLayout';
+import { cn }                    from '../../lib/utils';
 import { useNavigation, ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
-import { ADMIN_NAV } from '../../lib/navigation/nav.config';
+import { ADMIN_NAV }             from '../../lib/navigation/nav.config';
 import type { ResolvedNavSection, ResolvedNavItem } from '../../lib/navigation/nav.types';
+import { PageFleetDocs }         from '../pages/PageFleetDocs';
+import { PageDriverProfile }     from '../pages/PageDriverProfile';
+import { PageCrewBriefing }      from '../pages/PageCrewBriefing';
+import { PageQhse }              from '../pages/PageQhse';
 
 // ─── Lucide icon resolver ─────────────────────────────────────────────────────
 
@@ -82,8 +87,13 @@ const ICONS: Record<string, LucideIcon> = {
   // aliases
   Steer: Bus, CalendarRange: CalendarDays, CalendarClock: CalendarDays,
   FileType: ScrollText, List: ClipboardList, PackagePlus: Package,
-  FileText: ScrollText, FileCheck: ClipboardList, FileWarningIcon: FileWarning,
+  FileCheck: ClipboardList, FileWarningIcon: FileWarning,
   PlusCircle: TrendingUp, XCircle: AlertTriangle, Luggage: Package,
+  // New fleet & safety aliases
+  Coffee, GraduationCap, ClipboardCheck, AlertOctagon, Gavel, FileText,
+  DriverRest: Coffee, DriverTraining: GraduationCap,
+  AccidentReport: AlertOctagon, DisputeTracking: Gavel,
+  CrewChecklist: ClipboardCheck,
 };
 
 function NavIcon({ name, className }: { name: string; className?: string }) {
@@ -715,9 +725,23 @@ function PageRouter({ activeId }: { activeId: string | null }) {
     case 'maintenance-list':   return <PageWip title="Fiches de maintenance" />;
     case 'maintenance-planning': return <PageWip title="Planning garage" />;
     case 'maintenance-alerts': return <PageWip title="Alertes techniques" />;
-    case 'drivers':            return <PageWip title="Chauffeurs" />;
+    // Fleet docs & consumables
+    case 'fleet-docs':         return <PageFleetDocs />;
+    case 'fleet-docs-alerts':  return <PageFleetDocs />;
+    // Drivers
+    case 'drivers':            return <PageDriverProfile />;
+    case 'driver-licenses':    return <PageDriverProfile />;
+    case 'driver-rest':        return <PageDriverProfile />;
+    case 'driver-trainings':   return <PageDriverProfile />;
+    case 'driver-remediation': return <PageDriverProfile />;
+    // Crew briefing
+    case 'crew-briefing':      return <PageCrewBriefing />;
     case 'staff-list':         return <PageWip title="Personnel" />;
     case 'crew-planning':      return <PageWip title="Planning équipages" />;
+    // QHSE
+    case 'qhse-accidents':     return <PageQhse />;
+    case 'qhse-disputes':      return <PageQhse />;
+    case 'qhse-procedures':    return <PageQhse />;
     case 'crm-clients':        return <PageCrm />;
     case 'crm-campaigns':      return <PageWip title="Campagnes marketing" />;
     case 'crm-loyalty':        return <PageWip title="Programme fidélité" />;

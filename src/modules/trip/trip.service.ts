@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -6,17 +6,30 @@ import { EventTypes } from '../../common/types/domain-event.type';
 import { TripState } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { CreateTripDto } from './dto/create-trip.dto';
+import { SchedulingGuardService } from '../scheduling-guard/scheduling-guard.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TripService {
   constructor(
-    private readonly prisma:    PrismaService,
-    private readonly workflow:  WorkflowEngine,
+    private readonly prisma:           PrismaService,
+    private readonly workflow:         WorkflowEngine,
+    private readonly schedulingGuard:  SchedulingGuardService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
   async create(tenantId: string, dto: CreateTripDto) {
+    // ── Scheduling Guard: vérifie bus + chauffeur avant création ──────────────
+    const check = await this.schedulingGuard.checkAssignability(
+      tenantId,
+      dto.busId,
+      dto.driverId,
+    );
+    if (!check.canAssign) {
+      const details = check.reasons.map(r => r.message).join(' | ');
+      throw new BadRequestException(`Affectation impossible: ${details}`);
+    }
+
     return this.prisma.trip.create({
       data: {
         tenantId,

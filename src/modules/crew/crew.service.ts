@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { PrismaService }              from '../../infrastructure/database/prisma.service';
+import { SchedulingGuardService }     from '../scheduling-guard/scheduling-guard.service';
 
 export interface AssignCrewDto {
   staffId:  string;
@@ -8,7 +9,10 @@ export interface AssignCrewDto {
 
 @Injectable()
 export class CrewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:          PrismaService,
+    private readonly schedulingGuard: SchedulingGuardService,
+  ) {}
 
   async assign(tenantId: string, tripId: string, dto: AssignCrewDto) {
     const [trip, staff] = await Promise.all([
@@ -23,6 +27,14 @@ export class CrewService {
       where: { tripId_staffId: { tripId, staffId: dto.staffId } },
     });
     if (existing) throw new ConflictException('Ce membre d\'équipage est déjà assigné à ce trajet');
+
+    // ── Scheduling Guard: vérifier disponibilité du membre d'équipage ─────────
+    // On vérifie seulement le personnel (pas le bus — déjà vérifié à la création du trip)
+    const check = await this.schedulingGuard.checkAssignability(tenantId, undefined, dto.staffId);
+    if (!check.canAssign) {
+      const details = check.reasons.map(r => r.message).join(' | ');
+      throw new BadRequestException(`Affectation équipage impossible: ${details}`);
+    }
 
     return this.prisma.crewAssignment.create({
       data: { tenantId, tripId, staffId: dto.staffId, crewRole: dto.crewRole },

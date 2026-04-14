@@ -532,6 +532,8 @@ model Bus {
   trips              Trip[]
   maintenanceReports MaintenanceReport[]
   costProfile        BusCostProfile?
+  vehicleDocuments   VehicleDocument[]
+  consumableTrackings ConsumableTracking[]
 
   @@index([tenantId, status])
   @@map("buses")
@@ -664,7 +666,9 @@ model MaintenanceReport {
   approvedAt    DateTime?
   createdAt     DateTime  @default(now())
 
-  bus Bus @relation(fields: [busId], references: [id])
+  bus          Bus                      @relation(fields: [busId], references: [id])
+  intervenants MaintenanceIntervenant[]
+  parts        MaintenancePart[]
 
   @@index([tenantId, busId])
   @@index([tenantId, status])
@@ -985,7 +989,8 @@ model CrewAssignment {
   briefedAt DateTime? // null = pas encore briefé (guard CREW_BRIEFED)
   createdAt DateTime  @default(now())
 
-  trip Trip @relation(fields: [tripId], references: [id])
+  trip          Trip                @relation(fields: [tripId], references: [id])
+  briefingRecord CrewBriefingRecord?
 
   @@unique([tripId, staffId])
   @@index([tenantId, tripId])
@@ -1294,4 +1299,604 @@ model TripAnalytics {
   @@index([tenantId, routeId, isGoldenDay])
   @@index([tenantId, isBlackRoute])
   @@map("trip_analytics")
+}
+
+// ═════════════════════════════════════════════════════════════
+// SECTION 21 : FLEET DOCUMENTS & CONSUMABLE TRACKING
+// ═════════════════════════════════════════════════════════════
+
+// ── Catalogue des types de documents réglementaires (configurable per tenant) ──
+// Exemples : Assurance, Carte grise, Contrôle technique, Vignette, Visite médicale…
+// alertDaysBeforeExpiry = nombre de jours avant expiry pour déclencher l'alerte.
+model VehicleDocumentType {
+  id                    String  @id @default(cuid())
+  tenantId              String
+  name                  String                    // "Assurance RC" , "Carte grise" …
+  code                  String                    // "INSURANCE" | "REGISTRATION" | etc. (libre)
+  alertDaysBeforeExpiry Int     @default(30)      // alerte J-30 par défaut
+  isMandatory           Boolean @default(true)
+  isActive              Boolean @default(true)
+
+  documents VehicleDocument[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("vehicle_document_types")
+}
+
+// ── Instance d'un document réglementaire pour un véhicule ────────────────────
+// fileKey → MinIO signed URL générée à la demande.
+// status calculé par un scheduler : VALID | EXPIRING | EXPIRED | MISSING
+model VehicleDocument {
+  id           String    @id @default(cuid())
+  tenantId     String
+  busId        String
+  typeId       String
+  fileKey      String?   // MinIO key (null si document non encore uploadé)
+  referenceNo  String?   // Numéro de l'assurance, plaque immat…
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  status       String    @default("MISSING")
+  // VALID | EXPIRING | EXPIRED | MISSING
+  notes        String?
+  uploadedById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  bus  Bus                 @relation(fields: [busId], references: [id], onDelete: Cascade)
+  type VehicleDocumentType @relation(fields: [typeId], references: [id])
+
+  @@index([tenantId, busId])
+  @@index([tenantId, status])
+  @@index([tenantId, expiresAt])
+  @@map("vehicle_documents")
+}
+
+// ── Catalogue des consommables par tenant (configurable) ─────────────────────
+// nominalLifetimeKm  = durée de vie théorique du consommable (km).
+// alertKmBefore      = déclencher l'alerte X km avant la fin de vie.
+// Exemples : Pneus (50 000 km, alerte à 5 000 km), Vidange (10 000 km, alerte à 1 000 km)
+model ConsumableType {
+  id                 String  @id @default(cuid())
+  tenantId           String
+  name               String                     // "Pneus AV", "Vidange moteur", "Filtres"…
+  code               String                     // "TIRES_FRONT", "OIL_CHANGE"… (libre)
+  nominalLifetimeKm  Float                      // durée de vie en km
+  alertKmBefore      Float                      // km avant fin de vie pour alerte
+  isActive           Boolean @default(true)
+
+  trackings ConsumableTracking[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("consumable_types")
+}
+
+// ── État courant d'un consommable sur un véhicule ────────────────────────────
+// Mis à jour à chaque MaintenanceReport impliquant ce consommable.
+// Le scheduler compare currentKm vs (lastReplacedKm + nominalLifetimeKm - alertKmBefore)
+// pour publier un événement fleet.consumable.alert_due.
+model ConsumableTracking {
+  id              String    @id @default(cuid())
+  tenantId        String
+  busId           String
+  typeId          String
+  lastReplacedKm  Float?    // kilométrage au dernier remplacement (null = jamais remplacé)
+  lastReplacedAt  DateTime?
+  currentKm       Float     @default(0) // kilométrage actuel du bus (synchronisé depuis GPS/TripEvent)
+  status          String    @default("OK")
+  // OK | ALERT | OVERDUE
+  nextDueKm       Float?    // calculé : lastReplacedKm + nominalLifetimeKm
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bus  Bus            @relation(fields: [busId], references: [id], onDelete: Cascade)
+  type ConsumableType @relation(fields: [typeId], references: [id])
+
+  @@unique([busId, typeId])
+  @@index([tenantId, status])
+  @@map("consumable_trackings")
+}
+
+// ── Intervenant sur un rapport de maintenance ─────────────────────────────────
+// Trace qui a fait quoi : mécanicien, nettoyeur, contrôleur technique…
+model MaintenanceIntervenant {
+  id            String    @id @default(cuid())
+  tenantId      String
+  reportId      String
+  staffId       String?   // Staff.id si interne (null si prestataire externe)
+  externalName  String?   // Nom si prestataire externe
+  role          String    // "MECHANIC" | "CLEANER" | "TECHNICAL_INSPECTOR" | … (libre)
+  hoursWorked   Float?
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  report MaintenanceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([tenantId])
+  @@map("maintenance_intervenants")
+}
+
+// ── Pièce / consommable remplacé dans un rapport de maintenance ────────────────
+// Remplace l'ancien champ partsUsed Json pour permettre des requêtes structurées.
+model MaintenancePart {
+  id               String    @id @default(cuid())
+  tenantId         String
+  reportId         String
+  consumableTypeId String?   // null si pièce ad-hoc non cataloguée
+  partName         String    // Nom libre (ex: "Filtre à huile Mann W 719/30")
+  partReference    String?   // Référence constructeur
+  quantity         Float     @default(1)
+  unitCostXaf      Float?
+  kmAtReplacement  Float?    // km du bus au moment du remplacement
+  createdAt        DateTime  @default(now())
+
+  report MaintenanceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([tenantId])
+  @@map("maintenance_parts")
+}
+
+// ═════════════════════════════════════════════════════════════
+// SECTION 22 : DRIVER PROFILE & RH
+// ═════════════════════════════════════════════════════════════
+
+// ── Configuration des temps de repos réglementaires (par tenant) ──────────────
+// minRestMinutes          = repos minimum obligatoire entre deux services (défaut 11h).
+// maxDrivingMinutesPerDay = conduite max par période de 24h.
+// maxDrivingMinutesPerWeek= conduite max sur 7 jours glissants.
+// Ces valeurs sont chargées par le SchedulingGuardService avant toute assignation.
+model DriverRestConfig {
+  id                       String  @id @default(cuid())
+  tenantId                 String  @unique
+  minRestMinutes           Int     @default(660)   // 11h = 660 min
+  maxDrivingMinutesPerDay  Int     @default(540)   // 9h = 540 min
+  maxDrivingMinutesPerWeek Int     @default(3360)  // 56h = 3360 min
+  alertBeforeEndRestMin    Int     @default(30)    // prévenir 30 min avant fin repos autorisé
+
+  @@map("driver_rest_configs")
+}
+
+// ── Période de repos déclarée pour un chauffeur ───────────────────────────────
+// Créée automatiquement à la fin de chaque trajet (side effect trip.completed).
+// Peut aussi être créée manuellement (suspension médicale, etc.).
+model DriverRestPeriod {
+  id        String    @id @default(cuid())
+  tenantId  String
+  staffId   String
+  startedAt DateTime
+  endedAt   DateTime?
+  source    String    // AUTO | MANUAL | MEDICAL
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, staffId, endedAt])
+  @@map("driver_rest_periods")
+}
+
+// ── Permis de conduire chauffeur (remplace licenseData Json dans Staff) ───────
+// Un chauffeur peut avoir plusieurs catégories (B, D, EC…).
+// La colonne Staff.licenseData est conservée pour rétro-compatibilité.
+model DriverLicense {
+  id           String    @id @default(cuid())
+  tenantId     String
+  staffId      String
+  category     String    // "B" | "D" | "EC" | … (libre)
+  licenseNo    String
+  issuedAt     DateTime
+  expiresAt    DateTime
+  issuingState String?   // Pays ou état émetteur
+  fileKey      String?   // Scan du permis — MinIO key
+  status       String    @default("VALID")
+  // VALID | EXPIRING | EXPIRED | SUSPENDED
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId, staffId])
+  @@index([tenantId, expiresAt])
+  @@index([tenantId, status])
+  @@map("driver_licenses")
+}
+
+// ── Catalogue des types de formation obligatoire (par tenant) ─────────────────
+// frequencyDays = récurrence obligatoire en jours (ex: premiers secours tous les 365j).
+model DriverTrainingType {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String                    // "Premiers secours", "Conduite défensive"…
+  code          String                    // "FIRST_AID", "DEFENSIVE_DRIVING"… (libre)
+  frequencyDays Int      @default(365)   // récurrence annuelle par défaut
+  durationHours Float    @default(8)
+  isMandatory   Boolean  @default(true)
+  isActive      Boolean  @default(true)
+
+  trainings DriverTraining[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("driver_training_types")
+}
+
+// ── Planning de formation par chauffeur ──────────────────────────────────────
+// Généré automatiquement par le scheduler (tous les frequencyDays depuis la dernière completion).
+model DriverTraining {
+  id          String    @id @default(cuid())
+  tenantId    String
+  staffId     String
+  typeId      String
+  scheduledAt DateTime
+  completedAt DateTime?
+  status      String    @default("PLANNED")
+  // PLANNED | COMPLETED | MISSED | CANCELLED
+  trainerName String?
+  locationName String?
+  fileKey     String?   // Attestation MinIO
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  type DriverTrainingType @relation(fields: [typeId], references: [id])
+
+  @@index([tenantId, staffId])
+  @@index([tenantId, status])
+  @@index([tenantId, scheduledAt])
+  @@map("driver_trainings")
+}
+
+// ── Règles de remédiation CRM (par tenant) ───────────────────────────────────
+// Si le score CRM d'un chauffeur descend sous scoreBelowThreshold,
+// le système génère automatiquement une DriverRemediationAction de type actionType.
+model DriverRemediationRule {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  name                String
+  scoreBelowThreshold Float    // ex: 3.5 sur 5
+  actionType          String   // "TRAINING" | "WARNING" | "SUSPENSION" (libre)
+  trainingTypeId      String?  // si actionType = TRAINING, quelle formation déclencher
+  suspensionDays      Int?     // si actionType = SUSPENSION, durée
+  priority            Int      @default(0) // ordre d'évaluation des règles
+  isActive            Boolean  @default(true)
+
+  actions DriverRemediationAction[]
+
+  @@index([tenantId])
+  @@map("driver_remediation_rules")
+}
+
+// ── Action de remédiation déclenchée pour un chauffeur ───────────────────────
+model DriverRemediationAction {
+  id          String    @id @default(cuid())
+  tenantId    String
+  staffId     String
+  ruleId      String
+  scoreAtTrigger Float  // score au moment du déclenchement
+  status      String    @default("PENDING")
+  // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+  triggeredAt DateTime  @default(now())
+  dueAt       DateTime?
+  completedAt DateTime?
+  notes       String?
+
+  rule DriverRemediationRule @relation(fields: [ruleId], references: [id])
+
+  @@index([tenantId, staffId])
+  @@index([tenantId, status])
+  @@map("driver_remediation_actions")
+}
+
+// ═════════════════════════════════════════════════════════════
+// SECTION 23 : CREW BRIEFING (extension CrewAssignment)
+// ═════════════════════════════════════════════════════════════
+
+// ── Catalogue des équipements de sécurité obligatoires (par tenant) ───────────
+// Exemples : Gilets, Lampes torches, Trousse de secours, Cales, Sangles, Triangles, Cric
+model BriefingEquipmentType {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String                        // "Gilets de sécurité"
+  code        String                        // "SAFETY_VESTS" (libre)
+  requiredQty Int      @default(1)
+  isMandatory Boolean  @default(true)
+  isActive    Boolean  @default(true)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("briefing_equipment_types")
+}
+
+// ── Enregistrement de briefing pour un CrewAssignment ────────────────────────
+// Un CrewBriefingRecord est créé lors du briefing pré-départ.
+// checkedItems = JSON : [{ equipmentTypeId, qty, ok, notes }]
+// allEquipmentOk = computed field : true si tous les items mandatory sont OK.
+model CrewBriefingRecord {
+  id               String    @id @default(cuid())
+  tenantId         String
+  assignmentId     String    @unique
+  conductedById    String    // Staff.id du responsable de briefing (driver ou co-pilot)
+  checkedItems     Json      @default("[]")
+  // [{ equipmentTypeId: string, qty: number, ok: boolean, notes?: string }]
+  allEquipmentOk   Boolean   @default(false)
+  briefingNotes    String?
+  gpsLat           Float?    // position GPS au moment du briefing
+  gpsLng           Float?
+  completedAt      DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  assignment CrewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("crew_briefing_records")
+}
+
+// ═════════════════════════════════════════════════════════════
+// SECTION 24 : QHSE — ACCIDENTS & LITIGES
+// ═════════════════════════════════════════════════════════════
+
+// ── Catalogue de sévérité d'accident (par tenant) ────────────────────────────
+// Exemples : Léger (0 blessé grave), Lourd (blessé grave), Mortel (décès)
+// Les codes sont libres pour s'adapter à la réglementation locale.
+model AccidentSeverityType {
+  id               String  @id @default(cuid())
+  tenantId         String
+  name             String                    // "Accident léger", "Accident grave"…
+  code             String                    // "MINOR" | "SERIOUS" | "FATAL" (libre)
+  color            String  @default("#f59e0b") // couleur dashboard
+  requiresQhse     Boolean @default(false)   // déclenche alerte QHSE automatique
+  requiresPolice   Boolean @default(false)   // déclenche consigne "Appeler la police"
+  requiresInsurer  Boolean @default(false)   // déclenche contact assureur obligatoire
+  sortOrder        Int     @default(0)
+  isActive         Boolean @default(true)
+
+  accidents AccidentReport[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("accident_severity_types")
+}
+
+// ── Rapport d'accident principal ─────────────────────────────────────────────
+// Créé par le chauffeur, co-pilote ou agent QHSE depuis leurs apps respectives.
+// Peut déclencher un workflow QHSE (QhseProcedureExecution).
+model AccidentReport {
+  id               String    @id @default(cuid())
+  tenantId         String
+  incidentId       String?   @unique  // FK vers Incident existant (si venu du système incident)
+  tripId           String?
+  busId            String?
+  severityTypeId   String
+  reportedById     String              // Staff.id (driver/crew) ou User.id (QHSE agent)
+  reportedByRole   String              // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT"
+  occurredAt       DateTime
+  gpsLat           Float?
+  gpsLng           Float?
+  locationDesc     String?
+  description      String    @db.Text
+  circumstance     String?   @db.Text // description circonstances (route, météo, tiers…)
+  photoKeys        Json      @default("[]")  // string[] clés MinIO photos
+  status           String    @default("OPEN")
+  // OPEN | UNDER_INVESTIGATION | LEGAL | SETTLED | CLOSED
+  assignedQhseId   String?   // QHSE responsible assigned
+  closedAt         DateTime?
+  closedById       String?
+  closingNotes     String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  severityType       AccidentSeverityType      @relation(fields: [severityTypeId], references: [id])
+  thirdParties       AccidentThirdParty[]
+  injuries           AccidentInjury[]
+  disputeTracking    DisputeTracking?
+  procedureExecs     QhseProcedureExecution[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, busId])
+  @@map("accident_reports")
+}
+
+// ── Tiers impliqués dans un accident ─────────────────────────────────────────
+model AccidentThirdParty {
+  id            String    @id @default(cuid())
+  tenantId      String
+  reportId      String
+  type          String    // "VEHICLE" | "PEDESTRIAN" | "PROPERTY" | "OTHER" (libre)
+  name          String?
+  phone         String?
+  plateNumber   String?   // si véhicule
+  vehicleModel  String?
+  insuranceRef  String?   // numéro d'assurance tiers
+  statementFile String?   // MinIO — constat amiable signé
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  report AccidentReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([tenantId])
+  @@map("accident_third_parties")
+}
+
+// ── Blessures enregistrées dans l'accident ───────────────────────────────────
+model AccidentInjury {
+  id              String    @id @default(cuid())
+  tenantId        String
+  reportId        String
+  personType      String    // "PASSENGER" | "DRIVER" | "CREW" | "PEDESTRIAN" | "THIRD_PARTY"
+  personName      String?
+  ticketId        String?   // FK Ticket si c'est un passager
+  severity        String    // "MINOR" | "SERIOUS" | "CRITICAL" | "FATAL" (libre)
+  hospitalId      String?   // FK Hospital si transfert hospitalier
+  hospitalName    String?   // Nom libre si hôpital non répertorié
+  admittedAt      DateTime?
+  dischargedAt    DateTime?
+  medicalNotes    String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  report       AccidentReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  hospital     Hospital?       @relation(fields: [hospitalId], references: [id])
+  followUps    MedicalFollowUp[]
+
+  @@index([reportId])
+  @@index([tenantId])
+  @@map("accident_injuries")
+}
+
+// ── Hôpitaux référencés (par tenant) ─────────────────────────────────────────
+model Hospital {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  city     String
+  address  String?
+  phone    String?
+  gpsLat   Float?
+  gpsLng   Float?
+  isActive Boolean @default(true)
+
+  injuries AccidentInjury[]
+
+  @@index([tenantId, city])
+  @@map("hospitals")
+}
+
+// ── Suivi médical d'une blessure ─────────────────────────────────────────────
+model MedicalFollowUp {
+  id              String    @id @default(cuid())
+  tenantId        String
+  injuryId        String
+  date            DateTime
+  practitionerName String?
+  notes           String?   @db.Text
+  nextAppointment DateTime?
+  fileKey         String?   // Compte-rendu médical MinIO
+  createdAt       DateTime  @default(now())
+
+  injury AccidentInjury @relation(fields: [injuryId], references: [id], onDelete: Cascade)
+
+  @@index([injuryId])
+  @@map("medical_followups")
+}
+
+// ── Suivi du litige (assurance ou gré à gré) ────────────────────────────────
+model DisputeTracking {
+  id              String    @id @default(cuid())
+  tenantId        String
+  reportId        String    @unique
+  mode            String    @default("INSURANCE")
+  // "INSURANCE" | "AMICABLE" | "LEGAL"
+  insurerRef      String?   // Numéro de dossier assureur
+  insurerName     String?
+  adjusterId      String?   // Nom de l'expert mandaté
+  status          String    @default("OPEN")
+  // OPEN | PENDING_ADJUSTER | NEGOTIATION | AGREED | CLOSED | CONTESTED
+  estimatedTotal  Float?    // Estimation du sinistre total
+  advancedAmount  Float     @default(0) // Montant pré-financé par l'entreprise
+  finalSettlement Float?    // Montant final agréé
+  settledAt       DateTime?
+  closingNotes    String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  report   AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  expenses DisputeExpense[]
+
+  @@index([tenantId, status])
+  @@map("dispute_trackings")
+}
+
+// ── Frais individuels liés au litige ────────────────────────────────────────
+model DisputeExpense {
+  id           String    @id @default(cuid())
+  tenantId     String
+  disputeId    String
+  type         String    // "REPAIR" | "MEDICAL" | "LEGAL" | "TOWING" | "OTHER" (libre)
+  description  String
+  amountXaf    Float
+  paidAt       DateTime?
+  fileKey      String?   // Justificatif MinIO
+  approvedById String?
+  createdAt    DateTime  @default(now())
+
+  dispute DisputeTracking @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@index([tenantId])
+  @@map("dispute_expenses")
+}
+
+// ── Procédures QHSE configurables par tenant ────────────────────────────────
+// Une procédure est associée à un type de déclencheur (ex: ACCIDENT_FATAL).
+// Le code du trigger est libre pour s'adapter à la réglementation locale.
+model QhseProcedure {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  triggerCode   String   // "ACCIDENT_FATAL" | "ACCIDENT_SERIOUS" | "FIRE" | "BREAKDOWN" (libre)
+  description   String?
+  isActive      Boolean  @default(true)
+  version       Int      @default(1)
+
+  steps      QhseProcedureStep[]
+  executions QhseProcedureExecution[]
+
+  @@unique([tenantId, triggerCode, version])
+  @@index([tenantId])
+  @@map("qhse_procedures")
+}
+
+// ── Étapes d'une procédure QHSE ──────────────────────────────────────────────
+model QhseProcedureStep {
+  id            String   @id @default(cuid())
+  procedureId   String
+  order         Int
+  description   String   @db.Text
+  responsible   String   // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT" (libre)
+  isVerification Boolean @default(false) // si true, l'exécutant doit cocher OK
+  isPhotoRequired Boolean @default(false)
+
+  procedure QhseProcedure   @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  stepExecs QhseStepExecution[]
+
+  @@unique([procedureId, order])
+  @@map("qhse_procedure_steps")
+}
+
+// ── Exécution d'une procédure (1 par accident / trigger) ─────────────────────
+model QhseProcedureExecution {
+  id            String    @id @default(cuid())
+  tenantId      String
+  reportId      String
+  procedureId   String
+  startedById   String    // qui a lancé la procédure
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  status        String    @default("IN_PROGRESS")
+  // IN_PROGRESS | COMPLETED | ABORTED
+
+  report    AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  procedure QhseProcedure     @relation(fields: [procedureId], references: [id])
+  stepExecs QhseStepExecution[]
+
+  @@index([tenantId, reportId])
+  @@map("qhse_procedure_executions")
+}
+
+// ── Exécution d'une étape individuelle ───────────────────────────────────────
+model QhseStepExecution {
+  id           String    @id @default(cuid())
+  executionId  String
+  stepId       String
+  executedById String
+  executedAt   DateTime  @default(now())
+  isOk         Boolean   @default(true)
+  notes        String?
+  photoKey     String?   // MinIO si isPhotoRequired
+
+  execution QhseProcedureExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step      QhseProcedureStep      @relation(fields: [stepId], references: [id])
+
+  @@unique([executionId, stepId])
+  @@map("qhse_step_executions")
 }
