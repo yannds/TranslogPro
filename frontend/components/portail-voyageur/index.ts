@@ -1,0 +1,1 @@
+export { PortailVoyageur } from './PortailVoyageur';

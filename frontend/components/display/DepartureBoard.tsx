@@ -18,7 +18,7 @@
  *   ANNULÉ        → rouge
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -134,15 +134,6 @@ function Ticker() {
 function DepartureRowItem({ row }: { row: DepartureRow }) {
   const cfg = STATUS_CONFIG[row.status];
   const isParti = row.status === 'PARTI';
-  const rowCls = cn(
-    'grid items-center text-lg transition-colors',
-    isParti
-      ? 'opacity-40'
-      : row.status === 'ANNULE'
-        ? 'opacity-60 line-through decoration-red-600'
-        : '',
-  );
-
   return (
     <div
       className={cn(

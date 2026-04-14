@@ -415,7 +415,7 @@ export function PortailVoyageur() {
   const [depart, setDepart]           = useState('Dakar');
   const [arrivee, setArrivee]         = useState('Saint-Louis');
   const [date, setDate]               = useState(new Date().toISOString().slice(0, 10));
-  const [passengers, setPassengers]   = useState(1);
+  const [_passengers, _setPassengers]  = useState(1);
   const [searched, setSearched]       = useState(false);
   const [sortBy, setSortBy]           = useState<'prix' | 'heure'>('heure');
   const [selectedTrip, setSelectedTrip] = useState<TripResult | null>(null);
