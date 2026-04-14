@@ -19,8 +19,8 @@
 import { useState } from 'react';
 import {
   AlertOctagon, Gavel, ClipboardCheck, Plus,
-  MapPin, Clock, Users, Activity, ChevronRight,
-  CheckCircle2, XCircle,
+  MapPin, Clock, Users, ChevronRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -104,7 +104,7 @@ export function PageQhse() {
             Rapports d'accidents, suivi des litiges assureurs, procédures QHSE
           </p>
         </div>
-        <Button variant="danger" aria-label="Déclarer un accident">
+        <Button variant="destructive" aria-label="Déclarer un accident">
           <Plus className="w-4 h-4 mr-2" aria-hidden />
           Déclarer accident
         </Button>

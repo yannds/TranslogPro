@@ -54,7 +54,7 @@ function isVisible(anyOf: string[] | undefined, perms: Set<string>): boolean {
   return anyOf.some(p => perms.has(p));
 }
 
-function resolveLeaf(leaf: NavLeaf, perms: Set<string>, currentHref?: string): ResolvedNavLeaf | null {
+function resolveLeaf(leaf: NavLeaf, perms: Set<string>, _currentHref?: string): ResolvedNavLeaf | null {
   if (!isVisible(leaf.anyOf, perms)) return null;
   return {
     id:     leaf.id,

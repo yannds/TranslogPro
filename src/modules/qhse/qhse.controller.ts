@@ -15,9 +15,11 @@ import {
   ExecuteStepDto,
 } from './qhse.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
+@RequireModule('QHSE')
 @Controller('tenants/:tenantId/qhse')
 export class QhseController {
   constructor(private readonly svc: QhseService) {}

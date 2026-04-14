@@ -264,10 +264,25 @@ export function PageCrewBriefing() {
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : (
+              ) : history.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-12 text-center">
-                  TODO — charger l'historique depuis l'API
+                  {/* TODO: fetch depuis GET /tenants/:tid/crew-briefing/briefings/history?limit=50 */}
+                  Aucun briefing dans l'historique
                 </p>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {history.map(b => (
+                    <li key={b.id} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{b.tripRef}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Par {b.conductedBy} — {new Date(b.completedAt).toLocaleString('fr-FR')}
+                        </p>
+                      </div>
+                      <ConformityIndicator ok={b.allEquipmentOk} />
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>

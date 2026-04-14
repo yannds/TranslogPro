@@ -119,6 +119,12 @@
 | ADR-25 | CSS White Label SSR | `<style data-tenant-brand>` + CSS custom properties + `sanitizeCss()` — pas de round-trip JS |
 | ADR-26 | ICostCalculator interface | `CostCalculatorEngine` pure (sans NestJS/Prisma) — testable sans DB. Seul `ProfitabilityService` dépend de Prisma. |
 | ADR-27 | Dual Margin | Marge Opérationnelle (rev−var) + Marge Nette (rev−total) — piloter prix = piloter les deux niveaux |
+| ADR-28 | SchedulingGuardModule partagé | Logique d'assignabilité centralisée, réutilisable par Trip, Crew, Scheduler |
+| ADR-29 | ModuleGuard global APP_GUARD | SaaS modularité — modules désactivables sans modifier le code métier |
+| ADR-30 | @RequireModule décorateur classe | Module désactivé = 403 sur tous les endpoints ; pas de logique conditionnelle dans les services |
+| ADR-31 | Cache module Redis TTL 300s | TTL long (modules rarement modifiés) + `invalidateModuleCache()` sur changement |
+| ADR-32 | allEquipmentOk côté serveur | Intégrité — le client ne peut pas forcer allEquipmentOk=true |
+| ADR-33 | Remédiation anti-doublon | Idempotence — vérification PENDING/IN_PROGRESS avant create |
 
 ---
 
@@ -1333,7 +1339,246 @@ Tous les seuils configurables via `InstalledModule.config` (clé `YIELD_ENGINE`)
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v4.0*
+---
+
+## 15. Modules RH & Sécurité — v5.0
+
+### 15.1 Vue d'ensemble
+
+Quatre nouveaux modules domaine ajoutés en avril 2026, tous protégés par `@RequireModule('KEY')` :
+
+| Module NestJS       | Clé SaaS         | Controller prefix                     | Permissions principales                                    |
+|---------------------|------------------|---------------------------------------|------------------------------------------------------------|
+| `FleetDocsModule`   | `FLEET_DOCS`     | `tenants/:tid/fleet-docs`             | `control.fleet.manage.tenant`                              |
+| `DriverProfileModule` | `DRIVER_PROFILE` | `tenants/:tid/driver-profile`        | `control.driver.manage.tenant`, `data.driver.profile.agency` |
+| `CrewBriefingModule` | `CREW_BRIEFING` | `tenants/:tid/crew-briefing`          | `control.fleet.manage.tenant`, `data.crew.manage.tenant`   |
+| `QhseModule`        | `QHSE`           | `tenants/:tid/qhse`                   | `control.qhse.manage.tenant`, `data.accident.report.own`   |
+
+---
+
+### 15.2 FleetDocsModule (`src/modules/fleet-docs/`)
+
+**Responsabilités :**
+- CRUD `VehicleDocument` (documents réglementaires par bus : CT, assurance, visite…)
+- CRUD `ConsumableTracking` (huile, pneus, filtres — suivi au km)
+- Calcul statuts `VALID / EXPIRING / EXPIRED / MISSING` (helper `_computeDocStatus`)
+- Calcul statuts `OK / ALERT / OVERDUE` (helper `_computeConsumableStatus`)
+- `@Cron(EVERY_DAY_AT_6AM)` → `refreshDocumentStatuses()` + publie `fleet.document.alert`
+
+**Logique métier (_computeDocStatus) :**
+```
+MISSING  — expiresAt absent
+EXPIRED  — now > expiresAt
+EXPIRING — now >= expiresAt − alertDaysBeforeExpiry × 86400s
+VALID    — sinon
+```
+
+**Logique métier (_computeConsumableStatus) :**
+```
+ALERT   — lastReplacedKm = null (jamais remplacé)
+OVERDUE — currentKm >= lastReplacedKm + nominalLifetimeKm
+ALERT   — currentKm >= nextDueKm − alertKmBefore
+OK      — sinon
+```
+
+**Events publiés :** `fleet.document.alert`, `fleet.consumable.alert`
+
+---
+
+### 15.3 DriverProfileModule (`src/modules/driver-profile/`)
+
+**Responsabilités :**
+- `DriverRestConfig` — config repos par tenant (minRestMinutes, maxDrivingMinutesPerDay)
+- `DriverLicense` — CRUD permis (cat. D/EC/D+E), upload MinIO, alertes expiration
+- `DriverRestPeriod` — start/end période de repos
+- `checkRestCompliance(tenantId, staffId)` → `{ canDrive, restRemainingMinutes, activeRestPeriod }`
+- `DriverTrainingType` + `DriverTraining` — types et sessions de formation, auto-replanification
+- `DriverRemediationRule` + `DriverRemediationAction` — évaluation en cascade par score
+- `evaluateRemediationForDriver(tenantId, staffId, score)` → `string[]` (actionIds créés)
+- `@Cron` → `refreshLicenseStatuses()` + `alertOverdueTrainings()`
+
+**Logique `evaluateRemediationForDriver` :**
+```
+1. Récupère règles actives où scoreBelowThreshold >= currentScore (ordre priorité)
+2. Pour chaque règle : skip si action PENDING/IN_PROGRESS existe déjà (anti-doublon)
+3. Crée DriverRemediationAction (status=PENDING)
+4. Si actionType=TRAINING et trainingTypeId : crée DriverTraining dans J+7
+5. Publie driver.remediation.triggered
+6. Retourne [actionId1, actionId2, ...]
+```
+
+**Events publiés :** `driver.rest.started`, `driver.rest.violation`, `driver.remediation.triggered`, `driver.training.due`, `driver.license.expiring`
+
+---
+
+### 15.4 CrewBriefingModule (`src/modules/crew-briefing/`)
+
+**Responsabilités :**
+- `BriefingEquipmentType` — catalogue équipements obligatoires par tenant (gilets, lampes, trousse…)
+- `CrewBriefingRecord` — UN briefing par `crewAssignment` (contrainte unique)
+- `allEquipmentOk` — calculé à la création selon items cochés vs types obligatoires
+
+**Logique allEquipmentOk :**
+```
+Pour chaque BriefingEquipmentType { isMandatory=true } :
+  checked = checkedItems.find(i.equipmentTypeId === eq.id)
+  if !checked || !checked.ok || checked.qty < eq.requiredQty → manquant
+allEquipmentOk = missing.length === 0
+```
+
+**Events publiés :** `crew.briefing.completed`, `crew.briefing.equipment_missing`
+
+---
+
+### 15.5 QhseModule (`src/modules/qhse/`)
+
+**Responsabilités :**
+- `AccidentReport` + tiers (`AccidentThirdParty`) + blessés (`AccidentInjury`) + suivi médical
+- `Dispute` + dépenses (`DisputeExpense`) — suivi assureur/litige
+- `QhseProcedure` + `QhseProcedureStep` — bibliothèque procédures par tenant
+- `QhseProcedureExecution` + `QhseStepExecution` — exécution traçable (photos optionnelles)
+- Auto-déclenchement procédure sur `AccidentReport` si `SeverityType.requiresQhse=true`
+
+**Logique executeStep :**
+```
+1. Vérifie photoRequired : si requis et pas de photoUrl → BadRequestException
+2. Met à jour QhseStepExecution (status, notes, photoUrl)
+3. Si tous les steps terminés → execution.status = COMPLETED
+4. Publie qhse.procedure.completed si terminé
+```
+
+**Events publiés :** `accident.reported`, `accident.updated`, `qhse.procedure.started`, `qhse.procedure.completed`, `dispute.opened`, `dispute.settled`
+
+---
+
+### 15.6 SchedulingGuardModule (`src/modules/scheduling-guard/`)
+
+Module transversal partagé — exporté pour injection dans `TripModule` et `CrewModule`.
+
+**Interface `checkAssignability(tenantId, busId?, staffId?)` :**
+
+```typescript
+interface AssignabilityCheckResult {
+  canAssign: boolean;
+  reasons:   BlockReason[];  // codes: BUS_MAINTENANCE | BUS_OUT_OF_SERVICE |
+}                            //        BUS_DOCUMENT_EXPIRED | DRIVER_REST_REQUIRED |
+                             //        DRIVER_SUSPENDED | DRIVER_LICENSE_EXPIRED
+```
+
+**Vérifications bus :**
+1. `bus.status === 'MAINTENANCE_REQUIRED'` → `BUS_MAINTENANCE`
+2. `bus.status IN ('OUT_OF_SERVICE', 'RETIRED')` → `BUS_OUT_OF_SERVICE`
+3. `VehicleDocument { status='EXPIRED', type.isMandatory=true }` → `BUS_DOCUMENT_EXPIRED`
+
+**Vérifications driver :**
+1. `DriverRestPeriod` ouverte avec temps restant > 0 → `DRIVER_REST_REQUIRED`
+2. `DriverRemediationAction { actionType='SUSPENSION', status IN PENDING/IN_PROGRESS }` → `DRIVER_SUSPENDED`
+3. Aucun `DriverLicense { category IN [D,EC,D+E], status IN [VALID,EXPIRING] }` → `DRIVER_LICENSE_EXPIRED`
+
+**Intégration :** `TripService.create()` et `CrewService.assign()` appellent `checkAssignability` avant toute création/affectation. `BadRequestException` si `!canAssign`.
+
+---
+
+### 15.7 ModuleGuard (`src/core/iam/guards/module.guard.ts`)
+
+Guard global enregistré via `APP_GUARD` (s'exécute après `PermissionGuard`).
+
+**Déclencheur :** `@RequireModule('KEY')` sur classe ou méthode du controller.
+
+**Logique :**
+```
+1. Pas de @RequireModule → skip (route sans exigence module)
+2. Extraire tenantId depuis req[SCOPE_CONTEXT_KEY] (post-PermissionGuard) ou req.user.tenantId
+3. Cache Redis : module:{tenantId}:{moduleKey} TTL 300s
+   - hit '1' → allow
+   - hit '0' → ForbiddenException
+4. DB : InstalledModule { tenantId, moduleKey } → isActive
+   - true → allow + cache '1'
+   - false/absent → ForbiddenException + cache '0'
+```
+
+**Invalidation cache :** `ModuleGuard.invalidateModuleCache(tenantId, moduleKey)` — à appeler depuis `TenantService` lors d'un changement d'état `InstalledModule.isActive`.
+
+**Décorateur :** `src/common/decorators/require-module.decorator.ts` — `@RequireModule('FLEET_DOCS')`
+
+---
+
+### 15.8 Nouveaux EventTypes (domain-event.type.ts)
+
+| Type | Déclencheur |
+|------|-------------|
+| `fleet.document.alert` | Document expirant/expiré détecté par le cron |
+| `fleet.consumable.alert` | Consommable en alerte ou dépassé |
+| `driver.rest.started` | Début d'une période de repos |
+| `driver.rest.violation` | Fin de repos avec durée insuffisante |
+| `driver.remediation.triggered` | Action de remédiation créée |
+| `driver.training.due` | Formation planifiée en retard |
+| `driver.license.expiring` | Permis entrant dans la fenêtre d'alerte |
+| `crew.briefing.completed` | Briefing conforme créé |
+| `crew.briefing.equipment_missing` | Briefing non conforme (équipements manquants) |
+| `accident.reported` | Rapport d'accident créé |
+| `accident.updated` | Statut accident mis à jour |
+| `qhse.procedure.started` | Exécution de procédure QHSE démarrée |
+| `qhse.procedure.completed` | Procédure QHSE terminée (tous steps OK) |
+| `dispute.opened` | Litige ouvert |
+| `dispute.settled` | Litige clôturé |
+
+---
+
+### 15.9 Nouvelles Permissions
+
+| Constante | String | Usage |
+|-----------|--------|-------|
+| `DRIVER_MANAGE_TENANT` | `control.driver.manage.tenant` | Gérer dossiers chauffeurs, repos, formations, remédiation |
+| `DRIVER_PROFILE_AGENCY` | `data.driver.profile.agency` | Consulter profil chauffeur (scope agence) |
+| `DRIVER_REST_OWN` | `data.driver.rest.own` | Chauffeur — voir ses propres périodes de repos |
+| `QHSE_MANAGE_TENANT` | `control.qhse.manage.tenant` | Gérer accidents, litiges, procédures QHSE |
+| `ACCIDENT_REPORT_OWN` | `data.accident.report.own` | Déclarer/consulter ses propres accidents |
+
+---
+
+### 15.10 Navigation (`nav.config.ts`)
+
+Sections et items ajoutés :
+
+**Flotte → groupe `fleet-docs` :**
+- Documents en alerte `/admin/fleet-docs` (`FLEET_MANAGE`)
+- Consommables `/admin/fleet-docs/consumables` (`FLEET_MANAGE`)
+- Configuration docs `/admin/fleet-docs/config` (`FLEET_MANAGE`)
+
+**Personnel → groupe `drivers` (étendu) :**
+- Permis & Habilitations `/admin/drivers/licenses` (`DRIVER_MANAGE`, `DRIVER_PROFILE`)
+- Temps de repos `/admin/drivers/rest` (`DRIVER_MANAGE`)
+- Formations `/admin/drivers/trainings` (`DRIVER_MANAGE`)
+- Remédiation `/admin/drivers/remediation` (`DRIVER_MANAGE`)
+
+**Personnel → groupe `crew` :**
+- Planning équipages `/admin/crew/planning` (`CREW_MANAGE`)
+- Briefings pré-départ `/admin/crew/briefing` (`CREW_MANAGE`)
+
+**Section QHSE (nouvelle) :**
+- Rapports d'accidents `/admin/qhse/accidents` (`QHSE_MANAGE`, `ACCIDENT_REPORT`)
+- Litiges & Sinistres `/admin/qhse/disputes` (`QHSE_MANAGE`)
+- Procédures QHSE `/admin/qhse/procedures` (`QHSE_MANAGE`)
+- Configuration QHSE `/admin/qhse/config` (`QHSE_MANAGE`)
+
+---
+
+### 15.11 Nouvelles Décisions Architecturales
+
+| ADR | Décision | Raison |
+|-----|----------|--------|
+| ADR-28 | `SchedulingGuardModule` partagé | Single Responsibility — logique d'assignabilité centralisée, réutilisable par Trip, Crew, tout futur scheduler |
+| ADR-29 | `ModuleGuard` global APP_GUARD | SaaS modularité — modules désactivables sans modifier le code métier ; isolation via décorateur déclaratif |
+| ADR-30 | `@RequireModule` décorateur classe | Module désactivé = 403 complet sur tous les endpoints ; pas de logique conditionnelle dans les services |
+| ADR-31 | Cache module Redis TTL 300s | Modules rarement modifiés — TTL long évite les DB hits à chaque requête ; `invalidateModuleCache()` assure la cohérence sur changement |
+| ADR-32 | `allEquipmentOk` calculé côté serveur | Intégrité des données — le client ne peut pas forcer allEquipmentOk=true ; calculé depuis les types configurés en DB |
+| ADR-33 | `evaluateRemediationForDriver` anti-doublon | Idempotence — score peut être réévalué plusieurs fois sans créer plusieurs actions pour la même règle ; vérification `PENDING/IN_PROGRESS` avant `create` |
+
+---
+
+*Fin du Dossier Technique TransLog Pro v5.0*
 *Révision v2.0 : Avril 2026 — Architecture Validée*
 *Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*
 *Révision v4.0 : Avril 2026 — White Label · Profitabilité (ICostCalculator) · TenantBusinessConfig · Yield Management · ADR-23→27*
+*Révision v5.0 : Avril 2026 — FleetDocs · DriverProfile · CrewBriefing · QHSE · SchedulingGuard · ModuleGuard · Frontend QHSE/HR · ADR-28→33*

@@ -6,9 +6,11 @@ import {
   CreateBriefingDto,
 } from './crew-briefing.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
+@RequireModule('CREW_BRIEFING')
 @Controller('tenants/:tenantId/crew-briefing')
 export class CrewBriefingController {
   constructor(private readonly svc: CrewBriefingService) {}

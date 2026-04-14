@@ -13,9 +13,11 @@ import {
   CreateRemediationRuleDto,
 } from './driver-profile.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
+@RequireModule('DRIVER_PROFILE')
 @Controller('tenants/:tenantId/driver-profile')
 export class DriverProfileController {
   constructor(private readonly svc: DriverProfileService) {}

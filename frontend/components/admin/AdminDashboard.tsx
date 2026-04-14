@@ -62,11 +62,10 @@ import {
   UserCheck, Bug, RefreshCw, Coffee, GraduationCap, ClipboardCheck,
   AlertOctagon, Gavel, FileText, type LucideIcon,
 } from 'lucide-react';
-import { SidebarLayout }         from '../layout/SidebarLayout';
 import { cn }                    from '../../lib/utils';
 import { useNavigation, ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
 import { ADMIN_NAV }             from '../../lib/navigation/nav.config';
-import type { ResolvedNavSection, ResolvedNavItem } from '../../lib/navigation/nav.types';
+import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 import { PageFleetDocs }         from '../pages/PageFleetDocs';
 import { PageDriverProfile }     from '../pages/PageDriverProfile';
 import { PageCrewBriefing }      from '../pages/PageCrewBriefing';
@@ -777,7 +776,7 @@ function PageRouter({ activeId }: { activeId: string | null }) {
 // ─── Sidebar nav items renderer ──────────────────────────────────────────────
 
 function SidebarNavItem({
-  item, activeId, onSelect, depth = 0,
+  item, activeId, onSelect, depth: _depth = 0,
 }: {
   item:     ResolvedNavItem;
   activeId: string | null;
@@ -867,22 +866,6 @@ function SidebarNavItem({
   );
 }
 
-function buildNavGroups(sections: ResolvedNavSection[], activeId: string | null, onSelect: (id: string) => void) {
-  return sections.map(section => ({
-    title: section.title,
-    items: section.items.map(item => ({
-      label:  item.label,
-      href:   '#',
-      icon:   <NavIcon name={item.icon} />,
-      active: item.id === activeId || item.children?.some(c => c.id === activeId),
-      badge:  item.badge,
-      // override rendering via customItems
-      _item:  item,
-    })),
-    _section: section,
-  }));
-}
-
 // ─── AdminDashboard ───────────────────────────────────────────────────────────
 
 export function AdminDashboard() {
@@ -890,7 +873,7 @@ export function AdminDashboard() {
   const currentUser = DEMO_USERS[currentUserIdx]!;
   const permissions = ROLE_PERMISSIONS[currentUser.role] ?? [];
 
-  const { sections, activeId, setActiveId } = useNavigation({
+  const { sections, activeId, setActiveId: _setActiveId } = useNavigation({
     config:      ADMIN_NAV,
     permissions,
     currentHref: '/admin',

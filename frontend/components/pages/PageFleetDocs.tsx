@@ -16,7 +16,7 @@
  */
 
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus, Eye } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';

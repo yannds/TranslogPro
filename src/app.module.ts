@@ -59,6 +59,7 @@ import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-gua
 
 // Guards & Middleware
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
+import { ModuleGuard }           from './core/iam/guards/module.guard';
 import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
@@ -146,6 +147,10 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     // PermissionGuard global — protège TOUTES les routes
     // Routes sans @Permission() = 500 en dev, 403 en prod
     { provide: APP_GUARD, useClass: PermissionGuard },
+    // ModuleGuard global — vérifie qu'un module SaaS est actif pour le tenant.
+    // Déclenché uniquement sur les routes portant @RequireModule('KEY').
+    // S'exécute APRÈS PermissionGuard (ordre de déclaration APP_GUARD).
+    { provide: APP_GUARD, useClass: ModuleGuard },
     // RedisRateLimitGuard — injecté via @UseGuards() par endpoint
     // Nécessite REDIS_CLIENT (fourni par EventBusModule @Global)
     RedisRateLimitGuard,

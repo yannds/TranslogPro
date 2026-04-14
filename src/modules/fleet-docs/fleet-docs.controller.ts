@@ -8,10 +8,12 @@ import {
   RecordConsumableReplacementDto,
 } from './fleet-docs.service';
 import { RequirePermission }  from '../../common/decorators/require-permission.decorator';
+import { RequireModule }      from '../../common/decorators/require-module.decorator';
 import { TenantId }           from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission }         from '../../common/constants/permissions';
 
+@RequireModule('FLEET_DOCS')
 @Controller('tenants/:tenantId/fleet-docs')
 export class FleetDocsController {
   constructor(private readonly svc: FleetDocsService) {}

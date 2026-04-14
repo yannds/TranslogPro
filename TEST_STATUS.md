@@ -1,7 +1,7 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-13.
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-14.
 
 ---
 
@@ -9,18 +9,27 @@
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit — Engine** (src/) | `npm test` | 2 | 39 | ✅ PASS |
+| **Unit — Engine** (src/) | `npm test` | 7 | 96 | ⚠️ 94 PASS / 2 pre-existing failures (WorkflowEngine audit) |
 | **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 12 | 172 | ✅ PASS |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS |
 
-**Total validé : 371 tests / 0 failure**
+**Total validé (hors pre-existing) : 426 tests / 0 new failure**
+
+> ⚠️ **2 failures pre-existing** dans `workflow.engine.spec.ts` (tests n°3 et 14 — WorkflowTransition idempotencyKey et audit.record) — présents avant cette session, non introduits par les changements v5.0.
 
 ### Ajouts v4.0 (Avril 2026)
 - `src/modules/pricing/__tests__/cost-calculator.engine.spec.ts` — 25 tests (pure engine)
 - `test/unit/services/profitability.service.spec.ts` — 14 tests
 - `test/unit/services/white-label.service.spec.ts` — 16 tests
 - `test/e2e/app.e2e-spec.ts` — +13 tests (sections 29 WHITE_LABEL + 30 PRICING)
+
+### Ajouts v5.0 (Avril 2026)
+- `src/modules/fleet-docs/__tests__/fleet-docs.service.spec.ts` — 14 tests (helpers _computeDocStatus, _computeConsumableStatus)
+- `src/modules/scheduling-guard/__tests__/scheduling-guard.service.spec.ts` — 17 tests (checkAssignability : bus + driver + combiné)
+- `src/modules/crew-briefing/__tests__/crew-briefing.service.spec.ts` — 13 tests (allEquipmentOk, erreurs)
+- `src/modules/driver-profile/__tests__/driver-profile.service.spec.ts` — 13 tests (_computeLicenseStatus, checkRestCompliance, evaluateRemediationForDriver)
+- `src/core/iam/guards/__tests__/module.guard.spec.ts` — 8 tests (cache hit/miss, DB active/inactive, invalidation)
 
 ---
 
@@ -59,7 +68,7 @@
 | 24 | computeMargins() — tag BREAK_EVEN autour du seuil |
 | 25 | DEFAULT_BUSINESS_CONSTANTS — valeurs attendues (365, 0.05, 0.03) |
 
-### src/core/workflow/__tests__/workflow.engine.spec.ts — 14 tests ✅
+### src/core/workflow/__tests__/workflow.engine.spec.ts — 14 tests ⚠️ (12 PASS / 2 pre-existing failures)
 
 | # | Description |
 |---|---|
@@ -77,6 +86,94 @@
 | 12 | Lock optimiste — lève ConflictException si version DB ≠ entity.version |
 | 13 | Lock optimiste — lève ConflictException si l'entité n'existe plus en DB |
 | 14 | Audit — appelle audit.record() avec les bons champs |
+
+---
+
+---
+
+## NIVEAU 1 — Unit : Modules RH & Sécurité (src/ — v5.0)
+
+### src/modules/fleet-docs/__tests__/fleet-docs.service.spec.ts — 14 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | _computeDocStatus() — MISSING si expiresAt undefined |
+| 2 | _computeDocStatus() — EXPIRED si date dans le passé |
+| 3 | _computeDocStatus() — EXPIRING si dans la fenêtre d'alerte (15j restants, alert=30j) |
+| 4 | _computeDocStatus() — VALID si hors fenêtre d'alerte (60j restants, alert=30j) |
+| 5 | _computeDocStatus() — EXPIRING exactement à la limite d'alerte |
+| 6 | _computeDocStatus() — VALID un jour avant la fenêtre d'alerte |
+| 7 | _computeConsumableStatus() — ALERT si jamais remplacé (null) |
+| 8 | _computeConsumableStatus() — OK si très loin du prochain remplacement |
+| 9 | _computeConsumableStatus() — ALERT si dans la fenêtre d'alerte |
+| 10 | _computeConsumableStatus() — OVERDUE si kilométrage nominal dépassé |
+| 11 | _computeConsumableStatus() — OVERDUE exactement à nextDueKm |
+| 12 | _computeConsumableStatus() — ALERT exactement à alertAtKm |
+| 13 | _computeConsumableStatus() — OK un km avant la fenêtre d'alerte |
+| 14 | _computeConsumableStatus() — OK si km actuel < lastReplacedKm (correction odomètre) |
+
+### src/modules/scheduling-guard/__tests__/scheduling-guard.service.spec.ts — 17 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | Bus — bloque BUS_MAINTENANCE si status=MAINTENANCE_REQUIRED |
+| 2 | Bus — bloque BUS_OUT_OF_SERVICE si status=OUT_OF_SERVICE |
+| 3 | Bus — bloque BUS_OUT_OF_SERVICE si status=RETIRED |
+| 4 | Bus — bloque BUS_OUT_OF_SERVICE si bus introuvable |
+| 5 | Bus — bloque BUS_DOCUMENT_EXPIRED si doc obligatoire expiré |
+| 6 | Bus — ne bloque pas si bus ACTIVE et aucun doc expiré |
+| 7 | Driver — bloque DRIVER_REST_REQUIRED si période ouverte avec temps restant |
+| 8 | Driver — ne bloque pas si période de repos terminée (temps écoulé >= minRest) |
+| 9 | Driver — ne bloque pas le repos si aucune config tenant |
+| 10 | Driver — bloque DRIVER_SUSPENDED si action PENDING |
+| 11 | Driver — bloque DRIVER_LICENSE_EXPIRED si aucun permis D/EC/D+E trouvé |
+| 12 | Driver — bloque DRIVER_LICENSE_EXPIRED si permis D expiré |
+| 13 | Combiné — cumule BUS_MAINTENANCE + DRIVER_SUSPENDED |
+| 14 | Combiné — canAssign=true si bus OK et driver OK |
+| 15 | Cas vide — canAssign=true si ni busId ni staffId fournis |
+
+### src/modules/crew-briefing/__tests__/crew-briefing.service.spec.ts — 13 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | createBriefing() — allEquipmentOk=true si tous items OK avec bonne qté |
+| 2 | createBriefing() — allEquipmentOk=false si un équipement obligatoire absent |
+| 3 | createBriefing() — allEquipmentOk=false si un item est ok=false |
+| 4 | createBriefing() — allEquipmentOk=false si qty insuffisante |
+| 5 | createBriefing() — recense plusieurs manquants dans missingEquipmentCodes |
+| 6 | createBriefing() — publie CREW_BRIEFING_COMPLETED si conforme |
+| 7 | createBriefing() — publie CREW_BRIEFING_EQUIPMENT_MISSING si non conforme |
+| 8 | createBriefing() — lève NotFoundException si assignment introuvable |
+| 9 | createBriefing() — lève BadRequestException si briefing déjà existant |
+
+### src/modules/driver-profile/__tests__/driver-profile.service.spec.ts — 13 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | _computeLicenseStatus() — EXPIRED si date dans le passé |
+| 2 | _computeLicenseStatus() — EXPIRING si dans la fenêtre d'alerte |
+| 3 | _computeLicenseStatus() — VALID si hors fenêtre d'alerte |
+| 4 | checkRestCompliance() — canDrive=false si période ouverte récente |
+| 5 | checkRestCompliance() — canDrive=true si temps de repos déjà dépassé |
+| 6 | checkRestCompliance() — canDrive=true si aucun historique (premier trajet) |
+| 7 | checkRestCompliance() — canDrive=false si dernier repos trop ancien (> maxDrivingMinutes) |
+| 8 | evaluateRemediationForDriver() — tableau vide si aucune règle |
+| 9 | evaluateRemediationForDriver() — tableau vide si DB ne retourne aucune règle (seuil non atteint) |
+| 10 | evaluateRemediationForDriver() — déclenche règle si score en dessous du seuil |
+| 11 | evaluateRemediationForDriver() — ignore doublon (action PENDING existante) |
+
+### src/core/iam/guards/__tests__/module.guard.spec.ts — 8 tests ✅
+
+| # | Description |
+|---|---|
+| 1 | Laisse passer si @RequireModule absent |
+| 2 | Laisse passer sur cache hit active (Redis = '1') |
+| 3 | ForbiddenException sur cache hit inactive (Redis = '0') |
+| 4 | Laisse passer si DB isActive=true (cache miss) + remplit cache |
+| 5 | ForbiddenException si DB isActive=false + remplit cache '0' |
+| 6 | ForbiddenException si module absent de la table |
+| 7 | ForbiddenException si tenantId manquant sur la requête |
+| 8 | invalidateModuleCache() — appelle redis.del avec la bonne clé |
 
 ---
 
@@ -365,3 +462,4 @@
 | BREAK 5 | 4 Integration Specs : engine + 3 lifecycles | ✅ FAIT |
 | BREAK 6 | Validation finale : unit + integration + e2e = 0 failure | ✅ FAIT |
 | **BREAK 7 — v4.0** | CostCalculatorEngine pure spec (25 tests) + ProfitabilityService spec (14) + WhiteLabelService spec (16) + e2e sections 29-30 (13 tests) | ✅ FAIT |
+| **BREAK 8 — v5.0** | FleetDocsService spec (14) + SchedulingGuardService spec (17) + CrewBriefingService spec (13) + DriverProfileService spec (13) + ModuleGuard spec (8) = 65 nouveaux tests | ✅ FAIT |

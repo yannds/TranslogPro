@@ -18,7 +18,7 @@
 
 import { useState } from 'react';
 import {
-  UserCheck, Clock, BookOpen, AlertTriangle, Plus,
+  UserCheck, AlertTriangle, Plus,
   ChevronRight, Shield, Coffee, GraduationCap,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/Card';
@@ -74,8 +74,8 @@ function KpiCard({
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageDriverProfile() {
-  const [tab, setTab]             = useState<Tab>('overview');
-  const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
+  const [tab, setTab]         = useState<Tab>('overview');
+  const [_selectedDriver, setSelectedDriver] = useState<string | null>(null);
 
   // TODO: fetch depuis l'API
   const loading       = false;
