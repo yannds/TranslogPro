@@ -134,12 +134,12 @@ describe('WorkflowEngine', () => {
 
     it('crée un WorkflowTransition avec l\'idempotencyKey fourni', async () => {
       await engine.transition(BASE_TICKET, TRANSITION_INPUT, makeConfig());
-      const txMock = (prisma.transact as jest.Mock).mock.calls[0][0];
-      // L'assertion est sur le mock interne — vérification via audit
+      // Le moteur passe action=requiredPerm (permission canonique pour SIEM/ISO 27001),
+      // pas le verbe métier 'BOARD'. C'est le contrat défini ligne 245 du moteur.
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           tenantId: TENANT_ID,
-          action:   'BOARD',
+          action:   'data.ticket.scan.agency',
         }),
       );
     });
@@ -294,11 +294,13 @@ describe('WorkflowEngine', () => {
   describe('transition() — audit', () => {
     it('appelle audit.record() avec les bons champs', async () => {
       await engine.transition(BASE_TICKET, TRANSITION_INPUT, makeConfig());
+      // action = requiredPerm (permission canonique) — pas le verbe métier.
+      // C'est le contrat ADR : le SIEM filtre par permission, pas par verbe.
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           tenantId: TENANT_ID,
           userId:   ACTOR.id,
-          action:   'BOARD',
+          action:   'data.ticket.scan.agency',
           resource: expect.stringContaining('ticket-001'),
         }),
       );
