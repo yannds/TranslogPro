@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
-import { CrmService, CreateCampaignDto, UpdateCampaignDto } from './crm.service';
+import { CrmService, CreateCampaignDto, UpdateCampaignDto, CreateCustomerDto, UpdateCustomerDto } from './crm.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -34,6 +34,34 @@ export class CrmController {
     @Param('userId') userId: string,
   ) {
     return this.crmService.getCustomer(tenantId, userId);
+  }
+
+  @Post('customers')
+  @RequirePermission(Permission.CAMPAIGN_MANAGE_TENANT)
+  createCustomer(
+    @TenantId() tenantId: string,
+    @Body() dto: CreateCustomerDto,
+  ) {
+    return this.crmService.createCustomer(tenantId, dto);
+  }
+
+  @Patch('customers/:userId')
+  @RequirePermission(Permission.CAMPAIGN_MANAGE_TENANT)
+  updateCustomer(
+    @TenantId() tenantId: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateCustomerDto,
+  ) {
+    return this.crmService.updateCustomer(tenantId, userId, dto);
+  }
+
+  @Delete('customers/:userId')
+  @RequirePermission(Permission.CAMPAIGN_MANAGE_TENANT)
+  archiveCustomer(
+    @TenantId() tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.crmService.archiveCustomer(tenantId, userId);
   }
 
   // ─── Campaigns ───────────────────────────────────────────────────────────────

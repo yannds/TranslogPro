@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
-import { StaffService, CreateStaffDto } from './staff.service';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query } from '@nestjs/common';
+import { StaffService, CreateStaffDto, UpdateStaffDto } from './staff.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
@@ -33,9 +33,31 @@ export class StaffController {
     return this.staffService.findOne(tenantId, userId);
   }
 
+  @Patch(':userId')
+  @RequirePermission(Permission.STAFF_MANAGE)
+  update(
+    @TenantId() tenantId: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateStaffDto,
+  ) {
+    return this.staffService.update(tenantId, userId, dto);
+  }
+
   @Patch(':userId/suspend')
   @RequirePermission(Permission.STAFF_MANAGE)
   suspend(@TenantId() tenantId: string, @Param('userId') userId: string) {
     return this.staffService.suspend(tenantId, userId);
+  }
+
+  @Patch(':userId/reactivate')
+  @RequirePermission(Permission.STAFF_MANAGE)
+  reactivate(@TenantId() tenantId: string, @Param('userId') userId: string) {
+    return this.staffService.reactivate(tenantId, userId);
+  }
+
+  @Delete(':userId')
+  @RequirePermission(Permission.STAFF_MANAGE)
+  archive(@TenantId() tenantId: string, @Param('userId') userId: string) {
+    return this.staffService.archive(tenantId, userId);
   }
 }

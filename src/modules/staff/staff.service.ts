@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IIdentityManager, IDENTITY_SERVICE } from '../../infrastructure/identity/interfaces/identity.interface';
 import { Inject } from '@nestjs/common';
@@ -7,8 +7,16 @@ export interface CreateStaffDto {
   email:    string;
   name:     string;
   role:     string;
-  agencyId: string;
+  agencyId?: string | null;
   licenseData?: Record<string, unknown>;
+}
+
+export interface UpdateStaffDto {
+  name?:        string;
+  role?:        string;
+  agencyId?:    string | null;
+  licenseData?: Record<string, unknown>;
+  isAvailable?: boolean;
 }
 
 @Injectable()
@@ -20,14 +28,22 @@ export class StaffService {
 
   async create(tenantId: string, dto: CreateStaffDto) {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException(`Email ${dto.email} already registered`);
+    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré`);
+
+    const agencyId = dto.agencyId && dto.agencyId.trim() !== '' ? dto.agencyId : null;
+
+    // Valider que l'agence existe bien dans le tenant (évite FK violation → 500)
+    if (agencyId) {
+      const agency = await this.prisma.agency.findFirst({ where: { id: agencyId, tenantId } });
+      if (!agency) throw new BadRequestException(`Agence ${agencyId} introuvable dans ce tenant`);
+    }
 
     const user = await this.identity.createUser({
       email:    dto.email,
       password: this.generateTemporaryPassword(),
       name:     dto.name,
       tenantId,
-      agencyId: dto.agencyId,
+      agencyId: agencyId ?? undefined,
       userType: 'STAFF',
     });
 
@@ -35,7 +51,7 @@ export class StaffService {
       data: {
         userId:      user.id,
         tenantId,
-        agencyId:    dto.agencyId,
+        agencyId,
         role:        dto.role,
         licenseData: (dto.licenseData ?? {}) as any,
         status:      'ACTIVE',
@@ -62,9 +78,42 @@ export class StaffService {
     return staff;
   }
 
+  async update(tenantId: string, userId: string, dto: UpdateStaffDto) {
+    const staff = await this.findOne(tenantId, userId);
+
+    if (dto.name !== undefined && dto.name !== staff.user.name) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data:  { name: dto.name },
+      });
+    }
+
+    return this.prisma.staff.update({
+      where: { userId },
+      data:  {
+        ...(dto.role        !== undefined ? { role:        dto.role }                : {}),
+        ...(dto.agencyId    !== undefined ? { agencyId:    dto.agencyId ?? null }    : {}),
+        ...(dto.licenseData !== undefined ? { licenseData: dto.licenseData as any }  : {}),
+        ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable }         : {}),
+      },
+      include: { user: true },
+    });
+  }
+
   async suspend(tenantId: string, userId: string) {
     await this.findOne(tenantId, userId);
     return this.prisma.staff.update({ where: { userId }, data: { status: 'SUSPENDED' } });
+  }
+
+  async reactivate(tenantId: string, userId: string) {
+    await this.findOne(tenantId, userId);
+    return this.prisma.staff.update({ where: { userId }, data: { status: 'ACTIVE' } });
+  }
+
+  async archive(tenantId: string, userId: string) {
+    await this.findOne(tenantId, userId);
+    await this.prisma.staff.update({ where: { userId }, data: { status: 'ARCHIVED', isAvailable: false } });
+    return { archived: true };
   }
 
   private generateTemporaryPassword(): string {

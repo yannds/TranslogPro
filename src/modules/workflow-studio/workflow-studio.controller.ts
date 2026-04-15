@@ -20,6 +20,7 @@ import {
   Controller, Get, Post, Put, Delete, Param, Body, Query,
 } from '@nestjs/common';
 import { WorkflowStudioService }      from './workflow-studio.service';
+import { SimulationSessionService, CreateSessionDto } from './simulation-session.service';
 import { RequirePermission }          from '../../common/decorators/require-permission.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission }                 from '../../common/constants/permissions';
@@ -28,7 +29,10 @@ import { SimulateWorkflowDto }        from './dto/simulate-workflow.dto';
 
 @Controller('tenants/:tenantId/workflow-studio')
 export class WorkflowStudioController {
-  constructor(private readonly studio: WorkflowStudioService) {}
+  constructor(
+    private readonly studio: WorkflowStudioService,
+    private readonly sessions: SimulationSessionService,
+  ) {}
 
   // ─── Graphe actif ────────────────────────────────────────────────────────────
 
@@ -54,6 +58,16 @@ export class WorkflowStudioController {
     @Param('entityType') entityType: string,
   ) {
     return this.studio.getEntityTypeMetadata(tenantId, entityType);
+  }
+
+  @Get('suggestions')
+  @RequirePermission(Permission.WORKFLOW_STUDIO_READ_TENANT)
+  getSuggestions(
+    @Param('tenantId')    tenantId:   string,
+    @Query('entityType')  entityType: string,
+    @Query('action')      action:     string,
+  ) {
+    return this.studio.getSuggestions(tenantId, entityType, action);
   }
 
   @Put('graph')
@@ -145,5 +159,61 @@ export class WorkflowStudioController {
     @Body()            dto:      SimulateWorkflowDto,
   ) {
     return this.studio.simulateWorkflow(tenantId, dto);
+  }
+
+  @Post('simulate/explore')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  explore(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      SimulateWorkflowDto,
+  ) {
+    return this.studio.exploreWorkflow(tenantId, dto);
+  }
+
+  // ─── Sessions breakpoint ─────────────────────────────────────────────────
+
+  @Post('simulate/sessions')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  createSession(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      CreateSessionDto,
+  ) {
+    return this.sessions.createSession(tenantId, dto);
+  }
+
+  @Get('simulate/sessions/:sessionId')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  getSession(
+    @Param('tenantId')  tenantId:  string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.sessions.getSession(tenantId, sessionId);
+  }
+
+  @Post('simulate/sessions/:sessionId/step')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  stepSession(
+    @Param('tenantId')  tenantId:  string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.sessions.stepSession(tenantId, sessionId);
+  }
+
+  @Post('simulate/sessions/:sessionId/continue')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  continueSession(
+    @Param('tenantId')  tenantId:  string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.sessions.continueSession(tenantId, sessionId);
+  }
+
+  @Delete('simulate/sessions/:sessionId')
+  @RequirePermission(Permission.WORKFLOW_SIMULATE_TENANT)
+  deleteSession(
+    @Param('tenantId')  tenantId:  string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.sessions.deleteSession(tenantId, sessionId);
   }
 }

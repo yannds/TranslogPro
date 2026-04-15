@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c 'SELECT \"tenantId\", slug, version, \"isActive\", \"updatedAt\" FROM document_templates WHERE slug=\\('\"'\"'packing-list-a4'\"'\"'\\) ORDER BY \"tenantId\" NULLS FIRST, version;')",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -tAc \"SELECT jsonb_path_query\\(\\\\\"schemaJson\\\\\"::jsonb, '\\\\$.schemas[0][*] ? \\(@.type == \\\\\"table\\\\\"\\)'\\) FROM document_templates WHERE slug='packing-list-a4' AND \\\\\"tenantId\\\\\" IS NULL AND \\\\\"isActive\\\\\"=true;\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c 'SELECT \"tenantId\", slug, version, \"updatedAt\" FROM document_templates WHERE slug IN \\('\"'\"'packing-list-a4'\"'\"','\"'\"'manifest-a4'\"'\"'\\) AND \"isActive\"=true ORDER BY slug, \"tenantId\" NULLS FIRST;')",
+      "Bash(ls /Users/dsyann/TranslogPro/frontend/components/dashboard/PageCrm* /Users/dsyann/TranslogPro/frontend/components/pages/PageCrm*)",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -tAc \"SELECT slug, jsonb_path_query_array\\(\\\\\"schemaJson\\\\\"::jsonb, '\\\\$.schemas[0][*] ? \\(@.type == \\\\\"qrcode\\\\\"\\).content'\\) FROM document_templates WHERE \\\\\"tenantId\\\\\" IS NULL AND \\\\\"isActive\\\\\"=true ORDER BY slug;\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -tAc \"SELECT jsonb_path_query_array\\(\\\\\"schemaJson\\\\\"::jsonb, '\\\\$.schemas[0][*].name'\\) FROM document_templates WHERE slug='boarding-pass-a6' AND \\\\\"tenantId\\\\\" IS NULL AND \\\\\"isActive\\\\\"=true;\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -tAc \"SELECT \\\\\"varsSchema\\\\\" FROM document_templates WHERE slug IN \\('boarding-pass-a6','envelope-c5','envelope-dl','parcel-label-multi','invoice-simple-a5','receipt-a4','receipt-thermal'\\) AND \\\\\"tenantId\\\\\" IS NULL AND \\\\\"isActive\\\\\"=true;\")",
+      "Bash(grep -n \"IStorageService\\\\|STORAGE_SERVICE\\\\|putObject\\\\|getDownloadUrl\\\\|presign\" /Users/dsyann/TranslogPro/src/infrastructure/**/*.ts)",
+      "Bash(grep -rn \"DatabaseModule\\\\|@Global\\\\|PrismaService\" /Users/dsyann/TranslogPro/src/infrastructure/database/*.ts)",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT entity_type, action, required_perm FROM workflow_configs WHERE tenant_id='11111111-1111-1111-1111-111111111111' AND is_active=true ORDER BY entity_type, from_state;\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c 'SELECT \"entityType\", action, \"requiredPerm\" FROM workflow_configs WHERE \"tenantId\"='\"'\"'11111111-1111-1111-1111-111111111111'\"'\"' AND \"isActive\"=true ORDER BY \"entityType\", \"fromState\";')"
+    ]
+  }
+}

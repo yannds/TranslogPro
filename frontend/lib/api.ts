@@ -52,15 +52,26 @@ export async function apiFetch<T = unknown>(
   const url = `${baseUrl}${path}`;
 
   const headers = new Headers(init.headers);
-  if (body !== undefined && !headers.has('Content-Type')) {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const isBlob     = typeof Blob    !== 'undefined' && body instanceof Blob;
+  const isString   = typeof body === 'string';
+
+  // Pour FormData / Blob / string : ne jamais forcer Content-Type (boundary auto, etc.)
+  if (body !== undefined && !isFormData && !isBlob && !isString && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+
+  const serializedBody: BodyInit | undefined =
+    body === undefined              ? undefined
+    : (isFormData || isBlob)         ? (body as BodyInit)
+    : isString                       ? (body as string)
+    : JSON.stringify(body);
 
   const res = await fetch(url, {
     ...init,
     headers,
     credentials: 'include',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: serializedBody,
   });
 
   if (res.status === 401) {

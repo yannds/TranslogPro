@@ -29,11 +29,13 @@ const dialogContentVariants = cva(
   {
     variants: {
       size: {
-        sm:   'w-full max-w-sm',
-        md:   'w-full max-w-md',
-        lg:   'w-full max-w-lg',
-        xl:   'w-full max-w-2xl',
-        full: 'w-[95vw] max-w-none',
+        sm:    'w-full max-w-sm',
+        md:    'w-full max-w-md',
+        lg:    'w-full max-w-lg',
+        xl:    'w-full max-w-2xl',
+        '2xl': 'w-[95vw] max-w-5xl',
+        '3xl': 'w-[95vw] max-w-6xl',
+        full:  'w-[95vw] max-w-none',
       },
     },
     defaultVariants: { size: 'md' },
@@ -71,29 +73,25 @@ export function Dialog({
             data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0`}
         />
 
-        {/* Content */}
-        <DialogPrimitive.Content
-          className={cn(dialogContentVariants({ size }))}
-          aria-labelledby="dialog-title"
-          aria-describedby={description ? 'dialog-desc' : undefined}
-        >
+        {/* Content — Radix gère aria-labelledby/aria-describedby automatiquement
+            à partir des composants Title/Description présents en descendance. */}
+        <DialogPrimitive.Content className={cn(dialogContentVariants({ size }))}>
           {/* Header */}
           <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
             <div>
-              <DialogPrimitive.Title
-                id="dialog-title"
-                className="text-base font-semibold text-slate-900 dark:text-slate-50"
-              >
+              <DialogPrimitive.Title className="text-base font-semibold text-slate-900 dark:text-slate-50">
                 {title}
               </DialogPrimitive.Title>
-              {description && (
-                <DialogPrimitive.Description
-                  id="dialog-desc"
-                  className="mt-1 text-sm text-slate-500 dark:text-slate-400"
-                >
-                  {description}
-                </DialogPrimitive.Description>
-              )}
+              {description
+                ? (
+                  <DialogPrimitive.Description className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {description}
+                  </DialogPrimitive.Description>
+                )
+                : (
+                  // Description obligatoire selon Radix : on la masque visuellement si non fournie.
+                  <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
+                )}
             </div>
             {!hideCloseButton && (
               <DialogPrimitive.Close

@@ -114,7 +114,9 @@ export class DocumentsService {
     });
 
     const s = (tenant.settings ?? {}) as Record<string, unknown>;
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      tenantLogo,
       tenantName:    tenant.name,
       tenantAddress: (s.address as string) ?? '',
       tenantPhone:   (s.phone   as string) ?? '',
@@ -210,7 +212,47 @@ export class DocumentsService {
       scope,
     });
 
-    return this.storeAsPdf(tenantId, html, `manifests/${tripId}`, DocumentType.MANIFEST_HTML, actor, 'A4');
+    const totalParcels = shipments.reduce((s, sh) => s + sh.parcels.length, 0);
+    const totalWeight  = shipments.reduce((s, sh) => s + sh.totalWeight,    0);
+
+    const passengerRows = travelers.map((t, i) => [
+      String(i + 1),
+      t.passengerName,
+      t.seatNumber ?? '—',
+      t.status,
+      '',
+    ]);
+    const parcelRows = shipments.flatMap(sh =>
+      sh.parcels.map(p => [p.trackingCode, p.destinationId, `${p.weight} kg`, p.status]),
+    );
+
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
+    const pdfmeData: Record<string, string> = {
+      tenantLogo,
+      tenantName:     tenant.name,
+      tenantAddress:  '',
+      tenantPhone:    '',
+      tripId:         trip.id.slice(0, 12).toUpperCase(),
+      routeName:      (trip as any).route?.name ?? '',
+      origin:         (trip as any).route?.originId      ?? '',
+      destination:    (trip as any).route?.destinationId ?? '',
+      tripDate:       trip.departureScheduled.toLocaleString('fr-FR'),
+      busPlate:       (trip as any).bus?.plateNumber ?? '—',
+      driverName:     driver?.name ?? driver?.email ?? '—',
+      passengerCount: String(travelers.length),
+      parcelCount:    String(totalParcels),
+      totalWeight:    String(totalWeight),
+      passengerRows:  JSON.stringify(passengerRows.length ? passengerRows : [['—','Aucun passager','—','—','']]),
+      parcelRows:     JSON.stringify(parcelRows.length    ? parcelRows    : [['—','Aucun colis','—','—']]),
+      qrCodeValue:    `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/manifest/${trip.id}`,
+      generatedAt:    new Date().toLocaleString('fr-FR'),
+    };
+
+    return this.storeWithPdfmeFallback(
+      tenantId, 'manifest-a4', pdfmeData,
+      async () => html,
+      `manifests/${tripId}`, DocumentType.MANIFEST_HTML, actor, 'A4',
+    );
   }
 
   // ─── Étiquette colis ────────────────────────────────────────────────────────
@@ -250,7 +292,9 @@ export class DocumentsService {
     });
 
     const recip = (parcel.recipientInfo ?? {}) as Record<string, unknown>;
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      tenantLogo,
       tenantName:       tenant.name,
       parcelRef:        parcel.id,
       trackingCode:     parcel.trackingCode,
@@ -330,7 +374,50 @@ export class DocumentsService {
       scope,
     });
 
-    return this.storeAsPdf(tenantId, html, `packing-lists/${shipmentId}`, DocumentType.PARCEL_LABEL, actor, 'A4');
+    const firstParcel = (shipment.parcels as any[])[0] ?? {};
+    const firstSender = senderMap.get(firstParcel.senderId) ?? null;
+    const firstRecip  = (firstParcel.recipientInfo ?? {}) as Record<string, unknown>;
+    const parcelRows  = (shipment.parcels as any[]).map(p => {
+      const recip = (p.recipientInfo ?? {}) as Record<string, unknown>;
+      return [
+        p.trackingCode,
+        (recip.description as string) ?? (recip.name as string) ?? '—',
+        `${p.weight} kg`,
+        p.status,
+      ];
+    });
+
+    const tenantSettings = (tenant.settings ?? {}) as Record<string, unknown>;
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
+    const pdfmeData: Record<string, string> = {
+      tenantLogo,
+      tenantName:       tenant.name,
+      tenantAddress:    (tenantSettings.address as string) ?? '',
+      tenantPhone:      (tenantSettings.phone   as string) ?? '',
+      tenantNif:        (tenantSettings.nif     as string) ?? '',
+      tenantRccm:       (tenantSettings.rccm    as string) ?? '',
+      shipmentId:       shipment.id.slice(0, 12).toUpperCase(),
+      shipmentDate:     shipment.createdAt.toLocaleDateString('fr-FR'),
+      senderName:       firstSender?.name ?? '—',
+      senderAddress:    '',
+      senderPhone:      firstSender?.email ?? '',
+      recipientName:    (firstRecip.name    as string) ?? '—',
+      recipientAddress: (firstRecip.address as string) ?? '',
+      recipientPhone:   (firstRecip.phone   as string) ?? '',
+      origin:           (trip as any)?.route?.originId      ?? '—',
+      destination:      (trip as any)?.route?.destinationId ?? shipment.destinationId,
+      parcelCount:      String((shipment.parcels as any[]).length),
+      totalWeight:      String(shipment.totalWeight),
+      parcelRows:       JSON.stringify(parcelRows.length ? parcelRows : [['—','Aucun colis','—','—']]),
+      qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
+      generatedAt:      new Date().toLocaleString('fr-FR'),
+    };
+
+    return this.storeWithPdfmeFallback(
+      tenantId, 'packing-list-a4', pdfmeData,
+      async () => html,
+      `packing-lists/${shipmentId}`, DocumentType.PARCEL_LABEL, actor, 'A4',
+    );
   }
 
   // ─── Facture ticket voyageur ─────────────────────────────────────────────────
@@ -539,7 +626,9 @@ export class DocumentsService {
     });
 
     const tvaAmt = Math.round(ticket.pricePaid - ht);
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      tenantLogo,
       tenantName:    tenant.name,
       tenantAddress: (s.address as string) ?? '',
       tenantPhone:   (s.phone   as string) ?? '',
@@ -560,6 +649,12 @@ export class DocumentsService {
       totalTtc:      String(ticket.pricePaid),
       currency:      'FCFA',
       paymentMethod: 'Espèces',
+      invoiceLines:  JSON.stringify([[
+        `Transport — ${trip?.route?.name ?? 'Trajet'} — ${ticket.passengerName}`,
+        '1',
+        `${ht} FCFA`,
+        `${ht} FCFA`,
+      ]]),
       qrCodeValue:   ticket.qrCode ?? ticket.id,
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
@@ -612,7 +707,32 @@ export class DocumentsService {
       scope,
     });
 
-    return this.storeAsPdf(tenantId, html, `poc/ticket-stub/${ticketId}`, DocumentType.TICKET_PDF, actor, 'A5');
+    const depart  = trip?.departureScheduled ?? new Date();
+    const boarding = new Date(depart.getTime() - 15 * 60_000);
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
+    const pdfmeData: Record<string, string> = {
+      tenantLogo,
+      tenantName:   tenant.name,
+      flightCode:   (trip as any)?.route?.code ?? (trip?.id ?? ticketId).slice(0, 8).toUpperCase(),
+      passengerName: ticket.passengerName,
+      origin:        (trip as any)?.route?.originId      ?? '',
+      destination:   (trip as any)?.route?.destinationId ?? '',
+      boardingDate:  depart.toLocaleDateString('fr-FR'),
+      departureTime: depart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      boardingTime:  boarding.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      class:         '—',
+      gate:          '—',
+      seatNumber:    (ticket as any).seatNumber ?? '—',
+      zone:          '—',
+      bookingRef:    ticket.id.slice(-8).toUpperCase(),
+      qrCodeValue:   ticket.qrCode ?? ticket.id,
+      barcodeValue:  ticket.id,
+    };
+    return this.storeWithPdfmeFallback(
+      tenantId, 'boarding-pass-a6', pdfmeData,
+      async () => html,
+      `poc/ticket-stub/${ticketId}`, DocumentType.TICKET_PDF, actor, 'A5',
+    );
   }
 
   /** Feuille multi-impression d'étiquettes (2×4 sur A4) */
@@ -658,8 +778,28 @@ export class DocumentsService {
       scope,
     });
 
-    return this.storeAsPdf(
-      tenantId, html,
+    const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
+    const pdfmeData: Record<string, string> = {
+      tenantName:  tenant.name,
+      shipmentId:  parcelIds[0]?.slice(0, 12).toUpperCase() ?? '—',
+      generatedAt: new Date().toLocaleString('fr-FR'),
+    };
+    for (let i = 0; i < 8; i++) {
+      const idx = i + 1;
+      const it  = items[i];
+      const recip = (it?.recipientInfo ?? {}) as Record<string, string | undefined>;
+      pdfmeData[`label_${idx}_tracking`]    = it?.trackingCode ?? '';
+      pdfmeData[`label_${idx}_weight`]      = it ? `${it.weight} kg` : '';
+      pdfmeData[`label_${idx}_sender`]      = it?.sender?.name ?? '';
+      pdfmeData[`label_${idx}_recipient`]   = recip.name ?? '';
+      pdfmeData[`label_${idx}_address`]     = recip.address ?? '';
+      pdfmeData[`label_${idx}_destination`] = (it as any)?.destination?.name ?? '';
+      pdfmeData[`label_${idx}_qr`]          = it ? `${trackingBase}/${it.trackingCode}` : '';
+    }
+
+    return this.storeWithPdfmeFallback(
+      tenantId, 'parcel-label-multi', pdfmeData,
+      async () => html,
       `poc/multi-label/${Date.now()}`,
       DocumentType.PARCEL_LABEL, actor, 'A4',
     );
@@ -705,8 +845,25 @@ export class DocumentsService {
     });
 
     const printFmt = format === 'C5' ? 'ENVELOPE_C5' as PrintFormat : 'ENVELOPE_C5' as PrintFormat;
-    return this.storeAsPdf(
-      tenantId, html,
+    const slug = format === 'DL' ? 'envelope-dl' : 'envelope-c5';
+    const pdfmeData: Record<string, string> = {
+      tenantName:       tenant.name,
+      reference:        shipment.id.slice(0, 12).toUpperCase(),
+      senderName:       tenant.name,
+      senderAddress:    (s.address as string) ?? '',
+      senderCity:       (s.city    as string) ?? '',
+      senderZip:        (s.zip     as string) ?? '',
+      recipientName:    station?.name ?? shipment.destinationId,
+      recipientAddress: (station as any)?.address ?? 'Adresse à compléter',
+      recipientCity:    (station as any)?.city ?? '',
+      recipientZip:     (station as any)?.zip  ?? '',
+      recipientCountry: (station as any)?.country ?? '',
+      qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
+      generatedAt:      new Date().toLocaleString('fr-FR'),
+    };
+    return this.storeWithPdfmeFallback(
+      tenantId, slug, pdfmeData,
+      async () => html,
       `poc/envelope/${shipmentId}`,
       DocumentType.PARCEL_LABEL, actor, printFmt,
     );
@@ -779,7 +936,9 @@ export class DocumentsService {
       scope,
     });
 
+    const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      tenantLogo,
       tenantName:    tenant.name,
       trackingCode,
       weight:        String(weightKg),
@@ -804,6 +963,46 @@ export class DocumentsService {
       `poc/baggage-tag/${ticketId}-${bagIndex}`,
       DocumentType.TICKET_PDF, actor, 'BAGGAGE_TAG',
     );
+  }
+
+  /**
+   * Récupère le logo tenant (tenant_brands.logoUrl) en tant que data URI base64.
+   * Retourne '' si absent ou inaccessible — jamais d'exception (regression-free).
+   */
+  private async fetchTenantLogoDataUri(tenantId: string): Promise<string> {
+    try {
+      const brand = await this.prisma.tenantBrand.findUnique({
+        where:  { tenantId },
+        select: { logoUrl: true },
+      });
+      const url = brand?.logoUrl;
+      if (!url) return '';
+      // Déjà en data URI ?
+      if (url.startsWith('data:')) return url;
+      // URL HTTP(S) → fetch avec timeout
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 3000);
+        try {
+          const res = await fetch(url, { signal: ctrl.signal });
+          if (!res.ok) return '';
+          const mime = res.headers.get('content-type') ?? 'image/png';
+          const buf  = Buffer.from(await res.arrayBuffer());
+          return `data:${mime};base64,${buf.toString('base64')}`;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      // Clé MinIO relative
+      const buf = await this.storage.getObject(tenantId, url);
+      const mime = url.endsWith('.svg') ? 'image/svg+xml'
+                 : url.endsWith('.jpg') || url.endsWith('.jpeg') ? 'image/jpeg'
+                 : 'image/png';
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch (e) {
+      this.logger.warn(`Logo tenant indisponible (${tenantId}): ${(e as Error).message}`);
+      return '';
+    }
   }
 
   // ─── Helper pdfme : template personnalisé → PDF ─────────────────────────────

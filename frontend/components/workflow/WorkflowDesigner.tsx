@@ -34,6 +34,7 @@ import { TransitionEdge }  from './edges/TransitionEdge';
 import { SimulationPanel } from './SimulationPanel';
 import { BlueprintPanel }  from './BlueprintPanel';
 import { ReactFlowAdapter, type RFNode, type RFEdge, type RFNodeData, type RFEdgeData } from './ReactFlowAdapter';
+import { layoutGraph } from './layoutGraph';
 import type { WorkflowGraph, SimResult, SimOverlay } from './types';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
@@ -132,10 +133,32 @@ export function WorkflowDesigner({
   }, [tenantId, entityType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncGraphToRF = useCallback((g: WorkflowGraph) => {
-    const { nodes: rfn, edges: rfe } = ReactFlowAdapter.toReactFlow(g, {});
+    // Si aucune position significative (toutes à 0 ou très proches), on auto-layout.
+    // Préserve les positions personnalisées par l'utilisateur.
+    const allZero = g.nodes.length > 0 && g.nodes.every(
+      n => (n.position?.x ?? 0) < 5 && (n.position?.y ?? 0) < 5,
+    );
+    const effective = allZero
+      ? { ...g, nodes: layoutGraph(g.nodes, g.edges).nodes }
+      : g;
+    const { nodes: rfn, edges: rfe } = ReactFlowAdapter.toReactFlow(effective, {});
     setNodes(rfn as any);
     setEdges(rfe as any);
   }, [setNodes, setEdges]);
+
+  // Réorganise tous les nœuds via BFS — déclenché par le bouton "Réorganiser".
+  // Reconstruit la WorkflowGraph depuis l'état RF courant, layoute, ré-applique.
+  const handleAutoLayout = useCallback(() => {
+    const current = ReactFlowAdapter.fromReactFlow(
+      nodes as RFNode[], edges as RFEdge[], entityType,
+    );
+    const relaid = layoutGraph(current.nodes, current.edges);
+    const updated: WorkflowGraph = { ...current, nodes: relaid.nodes };
+    const { nodes: rfn, edges: rfe } = ReactFlowAdapter.toReactFlow(updated, {});
+    setNodes(rfn as any);
+    setEdges(rfe as any);
+    setIsDirty(true);
+  }, [nodes, edges, entityType, setNodes, setEdges]);
 
   // ─── Marquer dirty à chaque changement ───────────────────────────────────
 
@@ -311,6 +334,14 @@ export function WorkflowDesigner({
           </button>
 
           <button
+            onClick={handleAutoLayout}
+            className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-medium px-3 py-1.5 shadow transition-colors"
+            title="Réorganiser automatiquement le graphe (BFS gauche → droite)"
+          >
+            ⇆ Réorganiser
+          </button>
+
+          <button
             onClick={() => graph && syncGraphToRF(graph)}
             disabled={!isDirty}
             className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium px-3 py-1.5 disabled:opacity-50 shadow transition-colors"
@@ -394,7 +425,13 @@ export function WorkflowDesigner({
               <NodePropsEditor data={editPanel.data} onChange={applyNodeEdit} />
             )}
             {editPanel.type === 'edge' && (
-              <EdgePropsEditor data={editPanel.data} onChange={applyEdgeEdit} metadata={metadata} />
+              <EdgePropsEditor
+                data={editPanel.data}
+                onChange={applyEdgeEdit}
+                metadata={metadata}
+                tenantId={tenantId}
+                entityType={entityType}
+              />
             )}
           </div>
         )}
@@ -408,6 +445,7 @@ export function WorkflowDesigner({
               tenantId={tenantId}
               entityType={entityType}
               nodes={liveGraph?.nodes ?? []}
+              currentGraph={liveGraph}
               availableActions={
                 /* Dérive directement du graphe en cours d'édition — indépendant de metadata.
                    Fallback sur metadata si graphe vide. */
@@ -460,17 +498,51 @@ function NodePropsEditor({ data, onChange }: { data: RFNodeData; onChange: (d: R
 
 // ─── EdgePropsEditor ─────────────────────────────────────────────────────────
 
+interface SuggestionsResponse {
+  entityType: string;
+  action:     string;
+  suggestedPermissions: Array<{ value: string; source: 'graph' | 'convention' | 'system'; usedBy?: number }>;
+  suggestedRoles:       Array<{ id: string; name: string; userCount: number }>;
+}
+
 function EdgePropsEditor({
   data,
   onChange,
   metadata,
+  tenantId,
+  entityType,
 }: {
-  data:      RFEdgeData;
-  onChange:  (d: RFEdgeData) => void;
-  metadata?: WorkflowMetadata | null;
+  data:       RFEdgeData;
+  onChange:   (d: RFEdgeData) => void;
+  metadata?:  WorkflowMetadata | null;
+  tenantId:   string;
+  entityType: string;
 }) {
   const guards      = data.guards     ?? [];
   const sideEffects = data.sideEffects ?? [];
+
+  const [suggestions, setSuggestions] = useState<SuggestionsResponse | null>(null);
+
+  // Fetch suggestions quand l'action change (debounce 400ms — pas à chaque frappe)
+  useEffect(() => {
+    if (!tenantId || !entityType || !data.action) {
+      setSuggestions(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      apiFetch<SuggestionsResponse>(
+        `/api/tenants/${tenantId}/workflow-studio/suggestions?entityType=${encodeURIComponent(entityType)}&action=${encodeURIComponent(data.action)}`,
+        { signal: ctrl.signal },
+      )
+        .then(setSuggestions)
+        .catch(() => { /* non bloquant */ });
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [tenantId, entityType, data.action]);
 
   const toggleGuard = (g: string) => {
     const next = guards.includes(g) ? guards.filter(x => x !== g) : [...guards, g];
@@ -481,6 +553,13 @@ function EdgePropsEditor({
     const next = sideEffects.includes(s) ? sideEffects.filter(x => x !== s) : [...sideEffects, s];
     onChange({ ...data, sideEffects: next });
   };
+
+  const applyPermission = (p: string) => onChange({ ...data, permission: p });
+
+  const sourceLabel = (src: 'graph' | 'convention' | 'system'): string =>
+    src === 'graph'     ? 'déjà utilisée'
+    : src === 'system'  ? 'blueprint'
+    : 'convention';
 
   const actionListId    = 'wf-actions-list';
   const permListId      = 'wf-perms-list';
@@ -505,7 +584,7 @@ function EdgePropsEditor({
         )}
       </div>
 
-      {/* Permission */}
+      {/* Permission + suggestions contextuelles */}
       <div>
         <label className="block text-[10px] text-slate-500 mb-0.5">Permission requise</label>
         <input
@@ -520,6 +599,58 @@ function EdgePropsEditor({
           <datalist id={permListId}>
             {metadata.permissions.map(p => <option key={p} value={p} />)}
           </datalist>
+        )}
+
+        {/* Chips de suggestions — clic = remplissage immédiat */}
+        {suggestions && suggestions.suggestedPermissions.length > 0 && (
+          <div className="mt-1.5 space-y-1">
+            <div className="text-[9px] text-slate-400">Suggestions pour "{data.action}" :</div>
+            <div className="flex flex-wrap gap-1">
+              {suggestions.suggestedPermissions.slice(0, 6).map(s => {
+                const selected = s.value === data.permission;
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => applyPermission(s.value)}
+                    title={`${sourceLabel(s.source)}${s.usedBy ? ` · utilisée ${s.usedBy}×` : ''}`}
+                    className={cn(
+                      'rounded-full text-[9px] font-mono px-1.5 py-0.5 border transition-colors',
+                      selected
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : s.source === 'graph'
+                          ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900'
+                          : s.source === 'system'
+                            ? 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700',
+                    )}
+                  >
+                    {s.value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Rôles qui possèdent la permission suggérée */}
+        {suggestions && suggestions.suggestedRoles.length > 0 && (
+          <div className="mt-1.5">
+            <div className="text-[9px] text-slate-400 mb-0.5">
+              {suggestions.suggestedRoles.length} rôle{suggestions.suggestedRoles.length > 1 ? 's' : ''} possède{suggestions.suggestedRoles.length > 1 ? 'nt' : ''} cette permission :
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {suggestions.suggestedRoles.slice(0, 5).map(r => (
+                <span
+                  key={r.id}
+                  title={`${r.userCount} utilisateur${r.userCount > 1 ? 's' : ''}`}
+                  className="rounded-full text-[9px] bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5"
+                >
+                  {r.name} <span className="text-emerald-400">({r.userCount})</span>
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 

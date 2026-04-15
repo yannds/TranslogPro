@@ -55,6 +55,13 @@ export interface WorkflowGraph {
   metadata:   Record<string, unknown>;
 }
 
+/** Side-effect capturé pendant la simulation (jamais exécuté). */
+export interface CapturedSideEffectSummary {
+  name:    string;
+  /** Snapshot de l'entité au moment de la capture (utile pour debug UI). */
+  payload: Record<string, unknown>;
+}
+
 /** Résultat de simulation Live-Path */
 export interface SimulationStep {
   edgeId:    string;
@@ -65,8 +72,70 @@ export interface SimulationStep {
   guardResult:  Record<string, boolean | null>;
   /** Permission présente dans le rôle simulé */
   permGranted:  boolean;
+  /** Permission que cette transition exige (pour le tooltip UI). */
+  permission?:  string;
   /** État final après cette étape */
   reachable:    boolean;
+  /** Side-effects capturés spécifiquement pendant cette étape. */
+  capturedSideEffects?: CapturedSideEffectSummary[];
+  /** Message d'erreur remonté par le moteur (si reachable=false). */
+  errorMessage?: string;
+}
+
+/**
+ * Raison structurée d'une étape (pas de texte — le frontend assemble la phrase
+ * dans la langue du tenant via l'I18nProvider).
+ */
+export type StepReason =
+  | 'success'
+  | 'permission_denied'
+  | 'guard_blocked'
+  | 'transition_unknown';
+
+export interface StructuredStep {
+  reason:     StepReason;
+  action:     string;
+  fromState:  string;
+  toState:    string;
+  /** Permission refusée (présent si reason='permission_denied'). */
+  missingPermission?:    string;
+  /** Rôles du tenant qui possèdent cette permission. */
+  rolesWithPermission?:  string[];
+  /** Guard qui a bloqué (présent si reason='guard_blocked'). */
+  guardName?:            string;
+  /** Message brut moteur (fallback affichage). */
+  errorMessage?:         string;
+}
+
+export type ConclusionType =
+  | 'all_success'
+  | 'try_other_roles'
+  | 'no_permission_owner'
+  | 'states_unreachable';
+
+export interface StructuredConclusion {
+  type:                ConclusionType;
+  /** Rôles suggérés pour débloquer le scénario. */
+  rolesSuggested?:     string[];
+  /** Permissions manquantes à attribuer / créer. */
+  missingPermissions?: string[];
+  /** États jamais atteints depuis le point de départ. */
+  unreachableStates?:  string[];
+}
+
+/**
+ * Résumé structuré (non traduit) de la simulation.
+ * L'I18nProvider frontend compose les phrases finales.
+ */
+export interface HumanSummary {
+  /** Nom du rôle simulé, ou '' si permissions ignorées. */
+  roleName:           string;
+  /** true si le simulateur a bypass les permissions (mode sans rôle). */
+  ignoredPermissions: boolean;
+  totalCount:         number;
+  successCount:       number;
+  perStep:            StructuredStep[];
+  conclusion?:        StructuredConclusion;
 }
 
 export interface SimulationResult {
@@ -78,6 +147,10 @@ export interface SimulationResult {
   reachedStates: string[];
   /** États jamais atteints depuis initialState */
   unreachableStates: string[];
+  /** Entité sandbox dans son état final — pour affichage debug côté UI. */
+  finalEntity?: Record<string, unknown>;
+  /** Interprétation lisible — pour les utilisateurs non-techniques. */
+  humanSummary?: HumanSummary;
 }
 
 /** Registre connu des guards et side-effects (utilisé par le validateur) */

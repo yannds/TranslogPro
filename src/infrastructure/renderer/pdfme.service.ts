@@ -30,8 +30,8 @@
  */
 import { Injectable, Logger }  from '@nestjs/common';
 import { generate }             from '@pdfme/generator';
-import type { Template, Font } from '@pdfme/common';
-import { text, image, barcodes } from '@pdfme/schemas';
+import type { Template } from '@pdfme/common';
+import { text, image, barcodes, rectangle, line, ellipse, table } from '@pdfme/schemas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +70,10 @@ export class PdfmeService {
         text,
         image,
         qrcode: barcodes.qrcode,
+        rectangle,
+        line,
+        ellipse,
+        table,
       },
     });
 
@@ -91,16 +95,15 @@ export class PdfmeService {
 
     const schemas = template.schemas.map(page =>
       page.map(field => {
-        const content = (field as any).content ?? '';
-        // Si le content est un placeholder {{key}}, on pré-remplit avec la valeur
-        const match = typeof content === 'string' && content.match(/^\{\{(\w+)\}\}$/);
-        if (match) {
-          const key = match[1];
-          if (defaults[key] !== undefined) {
-            return { ...field, content: defaults[key] };
-          }
-        }
-        return field;
+        const content = (field as any).content;
+        if (typeof content !== 'string') return field;
+        // Les champs de type table contiennent du JSON — ne pas toucher
+        if ((field as any).type === 'table') return field;
+        // Substitution globale : remplace chaque {{var}} par defaults[var] si défini
+        const resolved = content.replace(/\{\{(\w+)\}\}/g, (match, key) =>
+          defaults[key] !== undefined ? defaults[key] : match,
+        );
+        return resolved === content ? field : { ...field, content: resolved };
       }),
     );
 

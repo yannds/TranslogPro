@@ -1902,3 +1902,27 @@ model QhseStepExecution {
   @@unique([executionId, stepId])
   @@map("qhse_step_executions")
 }
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 21 : ATTACHMENTS POLYMORPHES (Documents génériques)
+// ─────────────────────────────────────────────────────────────
+
+model Attachment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String   // CUSTOMER | STAFF | VEHICLE | TRIP | INCIDENT | PARCEL...
+  entityId    String
+  kind        String   // CONTRACT | ID_CARD | LICENSE | CERTIFICATE | PHOTO | OTHER
+  fileName    String
+  mimeType    String
+  size        Int
+  storageKey  String   // MinIO key
+  checksum    String?  // SHA-256
+  uploadedBy  String?  // userId
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, kind])
+  @@map("attachments")
+}
+

@@ -5,7 +5,6 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEntity } from './interfaces/workflow-entity.interface';
@@ -14,21 +13,8 @@ import { GuardDefinition } from './types/guard-definition.type';
 import { SideEffectDefinition } from './types/side-effect-definition.type';
 import { AuditService } from './audit.service';
 import { extractScope } from '../../common/constants/permissions';
-
-/**
- * Whitelist des noms de tables Postgres par aggregateType.
- * Protège contre toute injection SQL dans le SELECT FOR UPDATE NOWAIT.
- * À mettre à jour si un nouveau type d'entité est ajouté au workflow.
- */
-const AGGREGATE_TABLE_MAP: Record<string, string> = {
-  Trip:     'trips',
-  Ticket:   'tickets',
-  Traveler: 'travelers',
-  Parcel:   'parcels',
-  Shipment: 'shipments',
-  Bus:      'buses',
-  Claim:    'claims',
-};
+import { IWorkflowIO, PersistFn } from './io/workflow-io.interface';
+import { LiveWorkflowIO } from './io/live-workflow.io';
 
 export interface WorkflowTransitionConfig<E extends WorkflowEntity> {
   /** Type d'entité — doit correspondre à WorkflowConfig.entityType en DB */
@@ -44,7 +30,7 @@ export interface WorkflowTransitionConfig<E extends WorkflowEntity> {
   /**
    * Callback de persistance — DOIT incrémenter `version` pour le lock optimiste.
    */
-  persist: (entity: E, toState: string, prisma: PrismaService) => Promise<E>;
+  persist: PersistFn<E>;
 }
 
 export interface WorkflowResult<E extends WorkflowEntity> {
@@ -56,11 +42,16 @@ export interface WorkflowResult<E extends WorkflowEntity> {
 @Injectable()
 export class WorkflowEngine {
   private readonly logger = new Logger(WorkflowEngine.name);
+  private readonly defaultIO: IWorkflowIO;
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit:  AuditService,
-  ) {}
+    prisma: PrismaService,
+    audit:  AuditService,
+  ) {
+    // L'engine instancie son I/O par défaut (live). Les appels en mode simulation
+    // passent un `ioOverride` à transition() — aucun changement de DI requis.
+    this.defaultIO = new LiveWorkflowIO(prisma, audit);
+  }
 
   /**
    * Exécute une transition selon l'algorithme PRD §III.3 :
@@ -75,19 +66,25 @@ export class WorkflowEngine {
    * Race condition P2002 → capturée et convertie en replay idempotent (409 → entity).
    *
    * LOCKING : SELECT FOR UPDATE NOWAIT sur le vrai nom de table (whitelist),
-   * avec `Prisma.raw()` pour éviter l'injection SQL.
+   * délégué à l'IO (LiveWorkflowIO utilise Prisma.raw() anti-injection).
    * Échec → ConflictException(423) — jamais swallowed silencieusement.
+   *
+   * MODE SIMULATION : passer `ioOverride` (SimulationWorkflowIO) exécute la même
+   * logique mais contre un I/O en mémoire — zéro écriture DB, side-effects capturés.
    */
   async transition<E extends WorkflowEntity>(
     entity: E,
     input:  TransitionInput,
     config: WorkflowTransitionConfig<E>,
+    ioOverride?: IWorkflowIO,
   ): Promise<WorkflowResult<E>> {
+    const io = ioOverride ?? this.defaultIO;
     const { action, actor, idempotencyKey, ipAddress } = input;
 
-    // Valider le aggregateType contre la whitelist avant toute requête DB
-    const tableName = AGGREGATE_TABLE_MAP[config.aggregateType];
-    if (!tableName) {
+    // ── Pré-validation whitelist (fail-fast avant toute requête DB) ───────────
+    // Préserve le comportement de l'ancien engine : invalider aggregateType
+    // avant de toucher à Prisma. Défense en profondeur — txIO.lockEntity re-check.
+    if (!io.supportsAggregateType(config.aggregateType)) {
       throw new BadRequestException(
         `aggregateType "${config.aggregateType}" non reconnu par le WorkflowEngine`,
       );
@@ -98,9 +95,7 @@ export class WorkflowEngine {
     // Cas typique : retry HTTP après que l'état ait déjà changé en DB.
     // Le check atomique dans la transaction (4a) reste la barrière définitive.
     if (idempotencyKey) {
-      const earlyExisting = await this.prisma.workflowTransition.findUnique({
-        where: { idempotencyKey },
-      });
+      const earlyExisting = await io.findIdempotentTransition(idempotencyKey);
       if (earlyExisting) {
         this.logger.debug(`Idempotent early-exit: key=${idempotencyKey}`);
         return { entity, toState: earlyExisting.toState, fromState: earlyExisting.fromState };
@@ -111,15 +106,12 @@ export class WorkflowEngine {
     // Hors transaction : lecture seule, pas de side-effects.
     // La clé composite @@unique([tenantId, entityType, fromState, action, version])
     // garantit qu'un tenant ne peut pas injecter une config pour un autre tenant.
-    const wfConfig = await this.prisma.workflowConfig.findFirst({
-      where: {
-        tenantId:   entity.tenantId,
-        entityType: config.aggregateType,
-        fromState:  entity.status,
-        action,
-        isActive:   true,
-      },
-    });
+    const wfConfig = await io.loadConfig(
+      entity.tenantId,
+      config.aggregateType,
+      entity.status,
+      action,
+    );
 
     if (!wfConfig) {
       throw new BadRequestException(
@@ -128,17 +120,14 @@ export class WorkflowEngine {
       );
     }
 
-    const toState       = wfConfig.toState as string;
-    const requiredPerm  = wfConfig.requiredPerm as string;
+    const { toState, requiredPerm } = wfConfig;
 
     // ── 2. Vérification de permission — DB-driven, zéro hardcode ─────────────
     // Note : le PermissionGuard a déjà vérifié la permission de la route HTTP.
     // Ce deuxième check ici est une défense en profondeur pour les transitions
     // déclenchées programmatiquement (scheduler, side-effects d'autres transitions).
-    const rp = await this.prisma.rolePermission.findFirst({
-      where: { roleId: actor.roleId, permission: requiredPerm },
-    });
-    if (!rp) {
+    const hasPerm = await io.hasPermission(actor.roleId, requiredPerm);
+    if (!hasPerm) {
       throw new ForbiddenException(
         `Rôle ne possède pas la permission "${requiredPerm}" requise pour l'action "${action}"`,
       );
@@ -163,71 +152,56 @@ export class WorkflowEngine {
     }
 
     // ── 4. Transaction atomique ────────────────────────────────────────────────
-    return this.prisma.transact(async (tx) => {
+    return io.runInTransaction(async (txIO) => {
       const effectiveKey = idempotencyKey ?? randomUUID();
 
       // ── 4a. Idempotence check DANS la transaction ────────────────────────
       // Atomique avec l'insert → élimine la race condition.
-      const existing = await tx.workflowTransition.findUnique({
-        where: { idempotencyKey: effectiveKey },
-      });
+      const existing = await txIO.findIdempotentTransition(effectiveKey);
       if (existing) {
         this.logger.debug(`Idempotent replay: key=${effectiveKey}`);
         return { entity, toState: existing.toState, fromState: existing.fromState };
       }
 
       // ── 4b. Lock pessimiste — SELECT FOR UPDATE NOWAIT ──────────────────
-      // Whitelist validée ci-dessus → Prisma.raw() sans risque d'injection.
+      // Whitelist validée dans l'IO → Prisma.raw() sans risque d'injection.
       // Ne swallow JAMAIS l'erreur : si le lock échoue, la transaction échoue.
-      const rows = (await tx.$queryRaw(
-        Prisma.sql`
-          SELECT version
-          FROM   ${Prisma.raw(`"${tableName}"`)}
-          WHERE  id = ${entity.id}
-          FOR UPDATE NOWAIT
-        `,
-      )) as { version: number }[];
-
-      const currentVersion = rows[0]?.version;
-      if (currentVersion === undefined) {
+      const lock = await txIO.lockEntity(config.aggregateType, entity.id);
+      if (!lock) {
         throw new ConflictException(
           `Entité ${config.aggregateType}:${entity.id} introuvable pour lock`,
         );
       }
-      if (currentVersion !== entity.version) {
+      if (lock.version !== entity.version) {
         throw new ConflictException(
           `Modification concurrente détectée sur ${config.aggregateType}:${entity.id} ` +
-          `(version attendue=${entity.version}, trouvée=${currentVersion}) — réessayez`,
+          `(version attendue=${entity.version}, trouvée=${lock.version}) — réessayez`,
         );
       }
 
       // ── 4c. Persistance de l'état cible ─────────────────────────────────
-      const updated = await config.persist(entity, toState, tx as unknown as PrismaService);
+      const updated = await txIO.persist(entity, toState, config.persist);
 
       // ── 4d. Log de transition (idempotence + historique) ─────────────────
       try {
-        await (tx as unknown as PrismaService).workflowTransition.create({
-          data: {
-            tenantId:       entity.tenantId,
-            entityType:     config.aggregateType,
-            entityId:       entity.id,
-            fromState:      entity.status,
-            action,
-            toState,
-            userId:         actor.id,
-            idempotencyKey: effectiveKey,
-          },
+        await txIO.recordTransition({
+          tenantId:       entity.tenantId,
+          entityType:     config.aggregateType,
+          entityId:       entity.id,
+          fromState:      entity.status,
+          action,
+          toState,
+          userId:         actor.id,
+          idempotencyKey: effectiveKey,
         });
       } catch (e: any) {
         // P2002 = race condition : un autre pod a commité la même clé entre
-        // le findUnique ci-dessus et cet insert. Retourner l'entité existante.
+        // le findIdempotentTransition ci-dessus et cet insert. Retourner l'entité existante.
         if (e?.code === 'P2002') {
           this.logger.warn(
             `Idempotency race P2002 capturée pour key=${effectiveKey} — replay safe`,
           );
-          const committed = await (tx as unknown as PrismaService).workflowTransition.findUnique({
-            where: { idempotencyKey: effectiveKey },
-          });
+          const committed = await txIO.findIdempotentTransition(effectiveKey);
           if (committed) {
             return { entity, toState: committed.toState, fromState: committed.fromState };
           }
@@ -239,7 +213,7 @@ export class WorkflowEngine {
       // L'audit est dans la transaction pour garantir qu'il ne peut pas manquer.
       // AuditService.record() avale ses propres erreurs (non-breaking) —
       // mais les erreurs critiques sont quand même loguées.
-      await this.audit.record({
+      await txIO.recordAudit({
         tenantId: entity.tenantId,
         userId:   actor.id,
         action:   requiredPerm,  // permission exercée — format canonique pour SIEM
@@ -254,7 +228,7 @@ export class WorkflowEngine {
       // (ex: mise à jour du seat_map) sont admises dans cette transaction.
       // Les notifications, webhooks → OutboxEvent (asynchrone, non-bloquant).
       for (const se of config.sideEffects ?? []) {
-        await se.fn(updated, input, ctx);
+        await txIO.runSideEffect(se, updated, input, ctx);
       }
 
       this.logger.log(

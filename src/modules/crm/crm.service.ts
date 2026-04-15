@@ -1,5 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { IIdentityManager, IDENTITY_SERVICE } from '../../infrastructure/identity/interfaces/identity.interface';
+
+export interface CreateCustomerDto {
+  email:        string;
+  name:         string;
+  agencyId?:    string;
+  phone?:       string;
+  preferences?: Record<string, unknown>;
+}
+
+export interface UpdateCustomerDto {
+  name?:         string;
+  agencyId?:     string | null;
+  phone?:        string;
+  preferences?:  Record<string, unknown>;
+  loyaltyScore?: number;
+}
 
 export interface CreateCampaignDto {
   name:        string;
@@ -16,9 +33,88 @@ export interface UpdateCampaignDto {
 
 @Injectable()
 export class CrmService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(IDENTITY_SERVICE) private readonly identity: IIdentityManager,
+  ) {}
 
   // ─── Customer Profiles ───────────────────────────────────────────────────────
+
+  async createCustomer(tenantId: string, dto: CreateCustomerDto) {
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré`);
+
+    const agencyId = dto.agencyId && dto.agencyId.trim() !== '' ? dto.agencyId : undefined;
+    if (agencyId) {
+      const agency = await this.prisma.agency.findFirst({ where: { id: agencyId, tenantId } });
+      if (!agency) throw new BadRequestException(`Agence ${agencyId} introuvable dans ce tenant`);
+    }
+
+    const tempPwd =
+      Math.random().toString(36).slice(2, 10) +
+      Math.random().toString(36).slice(2, 10).toUpperCase() +
+      '!';
+
+    const user = await this.identity.createUser({
+      email:    dto.email,
+      password: tempPwd,
+      name:     dto.name,
+      tenantId,
+      agencyId,
+      userType: 'VOYAGEUR',
+    });
+
+    if (dto.phone || dto.preferences) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data:  {
+          preferences: { ...(dto.preferences ?? {}), ...(dto.phone ? { phone: dto.phone } : {}) } as any,
+        },
+      });
+    }
+
+    return this.getCustomer(tenantId, user.id);
+  }
+
+  async updateCustomer(tenantId: string, userId: string, dto: UpdateCustomerDto) {
+    const existing = await this.prisma.user.findFirst({
+      where: { tenantId, id: userId, userType: 'VOYAGEUR' },
+    });
+    if (!existing) throw new NotFoundException('Voyageur introuvable');
+
+    const prevPrefs = (existing.preferences as Record<string, unknown>) ?? {};
+    const nextPrefs: Record<string, unknown> = {
+      ...prevPrefs,
+      ...(dto.preferences ?? {}),
+      ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+    };
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data:  {
+        ...(dto.name         !== undefined ? { name:         dto.name }                 : {}),
+        ...(dto.agencyId     !== undefined ? { agencyId:     dto.agencyId ?? null }     : {}),
+        ...(dto.loyaltyScore !== undefined ? { loyaltyScore: dto.loyaltyScore }         : {}),
+        preferences: nextPrefs as any,
+      },
+    });
+
+    return this.getCustomer(tenantId, userId);
+  }
+
+  async archiveCustomer(tenantId: string, userId: string) {
+    const existing = await this.prisma.user.findFirst({
+      where: { tenantId, id: userId, userType: 'VOYAGEUR' },
+    });
+    if (!existing) throw new NotFoundException('Voyageur introuvable');
+
+    const prevPrefs = (existing.preferences as Record<string, unknown>) ?? {};
+    await this.prisma.user.update({
+      where: { id: userId },
+      data:  { preferences: { ...prevPrefs, archived: true, archivedAt: new Date().toISOString() } as any },
+    });
+    return { archived: true };
+  }
 
   /**
    * Liste les profils voyageurs du tenant (userType = VOYAGEUR).
@@ -54,28 +150,59 @@ export class CrmService {
   }
 
   /**
-   * Profil détaillé d'un voyageur : infos + historique tickets.
+   * Profil détaillé d'un voyageur : infos + historique tickets + plaintes.
    */
   async getCustomer(tenantId: string, userId: string) {
     const user = await this.prisma.user.findFirst({
       where:  { tenantId, id: userId, userType: 'VOYAGEUR' },
       select: {
-        id: true, email: true, name: true, agencyId: true,
+        id: true, email: true, name: true, image: true, agencyId: true,
         loyaltyScore: true, preferences: true, createdAt: true,
       },
     });
     if (!user) throw new NotFoundException('Voyageur introuvable');
 
-    const tickets = await this.prisma.ticket.findMany({
-      where:   { tenantId, passengerId: userId },
-      select:  { id: true, status: true, pricePaid: true, createdAt: true, qrCode: true },
-      orderBy: { createdAt: 'desc' },
-      take:    20,
-    });
+    const [tickets, feedbacks, agency] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where:   { tenantId, passengerId: userId },
+        select:  {
+          id: true, status: true, pricePaid: true, createdAt: true, qrCode: true, tripId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take:    50,
+      }),
+      this.prisma.feedback.findMany({
+        where:   { tenantId, userId },
+        select:  { id: true, ratings: true, comment: true, createdAt: true, tripId: true },
+        orderBy: { createdAt: 'desc' },
+        take:    20,
+      }),
+      user.agencyId
+        ? this.prisma.agency.findFirst({ where: { id: user.agencyId }, select: { id: true, name: true } })
+        : Promise.resolve(null),
+    ]);
+
+    const tripIds = Array.from(new Set(tickets.map(t => t.tripId)));
+    const trips = tripIds.length
+      ? await this.prisma.trip.findMany({
+          where:  { id: { in: tripIds } },
+          select: { id: true, departureScheduled: true, arrivalScheduled: true, route: { select: { name: true } } },
+        })
+      : [];
+    const tripMap = new Map(trips.map(t => [t.id, t]));
+    const ticketsWithTrip = tickets.map(t => ({ ...t, trip: tripMap.get(t.tripId) ?? null }));
 
     const totalSpent = tickets.reduce((sum, t) => sum + (t.pricePaid ?? 0), 0);
 
-    return { ...user, tickets, totalSpent, ticketCount: tickets.length };
+    return {
+      ...user,
+      agency,
+      tickets: ticketsWithTrip,
+      feedbacks,
+      totalSpent,
+      ticketCount: ticketsWithTrip.length,
+      feedbackCount: feedbacks.length,
+    };
   }
 
   // ─── Campaigns ───────────────────────────────────────────────────────────────

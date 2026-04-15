@@ -5,13 +5,14 @@
     "docType": "MANIFEST",
     "format": "A4",
     "engine": "PDFME",
-    "description": "Manifeste passagers et colis pour le conducteur/hôtesse",
+    "description": "Manifeste passagers + table dynamique pour le conducteur/hôtesse",
     "variables": [
-      "tenantName", "tenantAddress", "tenantPhone",
+      "tenantName", "tenantAddress", "tenantPhone", "tenantLogo",
       "tripId", "routeName", "origin", "destination",
       "tripDate", "busPlate", "driverName",
       "passengerCount", "parcelCount", "totalWeight",
-      "generatedAt"
+      "passengerRows", "parcelRows",
+      "qrCodeValue", "generatedAt"
     ]
   },
   "basePdf": { "width": 210, "height": 297, "padding": [12, 14, 12, 14] },
@@ -21,8 +22,13 @@
       "position": {"x":0,"y":0}, "width":210, "height":20, "color":"#1a3a5c"
     },
     {
+      "name": "tenantLogo", "type": "image",
+      "position": {"x":4,"y":3}, "width":14, "height":14,
+      "content": ""
+    },
+    {
       "name": "tenantName", "type": "text",
-      "position": {"x":14,"y":5}, "width":120, "height":10,
+      "position": {"x":22,"y":5}, "width":112, "height":10,
       "content": "{{tenantName}}", "fontSize":14, "fontColor":"#fff",
       "fontName":"NotoSans-Bold"
     },
@@ -84,37 +90,83 @@
       "content": "passagers", "fontSize":6, "fontColor":"#93c5fd", "alignment":"center"
     },
     {
-      "name": "tableHeader", "type": "rectangle",
-      "position": {"x":14,"y":58}, "width":182, "height":8, "color":"#e2e8f0"
+      "name": "passengerRows",
+      "type": "table",
+      "position": {"x":14,"y":58},
+      "width": 182,
+      "height": 120,
+      "content": "[[\"1\",\"DUPONT Jean\",\"12A\",\"BOARDED\",\"\"],[\"2\",\"KONE Awa\",\"14B\",\"BOARDED\",\"\"]]",
+      "showHead": true,
+      "head": ["N°", "NOM DU PASSAGER", "SIÈGE", "STATUT", "SIGNATURE"],
+      "headWidthPercentages": [6, 48, 12, 18, 16],
+      "tableStyles": { "borderColor": "#e2e8f0", "borderWidth": 0.3 },
+      "headStyles": {
+        "fontName": "NotoSans-Bold", "fontSize": 8, "fontColor": "#374151",
+        "backgroundColor": "#e2e8f0", "borderColor": "#cbd5e1",
+        "borderWidth": { "top": 0.3, "right": 0, "bottom": 0.3, "left": 0 },
+        "padding": { "top": 3, "right": 4, "bottom": 3, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.2, "characterSpacing": 0
+      },
+      "bodyStyles": {
+        "fontName": "NotoSans", "fontSize": 8, "fontColor": "#111827",
+        "backgroundColor": "", "alternateBackgroundColor": "#f8fafc",
+        "borderColor": "#e5e7eb",
+        "borderWidth": { "top": 0, "right": 0, "bottom": 0.2, "left": 0 },
+        "padding": { "top": 2.5, "right": 4, "bottom": 2.5, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.3, "characterSpacing": 0
+      },
+      "columnStyles": {
+        "alignment": { "0": "center", "1": "left", "2": "center", "3": "center", "4": "left" }
+      }
     },
     {
-      "name": "colN", "type": "text",
-      "position": {"x":16,"y":60}, "width":12, "height":5,
-      "content": "N°", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+      "name": "parcelsTitle", "type": "text",
+      "position": {"x":14,"y":182}, "width":182, "height":5,
+      "content": "COLIS EMBARQUÉS",
+      "fontSize":7.5, "fontColor":"#1a3a5c", "fontName":"NotoSans-Bold"
     },
     {
-      "name": "colName", "type": "text",
-      "position": {"x":30,"y":60}, "width":70, "height":5,
-      "content": "NOM DU PASSAGER", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+      "name": "parcelRows",
+      "type": "table",
+      "position": {"x":14,"y":188},
+      "width": 182,
+      "height": 78,
+      "content": "[[\"PKG-001\",\"BKO-ABJ\",\"5 kg\",\"LOADED\"]]",
+      "showHead": true,
+      "head": ["CODE SUIVI", "DESTINATION", "POIDS", "STATUT"],
+      "headWidthPercentages": [32, 36, 16, 16],
+      "tableStyles": { "borderColor": "#e2e8f0", "borderWidth": 0.3 },
+      "headStyles": {
+        "fontName": "NotoSans-Bold", "fontSize": 7.5, "fontColor": "#374151",
+        "backgroundColor": "#e2e8f0", "borderColor": "#cbd5e1",
+        "borderWidth": { "top": 0.3, "right": 0, "bottom": 0.3, "left": 0 },
+        "padding": { "top": 2.5, "right": 4, "bottom": 2.5, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.2, "characterSpacing": 0
+      },
+      "bodyStyles": {
+        "fontName": "NotoSans", "fontSize": 7.5, "fontColor": "#111827",
+        "backgroundColor": "", "alternateBackgroundColor": "#f8fafc",
+        "borderColor": "#e5e7eb",
+        "borderWidth": { "top": 0, "right": 0, "bottom": 0.2, "left": 0 },
+        "padding": { "top": 2, "right": 4, "bottom": 2, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.3, "characterSpacing": 0
+      },
+      "columnStyles": {
+        "alignment": { "0": "left", "1": "left", "2": "right", "3": "center" }
+      }
     },
     {
-      "name": "colSeat", "type": "text",
-      "position": {"x":102,"y":60}, "width":20, "height":5,
-      "content": "SIÈGE", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
-    },
-    {
-      "name": "colStatus", "type": "text",
-      "position": {"x":124,"y":60}, "width":35, "height":5,
-      "content": "STATUT", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
-    },
-    {
-      "name": "colSign", "type": "text",
-      "position": {"x":162,"y":60}, "width":32, "height":5,
-      "content": "SIGNATURE", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+      "name": "qrCode", "type": "qrcode",
+      "position": {"x":14,"y":268}, "width":18, "height":18,
+      "content": "{{qrCodeValue}}"
     },
     {
       "name": "summaryLine", "type": "text",
-      "position": {"x":14,"y":272}, "width":182, "height":8,
+      "position": {"x":36,"y":272}, "width":160, "height":8,
       "content": "Colis : {{parcelCount}}  ·  Poids total : {{totalWeight}} kg  ·  Généré : {{generatedAt}}",
       "fontSize":7, "fontColor":"#6b7280", "alignment":"center"
     },

@@ -56,6 +56,8 @@ const LazyIamSessions    = lazy(() => import('../pages/PageIamSessions').then(m 
 const LazyModules        = lazy(() => import('../pages/PageModules').then(m => ({ default: m.PageModules })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTemplateStudio = lazy(() => import('../pages/PageTemplateStudio').then(m => ({ default: m.PageTemplateStudio })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPersonnel      = lazy(() => import('../pages/PagePersonnel').then(m => ({ default: m.PagePersonnel })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +129,8 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'driver-trainings':
     case 'driver-remediation':  return <LazyDriverProfile />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
-    case 'staff-list':          return <PageWip title="Personnel" />;
+    case 'staff-list':
+    case 'personnel':           return <LazyPersonnel />;
     case 'crew-planning':       return <PageWip title="Planning équipages" />;
 
     // ── QHSE ───────────────────────────────────────────────────────────────

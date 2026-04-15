@@ -5,27 +5,33 @@
     "docType": "PACKING_LIST",
     "format": "A4",
     "engine": "PDFME",
-    "description": "Bordereau récapitulatif d'un shipment complet avec liste de colis",
+    "description": "Bordereau récapitulatif d'un shipment complet avec table dynamique des colis",
     "variables": [
-      "tenantName", "tenantAddress", "tenantPhone", "tenantNif", "tenantRccm",
+      "tenantName", "tenantAddress", "tenantPhone", "tenantNif", "tenantRccm", "tenantLogo",
       "shipmentId", "shipmentDate",
       "senderName", "senderAddress", "senderPhone",
       "recipientName", "recipientAddress", "recipientPhone",
       "origin", "destination",
       "parcelCount", "totalWeight",
+      "parcelRows",
       "qrCodeValue", "generatedAt"
     ]
   },
   "basePdf": { "width": 210, "height": 297, "padding": [15, 14, 15, 14] },
   "schemas": [[
     {
+      "name": "tenantLogo", "type": "image",
+      "position": {"x":14,"y":10}, "width":22, "height":22,
+      "content": ""
+    },
+    {
       "name": "tenantName", "type": "text",
-      "position": {"x":14,"y":12}, "width":100, "height":10,
+      "position": {"x":40,"y":12}, "width":74, "height":10,
       "content": "{{tenantName}}", "fontSize":18, "fontColor":"#1a3a5c", "fontName":"NotoSans-Bold"
     },
     {
       "name": "tenantInfo", "type": "text",
-      "position": {"x":14,"y":23}, "width":100, "height":10,
+      "position": {"x":40,"y":23}, "width":74, "height":10,
       "content": "NIF: {{tenantNif}}  ·  RCCM: {{tenantRccm}}\n{{tenantAddress}}  ·  {{tenantPhone}}",
       "fontSize":7, "fontColor":"#6b7280", "lineHeight":1.5
     },
@@ -89,28 +95,49 @@
       "fontSize":9, "fontColor":"#fff", "fontName":"NotoSans-Bold", "alignment":"center"
     },
     {
-      "name": "tableHeaderBg", "type": "rectangle",
-      "position": {"x":14,"y":94}, "width":182, "height":8, "color":"#e2e8f0"
-    },
-    {
-      "name": "colRef", "type": "text",
-      "position": {"x":16,"y":96}, "width":50, "height":5,
-      "content": "RÉFÉRENCE COLIS", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
-    },
-    {
-      "name": "colDesc", "type": "text",
-      "position": {"x":70,"y":96}, "width":60, "height":5,
-      "content": "DESCRIPTION", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
-    },
-    {
-      "name": "colWeight", "type": "text",
-      "position": {"x":134,"y":96}, "width":25, "height":5,
-      "content": "POIDS", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
-    },
-    {
-      "name": "colStatus", "type": "text",
-      "position": {"x":162,"y":96}, "width":32, "height":5,
-      "content": "STATUT", "fontSize":7, "fontColor":"#374151", "fontName":"NotoSans-Bold"
+      "name": "parcelRows",
+      "type": "table",
+      "position": {"x":14,"y":94},
+      "width": 182,
+      "height": 150,
+      "content": "[[\"COL-001\",\"Carton électroménager\",\"12 kg\",\"PACKED\"],[\"COL-002\",\"Sac isotherme\",\"3 kg\",\"PACKED\"],[\"COL-003\",\"Valise cabine\",\"8 kg\",\"LOADED\"],[\"COL-004\",\"Colis documents\",\"1 kg\",\"PACKED\"]]",
+      "showHead": true,
+      "head": ["RÉFÉRENCE", "DESCRIPTION", "POIDS", "STATUT"],
+      "headWidthPercentages": [28, 42, 15, 15],
+      "tableStyles": {
+        "borderColor": "#e2e8f0",
+        "borderWidth": 0.3
+      },
+      "headStyles": {
+        "fontName": "NotoSans-Bold",
+        "fontSize": 8,
+        "fontColor": "#374151",
+        "backgroundColor": "#e2e8f0",
+        "borderColor": "#cbd5e1",
+        "borderWidth": { "top": 0.3, "right": 0, "bottom": 0.3, "left": 0 },
+        "padding": { "top": 3, "right": 4, "bottom": 3, "left": 4 },
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "lineHeight": 1.2,
+        "characterSpacing": 0
+      },
+      "bodyStyles": {
+        "fontName": "NotoSans",
+        "fontSize": 8,
+        "fontColor": "#111827",
+        "backgroundColor": "",
+        "alternateBackgroundColor": "#f8fafc",
+        "borderColor": "#e5e7eb",
+        "borderWidth": { "top": 0, "right": 0, "bottom": 0.2, "left": 0 },
+        "padding": { "top": 2.5, "right": 4, "bottom": 2.5, "left": 4 },
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "lineHeight": 1.3,
+        "characterSpacing": 0
+      },
+      "columnStyles": {
+        "alignment": { "0": "left", "1": "left", "2": "right", "3": "center" }
+      }
     },
     {
       "name": "summaryBg", "type": "rectangle",

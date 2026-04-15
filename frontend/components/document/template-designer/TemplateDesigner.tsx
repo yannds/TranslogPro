@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Designer }         from '@pdfme/ui';
-import { text, image, barcodes, rectangle, line, ellipse } from '@pdfme/schemas';
+import { text, image, barcodes, rectangle, line, ellipse, table } from '@pdfme/schemas';
 import type { Template }    from '@pdfme/common';
 import { VariablesPanel }   from './VariablesPanel';
 import type { VariablesPanelProps } from './VariablesPanel';
@@ -45,6 +45,7 @@ const PLUGINS = {
   rectangle,
   line,
   ellipse,
+  table,
 };
 
 // ─── Composant ────────────────────────────────────────────────────────────────

@@ -35,6 +35,11 @@ export interface WorkflowGraph {
 
 // ─── Simulation ────────────────────────────────────────────────────────────────
 
+export interface CapturedSideEffectSummary {
+  name:    string;
+  payload: Record<string, unknown>;
+}
+
 export interface SimStep {
   edgeId:       string;
   action:       string;
@@ -42,7 +47,49 @@ export interface SimStep {
   toState:      string;
   guardResult:  Record<string, boolean | null>;
   permGranted:  boolean;
+  permission?:  string;
   reachable:    boolean;
+  capturedSideEffects?: CapturedSideEffectSummary[];
+  errorMessage?: string;
+}
+
+export type StepReason =
+  | 'success'
+  | 'permission_denied'
+  | 'guard_blocked'
+  | 'transition_unknown';
+
+export interface StructuredStep {
+  reason:                StepReason;
+  action:                string;
+  fromState:             string;
+  toState:               string;
+  missingPermission?:    string;
+  rolesWithPermission?:  string[];
+  guardName?:            string;
+  errorMessage?:         string;
+}
+
+export type ConclusionType =
+  | 'all_success'
+  | 'try_other_roles'
+  | 'no_permission_owner'
+  | 'states_unreachable';
+
+export interface StructuredConclusion {
+  type:                ConclusionType;
+  rolesSuggested?:     string[];
+  missingPermissions?: string[];
+  unreachableStates?:  string[];
+}
+
+export interface HumanSummary {
+  roleName:           string;
+  ignoredPermissions: boolean;
+  totalCount:         number;
+  successCount:       number;
+  perStep:            StructuredStep[];
+  conclusion?:        StructuredConclusion;
 }
 
 export interface SimResult {
@@ -52,6 +99,8 @@ export interface SimResult {
   steps:             SimStep[];
   reachedStates:     string[];
   unreachableStates: string[];
+  finalEntity?:      Record<string, unknown>;
+  humanSummary?:     HumanSummary;
 }
 
 // ─── Marketplace ───────────────────────────────────────────────────────────────

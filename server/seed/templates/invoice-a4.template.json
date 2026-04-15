@@ -5,288 +5,128 @@
     "docType": "INVOICE",
     "format": "A4",
     "engine": "PDFME",
-    "description": "Facture professionnelle A4 avec TVA, coordonnées bancaires et coupon détachable",
+    "description": "Facture A4 avec table dynamique des lignes, TVA et coupon QR",
     "variables": [
-      "tenantName", "tenantAddress", "tenantPhone", "tenantNif", "tenantRccm",
+      "tenantName", "tenantAddress", "tenantPhone", "tenantNif", "tenantRccm", "tenantLogo",
       "invoiceNumber", "invoiceDate", "clientName", "clientAddress", "clientPhone",
       "origin", "destination", "tripDate", "seatNumber",
+      "invoiceLines",
       "priceHt", "tvaRate", "tvaAmount", "totalTtc", "currency", "paymentMethod",
       "qrCodeValue", "generatedAt"
     ]
   },
-  "basePdf": {
-    "width": 210,
-    "height": 297,
-    "padding": [15, 14, 15, 14]
-  },
-  "schemas": [
-    [
-      {
-        "name": "tenantName",
-        "type": "text",
-        "position": { "x": 14, "y": 12 },
-        "width": 100,
-        "height": 10,
-        "content": "{{tenantName}}",
-        "fontSize": 18,
-        "fontColor": "#1a3a5c",
-        "fontName": "NotoSans-Bold",
-        "alignment": "left"
+  "basePdf": { "width": 210, "height": 297, "padding": [15, 14, 15, 14] },
+  "schemas": [[
+    { "name": "tenantLogo", "type": "image",
+      "position": {"x":14,"y":10}, "width":22, "height":22,
+      "content": "" },
+    { "name": "tenantName", "type": "text",
+      "position": {"x":40,"y":12}, "width":74, "height":10,
+      "content": "{{tenantName}}", "fontSize":18, "fontColor":"#1a3a5c",
+      "fontName":"NotoSans-Bold", "alignment":"left" },
+    { "name": "tenantNif", "type": "text",
+      "position": {"x":40,"y":23}, "width":74, "height":6,
+      "content": "NIF: {{tenantNif}}  |  RCCM: {{tenantRccm}}",
+      "fontSize":7, "fontColor":"#6b7280" },
+    { "name": "tenantContact", "type": "text",
+      "position": {"x":40,"y":29}, "width":74, "height":6,
+      "content": "{{tenantAddress}}  |  Tél: {{tenantPhone}}",
+      "fontSize":7, "fontColor":"#6b7280" },
+
+    { "name": "invoiceLabel", "type": "text",
+      "position": {"x":130,"y":12}, "width":66, "height":12,
+      "content": "FACTURE", "fontSize":22, "fontColor":"#1a3a5c",
+      "fontName":"NotoSans-Bold", "alignment":"right" },
+    { "name": "invoiceNumber", "type": "text",
+      "position": {"x":130,"y":26}, "width":66, "height":6,
+      "content": "N° {{invoiceNumber}}", "fontSize":9, "fontColor":"#374151", "alignment":"right" },
+    { "name": "invoiceDate", "type": "text",
+      "position": {"x":130,"y":32}, "width":66, "height":6,
+      "content": "Date: {{invoiceDate}}", "fontSize":9, "fontColor":"#374151", "alignment":"right" },
+
+    { "name": "divider1", "type": "line",
+      "position": {"x":14,"y":42}, "width":182, "height":0.5, "color":"#1a3a5c" },
+
+    { "name": "clientLabel", "type": "text",
+      "position": {"x":14,"y":46}, "width":30, "height":5,
+      "content": "FACTURÉ À", "fontSize":7, "fontColor":"#6b7280", "fontName":"NotoSans-Bold" },
+    { "name": "clientName", "type": "text",
+      "position": {"x":14,"y":52}, "width":90, "height":8,
+      "content": "{{clientName}}", "fontSize":11, "fontColor":"#111827", "fontName":"NotoSans-Bold" },
+    { "name": "clientAddress", "type": "text",
+      "position": {"x":14,"y":61}, "width":90, "height":12,
+      "content": "{{clientAddress}}\n{{clientPhone}}",
+      "fontSize":8, "fontColor":"#374151", "lineHeight":1.5 },
+
+    { "name": "invoiceLines",
+      "type": "table",
+      "position": {"x":14,"y":80},
+      "width": 182,
+      "height": 120,
+      "content": "[[\"Billet de voyage\",\"1\",\"5000\",\"5000\"]]",
+      "showHead": true,
+      "head": ["DESCRIPTION", "QTÉ", "P.U.", "MONTANT"],
+      "headWidthPercentages": [60, 10, 15, 15],
+      "tableStyles": { "borderColor": "#1a3a5c", "borderWidth": 0.3 },
+      "headStyles": {
+        "fontName": "NotoSans-Bold", "fontSize": 8, "fontColor": "#ffffff",
+        "backgroundColor": "#1a3a5c", "borderColor": "#1a3a5c",
+        "borderWidth": { "top": 0.3, "right": 0, "bottom": 0.3, "left": 0 },
+        "padding": { "top": 3, "right": 4, "bottom": 3, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.2, "characterSpacing": 0
       },
-      {
-        "name": "tenantNif",
-        "type": "text",
-        "position": { "x": 14, "y": 23 },
-        "width": 100,
-        "height": 6,
-        "content": "NIF: {{tenantNif}}  |  RCCM: {{tenantRccm}}",
-        "fontSize": 7,
-        "fontColor": "#6b7280",
-        "alignment": "left"
+      "bodyStyles": {
+        "fontName": "NotoSans", "fontSize": 9, "fontColor": "#111827",
+        "backgroundColor": "", "alternateBackgroundColor": "#f8fafc",
+        "borderColor": "#e5e7eb",
+        "borderWidth": { "top": 0, "right": 0, "bottom": 0.2, "left": 0 },
+        "padding": { "top": 3, "right": 4, "bottom": 3, "left": 4 },
+        "alignment": "left", "verticalAlignment": "middle",
+        "lineHeight": 1.3, "characterSpacing": 0
       },
-      {
-        "name": "tenantContact",
-        "type": "text",
-        "position": { "x": 14, "y": 29 },
-        "width": 100,
-        "height": 6,
-        "content": "{{tenantAddress}}  |  Tél: {{tenantPhone}}",
-        "fontSize": 7,
-        "fontColor": "#6b7280",
-        "alignment": "left"
-      },
-      {
-        "name": "invoiceLabel",
-        "type": "text",
-        "position": { "x": 130, "y": 12 },
-        "width": 66,
-        "height": 12,
-        "content": "FACTURE",
-        "fontSize": 22,
-        "fontColor": "#1a3a5c",
-        "fontName": "NotoSans-Bold",
-        "alignment": "right"
-      },
-      {
-        "name": "invoiceNumber",
-        "type": "text",
-        "position": { "x": 130, "y": 26 },
-        "width": 66,
-        "height": 6,
-        "content": "N° {{invoiceNumber}}",
-        "fontSize": 9,
-        "fontColor": "#374151",
-        "alignment": "right"
-      },
-      {
-        "name": "invoiceDate",
-        "type": "text",
-        "position": { "x": 130, "y": 32 },
-        "width": 66,
-        "height": 6,
-        "content": "Date: {{invoiceDate}}",
-        "fontSize": 9,
-        "fontColor": "#374151",
-        "alignment": "right"
-      },
-      {
-        "name": "divider1",
-        "type": "line",
-        "position": { "x": 14, "y": 42 },
-        "width": 182,
-        "height": 0.5,
-        "color": "#1a3a5c"
-      },
-      {
-        "name": "clientLabel",
-        "type": "text",
-        "position": { "x": 14, "y": 46 },
-        "width": 30,
-        "height": 5,
-        "content": "FACTURÉ À",
-        "fontSize": 7,
-        "fontColor": "#6b7280",
-        "fontName": "NotoSans-Bold"
-      },
-      {
-        "name": "clientName",
-        "type": "text",
-        "position": { "x": 14, "y": 52 },
-        "width": 90,
-        "height": 8,
-        "content": "{{clientName}}",
-        "fontSize": 11,
-        "fontColor": "#111827",
-        "fontName": "NotoSans-Bold"
-      },
-      {
-        "name": "clientAddress",
-        "type": "text",
-        "position": { "x": 14, "y": 61 },
-        "width": 90,
-        "height": 12,
-        "content": "{{clientAddress}}\n{{clientPhone}}",
-        "fontSize": 8,
-        "fontColor": "#374151",
-        "lineHeight": 1.5
-      },
-      {
-        "name": "serviceLabel",
-        "type": "text",
-        "position": { "x": 14, "y": 80 },
-        "width": 182,
-        "height": 6,
-        "content": "DÉTAIL DES SERVICES",
-        "fontSize": 7,
-        "fontColor": "#fff",
-        "fontName": "NotoSans-Bold",
-        "backgroundColor": "#1a3a5c",
-        "alignment": "center"
-      },
-      {
-        "name": "serviceRow",
-        "type": "text",
-        "position": { "x": 14, "y": 90 },
-        "width": 130,
-        "height": 8,
-        "content": "Billet de voyage — {{origin}} → {{destination}}\nDépart: {{tripDate}} | Siège: {{seatNumber}}",
-        "fontSize": 9,
-        "fontColor": "#111827",
-        "lineHeight": 1.5
-      },
-      {
-        "name": "priceHt",
-        "type": "text",
-        "position": { "x": 148, "y": 90 },
-        "width": 48,
-        "height": 8,
-        "content": "{{priceHt}} {{currency}}",
-        "fontSize": 9,
-        "fontColor": "#111827",
-        "alignment": "right"
-      },
-      {
-        "name": "divider2",
-        "type": "line",
-        "position": { "x": 14, "y": 105 },
-        "width": 182,
-        "height": 0.3,
-        "color": "#e5e7eb"
-      },
-      {
-        "name": "totalHtLabel",
-        "type": "text",
-        "position": { "x": 120, "y": 110 },
-        "width": 40,
-        "height": 6,
-        "content": "Sous-total HT",
-        "fontSize": 8,
-        "fontColor": "#6b7280"
-      },
-      {
-        "name": "totalHtValue",
-        "type": "text",
-        "position": { "x": 162, "y": 110 },
-        "width": 34,
-        "height": 6,
-        "content": "{{priceHt}} {{currency}}",
-        "fontSize": 8,
-        "fontColor": "#374151",
-        "alignment": "right"
-      },
-      {
-        "name": "tvaLabel",
-        "type": "text",
-        "position": { "x": 120, "y": 118 },
-        "width": 40,
-        "height": 6,
-        "content": "TVA ({{tvaRate}}%)",
-        "fontSize": 8,
-        "fontColor": "#6b7280"
-      },
-      {
-        "name": "tvaValue",
-        "type": "text",
-        "position": { "x": 162, "y": 118 },
-        "width": 34,
-        "height": 6,
-        "content": "{{tvaAmount}} {{currency}}",
-        "fontSize": 8,
-        "fontColor": "#374151",
-        "alignment": "right"
-      },
-      {
-        "name": "totalBox",
-        "type": "rectangle",
-        "position": { "x": 118, "y": 126 },
-        "width": 78,
-        "height": 12,
-        "color": "#1a3a5c",
-        "borderRadius": 2
-      },
-      {
-        "name": "totalLabel",
-        "type": "text",
-        "position": { "x": 120, "y": 129 },
-        "width": 40,
-        "height": 7,
-        "content": "TOTAL TTC",
-        "fontSize": 9,
-        "fontColor": "#fff",
-        "fontName": "NotoSans-Bold"
-      },
-      {
-        "name": "totalTtc",
-        "type": "text",
-        "position": { "x": 160, "y": 129 },
-        "width": 34,
-        "height": 7,
-        "content": "{{totalTtc}} {{currency}}",
-        "fontSize": 9,
-        "fontColor": "#fff",
-        "fontName": "NotoSans-Bold",
-        "alignment": "right"
-      },
-      {
-        "name": "paymentLabel",
-        "type": "text",
-        "position": { "x": 14, "y": 145 },
-        "width": 80,
-        "height": 5,
-        "content": "Mode de paiement: {{paymentMethod}}",
-        "fontSize": 8,
-        "fontColor": "#374151"
-      },
-      {
-        "name": "qrCode",
-        "type": "qrcode",
-        "position": { "x": 14, "y": 155 },
-        "width": 28,
-        "height": 28,
-        "content": "{{qrCodeValue}}"
-      },
-      {
-        "name": "qrLabel",
-        "type": "text",
-        "position": { "x": 14, "y": 184 },
-        "width": 28,
-        "height": 5,
-        "content": "Vérification",
-        "fontSize": 6,
-        "fontColor": "#9ca3af",
-        "alignment": "center"
-      },
-      {
-        "name": "footer",
-        "type": "text",
-        "position": { "x": 14, "y": 275 },
-        "width": 182,
-        "height": 8,
-        "content": "Document généré automatiquement — {{generatedAt}} — {{tenantName}}",
-        "fontSize": 6.5,
-        "fontColor": "#9ca3af",
-        "alignment": "center"
+      "columnStyles": {
+        "alignment": { "0": "left", "1": "center", "2": "right", "3": "right" }
       }
-    ]
-  ]
+    },
+
+    { "name": "totalHtLabel", "type": "text",
+      "position": {"x":120,"y":215}, "width":40, "height":6,
+      "content": "Sous-total HT", "fontSize":8, "fontColor":"#6b7280" },
+    { "name": "totalHtValue", "type": "text",
+      "position": {"x":162,"y":215}, "width":34, "height":6,
+      "content": "{{priceHt}} {{currency}}", "fontSize":8, "fontColor":"#374151", "alignment":"right" },
+    { "name": "tvaLabel", "type": "text",
+      "position": {"x":120,"y":222}, "width":40, "height":6,
+      "content": "TVA ({{tvaRate}}%)", "fontSize":8, "fontColor":"#6b7280" },
+    { "name": "tvaValue", "type": "text",
+      "position": {"x":162,"y":222}, "width":34, "height":6,
+      "content": "{{tvaAmount}} {{currency}}", "fontSize":8, "fontColor":"#374151", "alignment":"right" },
+
+    { "name": "totalBox", "type": "rectangle",
+      "position": {"x":118,"y":230}, "width":78, "height":12, "color":"#1a3a5c", "borderRadius":2 },
+    { "name": "totalLabel", "type": "text",
+      "position": {"x":120,"y":233}, "width":40, "height":7,
+      "content": "TOTAL TTC", "fontSize":9, "fontColor":"#fff", "fontName":"NotoSans-Bold" },
+    { "name": "totalTtc", "type": "text",
+      "position": {"x":160,"y":233}, "width":34, "height":7,
+      "content": "{{totalTtc}} {{currency}}", "fontSize":9, "fontColor":"#fff",
+      "fontName":"NotoSans-Bold", "alignment":"right" },
+
+    { "name": "paymentLabel", "type": "text",
+      "position": {"x":14,"y":250}, "width":120, "height":5,
+      "content": "Mode de paiement: {{paymentMethod}}", "fontSize":8, "fontColor":"#374151" },
+
+    { "name": "qrCode", "type": "qrcode",
+      "position": {"x":14,"y":255}, "width":24, "height":24,
+      "content": "{{qrCodeValue}}" },
+    { "name": "qrLabel", "type": "text",
+      "position": {"x":14,"y":280}, "width":24, "height":5,
+      "content": "Vérification", "fontSize":6, "fontColor":"#9ca3af", "alignment":"center" },
+
+    { "name": "footer", "type": "text",
+      "position": {"x":44,"y":283}, "width":152, "height":6,
+      "content": "Document généré automatiquement — {{generatedAt}} — {{tenantName}}",
+      "fontSize":6.5, "fontColor":"#9ca3af", "alignment":"right" }
+  ]]
 }
