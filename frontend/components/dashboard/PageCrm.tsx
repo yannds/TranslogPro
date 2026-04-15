@@ -13,7 +13,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  Users2, Plus, Pencil, Archive, X, Check, AlertTriangle, UserCircle, Star,
+  Users2, Plus, Pencil, Archive, X, UserCircle, Star,
 } from 'lucide-react';
 import { useFetch }              from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
@@ -21,6 +21,9 @@ import { useAuth }               from '../../lib/auth/auth.context';
 import { Button }                from '../ui/Button';
 import { Badge }                 from '../ui/Badge';
 import { Dialog }                from '../ui/Dialog';
+import { ErrorAlert }            from '../ui/ErrorAlert';
+import { FormFooter }            from '../ui/FormFooter';
+import { inputClass as inp }     from '../ui/inputClass';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import { DocumentAttachments } from '../document/DocumentAttachments';
 import { CustomerDetailModal } from '../crm/CustomerDetailModal';
@@ -138,11 +141,6 @@ function buildColumns(): Column<CustomerRow>[] {
 
 // ─── Formulaire création ──────────────────────────────────────────────────────
 
-const inp =
-  'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ' +
-  'px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 ' +
-  'focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-50';
-
 function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
   onSubmit: (f: CreateForm) => void;
   onCancel: () => void;
@@ -155,11 +153,7 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
 
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
-      {error && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <ErrorAlert error={error} />
       <div className="space-y-3">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -187,27 +181,21 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
             autoComplete="tel" />
         </div>
       </div>
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
-        </Button>
-        <Button type="submit" disabled={busy} loading={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Création…' : 'Créer'}
-        </Button>
-      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
     </form>
   );
 }
 
 // ─── Formulaire édition ───────────────────────────────────────────────────────
 
-function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error }: {
+function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error, onPreviewChange }: {
   customer: CustomerRow;
   tenantId: string;
   onSubmit: (f: EditForm) => void;
   onCancel: () => void;
   busy:     boolean;
   error:    string | null;
+  onPreviewChange?: (open: boolean) => void;
 }) {
   const [f, setF] = useState<EditForm>({
     name:         customer.name ?? '',
@@ -219,11 +207,7 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error 
 
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
-      {error && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <ErrorAlert error={error} />
       <div className="space-y-3">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
@@ -258,17 +242,11 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error 
             entityType="CUSTOMER"
             entityId={customer.id}
             allowedKinds={['ID_CARD', 'CONTRACT', 'PHOTO', 'OTHER']}
+            onPreviewChange={onPreviewChange}
           />
         </div>
       </div>
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
-        </Button>
-        <Button type="submit" disabled={busy} loading={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Enregistrement…' : 'Enregistrer'}
-        </Button>
-      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
     </form>
   );
 }
@@ -332,6 +310,7 @@ export function PageCrm() {
   const [archiveTarget, setArchiveTarget] = useState<CustomerRow | null>(null);
   const [busy,         setBusy]         = useState(false);
   const [actionErr,    setActionErr]    = useState<string | null>(null);
+  const [editPreviewOpen, setEditPreviewOpen] = useState(false);
 
   const handleCreate = async (f: CreateForm) => {
     setBusy(true); setActionErr(null);
@@ -413,11 +392,7 @@ export function PageCrm() {
       {/* KPIs */}
       <CrmKpis customers={customers} />
 
-      {(error || actionErr) && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden />{error ?? actionErr}
-        </div>
-      )}
+      <ErrorAlert error={error ?? actionErr} icon />
 
       {/* Tableau */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2">
@@ -469,19 +444,20 @@ export function PageCrm() {
       {/* Modal Éditer */}
       <Dialog
         open={!!editTarget}
-        onOpenChange={o => { if (!o) setEditTarget(null); }}
+        onOpenChange={o => { if (!o) { setEditPreviewOpen(false); setEditTarget(null); } }}
         title="Modifier le voyageur"
         description={editTarget?.email}
-        size="md"
+        size={editPreviewOpen ? '3xl' : 'md'}
       >
         {editTarget && (
           <EditCustomerForm
             customer={editTarget}
             tenantId={tenantId}
             onSubmit={handleEdit}
-            onCancel={() => setEditTarget(null)}
+            onCancel={() => { setEditPreviewOpen(false); setEditTarget(null); }}
             busy={busy}
             error={actionErr}
+            onPreviewChange={setEditPreviewOpen}
           />
         )}
       </Dialog>
