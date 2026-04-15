@@ -57,6 +57,7 @@ import { CrewBriefingModule }    from './modules/crew-briefing/crew-briefing.mod
 import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
+import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
 
 // Guards & Middleware
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
@@ -146,6 +147,8 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     SchedulingGuardModule,
     // Auth — sign-in / sign-out / me (credential provider)
     AuthModule,
+    // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
+    TenantIamModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

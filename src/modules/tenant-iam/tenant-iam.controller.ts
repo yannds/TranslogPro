@@ -1,0 +1,188 @@
+/**
+ * TenantIamController
+ *
+ * Routes scopées par tenant : /api/v1/tenants/:tenantId/iam/…
+ *
+ * Utilisateurs :
+ *   GET    /users           — liste
+ *   POST   /users           — créer
+ *   GET    /users/:userId   — détail
+ *   PATCH  /users/:userId   — modifier
+ *   DELETE /users/:userId   — supprimer
+ *
+ * Rôles :
+ *   GET    /roles             — liste
+ *   POST   /roles             — créer
+ *   GET    /roles/:roleId     — détail + permissions
+ *   PATCH  /roles/:roleId     — renommer
+ *   DELETE /roles/:roleId     — supprimer
+ *   PUT    /roles/:roleId/permissions — remplacer toutes les permissions
+ *
+ * Sessions :
+ *   GET    /sessions           — sessions actives
+ *   DELETE /sessions/:id       — révoquer
+ *
+ * Journal :
+ *   GET    /audit              — logs paginés (filtres: userId, action, level, from, to)
+ */
+import {
+  Controller, Get, Post, Patch, Put, Delete,
+  Param, Body, Query, HttpCode, HttpStatus,
+} from '@nestjs/common';
+import { TenantIamService }    from './tenant-iam.service';
+import { RequirePermission }   from '../../common/decorators/require-permission.decorator';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { Permission }          from '../../common/constants/permissions';
+import {
+  CreateUserDto, UpdateUserDto,
+  CreateRoleDto, UpdateRoleDto, SetPermissionsDto,
+  AuditQueryDto,
+} from './dto/tenant-iam.dto';
+
+@Controller({ version: '1', path: 'tenants/:tenantId/iam' })
+export class TenantIamController {
+  constructor(private readonly iam: TenantIamService) {}
+
+  // ─── Utilisateurs ──────────────────────────────────────────────────────────
+
+  @Get('users')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  listUsers(
+    @Param('tenantId') tenantId: string,
+    @Query('search')   search?:  string,
+    @Query('roleId')   roleId?:  string,
+  ) {
+    return this.iam.listUsers(tenantId, search, roleId);
+  }
+
+  @Post('users')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  createUser(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      CreateUserDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.createUser(tenantId, dto, actor.id);
+  }
+
+  @Get('users/:userId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  getUser(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+  ) {
+    return this.iam.getUser(tenantId, userId);
+  }
+
+  @Patch('users/:userId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  updateUser(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @Body()            dto:      UpdateUserDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.updateUser(tenantId, userId, dto, actor.id);
+  }
+
+  @Delete('users/:userId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteUser(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.deleteUser(tenantId, userId, actor.id);
+  }
+
+  // ─── Rôles ────────────────────────────────────────────────────────────────
+
+  @Get('roles')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  listRoles(@Param('tenantId') tenantId: string) {
+    return this.iam.listRoles(tenantId);
+  }
+
+  @Post('roles')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  createRole(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      CreateRoleDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.createRole(tenantId, dto, actor.id);
+  }
+
+  @Get('roles/:roleId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  getRole(
+    @Param('tenantId') tenantId: string,
+    @Param('roleId')   roleId:   string,
+  ) {
+    return this.iam.getRole(tenantId, roleId);
+  }
+
+  @Patch('roles/:roleId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  updateRole(
+    @Param('tenantId') tenantId: string,
+    @Param('roleId')   roleId:   string,
+    @Body()            dto:      UpdateRoleDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.updateRole(tenantId, roleId, dto, actor.id);
+  }
+
+  @Delete('roles/:roleId')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteRole(
+    @Param('tenantId') tenantId: string,
+    @Param('roleId')   roleId:   string,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.deleteRole(tenantId, roleId, actor.id);
+  }
+
+  @Put('roles/:roleId/permissions')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  setPermissions(
+    @Param('tenantId') tenantId: string,
+    @Param('roleId')   roleId:   string,
+    @Body()            dto:      SetPermissionsDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.setPermissions(tenantId, roleId, dto, actor.id);
+  }
+
+  // ─── Sessions ─────────────────────────────────────────────────────────────
+
+  @Get('sessions')
+  @RequirePermission(Permission.SESSION_REVOKE_TENANT)
+  listSessions(@Param('tenantId') tenantId: string) {
+    return this.iam.listSessions(tenantId);
+  }
+
+  @Delete('sessions/:sessionId')
+  @RequirePermission(Permission.SESSION_REVOKE_TENANT)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  revokeSession(
+    @Param('tenantId')  tenantId:  string,
+    @Param('sessionId') sessionId: string,
+    @CurrentUser()      actor:     CurrentUserPayload,
+  ) {
+    return this.iam.revokeSession(tenantId, sessionId, actor.id);
+  }
+
+  // ─── Journal d'accès ──────────────────────────────────────────────────────
+
+  @Get('audit')
+  @RequirePermission(Permission.IAM_AUDIT_TENANT)
+  listAuditLogs(
+    @Param('tenantId') tenantId: string,
+    @Query()           query:    AuditQueryDto,
+  ) {
+    return this.iam.listAuditLogs(tenantId, query);
+  }
+}
