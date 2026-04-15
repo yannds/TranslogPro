@@ -11,6 +11,22 @@ export interface CreateTenantDto {
   adminName:  string;
 }
 
+/**
+ * DTO pour la mise à jour des informations société du tenant.
+ * Tous les champs sont optionnels (update partiel).
+ * Les champs rccm et phoneNumber restent nullable en base.
+ */
+export interface UpdateCompanyInfoDto {
+  name?:        string;
+  language?:    string;  // 'fr' | 'en' (étendu plus tard)
+  timezone?:    string;  // IANA TZ
+  currency?:    string;  // ISO 4217
+  rccm?:        string | null;
+  phoneNumber?: string | null;
+}
+
+const SUPPORTED_LANGUAGES = ['fr', 'en'];
+
 @Injectable()
 export class TenantService {
   constructor(
@@ -55,5 +71,75 @@ export class TenantService {
 
   async suspend(id: string) {
     return this.prisma.tenant.update({ where: { id }, data: { provisionStatus: 'SUSPENDED' } });
+  }
+
+  /**
+   * Informations société du tenant — lecture publique (pas d'authentification
+   * requise) car utilisée par le bootstrap i18n frontend et les portails SSR.
+   */
+  async getCompanyInfo(tenantId: string) {
+    const t = await this.prisma.tenant.findUnique({
+      where:  { id: tenantId },
+      select: {
+        id: true, name: true, slug: true,
+        language: true, timezone: true, currency: true,
+        rccm: true, phoneNumber: true,
+      },
+    });
+    if (!t) throw new NotFoundException(`Tenant ${tenantId} not found`);
+    return t;
+  }
+
+  async updateCompanyInfo(tenantId: string, dto: UpdateCompanyInfoDto) {
+    if (dto.language !== undefined && !SUPPORTED_LANGUAGES.includes(dto.language)) {
+      throw new ConflictException(
+        `Language "${dto.language}" non supportée. Valeurs : ${SUPPORTED_LANGUAGES.join(', ')}`,
+      );
+    }
+
+    const updated = await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        ...(dto.name        !== undefined ? { name:        dto.name }        : {}),
+        ...(dto.language    !== undefined ? { language:    dto.language }    : {}),
+        ...(dto.timezone    !== undefined ? { timezone:    dto.timezone }    : {}),
+        ...(dto.currency    !== undefined ? { currency:    dto.currency }    : {}),
+        ...(dto.rccm        !== undefined ? { rccm:        dto.rccm }        : {}),
+        ...(dto.phoneNumber !== undefined ? { phoneNumber: dto.phoneNumber } : {}),
+      },
+      select: {
+        id: true, name: true, slug: true,
+        language: true, timezone: true, currency: true,
+        rccm: true, phoneNumber: true,
+      },
+    });
+    return updated;
+  }
+
+  /**
+   * Configuration agrégée — appelée par TenantConfigProvider côté frontend
+   * au bootstrap pour pré-remplir i18n, currency, timezone, brand.
+   * Lecture publique intentionnelle : aucune donnée sensible.
+   */
+  async getAggregatedConfig(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where:  { id: tenantId },
+      select: {
+        id: true, name: true, slug: true,
+        language: true, timezone: true, currency: true,
+        rccm: true, phoneNumber: true,
+        brand: true,
+      },
+    });
+    if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
+
+    return {
+      company: {
+        id: tenant.id, name: tenant.name, slug: tenant.slug,
+        language: tenant.language, timezone: tenant.timezone, currency: tenant.currency,
+        rccm: tenant.rccm, phoneNumber: tenant.phoneNumber,
+      },
+      brand: tenant.brand,
+    };
   }
 }

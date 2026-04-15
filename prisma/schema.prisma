@@ -23,6 +23,23 @@ model Tenant {
   isActive        Boolean           @default(true)
   provisionStatus String            @default("PENDING")
   // PENDING | PROVISIONING | ACTIVE | SUSPENDED
+
+  // ── Localisation & devise (drive l'interface i18n) ──────────────────────────
+  // language : code ISO 639-1 — pilote l'affichage frontend via I18nProvider
+  //   Valeurs supportées : fr | en (extensible vers ln, ktu, es, pt, ar, wo)
+  // timezone : IANA TZ (ex: "Africa/Brazzaville"). Par défaut Afrique centrale.
+  // currency : code ISO 4217 (ex: "XAF"). Drive l'affichage des montants.
+  language String  @default("fr")
+  timezone String  @default("Africa/Brazzaville")
+  currency String  @default("XAF")
+
+  // ── Informations société (optionnelles) ─────────────────────────────────────
+  // Utilisées sur les documents officiels (billets, factures, manifestes).
+  // RCCM : Registre du Commerce et du Crédit Mobilier — numéro légal.
+  // phoneNumber : contact principal affiché sur le portail public.
+  rccm        String?
+  phoneNumber String?
+
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 

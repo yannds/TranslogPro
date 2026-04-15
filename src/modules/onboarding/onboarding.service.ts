@@ -56,9 +56,14 @@ export class OnboardingService {
     const language: TenantLanguage = dto.language ?? 'fr';
 
     const result = await this.prisma.transact(async (tx) => {
-      // 1. Tenant
+      // 1. Tenant — persiste la langue dès la création (drive l'i18n frontend)
       const tenant = await tx.tenant.create({
-        data: { name: dto.name, slug: dto.slug, provisionStatus: 'PROVISIONING' },
+        data: {
+          name:            dto.name,
+          slug:            dto.slug,
+          provisionStatus: 'PROVISIONING',
+          language,
+        },
       });
 
       // 2. Seed des rôles IAM — JAMAIS de SUPER_ADMIN ici

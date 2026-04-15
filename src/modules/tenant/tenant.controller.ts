@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Param, Body } from '@nestjs/common';
-import { TenantService, CreateTenantDto } from './tenant.service';
+import { TenantService, CreateTenantDto, UpdateCompanyInfoDto } from './tenant.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -35,5 +35,33 @@ export class TenantController {
   @RequirePermission(Permission.TENANT_MANAGE)
   suspend(@Param('id') id: string) {
     return this.tenantService.suspend(id);
+  }
+
+  // ── Informations société ───────────────────────────────────────────────────
+  // Lecture PUBLIQUE volontairement — nécessaire au bootstrap i18n/branding
+  // côté frontend avant l'authentification (identique au /brand endpoint).
+  // Aucune donnée sensible exposée (name, slug, lang, tz, currency, rccm, phone).
+
+  @Get(':id/company')
+  getCompany(@Param('id') id: string) {
+    return this.tenantService.getCompanyInfo(id);
+  }
+
+  @Patch(':id/company')
+  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  updateCompany(
+    @Param('id') id: string,
+    @Body() dto: UpdateCompanyInfoDto,
+  ) {
+    return this.tenantService.updateCompanyInfo(id, dto);
+  }
+
+  /**
+   * Configuration agrégée — utilisée par TenantConfigProvider au bootstrap
+   * frontend pour pré-remplir i18n, brand, devise en une seule requête.
+   */
+  @Get(':id/config')
+  getConfig(@Param('id') id: string) {
+    return this.tenantService.getAggregatedConfig(id);
   }
 }
