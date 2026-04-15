@@ -33,8 +33,9 @@ export class CashierController {
     @Body('referenceId') referenceId: string,
     @Body('referenceType') referenceType: string,
     @CurrentUser() actor: CurrentUserPayload,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.cashierService.recordTransaction(tenantId, id, type, amount, referenceId, referenceType);
+    return this.cashierService.recordTransaction(tenantId, id, type, amount, referenceId, referenceType, scope);
   }
 
   /**
@@ -55,8 +56,12 @@ export class CashierController {
 
   @Get('registers/:id')
   @RequirePermission(Permission.CASHIER_OPEN_OWN)
-  getRegister(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.cashierService.getRegister(tenantId, id);
+  getRegister(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.cashierService.getRegister(tenantId, id, scope);
   }
 
   @Get('report/daily')

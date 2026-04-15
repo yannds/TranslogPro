@@ -17,9 +17,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   Logger,
 } from '@nestjs/common';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertOwnership } from '../../common/helpers/scope-filter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import {
@@ -274,7 +277,11 @@ export class DriverProfileService {
     return { canDrive: true, restRemainingMinutes: 0, activeRestPeriod: null };
   }
 
-  async startRestPeriod(tenantId: string, dto: StartRestPeriodDto) {
+  async startRestPeriod(tenantId: string, dto: StartRestPeriodDto, scope?: ScopeContext) {
+    // Scope own : un chauffeur ne peut démarrer une période QUE pour lui-même.
+    if (scope?.scope === 'own' && dto.staffId !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — staffId ≠ actor.id`);
+    }
     // Ferme toute période ouverte existante (défensive — ne devrait pas arriver)
     await this.prisma.driverRestPeriod.updateMany({
       where: { tenantId, staffId: dto.staffId, endedAt: null },
@@ -299,11 +306,12 @@ export class DriverProfileService {
     return period;
   }
 
-  async endRestPeriod(tenantId: string, periodId: string, dto: EndRestPeriodDto) {
+  async endRestPeriod(tenantId: string, periodId: string, dto: EndRestPeriodDto, scope?: ScopeContext) {
     const period = await this.prisma.driverRestPeriod.findFirst({
       where: { id: periodId, tenantId },
     });
     if (!period) throw new NotFoundException(`Période de repos ${periodId} introuvable`);
+    if (scope) assertOwnership(scope, period, 'staffId');
     if (period.endedAt) throw new BadRequestException('Période déjà terminée');
 
     const config      = await this.getRestConfig(tenantId);

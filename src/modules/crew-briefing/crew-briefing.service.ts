@@ -14,10 +14,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   Logger,
 } from '@nestjs/common';
 import { PrismaService }       from '../../infrastructure/database/prisma.service';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 import {
   IEventBus,
   EVENT_BUS,
@@ -91,7 +93,11 @@ export class CrewBriefingService {
    * Calcule allEquipmentOk en vérifiant que tous les items isMandatory de ce tenant
    * sont présents dans checkedItems avec ok=true et qty >= requiredQty.
    */
-  async createBriefing(tenantId: string, dto: CreateBriefingDto) {
+  async createBriefing(tenantId: string, dto: CreateBriefingDto, scope?: ScopeContext) {
+    // Scope own : un acteur ne peut conduire un briefing QUE pour lui-même
+    if (scope?.scope === 'own' && dto.conductedById !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — conductedById ≠ actor.id`);
+    }
     // Vérifier que l'assignment existe et appartient à ce tenant
     const assignment = await this.prisma.crewAssignment.findFirst({
       where: { id: dto.assignmentId, tenantId },

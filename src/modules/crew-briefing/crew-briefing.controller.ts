@@ -8,6 +8,7 @@ import {
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
 @RequireModule('CREW_BRIEFING')
@@ -49,8 +50,9 @@ export class CrewBriefingController {
   createBriefing(
     @TenantId() tenantId: string,
     @Body() dto: CreateBriefingDto,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.createBriefing(tenantId, dto);
+    return this.svc.createBriefing(tenantId, dto, scope);
   }
 
   @Get('briefings/assignment/:assignmentId')

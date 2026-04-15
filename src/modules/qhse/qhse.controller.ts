@@ -17,6 +17,7 @@ import {
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
 @RequireModule('QHSE')
@@ -71,8 +72,9 @@ export class QhseController {
   getAccidentReport(
     @TenantId() tenantId: string,
     @Param('id') id: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.getAccidentReport(tenantId, id);
+    return this.svc.getAccidentReport(tenantId, id, scope);
   }
 
   @Get('accidents')
@@ -93,8 +95,9 @@ export class QhseController {
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() body: { filename: string },
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.getAccidentPhotoUploadUrl(tenantId, id, body.filename);
+    return this.svc.getAccidentPhotoUploadUrl(tenantId, id, body.filename, scope);
   }
 
   // ── Third Parties ──────────────────────────────────────────────────────────
@@ -105,8 +108,9 @@ export class QhseController {
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() dto: AddThirdPartyDto,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.addThirdParty(tenantId, id, dto);
+    return this.svc.addThirdParty(tenantId, id, dto, scope);
   }
 
   @Post('third-parties/:id/statement-url')
@@ -114,8 +118,9 @@ export class QhseController {
   getThirdPartyStatementUrl(
     @TenantId() tenantId: string,
     @Param('id') id: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.getThirdPartyStatementUploadUrl(tenantId, id);
+    return this.svc.getThirdPartyStatementUploadUrl(tenantId, id, scope);
   }
 
   // ── Injuries ───────────────────────────────────────────────────────────────
@@ -126,8 +131,9 @@ export class QhseController {
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() dto: AddInjuryDto,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.addInjury(tenantId, id, dto);
+    return this.svc.addInjury(tenantId, id, dto, scope);
   }
 
   @Post('injuries/:id/follow-ups')

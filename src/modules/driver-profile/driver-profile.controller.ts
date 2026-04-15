@@ -15,6 +15,7 @@ import {
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
 @RequireModule('DRIVER_PROFILE')
@@ -105,8 +106,9 @@ export class DriverProfileController {
   startRestPeriod(
     @TenantId() tenantId: string,
     @Body() dto: StartRestPeriodDto,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.startRestPeriod(tenantId, dto);
+    return this.svc.startRestPeriod(tenantId, dto, scope);
   }
 
   @Patch('rest-periods/:id/end')
@@ -115,8 +117,9 @@ export class DriverProfileController {
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() dto: EndRestPeriodDto,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.endRestPeriod(tenantId, id, dto);
+    return this.svc.endRestPeriod(tenantId, id, dto, scope);
   }
 
   @Get('drivers/:staffId/rest-history')

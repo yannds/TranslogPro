@@ -1,5 +1,13 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ScopeContext } from '../decorators/scope-context.decorator';
+
+/** Sous-type minimal d'un client Prisma capable de retrouver un Trip par id. */
+type TripFinder = {
+  trip: {
+    findFirst: (args: { where: Record<string, unknown>; select: { driverId: true } }) =>
+      Promise<{ driverId: string | null } | null>;
+  };
+};
 
 /**
  * Construit la clause Prisma `where` correspondant au scope de permission.
@@ -47,5 +55,30 @@ export function assertOwnership<T extends Record<string, unknown>>(
     throw new ForbiddenException(
       `Scope 'own' violation — resource not owned by actor (field=${String(ownerField)})`,
     );
+  }
+}
+
+/**
+ * Vérifie qu'un Trip est assigné à l'acteur lorsque scope=own.
+ * Utilisé pour les ressources rattachées à un trajet (GPS, manifeste,
+ * checklist, équipage…) qui n'ont pas de ownerField direct.
+ *
+ * Effet de bord : 1 SELECT sur Trip (driverId only). Acceptable pour la
+ * sécurité — à mettre en cache par requête si jamais hot path.
+ */
+export async function assertTripOwnership(
+  prisma:   TripFinder,
+  tenantId: string,
+  tripId:   string,
+  scope:    ScopeContext,
+): Promise<void> {
+  if (scope.scope !== 'own') return;
+  const trip = await prisma.trip.findFirst({
+    where:  { id: tripId, tenantId },
+    select: { driverId: true },
+  });
+  if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
+  if (trip.driverId !== scope.userId) {
+    throw new ForbiddenException(`Scope 'own' violation — trip not assigned to actor`);
   }
 }

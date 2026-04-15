@@ -2,6 +2,7 @@ import { Controller, Post, Get, Patch, Delete, Body, Param } from '@nestjs/commo
 import { CrewService, AssignCrewDto } from './crew.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -21,8 +22,12 @@ export class CrewController {
 
   @Get()
   @RequirePermission(Permission.TRIP_READ_OWN)
-  getForTrip(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
-    return this.crewService.getForTrip(tenantId, tripId);
+  getForTrip(
+    @TenantId() tenantId: string,
+    @Param('tripId') tripId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.crewService.getForTrip(tenantId, tripId, scope);
   }
 
   @Patch(':staffId/briefed')
@@ -31,8 +36,9 @@ export class CrewController {
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
     @Param('staffId') staffId: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.crewService.markBriefed(tenantId, tripId, staffId);
+    return this.crewService.markBriefed(tenantId, tripId, staffId, scope);
   }
 
   @Delete(':staffId')

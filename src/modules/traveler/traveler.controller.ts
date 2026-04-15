@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body, Headers } from '@nestjs/common';
 import { TravelerService } from './traveler.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -73,7 +74,8 @@ export class TravelerController {
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
     @Param('stationId') stationId: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.travelerService.getDropOffList(tenantId, tripId, stationId);
+    return this.travelerService.getDropOffList(tenantId, tripId, stationId, scope);
   }
 }

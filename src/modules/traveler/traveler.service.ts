@@ -5,6 +5,8 @@ import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus
 import { EventTypes } from '../../common/types/domain-event.type';
 import { TravelerState, TravelerAction } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertTripOwnership } from '../../common/helpers/scope-filter';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -139,7 +141,8 @@ export class TravelerService {
   /**
    * PRD §IV.10 — Manifeste 3.0 : voyageurs à décharger à une station.
    */
-  async getDropOffList(tenantId: string, tripId: string, stationId: string) {
+  async getDropOffList(tenantId: string, tripId: string, stationId: string, scope?: ScopeContext) {
+    if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.traveler.findMany({
       where: {
         tenantId,

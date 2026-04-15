@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService }              from '../../infrastructure/database/prisma.service';
 import { SchedulingGuardService }     from '../scheduling-guard/scheduling-guard.service';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertTripOwnership } from '../../common/helpers/scope-filter';
 
 export interface AssignCrewDto {
   staffId:  string;
@@ -41,13 +43,18 @@ export class CrewService {
     });
   }
 
-  async getForTrip(tenantId: string, tripId: string) {
+  async getForTrip(tenantId: string, tripId: string, scope?: ScopeContext) {
+    if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.crewAssignment.findMany({
       where: { tenantId, tripId },
     });
   }
 
-  async markBriefed(tenantId: string, tripId: string, staffId: string) {
+  async markBriefed(tenantId: string, tripId: string, staffId: string, scope?: ScopeContext) {
+    // Scope own : un membre d'équipage ne peut marquer briefé QUE lui-même.
+    if (scope?.scope === 'own' && staffId !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — staffId ≠ actor.id`);
+    }
     const assignment = await this.prisma.crewAssignment.findFirst({
       where: { tripId, staffId, tenantId },
     });

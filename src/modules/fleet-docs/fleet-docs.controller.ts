@@ -11,6 +11,7 @@ import { RequirePermission }  from '../../common/decorators/require-permission.d
 import { RequireModule }      from '../../common/decorators/require-module.decorator';
 import { TenantId }           from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }         from '../../common/constants/permissions';
 
 @RequireModule('FLEET_DOCS')
@@ -126,8 +127,9 @@ export class FleetDocsController {
     @TenantId() tenantId: string,
     @Param('reportId') reportId: string,
     @Body() body: { staffId?: string; externalName?: string; role: string; hoursWorked?: number; notes?: string },
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.addIntervenant(tenantId, reportId, body);
+    return this.svc.addIntervenant(tenantId, reportId, body, scope);
   }
 
   @Post('maintenance/:reportId/parts')
@@ -136,8 +138,9 @@ export class FleetDocsController {
     @TenantId() tenantId: string,
     @Param('reportId') reportId: string,
     @Body() body: { consumableTypeId?: string; partName: string; partReference?: string; quantity?: number; unitCostXaf?: number; kmAtReplacement?: number },
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.addPart(tenantId, reportId, body);
+    return this.svc.addPart(tenantId, reportId, body, scope);
   }
 
   @Get('maintenance/:reportId/detail')

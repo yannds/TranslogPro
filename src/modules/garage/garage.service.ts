@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { Inject } from '@nestjs/common';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { ownershipWhere, assertOwnership } from '../../common/helpers/scope-filter';
 
 export interface CreateMaintenanceDto {
   busId:       string;
@@ -37,11 +39,12 @@ export class GarageService {
     });
   }
 
-  async complete(tenantId: string, reportId: string, notes: string, actor: CurrentUserPayload) {
+  async complete(tenantId: string, reportId: string, notes: string, actor: CurrentUserPayload, scope?: ScopeContext) {
     const report = await this.prisma.maintenanceReport.findFirst({
       where: { id: reportId, tenantId },
     });
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+    if (scope) assertOwnership(scope, report, 'createdById');
 
     return this.prisma.maintenanceReport.update({
       where: { id: reportId },
@@ -72,21 +75,38 @@ export class GarageService {
     ]);
   }
 
-  async getDocumentUploadUrl(tenantId: string, reportId: string) {
+  async getDocumentUploadUrl(tenantId: string, reportId: string, scope?: ScopeContext) {
+    if (scope?.scope === 'own') {
+      const report = await this.prisma.maintenanceReport.findFirst({
+        where:  { id: reportId, tenantId },
+        select: { createdById: true },
+      });
+      if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+      if (report.createdById !== scope.userId) {
+        throw new ForbiddenException(`Scope 'own' violation — report not owned by actor`);
+      }
+    }
     const key = `${tenantId}/maintenance/${reportId}/${Date.now()}.pdf`;
     return this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
   }
 
-  async findByBus(tenantId: string, busId: string) {
+  async findByBus(tenantId: string, busId: string, scope?: ScopeContext) {
     return this.prisma.maintenanceReport.findMany({
-      where:   { tenantId, busId },
+      where: {
+        tenantId, busId,
+        ...(scope ? ownershipWhere(scope, 'createdById') : {}),
+      },
       orderBy: { scheduledAt: 'desc' },
     });
   }
 
-  async findAll(tenantId: string, status?: string) {
+  async findAll(tenantId: string, status?: string, scope?: ScopeContext) {
     return this.prisma.maintenanceReport.findMany({
-      where:   { tenantId, ...(status ? { status } : {}) },
+      where: {
+        tenantId,
+        ...(status ? { status } : {}),
+        ...(scope ? ownershipWhere(scope, 'createdById') : {}),
+      },
       include: { bus: true },
       orderBy: { scheduledAt: 'asc' },
     });

@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Param } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -20,7 +21,11 @@ export class NotificationController {
 
   @Patch(':id/read')
   @RequirePermission(Permission.NOTIFICATION_READ_OWN)
-  markRead(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.notificationService.markRead(tenantId, id);
+  markRead(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.notificationService.markRead(tenantId, id, scope);
   }
 }

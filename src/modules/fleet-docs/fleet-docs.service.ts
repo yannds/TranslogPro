@@ -15,9 +15,11 @@
 import {
   Injectable,
   NotFoundException,
+  ForbiddenException,
   Inject,
   Logger,
 } from '@nestjs/common';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import {
@@ -290,7 +292,8 @@ export class FleetDocsService {
 
   async addIntervenant(tenantId: string, reportId: string, dto: {
     staffId?: string; externalName?: string; role: string; hoursWorked?: number; notes?: string;
-  }) {
+  }, scope?: ScopeContext) {
+    if (scope) await this.assertReportOwnership(tenantId, reportId, scope);
     return this.prisma.maintenanceIntervenant.create({
       data: { tenantId, reportId, ...dto },
     });
@@ -299,10 +302,27 @@ export class FleetDocsService {
   async addPart(tenantId: string, reportId: string, dto: {
     consumableTypeId?: string; partName: string; partReference?: string;
     quantity?: number; unitCostXaf?: number; kmAtReplacement?: number;
-  }) {
+  }, scope?: ScopeContext) {
+    if (scope) await this.assertReportOwnership(tenantId, reportId, scope);
     return this.prisma.maintenancePart.create({
       data: { tenantId, reportId, quantity: 1, ...dto },
     });
+  }
+
+  /**
+   * Vérifie qu'un MaintenanceReport a été créé par l'acteur si scope=own.
+   * Empêche un mécanicien d'ajouter intervenants/pièces au rapport d'un collègue.
+   */
+  private async assertReportOwnership(tenantId: string, reportId: string, scope: ScopeContext): Promise<void> {
+    if (scope.scope !== 'own') return;
+    const report = await this.prisma.maintenanceReport.findFirst({
+      where:  { id: reportId, tenantId },
+      select: { createdById: true },
+    });
+    if (!report) throw new NotFoundException(`MaintenanceReport ${reportId} introuvable`);
+    if (report.createdById !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — report not owned by actor`);
+    }
   }
 
   async getMaintenanceDetail(tenantId: string, reportId: string) {

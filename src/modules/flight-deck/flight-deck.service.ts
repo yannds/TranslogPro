@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TripState } from '../../common/constants/workflow-states';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertTripOwnership } from '../../common/helpers/scope-filter';
 
 /**
  * Flight-deck = Driver dashboard.
@@ -27,7 +29,8 @@ export class FlightDeckService {
     });
   }
 
-  async getChecklist(tenantId: string, tripId: string) {
+  async getChecklist(tenantId: string, tripId: string, scope?: ScopeContext) {
+    if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.checklist.findMany({
       where:   { tripId },
       orderBy: { createdAt: 'asc' },

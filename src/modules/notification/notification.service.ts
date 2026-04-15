@@ -1,8 +1,9 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISmsService, IWhatsappService, SMS_SERVICE, WHATSAPP_SERVICE } from '../../infrastructure/notification/interfaces/sms.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 
 export interface SendNotificationDto {
   tenantId:    string;
@@ -112,7 +113,17 @@ export class NotificationService {
     });
   }
 
-  async markRead(tenantId: string, notificationId: string) {
+  async markRead(tenantId: string, notificationId: string, scope?: ScopeContext) {
+    if (scope?.scope === 'own') {
+      const notif = await this.prisma.notification.findFirst({
+        where:  { id: notificationId, tenantId },
+        select: { userId: true },
+      });
+      if (!notif) throw new NotFoundException(`Notification ${notificationId} introuvable`);
+      if (notif.userId !== scope.userId) {
+        throw new ForbiddenException(`Scope 'own' violation — notification not owned by actor`);
+      }
+    }
     return this.prisma.notification.update({
       where: { id: notificationId },
       data:  { status: 'READ', readAt: new Date() },

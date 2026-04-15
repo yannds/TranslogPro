@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common
 import { GarageService, CreateMaintenanceDto } from './garage.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -28,8 +29,9 @@ export class GarageController {
     @Param('id') id: string,
     @Body('notes') notes: string,
     @CurrentUser() actor: CurrentUserPayload,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.garageService.complete(tenantId, id, notes, actor);
+    return this.garageService.complete(tenantId, id, notes, actor, scope);
   }
 
   /**
@@ -50,19 +52,31 @@ export class GarageController {
   /** URL upload document intervention */
   @Get('reports/:id/upload-url')
   @RequirePermission(Permission.MAINTENANCE_UPDATE_OWN)
-  uploadUrl(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.garageService.getDocumentUploadUrl(tenantId, id);
+  uploadUrl(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.garageService.getDocumentUploadUrl(tenantId, id, scope);
   }
 
   @Get('reports')
   @RequirePermission(Permission.MAINTENANCE_UPDATE_OWN)
-  findAll(@TenantId() tenantId: string, @Query('status') status?: string) {
-    return this.garageService.findAll(tenantId, status);
+  findAll(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('status') status?: string,
+  ) {
+    return this.garageService.findAll(tenantId, status, scope);
   }
 
   @Get('buses/:busId/reports')
   @RequirePermission(Permission.MAINTENANCE_UPDATE_OWN)
-  findByBus(@TenantId() tenantId: string, @Param('busId') busId: string) {
-    return this.garageService.findByBus(tenantId, busId);
+  findByBus(
+    @TenantId() tenantId: string,
+    @Param('busId') busId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.garageService.findByBus(tenantId, busId, scope);
   }
 }

@@ -1,8 +1,9 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 import { EventTypes } from '../../common/types/domain-event.type';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertTripOwnership } from '../../common/helpers/scope-filter';
 import { v4 as uuidv4 } from 'uuid';
 
 const GPS_API_THROTTLE_S  = 5;   // max 1 write/5s to API
@@ -62,7 +63,7 @@ export class TrackingService {
   }
 
   async getLastPosition(tenantId: string, tripId: string, scope?: ScopeContext) {
-    if (scope) await this.assertTripOwnership(tenantId, tripId, scope);
+    if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.gpsPosition.findFirst({
       where:   { tenantId, tripId },
       orderBy: { recordedAt: 'desc' },
@@ -76,27 +77,11 @@ export class TrackingService {
   }
 
   async getTripHistory(tenantId: string, tripId: string, limit = 500, scope?: ScopeContext) {
-    if (scope) await this.assertTripOwnership(tenantId, tripId, scope);
+    if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.gpsPosition.findMany({
       where:   { tenantId, tripId },
       orderBy: { recordedAt: 'asc' },
       take:    limit,
     });
-  }
-
-  /**
-   * Vérifie qu'un trip appartient à l'acteur si scope=own. Lance 403 sinon.
-   * Utilisé pour les endpoints GPS qui n'ont pas de ownerField direct.
-   */
-  private async assertTripOwnership(tenantId: string, tripId: string, scope: ScopeContext): Promise<void> {
-    if (scope.scope !== 'own') return;
-    const trip = await this.prisma.trip.findFirst({
-      where:  { id: tripId, tenantId },
-      select: { driverId: true },
-    });
-    if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
-    if (trip.driverId !== scope.userId) {
-      throw new ForbiddenException(`Scope 'own' violation — trip not assigned to actor`);
-    }
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, ForbiddenException } 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertOwnership } from '../../common/helpers/scope-filter';
 import { OpenRegisterDto } from './dto/open-register.dto';
 
 @Injectable()
@@ -48,12 +49,13 @@ export class CashierService {
     });
   }
 
-  async getRegister(tenantId: string, registerId: string) {
+  async getRegister(tenantId: string, registerId: string, scope?: ScopeContext) {
     const r = await this.prisma.cashRegister.findFirst({
       where:   { id: registerId, tenantId },
       include: { transactions: { orderBy: { createdAt: 'desc' }, take: 50 } },
     });
     if (!r) throw new NotFoundException(`Register ${registerId} not found`);
+    if (scope) assertOwnership(scope, r, 'agentId');
     return r;
   }
 
@@ -64,7 +66,18 @@ export class CashierService {
     amount:        number,
     paymentMethod: string,
     externalRef?:  string,
+    scope?:        ScopeContext,
   ) {
+    if (scope?.scope === 'own') {
+      const reg = await this.prisma.cashRegister.findFirst({
+        where: { id: registerId, tenantId },
+        select: { agentId: true },
+      });
+      if (!reg) throw new NotFoundException(`Register ${registerId} not found`);
+      if (reg.agentId !== scope.userId) {
+        throw new ForbiddenException(`Scope 'own' violation — register not owned by actor`);
+      }
+    }
     return this.prisma.transaction.create({
       data: {
         tenantId,

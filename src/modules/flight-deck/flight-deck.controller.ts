@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Param, Query } from '@nestjs/common';
 import { FlightDeckService } from './flight-deck.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -20,8 +21,12 @@ export class FlightDeckController {
 
   @Get('trips/:tripId/checklist')
   @RequirePermission(Permission.TRIP_READ_OWN)
-  getChecklist(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
-    return this.flightDeckService.getChecklist(tenantId, tripId);
+  getChecklist(
+    @TenantId() tenantId: string,
+    @Param('tripId') tripId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.flightDeckService.getChecklist(tenantId, tripId, scope);
   }
 
   @Patch('checklist/:checklistId/complete')

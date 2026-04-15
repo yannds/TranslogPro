@@ -19,10 +19,13 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   Logger,
 } from '@nestjs/common';
 import { PrismaService }       from '../../infrastructure/database/prisma.service';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { assertOwnership } from '../../common/helpers/scope-filter';
 import {
   IStorageService,
   STORAGE_SERVICE,
@@ -246,7 +249,7 @@ export class QhseService {
     });
   }
 
-  async getAccidentReport(tenantId: string, reportId: string) {
+  async getAccidentReport(tenantId: string, reportId: string, scope?: ScopeContext) {
     const report = await this.prisma.accidentReport.findFirst({
       where:   { id: reportId, tenantId },
       include: {
@@ -257,6 +260,7 @@ export class QhseService {
         procedureExecs: { include: { stepExecs: { include: { step: true } }, procedure: true } },
       },
     });
+    if (scope) assertOwnership(scope, report, 'reportedById');
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
     return report;
   }
@@ -283,9 +287,10 @@ export class QhseService {
     });
   }
 
-  async getAccidentPhotoUploadUrl(tenantId: string, reportId: string, filename: string) {
+  async getAccidentPhotoUploadUrl(tenantId: string, reportId: string, filename: string, scope?: ScopeContext) {
     const report = await this.prisma.accidentReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+    if (scope) assertOwnership(scope, report, 'reportedById');
 
     const key = `${tenantId}/accidents/${reportId}/${Date.now()}-${filename}`;
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
@@ -302,18 +307,25 @@ export class QhseService {
 
   // ─── Third Parties ────────────────────────────────────────────────────────
 
-  async addThirdParty(tenantId: string, reportId: string, dto: AddThirdPartyDto) {
+  async addThirdParty(tenantId: string, reportId: string, dto: AddThirdPartyDto, scope?: ScopeContext) {
     const report = await this.prisma.accidentReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+    if (scope) assertOwnership(scope, report, 'reportedById');
 
     return this.prisma.accidentThirdParty.create({
       data: { tenantId, reportId, ...dto, type: dto.type.toUpperCase() },
     });
   }
 
-  async getThirdPartyStatementUploadUrl(tenantId: string, thirdPartyId: string) {
-    const tp = await this.prisma.accidentThirdParty.findFirst({ where: { id: thirdPartyId, tenantId } });
+  async getThirdPartyStatementUploadUrl(tenantId: string, thirdPartyId: string, scope?: ScopeContext) {
+    const tp = await this.prisma.accidentThirdParty.findFirst({
+      where:   { id: thirdPartyId, tenantId },
+      include: { report: { select: { reportedById: true } } },
+    });
     if (!tp) throw new NotFoundException(`Tiers ${thirdPartyId} introuvable`);
+    if (scope?.scope === 'own' && tp.report?.reportedById !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — third party not from owned report`);
+    }
 
     const key = `${tenantId}/accidents/${tp.reportId}/thirds/${thirdPartyId}-statement.pdf`;
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
@@ -324,9 +336,10 @@ export class QhseService {
 
   // ─── Injuries ─────────────────────────────────────────────────────────────
 
-  async addInjury(tenantId: string, reportId: string, dto: AddInjuryDto) {
+  async addInjury(tenantId: string, reportId: string, dto: AddInjuryDto, scope?: ScopeContext) {
     const report = await this.prisma.accidentReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+    if (scope) assertOwnership(scope, report, 'reportedById');
 
     if (dto.hospitalId) {
       const hospital = await this.prisma.hospital.findFirst({ where: { id: dto.hospitalId, tenantId } });
