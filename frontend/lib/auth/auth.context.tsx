@@ -13,7 +13,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '../api';
+import { apiFetch, ApiError } from '../api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,12 @@ export interface AuthUser {
   userType:       string;
   /** moduleKey SaaS actifs pour le tenant (ex: 'TICKETING', 'QHSE'). */
   enabledModules: string[];
+  /**
+   * Permissions résolues backend (source de vérité unique).
+   * Ne JAMAIS dériver les perms depuis `roleName` côté frontend — cette liste
+   * fait foi pour l'affichage. La sécurité réelle reste sur PermissionGuard.
+   */
+  permissions:    string[];
 }
 
 interface AuthContextValue {
@@ -49,11 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Vérification de session au montage — skipRedirectOn401 évite la boucle infinie
+  // Vérification de session au montage — skipRedirectOn401 évite la boucle infinie.
+  // On ne clear user QUE sur un vrai 401 : une erreur réseau transitoire (backend
+  // qui redémarre en dev, perte de connexion brève) ne doit pas simuler un logout.
   useEffect(() => {
     apiFetch<AuthUser>('/api/auth/me', { skipRedirectOn401: true })
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -80,10 +90,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const fresh = await apiFetch<AuthUser>('/api/auth/me', { skipRedirectOn401: true });
       setUser(fresh);
-    } catch {
-      setUser(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setUser(null);
     }
   }, []);
+
+  // Revalidation automatique sur retour de focus / reconnexion réseau.
+  // Couvre les cas : changement de rôle/perm en DB, session expirée pendant
+  // que l'onglet était en arrière-plan, perte/retour de connexion.
+  // Pas de polling — on revalide uniquement quand un signal utilisateur arrive.
+  useEffect(() => {
+    if (!user) return;
+    const onFocus  = () => { void refresh(); };
+    const onOnline = () => { void refresh(); };
+    window.addEventListener('focus',  onFocus);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('focus',  onFocus);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [user, refresh]);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>

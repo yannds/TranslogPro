@@ -21,10 +21,11 @@ export class StaffController {
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
     @Query('agencyId') agencyId?: string,
+    @Query('role')     role?:     string,
   ) {
     // scope dérivé par PermissionGuard depuis la permission string — zéro hardcode de rôle
     const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
-    return this.staffService.findAll(tenantId, effectiveAgencyId);
+    return this.staffService.findAll(tenantId, effectiveAgencyId, role);
   }
 
   @Get(':userId')

@@ -13,7 +13,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  IdCard, Plus, Pencil, Power, Archive, X, Check, AlertTriangle, UserCircle,
+  IdCard, Plus, Pencil, Power, Archive, X, UserCircle,
 } from 'lucide-react';
 import { useFetch }                from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
@@ -21,6 +21,9 @@ import { useAuth }                 from '../../lib/auth/auth.context';
 import { Button }                  from '../ui/Button';
 import { Badge }                   from '../ui/Badge';
 import { Dialog }                  from '../ui/Dialog';
+import { ErrorAlert }              from '../ui/ErrorAlert';
+import { FormFooter }              from '../ui/FormFooter';
+import { inputClass as inp }       from '../ui/inputClass';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import { DocumentAttachments } from '../document/DocumentAttachments';
 
@@ -158,11 +161,6 @@ function buildColumns(): Column<StaffRow>[] {
 
 // ─── Form base ────────────────────────────────────────────────────────────────
 
-const inp =
-  'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ' +
-  'px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 ' +
-  'focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-50';
-
 function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
   onSubmit: (f: CreateForm) => void;
   onCancel: () => void;
@@ -178,11 +176,7 @@ function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
 
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
-      {error && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <ErrorAlert error={error} />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -224,19 +218,12 @@ function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
           </select>
         </div>
       </div>
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
-        </Button>
-        <Button type="submit" disabled={busy} loading={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Création…' : 'Créer'}
-        </Button>
-      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
     </form>
   );
 }
 
-function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agencies }: {
+function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agencies, onPreviewChange }: {
   staff:    StaffRow;
   tenantId: string;
   onSubmit: (f: EditForm) => void;
@@ -244,6 +231,7 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
   busy:     boolean;
   error:    string | null;
   agencies: AgencyOption[];
+  onPreviewChange?: (open: boolean) => void;
 }) {
   const [f, setF] = useState<EditForm>({
     name:        staff.user?.name ?? '',
@@ -256,11 +244,7 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
 
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
-      {error && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <ErrorAlert error={error} />
       <div className="space-y-3">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
@@ -305,17 +289,11 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
             entityType="STAFF"
             entityId={staff.userId}
             allowedKinds={['CONTRACT', 'ID_CARD', 'LICENSE', 'CERTIFICATE', 'PHOTO', 'OTHER']}
+            onPreviewChange={onPreviewChange}
           />
         </div>
       </div>
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
-        </Button>
-        <Button type="submit" disabled={busy} loading={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Enregistrement…' : 'Enregistrer'}
-        </Button>
-      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
     </form>
   );
 }
@@ -344,6 +322,7 @@ export function PagePersonnel() {
   const [archiveTarget, setArchiveTarget] = useState<StaffRow | null>(null);
   const [busy,          setBusy]          = useState(false);
   const [actionErr,     setActionErr]     = useState<string | null>(null);
+  const [editPreviewOpen, setEditPreviewOpen] = useState(false);
 
   const data = (staffList ?? []).filter(s => {
     if (filterRole   && s.role   !== filterRole)   return false;
@@ -469,11 +448,7 @@ export function PagePersonnel() {
         </select>
       </div>
 
-      {(error || actionErr) && (
-        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden />{error ?? actionErr}
-        </div>
-      )}
+      <ErrorAlert error={error ?? actionErr} icon />
 
       {/* Tableau */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2">
@@ -513,20 +488,21 @@ export function PagePersonnel() {
       {/* Modal Éditer */}
       <Dialog
         open={!!editTarget}
-        onOpenChange={o => { if (!o) setEditTarget(null); }}
+        onOpenChange={o => { if (!o) { setEditPreviewOpen(false); setEditTarget(null); } }}
         title="Modifier le membre"
         description={editTarget?.user?.email}
-        size="md"
+        size={editPreviewOpen ? '3xl' : 'md'}
       >
         {editTarget && (
           <EditStaffForm
             staff={editTarget}
             tenantId={tenantId}
             onSubmit={handleEdit}
-            onCancel={() => setEditTarget(null)}
+            onCancel={() => { setEditPreviewOpen(false); setEditTarget(null); }}
             busy={busy}
             error={actionErr}
             agencies={agencyOptions}
+            onPreviewChange={setEditPreviewOpen}
           />
         )}
       </Dialog>

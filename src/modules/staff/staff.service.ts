@@ -61,9 +61,9 @@ export class StaffService {
     return user;
   }
 
-  async findAll(tenantId: string, agencyId?: string) {
+  async findAll(tenantId: string, agencyId?: string, role?: string) {
     return this.prisma.staff.findMany({
-      where:   { tenantId, ...(agencyId ? { agencyId } : {}) },
+      where:   { tenantId, ...(agencyId ? { agencyId } : {}), ...(role ? { role } : {}) },
       include: { user: { select: { id: true, email: true, name: true, roleId: true } } },
       orderBy: { createdAt: 'asc' },
     });

@@ -72,10 +72,16 @@ export class AuthController {
    * sans le token opaque 256 bits).
    */
   @Get('me')
-  async me(@Req() req: Request): Promise<AuthUserDto> {
+  async me(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthUserDto> {
     const token = this.extractToken(req);
     if (!token) throw new UnauthorizedException('Token de session absent');
 
+    // Pas de cache — un changement de rôle/perm doit être visible au prochain
+    // refresh sans attendre l'expiration d'un cache HTTP intermédiaire.
+    res.setHeader('Cache-Control', 'no-store');
     return this.authService.me(token, extractIp(req));
   }
 

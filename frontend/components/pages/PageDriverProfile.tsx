@@ -7,17 +7,22 @@
  * Dark mode : Tailwind dark:
  */
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   UserCheck, AlertTriangle, Plus,
   ChevronRight, Shield, Coffee, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { apiPost } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
+import { ErrorAlert } from '../ui/ErrorAlert';
+import { FormFooter } from '../ui/FormFooter';
+import { inputClass } from '../ui/inputClass';
 import { cn } from '../../lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,6 +68,95 @@ interface RestConfig {
 
 type Tab = 'overview' | 'licenses' | 'rest' | 'trainings' | 'remediation';
 
+export interface PageDriverProfileProps {
+  /** Onglet initial piloté par la navigation (drivers-list → 'overview', driver-licenses → 'licenses', etc.) */
+  initialTab?: Tab;
+}
+
+// ─── Formulaire : créer un permis ────────────────────────────────────────────
+
+interface LicenseValues {
+  staffId: string; category: string; licenseNo: string;
+  issuedAt: string; expiresAt: string; issuingState: string;
+}
+
+function LicenseForm({
+  drivers, onSubmit, onCancel, busy, error,
+}: {
+  drivers: DriverSummary[];
+  onSubmit: (v: LicenseValues) => void;
+  onCancel: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  const [f, setF] = useState<LicenseValues>({
+    staffId: drivers[0]?.id ?? '', category: 'D',
+    licenseNo: '', issuedAt: '', expiresAt: '', issuingState: '',
+  });
+  return (
+    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
+      <ErrorAlert error={error} />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="lic-staff" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Chauffeur <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select id="lic-staff" required value={f.staffId} onChange={e => setF(p => ({ ...p, staffId: e.target.value }))}
+            className={inputClass} disabled={busy || drivers.length === 0}>
+            {drivers.length === 0 && <option value="">Aucun chauffeur</option>}
+            {drivers.map(d => (
+              <option key={d.id} value={d.id}>
+                {d.user.displayName ?? d.user.email}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="lic-cat" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Catégorie <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="lic-cat" type="text" required value={f.category}
+            onChange={e => setF(p => ({ ...p, category: e.target.value.toUpperCase() }))}
+            className={inputClass} disabled={busy} placeholder="D" maxLength={8} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="lic-no" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            N° de permis <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="lic-no" type="text" required value={f.licenseNo}
+            onChange={e => setF(p => ({ ...p, licenseNo: e.target.value }))}
+            className={cn(inputClass, 'font-mono')} disabled={busy} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="lic-issued" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Émis le <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="lic-issued" type="date" required value={f.issuedAt}
+            onChange={e => setF(p => ({ ...p, issuedAt: e.target.value }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="lic-expires" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Expire le <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="lic-expires" type="date" required value={f.expiresAt}
+            onChange={e => setF(p => ({ ...p, expiresAt: e.target.value }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="lic-state" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Pays / État émetteur
+          </label>
+          <input id="lic-state" type="text" value={f.issuingState}
+            onChange={e => setF(p => ({ ...p, issuingState: e.target.value }))}
+            className={inputClass} disabled={busy} placeholder="CG" />
+        </div>
+      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+    </form>
+  );
+}
+
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -96,17 +190,21 @@ function KpiCard({
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-export function PageDriverProfile() {
+export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfileProps = {}) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
 
-  const [tab, setTab]         = useState<Tab>('overview');
+  const [tab, setTab]         = useState<Tab>(initialTab);
   const [_selectedDriver, setSelectedDriver] = useState<string | null>(null);
+
+  const [showLicenseForm, setShowLicenseForm] = useState(false);
+  const [busy,            setBusy]            = useState(false);
+  const [actionError,     setActionError]     = useState<string | null>(null);
 
   const base = `/api/tenants/${tenantId}`;
 
   const { data: drivers,     loading: loadingDrivers }    = useFetch<DriverSummary[]>(`${base}/staff?role=DRIVER`, [tenantId]);
-  const { data: licAlerts,   loading: loadingLic }        = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
+  const { data: licAlerts,   loading: loadingLic, refetch: refetchLic } = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
   const { data: overdueTrainings, loading: loadingTrainings } = useFetch<OverdueTraining[]>(`${base}/driver-profile/trainings/overdue`, [tenantId]);
   const { data: restConfig,  loading: loadingRest }       = useFetch<RestConfig>(`${base}/driver-profile/rest-config`, [tenantId]);
   const { data: remediations, loading: loadingRemediation } = useFetch<RemediationRule[]>(
@@ -139,7 +237,10 @@ export function PageDriverProfile() {
             Permis, repos réglementaires, formations et remédiation CRM
           </p>
         </div>
-        <Button aria-label="Enregistrer un nouveau permis">
+        <Button
+          onClick={() => { setShowLicenseForm(true); setActionError(null); }}
+          aria-label="Enregistrer un nouveau permis"
+        >
           <Plus className="w-4 h-4 mr-2" aria-hidden /> Nouveau permis
         </Button>
       </div>
@@ -248,7 +349,11 @@ export function PageDriverProfile() {
               heading="Alertes permis"
               description="Permis expirant dans les 30 prochains jours ou déjà expirés"
               action={
-                <Button size="sm" aria-label="Enregistrer un permis de conduire">
+                <Button
+                  size="sm"
+                  onClick={() => { setShowLicenseForm(true); setActionError(null); }}
+                  aria-label="Enregistrer un permis de conduire"
+                >
                   <Plus className="w-4 h-4 mr-1" aria-hidden /> Permis
                 </Button>
               }
@@ -393,6 +498,41 @@ export function PageDriverProfile() {
           </Card>
         </section>
       )}
+
+      {/* ── Modal : Nouveau permis ── */}
+      <Dialog
+        open={showLicenseForm}
+        onOpenChange={o => { if (!o) setShowLicenseForm(false); }}
+        title="Nouveau permis de conduire"
+        description="Les alertes se déclenchent 30 jours avant l'expiration."
+        size="lg"
+      >
+        {showLicenseForm && (
+          <LicenseForm
+            drivers={drivers ?? []}
+            busy={busy}
+            error={actionError}
+            onCancel={() => setShowLicenseForm(false)}
+            onSubmit={async (v: LicenseValues) => {
+              setBusy(true); setActionError(null);
+              try {
+                await apiPost(`${base}/driver-profile/licenses`, {
+                  staffId:      v.staffId,
+                  category:     v.category,
+                  licenseNo:    v.licenseNo,
+                  issuedAt:     v.issuedAt,
+                  expiresAt:    v.expiresAt,
+                  issuingState: v.issuingState || undefined,
+                });
+                setShowLicenseForm(false);
+                refetchLic();
+              } catch (e) {
+                setActionError(e instanceof Error ? e.message : 'Erreur inconnue');
+              } finally { setBusy(false); }
+            }}
+          />
+        )}
+      </Dialog>
 
       {/* ── Remédiation ── */}
       {tab === 'remediation' && (

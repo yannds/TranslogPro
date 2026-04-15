@@ -27,6 +27,13 @@ export interface AuthUserDto {
   userType:        string;
   /** Liste des `moduleKey` SaaS actifs pour le tenant de l'utilisateur. */
   enabledModules:  string[];
+  /**
+   * Permissions effectives résolues depuis `role.permissions`.
+   * Source de vérité unique pour l'affichage conditionnel côté frontend.
+   * Le backend reste l'autorité finale via PermissionGuard — ces strings
+   * ne servent qu'à masquer/afficher des éléments d'UI.
+   */
+  permissions:     string[];
 }
 
 @Injectable()
@@ -52,7 +59,7 @@ export class AuthService {
     //    (timing-safe : évite l'énumération d'emails par mesure du temps de réponse)
     const account = await this.prisma.account.findUnique({
       where:   { providerId_accountId: { providerId: 'credential', accountId: email } },
-      include: { user: { include: { role: true } } },
+      include: { user: { include: { role: { include: { permissions: true } } } } },
     });
 
     const dummyHash = '$2a$12$Wz1q2FAKEHASHJUSTFORTIMINGPROTECTION.padding.padding';
@@ -120,7 +127,7 @@ export class AuthService {
   ): Promise<AuthUserDto> {
     const session = await this.prisma.session.findUnique({
       where:   { token },
-      include: { user: { include: { role: true } } },
+      include: { user: { include: { role: { include: { permissions: true } } } } },
     });
 
     if (!session || session.expiresAt < new Date()) {
@@ -175,7 +182,7 @@ export class AuthService {
   private async toDto(user: {
     id: string; email: string; name: string | null;
     tenantId: string; roleId: string | null; userType: string;
-    role?: { name: string } | null;
+    role?: { name: string; permissions?: { permission: string }[] } | null;
   }): Promise<AuthUserDto> {
     const enabledModules = await this.modules.listActiveKeys(user.tenantId);
     return {
@@ -187,6 +194,7 @@ export class AuthService {
       roleName:       user.role?.name ?? null,
       userType:       user.userType,
       enabledModules,
+      permissions:    user.role?.permissions?.map(p => p.permission) ?? [],
     };
   }
 

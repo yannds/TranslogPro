@@ -14,10 +14,10 @@
 import { useState, type FormEvent } from 'react';
 import {
   Users, Plus, Pencil, Trash2, X, Check,
-  AlertTriangle, UserCircle,
+  AlertTriangle, UserCircle, LogOut,
 } from 'lucide-react';
 import { useFetch }            from '../../lib/hooks/useFetch';
-import { apiPost, apiPut, apiDelete } from '../../lib/api';
+import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth }             from '../../lib/auth/auth.context';
 import { Button }              from '../ui/Button';
 import { Badge }               from '../ui/Badge';
@@ -312,7 +312,7 @@ export function PageIamUsers() {
     if (!editUser) return;
     setBusy(true); setActionErr(null);
     try {
-      await apiPut(`${base}/users/${editUser.id}`, {
+      await apiPatch(`${base}/users/${editUser.id}`, {
         name:   f.name   || undefined,
         roleId: f.roleId || null,
       });
@@ -331,12 +331,27 @@ export function PageIamUsers() {
     finally { setBusy(false); }
   };
 
+  const handleRevokeSessions = async (row: UserRow) => {
+    if (!confirm(`Forcer la déconnexion de "${row.name ?? row.email}" ? Toutes ses sessions actives seront révoquées.`)) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPost(`${base}/users/${row.id}/revoke-sessions`);
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   const columns    = buildColumns(me?.id ?? '');
   const rowActions: RowAction<UserRow>[] = [
     {
       label:    'Modifier',
       icon:     <Pencil size={13} />,
       onClick:  (row) => { setEditUser(row); setActionErr(null); },
+    },
+    {
+      label:    'Forcer reconnexion',
+      icon:     <LogOut size={13} />,
+      hidden:   (row) => row.id === (me?.id ?? ''),
+      onClick:  handleRevokeSessions,
     },
     {
       label:    'Supprimer',

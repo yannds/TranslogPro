@@ -8,14 +8,19 @@
  * Dark mode : classes Tailwind dark: — automatique via ThemeProvider
  */
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { apiPost } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
+import { ErrorAlert } from '../ui/ErrorAlert';
+import { FormFooter } from '../ui/FormFooter';
+import { inputClass } from '../ui/inputClass';
 import { cn } from '../../lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -121,28 +126,281 @@ function StatCard({ label, value, icon, highlight = 'neutral', loading }: StatCa
 
 type Tab = 'alerts' | 'consumables' | 'types';
 
+// ─── Bus ──────────────────────────────────────────────────────────────────────
+
+interface BusLite { id: string; plateNumber: string; model?: string | null }
+
+// ─── Formulaires CRUD ─────────────────────────────────────────────────────────
+
+interface DocTypeValues { name: string; code: string; alertDaysBeforeExpiry: number; isMandatory: boolean }
+function DocumentTypeForm({ onSubmit, onCancel, busy, error }: {
+  onSubmit: (v: DocTypeValues) => void; onCancel: () => void; busy: boolean; error: string | null;
+}) {
+  const [f, setF] = useState<DocTypeValues>({ name: '', code: '', alertDaysBeforeExpiry: 30, isMandatory: true });
+  return (
+    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
+      <ErrorAlert error={error} />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="dt-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Nom <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="dt-name" type="text" required value={f.name} onChange={e => setF(p => ({ ...p, name: e.target.value }))}
+            className={inputClass} disabled={busy} placeholder="Carte grise" />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="dt-code" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Code <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="dt-code" type="text" required value={f.code}
+            onChange={e => setF(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+            className={cn(inputClass, 'font-mono')} disabled={busy} placeholder="CARTE_GRISE" maxLength={32} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="dt-alert" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Alerte (j avant expiration)
+          </label>
+          <input id="dt-alert" type="number" min={1} value={f.alertDaysBeforeExpiry}
+            onChange={e => setF(p => ({ ...p, alertDaysBeforeExpiry: Math.max(1, Number(e.target.value)) }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <label className="col-span-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+          <input type="checkbox" checked={f.isMandatory} onChange={e => setF(p => ({ ...p, isMandatory: e.target.checked }))}
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" disabled={busy} />
+          Document obligatoire
+        </label>
+      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
+    </form>
+  );
+}
+
+interface ConsTypeValues { name: string; code: string; nominalLifetimeKm: number; alertKmBefore: number }
+function ConsumableTypeForm({ onSubmit, onCancel, busy, error }: {
+  onSubmit: (v: ConsTypeValues) => void; onCancel: () => void; busy: boolean; error: string | null;
+}) {
+  const [f, setF] = useState<ConsTypeValues>({ name: '', code: '', nominalLifetimeKm: 50000, alertKmBefore: 2000 });
+  return (
+    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
+      <ErrorAlert error={error} />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="ct-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Nom <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="ct-name" type="text" required value={f.name}
+            onChange={e => setF(p => ({ ...p, name: e.target.value }))}
+            className={inputClass} disabled={busy} placeholder="Pneus avant" />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="ct-code" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Code <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="ct-code" type="text" required value={f.code}
+            onChange={e => setF(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+            className={cn(inputClass, 'font-mono')} disabled={busy} placeholder="PNEU_AV" maxLength={32} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="ct-life" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Durée nominale (km) <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="ct-life" type="number" min={1} required value={f.nominalLifetimeKm}
+            onChange={e => setF(p => ({ ...p, nominalLifetimeKm: Math.max(1, Number(e.target.value)) }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="ct-alert" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Alerte (km avant expiration) <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="ct-alert" type="number" min={0} required value={f.alertKmBefore}
+            onChange={e => setF(p => ({ ...p, alertKmBefore: Math.max(0, Number(e.target.value)) }))}
+            className={inputClass} disabled={busy} />
+        </div>
+      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
+    </form>
+  );
+}
+
+interface DocValues { busId: string; typeId: string; referenceNo: string; issuedAt: string; expiresAt: string; notes: string }
+function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error }: {
+  buses: BusLite[]; docTypes: DocumentType[];
+  onSubmit: (v: DocValues) => void; onCancel: () => void; busy: boolean; error: string | null;
+}) {
+  const [f, setF] = useState<DocValues>({
+    busId: buses[0]?.id ?? '', typeId: docTypes[0]?.id ?? '',
+    referenceNo: '', issuedAt: '', expiresAt: '', notes: '',
+  });
+  return (
+    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
+      <ErrorAlert error={error} />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label htmlFor="doc-bus" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Véhicule <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select id="doc-bus" required value={f.busId} onChange={e => setF(p => ({ ...p, busId: e.target.value }))}
+            className={inputClass} disabled={busy || buses.length === 0}>
+            {buses.length === 0 && <option value="">Aucun véhicule</option>}
+            {buses.map(b => <option key={b.id} value={b.id}>{b.plateNumber}{b.model ? ` — ${b.model}` : ''}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="doc-type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Type <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select id="doc-type" required value={f.typeId} onChange={e => setF(p => ({ ...p, typeId: e.target.value }))}
+            className={inputClass} disabled={busy || docTypes.length === 0}>
+            {docTypes.length === 0 && <option value="">Aucun type</option>}
+            {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="doc-ref" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Référence
+          </label>
+          <input id="doc-ref" type="text" value={f.referenceNo}
+            onChange={e => setF(p => ({ ...p, referenceNo: e.target.value }))}
+            className={cn(inputClass, 'font-mono')} disabled={busy} placeholder="N° d'immatriculation du document" />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="doc-issued" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Émis le
+          </label>
+          <input id="doc-issued" type="date" value={f.issuedAt}
+            onChange={e => setF(p => ({ ...p, issuedAt: e.target.value }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="doc-expires" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Expire le
+          </label>
+          <input id="doc-expires" type="date" value={f.expiresAt}
+            onChange={e => setF(p => ({ ...p, expiresAt: e.target.value }))}
+            className={inputClass} disabled={busy} />
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="doc-notes" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Notes
+          </label>
+          <textarea id="doc-notes" rows={2} value={f.notes}
+            onChange={e => setF(p => ({ ...p, notes: e.target.value }))}
+            className={inputClass} disabled={busy} />
+        </div>
+      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+    </form>
+  );
+}
+
+interface ReplaceValues { busId: string; typeId: string; replacedAtKm: number }
+function ReplacementForm({ buses, consTypes, onSubmit, onCancel, busy, error }: {
+  buses: BusLite[]; consTypes: ConsumableType[];
+  onSubmit: (v: ReplaceValues) => void; onCancel: () => void; busy: boolean; error: string | null;
+}) {
+  const [f, setF] = useState<ReplaceValues>({
+    busId: buses[0]?.id ?? '', typeId: consTypes[0]?.id ?? '', replacedAtKm: 0,
+  });
+  return (
+    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
+      <ErrorAlert error={error} />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label htmlFor="rep-bus" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Véhicule <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select id="rep-bus" required value={f.busId} onChange={e => setF(p => ({ ...p, busId: e.target.value }))}
+            className={inputClass} disabled={busy || buses.length === 0}>
+            {buses.length === 0 && <option value="">Aucun véhicule</option>}
+            {buses.map(b => <option key={b.id} value={b.id}>{b.plateNumber}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="rep-type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Consommable <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select id="rep-type" required value={f.typeId} onChange={e => setF(p => ({ ...p, typeId: e.target.value }))}
+            className={inputClass} disabled={busy || consTypes.length === 0}>
+            {consTypes.length === 0 && <option value="">Aucun consommable</option>}
+            {consTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <label htmlFor="rep-km" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Kilométrage au remplacement <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input id="rep-km" type="number" min={0} required value={f.replacedAtKm}
+            onChange={e => setF(p => ({ ...p, replacedAtKm: Math.max(0, Number(e.target.value)) }))}
+            className={inputClass} disabled={busy} />
+        </div>
+      </div>
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+    </form>
+  );
+}
+
+export interface PageFleetDocsProps {
+  /** Onglet initial piloté par la navigation sidebar (fleet-docs-alerts → 'alerts', etc.) */
+  initialTab?: Tab;
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-export function PageFleetDocs() {
+export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
-  const [tab, setTab] = useState<Tab>('alerts');
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  // CRUD state
+  const [showDocForm,      setShowDocForm]      = useState(false);
+  const [showDocTypeForm,  setShowDocTypeForm]  = useState(false);
+  const [showConsTypeForm, setShowConsTypeForm] = useState(false);
+  const [showReplaceForm,  setShowReplaceForm]  = useState(false);
+  const [busy,             setBusy]             = useState(false);
+  const [actionError,      setActionError]      = useState<string | null>(null);
 
   const base = `/api/tenants/${tenantId}/fleet-docs`;
 
-  const { data: docAlerts,      loading: loadingAlerts }      = useFetch<DocAlertItem[]>(`${base}/documents/alerts`, [tenantId]);
+  const { data: docAlerts,      loading: loadingAlerts, refetch: refetchAlerts } = useFetch<DocAlertItem[]>(`${base}/documents/alerts`, [tenantId]);
   const { data: consumables,    loading: loadingConsumables }  = useFetch<ConsumableItem[]>(
     tab === 'consumables' ? `${base}/buses/all/consumables` : null,
     [tenantId, tab],
   );
-  const { data: documentTypes,  loading: loadingDocTypes }     = useFetch<DocumentType[]>(
-    tab === 'types' ? `${base}/document-types` : null,
-    [tenantId, tab],
+  const { data: documentTypes,  loading: loadingDocTypes, refetch: refetchDocTypes } = useFetch<DocumentType[]>(
+    tab === 'types' || showDocForm ? `${base}/document-types` : null,
+    [tenantId, tab, showDocForm],
   );
-  const { data: consumableTypes, loading: loadingConsTypes }   = useFetch<ConsumableType[]>(
-    tab === 'types' ? `${base}/consumable-types` : null,
-    [tenantId, tab],
+  const { data: consumableTypes, loading: loadingConsTypes, refetch: refetchConsTypes } = useFetch<ConsumableType[]>(
+    tab === 'types' || showReplaceForm ? `${base}/consumable-types` : null,
+    [tenantId, tab, showReplaceForm],
   );
+  const { data: buses } = useFetch<BusLite[]>(
+    showDocForm || showReplaceForm ? `/api/tenants/${tenantId}/fleet/buses` : null,
+    [tenantId, showDocForm, showReplaceForm],
+  );
+
+  // CRUD handlers
+  const wrap = async <T,>(fn: () => Promise<T>, close: () => void, afterSuccess?: () => void) => {
+    setBusy(true); setActionError(null);
+    try { await fn(); close(); afterSuccess?.(); }
+    catch (e) { setActionError(e instanceof Error ? e.message : 'Erreur inconnue'); }
+    finally { setBusy(false); }
+  };
+
+  const submitDocType = (v: DocTypeValues) =>
+    wrap(() => apiPost(`${base}/document-types`, v), () => setShowDocTypeForm(false), refetchDocTypes);
+  const submitConsType = (v: ConsTypeValues) =>
+    wrap(() => apiPost(`${base}/consumable-types`, v), () => setShowConsTypeForm(false), refetchConsTypes);
+  const submitDoc = (v: DocValues) =>
+    wrap(() => apiPost(`${base}/documents`, {
+      busId: v.busId, typeId: v.typeId,
+      referenceNo: v.referenceNo || undefined,
+      issuedAt:    v.issuedAt    || undefined,
+      expiresAt:   v.expiresAt   || undefined,
+      notes:       v.notes       || undefined,
+    }), () => setShowDocForm(false), refetchAlerts);
+  const submitReplace = (v: ReplaceValues) =>
+    wrap(() => apiPost(`${base}/consumables/replacement`, v), () => setShowReplaceForm(false));
 
   const expiredCount  = docAlerts?.filter(d => d.status === 'EXPIRED').length  ?? 0;
   const expiringCount = docAlerts?.filter(d => d.status === 'EXPIRING').length ?? 0;
@@ -167,7 +425,10 @@ export function PageFleetDocs() {
             Suivi réglementaire et maintenance prédictive de la flotte
           </p>
         </div>
-        <Button aria-label="Ajouter un document véhicule">
+        <Button
+          onClick={() => { setShowDocForm(true); setActionError(null); }}
+          aria-label="Ajouter un document véhicule"
+        >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
           Nouveau document
         </Button>
@@ -282,7 +543,11 @@ export function PageFleetDocs() {
               heading="Suivi consommables"
               description="Pneus, vidange, filtres — alertes basées sur le kilométrage réel"
               action={
-                <Button size="sm" aria-label="Enregistrer un remplacement de consommable">
+                <Button
+                  size="sm"
+                  onClick={() => { setShowReplaceForm(true); setActionError(null); }}
+                  aria-label="Enregistrer un remplacement de consommable"
+                >
                   <Plus className="w-4 h-4 mr-1" aria-hidden />
                   Remplacement
                 </Button>
@@ -356,7 +621,11 @@ export function PageFleetDocs() {
                 heading="Types de documents"
                 description="Catalogue réglementaire configuré pour ce tenant"
                 action={
-                  <Button size="sm" aria-label="Créer un nouveau type de document">
+                  <Button
+                    size="sm"
+                    onClick={() => { setShowDocTypeForm(true); setActionError(null); }}
+                    aria-label="Créer un nouveau type de document"
+                  >
                     <Plus className="w-4 h-4 mr-1" aria-hidden /> Ajouter
                   </Button>
                 }
@@ -398,7 +667,11 @@ export function PageFleetDocs() {
                 heading="Types de consommables"
                 description="Pneus, vidange, filtres avec seuils kilométriques"
                 action={
-                  <Button size="sm" aria-label="Créer un nouveau type de consommable">
+                  <Button
+                    size="sm"
+                    onClick={() => { setShowConsTypeForm(true); setActionError(null); }}
+                    aria-label="Créer un nouveau type de consommable"
+                  >
                     <Plus className="w-4 h-4 mr-1" aria-hidden /> Ajouter
                   </Button>
                 }
@@ -430,6 +703,69 @@ export function PageFleetDocs() {
           </div>
         </section>
       )}
+
+      {/* ── Modals CRUD ── */}
+      <Dialog
+        open={showDocTypeForm}
+        onOpenChange={o => { if (!o) setShowDocTypeForm(false); }}
+        title="Nouveau type de document"
+        description="Configurer un document véhicule réglementaire pour ce tenant."
+        size="md"
+      >
+        {showDocTypeForm && (
+          <DocumentTypeForm onSubmit={submitDocType} onCancel={() => setShowDocTypeForm(false)} busy={busy} error={actionError} />
+        )}
+      </Dialog>
+
+      <Dialog
+        open={showConsTypeForm}
+        onOpenChange={o => { if (!o) setShowConsTypeForm(false); }}
+        title="Nouveau type de consommable"
+        description="Seuils kilométriques pour la maintenance prédictive."
+        size="md"
+      >
+        {showConsTypeForm && (
+          <ConsumableTypeForm onSubmit={submitConsType} onCancel={() => setShowConsTypeForm(false)} busy={busy} error={actionError} />
+        )}
+      </Dialog>
+
+      <Dialog
+        open={showDocForm}
+        onOpenChange={o => { if (!o) setShowDocForm(false); }}
+        title="Nouveau document véhicule"
+        description="Associer un document (assurance, CT, carte grise…) à un véhicule."
+        size="lg"
+      >
+        {showDocForm && (
+          <VehicleDocumentForm
+            buses={buses ?? []}
+            docTypes={documentTypes ?? []}
+            onSubmit={submitDoc}
+            onCancel={() => setShowDocForm(false)}
+            busy={busy}
+            error={actionError}
+          />
+        )}
+      </Dialog>
+
+      <Dialog
+        open={showReplaceForm}
+        onOpenChange={o => { if (!o) setShowReplaceForm(false); }}
+        title="Enregistrer un remplacement"
+        description="Pneus, vidange ou filtres — le prochain seuil d'alerte est recalculé automatiquement."
+        size="md"
+      >
+        {showReplaceForm && (
+          <ReplacementForm
+            buses={buses ?? []}
+            consTypes={consumableTypes ?? []}
+            onSubmit={submitReplace}
+            onCancel={() => setShowReplaceForm(false)}
+            busy={busy}
+            error={actionError}
+          />
+        )}
+      </Dialog>
     </main>
   );
 }
