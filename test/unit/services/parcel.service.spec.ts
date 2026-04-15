@@ -234,4 +234,44 @@ describe('ParcelService', () => {
       );
     });
   });
+
+  // ── findMine() ─────────────────────────────────────────────────────────────
+
+  describe('findMine()', () => {
+    it('filtre les colis par senderId = userId courant', async () => {
+      const prisma = makePrisma();
+      const { service } = buildService({ prisma });
+      await service.findMine(TENANT, 'user-customer-42');
+      expect(prisma.parcel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: TENANT, senderId: 'user-customer-42' }),
+        }),
+      );
+    });
+
+    it('limite à 100, tri createdAt desc, inclut destination', async () => {
+      const prisma = makePrisma();
+      const { service } = buildService({ prisma });
+      await service.findMine(TENANT, 'user-001');
+      expect(prisma.parcel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take:    100,
+          orderBy: { createdAt: 'desc' },
+          include: { destination: true },
+        }),
+      );
+    });
+
+    it("ne retourne JAMAIS les colis d'un autre senderId (filtre Prisma)", async () => {
+      const prisma = makePrisma();
+      // Simule la DB renvoyant uniquement les colis filtrés
+      prisma.parcel.findMany = jest.fn().mockImplementation(({ where }) => {
+        if (where.senderId !== 'user-mine') return Promise.resolve([]);
+        return Promise.resolve([PARCEL_BASE]);
+      });
+      const { service } = buildService({ prisma });
+      const result = await service.findMine(TENANT, 'user-mine');
+      expect(result).toHaveLength(1);
+    });
+  });
 });

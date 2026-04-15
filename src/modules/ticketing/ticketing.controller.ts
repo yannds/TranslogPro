@@ -54,6 +54,20 @@ export class TicketingController {
     return this.ticketingService.findMany(tenantId, tripId);
   }
 
+  /**
+   * "Mes voyages" — billets du CUSTOMER courant (filtré passengerId = actor.id).
+   * Permission .own : tout client connecté peut consulter ses propres billets.
+   * Le filtre est forcé côté service ; aucun query param ne l'override.
+   */
+  @Get('my')
+  @RequirePermission(Permission.TICKET_READ_OWN)
+  findMine(
+    @TenantId() tenantId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.ticketingService.findMine(tenantId, actor.id);
+  }
+
   @Get(':id')
   @RequirePermission(Permission.TICKET_READ_AGENCY)
   findOne(

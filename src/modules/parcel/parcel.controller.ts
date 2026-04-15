@@ -49,6 +49,20 @@ export class ParcelController {
     return this.parcelService.reportDamage(tenantId, id, description, actor);
   }
 
+  /**
+   * "Mes colis" — colis expédiés par le CUSTOMER courant (filtré senderId).
+   * Permission .own : tout client connecté peut consulter ses propres colis.
+   * Le filtre est forcé côté service ; aucun query param ne l'override.
+   */
+  @Get('my')
+  @RequirePermission(Permission.PARCEL_READ_OWN)
+  findMine(
+    @TenantId() tenantId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.parcelService.findMine(tenantId, actor.id);
+  }
+
   @Get(':id')
   @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {

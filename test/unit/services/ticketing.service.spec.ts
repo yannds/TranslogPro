@@ -251,4 +251,50 @@ describe('TicketingService', () => {
       await expect(service.trackByCode(TENANT, 'bad-code')).rejects.toThrow(NotFoundException);
     });
   });
+
+  // ── findMine() ─────────────────────────────────────────────────────────────
+
+  describe('findMine()', () => {
+    it('filtre les tickets par passengerId = userId courant', async () => {
+      const prisma = makePrisma();
+      (prisma as any).trip = { findMany: jest.fn().mockResolvedValue([]) };
+      const { service } = buildService({ prisma });
+      await service.findMine(TENANT, 'user-customer-77');
+      expect(prisma.ticket.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: TENANT, passengerId: 'user-customer-77' }),
+        }),
+      );
+    });
+
+    it('retourne [] sans hydrater Trip si aucun ticket', async () => {
+      const prisma = makePrisma();
+      prisma.ticket.findMany = jest.fn().mockResolvedValue([]);
+      const tripFindMany = jest.fn();
+      (prisma as any).trip = { findMany: tripFindMany };
+      const { service } = buildService({ prisma });
+      const result = await service.findMine(TENANT, 'user-empty');
+      expect(result).toEqual([]);
+      expect(tripFindMany).not.toHaveBeenCalled();
+    });
+
+    it('hydrate chaque ticket avec son trip (jointure manuelle)', async () => {
+      const prisma = makePrisma();
+      const trip = { id: 'trip-001', route: { id: 'r1', name: 'Dakar-Thiès' }, bus: { id: 'b1', plateNumber: 'AB-001-CD' } };
+      (prisma as any).trip = { findMany: jest.fn().mockResolvedValue([trip]) };
+      const { service } = buildService({ prisma });
+      const result = await service.findMine(TENANT, 'user-001');
+      expect(result[0].trip).toEqual(trip);
+    });
+
+    it('limite à 100 tickets, tri createdAt desc', async () => {
+      const prisma = makePrisma();
+      (prisma as any).trip = { findMany: jest.fn().mockResolvedValue([]) };
+      const { service } = buildService({ prisma });
+      await service.findMine(TENANT, 'user-001');
+      expect(prisma.ticket.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 100, orderBy: { createdAt: 'desc' } }),
+      );
+    });
+  });
 });

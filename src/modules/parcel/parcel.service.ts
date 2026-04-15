@@ -124,6 +124,20 @@ export class ParcelService {
     });
   }
 
+  /**
+   * Liste les colis expédiés par l'utilisateur courant (CUSTOMER) — page
+   * "Mes colis". Filtré par senderId — un client ne voit jamais les colis
+   * d'autrui. Inclut destination pour l'affichage. Tri par création desc.
+   */
+  async findMine(tenantId: string, userId: string) {
+    return this.prisma.parcel.findMany({
+      where:   { tenantId, senderId: userId },
+      include: { destination: true },
+      orderBy: { createdAt: 'desc' },
+      take:    100,
+    });
+  }
+
   private generateTrackingCode(tenantId: string): string {
     const prefix = tenantId.slice(0, 4).toUpperCase();
     const ts     = Date.now().toString(36).toUpperCase();

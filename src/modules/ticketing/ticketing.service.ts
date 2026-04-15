@@ -160,6 +160,32 @@ export class TicketingService {
     });
   }
 
+  /**
+   * Liste les billets de l'utilisateur courant (CUSTOMER) — page "Mes voyages".
+   * Filtré par passengerId — un client ne voit jamais les billets d'autrui.
+   * Trip n'est pas une relation Prisma sur Ticket : on hydrate en 2e requête.
+   */
+  async findMine(tenantId: string, userId: string) {
+    const tickets = await this.prisma.ticket.findMany({
+      where:   { tenantId, passengerId: userId },
+      orderBy: { createdAt: 'desc' },
+      take:    100,
+    });
+    if (tickets.length === 0) return [];
+
+    const tripIds = Array.from(new Set(tickets.map(t => t.tripId)));
+    const trips = await this.prisma.trip.findMany({
+      where:   { id: { in: tripIds }, tenantId },
+      include: {
+        route: { select: { id: true, name: true } },
+        bus:   { select: { id: true, plateNumber: true } },
+      },
+    });
+    const tripMap = new Map(trips.map(t => [t.id, t]));
+
+    return tickets.map(t => ({ ...t, trip: tripMap.get(t.tripId) ?? null }));
+  }
+
   async trackByCode(tenantId: string, qrCode: string) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { tenantId, qrCode },
