@@ -143,7 +143,67 @@ model Assignment {
 }
 ```
 
-### 4.3 Nettoyage `User`
+### 4.3 Cas multi-agences spécifiques (table annexe `AssignmentAgency`)
+
+Pour couvrir le cas « ce contrôleur opère sur 2 agences précises parmi 5 » sans dupliquer N affectations identiques, on introduit une table de jointure facultative.
+
+```prisma
+model AssignmentAgency {
+  assignmentId String
+  agencyId     String
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  agency     Agency     @relation(fields: [agencyId],     references: [id])
+
+  @@id([assignmentId, agencyId])
+  @@index([agencyId])
+  @@map("assignment_agencies")
+}
+```
+
+Et on ajoute côté `Assignment` :
+```prisma
+model Assignment {
+  // ... champs existants
+  coverageAgencies AssignmentAgency[]
+}
+```
+
+**Règle de lecture (unique) :**
+
+| Configuration | Signification |
+|---|---|
+| `Assignment.agencyId` renseigné, pas de `AssignmentAgency` | **Mono-agence** (cas le plus courant) |
+| `Assignment.agencyId = null`, pas de `AssignmentAgency` | **Tenant-wide** (toutes les agences du tenant) |
+| `Assignment.agencyId = null`, N lignes `AssignmentAgency` | **Multi-spécifique** (N agences précises) |
+
+**Combinaison interdite** : `Assignment.agencyId` renseigné **ET** lignes dans `AssignmentAgency` → incohérent, rejeté par validation applicative.
+
+**Requête « visible depuis agence X »** (nouvelle version) :
+```
+SELECT * FROM assignments A
+WHERE A.status = 'ACTIVE'
+  AND A.isAvailable = true
+  AND (
+       A.agencyId = :X                                                   -- mono
+    OR (A.agencyId IS NULL AND NOT EXISTS (
+         SELECT 1 FROM assignment_agencies WHERE assignmentId = A.id))   -- tenant-wide
+    OR EXISTS (
+         SELECT 1 FROM assignment_agencies
+         WHERE assignmentId = A.id AND agencyId = :X)                    -- multi-spécifique
+  )
+```
+
+**Granularité de suspension** préservée :
+- Suspendre l'affectation entière → `Assignment.status = SUSPENDED`
+- Retirer juste une des agences couvertes → `DELETE FROM assignment_agencies WHERE assignmentId = ? AND agencyId = ?`
+
+**UI Personnel** : au moment de créer/éditer une affectation, 3 choix explicites :
+1. « Une seule agence » → renseigne `Assignment.agencyId`
+2. « Toutes les agences du tenant » → `agencyId = null`, pas de `AssignmentAgency`
+3. « Plusieurs agences à choisir » → `agencyId = null`, N `AssignmentAgency`
+
+### 4.4 Nettoyage `User`
 
 ```prisma
 model User {
