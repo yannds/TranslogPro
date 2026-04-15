@@ -297,6 +297,46 @@ const BLUEPRINTS = [
     ]),
   },
 
+  // ── Voyageur (Traveler) — cycle passager sur un trajet ───────────────────
+  {
+    slug: 'traveler-journey', name: 'Voyageur — Embarquement & descente',
+    description: 'Cycle passager sur un trajet : REGISTERED → VERIFIED → CHECKED_IN → BOARDED → ARRIVED → EXITED. Distinct du profil utilisateur.',
+    entityType: 'Traveler', isPublic: true, isSystem: true, tags: ['voyageur', 'passager', 'embarquement'],
+    graphData: graph('Traveler', [
+      node('REGISTERED', 'initial',   60,  80),
+      node('VERIFIED',   'state',    260,  80),
+      node('CHECKED_IN', 'state',    460,  80),
+      node('BOARDED',    'state',    660,  80),
+      node('ARRIVED',    'state',    860,  80),
+      node('EXITED',     'terminal', 1060, 80),
+    ], [
+      edge('REGISTERED', 'verify',     'VERIFIED',   'data.traveler.verify.agency'),
+      edge('VERIFIED',   'scan_in',    'CHECKED_IN', 'data.ticket.scan.agency'),
+      edge('CHECKED_IN', 'scan_board', 'BOARDED',    'data.traveler.verify.agency'),
+      edge('BOARDED',    'scan_out',   'ARRIVED',    'data.traveler.verify.agency'),
+      edge('ARRIVED',    'exit',       'EXITED',     'data.traveler.verify.agency'),
+    ]),
+  },
+
+  // ── Shipment — groupage de colis ──────────────────────────────────────────
+  {
+    slug: 'shipment-grouping', name: 'Shipment — Groupage colis',
+    description: 'Regroupement de colis pour un même trajet : OPEN → LOADED → IN_TRANSIT → ARRIVED → CLOSED.',
+    entityType: 'Shipment', isPublic: true, isSystem: true, tags: ['shipment', 'colis', 'groupage'],
+    graphData: graph('Shipment', [
+      node('OPEN',       'initial',   60,  80),
+      node('LOADED',     'state',    280,  80),
+      node('IN_TRANSIT', 'state',    500,  80),
+      node('ARRIVED',    'state',    720,  80),
+      node('CLOSED',     'terminal', 940,  80),
+    ], [
+      edge('OPEN',       'load',    'LOADED',     'data.shipment.group.agency'),
+      edge('LOADED',     'depart',  'IN_TRANSIT', 'data.trip.update.agency'),
+      edge('IN_TRANSIT', 'arrive',  'ARRIVED',    'data.trip.update.agency'),
+      edge('ARRIVED',    'close',   'CLOSED',     'data.shipment.group.agency'),
+    ]),
+  },
+
   // ── Chauffeur — disponibilité ─────────────────────────────────────────────
   {
     slug: 'driver-availability', name: 'Chauffeur — Disponibilité & Repos',
@@ -356,7 +396,9 @@ async function main() {
   const categoryMap: Record<string, string> = {
     Ticket:      transportCat!.id,
     Trip:        transportCat!.id,
+    Traveler:    transportCat!.id,
     Parcel:      opsCat!.id,
+    Shipment:    opsCat!.id,
     Bus:         opsCat!.id,
     Maintenance: opsCat!.id,
     Manifest:    opsCat!.id,

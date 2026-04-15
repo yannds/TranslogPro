@@ -53,6 +53,7 @@ export const P_TRIP_LOG_EVENT_OWN          = 'control.trip.log_event.own';
 export const P_TICKET_CREATE_AGENCY        = 'data.ticket.create.agency';
 export const P_TICKET_CANCEL_AGENCY        = 'data.ticket.cancel.agency';
 export const P_TICKET_SCAN_AGENCY          = 'data.ticket.scan.agency';
+export const P_TICKET_READ_OWN             = 'data.ticket.read.own';
 export const P_TICKET_READ_AGENCY          = 'data.ticket.read.agency';
 export const P_TICKET_READ_TENANT          = 'data.ticket.read.tenant';
 export const P_TRAVELER_VERIFY_AGENCY      = 'data.traveler.verify.agency';
@@ -65,8 +66,11 @@ export const P_PARCEL_SCAN_AGENCY          = 'data.parcel.scan.agency';
 export const P_PARCEL_UPDATE_AGENCY        = 'data.parcel.update.agency';
 export const P_PARCEL_UPDATE_TENANT        = 'data.parcel.update.tenant';
 export const P_PARCEL_REPORT_AGENCY        = 'data.parcel.report.agency';
+export const P_PARCEL_READ_OWN             = 'data.parcel.read.own';
+export const P_PARCEL_TRACK_OWN            = 'data.parcel.track.own';
 export const P_PARCEL_TRACK_GLOBAL         = 'data.parcel.track.global';
 export const P_SHIPMENT_GROUP_AGENCY       = 'data.shipment.group.agency';
+export const P_SHIPMENT_READ_OWN           = 'data.shipment.read.own';
 
 // ─── Flotte & Maintenance ─────────────────────────────────────────────────────
 export const P_FLEET_MANAGE_TENANT         = 'control.fleet.manage.tenant';
@@ -98,6 +102,18 @@ export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
 export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
 export const P_STAFF_READ_AGENCY           = 'data.staff.read.agency';
 export const P_TENANT_MANAGE_GLOBAL        = 'control.tenant.manage.global';
+
+// ─── Agency (CRUD agences au sein d'un tenant) ────────────────────────────────
+// INVARIANT : tout tenant possède ≥1 agence (défaut : "Siège" / "Headquarters").
+// AgencyService.remove() refuse la suppression de la dernière agence (409).
+export const P_AGENCY_MANAGE_TENANT        = 'control.agency.manage.tenant';
+export const P_AGENCY_READ_TENANT          = 'data.agency.read.tenant';
+
+// ─── Station (CRUD gares/stations) ────────────────────────────────────────────
+// Les stations sont la source des origines/destinations de lignes, parcels, etc.
+// Suppression refusée (409) si la station est référencée ailleurs.
+export const P_STATION_MANAGE_TENANT       = 'control.station.manage.tenant';
+export const P_STATION_READ_TENANT         = 'data.station.read.tenant';
 
 // ─── CRM & Campagnes ─────────────────────────────────────────────────────────
 export const P_CRM_READ_TENANT             = 'data.crm.read.tenant';
@@ -199,6 +215,7 @@ export const Permission = {
   TICKET_CREATE_AGENCY:       P_TICKET_CREATE_AGENCY,
   TICKET_CANCEL_AGENCY:       P_TICKET_CANCEL_AGENCY,
   TICKET_SCAN_AGENCY:         P_TICKET_SCAN_AGENCY,
+  TICKET_READ_OWN:            P_TICKET_READ_OWN,
   TICKET_READ_AGENCY:         P_TICKET_READ_AGENCY,
   TICKET_READ_TENANT:         P_TICKET_READ_TENANT,
   TRAVELER_VERIFY_AGENCY:     P_TRAVELER_VERIFY_AGENCY,
@@ -210,8 +227,11 @@ export const Permission = {
   PARCEL_UPDATE_AGENCY:       P_PARCEL_UPDATE_AGENCY,
   PARCEL_UPDATE_TENANT:       P_PARCEL_UPDATE_TENANT,
   PARCEL_REPORT_AGENCY:       P_PARCEL_REPORT_AGENCY,
+  PARCEL_READ_OWN:            P_PARCEL_READ_OWN,
+  PARCEL_TRACK_OWN:           P_PARCEL_TRACK_OWN,
   PARCEL_TRACK_GLOBAL:        P_PARCEL_TRACK_GLOBAL,
   SHIPMENT_GROUP_AGENCY:      P_SHIPMENT_GROUP_AGENCY,
+  SHIPMENT_READ_OWN:          P_SHIPMENT_READ_OWN,
   // Fleet
   FLEET_MANAGE_TENANT:        P_FLEET_MANAGE_TENANT,
   FLEET_LAYOUT_TENANT:        P_FLEET_LAYOUT_TENANT,
@@ -239,6 +259,12 @@ export const Permission = {
   STAFF_MANAGE:               P_STAFF_MANAGE_TENANT,
   STAFF_READ:                 P_STAFF_READ_AGENCY,
   TENANT_MANAGE:              P_TENANT_MANAGE_GLOBAL,
+  // Agency (CRUD)
+  AGENCY_MANAGE_TENANT:       P_AGENCY_MANAGE_TENANT,
+  AGENCY_READ_TENANT:         P_AGENCY_READ_TENANT,
+  // Station (CRUD)
+  STATION_MANAGE_TENANT:      P_STATION_MANAGE_TENANT,
+  STATION_READ_TENANT:        P_STATION_READ_TENANT,
   // CRM
   CRM_READ_TENANT:            P_CRM_READ_TENANT,
   CAMPAIGN_MANAGE_TENANT:     P_CAMPAIGN_MANAGE_TENANT,

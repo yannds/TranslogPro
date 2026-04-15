@@ -3,7 +3,13 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
 import { Inject } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { seedTenantRoles } from '../../../prisma/seeds/iam.seed';
+import {
+  seedTenantRoles,
+  ensureDefaultAgency,
+  DEFAULT_AGENCY_NAME,
+  DEFAULT_WORKFLOW_CONFIGS,
+  type TenantLanguage,
+} from '../../../prisma/seeds/iam.seed';
 import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
 
 export interface OnboardTenantDto {
@@ -12,6 +18,11 @@ export interface OnboardTenantDto {
   adminEmail: string;
   adminName:  string;
   plan?:      string;
+  /**
+   * Langue par défaut du tenant (pilote le nom de l'agence par défaut :
+   * "Agence principale" en fr, "Main Agency" en en). Défaut : 'fr'.
+   */
+  language?:  TenantLanguage;
 }
 
 /**
@@ -19,10 +30,13 @@ export interface OnboardTenantDto {
  *
  * Provisioning ATOMIQUE d'un nouveau tenant :
  *   1. Créer l'enregistrement Tenant en DB
- *   2. Provisionner la clé HMAC dans Vault
- *   3. Créer l'utilisateur admin
- *   4. Seeder les WorkflowConfig par défaut (5 workflows PRD)
- *   5. Activer les modules de base (InstalledModule)
+ *   2. Seeder les rôles IAM (TENANT_ADMIN, CASHIER, DRIVER…)
+ *   3. Créer l'agence par défaut ("Agence principale" / "Main Agency") — INVARIANT ≥1 agence
+ *   4. Créer l'utilisateur admin (rattaché à l'agence par défaut)
+ *   5. Seeder les WorkflowConfig par défaut
+ *   6. Activer les modules de base (InstalledModule)
+ *   7. Dupliquer le pack de démarrage des templates de documents
+ *   8. Marquer le tenant ACTIVE + provisionner la clé HMAC dans Vault
  */
 @Injectable()
 export class OnboardingService {
@@ -39,6 +53,8 @@ export class OnboardingService {
 
     this.logger.log(`Onboarding tenant "${dto.slug}" — début provisioning atomique`);
 
+    const language: TenantLanguage = dto.language ?? 'fr';
+
     const result = await this.prisma.transact(async (tx) => {
       // 1. Tenant
       const tenant = await tx.tenant.create({
@@ -49,7 +65,16 @@ export class OnboardingService {
       const roleMap = await seedTenantRoles(tx as unknown as any, tenant.id);
       const tenantAdminRoleId = roleMap.get('TENANT_ADMIN');
 
-      // 3. Admin user assigné au rôle TENANT_ADMIN
+      // 3. Agence par défaut AVANT l'admin — invariant "tout tenant a ≥1 agence".
+      // Sans cela, toute permission scope `.agency` retourne 403 pour l'admin
+      // (PermissionGuard exige un agencyId sur l'acteur).
+      const defaultAgencyId = await ensureDefaultAgency(
+        tx,
+        tenant.id,
+        DEFAULT_AGENCY_NAME[language],
+      );
+
+      // 4. Admin user assigné au rôle TENANT_ADMIN + rattaché à l'agence par défaut
       const admin = await tx.user.create({
         data: {
           email:    dto.adminEmail,
@@ -57,19 +82,20 @@ export class OnboardingService {
           tenantId: tenant.id,
           userType: 'STAFF',
           roleId:   tenantAdminRoleId ?? null,
+          agencyId: defaultAgencyId,
         },
       });
 
-      // 4. Seed WorkflowConfig par défaut
+      // 5. Seed WorkflowConfig par défaut
       await this.seedDefaultWorkflowConfigs(tx as unknown as PrismaService, tenant.id);
 
-      // 4. Modules de base activés
+      // 6. Modules de base activés
       await this.seedInstalledModules(tx as unknown as PrismaService, tenant.id);
 
-      // 4bis. Pack de démarrage — copies éditables des templates de documents
+      // 7. Pack de démarrage — copies éditables des templates de documents
       await this.seedStarterTemplates(tx as unknown as PrismaService, tenant.id, admin.id);
 
-      // 5. Marquer tenant ACTIVE
+      // 8. Marquer tenant ACTIVE
       await tx.tenant.update({
         where: { id: tenant.id },
         data:  { provisionStatus: 'ACTIVE' },
@@ -88,28 +114,13 @@ export class OnboardingService {
   }
 
   private async seedDefaultWorkflowConfigs(prisma: PrismaService, tenantId: string) {
-    const configs = [
-      { entityType: 'Trip', fromState: 'PLANNED',      action: 'ACTIVATE',         toState: 'PLANNED',               requiredPerm: 'data.trip.create.tenant' },
-      { entityType: 'Trip', fromState: 'PLANNED',      action: 'START_BOARDING',    toState: 'OPEN',                  requiredPerm: 'data.trip.update.agency' },
-      { entityType: 'Trip', fromState: 'OPEN',         action: 'BEGIN_BOARDING',    toState: 'BOARDING',              requiredPerm: 'data.trip.update.agency' },
-      { entityType: 'Trip', fromState: 'BOARDING',     action: 'DEPART',            toState: 'IN_PROGRESS',           requiredPerm: 'data.trip.update.agency' },
-      { entityType: 'Trip', fromState: 'IN_PROGRESS',  action: 'PAUSE',             toState: 'IN_PROGRESS_PAUSED',    requiredPerm: 'data.trip.report.own' },
-      { entityType: 'Trip', fromState: 'IN_PROGRESS_PAUSED', action: 'RESUME',      toState: 'IN_PROGRESS',           requiredPerm: 'data.trip.report.own' },
-      { entityType: 'Trip', fromState: 'IN_PROGRESS',  action: 'REPORT_INCIDENT',   toState: 'IN_PROGRESS_DELAYED',   requiredPerm: 'data.trip.report.own' },
-      { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED', action: 'CLEAR_INCIDENT', toState: 'IN_PROGRESS',       requiredPerm: 'data.trip.report.own' },
-      { entityType: 'Trip', fromState: 'IN_PROGRESS',  action: 'END_TRIP',          toState: 'COMPLETED',             requiredPerm: 'data.trip.update.agency' },
-      { entityType: 'Trip', fromState: 'PLANNED',      action: 'CANCEL',            toState: 'CANCELLED',             requiredPerm: 'data.trip.update.agency' },
-      // Ticket
-      { entityType: 'Ticket', fromState: 'CREATED',         action: 'RESERVE',   toState: 'PENDING_PAYMENT', requiredPerm: 'data.ticket.create.agency' },
-      { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'PAY',        toState: 'CONFIRMED',       requiredPerm: 'data.ticket.create.agency' },
-      { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'EXPIRE',     toState: 'EXPIRED',         requiredPerm: 'data.ticket.create.agency' },
-      { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CHECK_IN',   toState: 'CHECKED_IN',      requiredPerm: 'data.ticket.scan.agency' },
-      { entityType: 'Ticket', fromState: 'CHECKED_IN',      action: 'BOARD',      toState: 'BOARDED',         requiredPerm: 'data.ticket.scan.agency' },
-      { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CANCEL',     toState: 'CANCELLED',       requiredPerm: 'data.ticket.cancel.agency' },
-    ];
-
+    // Source unique : DEFAULT_WORKFLOW_CONFIGS (iam.seed.ts) — Trip + Ticket +
+    // Parcel + Traveler + Bus + Shipment. Toute modification doit se faire
+    // là-bas pour que onboarding + backfill restent cohérents.
     await prisma.workflowConfig.createMany({
-      data:           configs.map(c => ({ ...c, tenantId, guards: [], sideEffects: [], isActive: true, version: 1 })),
+      data: DEFAULT_WORKFLOW_CONFIGS.map(c => ({
+        ...c, tenantId, guards: [], sideEffects: [], isActive: true, version: 1,
+      })),
       skipDuplicates: true,
     });
   }

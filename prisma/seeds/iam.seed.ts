@@ -295,12 +295,23 @@ const TENANT_ROLES: Array<{
     ],
   },
   {
+    // CUSTOMER — profil client unifié (voyageur + expéditeur).
+    // Scope .own : borne chaque action à la ressource possédée (no cross-tenant leak).
+    // Pas de rôle séparé VOYAGEUR/SHIPPER : la segmentation pour les stats se
+    // fait par activité (has_ticket, has_parcel), pas par rôle.
     name:     'CUSTOMER',
     isSystem: true,
     permissions: [
       'data.feedback.submit.own',
       'data.notification.read.own',
       'data.session.revoke.own',
+      'data.sav.report.own',
+      // Voyageur : lecture de ses propres billets (QR, statut)
+      'data.ticket.read.own',
+      // Expéditeur : suivi et lecture de ses propres colis + shipments
+      'data.parcel.read.own',
+      'data.parcel.track.own',
+      'data.shipment.read.own',
     ],
   },
   {
@@ -588,6 +599,38 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CHECK_IN',  toState: 'CHECKED_IN',      requiredPerm: 'data.ticket.scan.agency'   },
   { entityType: 'Ticket', fromState: 'CHECKED_IN',      action: 'BOARD',     toState: 'BOARDED',         requiredPerm: 'data.ticket.scan.agency'   },
   { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CANCEL',    toState: 'CANCELLED',       requiredPerm: 'data.ticket.cancel.agency' },
+  // Parcel — PRD §III.7 (8 états métier)
+  { entityType: 'Parcel', fromState: 'CREATED',    action: 'RECEIVE',         toState: 'AT_ORIGIN',  requiredPerm: 'data.parcel.scan.agency'   },
+  { entityType: 'Parcel', fromState: 'AT_ORIGIN',  action: 'ADD_TO_SHIPMENT', toState: 'PACKED',     requiredPerm: 'data.shipment.group.agency' },
+  { entityType: 'Parcel', fromState: 'PACKED',     action: 'LOAD',            toState: 'LOADED',     requiredPerm: 'data.parcel.update.agency' },
+  { entityType: 'Parcel', fromState: 'LOADED',     action: 'DEPART',          toState: 'IN_TRANSIT', requiredPerm: 'data.parcel.update.agency' },
+  { entityType: 'Parcel', fromState: 'IN_TRANSIT', action: 'ARRIVE',          toState: 'ARRIVED',    requiredPerm: 'data.parcel.scan.agency'   },
+  { entityType: 'Parcel', fromState: 'ARRIVED',    action: 'DELIVER',         toState: 'DELIVERED',  requiredPerm: 'data.parcel.update.agency' },
+  { entityType: 'Parcel', fromState: 'IN_TRANSIT', action: 'DAMAGE',          toState: 'DAMAGED',    requiredPerm: 'data.parcel.report.agency' },
+  { entityType: 'Parcel', fromState: 'IN_TRANSIT', action: 'DECLARE_LOST',    toState: 'LOST',       requiredPerm: 'data.parcel.report.agency' },
+  { entityType: 'Parcel', fromState: 'ARRIVED',    action: 'RETURN',          toState: 'RETURNED',   requiredPerm: 'data.parcel.update.tenant' },
+  // Traveler — PRD §III.7 (cycle passager sur un trajet, distinct du rôle CUSTOMER)
+  { entityType: 'Traveler', fromState: 'REGISTERED', action: 'VERIFY',     toState: 'VERIFIED',   requiredPerm: 'data.traveler.verify.agency' },
+  { entityType: 'Traveler', fromState: 'VERIFIED',   action: 'SCAN_IN',    toState: 'CHECKED_IN', requiredPerm: 'data.ticket.scan.agency'     },
+  { entityType: 'Traveler', fromState: 'CHECKED_IN', action: 'SCAN_BOARD', toState: 'BOARDED',    requiredPerm: 'data.traveler.verify.agency' },
+  { entityType: 'Traveler', fromState: 'BOARDED',    action: 'SCAN_OUT',   toState: 'ARRIVED',    requiredPerm: 'data.traveler.verify.agency' },
+  { entityType: 'Traveler', fromState: 'ARRIVED',    action: 'EXIT',       toState: 'EXITED',     requiredPerm: 'data.traveler.verify.agency' },
+  // Bus — PRD §III.7 (état opérationnel véhicule)
+  { entityType: 'Bus', fromState: 'AVAILABLE',   action: 'OPEN_BOARDING',       toState: 'BOARDING',    requiredPerm: 'data.trip.update.agency'        },
+  { entityType: 'Bus', fromState: 'IDLE',        action: 'OPEN_BOARDING',       toState: 'BOARDING',    requiredPerm: 'data.trip.update.agency'        },
+  { entityType: 'Bus', fromState: 'BOARDING',    action: 'DEPART',              toState: 'DEPARTED',    requiredPerm: 'data.trip.update.agency'        },
+  { entityType: 'Bus', fromState: 'DEPARTED',    action: 'ARRIVE',              toState: 'ARRIVED',     requiredPerm: 'data.trip.update.agency'        },
+  { entityType: 'Bus', fromState: 'ARRIVED',     action: 'CLEAN',               toState: 'CLOSED',      requiredPerm: 'data.trip.update.agency'        },
+  { entityType: 'Bus', fromState: 'CLOSED',      action: 'RESTORE',             toState: 'AVAILABLE',   requiredPerm: 'data.fleet.status.agency'       },
+  { entityType: 'Bus', fromState: 'AVAILABLE',   action: 'INCIDENT_MECHANICAL', toState: 'MAINTENANCE', requiredPerm: 'data.maintenance.update.own'    },
+  { entityType: 'Bus', fromState: 'BOARDING',    action: 'INCIDENT_MECHANICAL', toState: 'MAINTENANCE', requiredPerm: 'data.maintenance.update.own'    },
+  { entityType: 'Bus', fromState: 'DEPARTED',    action: 'INCIDENT_MECHANICAL', toState: 'MAINTENANCE', requiredPerm: 'data.maintenance.update.own'    },
+  { entityType: 'Bus', fromState: 'MAINTENANCE', action: 'RESTORE',             toState: 'AVAILABLE',   requiredPerm: 'data.maintenance.approve.tenant' },
+  // Shipment — groupage colis
+  { entityType: 'Shipment', fromState: 'OPEN',       action: 'LOAD',    toState: 'LOADED',     requiredPerm: 'data.shipment.group.agency' },
+  { entityType: 'Shipment', fromState: 'LOADED',    action: 'DEPART',  toState: 'IN_TRANSIT', requiredPerm: 'data.trip.update.agency'    },
+  { entityType: 'Shipment', fromState: 'IN_TRANSIT',action: 'ARRIVE',  toState: 'ARRIVED',    requiredPerm: 'data.trip.update.agency'    },
+  { entityType: 'Shipment', fromState: 'ARRIVED',   action: 'CLOSE',   toState: 'CLOSED',     requiredPerm: 'data.shipment.group.agency' },
 ];
 
 export async function backfillDefaultWorkflows(
@@ -619,6 +662,41 @@ export async function backfillDefaultWorkflows(
   return { scanned: tenants.length, rowsCreated };
 }
 
+/**
+ * Backfill des permissions de rôles pour les tenants existants.
+ *
+ * Chaque fois qu'une permission est ajoutée à `TENANT_ROLES`, relancer
+ * `npx ts-node prisma/seeds/iam.seed.ts` propage la nouvelle permission
+ * à tous les tenants déjà onboardés (upserts idempotents côté Role /
+ * RolePermission).
+ */
+export async function backfillTenantRolePermissions(
+  prismaClient: PrismaClient,
+): Promise<{ scanned: number; rowsCreated: number }> {
+  const tenants = await prismaClient.tenant.findMany({
+    where:  { id: { not: PLATFORM_TENANT_ID } },
+    select: { id: true, slug: true },
+  });
+
+  let rowsCreated = 0;
+  for (const tenant of tenants) {
+    const beforePerms = await prismaClient.rolePermission.count({
+      where: { role: { tenantId: tenant.id } },
+    });
+    await seedTenantRoles(prismaClient, tenant.id);
+    const afterPerms = await prismaClient.rolePermission.count({
+      where: { role: { tenantId: tenant.id } },
+    });
+    const delta = afterPerms - beforePerms;
+    if (delta > 0) {
+      console.log(`[IAM Seed] Backfill permissions tenant=${tenant.slug} — ${delta} ligne(s) créée(s)`);
+    }
+    rowsCreated += delta;
+  }
+
+  return { scanned: tenants.length, rowsCreated };
+}
+
 // ─── Standalone runner ────────────────────────────────────────────────────────
 async function main() {
   await bootstrapPlatform();
@@ -636,6 +714,14 @@ async function main() {
   console.log(
     `[IAM Seed] Backfill workflows — ${wfReport.scanned} tenants scannés, ` +
     `${wfReport.rowsCreated} transition(s) créée(s)`,
+  );
+
+  // Backfill permissions de rôles — propage les nouvelles permissions du seed
+  // (ex. control.station.manage.tenant) aux tenants déjà onboardés.
+  const permReport = await backfillTenantRolePermissions(prisma);
+  console.log(
+    `[IAM Seed] Backfill permissions rôles — ${permReport.scanned} tenants scannés, ` +
+    `${permReport.rowsCreated} ligne(s) créée(s)`,
   );
 }
 
