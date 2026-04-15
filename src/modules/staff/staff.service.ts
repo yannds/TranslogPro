@@ -103,6 +103,63 @@ export class StaffService {
     });
   }
 
+  /**
+   * Liste les users du tenant éligibles à devenir Staff (pas de staffProfile).
+   * Sert au dialog « Promouvoir un user IAM » de PagePersonnel (Phase 4).
+   */
+  async listEligibleUsers(tenantId: string) {
+    return this.prisma.user.findMany({
+      where:  { tenantId, userType: 'STAFF', staffProfile: null },
+      select: {
+        id: true, email: true, name: true, agencyId: true,
+        agency: { select: { id: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Promeut un user IAM existant en Staff (crée Staff + 1ère StaffAssignment).
+   * Le user doit appartenir au tenant et ne pas déjà avoir de staffProfile.
+   */
+  async promoteFromUser(tenantId: string, userId: string, dto: { role: string; agencyId?: string | null; licenseData?: Record<string, unknown> }) {
+    const user = await this.prisma.user.findFirst({
+      where:   { id: userId, tenantId },
+      include: { staffProfile: true },
+    });
+    if (!user) throw new NotFoundException(`User ${userId} introuvable dans ce tenant`);
+    if (user.staffProfile) throw new ConflictException(`User ${userId} a déjà un profil Staff`);
+
+    const agencyId = dto.agencyId && dto.agencyId.trim() !== '' ? dto.agencyId : null;
+    if (agencyId) {
+      const agency = await this.prisma.agency.findFirst({ where: { id: agencyId, tenantId } });
+      if (!agency) throw new BadRequestException(`Agence ${agencyId} introuvable dans ce tenant`);
+    }
+
+    const licenseData = (dto.licenseData ?? {}) as any;
+    const staff = await this.prisma.staff.create({
+      data: {
+        userId,
+        tenantId,
+        agencyId,
+        role:        dto.role,
+        licenseData,
+        status:      'ACTIVE',
+      },
+    });
+    await this.prisma.staffAssignment.create({
+      data: {
+        staffId:     staff.id,
+        role:        dto.role,
+        agencyId,
+        status:      'ACTIVE',
+        licenseData,
+      },
+    });
+
+    return staff;
+  }
+
   async findOne(tenantId: string, userId: string) {
     const staff = await this.prisma.staff.findFirst({
       where:   { userId, tenantId },

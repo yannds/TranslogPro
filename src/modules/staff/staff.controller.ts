@@ -28,6 +28,22 @@ export class StaffController {
     return this.staffService.findAll(tenantId, effectiveAgencyId, role);
   }
 
+  @Get('eligible-users')
+  @RequirePermission(Permission.STAFF_MANAGE)
+  listEligibleUsers(@TenantId() tenantId: string) {
+    return this.staffService.listEligibleUsers(tenantId);
+  }
+
+  @Post('from-user/:userId')
+  @RequirePermission(Permission.STAFF_MANAGE)
+  promoteFromUser(
+    @TenantId() tenantId: string,
+    @Param('userId') userId: string,
+    @Body() dto: { role: string; agencyId?: string | null; licenseData?: Record<string, unknown> },
+  ) {
+    return this.staffService.promoteFromUser(tenantId, userId, dto);
+  }
+
   @Get(':userId')
   @RequirePermission(Permission.STAFF_READ)
   findOne(@TenantId() tenantId: string, @Param('userId') userId: string) {
