@@ -190,6 +190,27 @@ export class TenantIamController {
     return this.iam.revokeUserSessions(tenantId, userId, actor.id);
   }
 
+  // ─── Détail utilisateur : sessions + historique ──────────────────────────
+
+  @Get('users/:userId/sessions')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  listUserSessions(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+  ) {
+    return this.iam.listUserSessions(tenantId, userId);
+  }
+
+  @Get('users/:userId/login-history')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  getUserLoginHistory(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @Query('limit')    limit?:   string,
+  ) {
+    return this.iam.getUserLoginHistory(tenantId, userId, limit ? parseInt(limit, 10) : 50);
+  }
+
   // ─── Journal d'accès ──────────────────────────────────────────────────────
 
   @Get('audit')

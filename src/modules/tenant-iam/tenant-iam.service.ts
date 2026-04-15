@@ -146,7 +146,8 @@ export class TenantIamService {
       where: { id: userId, tenantId },
       select: {
         id: true, email: true, name: true, userType: true,
-        roleId: true, agencyId: true, createdAt: true,
+        roleId: true, agencyId: true, createdAt: true, updatedAt: true,
+        mfaEnabled: true, mfaVerifiedAt: true,
         role:         { select: { id: true, name: true } },
         agency:       { select: { id: true, name: true } },
         staffProfile: {
@@ -161,7 +162,16 @@ export class TenantIamService {
       },
     });
     if (!user) throw new NotFoundException(`Utilisateur ${userId} introuvable`);
-    return user;
+
+    // Dernière connexion = dernier auth.sign_in.success dans AuditLog.
+    // Source unique (pas de duplication dans User.lastLoginAt pour éviter la dérive).
+    const lastSignIn = await this.prisma.auditLog.findFirst({
+      where:   { tenantId, userId, action: 'auth.sign_in.success' },
+      select:  { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { ...user, lastLoginAt: lastSignIn?.createdAt ?? null };
   }
 
   async updateUser(tenantId: string, userId: string, dto: UpdateUserDto, actorId: string) {
@@ -438,5 +448,49 @@ export class TenantIamService {
       limit,
       pages: Math.ceil(total / limit),
     };
+  }
+
+  // ─── Détail utilisateur : sessions + historique ──────────────────────────
+
+  /** Sessions actives pour UN user (onglet Sécurité de la modale détail). */
+  async listUserSessions(tenantId: string, userId: string) {
+    await this.findUser(tenantId, userId);
+    return this.prisma.session.findMany({
+      where:  { tenantId, userId, expiresAt: { gt: new Date() } },
+      select: {
+        id: true, ipAddress: true, userAgent: true,
+        createdAt: true, expiresAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Historique des tentatives de connexion (succès + échec) d'un user.
+   * Source : AuditLog où action ∈ {auth.sign_in.success, auth.sign_in.failure}.
+   * `userAgent` est stocké dans newValue.userAgent (voir AuthService.auditSignIn).
+   */
+  async getUserLoginHistory(tenantId: string, userId: string, limit = 50) {
+    await this.findUser(tenantId, userId);
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        tenantId, userId,
+        action: { in: ['auth.sign_in.success', 'auth.sign_in.failure'] },
+      },
+      select: {
+        id: true, createdAt: true, action: true,
+        ipAddress: true, newValue: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    Math.min(200, Math.max(1, limit)),
+    });
+
+    return rows.map(r => ({
+      id:         r.id,
+      at:         r.createdAt,
+      success:    r.action === 'auth.sign_in.success',
+      ipAddress:  r.ipAddress,
+      userAgent:  (r.newValue as { userAgent?: string } | null)?.userAgent ?? null,
+    }));
   }
 }

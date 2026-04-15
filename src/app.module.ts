@@ -62,6 +62,7 @@ import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
+import { MfaModule }             from './modules/mfa/mfa.module';
 
 // Interceptors
 import { AuditLoggingInterceptor } from './common/interceptors/audit-logging.interceptor';
@@ -160,6 +161,7 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     AuthModule,
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
+    MfaModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

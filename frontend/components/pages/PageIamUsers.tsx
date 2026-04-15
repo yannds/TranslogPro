@@ -14,8 +14,9 @@
 import { useState, type FormEvent } from 'react';
 import {
   Users, Plus, Pencil, Trash2, X, Check,
-  AlertTriangle, UserCircle, LogOut,
+  AlertTriangle, UserCircle, LogOut, Eye,
 } from 'lucide-react';
+import { UserDetailDialog } from '../iam/UserDetailDialog';
 import { useFetch }            from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth }             from '../../lib/auth/auth.context';
@@ -259,6 +260,7 @@ export function PageIamUsers() {
 
   const [filterRole, setFilterRole] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [viewUser,   setViewUser]   = useState<UserRow | null>(null);
   const [editUser,   setEditUser]   = useState<UserRow | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null);
   const [busy,       setBusy]       = useState(false);
@@ -318,6 +320,11 @@ export function PageIamUsers() {
 
   const columns    = buildColumns(me?.id ?? '');
   const rowActions: RowAction<UserRow>[] = [
+    {
+      label:    'Voir',
+      icon:     <Eye size={13} />,
+      onClick:  (row) => { setViewUser(row); setActionErr(null); },
+    },
     {
       label:    'Modifier',
       icon:     <Pencil size={13} />,
@@ -388,8 +395,16 @@ export function PageIamUsers() {
         emptyMessage={users?.length === 0 ? 'Aucun utilisateur.' : 'Aucun résultat pour ce rôle.'}
         exportFormats={['csv', 'json', 'xls']}
         exportFilename="utilisateurs"
-        onRowClick={(row) => { setEditUser(row); setActionErr(null); }}
+        onRowClick={(row) => { setViewUser(row); setActionErr(null); }}
         stickyHeader
+      />
+
+      {/* Modal Détails (voir) */}
+      <UserDetailDialog
+        tenantId={tenantId}
+        userId={viewUser?.id ?? null}
+        open={!!viewUser}
+        onClose={() => setViewUser(null)}
       />
 
       {/* Modal Créer */}
