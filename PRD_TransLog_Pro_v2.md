@@ -335,9 +335,20 @@ createdAt    : horodatage précis
 
 - `Bus.seatLayout` (JSONB) : plan numéroté obligatoire avant vente — permission `control.fleet.layout.tenant`
 - `Bus.version` : champ de lock optimiste pour les transitions workflow
-- `Staff` ↔ `User` : relation bidirectionnelle (`Staff.userId @unique`, `User.staffProfile Staff?`)
-- `Staff.totalDriveTimeToday` : suivi du temps de conduite pour conformité réglementaire
-- Guard d'affectation chauffeur : `Staff.totalDriveTimeToday < maxDriveHoursPerDay` (configurable tenant)
+
+#### Personnel : Staff (enveloppe RH) + StaffAssignment (postes occupés)
+
+Voir [DESIGN_Staff_Assignment.md](DESIGN_Staff_Assignment.md) pour le détail.
+
+- `Staff` ↔ `User` : relation 1-1 (`Staff.userId @unique`, `User.staffProfile Staff?`). `Staff` ne porte **que** les attributs RH : statut global (ACTIVE/SUSPENDED/ARCHIVED), agence de rattachement (home administrative), date d'embauche.
+- `StaffAssignment` : chaque ligne = un **poste occupé** (`role` métier × agence × dates × licence × dispo). Un Staff peut en avoir 0..N simultanément → un même user peut être chauffeur **et** contrôleur, ou couvrir plusieurs agences.
+- **Couverture** (`StaffAssignment.agencyId` + table annexe `StaffAssignmentAgency`) :
+  - `agencyId` renseigné → mono-agence
+  - `agencyId = null` sans couvertures additionnelles → tenant-wide (toutes les agences)
+  - `agencyId = null` avec N entrées `StaffAssignmentAgency` → multi-spécifique (N agences précises)
+- **Clôture plutôt que suppression** : une affectation terminée passe `status=CLOSED` + `endDate` — l'historique reste exploitable.
+- **Suivi conformité chauffeur** : `StaffAssignment.totalDriveTimeToday < maxDriveHoursPerDay` (configurable tenant, reset nuit par scheduler).
+- **Séparation stricte avec IAM** : `User.role` (permissions RBAC) et `StaffAssignment.role` (métier) sont deux notions différentes. Changer le rôle IAM d'un user n'a aucun effet sur ses affectations métier, et inversement.
 #### Distinction Agence vs Gare (règle métier)
 
 Deux concepts **orthogonaux** à ne pas confondre :

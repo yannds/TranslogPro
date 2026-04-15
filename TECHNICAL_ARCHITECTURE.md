@@ -415,7 +415,50 @@ Deux entités que l'UI et les permissions ne doivent jamais confondre.
 
 **Corollaire IAM.** `PermissionGuard` ne vérifie jamais de `stationId` ; il vérifie `agencyId`. Une station n'est donc **jamais** un scope d'autorisation — c'est une donnée métier.
 
-### 2.4 Invariant Agency — "tout tenant ≥1 agence"
+### 2.4 Personnel : Staff (RH) vs StaffAssignment (métier)
+
+Voir [DESIGN_Staff_Assignment.md](DESIGN_Staff_Assignment.md) pour le détail et l'historique de la refonte.
+
+Trois couches distinctes **qu'il ne faut jamais confondre** :
+
+```
+User ─── identité + login + scope IAM (permissions)
+  └─ staffProfile?: Staff ── enveloppe RH : statut global, home agency, hireDate
+                              └─ assignments: StaffAssignment[] ── postes occupés
+                                                                   (rôle × agence × dispo)
+```
+
+| Couche | Question | Exemples de champs |
+|---|---|---|
+| `User.role` (IAM) | *« Qu'a-t-il le droit de faire ? »* | permissions RBAC |
+| `Staff` | *« Est-il employé chez nous ? »* | `status`, `agencyId` (home), `hireDate` |
+| `StaffAssignment` | *« Quel(s) poste(s) occupe-t-il, où, depuis quand ? »* | `role`, `agencyId?`, `startDate`, `endDate?`, `isAvailable` |
+
+**Règles d'or.**
+- Modifier un rôle IAM **ne crée pas** de Staff ni d'affectation. Les deux axes sont indépendants.
+- Un Staff peut avoir 0..N affectations actives (multi-rôles, multi-agences possibles).
+- Une affectation est **clôturée** (`status=CLOSED` + `endDate`), jamais supprimée — l'historique reste exploitable.
+- L'archivage d'un Staff cascade : toutes ses affectations ouvertes passent en CLOSED (invariant DESIGN §5.2).
+
+**Couverture d'une affectation (3 cas).**
+
+| Configuration | Signification |
+|---|---|
+| `agencyId` renseigné, pas de `StaffAssignmentAgency` | **Mono-agence** (cas courant) |
+| `agencyId = null`, pas de `StaffAssignmentAgency` | **Tenant-wide** (toutes agences) |
+| `agencyId = null`, N lignes `StaffAssignmentAgency` | **Multi-spécifique** (N agences précises) |
+
+Requête « visible depuis agence X » :
+```sql
+SELECT * FROM staff_assignments A
+WHERE A.status='ACTIVE' AND A.isAvailable=true AND (
+     A.agencyId = :X
+  OR (A.agencyId IS NULL AND NOT EXISTS (SELECT 1 FROM staff_assignment_agencies WHERE "assignmentId"=A.id))
+  OR EXISTS (SELECT 1 FROM staff_assignment_agencies WHERE "assignmentId"=A.id AND agencyId=:X)
+)
+```
+
+### 2.5 Invariant Agency — "tout tenant ≥1 agence"
 
 **Problème résolu.** Le `PermissionGuard` ([`src/core/iam/guards/permission.guard.ts`](src/core/iam/guards/permission.guard.ts)) rejette avec 403 toute requête dont la permission est en scope `.agency` si l'acteur n'a pas d'`agencyId`. Un tenant fraîchement onboardé doit donc disposer d'au moins une agence, et son admin doit y être rattaché, sinon tous les endpoints scope `.agency` retournent 403 (observé : `restore-starter-pack`, `GET /templates`, etc.).
 
@@ -677,7 +720,9 @@ Formule: delay = min(attempts² × 10s, 600s)
 | Route | Ligne permanente | id, tenantId, originId, destinationId |
 | Waypoint | Point de passage d'une route | id, routeId, stationId, order |
 | Bus | Véhicule | id, tenantId, status, seatLayout, version |
-| Staff | Profil personnel | id, userId, role, totalDriveTimeToday |
+| Staff | Enveloppe RH d'un user | id, userId, tenantId, agencyId, status, hireDate |
+| StaffAssignment | Poste occupé par un Staff | id, staffId, role, agencyId?, status, dates, isAvailable, totalDriveTimeToday |
+| StaffAssignmentAgency | Couverture multi-agences d'une affectation | assignmentId, agencyId |
 | Trip | Occurrence d'une route | id, tenantId, status, roadbook, version |
 | Checklist | Formulaire vérification | id, tripId, type, isCompliant |
 | Incident | Anomalie terrain | id, tripId, type, severity |

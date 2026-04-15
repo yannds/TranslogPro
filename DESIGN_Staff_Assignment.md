@@ -1,8 +1,38 @@
 # DESIGN — Staff = enveloppe RH + Affectations métier (StaffAssignments)
 
-**Statut :** Proposition validée — option β (Staff reste, StaffAssignments introduits)
+**Statut :** ✅ **Implémenté — 2026-04-15** (option β retenue)
 **Auteur :** Session 2026-04-15
 **Dépend de :** [PRD_TransLog_Pro_v2.md](PRD_TransLog_Pro_v2.md), [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)
+
+---
+
+## 0. État final (post-implémentation)
+
+Les 6 phases du plan (§6) ont été livrées dans l'ordre, chacune mergée séparément pour permettre un rollback granulaire. Commits de référence :
+
+| Phase | Commit | Livraison |
+|---|---|---|
+| 1 — Schéma + migration données | `ab3d2f0` + `cb918ad` | Modèles `StaffAssignment` + `StaffAssignmentAgency` + `Staff.hireDate`. Seed backfille les 3 Staffs existants (idempotent). |
+| 2 — Services lisent via StaffAssignment | `d2e58d0` | `StaffService.findAll(role)` filtre via la relation ; double-écriture transitoire ; cascade archive. |
+| 3 — Endpoints CRUD | `3165c23` | 7 endpoints REST + 13 tests couvrant les invariants §4.3 / §5. |
+| 4 — UI PagePersonnel refondue | `6f8619e` | `AssignmentsManager` (list/add/close, 3 modes de couverture) + `PromoteFromIamForm` (sélection user IAM éligible). |
+| 5 — Nettoyage code orphelin | `265cadf` | Drop colonnes legacy (`Staff.role`, `licenseData`, `isAvailable`, `totalDriveTimeToday`) + zombie `userType='DRIVER'` supprimé partout. |
+| 6 — Documentation | *ce commit* | PRD §IV.3, TECHNICAL_ARCHITECTURE §2.4, RESULTATS, TEST_STATUS mis à jour. |
+
+**Vérifications finales (invariant §12).**
+
+- `tsc --noEmit` clean
+- Tests unit : 201/207 (6 échecs white-label pré-existants, hors scope)
+- `grep "staff\.role|staff\.licenseData|staff\.isAvailable|staff\.totalDriveTimeToday"` → **0 résultat** dans `src/`, `frontend/`, `test/`
+- `grep "userType.*DRIVER"` → 0 (hors `roleName: 'DRIVER'` qui est un rôle RBAC légitime)
+- Schéma `Staff` = 8 colonnes uniquement (id, tenantId, agencyId, userId, status, hireDate, createdAt, updatedAt)
+
+**Ce qui n'a pas été fait (non-objectifs, §2).**
+
+- Le scope IAM multi-agences (`User.agencyId` scalaire) reste inchangé. `UserAgencyAccess` non introduit — à ouvrir quand un cas client le réclamera.
+- `User` / `Role` inchangés côté IAM RBAC.
+
+**Effort réel.** ~3.5 jours estimés → 1 session (changements isolés grâce à un blast radius minimal côté consommateurs : seuls `staff.service.ts`, `tenant-iam.*`, `PageIamUsers`, `PagePersonnel`, `dev.seed.ts` touchés + nouveau module `StaffAssignment`).
 
 ---
 
@@ -407,12 +437,11 @@ Le nettoyage Phase 5 n'est pas cosmétique : **du code orphelin est un vecteur d
 
 ---
 
-## 14. Décision finale attendue avant démarrage Phase 1
+## 14. Décision finale — validée 2026-04-15
 
-Lire ce document, valider :
-- [ ] Modèle cible section 4 (schéma Prisma)
-- [ ] Règles métier section 5
-- [ ] Réponses proposées aux 4 questions section 11
-- [ ] Ordre des phases (modulable mais cohérence schéma→services→endpoints→UI→nettoyage→docs recommandée)
+- [x] Modèle cible section 4 (schéma Prisma)
+- [x] Règles métier section 5
+- [x] Réponses aux 4 questions section 11
+- [x] Ordre des phases — appliqué tel quel (schéma → services → endpoints → UI → nettoyage → docs)
 
-Une fois validé, on attaque Phase 1.
+Voir section **0. État final** en haut du document pour la traçabilité des commits et le bilan.

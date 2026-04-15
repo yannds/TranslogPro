@@ -3,6 +3,20 @@
 > Référence partagée entre les deux développeurs.
 > Mise à jour après chaque session. Dernière mise à jour : 2026-04-15.
 
+### Ajouts 2026-04-15 — Refonte Personnel (Staff + StaffAssignment)
+- `test/unit/services/staff-assignment.service.spec.ts` — 13 tests couvrant les invariants DESIGN §4.3 / §5 :
+  · combinaison interdite `agencyId + coverageAgencyIds` (§4.3)
+  · FK agence hors tenant → 400
+  · doublon `(staffId, role, agencyId)` ACTIVE → 400 (§5.5)
+  · création tenant-wide (agencyId null)
+  · création multi-spécifique avec coverageAgencyIds
+  · update sur affectation CLOSED → 400
+  · bascule mono → purge auto coverageAgencies
+  · close idempotent
+  · addCoverageAgency rejeté sur mono-agence
+  · removeCoverageAgency NotFoundException si non-couverte
+- Suite unit après refonte : **201/207 passed** (6 échecs `white-label.service.spec.ts` **pré-existants** — XSS sanitization / token format — hors scope refonte).
+
 ### Ajouts 2026-04-15 — Invariant Agency + AgencyModule
 - `test/unit/services/agency.service.spec.ts` — 13 tests (CRUD + invariant ≥1 agence par tenant)
 - `test/unit/services/onboarding.service.spec.ts` — 5 tests (agence par défaut "Siège"/"Headquarters" créée AVANT l'admin, HMAC Vault, slug déjà pris)
