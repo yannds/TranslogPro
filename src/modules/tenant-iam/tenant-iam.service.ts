@@ -349,6 +349,28 @@ export class TenantIamService {
     });
   }
 
+  /**
+   * Révoque TOUTES les sessions actives d'un user. À utiliser après changement
+   * critique (rôle, suspension, suspicion de compromission). Le user devra se
+   * reconnecter pour obtenir un nouveau cookie de session avec les perms à jour.
+   */
+  async revokeUserSessions(tenantId: string, userId: string, actorId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) throw new NotFoundException(`User ${userId} introuvable dans ce tenant`);
+
+    const res = await this.prisma.session.deleteMany({ where: { userId, tenantId } });
+
+    await this.log({
+      tenantId, actorId,
+      action:   'control.iam.session.revoke.tenant',
+      resource: `User:${userId}`,
+      level:    'warn',
+      newValue: { revokedCount: res.count },
+    });
+
+    return { revokedCount: res.count };
+  }
+
   async revokeSession(tenantId: string, sessionId: string, actorId: string) {
     const session = await this.prisma.session.findFirst({ where: { id: sessionId, tenantId } });
     if (!session) throw new NotFoundException(`Session ${sessionId} introuvable`);

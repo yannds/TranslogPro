@@ -175,6 +175,21 @@ export class TenantIamController {
     return this.iam.revokeSession(tenantId, sessionId, actor.id);
   }
 
+  /**
+   * Révoque toutes les sessions actives d'un user — force la reconnexion.
+   * À utiliser après changement de rôle critique ou suspicion de compromission.
+   */
+  @Post('users/:userId/revoke-sessions')
+  @RequirePermission(Permission.SESSION_REVOKE_TENANT)
+  @HttpCode(HttpStatus.OK)
+  revokeUserSessions(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.revokeUserSessions(tenantId, userId, actor.id);
+  }
+
   // ─── Journal d'accès ──────────────────────────────────────────────────────
 
   @Get('audit')

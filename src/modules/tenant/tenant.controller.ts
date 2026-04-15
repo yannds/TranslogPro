@@ -1,7 +1,5 @@
 import { Controller, Get, Post, Patch, Param, Body } from '@nestjs/common';
 import { TenantService, CreateTenantDto } from './tenant.service';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -9,18 +7,11 @@ import { Permission } from '../../common/constants/permissions';
 export class TenantController {
   constructor(
     private readonly tenantService: TenantService,
-    private readonly prisma: PrismaService,
   ) {}
 
-  @Get(':tenantId/agencies')
-  @RequirePermission(Permission.CRM_READ_TENANT)
-  async listAgencies(@TenantId() tenantId: string) {
-    return this.prisma.agency.findMany({
-      where:   { tenantId },
-      select:  { id: true, name: true, stationId: true },
-      orderBy: { name: 'asc' },
-    });
-  }
+  // NOTE : GET /:tenantId/agencies a été déplacé dans AgencyController
+  // (src/modules/agency/agency.controller.ts) avec la permission dédiée
+  // AGENCY_READ_TENANT. CRM_READ_TENANT restait une permission inadaptée.
 
   @Post()
   @RequirePermission(Permission.TENANT_MANAGE)

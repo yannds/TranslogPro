@@ -18,7 +18,12 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
-import { PLATFORM_TENANT_ID, seedTenantRoles } from './iam.seed';
+import {
+  PLATFORM_TENANT_ID,
+  seedTenantRoles,
+  ensureDefaultAgency,
+  DEFAULT_AGENCY_NAME,
+} from './iam.seed';
 
 const prisma = new PrismaClient();
 
@@ -41,13 +46,14 @@ async function upsertUserWithCredential(opts: {
   roleId:   string | null;
   password: string;
   userType?: 'STAFF' | 'DRIVER';
+  agencyId?: string | null;
 }) {
-  const { tenantId, email, name, roleId, password, userType = 'STAFF' } = opts;
+  const { tenantId, email, name, roleId, password, userType = 'STAFF', agencyId } = opts;
 
   const user = await prisma.user.upsert({
     where:  { email },
-    update: { name, roleId },
-    create: { email, name, tenantId, roleId, userType },
+    update: { name, roleId, ...(agencyId !== undefined ? { agencyId } : {}) },
+    create: { email, name, tenantId, roleId, userType, ...(agencyId !== undefined ? { agencyId } : {}) },
   });
 
   const hash = await hashPwd(password);
@@ -142,38 +148,6 @@ async function activateAllModules(tenantId: string) {
 
 // ─── Workflow seed helpers ─────────────────────────────────────────────────────
 
-interface TransitionSeed {
-  fromState:    string;
-  action:       string;
-  toState:      string;
-  requiredPerm: string;
-}
-
-async function seedWorkflowConfig(tenantId: string, entityType: string, transitions: TransitionSeed[]) {
-  for (const t of transitions) {
-    await prisma.workflowConfig.upsert({
-      where: {
-        tenantId_entityType_fromState_action_version: {
-          tenantId, entityType, fromState: t.fromState, action: t.action, version: 1,
-        },
-      },
-      update: { toState: t.toState, requiredPerm: t.requiredPerm, isActive: true },
-      create: {
-        tenantId, entityType,
-        fromState:    t.fromState,
-        action:       t.action,
-        toState:      t.toState,
-        requiredPerm: t.requiredPerm,
-        guards:       [],
-        sideEffects:  [],
-        isActive:     true,
-        version:      1,
-      },
-    });
-  }
-  console.log(`[Dev Seed] ✅ WorkflowConfig "${entityType}" (${transitions.length} transitions)`);
-}
-
 function graphChecksum(graph: {
   entityType: string;
   nodes: Array<{ id: string; type: string }>;
@@ -190,44 +164,6 @@ function graphChecksum(graph: {
     })),
   };
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-}
-
-async function seedWorkflows(tenantId: string) {
-  // ── Ticket ─────────────────────────────────────────────────────────────────
-  // Permissions alignées sur permissions.ts + iam.seed.ts (ne pas inventer de verbes).
-  // Rôle qui passe le cycle complet : CASHIER (a create/cancel/scan).
-  await seedWorkflowConfig(tenantId, 'Ticket', [
-    { fromState: 'DRAFT',     action: 'sell',      toState: 'SOLD',      requiredPerm: 'data.ticket.create.agency' },
-    { fromState: 'SOLD',      action: 'validate',  toState: 'VALIDATED', requiredPerm: 'data.ticket.scan.agency'   },
-    { fromState: 'VALIDATED', action: 'board',     toState: 'BOARDED',   requiredPerm: 'data.ticket.scan.agency'   },
-    { fromState: 'BOARDED',   action: 'complete',  toState: 'USED',      requiredPerm: 'data.ticket.scan.agency'   },
-    { fromState: 'SOLD',      action: 'cancel',    toState: 'CANCELLED', requiredPerm: 'data.ticket.cancel.agency' },
-    { fromState: 'VALIDATED', action: 'cancel',    toState: 'CANCELLED', requiredPerm: 'data.ticket.cancel.agency' },
-  ]);
-
-  // ── Trip ───────────────────────────────────────────────────────────────────
-  // Rôle qui passe le cycle complet : AGENCY_MANAGER (update/cancel/delay).
-  await seedWorkflowConfig(tenantId, 'Trip', [
-    { fromState: 'PLANNED',    action: 'start_loading',    toState: 'LOADING',          requiredPerm: 'data.trip.update.agency'    },
-    { fromState: 'LOADING',    action: 'depart',           toState: 'DEPARTING',        requiredPerm: 'data.trip.update.agency'    },
-    { fromState: 'DEPARTING',  action: 'confirm_departure',toState: 'IN_TRANSIT',       requiredPerm: 'data.trip.update.agency'    },
-    { fromState: 'IN_TRANSIT', action: 'arrive',           toState: 'ARRIVED',          requiredPerm: 'data.trip.update.agency'    },
-    { fromState: 'ARRIVED',    action: 'complete',         toState: 'COMPLETED',        requiredPerm: 'data.trip.update.agency'    },
-    { fromState: 'PLANNED',    action: 'cancel',           toState: 'CANCELLED',        requiredPerm: 'control.trip.cancel.tenant' },
-    { fromState: 'DEPARTING',  action: 'report_incident',  toState: 'INCIDENT',         requiredPerm: 'control.trip.delay.agency'  },
-    { fromState: 'INCIDENT',   action: 'resolve_incident', toState: 'IN_TRANSIT',       requiredPerm: 'data.trip.update.agency'    },
-  ]);
-
-  // ── Parcel ─────────────────────────────────────────────────────────────────
-  // Rôle qui passe le cycle complet : AGENCY_MANAGER (scan/update).
-  await seedWorkflowConfig(tenantId, 'Parcel', [
-    { fromState: 'RECEIVED',         action: 'process',          toState: 'PROCESSING',       requiredPerm: 'data.parcel.scan.agency'   },
-    { fromState: 'PROCESSING',       action: 'dispatch',         toState: 'IN_TRANSIT',       requiredPerm: 'data.parcel.update.agency' },
-    { fromState: 'IN_TRANSIT',       action: 'out_for_delivery', toState: 'OUT_FOR_DELIVERY', requiredPerm: 'data.parcel.update.agency' },
-    { fromState: 'OUT_FOR_DELIVERY', action: 'deliver',          toState: 'DELIVERED',        requiredPerm: 'data.parcel.update.agency' },
-    { fromState: 'OUT_FOR_DELIVERY', action: 'return_parcel',    toState: 'RETURNED',         requiredPerm: 'data.parcel.update.agency' },
-    { fromState: 'RETURNED',         action: 'reprocess',        toState: 'RECEIVED',         requiredPerm: 'data.parcel.update.agency' },
-  ]);
 }
 
 async function seedBlueprintCategories(): Promise<Record<string, string>> {
@@ -468,17 +404,24 @@ async function main() {
     const roleMap     = await seedTenantRoles(prisma, t.id);
     const adminRoleId = roleMap.get('TENANT_ADMIN') ?? null;
 
+    // Agence par défaut (INVARIANT ≥1) — idempotent
+    const defaultAgencyId = await ensureDefaultAgency(prisma, t.id, DEFAULT_AGENCY_NAME.fr);
+
     const admin = await upsertUserWithCredential({
       tenantId: t.id,
       email:    t.adminEmail,
       name:     `Admin ${t.name}`,
       roleId:   adminRoleId,
       password: 'Admin1234!',
+      agencyId: defaultAgencyId,
     });
-    console.log(`[Dev Seed] ✅ ${t.adminEmail} (TENANT_ADMIN → ${t.name}, id=${admin.id})`);
+    console.log(
+      `[Dev Seed] ✅ ${t.adminEmail} (TENANT_ADMIN → ${t.name}, id=${admin.id}, ` +
+      `agencyId=${defaultAgencyId})`,
+    );
   }
 
-  // ── 3. Agence principale tenant1 + rattachement de l'admin ─────────────────
+  // ── 3. Agence secondaire tenant1 (pour scénarios multi-agences) ─────────────
   let agency1 = await prisma.agency.findFirst({
     where: { tenantId: TENANT1_ID, name: 'Agence Brazzaville Nord' },
   });
@@ -487,19 +430,12 @@ async function main() {
       data: { tenantId: TENANT1_ID, name: 'Agence Brazzaville Nord' },
     });
   }
-
-  // Rattacher l'admin à cette agence pour les permissions .agency
-  await prisma.user.update({
-    where:  { email: 'admin@tenant1.dev' },
-    data:   { agencyId: agency1.id },
-  });
-  console.log(`[Dev Seed] ✅ Agence "${agency1.name}" (id=${agency1.id}), admin rattaché`);
+  console.log(`[Dev Seed] ✅ Agence secondaire "${agency1.name}" (id=${agency1.id})`);
 
   // ── 4. Activation de tous les modules pour tenant1 ───────────────────────────
   await activateAllModules(TENANT1_ID);
 
-  // ── 5b. Workflows & Blueprints ────────────────────────────────────────────────
-  await seedWorkflows(TENANT1_ID);
+  // ── 5b. Blueprints (workflows seedés par iam.seed.ts → DEFAULT_WORKFLOW_CONFIGS) ──
   const categoryIds = await seedBlueprintCategories();
   await seedSystemBlueprints(categoryIds);
 

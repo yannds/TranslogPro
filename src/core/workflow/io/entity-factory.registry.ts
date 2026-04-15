@@ -142,6 +142,28 @@ const factories: Record<string, EntityFactory> = {
     assignedTrip:      null,
     ...overrides,
   }),
+
+  Traveler: ({ tenantId, initialState, overrides }) => ({
+    id:       sandboxId('traveler'),
+    tenantId,
+    status:   initialState,
+    version:  1,
+    identityVerified: true,
+    hasTicket:        true,
+    scanned:          false,
+    ...overrides,
+  }),
+
+  Shipment: ({ tenantId, initialState, overrides }) => ({
+    id:       sandboxId('shipment'),
+    tenantId,
+    status:   initialState,
+    version:  1,
+    parcelCount:  5,
+    totalWeight:  50,
+    sealed:       false,
+    ...overrides,
+  }),
 };
 
 // ─── API ──────────────────────────────────────────────────────────────────────

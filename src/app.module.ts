@@ -42,6 +42,10 @@ import { PublicReporterModule } from './modules/public-reporter/public-reporter.
 import { CrmModule } from './modules/crm/crm.module';
 import { IncidentModule } from './modules/incident/incident.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { AgencyModule } from './modules/agency/agency.module';
+import { RouteModule } from './modules/route/route.module';
+import { StationModule } from './modules/station/station.module';
+import { GeoModule } from './modules/geo/geo.module';
 import { TravelerModule } from './modules/traveler/traveler.module';
 import { DlqModule } from './modules/dlq/dlq.module';
 import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.module';
@@ -123,6 +127,10 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     CrmModule,
     IncidentModule,
     StaffModule,
+    AgencyModule,
+    RouteModule,
+    StationModule,
+    GeoModule,
     TravelerModule,
     DlqModule,
     WorkflowDispatchModule,
