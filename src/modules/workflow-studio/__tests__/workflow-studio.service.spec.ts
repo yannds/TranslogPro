@@ -153,6 +153,7 @@ function makePrisma(opts: {
       upsert:    jest.fn().mockResolvedValue({}),
       update:    jest.fn().mockResolvedValue({}),
       findFirst: jest.fn().mockResolvedValue(opts.blueprintInstall ?? null),
+      findMany:  jest.fn().mockResolvedValue([]),
     },
     rolePermission: {
       findMany: jest.fn().mockResolvedValue(rolePermissions),

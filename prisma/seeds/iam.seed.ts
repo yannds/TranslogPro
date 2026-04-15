@@ -581,8 +581,8 @@ export async function backfillDefaultAgencies(
 // `skipDuplicates` sur la contrainte unique (tenantId, entityType, fromState,
 // action, version).
 export const DEFAULT_WORKFLOW_CONFIGS = [
-  // Trip
-  { entityType: 'Trip', fromState: 'PLANNED',              action: 'ACTIVATE',         toState: 'PLANNED',            requiredPerm: 'data.trip.create.tenant' },
+  // Trip — ACTIVATE (PLANNED→PLANNED) retiré : self-loop no-op qui piégeait
+  // la détection d'état initial basée sur la topologie.
   { entityType: 'Trip', fromState: 'PLANNED',              action: 'START_BOARDING',   toState: 'OPEN',               requiredPerm: 'data.trip.update.agency' },
   { entityType: 'Trip', fromState: 'OPEN',                 action: 'BEGIN_BOARDING',   toState: 'BOARDING',           requiredPerm: 'data.trip.update.agency' },
   { entityType: 'Trip', fromState: 'BOARDING',             action: 'DEPART',           toState: 'IN_PROGRESS',        requiredPerm: 'data.trip.update.agency' },

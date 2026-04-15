@@ -83,29 +83,34 @@ const BLUEPRINTS = [
     ]),
   },
 
-  // ── Trip : trajet planifié ────────────────────────────────────────────────
+  // ── Trip : trajet planifié (ALIGNÉ sur runtime — workflow-states.ts) ─────
+  // Les IDs d'état et d'action DOIVENT matcher DEFAULT_WORKFLOW_CONFIGS
+  // (prisma/seeds/iam.seed.ts) pour que l'overlay node-type sur le graphe
+  // actif du tenant fonctionne — sinon les scénarios ne se génèrent pas
+  // (PageWfSimulate buildScenarios échoue sans état initial).
   {
     slug: 'trip-standard', name: 'Trajet — Opérationnel standard',
-    description: 'PLANNED → CONFIRMED → BOARDING → IN_PROGRESS → COMPLETED. Gestion des retards et annulations.',
+    description: 'PLANNED → OPEN → BOARDING → IN_PROGRESS → COMPLETED, avec pause/retard et annulation.',
     entityType: 'Trip', isPublic: true, isSystem: true, tags: ['trip', 'trajet', 'transport'],
     graphData: graph('Trip', [
-      node('PLANNED',     'initial',   60,  80),
-      node('CONFIRMED',   'state',    280,  80),
-      node('BOARDING',    'state',    500,  80),
-      node('IN_PROGRESS', 'state',    720,  80),
-      node('COMPLETED',   'terminal', 940,  80),
-      node('DELAYED',     'state',    720, 220),
-      node('CANCELLED',   'terminal', 500, 220),
+      node('PLANNED',              'initial',   60,  80),
+      node('OPEN',                 'state',    240,  80),
+      node('BOARDING',             'state',    420,  80),
+      node('IN_PROGRESS',          'state',    600,  80),
+      node('COMPLETED',            'terminal', 780,  80),
+      node('IN_PROGRESS_PAUSED',   'state',    600, 220),
+      node('IN_PROGRESS_DELAYED',  'state',    780, 220),
+      node('CANCELLED',            'terminal', 420, 220),
     ], [
-      edge('PLANNED',     'confirm',    'CONFIRMED',   'data.trip.create.tenant'),
-      edge('CONFIRMED',   'open_boarding', 'BOARDING', 'data.trip.update.agency'),
-      edge('CONFIRMED',   'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
-      edge('BOARDING',    'depart',     'IN_PROGRESS', 'data.trip.update.agency'),
-      edge('BOARDING',    'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
-      edge('IN_PROGRESS', 'arrive',     'COMPLETED',   'data.trip.update.agency'),
-      edge('IN_PROGRESS', 'report_delay', 'DELAYED',   'control.trip.delay.agency'),
-      edge('DELAYED',     'resume',     'IN_PROGRESS', 'data.trip.update.agency'),
-      edge('DELAYED',     'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
+      edge('PLANNED',             'START_BOARDING',  'OPEN',                 'data.trip.update.agency'),
+      edge('PLANNED',             'CANCEL',          'CANCELLED',            'data.trip.update.agency'),
+      edge('OPEN',                'BEGIN_BOARDING',  'BOARDING',             'data.trip.update.agency'),
+      edge('BOARDING',            'DEPART',          'IN_PROGRESS',          'data.trip.update.agency'),
+      edge('IN_PROGRESS',         'PAUSE',           'IN_PROGRESS_PAUSED',   'data.trip.report.own'),
+      edge('IN_PROGRESS_PAUSED',  'RESUME',          'IN_PROGRESS',          'data.trip.report.own'),
+      edge('IN_PROGRESS',         'REPORT_INCIDENT', 'IN_PROGRESS_DELAYED',  'data.trip.report.own'),
+      edge('IN_PROGRESS_DELAYED', 'CLEAR_INCIDENT',  'IN_PROGRESS',          'data.trip.report.own'),
+      edge('IN_PROGRESS',         'END_TRIP',        'COMPLETED',            'data.trip.update.agency'),
     ]),
   },
 
@@ -156,28 +161,31 @@ const BLUEPRINTS = [
     ]),
   },
 
-  // ── Bus : maintenance préventive ──────────────────────────────────────────
+  // ── Bus : cycle opérationnel (ALIGNÉ sur runtime — workflow-states.ts) ───
   {
-    slug: 'bus-maintenance', name: 'Bus — Cycle de maintenance',
-    description: 'Suivi de l\'état opérationnel du véhicule : OPERATIONAL → INSPECTION → MAINTENANCE → REPAIRED.',
+    slug: 'bus-maintenance', name: 'Bus — Cycle opérationnel',
+    description: 'AVAILABLE → BOARDING → DEPARTED → ARRIVED → CLOSED, avec retour MAINTENANCE en cas d\'incident.',
     entityType: 'Bus', isPublic: true, isSystem: true, tags: ['bus', 'maintenance', 'flotte'],
     graphData: graph('Bus', [
-      node('OPERATIONAL',  'initial',  60,  80),
-      node('INSPECTION',   'state',   280,  80),
-      node('MAINTENANCE',  'state',   500,  80),
-      node('REPAIRED',     'state',   720,  80),
-      node('DECOMMISSIONED', 'terminal', 940, 80),
-      node('EMERGENCY',    'state',   500, 220),
+      node('AVAILABLE',   'initial',   60,  80),
+      node('BOARDING',    'state',    240,  80),
+      node('DEPARTED',    'state',    420,  80),
+      node('ARRIVED',     'state',    600,  80),
+      // CLOSED marqué terminal pour la génération de scénarios (fin naturelle
+      // d'un cycle journalier). L'edge RESTORE CLOSED→AVAILABLE reste valide
+      // en runtime — le simulateur peut toujours l'emprunter.
+      node('CLOSED',      'terminal', 780,  80),
+      node('MAINTENANCE', 'state',    420, 220),
     ], [
-      edge('OPERATIONAL', 'schedule_inspection', 'INSPECTION',  'data.fleet.status.agency'),
-      edge('OPERATIONAL', 'emergency_breakdown', 'EMERGENCY',   'data.fleet.status.agency'),
-      edge('INSPECTION',  'pass',                'OPERATIONAL', 'data.maintenance.approve.tenant'),
-      edge('INSPECTION',  'fail',                'MAINTENANCE', 'data.maintenance.approve.tenant'),
-      edge('MAINTENANCE', 'repaired',            'REPAIRED',    'data.maintenance.update.own'),
-      edge('REPAIRED',    'validate',            'OPERATIONAL', 'data.maintenance.approve.tenant'),
-      edge('REPAIRED',    'decommission',        'DECOMMISSIONED', 'control.fleet.manage.tenant'),
-      edge('EMERGENCY',   'fix',                 'MAINTENANCE', 'data.maintenance.update.own'),
-      edge('MAINTENANCE', 'decommission',        'DECOMMISSIONED', 'control.fleet.manage.tenant'),
+      edge('AVAILABLE',   'OPEN_BOARDING',       'BOARDING',    'data.trip.update.agency'),
+      edge('BOARDING',    'DEPART',              'DEPARTED',    'data.trip.update.agency'),
+      edge('DEPARTED',    'ARRIVE',              'ARRIVED',     'data.trip.update.agency'),
+      edge('ARRIVED',     'CLEAN',               'CLOSED',      'data.trip.update.agency'),
+      edge('CLOSED',      'RESTORE',             'AVAILABLE',   'data.fleet.status.agency'),
+      edge('AVAILABLE',   'INCIDENT_MECHANICAL', 'MAINTENANCE', 'data.maintenance.update.own'),
+      edge('BOARDING',    'INCIDENT_MECHANICAL', 'MAINTENANCE', 'data.maintenance.update.own'),
+      edge('DEPARTED',    'INCIDENT_MECHANICAL', 'MAINTENANCE', 'data.maintenance.update.own'),
+      edge('MAINTENANCE', 'RESTORE',             'AVAILABLE',   'data.maintenance.approve.tenant'),
     ]),
   },
 

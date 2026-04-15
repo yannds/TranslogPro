@@ -91,12 +91,63 @@ export class WorkflowStudioService {
 
   // ─── Graphe actif du tenant ─────────────────────────────────────────────────
 
-  /** Récupère le graphe actif du tenant pour un entityType. */
+  /**
+   * Récupère le graphe actif du tenant pour un entityType.
+   *
+   * Les edges proviennent de WorkflowConfig (source de vérité runtime).
+   * Les types de nœuds (initial/terminal/state) sont dérivés par topologie
+   * mais cette détection échoue sur les workflows cycliques (ex: Trip avec
+   * ACTIVATE PLANNED→PLANNED, ou Bus avec RESTORE MAINTENANCE→AVAILABLE).
+   *
+   * Pour fiabiliser, on OVERLAY les types de nœuds depuis le BlueprintInstall
+   * correspondant si un blueprint système est enregistré pour cette entité.
+   * Le snapshot blueprint porte les initial/terminal décidés au design-time.
+   */
   async getTenantGraph(tenantId: string, entityType: string): Promise<WorkflowGraph> {
     const configs = await this.prisma.workflowConfig.findMany({
       where: { tenantId, entityType, isActive: true },
     });
-    return WorkflowGraphAdapter.fromPrisma(configs as unknown as PrismaWorkflowConfig[], entityType);
+    const graph = WorkflowGraphAdapter.fromPrisma(
+      configs as unknown as PrismaWorkflowConfig[],
+      entityType,
+    );
+
+    // Overlay node types depuis TOUS les blueprints système du même entityType.
+    // Un entityType peut avoir plusieurs blueprints (ex: trip-standard +
+    // trip-charter) ; chacun peut déclarer des initial/terminal qui ne se
+    // recoupent pas. On fusionne : si ANY blueprint dit qu'un état est initial
+    // (ou terminal), on l'overlay. Ordre de priorité : initial > terminal > state.
+    const installs = await this.prisma.blueprintInstall.findMany({
+      where: {
+        tenantId,
+        blueprint: { isSystem: true, entityType },
+      },
+      include: { blueprint: { select: { graphJson: true } } },
+    });
+
+    if (installs.length > 0) {
+      const typeMap = new Map<string, 'initial' | 'state' | 'terminal'>();
+      for (const install of installs) {
+        const bpGraph = install.blueprint?.graphJson as unknown as {
+          nodes?: Array<{ id: string; type?: 'initial' | 'state' | 'terminal' }>;
+        } | null;
+        if (!bpGraph || !Array.isArray(bpGraph.nodes)) continue;
+        for (const n of bpGraph.nodes) {
+          if (!n.type) continue;
+          const cur = typeMap.get(n.id);
+          // Priorité : initial > terminal > state
+          if (cur === 'initial') continue;
+          if (cur === 'terminal' && n.type === 'state') continue;
+          typeMap.set(n.id, n.type);
+        }
+      }
+      for (const node of graph.nodes) {
+        const t = typeMap.get(node.id);
+        if (t) node.type = t;
+      }
+    }
+
+    return graph;
   }
 
   /** Liste tous les entityTypes configurés pour un tenant. */
