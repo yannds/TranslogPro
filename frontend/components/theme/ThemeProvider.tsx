@@ -1,43 +1,67 @@
 /**
- * ThemeProvider — Dark Mode exclusif, Zéro Flash Blanc
- *
- * TranslogPro est 100% dark — pas de mode clair.
+ * ThemeProvider — Light Mode par défaut, Dark-Ready
  *
  * Stratégie :
- *   1. Script inline dans <head> applique 'dark' sur <html> avant le premier paint
- *   2. ThemeProvider React garantit la classe 'dark' en permanence
- *   3. Classe 'dark' sur <html> drive Tailwind dark: variants
- *
- * Le toggle light/dark est intentionnellement supprimé.
+ *   1. Lecture du localStorage au premier mount (SSR-safe)
+ *   2. Défaut : 'light' (exigence PRD v1.0)
+ *   3. La classe 'dark' sur <html> active les Tailwind dark: variants
+ *   4. toggle() bascule entre light ↔ dark et persiste dans localStorage
  */
 import {
-  createContext, useContext, useEffect,
+  createContext, useContext, useEffect, useState, useCallback,
   type ReactNode,
 } from 'react';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type Theme = 'light' | 'dark';
+
 interface ThemeCtx {
-  /** Toujours 'dark' */
-  resolved: 'dark';
+  theme:  Theme;
+  toggle: () => void;
 }
 
-const Ctx = createContext<ThemeCtx>({ resolved: 'dark' });
+// ─── Contexte ─────────────────────────────────────────────────────────────────
+
+const Ctx = createContext<ThemeCtx>({
+  theme:  'light',
+  toggle: () => undefined,
+});
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Garantit que la classe 'dark' est toujours présente (pas de flash clair)
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      return (localStorage.getItem('translog-theme') as Theme | null) ?? 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  // Synchronise la classe <html> et persiste à chaque changement
   useEffect(() => {
-    document.documentElement.classList.add('dark');
-    // Supprimer light si jamais elle traîne d'une ancienne version
-    document.documentElement.classList.remove('light');
-    // Effacer l'ancien token de localStorage pour ne pas revenir en mode clair
-    try { localStorage.removeItem('translog-theme'); } catch { /* ignore */ }
-  }, []);
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+    try { localStorage.setItem('translog-theme', theme); } catch { /* ignore */ }
+  }, [theme]);
+
+  const toggle = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
 
   return (
-    <Ctx.Provider value={{ resolved: 'dark' }}>
+    <Ctx.Provider value={{ theme, toggle }}>
       {children}
     </Ctx.Provider>
   );
 }
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTheme(): ThemeCtx {
   return useContext(Ctx);

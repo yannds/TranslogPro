@@ -207,6 +207,29 @@ export function WorkflowDesigner({
 
   const handlePaneClick = useCallback(() => setEditPanel(null), []);
 
+  // ─── Ajouter un nouvel état (nœud) au canvas ─────────────────────────────
+
+  const handleAddState = useCallback(() => {
+    const id    = `STATE_${Date.now()}`;
+    // Positionne le nouveau nœud décalé du dernier pour éviter les superpositions
+    const lastY = nodes.length > 0
+      ? Math.max(...nodes.map((n: Node<RFNodeData>) => (n.position?.y ?? 0))) + 140
+      : 80;
+    const newNode: Node<RFNodeData> = {
+      id,
+      type: 'workflowState',
+      position: { x: 200, y: lastY },
+      data: {
+        label:           id,
+        stateType:       'state',
+        transitionCount: 0,
+      },
+    };
+    setNodes((ns: Node<RFNodeData>[]) => [...ns, newNode]);
+    setEditPanel({ type: 'node', id, data: { ...newNode.data } });
+    setIsDirty(true);
+  }, [nodes, setNodes]);
+
   // Applique les éditions du panneau propriétés dans les nodes/edges RF
   const applyNodeEdit = useCallback((data: RFNodeData) => {
     if (!editPanel || editPanel.type !== 'node') return;
@@ -253,6 +276,14 @@ export function WorkflowDesigner({
             className="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50 shadow transition-colors"
           >
             {saving ? 'Sauvegarde…' : isDirty ? '● Sauvegarder' : '✓ Sauvegardé'}
+          </button>
+
+          <button
+            onClick={handleAddState}
+            className="rounded-md bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 shadow transition-colors"
+            title="Ajouter un nouvel état au canvas"
+          >
+            + État
           </button>
 
           <button

@@ -70,16 +70,26 @@ export class WorkflowStudioService {
     }
 
     await this.prisma.transact(async (tx) => {
+      const txPrisma = tx as unknown as PrismaService;
+
       // Désactiver les configs existantes
-      await (tx as unknown as PrismaService).workflowConfig.updateMany({
+      await txPrisma.workflowConfig.updateMany({
         where: { tenantId, entityType: graph.entityType, isActive: true },
         data:  { isActive: false },
       });
 
+      // Résoudre le prochain numéro de version pour éviter la violation de contrainte unique
+      // @@unique([tenantId, entityType, fromState, action, version]) — version=1 déjà pris
+      const versionAgg = await txPrisma.workflowConfig.aggregate({
+        where: { tenantId, entityType: graph.entityType },
+        _max:  { version: true },
+      });
+      const nextVersion = (versionAgg._max.version ?? 0) + 1;
+
       // Créer les nouvelles configs
       const inputs = WorkflowGraphAdapter.toPrismaCreateInputs(graph, tenantId);
       for (const input of inputs) {
-        await (tx as unknown as PrismaService).workflowConfig.create({ data: input as any });
+        await txPrisma.workflowConfig.create({ data: { ...input, version: nextVersion } as any });
       }
     });
 
@@ -244,10 +254,17 @@ export class WorkflowStudioService {
         data:  { isActive: false },
       });
 
+      // Résoudre le prochain numéro de version
+      const versionAgg = await txPrisma.workflowConfig.aggregate({
+        where: { tenantId, entityType: graph.entityType },
+        _max:  { version: true },
+      });
+      const nextVersion = (versionAgg._max.version ?? 0) + 1;
+
       // Créer les nouvelles configs depuis le graphe
       const inputs = WorkflowGraphAdapter.toPrismaCreateInputs(graph, tenantId);
       for (const input of inputs) {
-        await txPrisma.workflowConfig.create({ data: input as any });
+        await txPrisma.workflowConfig.create({ data: { ...input, version: nextVersion } as any });
       }
 
       // Upsert BlueprintInstall
@@ -311,9 +328,15 @@ export class WorkflowStudioService {
         where: { tenantId, entityType, isActive: true },
         data:  { isActive: false },
       });
+      const versionAgg = await txPrisma.workflowConfig.aggregate({
+        where: { tenantId, entityType },
+        _max:  { version: true },
+      });
+      const nextVersion = (versionAgg._max.version ?? 0) + 1;
+
       const inputs = WorkflowGraphAdapter.toPrismaCreateInputs(snapshot, tenantId);
       for (const input of inputs) {
-        await txPrisma.workflowConfig.create({ data: input as any });
+        await txPrisma.workflowConfig.create({ data: { ...input, version: nextVersion } as any });
       }
       await txPrisma.blueprintInstall.update({
         where: { id: install.id },

@@ -1,11 +1,8 @@
 /**
  * SidebarNavItem — Élément de navigation sidebar avec expand/collapse
  *
- * Gère deux variantes :
- *   - Groupe avec enfants (bouton expansible + sous-liste)
- *   - Lien simple (bouton avec badge et indicateur WIP)
- *
- * Utilise useNavigate (react-router-dom) pour la navigation SPA.
+ * Utilise les tokens sémantiques (t-nav-*, t-badge-wip) définis dans index.css.
+ * Pour modifier les couleurs de navigation, modifier index.css uniquement.
  */
 import { useState }     from 'react';
 import { useNavigate }  from 'react-router-dom';
@@ -13,20 +10,13 @@ import { cn }           from '../../lib/utils';
 import { NavIcon }      from './NavIcon';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export interface SidebarNavItemProps {
   item:       ResolvedNavItem;
   activeHref: string | null;
-  /** Profondeur courante (non utilisé visuellement, réservé) */
   depth?:     number;
 }
 
-// ─── Composant ────────────────────────────────────────────────────────────────
-
-export function SidebarNavItem({
-  item, activeHref, depth: _depth = 0,
-}: SidebarNavItemProps) {
+export function SidebarNavItem({ item, activeHref, depth: _depth = 0 }: SidebarNavItemProps) {
   const navigate = useNavigate();
 
   const isChildActive = item.children?.some(c => c.href === activeHref) ?? false;
@@ -41,7 +31,7 @@ export function SidebarNavItem({
           onClick={() => setExpanded(e => !e)}
           className={cn(
             'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
-            isActive ? 'bg-slate-700/60 text-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
+            isActive ? 't-nav-group-active' : cn('t-nav-text', 't-nav-hover'),
           )}
         >
           <NavIcon name={item.icon} />
@@ -59,7 +49,7 @@ export function SidebarNavItem({
         </button>
 
         {expanded && (
-          <ul className="mt-0.5 ml-3 pl-3 border-l border-slate-800 space-y-0.5">
+          <ul className={cn('mt-0.5 ml-3 pl-3 t-nav-indent space-y-0.5')}>
             {item.children.map(child => (
               <li key={child.id}>
                 <button
@@ -68,16 +58,14 @@ export function SidebarNavItem({
                   aria-current={child.href === activeHref ? 'page' : undefined}
                   className={cn(
                     'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors text-left',
-                    child.href === activeHref
-                      ? 'bg-teal-900/40 text-teal-300 font-medium'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60',
+                    child.href === activeHref ? 't-nav-active font-medium' : cn('t-nav-text', 't-nav-hover'),
                     child.wip && 'opacity-40 cursor-not-allowed',
                   )}
                 >
                   <NavIcon name={child.icon} className="w-3.5 h-3.5" />
                   <span className="flex-1 truncate">{child.label}</span>
                   {child.wip && (
-                    <span className="text-[9px] bg-amber-900/40 text-amber-500 px-1 rounded">WIP</span>
+                    <span className="text-[9px] t-badge-wip px-1 rounded">WIP</span>
                   )}
                   {child.badge != null && (
                     <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -102,16 +90,14 @@ export function SidebarNavItem({
         aria-current={item.href === activeHref ? 'page' : undefined}
         className={cn(
           'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
-          item.href === activeHref
-            ? 'bg-teal-900/40 text-teal-300'
-            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
+          item.href === activeHref ? 't-nav-active' : cn('t-nav-text', 't-nav-hover'),
           item.wip && 'opacity-40 cursor-not-allowed',
         )}
       >
         <NavIcon name={item.icon} />
         <span className="flex-1 truncate">{item.label}</span>
         {item.wip && (
-          <span className="text-[9px] bg-amber-900/40 text-amber-500 px-1 rounded">WIP</span>
+          <span className="text-[9px] t-badge-wip px-1 rounded">WIP</span>
         )}
         {item.badge != null && (
           <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">

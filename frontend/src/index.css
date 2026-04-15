@@ -2,7 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Scrollbar personnalisée (dark mode) */
+/* ─── Tokens sémantiques ────────────────────────────────────────────────────
+ *
+ * Toutes les couleurs UI sont définies ICI, en un seul endroit.
+ * Les composants utilisent ces classes sémantiques — jamais des couleurs brutes.
+ *
+ * Light (défaut) ↔ Dark (classe .dark sur <html>)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+@layer components {
+
+  /* ── Fonds ───────────────────────────────────────────────────────────────── */
+
+  /** Fond général de la page */
+  .t-app        { @apply bg-gray-50 dark:bg-slate-950; }
+
+  /** Fond de la sidebar */
+  .t-sidebar    { @apply bg-white dark:bg-slate-900; }
+
+  /** Fond d'une carte / panel */
+  .t-card       { @apply bg-white dark:bg-slate-900; }
+
+  /** Fond d'une carte avec bordure */
+  .t-card-bordered {
+    @apply bg-white border border-gray-200 dark:bg-slate-900 dark:border-slate-800;
+  }
+
+  /** Fond de section secondaire (filtres, sous-panels) */
+  .t-surface    { @apply bg-gray-50 dark:bg-slate-800/50; }
+
+  /* ── Bordures ────────────────────────────────────────────────────────────── */
+
+  /** Bordure standard */
+  .t-border     { @apply border-gray-200 dark:border-slate-800; }
+
+  /** Bordure subtile (séparateurs internes) */
+  .t-border-sub { @apply border-gray-100 dark:border-slate-700; }
+
+  /* ── Textes ──────────────────────────────────────────────────────────────── */
+
+  /** Texte principal (titres, valeurs) */
+  .t-text       { @apply text-slate-900 dark:text-white; }
+
+  /** Texte secondaire (labels, descriptions) */
+  .t-text-2     { @apply text-slate-600 dark:text-slate-400; }
+
+  /** Texte tertiaire / muet (sous-titres, métadonnées) */
+  .t-text-3     { @apply text-slate-400 dark:text-slate-600; }
+
+  /** Texte de corps courant */
+  .t-text-body  { @apply text-slate-700 dark:text-slate-300; }
+
+  /* ── Navigation sidebar ──────────────────────────────────────────────────── */
+
+  /** Texte d'un item nav inactif */
+  .t-nav-text   { @apply text-slate-600 dark:text-slate-400; }
+
+  /** Item nav au survol */
+  .t-nav-hover  {
+    @apply hover:bg-gray-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100;
+  }
+
+  /** Item nav actif (lien courant) */
+  .t-nav-active {
+    @apply bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300;
+  }
+
+  /** Groupe nav actif (parent d'un lien courant) */
+  .t-nav-group-active {
+    @apply bg-gray-100 text-slate-900 dark:bg-slate-700/60 dark:text-slate-100;
+  }
+
+  /** Indentation verticale des sous-items */
+  .t-nav-indent { @apply border-l border-gray-200 dark:border-slate-800; }
+
+  /* ── Delta / badges KPI ─────────────────────────────────────────────────── */
+
+  .t-delta-up   {
+    @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-400;
+  }
+  .t-delta-down {
+    @apply bg-red-50 text-red-700 dark:bg-red-900/60 dark:text-red-400;
+  }
+
+  /* ── Badges WIP ─────────────────────────────────────────────────────────── */
+
+  .t-badge-wip  {
+    @apply bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-500;
+  }
+}
+
+/* Scrollbar personnalisée */
 :root {
   color-scheme: light dark;
 }

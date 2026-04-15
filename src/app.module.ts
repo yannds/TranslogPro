@@ -1,5 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -58,6 +58,9 @@ import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
+
+// Interceptors
+import { AuditLoggingInterceptor } from './common/interceptors/audit-logging.interceptor';
 
 // Guards & Middleware
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
@@ -158,6 +161,8 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     // Déclenché uniquement sur les routes portant @RequireModule('KEY').
     // S'exécute APRÈS PermissionGuard (ordre de déclaration APP_GUARD).
     { provide: APP_GUARD, useClass: ModuleGuard },
+    // AuditLoggingInterceptor global — traçabilité ISO 27001 sur toutes les mutations
+    { provide: APP_INTERCEPTOR, useClass: AuditLoggingInterceptor },
     // RedisRateLimitGuard — injecté via @UseGuards() par endpoint
     // Nécessite REDIS_CLIENT (fourni par EventBusModule @Global)
     RedisRateLimitGuard,

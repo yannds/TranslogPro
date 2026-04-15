@@ -2,19 +2,18 @@
  * PageIamAudit — Journal d'accès tenant
  *
  * Fonctionnalités :
- *   - Table paginée des AuditLog
- *   - Filtres : niveau (info/warn/critical), recherche action, plage de dates, userId
+ *   - DataTableMaster : tri, recherche full-text, pagination, export CSV
+ *   - Filtres serveur : niveau (info/warn/critical), action, userId, plage de dates
  *   - Badge coloré par niveau
- *   - Pagination : prev / next / page courante
  */
 import { useState, useCallback } from 'react';
-import { ScrollText, ChevronLeft, ChevronRight, Search, Filter } from 'lucide-react';
+import { ScrollText, Search, Filter } from 'lucide-react';
 import { useAuth }  from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { Input }    from '../ui/Input';
 import { Button }   from '../ui/Button';
 import { Select }   from '../ui/Select';
-import { Skeleton } from '../ui/Skeleton';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +63,67 @@ function formatDate(iso: string) {
   });
 }
 
+// ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
+
+const COLUMNS: Column<AuditEntry>[] = [
+  {
+    key: 'createdAt',
+    header: 'Date',
+    sortable: true,
+    width: '150px',
+    cellRenderer: (v) => (
+      <span className="text-xs text-slate-400 whitespace-nowrap font-mono">
+        {formatDate(String(v))}
+      </span>
+    ),
+    csvValue: (v) => formatDate(String(v)),
+  },
+  {
+    key: 'level',
+    header: 'Niveau',
+    sortable: true,
+    width: '90px',
+    cellRenderer: (v) => <LevelBadge level={String(v)} />,
+  },
+  {
+    key: 'action',
+    header: 'Action',
+    sortable: true,
+    cellRenderer: (v) => (
+      <span className="font-mono text-xs text-slate-200 max-w-[260px] truncate block">
+        {String(v)}
+      </span>
+    ),
+  },
+  {
+    key: 'resource',
+    header: 'Ressource',
+    sortable: true,
+    cellRenderer: (v) => (
+      <span className="text-xs text-slate-400 max-w-[180px] truncate block">{String(v)}</span>
+    ),
+  },
+  {
+    key: 'user',
+    header: 'Utilisateur',
+    cellRenderer: (_v, row) => row.user ? (
+      <div>
+        <p className="text-xs text-slate-200">{row.user.name}</p>
+        <p className="text-xs text-slate-500">{row.user.email}</p>
+      </div>
+    ) : <span className="text-xs text-slate-600 italic">—</span>,
+    csvValue: (_v, row) => row.user ? `${row.user.name} <${row.user.email}>` : '',
+  },
+  {
+    key: 'ipAddress',
+    header: 'IP',
+    width: '120px',
+    cellRenderer: (v) => (
+      <span className="text-xs text-slate-500 font-mono">{v ? String(v) : '—'}</span>
+    ),
+  },
+];
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function PageIamAudit() {
@@ -71,46 +131,36 @@ export function PageIamAudit() {
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/v1/tenants/${tenantId}/iam`;
 
-  const [page, setPage]       = useState(1);
-  const [level, setLevel]     = useState('');
-  const [action, setAction]   = useState('');
-  const [userId, setUserId]   = useState('');
-  const [from, setFrom]       = useState('');
-  const [to, setTo]           = useState('');
-  const [draft, setDraft]     = useState({ action: '', userId: '', from: '', to: '', level: '' });
-  const [rev, setRev]         = useState(0);
+  const [draft, setDraft]   = useState({ action: '', userId: '', from: '', to: '', level: '' });
+  const [filters, setFilters] = useState({ action: '', userId: '', from: '', to: '', level: '' });
+  const [rev, setRev]       = useState(0);
 
-  // Build query string
-  const qs = new URLSearchParams({ page: String(page), limit: '50' });
-  if (level)  qs.set('level',  level);
-  if (action) qs.set('action', action);
-  if (userId) qs.set('userId', userId);
-  if (from)   qs.set('from',   from);
-  if (to)     qs.set('to',     to);
+  // Récupère jusqu'à 200 entrées pour la page courante — DataTableMaster gère la pagination locale
+  const qs = new URLSearchParams({ page: '1', limit: '200' });
+  if (filters.level)  qs.set('level',  filters.level);
+  if (filters.action) qs.set('action', filters.action);
+  if (filters.userId) qs.set('userId', filters.userId);
+  if (filters.from)   qs.set('from',   filters.from);
+  if (filters.to)     qs.set('to',     filters.to);
 
   const url = `${base}/audit?${qs.toString()}`;
-  const { data, loading } = useFetch<AuditPage>(url, [page, level, action, userId, from, to, rev]);
+  const { data, loading } = useFetch<AuditPage>(url, [filters, rev]);
 
   const applyFilters = useCallback(() => {
-    setLevel(draft.level);
-    setAction(draft.action);
-    setUserId(draft.userId);
-    setFrom(draft.from);
-    setTo(draft.to);
-    setPage(1);
+    setFilters({ ...draft });
     setRev(r => r + 1);
   }, [draft]);
 
   const resetFilters = useCallback(() => {
     const empty = { action: '', userId: '', from: '', to: '', level: '' };
     setDraft(empty);
-    setLevel(''); setAction(''); setUserId(''); setFrom(''); setTo('');
-    setPage(1);
+    setFilters(empty);
     setRev(r => r + 1);
   }, []);
 
   const items = data?.items ?? [];
-  const pages = data?.pages ?? 1;
+
+  const rowActions: RowAction<AuditEntry>[] = []; // Journal en lecture seule
 
   return (
     <div className="p-6 space-y-6">
@@ -121,14 +171,16 @@ export function PageIamAudit() {
           Journal d&apos;accès
         </h1>
         <p className="text-slate-400 text-sm mt-1">
-          {data ? `${data.total} entrée(s) · page ${data.page}/${data.pages}` : 'Chargement…'}
+          {data
+            ? `${data.total} entrée(s) au total — affichage des ${items.length} plus récentes`
+            : 'Chargement…'}
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Filtres serveur */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-1 text-sm text-slate-400 font-medium mb-1">
-          <Filter size={14} /> Filtres
+          <Filter size={14} /> Filtres serveur
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <Select
@@ -161,7 +213,7 @@ export function PageIamAudit() {
             type="date"
             value={draft.to}
             onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
-            title="Jusqu'au"
+            title="Jusqu&apos;au"
           />
         </div>
         <div className="flex gap-2 justify-end">
@@ -172,89 +224,19 @@ export function PageIamAudit() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-700 overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
-          <thead className="bg-slate-800 text-slate-400">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium">Date</th>
-              <th className="text-left px-4 py-3 font-medium">Niveau</th>
-              <th className="text-left px-4 py-3 font-medium">Action</th>
-              <th className="text-left px-4 py-3 font-medium">Ressource</th>
-              <th className="text-left px-4 py-3 font-medium">Utilisateur</th>
-              <th className="text-left px-4 py-3 font-medium">IP</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {loading && Array.from({ length: 8 }).map((_, i) => (
-              <tr key={i} className="bg-slate-900">
-                {Array.from({ length: 6 }).map((__, j) => (
-                  <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
-                ))}
-              </tr>
-            ))}
-            {!loading && items.map(entry => (
-              <tr key={entry.id} className="bg-slate-900 hover:bg-slate-800/50 transition-colors">
-                <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap text-xs">
-                  {formatDate(entry.createdAt)}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap">
-                  <LevelBadge level={entry.level} />
-                </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-200 max-w-[260px] truncate">
-                  {entry.action}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-slate-400 max-w-[180px] truncate">
-                  {entry.resource}
-                </td>
-                <td className="px-4 py-2.5">
-                  {entry.user ? (
-                    <div>
-                      <p className="text-xs text-slate-200">{entry.user.name}</p>
-                      <p className="text-xs text-slate-500">{entry.user.email}</p>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-600 italic">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-slate-500 font-mono">
-                  {entry.ipAddress ?? '—'}
-                </td>
-              </tr>
-            ))}
-            {!loading && items.length === 0 && (
-              <tr className="bg-slate-900">
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                  Aucune entrée pour ces critères
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-3">
-          <Button
-            variant="ghost" size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
-          >
-            <ChevronLeft size={15} />
-          </Button>
-          <span className="text-sm text-slate-400">
-            Page <strong className="text-white">{page}</strong> / {pages}
-          </span>
-          <Button
-            variant="ghost" size="sm"
-            disabled={page >= pages}
-            onClick={() => setPage(p => p + 1)}
-          >
-            <ChevronRight size={15} />
-          </Button>
-        </div>
-      )}
+      {/* Tableau */}
+      <DataTableMaster<AuditEntry>
+        columns={COLUMNS}
+        data={items}
+        loading={loading}
+        rowActions={rowActions}
+        defaultSort={{ key: 'createdAt', dir: 'desc' }}
+        defaultPageSize={25}
+        searchPlaceholder="Recherche locale (action, ressource, IP…)"
+        emptyMessage="Aucune entrée pour ces critères"
+        onExportCsv="audit-log.csv"
+        stickyHeader
+      />
     </div>
   );
 }

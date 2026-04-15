@@ -2,7 +2,7 @@
  * PageIamRoles — Gestion des rôles et permissions du tenant
  *
  * Fonctionnalités :
- *   - Liste des rôles avec compteur d'utilisateurs
+ *   - Liste des rôles avec compteur d'utilisateurs (DataTableMaster)
  *   - Créer / renommer / supprimer un rôle (non-système)
  *   - Éditer les permissions d'un rôle (checklist groupée par module)
  */
@@ -16,6 +16,8 @@ import { Button }     from '../ui/Button';
 import { Input }      from '../ui/Input';
 import { Badge }      from '../ui/Badge';
 import { Skeleton }   from '../ui/Skeleton';
+import DataTableMaster from '../DataTableMaster';
+import type { Column, RowAction } from '../DataTableMaster';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,7 +190,6 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
 
 function permLabel(perm: string): string {
   const parts = perm.split('.');
-  // control.iam.manage.tenant → manage · tenant
   return parts.slice(2).join(' · ');
 }
 
@@ -232,11 +233,11 @@ function PermissionEditor({
         const isOpen        = expanded.has(group.label);
 
         return (
-          <div key={group.label} className="rounded-lg border border-slate-700 overflow-hidden">
+          <div key={group.label} className="rounded-lg t-border border overflow-hidden">
             <button
               type="button"
               onClick={() => toggle(group.label)}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700/60 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 t-surface t-nav-hover transition-colors"
             >
               <input
                 type="checkbox"
@@ -244,26 +245,26 @@ function PermissionEditor({
                 ref={el => { if (el) el.indeterminate = groupSelected > 0 && !allSelected; }}
                 onChange={() => toggleGroup(group.perms)}
                 onClick={e => e.stopPropagation()}
-                className="rounded border-slate-500 bg-slate-700 text-indigo-500 cursor-pointer"
+                className="rounded cursor-pointer"
               />
-              <span className="flex-1 text-left text-sm font-medium text-slate-200">{group.label}</span>
-              <span className="text-xs text-slate-400">{groupSelected}/{group.perms.length}</span>
+              <span className="flex-1 text-left text-sm font-medium t-text">{group.label}</span>
+              <span className="text-xs t-text-2">{groupSelected}/{group.perms.length}</span>
               {isOpen
-                ? <ChevronDown size={14} className="text-slate-400" />
-                : <ChevronRight size={14} className="text-slate-400" />}
+                ? <ChevronDown size={14} className="t-text-3" />
+                : <ChevronRight size={14} className="t-text-3" />}
             </button>
 
             {isOpen && (
-              <div className="px-3 py-2 space-y-1 bg-slate-900/40">
+              <div className="px-3 py-2 space-y-1 t-card">
                 {group.perms.map(perm => (
                   <label key={perm} className="flex items-center gap-2 cursor-pointer py-0.5">
                     <input
                       type="checkbox"
                       checked={selected.has(perm)}
                       onChange={() => togglePerm(perm)}
-                      className="rounded border-slate-500 bg-slate-700 text-indigo-500"
+                      className="rounded"
                     />
-                    <span className="text-xs text-slate-300 font-mono">{permLabel(perm)}</span>
+                    <span className="text-xs t-text-body font-mono">{permLabel(perm)}</span>
                   </label>
                 ))}
               </div>
@@ -357,18 +358,100 @@ export function PageIamRoles() {
     } finally { setDeleting(false); }
   }
 
+  // ── Colonnes DataTableMaster ───────────────────────────────────────────────
+
+  const COLUMNS: Column<Role>[] = [
+    {
+      key: 'name',
+      header: 'Nom',
+      sortable: true,
+      cellRenderer: (_, row) => (
+        <div className="flex items-center gap-2">
+          <span className="t-text font-medium">{row.name}</span>
+          {row.isSystem && (
+            <Badge variant="outline" className="text-xs normal-case">système</Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'permissions',
+      header: 'Permissions',
+      sortable: false,
+      cellRenderer: (_, row) => (
+        <button
+          type="button"
+          onClick={() => {
+            setPermRole(row);
+            setPermSet(new Set(row.permissions.map(p => p.permission)));
+            setPermErr('');
+          }}
+          className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
+        >
+          <Check size={13} />
+          <span>{row.permissions.length} perm{row.permissions.length !== 1 ? 's' : ''}</span>
+        </button>
+      ),
+      csvValue: (_, row) => String(row.permissions.length),
+    },
+    {
+      key: '_count',
+      header: 'Utilisateurs',
+      sortable: true,
+      align: 'right',
+      cellRenderer: (_, row) => (
+        <span className="t-text-2 tabular-nums">{row._count.users}</span>
+      ),
+      csvValue: (_, row) => String(row._count.users),
+    },
+  ];
+
+  const ROW_ACTIONS: RowAction<Role>[] = [
+    {
+      label: 'Permissions',
+      icon: <Check size={14} />,
+      onClick: (row) => {
+        setPermRole(row);
+        setPermSet(new Set(row.permissions.map(p => p.permission)));
+        setPermErr('');
+      },
+    },
+    {
+      label: 'Renommer',
+      icon: <Pencil size={14} />,
+      hidden: (row) => row.isSystem,
+      onClick: (row) => { setEditRole(row); setEditName(row.name); setEditErr(''); },
+    },
+    {
+      label: 'Supprimer',
+      icon: <Trash2 size={14} />,
+      hidden: (row) => row.isSystem,
+      onClick: (row) => setDeleteRole(row),
+    },
+  ];
+
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-12 w-full" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Shield size={24} className="text-indigo-400" />
+          <h1 className="text-2xl font-bold t-text flex items-center gap-2">
+            <Shield size={24} className="text-indigo-600 dark:text-indigo-400" />
             Rôles & Permissions
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Gérez les rôles et leurs permissions</p>
+          <p className="t-text-2 text-sm mt-1">Gérez les rôles et leurs permissions</p>
         </div>
         <Button size="sm" onClick={() => { setCreateName(''); setCreateErr(''); setShowCreate(true); }}>
           <Plus size={15} className="mr-1" /> Nouveau rôle
@@ -376,86 +459,14 @@ export function PageIamRoles() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-400">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium">Nom</th>
-              <th className="text-left px-4 py-3 font-medium">Permissions</th>
-              <th className="text-left px-4 py-3 font-medium">Utilisateurs</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {loading && Array.from({ length: 4 }).map((_, i) => (
-              <tr key={i} className="bg-slate-900">
-                <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
-                <td className="px-4 py-3" />
-              </tr>
-            ))}
-            {!loading && roles.map(role => (
-              <tr key={role.id} className="bg-slate-900 hover:bg-slate-800/60 transition-colors">
-                <td className="px-4 py-3 font-medium text-white">
-                  <div className="flex items-center gap-2">
-                    {role.name}
-                    {role.isSystem && (
-                      <Badge variant="outline" className="text-xs normal-case">système</Badge>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPermRole(role);
-                      setPermSet(new Set(role.permissions.map(p => p.permission)));
-                      setPermErr('');
-                    }}
-                    className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
-                  >
-                    <Check size={13} />
-                    <span>{role.permissions.length} perm{role.permissions.length !== 1 ? 's' : ''}</span>
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-slate-400">{role._count.users}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 justify-end">
-                    {!role.isSystem && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => { setEditRole(role); setEditName(role.name); setEditErr(''); }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                          title="Renommer"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteRole(role)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!loading && roles.length === 0 && (
-              <tr className="bg-slate-900">
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  Aucun rôle défini
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTableMaster<Role>
+        columns={COLUMNS}
+        data={roles}
+        loading={false}
+        rowActions={ROW_ACTIONS}
+        emptyMessage="Aucun rôle défini"
+        onExportCsv="roles.csv"
+      />
 
       {/* Create dialog */}
       <Dialog
@@ -480,7 +491,7 @@ export function PageIamRoles() {
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
             autoFocus
           />
-          {createErr && <p className="text-xs text-red-400">{createErr}</p>}
+          {createErr && <p className="text-xs text-red-500 dark:text-red-400">{createErr}</p>}
         </div>
       </Dialog>
 
@@ -505,7 +516,7 @@ export function PageIamRoles() {
             onKeyDown={e => e.key === 'Enter' && handleRename()}
             autoFocus
           />
-          {editErr && <p className="text-xs text-red-400">{editErr}</p>}
+          {editErr && <p className="text-xs text-red-500 dark:text-red-400">{editErr}</p>}
         </div>
       </Dialog>
 
@@ -518,7 +529,7 @@ export function PageIamRoles() {
         size="xl"
         footer={
           <>
-            <span className="flex-1 text-xs text-slate-400">{permSet.size} permission(s) sélectionnée(s)</span>
+            <span className="flex-1 text-xs t-text-2">{permSet.size} permission(s) sélectionnée(s)</span>
             <Button variant="ghost" size="sm" onClick={() => setPermRole(null)}>Annuler</Button>
             <Button size="sm" onClick={handleSavePerms} disabled={savingPerms}>
               {savingPerms ? 'Enregistrement…' : 'Enregistrer'}
@@ -528,7 +539,7 @@ export function PageIamRoles() {
       >
         <div className="space-y-3">
           <PermissionEditor selected={permSet} onChange={setPermSet} />
-          {permErr && <p className="text-xs text-red-400">{permErr}</p>}
+          {permErr && <p className="text-xs text-red-500 dark:text-red-400">{permErr}</p>}
         </div>
       </Dialog>
 
@@ -549,12 +560,12 @@ export function PageIamRoles() {
         }
       >
         {deleteRole?._count.users ? (
-          <p className="text-sm text-amber-400">
+          <p className="text-sm text-amber-600 dark:text-amber-400">
             Ce rôle est assigné à {deleteRole._count.users} utilisateur(s).
             Réassignez-les d'abord.
           </p>
         ) : (
-          <p className="text-sm text-slate-400">Cette opération ne peut pas être annulée.</p>
+          <p className="text-sm t-text-2">Cette opération ne peut pas être annulée.</p>
         )}
       </Dialog>
     </div>

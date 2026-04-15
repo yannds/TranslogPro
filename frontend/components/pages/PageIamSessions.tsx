@@ -2,10 +2,9 @@
  * PageIamSessions — Sessions actives du tenant
  *
  * Fonctionnalités :
- *   - Table des sessions actives (non expirées)
+ *   - DataTableMaster : tri, recherche, pagination
  *   - Informations : utilisateur, IP, user-agent, créée le, expire le
- *   - Révoquer une session individuelle
- *   - Actualisation manuelle
+ *   - Révoquer une session individuelle (row action + confirmation Dialog)
  */
 import { useState, useCallback } from 'react';
 import { KeyRound, RefreshCw, Trash2, Monitor, Smartphone } from 'lucide-react';
@@ -14,7 +13,7 @@ import { useFetch }   from '../../lib/hooks/useFetch';
 import { apiDelete, ApiError } from '../../lib/api';
 import { Button }     from '../ui/Button';
 import { Dialog }     from '../ui/Dialog';
-import { Skeleton }   from '../ui/Skeleton';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,18 +43,87 @@ function isMobile(ua?: string) {
 
 function uaShort(ua?: string) {
   if (!ua) return '—';
-  // Extract browser / OS summary
   const browser = ua.match(/(?:Chrome|Firefox|Safari|Edge|Opera)[/ ]([\d.]+)/i);
-  const os = ua.match(/\(([^)]+)\)/)?.[1]?.split(';')[0] ?? '';
+  const os      = ua.match(/\(([^)]+)\)/)?.[1]?.split(';')[0] ?? '';
   return browser ? `${browser[0]} · ${os}` : ua.slice(0, 60);
+}
+
+// ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
+
+function buildColumns(currentUserId: string): Column<Session>[] {
+  return [
+    {
+      key: 'user',
+      header: 'Utilisateur',
+      sortable: true,
+      cellRenderer: (_v, row) => (
+        <div>
+          <p className="text-sm font-medium text-white flex items-center gap-1.5">
+            {row.user.name}
+            {row.user.id === currentUserId && (
+              <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-1.5 py-0.5">
+                vous
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-slate-500">{row.user.email}</p>
+        </div>
+      ),
+      csvValue: (_v, row) => `${row.user.name} <${row.user.email}>`,
+    },
+    {
+      key: 'userAgent',
+      header: 'Appareil / Navigateur',
+      cellRenderer: (v) => (
+        <div className="flex items-center gap-1.5">
+          {isMobile(String(v))
+            ? <Smartphone size={13} className="text-slate-400 shrink-0" />
+            : <Monitor size={13} className="text-slate-400 shrink-0" />}
+          <span className="text-xs text-slate-400 max-w-[220px] truncate">
+            {uaShort(v ? String(v) : undefined)}
+          </span>
+        </div>
+      ),
+      csvValue: (v) => uaShort(v ? String(v) : undefined),
+    },
+    {
+      key: 'ipAddress',
+      header: 'IP',
+      sortable: true,
+      width: '130px',
+      cellRenderer: (v) => (
+        <span className="font-mono text-xs text-slate-400">{v ? String(v) : '—'}</span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      header: 'Créée le',
+      sortable: true,
+      width: '140px',
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
+      ),
+      csvValue: (v) => formatDate(String(v)),
+    },
+    {
+      key: 'expiresAt',
+      header: 'Expire le',
+      sortable: true,
+      width: '140px',
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
+      ),
+      csvValue: (v) => formatDate(String(v)),
+    },
+  ];
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function PageIamSessions() {
-  const { user } = useAuth();
-  const tenantId = user?.tenantId ?? '';
-  const base     = `/api/v1/tenants/${tenantId}/iam`;
+  const { user }  = useAuth();
+  const tenantId  = user?.tenantId ?? '';
+  const base      = `/api/v1/tenants/${tenantId}/iam`;
 
   const [rev, setRev]                   = useState(0);
   const reload                          = useCallback(() => setRev(r => r + 1), []);
@@ -63,9 +131,9 @@ export function PageIamSessions() {
   const { data: sessionsData, loading } = useFetch<Session[]>(`${base}/sessions`, [rev]);
   const sessions                        = sessionsData ?? [];
 
-  const [target, setTarget]             = useState<Session | null>(null);
-  const [revoking, setRevoking]         = useState(false);
-  const [err, setErr]                   = useState('');
+  const [target,   setTarget]   = useState<Session | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [err,      setErr]      = useState('');
 
   async function handleRevoke() {
     setRevoking(true); setErr('');
@@ -77,6 +145,16 @@ export function PageIamSessions() {
       setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
     } finally { setRevoking(false); }
   }
+
+  const columns    = buildColumns(user?.id ?? '');
+  const rowActions: RowAction<Session>[] = [
+    {
+      label:   'Révoquer',
+      icon:    <Trash2 size={13} />,
+      danger:  true,
+      onClick: (row) => { setTarget(row); setErr(''); },
+    },
+  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -97,89 +175,21 @@ export function PageIamSessions() {
         </Button>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-400">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium">Utilisateur</th>
-              <th className="text-left px-4 py-3 font-medium">Appareil / Navigateur</th>
-              <th className="text-left px-4 py-3 font-medium">IP</th>
-              <th className="text-left px-4 py-3 font-medium">Créée le</th>
-              <th className="text-left px-4 py-3 font-medium">Expire le</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {loading && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="bg-slate-900">
-                {Array.from({ length: 6 }).map((__, j) => (
-                  <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
-                ))}
-              </tr>
-            ))}
-            {!loading && sessions.map(session => {
-              const mobile = isMobile(session.userAgent);
-              const isOwn  = session.user.id === user?.id;
-              return (
-                <tr key={session.id} className="bg-slate-900 hover:bg-slate-800/50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-white flex items-center gap-1.5">
-                        {session.user.name}
-                        {isOwn && (
-                          <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-1.5 py-0.5">
-                            vous
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-500">{session.user.email}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      {mobile
-                        ? <Smartphone size={13} className="text-slate-400 shrink-0" />
-                        : <Monitor size={13} className="text-slate-400 shrink-0" />}
-                      <span className="text-xs text-slate-400 max-w-[220px] truncate">
-                        {uaShort(session.userAgent)}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                    {session.ipAddress ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                    {formatDate(session.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                    {formatDate(session.expiresAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => { setTarget(session); setErr(''); }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                      title="Révoquer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {!loading && sessions.length === 0 && (
-              <tr className="bg-slate-900">
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                  Aucune session active
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Tableau */}
+      <DataTableMaster<Session>
+        columns={columns}
+        data={sessions}
+        loading={loading}
+        rowActions={rowActions}
+        defaultSort={{ key: 'createdAt', dir: 'desc' }}
+        defaultPageSize={25}
+        searchPlaceholder="Rechercher (utilisateur, IP, appareil…)"
+        emptyMessage="Aucune session active"
+        onExportCsv="sessions.csv"
+        stickyHeader
+      />
 
-      {/* Revoke confirm */}
+      {/* Confirmation révocation */}
       <Dialog
         open={!!target}
         onOpenChange={o => { if (!o) setTarget(null); }}
