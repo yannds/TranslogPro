@@ -1,7 +1,14 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-14.
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-15.
+
+### Ajouts 2026-04-15 — Invariant Agency + AgencyModule
+- `test/unit/services/agency.service.spec.ts` — 13 tests (CRUD + invariant ≥1 agence par tenant)
+- `test/unit/services/onboarding.service.spec.ts` — 5 tests (agence par défaut "Siège"/"Headquarters" créée AVANT l'admin, HMAC Vault, slug déjà pris)
+- `test/integration/agency/agency-crud.spec.ts` — 4 tests (DB réelle : détachement users sur remove, FK station)
+- `test/e2e/app.e2e-spec.ts` — +5 tests section `[AGENCY]` (403/200/201/400/409 dernière agence)
+- Suite intégration complète : **40/40 passed** après ajout (aucune régression).
 
 ---
 

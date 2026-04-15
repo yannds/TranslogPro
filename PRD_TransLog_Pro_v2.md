@@ -338,6 +338,27 @@ createdAt    : horodatage précis
 - `Staff` ↔ `User` : relation bidirectionnelle (`Staff.userId @unique`, `User.staffProfile Staff?`)
 - `Staff.totalDriveTimeToday` : suivi du temps de conduite pour conformité réglementaire
 - Guard d'affectation chauffeur : `Staff.totalDriveTimeToday < maxDriveHoursPerDay` (configurable tenant)
+#### Distinction Agence vs Gare (règle métier)
+
+Deux concepts **orthogonaux** à ne pas confondre :
+
+| Dimension | Agence (`Agency`) | Gare/Station (`Station`) |
+|---|---|---|
+| Nature | Entité **organisationnelle / RH** | Entité **géographique / opérationnelle** |
+| Rôle | Bureau du transporteur : employés, manager, budget | Point sur la carte : origine/destination de lignes, dépôt colis, embarquement |
+| IAM | Scope permission `.agency` ; `User.agencyId` obligatoire | Aucun scope ni permission rattachée |
+| Données clés | Adresse, manager, équipe | `coordinates {lat,lng}`, `type` (PRINCIPALE/RELAIS), ville |
+| Question à se poser | *« Qui gère ça ? »* | *« Où ça se passe ? »* |
+
+**Relation.** Une agence **peut** être rattachée à une gare (`Agency.stationId?` — ex. « Agence Brazzaville » opère depuis « Gare Centrale BZV »), d'où le compteur `Station._count.agencies`. Mais :
+- Une **gare-relais** peut exister sans agence (simple point d'arrêt routier).
+- Une **agence de back-office** (comptabilité, direction) peut exister sans gare physique.
+
+**Conséquences pratiques.**
+- Supprimer une gare ≠ supprimer une agence. Les permissions diffèrent (`control.agency.manage.tenant` vs `control.fleet.station.tenant`).
+- `Waypoint`, `Route.originId`, `Parcel.destinationId`, `Traveler.dropOffStationId` référencent des **stations**, pas des agences.
+- `CashRegister.agencyId`, `User.agencyId`, `PermissionGuard (scope .agency)` référencent des **agences**, pas des stations.
+
 - `Agency` : entité formalisée — `User.agencyId` FK obligatoire pour le scope `agency`
 - **INVARIANT `tenant → ≥1 agence`** : à l'onboarding, `OnboardingService` crée automatiquement l'agence par défaut (« Agence principale » en fr, « Main Agency » en en, « Main » pour le tenant plateforme) et rattache l'admin dessus ; `AgencyService.remove()` refuse la suppression de la dernière agence (409). Empêche tout acteur TENANT_ADMIN de se retrouver sans `agencyId` — sans quoi toute permission scope `.agency` retournerait 403 via `PermissionGuard`.
 - **Module CRUD agence** : `AgencyModule` expose `POST/GET/PATCH/DELETE /tenants/:tenantId/agencies` protégés par les permissions `control.agency.manage.tenant` / `data.agency.read.tenant`.

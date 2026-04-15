@@ -394,7 +394,28 @@ src/
 | `modules/crew` | CrewAssignment | — | — |
 | `modules/public-reporter` | PublicReport | `public.report.created` | GPS buffer Redis |
 
-### 2.3 Invariant Agency — "tout tenant ≥1 agence"
+### 2.3 Distinction Agence vs Gare (dimensions orthogonales)
+
+Deux entités que l'UI et les permissions ne doivent jamais confondre.
+
+| Aspect | `Agency` | `Station` |
+|---|---|---|
+| Domaine | Organisationnel / RH | Géographique / opérationnel |
+| Rôle | Bureau du transporteur (employés, manager, caisse) | Point sur la carte (origine/destination, dépose colis, embarquement) |
+| IAM | Scope permission `.agency`, `User.agencyId` FK | Pas de scope IAM, pas de rattachement user |
+| FKs entrants | `User.agencyId`, `CashRegister.agencyId` | `Route.originId`, `Waypoint.stationId`, `Parcel.destinationId`, `Shipment.destinationId`, `Traveler.dropOffStationId`, `Agency.stationId?` |
+| Question | *« Qui gère ça ? »* | *« Où ça se passe ? »* |
+
+**Relation optionnelle.** `Agency.stationId?` peut pointer vers une `Station` (agence installée dans une gare). La réciproque (`Station._count.agencies`) indique combien d'agences opèrent depuis la gare.
+
+**Cas valides.**
+- Gare-relais **sans** agence (simple point d'arrêt routier).
+- Agence de back-office **sans** gare (comptabilité, direction).
+- N agences rattachées à la même gare.
+
+**Corollaire IAM.** `PermissionGuard` ne vérifie jamais de `stationId` ; il vérifie `agencyId`. Une station n'est donc **jamais** un scope d'autorisation — c'est une donnée métier.
+
+### 2.4 Invariant Agency — "tout tenant ≥1 agence"
 
 **Problème résolu.** Le `PermissionGuard` ([`src/core/iam/guards/permission.guard.ts`](src/core/iam/guards/permission.guard.ts)) rejette avec 403 toute requête dont la permission est en scope `.agency` si l'acteur n'a pas d'`agencyId`. Un tenant fraîchement onboardé doit donc disposer d'au moins une agence, et son admin doit y être rattaché, sinon tous les endpoints scope `.agency` retournent 403 (observé : `restore-starter-pack`, `GET /templates`, etc.).
 
