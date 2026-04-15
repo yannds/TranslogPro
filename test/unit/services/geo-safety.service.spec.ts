@@ -21,7 +21,7 @@ import { IEventBus } from '@infra/eventbus/interfaces/eventbus.interface';
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
 const TENANT = 'tenant-safety-001';
-const ACTOR  = { id: 'voyageur-01', tenantId: TENANT, roleId: 'role-voyageur', roleName: 'Voyageur' };
+const ACTOR  = { id: 'customer-01', tenantId: TENANT, roleId: 'role-customer', roleName: 'Customer' };
 
 const ALERT_BASE = {
   id:                'alert-001',

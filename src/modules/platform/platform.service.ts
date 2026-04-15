@@ -3,7 +3,7 @@
  *
  * Invariants absolus :
  *   • Tous les utilisateurs créés ici ont tenantId = PLATFORM_TENANT_ID
- *   • UserType est toujours 'STAFF' — jamais VOYAGEUR ou ANONYMOUS
+ *   • UserType est toujours 'STAFF' — jamais CUSTOMER ou ANONYMOUS
  *   • Les rôles sont strictement SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2
  *   • Impossible de supprimer le dernier SUPER_ADMIN
  *   • Impossible de supprimer sa propre session active

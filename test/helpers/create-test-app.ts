@@ -11,7 +11,7 @@
  *   • RedisRateLimitGuard overridé → jamais bloquant en test.
  */
 
-import { INestApplication, ValidationPipe, Injectable, NestMiddleware } from '@nestjs/common';
+import { INestApplication, ValidationPipe, Injectable, NestMiddleware, VersioningType } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infrastructure/database/prisma.service';
@@ -149,6 +149,11 @@ export async function createTestApp(): Promise<TestApp> {
 
   const app = moduleFixture.createNestApplication();
 
+  // Aligner le test-app sur main.ts : certains contrôleurs sont annotés
+  // `@Controller({ version: '1', path: '…' })` (WhiteLabel, Pricing…) et ne
+  // sont exposés que si le versioning URI est actif. Sans ça → 404 en e2e.
+  app.enableVersioning({ type: VersioningType.URI });
+
   // Inject test user BEFORE any guard runs
   app.use((req: Request & { user?: unknown; [k: string]: unknown }, res: Response, next: NextFunction) => {
     const raw = (req.headers as Record<string, string | undefined>)['x-test-user'];
@@ -194,10 +199,10 @@ export const AUTH_HEADERS = {
       roleName: 'DRIVER', agencyId: AGENCY_ID, userType: 'STAFF',
     }),
   },
-  traveler: {
+  customer: {
     'x-test-user': JSON.stringify({
       id: USER_ID, tenantId: TENANT_ID, roleId: ROLE_ID,
-      roleName: 'TRAVELER', userType: 'VOYAGEUR',
+      roleName: 'CUSTOMER', userType: 'CUSTOMER',
     }),
   },
 };

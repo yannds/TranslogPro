@@ -20,7 +20,7 @@ export interface UpdateCustomerDto {
 
 export interface CreateCampaignDto {
   name:        string;
-  criteria:    Record<string, unknown>; // segments voyageurs (ex: { minLoyalty: 100, agencyId: '...' })
+  criteria:    Record<string, unknown>; // segments clients (ex: { minLoyalty: 100, agencyId: '...' })
   messageText: string;
 }
 
@@ -61,7 +61,7 @@ export class CrmService {
       name:     dto.name,
       tenantId,
       agencyId,
-      userType: 'VOYAGEUR',
+      userType: 'CUSTOMER',
     });
 
     if (dto.phone || dto.preferences) {
@@ -78,9 +78,9 @@ export class CrmService {
 
   async updateCustomer(tenantId: string, userId: string, dto: UpdateCustomerDto) {
     const existing = await this.prisma.user.findFirst({
-      where: { tenantId, id: userId, userType: 'VOYAGEUR' },
+      where: { tenantId, id: userId, userType: 'CUSTOMER' },
     });
-    if (!existing) throw new NotFoundException('Voyageur introuvable');
+    if (!existing) throw new NotFoundException('Client introuvable');
 
     const prevPrefs = (existing.preferences as Record<string, unknown>) ?? {};
     const nextPrefs: Record<string, unknown> = {
@@ -104,9 +104,9 @@ export class CrmService {
 
   async archiveCustomer(tenantId: string, userId: string) {
     const existing = await this.prisma.user.findFirst({
-      where: { tenantId, id: userId, userType: 'VOYAGEUR' },
+      where: { tenantId, id: userId, userType: 'CUSTOMER' },
     });
-    if (!existing) throw new NotFoundException('Voyageur introuvable');
+    if (!existing) throw new NotFoundException('Client introuvable');
 
     const prevPrefs = (existing.preferences as Record<string, unknown>) ?? {};
     await this.prisma.user.update({
@@ -117,7 +117,7 @@ export class CrmService {
   }
 
   /**
-   * Liste les profils voyageurs du tenant (userType = VOYAGEUR).
+   * Liste les profils clients du tenant (userType = CUSTOMER).
    * Enrichit avec le nombre de tickets et le score de fidélité.
    */
   async listCustomers(
@@ -128,7 +128,7 @@ export class CrmService {
   ) {
     const where: Record<string, unknown> = {
       tenantId,
-      userType: 'VOYAGEUR',
+      userType: 'CUSTOMER',
       ...(agencyId ? { agencyId } : {}),
     };
 
@@ -150,17 +150,17 @@ export class CrmService {
   }
 
   /**
-   * Profil détaillé d'un voyageur : infos + historique tickets + plaintes.
+   * Profil détaillé d'un client : infos + historique tickets + plaintes.
    */
   async getCustomer(tenantId: string, userId: string) {
     const user = await this.prisma.user.findFirst({
-      where:  { tenantId, id: userId, userType: 'VOYAGEUR' },
+      where:  { tenantId, id: userId, userType: 'CUSTOMER' },
       select: {
         id: true, email: true, name: true, image: true, agencyId: true,
         loyaltyScore: true, preferences: true, createdAt: true,
       },
     });
-    if (!user) throw new NotFoundException('Voyageur introuvable');
+    if (!user) throw new NotFoundException('Client introuvable');
 
     const [tickets, feedbacks, agency] = await Promise.all([
       this.prisma.ticket.findMany({
@@ -264,7 +264,7 @@ export class CrmService {
     const campaign = await this.getCampaign(tenantId, id);
     const criteria = campaign.criteria as Record<string, unknown>;
 
-    const where: Record<string, unknown> = { tenantId, userType: 'VOYAGEUR' };
+    const where: Record<string, unknown> = { tenantId, userType: 'CUSTOMER' };
     if (criteria['minLoyalty'] != null) {
       where['loyaltyScore'] = { gte: Number(criteria['minLoyalty']) };
     }

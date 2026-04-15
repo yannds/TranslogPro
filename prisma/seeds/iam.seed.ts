@@ -169,6 +169,12 @@ const TENANT_ROLES: Array<{
       'data.template.read.agency',
       'data.template.write.agency',
       'data.template.delete.agency',
+      // Agences (CRUD — invariant ≥1 agence par tenant)
+      'control.agency.manage.tenant',
+      'data.agency.read.tenant',
+      // Stations (CRUD gares routières)
+      'control.station.manage.tenant',
+      'data.station.read.tenant',
       // Driver & HR
       'control.driver.manage.tenant',
       'data.driver.profile.agency',
@@ -289,7 +295,7 @@ const TENANT_ROLES: Array<{
     ],
   },
   {
-    name:     'VOYAGEUR',
+    name:     'CUSTOMER',
     isSystem: true,
     permissions: [
       'data.feedback.submit.own',
@@ -420,9 +426,217 @@ export async function seedTenantRoles(
   return roleMap;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Agence par défaut (INVARIANT : tout tenant possède ≥1 agence)
+//
+// Office 365 pattern : à la création d'un tenant, une "agence principale" est
+// provisionnée pour que l'admin dispose immédiatement d'un agencyId valide
+// (sans quoi toute permission en scope `.agency` retournerait 403 via
+// PermissionGuard). L'admin peut la renommer / ajouter d'autres agences
+// ensuite, mais AgencyService.remove() refuse la suppression de la dernière.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TenantLanguage = 'fr' | 'en';
+
+/**
+ * Nom par défaut de l'agence créée lors de l'onboarding.
+ * Le nom du tenant plateforme est "Main" (anglais), unique et immuable.
+ */
+export const DEFAULT_AGENCY_NAME: Record<TenantLanguage, string> = {
+  fr: 'Agence principale',
+  en: 'Main Agency',
+};
+
+/** Anciens noms — conservés pour rename migration des tenants existants. */
+const LEGACY_DEFAULT_AGENCY_NAMES = ['Siège', 'Headquarters'];
+
+export const PLATFORM_AGENCY_NAME = 'Main';
+
+type AgencyCapable = {
+  agency: {
+    findFirst: (args: unknown) => Promise<{ id: string } | null>;
+    create:    (args: unknown) => Promise<{ id: string }>;
+  };
+};
+
+/**
+ * Idempotent — crée l'agence par défaut si absente.
+ * Retourne l'id de l'agence (existante ou nouvellement créée).
+ *
+ * Contrat d'unicité : UNE agence par tenant portant exactement ce nom par
+ * défaut. Si l'admin renomme "Siège" en "Paris", un second appel créera
+ * une nouvelle "Siège" — c'est voulu : l'invariant est "≥1 agence", pas
+ * "une agence nommée Siège".
+ */
+export async function ensureDefaultAgency(
+  client:   AgencyCapable,
+  tenantId: string,
+  name:     string,
+): Promise<string> {
+  const existing = await client.agency.findFirst({
+    where: { tenantId, name },
+  } as unknown as Record<string, unknown>);
+  if (existing) return existing.id;
+
+  const created = await client.agency.create({
+    data: { tenantId, name },
+  } as unknown as Record<string, unknown>);
+  return created.id;
+}
+
+/**
+ * Backfill pour tenants existants créés AVANT l'introduction de l'invariant
+ * "≥1 agence". Pour chaque tenant sans agence : créer l'agence par défaut et
+ * y rattacher les users STAFF orphelins (agencyId IS NULL).
+ *
+ * Appel idempotent — skip tenants qui ont déjà au moins une agence.
+ * Les users CUSTOMER restent sans agence (ils n'en ont pas besoin).
+ */
+export async function backfillDefaultAgencies(
+  prismaClient: PrismaClient,
+  language:     TenantLanguage = 'fr',
+): Promise<{ scanned: number; agenciesCreated: number; agenciesRenamed: number; usersAssigned: number }> {
+  const tenants = await prismaClient.tenant.findMany({
+    select: { id: true, slug: true },
+  });
+
+  let agenciesCreated = 0;
+  let agenciesRenamed = 0;
+  let usersAssigned   = 0;
+
+  for (const tenant of tenants) {
+    const isPlatform  = tenant.id === PLATFORM_TENANT_ID;
+    const defaultName = isPlatform ? PLATFORM_AGENCY_NAME : DEFAULT_AGENCY_NAME[language];
+
+    const agencies = await prismaClient.agency.findMany({
+      where:  { tenantId: tenant.id },
+      select: { id: true, name: true },
+    });
+
+    // Rename legacy default ("Siège"/"Headquarters") → nouveau nom si mono-agence.
+    if (
+      !isPlatform &&
+      agencies.length === 1 &&
+      LEGACY_DEFAULT_AGENCY_NAMES.includes(agencies[0].name)
+    ) {
+      await prismaClient.agency.update({
+        where: { id: agencies[0].id },
+        data:  { name: defaultName },
+      });
+      agenciesRenamed++;
+      console.log(
+        `[IAM Seed] Rename agence "${agencies[0].name}" → "${defaultName}" tenant=${tenant.slug}`,
+      );
+    }
+
+    // Créer l'agence par défaut si aucune agence.
+    let defaultAgencyId: string;
+    if (agencies.length === 0) {
+      const agency = await prismaClient.agency.create({
+        data: { tenantId: tenant.id, name: defaultName },
+      });
+      agenciesCreated++;
+      defaultAgencyId = agency.id;
+      console.log(`[IAM Seed] Backfill agence "${defaultName}" (id=${agency.id}) tenant=${tenant.slug}`);
+    } else {
+      // Prend l'agence existante correspondant au nom par défaut, sinon la première.
+      defaultAgencyId =
+        agencies.find(a => a.name === defaultName)?.id ??
+        agencies[0].id;
+    }
+
+    // Rattache tous les users orphelins (STAFF + DRIVER). CUSTOMER/PUBLIC_REPORTER
+    // restent sans agence — ils n'appartiennent à aucune agence opérationnelle.
+    const res = await prismaClient.user.updateMany({
+      where: {
+        tenantId: tenant.id,
+        agencyId: null,
+        userType: { in: ['STAFF', 'DRIVER'] },
+      },
+      data: { agencyId: defaultAgencyId },
+    });
+    usersAssigned += res.count;
+    if (res.count > 0) {
+      console.log(`[IAM Seed] Rattachement tenant=${tenant.slug} — ${res.count} user(s) STAFF/DRIVER`);
+    }
+  }
+
+  return { scanned: tenants.length, agenciesCreated, agenciesRenamed, usersAssigned };
+}
+
+// ─── Workflow backfill ────────────────────────────────────────────────────────
+// Seed les WorkflowConfig par défaut pour tous les tenants existants (ceux qui
+// ont été onboardés avant l'introduction de ce seed). Idempotent via
+// `skipDuplicates` sur la contrainte unique (tenantId, entityType, fromState,
+// action, version).
+export const DEFAULT_WORKFLOW_CONFIGS = [
+  // Trip
+  { entityType: 'Trip', fromState: 'PLANNED',              action: 'ACTIVATE',         toState: 'PLANNED',            requiredPerm: 'data.trip.create.tenant' },
+  { entityType: 'Trip', fromState: 'PLANNED',              action: 'START_BOARDING',   toState: 'OPEN',               requiredPerm: 'data.trip.update.agency' },
+  { entityType: 'Trip', fromState: 'OPEN',                 action: 'BEGIN_BOARDING',   toState: 'BOARDING',           requiredPerm: 'data.trip.update.agency' },
+  { entityType: 'Trip', fromState: 'BOARDING',             action: 'DEPART',           toState: 'IN_PROGRESS',        requiredPerm: 'data.trip.update.agency' },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'PAUSE',            toState: 'IN_PROGRESS_PAUSED', requiredPerm: 'data.trip.report.own'    },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS_PAUSED',   action: 'RESUME',           toState: 'IN_PROGRESS',        requiredPerm: 'data.trip.report.own'    },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'REPORT_INCIDENT',  toState: 'IN_PROGRESS_DELAYED',requiredPerm: 'data.trip.report.own'    },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED',  action: 'CLEAR_INCIDENT',   toState: 'IN_PROGRESS',        requiredPerm: 'data.trip.report.own'    },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'END_TRIP',         toState: 'COMPLETED',          requiredPerm: 'data.trip.update.agency' },
+  { entityType: 'Trip', fromState: 'PLANNED',              action: 'CANCEL',           toState: 'CANCELLED',          requiredPerm: 'data.trip.update.agency' },
+  // Ticket
+  { entityType: 'Ticket', fromState: 'CREATED',         action: 'RESERVE',   toState: 'PENDING_PAYMENT', requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'PAY',       toState: 'CONFIRMED',       requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'EXPIRE',    toState: 'EXPIRED',         requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CHECK_IN',  toState: 'CHECKED_IN',      requiredPerm: 'data.ticket.scan.agency'   },
+  { entityType: 'Ticket', fromState: 'CHECKED_IN',      action: 'BOARD',     toState: 'BOARDED',         requiredPerm: 'data.ticket.scan.agency'   },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CANCEL',    toState: 'CANCELLED',       requiredPerm: 'data.ticket.cancel.agency' },
+];
+
+export async function backfillDefaultWorkflows(
+  prismaClient: PrismaClient,
+): Promise<{ scanned: number; rowsCreated: number }> {
+  const tenants = await prismaClient.tenant.findMany({ select: { id: true, slug: true } });
+  let rowsCreated = 0;
+
+  for (const tenant of tenants) {
+    if (tenant.id === PLATFORM_TENANT_ID) continue; // pas de workflows métier sur plateforme
+
+    const res = await prismaClient.workflowConfig.createMany({
+      data: DEFAULT_WORKFLOW_CONFIGS.map(c => ({
+        ...c,
+        tenantId:    tenant.id,
+        guards:      [],
+        sideEffects: [],
+        isActive:    true,
+        version:     1,
+      })),
+      skipDuplicates: true,
+    });
+    if (res.count > 0) {
+      console.log(`[IAM Seed] Backfill workflows tenant=${tenant.slug} — ${res.count} transition(s) créée(s)`);
+    }
+    rowsCreated += res.count;
+  }
+
+  return { scanned: tenants.length, rowsCreated };
+}
+
 // ─── Standalone runner ────────────────────────────────────────────────────────
 async function main() {
   await bootstrapPlatform();
+
+  // Garantit l'agence "Main" du tenant plateforme + corrige les tenants
+  // onboardés avant l'introduction de l'invariant.
+  const report = await backfillDefaultAgencies(prisma);
+  console.log(
+    `[IAM Seed] Backfill agences — ${report.scanned} tenants scannés, ` +
+    `${report.agenciesCreated} créée(s), ${report.agenciesRenamed} renommée(s), ` +
+    `${report.usersAssigned} user(s) rattaché(s)`,
+  );
+
+  const wfReport = await backfillDefaultWorkflows(prisma);
+  console.log(
+    `[IAM Seed] Backfill workflows — ${wfReport.scanned} tenants scannés, ` +
+    `${wfReport.rowsCreated} transition(s) créée(s)`,
+  );
 }
 
 main()

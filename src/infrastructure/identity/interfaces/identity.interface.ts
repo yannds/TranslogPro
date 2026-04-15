@@ -7,7 +7,7 @@ export interface CreateUserInput {
   tenantId:  string;
   roleId?:   string;   // DB Role.id — optionnel à la création, seedé par onboarding
   agencyId?: string;
-  userType?: string;   // STAFF | VOYAGEUR | ANONYMOUS
+  userType?: string;   // STAFF | CUSTOMER | ANONYMOUS
 }
 
 export interface UserIdentity {

@@ -124,6 +124,14 @@ model TenantBusinessConfig {
   @@map("tenant_business_configs")
 }
 
+// INVARIANT : tout tenant possède au moins une agence.
+//   - Création : OnboardingService.onboard() provisionne l'agence par défaut
+//     ("Agence principale" / "Main Agency") et l'admin y est rattaché automatiquement.
+//   - Tenants existants : backfillDefaultAgencies() (prisma/seeds/iam.seed.ts).
+//   - Suppression : AgencyService.remove() retourne 409 si c'est la dernière
+//     agence du tenant.
+// Cet invariant garantit que tout acteur ayant une permission en scope `.agency`
+// dispose d'un agencyId valide (sans quoi PermissionGuard renverrait 403).
 model Agency {
   id        String  @id @default(cuid())
   tenantId  String
@@ -147,9 +155,9 @@ model User {
   name        String?
   image       String?
   roleId      String?
-  userType    String   @default("STAFF") // STAFF | VOYAGEUR | ANONYMOUS
-  preferences Json     @default("{}")    // siège préféré, gares fav (voyageurs)
-  loyaltyScore Float   @default(0)       // calculé — voyageurs uniquement
+  userType    String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
+  preferences Json     @default("{}")    // siège préféré, gares fav (clients)
+  loyaltyScore Float   @default(0)       // calculé — clients uniquement
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

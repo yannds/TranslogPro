@@ -234,7 +234,7 @@ export type SafetyAlertStatus = typeof SafetyAlertStatus[keyof typeof SafetyAler
 // ─── UserType ─────────────────────────────────────────────────────────────────
 export const UserType = {
   STAFF:     'STAFF',
-  VOYAGEUR:  'VOYAGEUR',
+  CUSTOMER:  'CUSTOMER',
   ANONYMOUS: 'ANONYMOUS',
 } as const;
 export type UserType = typeof UserType[keyof typeof UserType];

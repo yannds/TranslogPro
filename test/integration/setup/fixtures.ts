@@ -132,7 +132,7 @@ export async function createIntegrationFixtures(prisma: PrismaClient): Promise<I
       tenantId,
       email:    'passenger-integ@test.local',
       name:     'Passenger Integration',
-      userType: 'VOYAGEUR',
+      userType: 'CUSTOMER',
     },
   });
 
