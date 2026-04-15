@@ -73,7 +73,11 @@
       "Bash(grep -rn \"BlueprintInstall\\\\|blueprint_installs\\\\|createMany.*blueprint\" /Users/dsyann/TranslogPro/prisma/seed* --include=\"*.ts\")",
       "Bash(find /Users/dsyann/TranslogPro/src/modules/white-label -type f -name \"*.ts\" -exec grep -l \"controller\\\\|service\" {} \\\\;)",
       "Bash(npx tsx *)",
-      "Bash(pkill -f \"prisma studio\")"
+      "Bash(pkill -f \"prisma studio\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT EXISTS \\(SELECT FROM information_schema.tables WHERE table_name='_prisma_migrations'\\);\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT migration_name FROM _prisma_migrations ORDER BY started_at DESC LIMIT 5;\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT EXISTS \\(SELECT FROM information_schema.tables WHERE table_name='staff_assignments'\\);\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT s.id, s.role, s.\\\\\"agencyId\\\\\", a.role AS asg_role, a.status AS asg_status FROM staff s LEFT JOIN staff_assignments a ON a.\\\\\"staffId\\\\\" = s.id;\")"
     ],
     "additionalDirectories": [
       "/tmp"

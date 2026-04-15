@@ -589,7 +589,7 @@ model Staff {
   status    String   @default("ACTIVE") // ACTIVE | SUSPENDED | ARCHIVED
   hireDate  DateTime @default(now()) // date d'embauche (RH)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   // ── Transition Phase 1 → Phase 5 : colonnes dupliquées sur StaffAssignment
   role                String // DRIVER | HOSTESS | MECHANIC | AGENT | CONTROLLER | SUPERVISOR — @deprecated, voir assignments
