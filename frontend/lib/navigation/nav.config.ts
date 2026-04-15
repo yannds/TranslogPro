@@ -22,6 +22,10 @@ const P = {
   // IAM & Config
   IAM_MANAGE:            'control.iam.manage.tenant',
   IAM_AUDIT:             'control.iam.audit.tenant',
+  AGENCY_MANAGE:         'control.agency.manage.tenant',
+  AGENCY_READ:           'data.agency.read.tenant',
+  STATION_MANAGE:        'control.station.manage.tenant',
+  STATION_READ:          'data.station.read.tenant',
   INTEGRATION_SETUP:     'control.integration.setup.tenant',
   MODULE_INSTALL:        'control.module.install.tenant',
   SETTINGS_MANAGE:       'control.settings.manage.tenant',
@@ -55,7 +59,12 @@ const P = {
   PARCEL_UPDATE_TENANT:  'data.parcel.update.tenant',
   PARCEL_REPORT:         'data.parcel.report.agency',
   PARCEL_PRINT:          'data.parcel.print.agency',
+  PARCEL_READ_OWN:       'data.parcel.read.own',
+  PARCEL_TRACK_OWN:      'data.parcel.track.own',
   SHIPMENT_GROUP:        'data.shipment.group.agency',
+  // Customer self-service
+  TICKET_READ_OWN:       'data.ticket.read.own',
+  SAV_REPORT_OWN:        'data.sav.report.own',
   // Fleet
   FLEET_MANAGE:          'control.fleet.manage.tenant',
   FLEET_LAYOUT:          'control.fleet.layout.tenant',
@@ -157,6 +166,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           children: [
             { kind: 'leaf', id: 'trips-list',     label: 'Trajets du jour',    href: '/admin/trips',          icon: 'List',        anyOf: [P.TRIP_UPDATE, P.TRIP_CREATE] },
             { kind: 'leaf', id: 'trips-planning', label: 'Planning hebdomadaire', href: '/admin/trips/planning', icon: 'CalendarDays', anyOf: [P.TRIP_CREATE, P.ROUTE_MANAGE] },
+            { kind: 'leaf', id: 'stations',       label: 'Gares & Stations',   href: '/admin/stations',       icon: 'MapPin',      anyOf: [P.STATION_MANAGE, P.STATION_READ] },
             { kind: 'leaf', id: 'routes',         label: 'Lignes & Routes',    href: '/admin/routes',         icon: 'Route',       anyOf: [P.ROUTE_MANAGE] },
             { kind: 'leaf', id: 'trips-delays',   label: 'Retards & Alertes',  href: '/admin/trips/delays',   icon: 'AlertTriangle', anyOf: [P.TRIP_DELAY, P.TRIP_UPDATE] },
           ],
@@ -522,7 +532,7 @@ export const ADMIN_NAV: PortalNavConfig = {
     {
       id: 'config',
       title: 'Configuration',
-      anyOf: [P.WORKFLOW_STUDIO_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP, P.IAM_MANAGE, P.TEMPLATE_WRITE, P.IAM_AUDIT],
+      anyOf: [P.WORKFLOW_STUDIO_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP, P.IAM_MANAGE, P.TEMPLATE_WRITE, P.IAM_AUDIT, P.AGENCY_MANAGE, P.AGENCY_READ],
       items: [
         {
           kind: 'group',
@@ -537,6 +547,14 @@ export const ADMIN_NAV: PortalNavConfig = {
             { kind: 'leaf', id: 'wf-marketplace', label: 'Marketplace',           href: '/admin/workflow-studio/market',     icon: 'Store',         anyOf: [P.WORKFLOW_MARKETPLACE] },
             { kind: 'leaf', id: 'wf-simulate',    label: 'Simulateur',            href: '/admin/workflow-studio/simulate',   icon: 'PlayCircle',    anyOf: [P.WORKFLOW_SIMULATE] },
           ],
+        },
+        {
+          kind: 'leaf',
+          id: 'agencies',
+          label: 'Agences',
+          href: '/admin/settings/agencies',
+          icon: 'Building2',
+          anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ],
         },
         {
           kind: 'leaf',
@@ -744,6 +762,48 @@ export const DRIVER_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'drv-docs',     label: 'Mes documents',     href: '/driver/documents',   icon: 'FileCheck',     anyOf: [P.DRIVER_REST_OWN, P.DRIVER_PROFILE] },
         { kind: 'leaf', id: 'drv-rest',     label: 'Mes temps de repos', href: '/driver/rest',       icon: 'Coffee',        anyOf: [P.DRIVER_REST_OWN] },
         { kind: 'leaf', id: 'drv-feedback', label: 'Feedback voyageur', href: '/driver/feedback',    icon: 'Star',          anyOf: [P.FEEDBACK_SUBMIT] },
+      ],
+    },
+  ],
+};
+
+// ─── Espace Client (CUSTOMER) ─────────────────────────────────────────────────
+// Profil unifié voyageur + expéditeur. Navigation adaptative : si le client
+// n'a jamais voyagé / expédié, les sections vides restent visibles (découverte).
+// Le filtrage activité/UX se fait dans les pages elles-mêmes (empty states).
+
+export const CUSTOMER_NAV: PortalNavConfig = {
+  portalId: 'customer',
+  sections: [
+    {
+      id: 'cust-main',
+      items: [
+        { kind: 'leaf', id: 'cust-home',    label: 'Accueil',      href: '/customer',           icon: 'Home' },
+      ],
+    },
+    {
+      id: 'cust-travel',
+      title: 'Mes voyages',
+      anyOf: [P.TICKET_READ_OWN],
+      items: [
+        { kind: 'leaf', id: 'cust-trips',   label: 'Mes billets',  href: '/customer/trips',     icon: 'Ticket',  anyOf: [P.TICKET_READ_OWN] },
+      ],
+    },
+    {
+      id: 'cust-shipping',
+      title: 'Mes colis',
+      anyOf: [P.PARCEL_READ_OWN, P.PARCEL_TRACK_OWN],
+      items: [
+        { kind: 'leaf', id: 'cust-parcels', label: 'Suivi colis',  href: '/customer/parcels',   icon: 'Package', anyOf: [P.PARCEL_READ_OWN, P.PARCEL_TRACK_OWN] },
+      ],
+    },
+    {
+      id: 'cust-support',
+      title: 'Assistance',
+      anyOf: [P.SAV_REPORT_OWN, P.FEEDBACK_SUBMIT],
+      items: [
+        { kind: 'leaf', id: 'cust-claim',    label: 'Réclamation',    href: '/customer/claim',    icon: 'MessageSquareWarning', anyOf: [P.SAV_REPORT_OWN] },
+        { kind: 'leaf', id: 'cust-feedback', label: 'Donner un avis', href: '/customer/feedback', icon: 'Star',                 anyOf: [P.FEEDBACK_SUBMIT] },
       ],
     },
   ],

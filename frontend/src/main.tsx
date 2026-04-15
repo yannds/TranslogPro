@@ -15,10 +15,26 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { ThemeProvider }        from '../components/theme/ThemeProvider';
 import { TenantConfigProvider } from '../providers/TenantConfigProvider';
+import { I18nProvider }         from '../providers/I18nProvider';
 import { AuthProvider }         from '../lib/auth/auth.context';
 import { ProtectedRoute }       from '../components/auth/ProtectedRoute';
 import { LoginPage }            from '../components/auth/LoginPage';
 import { AdminDashboard }       from '../components/admin/AdminDashboard';
+import { CustomerDashboard }    from '../components/customer/CustomerDashboard';
+import { useAuth }              from '../lib/auth/auth.context';
+
+/**
+ * Redirige vers le portail correspondant au userType :
+ *   CUSTOMER → /customer
+ *   STAFF / autres → /admin
+ * Évite qu'un client connecté atterrisse sur l'admin (et inversement).
+ */
+function HomeRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  const target = user?.userType === 'CUSTOMER' ? '/customer' : '/admin';
+  return <Navigate to={target} replace />;
+}
 
 import './index.css';
 
@@ -30,12 +46,13 @@ createRoot(root).render(
     <BrowserRouter>
       <ThemeProvider>
         <TenantConfigProvider>
+          <I18nProvider>
           <AuthProvider>
             <Routes>
               {/* Authentification */}
               <Route path="/login" element={<LoginPage />} />
 
-              {/* Portail admin — protégé */}
+              {/* Portail admin — protégé (STAFF / SUPER_ADMIN) */}
               <Route
                 path="/admin/*"
                 element={
@@ -45,13 +62,24 @@ createRoot(root).render(
                 }
               />
 
-              {/* Racine → redirection vers dashboard */}
-              <Route path="/" element={<Navigate to="/admin" replace />} />
+              {/* Portail client — protégé (CUSTOMER) */}
+              <Route
+                path="/customer/*"
+                element={
+                  <ProtectedRoute>
+                    <CustomerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Racine → redirection contextuelle selon userType */}
+              <Route path="/" element={<HomeRedirect />} />
 
               {/* Fallback toutes les routes inconnues */}
-              <Route path="*" element={<Navigate to="/admin" replace />} />
+              <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </AuthProvider>
+          </I18nProvider>
         </TenantConfigProvider>
       </ThemeProvider>
     </BrowserRouter>
