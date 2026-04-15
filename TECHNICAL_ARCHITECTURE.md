@@ -108,7 +108,7 @@
 | ADR-14 | Ticket ≠ Traveler | Ticket = financier immuable, Traveler = opérationnel |
 | ADR-15 | WorkflowConfig versioning | Entités in-flight suivent config active |
 | ADR-16 | IAM runtime | DB RolePermission + Redis 60s — zéro hardcode |
-| ADR-17 | User.userType | Discriminateur VOYAGEUR/STAFF/ANONYMOUS — pas d'entité Customer |
+| ADR-17 | User.userType | Discriminateur CUSTOMER/STAFF/ANONYMOUS — pas d'entité Customer (CUSTOMER unifie voyageur + expéditeur) |
 | ADR-18 | TripEvent/Incident | Table unifiée + type discriminateur — BaseEvent partagé |
 | ADR-19 | PostGIS | Optionnel avec fallback haversine — IGeoService interface |
 | ADR-20 | GPS Public Reporter | TTL 24h — RGPD minimisation données |
@@ -374,6 +374,7 @@ src/
 | `core/workflow` | WorkflowConfig, WorkflowTransition, AuditLog | Tous events via IEventBus | — |
 | `core/pricing` | PricingRules | — | InstalledModule |
 | `modules/tenant` | Tenant, InstalledModule | `tenant.provisioned` | — |
+| `modules/agency` | Agency (CRUD) | — | — |
 | `modules/ticketing` | Ticket, Traveler, Baggage | Via WorkflowEngine | `trip.boarding_started`, `trip.completed` |
 | `modules/parcel` | Parcel, Shipment | Via WorkflowEngine | `trip.departed` |
 | `modules/fleet` | Bus, Staff, Route, Waypoint, Station | `bus.status_changed` | `incident.mechanical` |
@@ -392,6 +393,34 @@ src/
 | `modules/safety` | SafetyAlert | `safety.alert` via IEventBus | GPS buffer Redis |
 | `modules/crew` | CrewAssignment | — | — |
 | `modules/public-reporter` | PublicReport | `public.report.created` | GPS buffer Redis |
+
+### 2.3 Invariant Agency — "tout tenant ≥1 agence"
+
+**Problème résolu.** Le `PermissionGuard` ([`src/core/iam/guards/permission.guard.ts`](src/core/iam/guards/permission.guard.ts)) rejette avec 403 toute requête dont la permission est en scope `.agency` si l'acteur n'a pas d'`agencyId`. Un tenant fraîchement onboardé doit donc disposer d'au moins une agence, et son admin doit y être rattaché, sinon tous les endpoints scope `.agency` retournent 403 (observé : `restore-starter-pack`, `GET /templates`, etc.).
+
+**Contrat (pattern Office 365).**
+
+| Acteur | Garantie | Code |
+|---|---|---|
+| `OnboardingService.onboard()` | Crée l'agence « Agence principale » (fr) / « Main Agency » (en) AVANT l'admin user et lui affecte `agencyId` | [`onboarding.service.ts`](src/modules/onboarding/onboarding.service.ts) |
+| `bootstrapPlatform()` + `backfillDefaultAgencies()` | Agence "Main" pour le tenant plateforme + rattrape tous les tenants existants sans agence | [`prisma/seeds/iam.seed.ts`](prisma/seeds/iam.seed.ts) |
+| `AgencyService.remove()` | Retourne 409 Conflict si c'est la dernière agence ; détache les users (`agencyId = null`) sinon | [`src/modules/agency/agency.service.ts`](src/modules/agency/agency.service.ts) |
+| Dev seed | Utilise `ensureDefaultAgency()` pour tous les tenants | [`prisma/seeds/dev.seed.ts`](prisma/seeds/dev.seed.ts) |
+
+**Permissions dédiées.**
+- `control.agency.manage.tenant` → `AgencyModule.create/update/remove`
+- `data.agency.read.tenant` → `AgencyModule.findAll/findOne` (accordée par défaut à `TENANT_ADMIN`)
+
+**Endpoints** (`AgencyController`, `/tenants/:tenantId/agencies`)
+```
+GET    /              → liste  (AGENCY_READ_TENANT)
+GET    /:id           → détail (AGENCY_READ_TENANT)
+POST   /              → créer  (AGENCY_MANAGE_TENANT)
+PATCH  /:id           → éditer (AGENCY_MANAGE_TENANT)
+DELETE /:id           → suppr. (AGENCY_MANAGE_TENANT) — 409 si dernière agence
+```
+
+**Backfill tenants existants.** `npx ts-node prisma/seeds/iam.seed.ts` — idempotent ; crée l'« Agence principale » (ou renomme l'ancienne « Siège »/« Headquarters » si mono-agence) et rattache les users `STAFF`/`DRIVER` orphelins pour chaque tenant sans agence. Appelle aussi `backfillDefaultWorkflows()` pour seeder les `WorkflowConfig` par défaut manquants.
 
 ---
 

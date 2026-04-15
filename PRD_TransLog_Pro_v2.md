@@ -38,7 +38,7 @@ Le système repose sur un **Unified Workflow Engine (UWE)** configurable permett
 | Super-Admin | Control Plane | Onboarding tenants, Monitoring infra, Override workflows |
 | Citoyen (anonyme) | Portail Public Web | Signalement de véhicule (immatriculation/numéro de parc) sans compte requis |
 
-> **Règle User.userType :** Un `User` peut être soit un `VOYAGEUR` (passager) soit un `STAFF` (employé). Il n'existe pas d'entité `Customer` séparée. Le discriminateur `User.userType: VOYAGEUR | STAFF | ANONYMOUS` détermine les permissions disponibles et le contexte de session. Un non-voyageur peut accéder au portail public sans compte.
+> **Règle User.userType :** Un `User` peut être soit un `CUSTOMER` (client — voyageur et/ou expéditeur) soit un `STAFF` (employé). Il n'existe pas d'entité `Customer` séparée. Le discriminateur `User.userType: CUSTOMER | STAFF | ANONYMOUS` détermine les permissions disponibles et le contexte de session. Un non-client peut accéder au portail public sans compte. La segmentation voyageur vs expéditeur pour les stats se fait par activité (`has_ticket`, `has_parcel`), pas par rôle — un même client peut faire les deux.
 
 ### I.3 Modules Fonctionnels
 
@@ -339,6 +339,8 @@ createdAt    : horodatage précis
 - `Staff.totalDriveTimeToday` : suivi du temps de conduite pour conformité réglementaire
 - Guard d'affectation chauffeur : `Staff.totalDriveTimeToday < maxDriveHoursPerDay` (configurable tenant)
 - `Agency` : entité formalisée — `User.agencyId` FK obligatoire pour le scope `agency`
+- **INVARIANT `tenant → ≥1 agence`** : à l'onboarding, `OnboardingService` crée automatiquement l'agence par défaut (« Agence principale » en fr, « Main Agency » en en, « Main » pour le tenant plateforme) et rattache l'admin dessus ; `AgencyService.remove()` refuse la suppression de la dernière agence (409). Empêche tout acteur TENANT_ADMIN de se retrouver sans `agencyId` — sans quoi toute permission scope `.agency` retournerait 403 via `PermissionGuard`.
+- **Module CRUD agence** : `AgencyModule` expose `POST/GET/PATCH/DELETE /tenants/:tenantId/agencies` protégés par les permissions `control.agency.manage.tenant` / `data.agency.read.tenant`.
 
 **Entités :** `Bus`, `Staff`, `Route`, `Waypoint`, `Station`, `Agency`
 
@@ -469,7 +471,7 @@ interface BaseEvent {
 ### IV.12 CRM & Expérience Voyageur
 
 - **Profil Voyageur Enrichi :** Histogramme des trajets, préférences de siège et de gare (JSONB), cumul des bagages, indice de fidélité calculé
-- **User.userType = VOYAGEUR :** Les voyageurs accèdent à leur profil via `data.crm.read.own`. Les admins tenant via `data.crm.read.tenant`
+- **User.userType = CUSTOMER :** Les clients accèdent à leur profil via `data.crm.read.own`. Les admins tenant via `data.crm.read.tenant`
 - **Réclamations SAV :** `Claim` workflow — `OPEN → UNDER_INVESTIGATION → RESOLVED → CLOSED`. Ouverture automatique si note voyageur < 2/5 (side effect de `trip.completed`)
 - **Campagnes Marketing :** Entité `Campaign` — scoped tenant, lié aux groupes de voyageurs par critères. Permission `control.campaign.manage.tenant`
 - **Anti-données-fantômes :** Un profil voyageur est créé uniquement à la première réservation — pas à la création de compte. `User.voyagerProfile` est nullable jusqu'à ce moment
@@ -725,7 +727,7 @@ model RolePermission {
 
 **Guard runtime :** `PermissionGuard` vérifie `prisma.rolePermission.findFirst({ where: { roleId: user.roleId, permission: requiredPerm } })` avec cache Redis `iam:perm:{roleId}:{permission}` TTL 60s (invalidé sur `control.iam.manage.tenant`).
 
-**Seed onboarding :** À chaque création de tenant, `OnboardingService` exécute `iam.seed.ts` qui insère les 8 rôles par défaut avec leurs permissions. L'admin tenant peut ensuite modifier via `control.iam.manage.tenant` — les rôles `isSystem = true` ne peuvent être supprimés mais leurs permissions peuvent être étendues.
+**Seed onboarding :** À chaque création de tenant, `OnboardingService` exécute `iam.seed.ts` qui insère les 8 rôles par défaut avec leurs permissions. L'admin tenant peut ensuite modifier via `control.iam.manage.tenant` — les rôles `isSystem = true` ne peuvent être supprimés mais leurs permissions peuvent être étendues. L'onboarding provisionne également l'**agence par défaut** (« Siège » / « Headquarters ») et y rattache l'admin — invariant `tenant → ≥1 agence` garanti (cf. §IV.3).
 
 **Rôles système — tenant plateforme `00000000-0000-0000-0000-000000000000` (bootstrapPlatform) :**
 | Rôle | Profil | Permissions clés | Tenant |
@@ -744,7 +746,7 @@ model RolePermission {
 | `HOSTESS` | Hôtesse/Agent quai | `data.ticket.scan.agency` + `data.traveler.verify.agency` |
 | `MECHANIC` | Mécanicien | `data.maintenance.*own` |
 | `DISPATCHER` | Superviseur dispatch | `control.safety.monitor.global` + tracking global |
-| `VOYAGEUR` | Passager | `data.feedback.submit.own` |
+| `CUSTOMER` | Client (voyageur + expéditeur) | `data.feedback.submit.own` + `data.ticket.read.own` + `data.parcel.read.own` + `data.parcel.track.own` + `data.shipment.read.own` + `data.sav.report.own` |
 | `PUBLIC_REPORTER` | Citoyen anonyme | `data.feedback.submit.own` |
 
 ### V.4 Architecture IAM Transverse — Tenant Plateforme (§IV.12)
@@ -890,9 +892,9 @@ model ImpersonationSession {
 - `AuditLog` : partitionnement mensuel (migration SQL brute)
 
 **Corrections v3.0 (PRD-ADD Integration) :**
-- `User.userType` : ajouté — discriminateur `VOYAGEUR | STAFF | ANONYMOUS`
-- `User.preferences` : JSONB — siège préféré, gares favorites (voyageurs uniquement)
-- `User.loyaltyScore` : Float calculé (voyageurs uniquement)
+- `User.userType` : ajouté — discriminateur `CUSTOMER | STAFF | ANONYMOUS`
+- `User.preferences` : JSONB — siège préféré, gares favorites (clients uniquement)
+- `User.loyaltyScore` : Float calculé (clients uniquement)
 - `Role` : entité formelle avec `isSystem Boolean` — plus de hardcode TypeScript
 - `RolePermission` : table de mapping rôle↔permission string — source de vérité runtime
 - `TripEvent` : table unifiée pour pauses/checkpoints/délais/incidents avec discriminateur `type`
@@ -1328,7 +1330,7 @@ export default function NotFound() {
 | ADR-14 | Traveler entité | Conservée séparée de Ticket | Ticket = record financier immuable. Traveler = état opérationnel mutable. |
 | ADR-15 | WorkflowConfig versioning | effectiveFrom + isActive | Entités in-flight suivent config active au moment de la transition |
 | ADR-16 | IAM runtime source | DB (RolePermission) + Redis cache 60s | Zéro hardcode. Permissions modifiables sans redéploiement. Cache invalide sur iam.manage. |
-| ADR-17 | User.userType discriminateur | VOYAGEUR / STAFF / ANONYMOUS | Pas d'entité Customer séparée. Simplifie RLS et joins. Profile voyageur nullable jusqu'à réservation. |
+| ADR-17 | User.userType discriminateur | CUSTOMER / STAFF / ANONYMOUS | Pas d'entité Customer séparée. Simplifie RLS et joins. Profile client nullable jusqu'à 1re réservation ou 1er dépôt colis. Segmentation voyageur/expéditeur par activité, pas par rôle. |
 | ADR-18 | TripEvent/Incident fusion | Table unique + discriminateur `type` | Interface partagée BaseEvent. Évite duplication colonnes. Claim FK optionnelle pour incidents SAV. |
 | ADR-19 | PostGIS optionnel | ST_Distance si disponible, sinon haversine applicatif | Développement sans PostGIS possible. Production = PostGIS activé. Interface `IGeoService` permutable. |
 | ADR-20 | PublicReport GPS TTL | reporterGpsExpireAt 24h + pg_cron delete | RGPD : données GPS collectées sans opt-in permanent — durée minimale de rétention. |
