@@ -71,13 +71,18 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<Permission>(PERMISSION_KEY, [
+    const requiredMeta = this.reflector.getAllAndOverride<Permission | Permission[]>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
     // No @RequirePermission → open route (health checks, public display)
-    if (!required) return true;
+    if (!requiredMeta) return true;
+
+    // Support array form : @RequirePermission([.tenant, .agency]) accepte
+    // n'importe laquelle des permissions listées. Le scope est dérivé de
+    // celle que l'acteur possède réellement (ordre = priorité).
+    const requiredList = Array.isArray(requiredMeta) ? requiredMeta : [requiredMeta];
 
     const req  = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = req.user;
@@ -110,10 +115,19 @@ export class PermissionGuard implements CanActivate {
       : user.tenantId;
 
     // ── 3. DB check with Redis cache (TTL 60s) ────────────────────────────────
-    const granted = await this.hasPermission(user.roleId, required);
-    if (!granted) {
+    // On pick la 1ère permission de la liste que l'acteur détient effectivement.
+    // Le scope sera dérivé de celle-ci (plus large en premier dans requiredList
+    // = accès maximal pour l'acteur).
+    let required: Permission | null = null;
+    for (const perm of requiredList) {
+      if (await this.hasPermission(user.roleId, perm)) {
+        required = perm;
+        break;
+      }
+    }
+    if (!required) {
       throw new ForbiddenException(
-        `Role lacks permission "${required}"`,
+        `Role lacks permission "${requiredList.join('" or "')}"`,
       );
     }
 

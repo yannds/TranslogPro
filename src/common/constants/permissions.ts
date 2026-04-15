@@ -101,6 +101,7 @@ export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
 // ─── Staff & Tenant ───────────────────────────────────────────────────────────
 export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
 export const P_STAFF_READ_AGENCY           = 'data.staff.read.agency';
+export const P_STAFF_READ_TENANT           = 'data.staff.read.tenant';
 export const P_TENANT_MANAGE_GLOBAL        = 'control.tenant.manage.global';
 
 // ─── Agency (CRUD agences au sein d'un tenant) ────────────────────────────────
@@ -258,6 +259,7 @@ export const Permission = {
   // Staff & Tenant
   STAFF_MANAGE:               P_STAFF_MANAGE_TENANT,
   STAFF_READ:                 P_STAFF_READ_AGENCY,
+  STAFF_READ_TENANT:          P_STAFF_READ_TENANT,
   TENANT_MANAGE:              P_TENANT_MANAGE_GLOBAL,
   // Agency (CRUD)
   AGENCY_MANAGE_TENANT:       P_AGENCY_MANAGE_TENANT,

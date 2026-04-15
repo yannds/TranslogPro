@@ -16,7 +16,7 @@ export class StaffController {
   }
 
   @Get()
-  @RequirePermission(Permission.STAFF_READ)
+  @RequirePermission([Permission.STAFF_READ_TENANT, Permission.STAFF_READ])
   findAll(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
@@ -45,7 +45,7 @@ export class StaffController {
   }
 
   @Get(':userId')
-  @RequirePermission(Permission.STAFF_READ)
+  @RequirePermission([Permission.STAFF_READ_TENANT, Permission.STAFF_READ])
   findOne(@TenantId() tenantId: string, @Param('userId') userId: string) {
     return this.staffService.findOne(tenantId, userId);
   }

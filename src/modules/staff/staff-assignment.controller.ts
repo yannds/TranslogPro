@@ -38,7 +38,7 @@ export class StaffAssignmentController {
   }
 
   @Get('staff/:userId/assignments')
-  @RequirePermission(Permission.STAFF_READ)
+  @RequirePermission([Permission.STAFF_READ_TENANT, Permission.STAFF_READ])
   listForStaff(@TenantId() tenantId: string, @Param('userId') userId: string) {
     return this.assignments.listForStaff(tenantId, userId);
   }
@@ -46,7 +46,7 @@ export class StaffAssignmentController {
   // ─── Ressource racine assignments ────────────────────────────────────────
 
   @Get('assignments')
-  @RequirePermission(Permission.STAFF_READ)
+  @RequirePermission([Permission.STAFF_READ_TENANT, Permission.STAFF_READ])
   list(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,

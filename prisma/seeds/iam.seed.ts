@@ -148,6 +148,7 @@ const TENANT_ROLES: Array<{
       'data.sav.report.agency',
       'data.sav.deliver.agency',
       'data.sav.claim.tenant',
+      'data.staff.read.tenant',
       'data.staff.read.agency',
       'data.user.read.agency',
       'data.crm.read.tenant',
