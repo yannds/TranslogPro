@@ -78,7 +78,7 @@ function buildColumns(): Column<CustomerRow>[] {
   return [
     {
       key: 'name',
-      header: 'Voyageur',
+      header: 'Client',
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ function CrmKpis({ customers }: { customers: CustomerRow[] }) {
   const avgScore   = total === 0 ? 0 : customers.reduce((s, c) => s + (c.loyaltyScore ?? 0), 0) / total;
 
   const items = [
-    { label: 'Voyageurs',         value: total.toLocaleString('fr-FR'),      sub: 'au total',         color: 'teal' },
+    { label: 'Clients',           value: total.toLocaleString('fr-FR'),      sub: 'au total',         color: 'teal' },
     { label: 'Nouveaux ce mois',  value: newMonth.toLocaleString('fr-FR'),   sub: 'inscriptions',     color: 'emerald' },
     { label: 'Clients Platinum',  value: platinum.toLocaleString('fr-FR'),   sub: '≥ 4 000 pts',      color: 'amber' },
     { label: 'Score moyen',       value: avgScore.toFixed(0),                sub: 'fidélité',         color: 'blue' },
@@ -378,9 +378,9 @@ export function PageCrm() {
             <Users2 className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">CRM — Voyageurs</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">CRM — Clients</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {list ? `${list.total} voyageur(s) enregistré(s)` : 'Gestion des clients voyageurs'}
+              {list ? `${list.total} client(s) enregistré(s)` : 'Gestion des clients'}
             </p>
           </div>
         </div>

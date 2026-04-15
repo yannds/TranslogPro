@@ -25,7 +25,7 @@ type ScreenId =
   | 'admin';
 
 const SCREENS: { id: ScreenId; label: string; icon: string; desc: string; device: string }[] = [
-  { id: 'portail',        label: 'Portail Voyageur',    icon: '🌐', desc: 'Site public de réservation',         device: 'Web (responsive)' },
+  { id: 'portail',        label: 'Portail Client',      icon: '🌐', desc: 'Site public de réservation',         device: 'Web (responsive)' },
   { id: 'departure-board',label: 'Tableau Départs',     icon: '📺', desc: 'Écran TV gare routière',             device: 'TV / Kiosque' },
   { id: 'bus-screen',     label: 'Écran Bus',           icon: '🚌', desc: 'Affichage à bord du véhicule',       device: 'Écran embarqué' },
   { id: 'quai-screen',    label: 'Écran Quai',          icon: '🚏', desc: 'Panneau informatif au quai',         device: 'TV / LED Quai' },

@@ -120,7 +120,7 @@ const MODULE_CATALOG: ModuleDef[] = [
 
   // ── Intelligence ──────────────────────────────────────────────────────
   {
-    id: 'CRM',             name: 'CRM & Voyageurs',
+    id: 'CRM',             name: 'CRM & Clients',
     description: 'Base clients, fidélisation, campagnes marketing.',
     category: 'Intelligence', icon: '👥', core: false, tags: ['crm', 'loyalty'],
   },
