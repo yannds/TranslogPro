@@ -566,6 +566,14 @@ export const ADMIN_NAV: PortalNavConfig = {
         },
         {
           kind: 'leaf',
+          id: 'tenant-company',
+          label: 'Informations société',
+          href: '/admin/settings/company',
+          icon: 'Building2',
+          anyOf: [P.SETTINGS_MANAGE],
+        },
+        {
+          kind: 'leaf',
           id: 'white-label',
           label: 'White-label & Thème',
           href: '/admin/settings/branding',

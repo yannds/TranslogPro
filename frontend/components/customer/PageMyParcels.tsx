@@ -8,6 +8,8 @@
 import { Package, MapPin, Loader2 } from 'lucide-react';
 import { useFetch }  from '../../lib/hooks/useFetch';
 import { useAuth }   from '../../lib/auth/auth.context';
+import { useI18n }   from '../../lib/i18n/useI18n';
+import { DEFAULT_PARCEL_STATUS_REGISTRY, lookupStatus } from '../../lib/config/status.config';
 
 interface MyParcel {
   id:            string;
@@ -19,19 +21,6 @@ interface MyParcel {
   destination:   { id: string; name: string } | null;
 }
 
-const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  CREATED:    { label: 'Enregistré',  cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-  AT_ORIGIN:  { label: 'À l\'agence',  cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
-  PACKED:     { label: 'Groupé',      cls: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300' },
-  LOADED:     { label: 'Chargé',      cls: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' },
-  IN_TRANSIT: { label: 'En route',    cls: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' },
-  ARRIVED:    { label: 'Arrivé',      cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-  DELIVERED:  { label: 'Livré',       cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' },
-  DAMAGED:    { label: 'Endommagé',   cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
-  LOST:       { label: 'Perdu',       cls: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
-  RETURNED:   { label: 'Retourné',    cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
-};
-
 function formatDate(iso?: string): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('fr-FR', {
@@ -41,6 +30,7 @@ function formatDate(iso?: string): string {
 
 export function PageMyParcels() {
   const { user } = useAuth();
+  const { t }    = useI18n();
   const url = user?.tenantId ? `/api/tenants/${user.tenantId}/parcels/my` : null;
   const { data, loading, error } = useFetch<MyParcel[]>(url, [user?.tenantId]);
 
@@ -86,7 +76,8 @@ export function PageMyParcels() {
       {!loading && parcels.length > 0 && (
         <ul className="space-y-3" role="list">
           {parcels.map(p => {
-            const status = STATUS_STYLE[p.status] ?? { label: p.status, cls: 'bg-slate-100 text-slate-700' };
+            const status = lookupStatus(DEFAULT_PARCEL_STATUS_REGISTRY, p.status);
+            const tooltip = status.description ? t(status.description) : t(status.label);
             return (
               <li
                 key={p.id}
@@ -102,8 +93,11 @@ export function PageMyParcels() {
                       {p.trackingCode}
                     </p>
                   </div>
-                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${status.cls}`}>
-                    {status.label}
+                  <span
+                    title={tooltip}
+                    className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${status.visual.badgeCls} cursor-help`}
+                  >
+                    {t(status.label)}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">

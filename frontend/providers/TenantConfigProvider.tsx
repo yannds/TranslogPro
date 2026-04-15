@@ -83,10 +83,23 @@ export const DEFAULT_TENANT_CONFIG: TenantConfig = {
 
 // ─── Contexte ─────────────────────────────────────────────────────────────────
 
-export const TenantConfigContext = createContext<TenantConfig>(DEFAULT_TENANT_CONFIG);
+interface TenantConfigContextValue {
+  config: TenantConfig;
+  /** Applique partiellement la config (ex: après fetch /tenants/:id/config) */
+  applyPatch: (patch: Partial<TenantConfig>) => void;
+}
+
+export const TenantConfigContext = createContext<TenantConfigContextValue>({
+  config:     DEFAULT_TENANT_CONFIG,
+  applyPatch: () => { /* no-op default */ },
+});
 
 export function useTenantConfig(): TenantConfig {
-  return useContext(TenantConfigContext);
+  return useContext(TenantConfigContext).config;
+}
+
+export function useTenantConfigApply(): (patch: Partial<TenantConfig>) => void {
+  return useContext(TenantConfigContext).applyPatch;
 }
 
 /** Formate un montant selon la devise du tenant */
@@ -100,35 +113,39 @@ export function useCurrencyFormatter() {
     }).format(amount);
 }
 
+/**
+ * Merge profond d'un patch sur la config courante.
+ * Préserve les sous-objets non fournis (brand, operational, statuses, cities).
+ */
+function mergeConfig(cur: TenantConfig, patch: Partial<TenantConfig>): TenantConfig {
+  return {
+    ...cur,
+    ...patch,
+    brand:       { ...cur.brand,       ...(patch.brand       ?? {}) },
+    operational: { ...cur.operational, ...(patch.operational ?? {}) },
+  };
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 interface TenantConfigProviderProps {
-  children:    ReactNode;
-  /** Override statique (tests / storybook) */
-  config?:     TenantConfig;
-  /** URL API pour charger la config du tenant courant */
-  apiEndpoint?: string;
-  tenantId?:   string;
+  children: ReactNode;
+  /** Override statique (tests / storybook) — si fourni, désactive le fetch dynamique */
+  config?:  TenantConfig;
 }
 
 export function TenantConfigProvider({
   children,
   config: staticConfig,
-  apiEndpoint,
-  tenantId,
 }: TenantConfigProviderProps) {
   const [config, setConfig] = useState<TenantConfig>(
     staticConfig ?? DEFAULT_TENANT_CONFIG,
   );
 
+  // Synchronise la config si le staticConfig change (tests / storybook)
   useEffect(() => {
-    if (staticConfig) return;
-    if (!apiEndpoint || !tenantId) return;
-
-    // En production : fetch(`${apiEndpoint}/tenant/${tenantId}/config`)
-    // Pour l'instant, on reste sur le DEFAULT avec l'id du tenant
-    setConfig(prev => ({ ...prev, tenantId: tenantId ?? 'demo' }));
-  }, [apiEndpoint, tenantId, staticConfig]);
+    if (staticConfig) setConfig(staticConfig);
+  }, [staticConfig]);
 
   // Injection des couleurs tenant en CSS custom properties (dark-mode agnostique)
   useEffect(() => {
@@ -143,8 +160,12 @@ export function TenantConfigProvider({
     root.style.setProperty('--font-family',     brand.fontFamily);
   }, [config]);
 
+  const applyPatch = (patch: Partial<TenantConfig>) => {
+    setConfig(prev => mergeConfig(prev, patch));
+  };
+
   return (
-    <TenantConfigContext.Provider value={config}>
+    <TenantConfigContext.Provider value={{ config, applyPatch }}>
       {children}
     </TenantConfigContext.Provider>
   );

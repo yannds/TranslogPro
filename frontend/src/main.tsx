@@ -15,6 +15,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { ThemeProvider }        from '../components/theme/ThemeProvider';
 import { TenantConfigProvider } from '../providers/TenantConfigProvider';
+import { TenantConfigBridge }   from '../providers/TenantConfigBridge';
 import { I18nProvider }         from '../providers/I18nProvider';
 import { AuthProvider }         from '../lib/auth/auth.context';
 import { ProtectedRoute }       from '../components/auth/ProtectedRoute';
@@ -48,6 +49,7 @@ createRoot(root).render(
         <TenantConfigProvider>
           <I18nProvider>
           <AuthProvider>
+            <TenantConfigBridge />
             <Routes>
               {/* Authentification */}
               <Route path="/login" element={<LoginPage />} />

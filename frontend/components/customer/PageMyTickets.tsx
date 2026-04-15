@@ -8,6 +8,8 @@
 import { Ticket, Calendar, MapPin, Loader2 } from 'lucide-react';
 import { useFetch }  from '../../lib/hooks/useFetch';
 import { useAuth }   from '../../lib/auth/auth.context';
+import { useI18n }   from '../../lib/i18n/useI18n';
+import { DEFAULT_TICKET_STATUS_REGISTRY, lookupStatus } from '../../lib/config/status.config';
 
 interface MyTicket {
   id:           string;
@@ -25,16 +27,6 @@ interface MyTicket {
   } | null;
 }
 
-const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  CONFIRMED:  { label: 'Confirmé',     cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-  CHECKED_IN: { label: 'Enregistré',   cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
-  BOARDED:    { label: 'À bord',       cls: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' },
-  COMPLETED:  { label: 'Terminé',      cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-  CANCELLED:  { label: 'Annulé',       cls: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
-  PENDING_PAYMENT: { label: 'À payer', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
-  EXPIRED:    { label: 'Expiré',       cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
-};
-
 function formatDate(iso?: string): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('fr-FR', {
@@ -43,7 +35,8 @@ function formatDate(iso?: string): string {
 }
 
 export function PageMyTickets() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
+  const { t }     = useI18n();
   const url = user?.tenantId ? `/api/tenants/${user.tenantId}/tickets/my` : null;
   const { data, loading, error } = useFetch<MyTicket[]>(url, [user?.tenantId]);
 
@@ -88,35 +81,43 @@ export function PageMyTickets() {
 
       {!loading && tickets.length > 0 && (
         <ul className="space-y-3" role="list">
-          {tickets.map(t => {
-            const status = STATUS_STYLE[t.status] ?? { label: t.status, cls: 'bg-slate-100 text-slate-700' };
+          {tickets.map(ticket => {
+            const status = lookupStatus(DEFAULT_TICKET_STATUS_REGISTRY, ticket.status);
+            // Tooltip natif (title) : description longue dans la langue tenant.
+            // Fallback label si pas de description définie.
+            const tooltip = status.description
+              ? t(status.description)
+              : t(status.label);
             return (
               <li
-                key={t.id}
+                key={ticket.id}
                 className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
                   <div>
                     <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-teal-500" aria-hidden />
-                      {t.trip?.route?.name ?? 'Trajet inconnu'}
+                      {ticket.trip?.route?.name ?? 'Trajet inconnu'}
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
                       <Calendar className="w-3 h-3" aria-hidden />
-                      {formatDate(t.trip?.departureScheduled)}
+                      {formatDate(ticket.trip?.departureScheduled)}
                     </p>
                   </div>
-                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${status.cls}`}>
-                    {status.label}
+                  <span
+                    title={tooltip}
+                    className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${status.visual.badgeCls} cursor-help`}
+                  >
+                    {t(status.label)}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
                   <span>
-                    {t.seatNumber ? `Siège ${t.seatNumber}` : 'Siège libre'}
-                    {t.trip?.bus?.plateNumber ? ` · Bus ${t.trip.bus.plateNumber}` : ''}
+                    {ticket.seatNumber ? `Siège ${ticket.seatNumber}` : 'Siège libre'}
+                    {ticket.trip?.bus?.plateNumber ? ` · Bus ${ticket.trip.bus.plateNumber}` : ''}
                   </span>
                   <span className="font-mono text-slate-700 dark:text-slate-300">
-                    {t.pricePaid.toLocaleString('fr-FR')} XAF
+                    {ticket.pricePaid.toLocaleString('fr-FR')} XAF
                   </span>
                 </div>
               </li>

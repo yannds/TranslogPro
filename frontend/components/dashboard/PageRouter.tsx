@@ -44,6 +44,8 @@ const LazyProfitability  = lazy(() => import('../pages/PageProfitability').then(
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyBranding       = lazy(() => import('../pages/PageBranding').then(m => ({ default: m.PageBranding })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m => ({ default: m.PageCompanySetup })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamUsers       = lazy(() => import('../pages/PageIamUsers').then(m => ({ default: m.PageIamUsers })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamRoles       = lazy(() => import('../pages/PageIamRoles').then(m => ({ default: m.PageIamRoles })));
@@ -179,6 +181,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'stations':            return <LazyStations />;
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
+    case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <PageWip title="Intégrations API" />;
     case 'documents-templates': return <LazyTemplateStudio />;
 
