@@ -137,12 +137,9 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'fleet-docs-config':        return <LazyFleetDocs initialTab="types" />;
 
     // ── Chauffeurs & Équipages ─────────────────────────────────────────────
-    case 'drivers':
-    case 'drivers-list':        return <LazyDriverProfile initialTab="overview" />;
-    case 'driver-licenses':     return <LazyDriverProfile initialTab="licenses" />;
-    case 'driver-rest':         return <LazyDriverProfile initialTab="rest" />;
-    case 'driver-trainings':    return <LazyDriverProfile initialTab="trainings" />;
-    case 'driver-remediation':  return <LazyDriverProfile initialTab="remediation" />;
+    // Les onglets internes (licenses/rest/trainings/remediation) sont gérés
+    // par la page elle-même ; une seule route parent suffit.
+    case 'drivers':             return <LazyDriverProfile initialTab="overview" />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
     case 'staff-list':
     case 'personnel':           return <LazyPersonnel />;

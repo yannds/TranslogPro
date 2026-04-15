@@ -345,19 +345,13 @@ export const ADMIN_NAV: PortalNavConfig = {
       anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
       items: [
         {
-          kind: 'group',
+          kind: 'leaf',
           id: 'drivers',
           label: 'Chauffeurs',
           icon: 'Steer',
+          href: '/admin/drivers',
           anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
           moduleKey: 'DRIVER_PROFILE',
-          children: [
-            { kind: 'leaf', id: 'drivers-list',        label: 'Liste des chauffeurs',   href: '/admin/drivers',                  icon: 'Users',          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE] },
-            { kind: 'leaf', id: 'driver-licenses',     label: 'Permis & Habilitations', href: '/admin/drivers/licenses',         icon: 'IdCard',         anyOf: [P.DRIVER_MANAGE, P.DRIVER_PROFILE] },
-            { kind: 'leaf', id: 'driver-rest',         label: 'Temps de repos',         href: '/admin/drivers/rest',             icon: 'Coffee',         anyOf: [P.DRIVER_MANAGE] },
-            { kind: 'leaf', id: 'driver-trainings',    label: 'Formations',             href: '/admin/drivers/trainings',        icon: 'GraduationCap',  anyOf: [P.DRIVER_MANAGE] },
-            { kind: 'leaf', id: 'driver-remediation',  label: 'Remédiation',            href: '/admin/drivers/remediation',      icon: 'AlertOctagon',   anyOf: [P.DRIVER_MANAGE] },
-          ],
         },
         {
           kind: 'leaf',
