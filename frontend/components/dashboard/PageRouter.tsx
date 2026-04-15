@@ -131,10 +131,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'maintenance-list':    return <PageWip title="Fiches de maintenance" />;
     case 'maintenance-planning': return <PageWip title="Planning garage" />;
     case 'maintenance-alerts':  return <PageWip title="Alertes techniques" />;
-    case 'fleet-docs':
-    case 'fleet-docs-alerts':        return <LazyFleetDocs initialTab="alerts" />;
-    case 'fleet-docs-consumables':   return <LazyFleetDocs initialTab="consumables" />;
-    case 'fleet-docs-config':        return <LazyFleetDocs initialTab="types" />;
+    case 'fleet-docs':               return <LazyFleetDocs initialTab="alerts" />;
 
     // ── Chauffeurs & Équipages ─────────────────────────────────────────────
     // Les onglets internes (licenses/rest/trainings/remediation) sont gérés
