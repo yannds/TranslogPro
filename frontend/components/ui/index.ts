@@ -15,3 +15,6 @@ export { Card, CardHeader, CardContent,
 export { Skeleton, SkeletonText,
          SkeletonTable }                      from './Skeleton';
 export { Dialog, type DialogProps }           from './Dialog';
+export { ErrorAlert, type ErrorAlertProps }   from './ErrorAlert';
+export { FormFooter, type FormFooterProps }   from './FormFooter';
+export { inputClass }                         from './inputClass';

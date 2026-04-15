@@ -1,0 +1,369 @@
+/**
+ * PageTripPlanning — « Planning hebdomadaire » (module Trajets & Planning)
+ *
+ * Scope OPÉRATIONNEL flotte :
+ *   - Grille VÉHICULE × JOUR de la semaine
+ *   - Chaque cellule liste les trajets du bus ce jour-là (chip chronologique)
+ *   - Met en évidence les conflits de créneau (double booking bus)
+ *   - Bouton « Nouveau trajet » (création via même formulaire partagé)
+ *
+ * Distinct de PageCrewPlanning (module Équipages) qui fait la grille JOUR + RH.
+ *
+ * WCAG · dark mode · responsive (scroll horizontal sur mobile).
+ */
+
+import { useMemo, useState } from 'react';
+import {
+  CalendarDays, ChevronLeft, ChevronRight, Plus, AlertTriangle, Bus,
+} from 'lucide-react';
+import { useAuth }       from '../../lib/auth/auth.context';
+import { useFetch }      from '../../lib/hooks/useFetch';
+import { apiPost }       from '../../lib/api';
+import { Card, CardHeader, CardContent } from '../ui/Card';
+import { Badge }         from '../ui/Badge';
+import { Skeleton }      from '../ui/Skeleton';
+import { Button }        from '../ui/Button';
+import { Dialog }        from '../ui/Dialog';
+import { ErrorAlert }    from '../ui/ErrorAlert';
+import { cn }            from '../../lib/utils';
+import {
+  type TripRow, type BusLite, type StaffLite,
+  deriveRoutesFromTrips, tripStatusBadgeVariant, tripStatusLabel,
+  routeLabelOf, startOfWeek, addDays, formatYmd, formatHm,
+} from './trips/shared';
+import { TripCreateForm, type TripCreatePayload } from './trips/TripCreateForm';
+
+const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
+
+function overlaps(a: TripRow, b: TripRow): boolean {
+  if (!a.busId || a.busId !== b.busId || a.id === b.id) return false;
+  const aStart = new Date(a.departureScheduled).getTime();
+  const aEnd   = new Date(a.arrivalScheduled).getTime();
+  const bStart = new Date(b.departureScheduled).getTime();
+  const bEnd   = new Date(b.arrivalScheduled).getTime();
+  return aStart < bEnd && bStart < aEnd;
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export function PageTripPlanning() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
+
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  const [showCreate, setShowCreate] = useState(false);
+  const [createDate, setCreateDate] = useState<string | null>(null);
+  const [createBusId, setCreateBusId] = useState<string | null>(null);
+  const [busy, setBusy]   = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const base = `/api/tenants/${tenantId}`;
+
+  const { data: trips, loading: loadingTrips, error: tripsError, refetch } = useFetch<TripRow[]>(
+    tenantId ? `${base}/trips` : null,
+    [tenantId],
+  );
+  const { data: buses, loading: loadingBuses } = useFetch<BusLite[]>(
+    tenantId ? `${base}/fleet/buses` : null,
+    [tenantId],
+  );
+  const { data: drivers } = useFetch<StaffLite[]>(
+    showCreate ? `${base}/staff?role=DRIVER` : null,
+    [tenantId, showCreate],
+  );
+
+  const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
+
+  // ── Conflits : détection globale sur la semaine visible ──────────────────
+  const conflictIds = useMemo(() => {
+    const ids = new Set<string>();
+    const weekTrips = (trips ?? []).filter(t => {
+      const ts = new Date(t.departureScheduled).getTime();
+      return ts >= weekStart.getTime() && ts < weekEnd.getTime();
+    });
+    for (let i = 0; i < weekTrips.length; i += 1) {
+      for (let j = i + 1; j < weekTrips.length; j += 1) {
+        if (overlaps(weekTrips[i], weekTrips[j])) {
+          ids.add(weekTrips[i].id);
+          ids.add(weekTrips[j].id);
+        }
+      }
+    }
+    return ids;
+  }, [trips, weekStart, weekEnd]);
+
+  // ── Index Bus → Jour → Trajets ──────────────────────────────────────────
+  const cellIndex = useMemo(() => {
+    const map = new Map<string, TripRow[]>();  // key = `${busId}:${dayIdx}`
+    (trips ?? []).forEach(t => {
+      if (!t.busId) return;
+      const d = new Date(t.departureScheduled);
+      if (d < weekStart || d >= weekEnd) return;
+      const dayIdx = Math.floor((d.getTime() - weekStart.getTime()) / 86_400_000);
+      if (dayIdx < 0 || dayIdx > 6) return;
+      const key = `${t.busId}:${dayIdx}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    });
+    map.forEach(list =>
+      list.sort((a, b) => new Date(a.departureScheduled).getTime() - new Date(b.departureScheduled).getTime()),
+    );
+    return map;
+  }, [trips, weekStart, weekEnd]);
+
+  const weekTotal = useMemo(() =>
+    (trips ?? []).filter(t => {
+      const ts = new Date(t.departureScheduled).getTime();
+      return ts >= weekStart.getTime() && ts < weekEnd.getTime();
+    }).length,
+    [trips, weekStart, weekEnd],
+  );
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const openCreate = (date: Date, busId?: string) => {
+    setCreateDate(formatYmd(date));
+    setCreateBusId(busId ?? null);
+    setShowCreate(true);
+    setActionError(null);
+  };
+
+  const handleCreate = async (payload: TripCreatePayload) => {
+    setBusy(true); setActionError(null);
+    try {
+      await apiPost(`${base}/trips`, payload);
+      setShowCreate(false);
+      refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Erreur lors de la création');
+    } finally { setBusy(false); }
+  };
+
+  const routes = useMemo(() => deriveRoutesFromTrips(trips), [trips]);
+
+  // Réordonne buses pour que le bus pré-sélectionné soit en tête
+  const busesForForm: BusLite[] = useMemo(() => {
+    const arr = buses ?? [];
+    if (!createBusId) return arr;
+    return [...arr].sort((a, b) =>
+      a.id === createBusId ? -1 : b.id === createBusId ? 1 : 0,
+    );
+  }, [buses, createBusId]);
+
+  // ── Navigation semaine ───────────────────────────────────────────────────
+  const goPrev  = () => setWeekStart(w => addDays(w, -7));
+  const goNext  = () => setWeekStart(w => addDays(w,  7));
+  const goToday = () => setWeekStart(startOfWeek(new Date()));
+
+  const formatWeekRange = (start: Date): string => {
+    const end = addDays(start, 6);
+    const s = start.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    const e = end.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `${s} — ${e}`;
+  };
+
+  const loading = loadingTrips || loadingBuses;
+
+  // ── Rendu ──────────────────────────────────────────────────────────────────
+  return (
+    <main className="p-6 space-y-6" role="main" aria-label="Planning hebdomadaire des trajets">
+      {/* En-tête */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
+            <CalendarDays className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Planning hebdomadaire</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Occupation de la flotte : un bus par ligne, un jour par colonne.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1" role="toolbar" aria-label="Navigation semaine">
+            <Button size="sm" variant="ghost" onClick={goPrev} aria-label="Semaine précédente">
+              <ChevronLeft className="w-4 h-4" aria-hidden />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={goToday} aria-label="Revenir à la semaine courante">
+              Aujourd'hui
+            </Button>
+            <span className="px-2 text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap" aria-live="polite">
+              {formatWeekRange(weekStart)}
+            </span>
+            <Button size="sm" variant="ghost" onClick={goNext} aria-label="Semaine suivante">
+              <ChevronRight className="w-4 h-4" aria-hidden />
+            </Button>
+          </div>
+          <Button onClick={() => openCreate(new Date())} aria-label="Créer un nouveau trajet">
+            <Plus className="w-4 h-4 mr-2" aria-hidden />Nouveau trajet
+          </Button>
+        </div>
+      </div>
+
+      <ErrorAlert error={tripsError} icon />
+
+      {/* KPIs */}
+      <section aria-label="Indicateurs semaine" className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <KpiLite label="Trajets / sem"   value={weekTotal} />
+        <KpiLite label="Véhicules actifs" value={buses?.length ?? 0} />
+        <KpiLite label="Conflits détectés" value={conflictIds.size / 2} danger />
+        <KpiLite label="Utilisation moy." value={
+          buses && buses.length > 0 ? Math.round((weekTotal / (buses.length * 7)) * 100) : 0
+        } suffix="%" />
+      </section>
+
+      {/* Grille */}
+      <Card>
+        <CardHeader
+          heading="Grille hebdomadaire"
+          description="Cliquer sur une cellule vide pour y planifier un trajet"
+        />
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-6 space-y-3" aria-busy="true">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+            </div>
+          ) : !buses || buses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
+              <Bus className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
+              <p className="font-medium">Aucun véhicule dans la flotte</p>
+              <p className="text-sm mt-1">Ajoutez des bus depuis « Flotte › Véhicules ».</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[900px]" role="grid" aria-label="Planning bus × jour">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 w-40">
+                      Véhicule
+                    </th>
+                    {DAY_LABELS.map((label, i) => {
+                      const d = addDays(weekStart, i);
+                      const today = d.toDateString() === new Date().toDateString();
+                      return (
+                        <th
+                          key={label}
+                          className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                          scope="col"
+                        >
+                          <div>{label}</div>
+                          <div className={cn(
+                            'tabular-nums',
+                            today && 'text-teal-600 dark:text-teal-400',
+                          )}>
+                            {d.getDate().toString().padStart(2, '0')}
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {buses.map(b => (
+                    <tr key={b.id} className="border-b border-slate-100 dark:border-slate-800">
+                      <th scope="row" className="text-left px-4 py-3 align-top">
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{b.plateNumber}</p>
+                        {b.model && <p className="text-[11px] text-slate-500">{b.model}</p>}
+                      </th>
+                      {DAY_LABELS.map((_, dayIdx) => {
+                        const dayDate = addDays(weekStart, dayIdx);
+                        const cellTrips = cellIndex.get(`${b.id}:${dayIdx}`) ?? [];
+                        return (
+                          <td
+                            key={dayIdx}
+                            role="gridcell"
+                            className="align-top p-1.5 min-w-[120px]"
+                          >
+                            {cellTrips.length === 0 ? (
+                              <button
+                                onClick={() => openCreate(dayDate, b.id)}
+                                className="w-full h-12 rounded-md border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 hover:text-teal-600 hover:border-teal-400 dark:hover:text-teal-400 dark:hover:border-teal-500 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                                aria-label={`Planifier un trajet pour ${b.plateNumber} le ${dayDate.toLocaleDateString('fr-FR')}`}
+                              >
+                                <Plus className="w-3.5 h-3.5" aria-hidden />
+                              </button>
+                            ) : (
+                              <ul className="space-y-1" role="list">
+                                {cellTrips.map(t => {
+                                  const isConflict = conflictIds.has(t.id);
+                                  return (
+                                    <li key={t.id}>
+                                      <div
+                                        className={cn(
+                                          'rounded-md border px-2 py-1.5 text-xs',
+                                          isConflict
+                                            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+                                        )}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                                            {formatHm(new Date(t.departureScheduled))}
+                                          </span>
+                                          {isConflict && (
+                                            <AlertTriangle className="w-3 h-3 text-red-500" aria-label="Conflit de planning" />
+                                          )}
+                                        </div>
+                                        <p className="truncate text-slate-600 dark:text-slate-400">{routeLabelOf(t)}</p>
+                                        <Badge variant={tripStatusBadgeVariant(t.status)} size="sm">
+                                          {tripStatusLabel(t.status)}
+                                        </Badge>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal Nouveau trajet */}
+      <Dialog
+        open={showCreate}
+        onOpenChange={o => { if (!o) { setShowCreate(false); setActionError(null); } }}
+        title="Nouveau trajet"
+        description="Planifier un trajet. Les conflits de bus apparaîtront en rouge dans la grille."
+        size="lg"
+      >
+        {showCreate && (
+          <TripCreateForm
+            routes={routes}
+            buses={busesForForm}
+            drivers={drivers ?? []}
+            defaultDate={createDate ?? formatYmd(new Date())}
+            onSubmit={handleCreate}
+            onCancel={() => { setShowCreate(false); setActionError(null); }}
+            busy={busy}
+            error={actionError}
+          />
+        )}
+      </Dialog>
+    </main>
+  );
+}
+
+function KpiLite({ label, value, suffix, danger }: { label: string; value: number; suffix?: string; danger?: boolean }) {
+  return (
+    <article
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4"
+      aria-label={`${label}: ${value}${suffix ?? ''}`}
+    >
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+      <p className={cn(
+        'text-xl font-bold tabular-nums',
+        danger && value > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-50',
+      )}>
+        {value}{suffix}
+      </p>
+    </article>
+  );
+}

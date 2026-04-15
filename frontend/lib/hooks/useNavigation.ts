@@ -141,6 +141,25 @@ function findActiveId(sections: ResolvedNavSection[], currentHref: string): stri
   return null;
 }
 
+/** Fallback sur la config brute (non filtrée par permissions/modules).
+ *  Évite que PageRouter tombe sur `default` quand un leaf est masqué au user
+ *  mais que le composant cible gère déjà son propre contrôle d'accès.
+ */
+function findActiveIdInConfig(config: PortalNavConfig, currentHref: string): string | null {
+  for (const section of config.sections) {
+    for (const item of section.items) {
+      if (item.kind === 'group') {
+        for (const child of item.children) {
+          if (child.href === currentHref) return child.id;
+        }
+      } else if (item.href === currentHref) {
+        return item.id;
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useNavigation({
@@ -166,8 +185,9 @@ export function useNavigation({
 
   const inferredActiveId = useMemo<string | null>(() => {
     if (!currentHref) return null;
-    return findActiveId(sections, currentHref);
-  }, [sections, currentHref]);
+    return findActiveId(sections, currentHref)
+        ?? findActiveIdInConfig(config, currentHref);
+  }, [sections, config, currentHref]);
 
   const [manualActiveId, setActiveId] = useState<string | null>(null);
 
@@ -181,12 +201,16 @@ export function useNavigation({
   return { sections, hasPermission, activeId, setActiveId };
 }
 
-// ─── Profils de rôles (référence, utilisés pour le MockUser en démo) ──────────
-
-/** Permissions types par profil — à remplacer par le JWT en production */
+// ─── Profils de rôles (DEMO ONLY) ─────────────────────────────────────────────
+// ⚠️ NE PAS UTILISER EN PRODUCTION — duplication du seed backend.
+// Le portail admin charge `permissions` depuis `/api/auth/me` (source unique).
+// Cette map sert UNIQUEMENT au sélecteur de rôle mock dans DriverSpace et
+// StationAgentApp (démos hors-ligne sans backend). À supprimer dès que ces
+// démos consomment l'API d'auth.
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: [
     'control.iam.manage.tenant',       'control.iam.audit.tenant',
+    'control.agency.manage.tenant',    'data.agency.read.tenant',
     'control.integration.setup.tenant','control.module.install.tenant',
     'control.settings.manage.tenant',  'control.workflow.studio.read.tenant',
     'control.workflow.studio.write.tenant', 'control.workflow.simulate.tenant',
@@ -222,6 +246,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
 
   TENANT_ADMIN: [
     'control.iam.manage.tenant',       'control.iam.audit.tenant',
+    'control.agency.manage.tenant',    'data.agency.read.tenant',
     'control.integration.setup.tenant','control.module.install.tenant',
     'control.settings.manage.tenant',  'control.workflow.studio.read.tenant',
     'control.workflow.studio.write.tenant', 'control.workflow.simulate.tenant',

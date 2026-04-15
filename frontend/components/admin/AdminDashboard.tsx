@@ -8,14 +8,12 @@ import { useMemo, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
 import { LogOut, Sun, Moon }  from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
-import { useNavigation, ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
+import { useNavigation } from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
 import { ADMIN_NAV }          from '../../lib/navigation/nav.config';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
-
-type RoleKey = keyof typeof ROLE_PERMISSIONS;
 
 function PageLoadingFallback() {
   return (
@@ -57,7 +55,9 @@ export function AdminDashboard() {
   const { theme, toggle }          = useTheme();
   const location = useLocation();
 
-  const permissions = ROLE_PERMISSIONS[(authUser?.roleName ?? '') as RoleKey] ?? [];
+  // Source unique : permissions résolues backend dans /api/auth/me (zéro
+  // duplication frontend ↔ seed IAM).
+  const permissions = authUser?.permissions ?? [];
 
   const { sections, activeId } = useNavigation({
     config:         ADMIN_NAV,

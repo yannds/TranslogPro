@@ -12,7 +12,6 @@ import { lazy } from 'react';
 
 // ── Pages internes légères (eager) ────────────────────────────────────────────
 import { PageDashboard } from './PageDashboard';
-import { PageTrips }     from './PageTrips';
 import { PageAnalytics } from './PageAnalytics';
 import { PageAiRoutes }  from './PageAiRoutes';
 import { PageFleet }     from './PageFleet';
@@ -58,6 +57,20 @@ const LazyModules        = lazy(() => import('../pages/PageModules').then(m => (
 const LazyTemplateStudio = lazy(() => import('../pages/PageTemplateStudio').then(m => ({ default: m.PageTemplateStudio })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPersonnel      = lazy(() => import('../pages/PagePersonnel').then(m => ({ default: m.PagePersonnel })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAgencies       = lazy(() => import('../pages/PageAgencies').then(m => ({ default: m.PageAgencies })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyStations       = lazy(() => import('../pages/PageStations').then(m => ({ default: m.PageStations })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCrewPlanning   = lazy(() => import('../pages/PageCrewPlanning').then(m => ({ default: m.PageCrewPlanning })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTrips          = lazy(() => import('../pages/PageTrips').then(m => ({ default: m.PageTrips })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTripPlanning   = lazy(() => import('../pages/PageTripPlanning').then(m => ({ default: m.PageTripPlanning })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyRoutes         = lazy(() => import('../pages/PageRoutes').then(m => ({ default: m.PageRoutes })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTripDelays     = lazy(() => import('../pages/PageTripDelays').then(m => ({ default: m.PageTripDelays })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,12 +85,12 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // ── Dashboard ──────────────────────────────────────────────────────────
     case 'dashboard':           return <PageDashboard />;
 
-    // ── Trajets ────────────────────────────────────────────────────────────
+    // ── Trajets & Planning ─────────────────────────────────────────────────
     case 'trips':
-    case 'trips-list':          return <PageTrips />;
-    case 'trips-planning':      return <PageWip title="Planning hebdomadaire" />;
-    case 'routes':              return <PageWip title="Lignes & Routes" />;
-    case 'trips-delays':        return <PageWip title="Retards & Alertes" />;
+    case 'trips-list':          return <LazyTrips />;
+    case 'trips-planning':      return <LazyTripPlanning />;
+    case 'routes':              return <LazyRoutes />;
+    case 'trips-delays':        return <LazyTripDelays />;
 
     // ── Billetterie ────────────────────────────────────────────────────────
     case 'tickets-new':         return <PageWip title="Vendre un billet" />;
@@ -117,21 +130,21 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'maintenance-planning': return <PageWip title="Planning garage" />;
     case 'maintenance-alerts':  return <PageWip title="Alertes techniques" />;
     case 'fleet-docs':
-    case 'fleet-docs-alerts':
-    case 'fleet-docs-consumables':
-    case 'fleet-docs-config':   return <LazyFleetDocs />;
+    case 'fleet-docs-alerts':        return <LazyFleetDocs initialTab="alerts" />;
+    case 'fleet-docs-consumables':   return <LazyFleetDocs initialTab="consumables" />;
+    case 'fleet-docs-config':        return <LazyFleetDocs initialTab="types" />;
 
     // ── Chauffeurs & Équipages ─────────────────────────────────────────────
     case 'drivers':
-    case 'drivers-list':
-    case 'driver-licenses':
-    case 'driver-rest':
-    case 'driver-trainings':
-    case 'driver-remediation':  return <LazyDriverProfile />;
+    case 'drivers-list':        return <LazyDriverProfile initialTab="overview" />;
+    case 'driver-licenses':     return <LazyDriverProfile initialTab="licenses" />;
+    case 'driver-rest':         return <LazyDriverProfile initialTab="rest" />;
+    case 'driver-trainings':    return <LazyDriverProfile initialTab="trainings" />;
+    case 'driver-remediation':  return <LazyDriverProfile initialTab="remediation" />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
     case 'staff-list':
     case 'personnel':           return <LazyPersonnel />;
-    case 'crew-planning':       return <PageWip title="Planning équipages" />;
+    case 'crew-planning':       return <LazyCrewPlanning />;
 
     // ── QHSE ───────────────────────────────────────────────────────────────
     case 'qhse-accidents':
@@ -162,6 +175,8 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'wf-simulate':         return <LazyWfSimulate />;
 
     // ── Paramètres & White-label ───────────────────────────────────────────
+    case 'agencies':            return <LazyAgencies />;
+    case 'stations':            return <LazyStations />;
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
     case 'integrations':        return <PageWip title="Intégrations API" />;
