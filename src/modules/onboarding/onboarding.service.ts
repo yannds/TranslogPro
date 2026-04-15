@@ -1,4 +1,5 @@
 import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
 import { Inject } from '@nestjs/common';
@@ -8,6 +9,7 @@ import {
   ensureDefaultAgency,
   DEFAULT_AGENCY_NAME,
   DEFAULT_WORKFLOW_CONFIGS,
+  installSystemBlueprintsForTenant,
   type TenantLanguage,
 } from '../../../prisma/seeds/iam.seed';
 import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
@@ -93,6 +95,11 @@ export class OnboardingService {
 
       // 5. Seed WorkflowConfig par défaut
       await this.seedDefaultWorkflowConfigs(tx as unknown as PrismaService, tenant.id);
+
+      // 5.bis. Enregistre les blueprints système comme "installés" pour ce tenant
+      // (UI marketplace + scénarios PageWfSimulate). N'écrit PAS les configs —
+      // purement déclaratif via BlueprintInstall. Idempotent.
+      await installSystemBlueprintsForTenant(tx as unknown as PrismaClient, tenant.id);
 
       // 6. Modules de base activés
       await this.seedInstalledModules(tx as unknown as PrismaService, tenant.id);

@@ -662,6 +662,69 @@ export async function backfillDefaultWorkflows(
   return { scanned: tenants.length, rowsCreated };
 }
 
+// ─── Blueprint auto-install ───────────────────────────────────────────────────
+// Les blueprints système (isSystem=true, authorTenantId=null) existent comme
+// modèles dans le marketplace. Pour qu'un tenant les voie comme "installés"
+// (UI marketplace + scénarios PageWfSimulate), il faut un record
+// BlueprintInstall par (tenantId, blueprintId). Les WorkflowConfig sont déjà
+// seedées séparément via DEFAULT_WORKFLOW_CONFIGS — cet enregistrement est
+// déclaratif, il ne réécrit PAS les configs existantes.
+//
+// Contrat : idempotent via upsert (tenantId_blueprintId). Rejouable.
+
+/**
+ * Crée les BlueprintInstall pour tous les blueprints système manquants sur
+ * un tenant. Retourne le nombre de lignes touchées.
+ */
+export async function installSystemBlueprintsForTenant(
+  prismaClient: PrismaClient,
+  tenantId:     string,
+): Promise<number> {
+  const systemBlueprints = await prismaClient.workflowBlueprint.findMany({
+    where:  { isSystem: true, authorTenantId: null },
+    select: { id: true, graphJson: true },
+  });
+
+  let touched = 0;
+  for (const bp of systemBlueprints) {
+    await prismaClient.blueprintInstall.upsert({
+      where:  { tenantId_blueprintId: { tenantId, blueprintId: bp.id } },
+      create: {
+        tenantId,
+        blueprintId:  bp.id,
+        snapshotJson: bp.graphJson as object,
+        isDirty:      false,
+        installedBy:  'system',
+      },
+      update: {}, // no-op si déjà installé — préserve installedAt/installedBy
+    });
+    touched++;
+  }
+  return touched;
+}
+
+/**
+ * Backfill pour tenants existants — itère tous les tenants (sauf plateforme)
+ * et garantit que chaque blueprint système a son record BlueprintInstall.
+ */
+export async function backfillSystemBlueprintInstalls(
+  prismaClient: PrismaClient,
+): Promise<{ scanned: number; tenantsTouched: number }> {
+  const tenants = await prismaClient.tenant.findMany({ select: { id: true, slug: true } });
+  let tenantsTouched = 0;
+
+  for (const tenant of tenants) {
+    if (tenant.id === PLATFORM_TENANT_ID) continue;
+    const n = await installSystemBlueprintsForTenant(prismaClient, tenant.id);
+    if (n > 0) {
+      tenantsTouched++;
+      console.log(`[IAM Seed] Blueprints système tenant=${tenant.slug} — ${n} ligne(s) upsertée(s)`);
+    }
+  }
+
+  return { scanned: tenants.length, tenantsTouched };
+}
+
 /**
  * Backfill des permissions de rôles pour les tenants existants.
  *
@@ -722,6 +785,16 @@ async function main() {
   console.log(
     `[IAM Seed] Backfill permissions rôles — ${permReport.scanned} tenants scannés, ` +
     `${permReport.rowsCreated} ligne(s) créée(s)`,
+  );
+
+  // Backfill blueprints système — rend les blueprints "installés" pour
+  // chaque tenant existant. Nécessaire pour que PageWfMarketplace montre
+  // Trip/Bus/Parcel/... comme activables et que PageWfSimulate trouve
+  // les scénarios associés. Idempotent.
+  const bpReport = await backfillSystemBlueprintInstalls(prisma);
+  console.log(
+    `[IAM Seed] Backfill blueprints système — ${bpReport.scanned} tenants scannés, ` +
+    `${bpReport.tenantsTouched} tenant(s) mis à jour`,
   );
 }
 
