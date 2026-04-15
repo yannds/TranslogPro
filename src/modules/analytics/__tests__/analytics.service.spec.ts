@@ -124,4 +124,87 @@ describe('AnalyticsService', () => {
       );
     });
   });
+
+  // ─── getCustomerSegmentation() ─────────────────────────────────────────────
+  // Segmentation par activité (has_ticket / has_parcel) — pas par rôle.
+
+  describe('getCustomerSegmentation()', () => {
+    function makeSegPrisma(opts: {
+      totalCustomers: number;
+      ticketBuyers:   string[];   // distinct passengerId
+      parcelSenders:  (string | null)[]; // distinct senderId (peut contenir null si DB historique)
+    }): jest.Mocked<PrismaService> {
+      return {
+        user: {
+          count: jest.fn().mockResolvedValue(opts.totalCustomers),
+        },
+        ticket: {
+          findMany: jest.fn().mockResolvedValue(opts.ticketBuyers.map(passengerId => ({ passengerId }))),
+        },
+        parcel: {
+          findMany: jest.fn().mockResolvedValue(opts.parcelSenders.map(senderId => ({ senderId }))),
+        },
+      } as unknown as jest.Mocked<PrismaService>;
+    }
+
+    it('compte total CUSTOMER + filtre userType=CUSTOMER', async () => {
+      const prisma = makeSegPrisma({ totalCustomers: 10, ticketBuyers: [], parcelSenders: [] });
+      const svc    = new AnalyticsService(prisma);
+      await svc.getCustomerSegmentation(TENANT_ID);
+      expect(prisma.user.count).toHaveBeenCalledWith({
+        where: { tenantId: TENANT_ID, userType: 'CUSTOMER' },
+      });
+    });
+
+    it("calcule travelersOnly = ticketBuyers \u00ad both", async () => {
+      const prisma = makeSegPrisma({
+        totalCustomers: 100,
+        ticketBuyers:   ['u1', 'u2', 'u3'],     // 3 voyageurs
+        parcelSenders:  ['u3', 'u4'],            // 2 expéditeurs (u3 fait les deux)
+      });
+      const svc    = new AnalyticsService(prisma);
+      const r      = await svc.getCustomerSegmentation(TENANT_ID);
+      expect(r.both).toBe(1);             // u3
+      expect(r.travelersOnly).toBe(2);    // u1, u2
+      expect(r.shippersOnly).toBe(1);     // u4
+      expect(r.active).toBe(4);           // u1, u2, u3, u4
+      expect(r.inactive).toBe(96);        // 100 - 4
+      expect(r.total).toBe(100);
+    });
+
+    it('total inactive = max(0, total - active) — jamais négatif', async () => {
+      const prisma = makeSegPrisma({
+        totalCustomers: 2,
+        ticketBuyers:   ['u1', 'u2', 'u3'],   // plus de buyers que de CUSTOMER (cas legacy)
+        parcelSenders:  [],
+      });
+      const svc = new AnalyticsService(prisma);
+      const r   = await svc.getCustomerSegmentation(TENANT_ID);
+      expect(r.inactive).toBe(0);
+    });
+
+    it('ignore les senderId null (parcels historiques sans owner)', async () => {
+      const prisma = makeSegPrisma({
+        totalCustomers: 5,
+        ticketBuyers:   ['u1'],
+        parcelSenders:  [null, 'u2', null],
+      });
+      const svc = new AnalyticsService(prisma);
+      const r   = await svc.getCustomerSegmentation(TENANT_ID);
+      expect(r.shippersOnly).toBe(1);  // u2 uniquement
+      expect(r.both).toBe(0);
+    });
+
+    it('utilise distinct: passengerId / senderId pour limiter le payload Prisma', async () => {
+      const prisma = makeSegPrisma({ totalCustomers: 0, ticketBuyers: [], parcelSenders: [] });
+      const svc    = new AnalyticsService(prisma);
+      await svc.getCustomerSegmentation(TENANT_ID);
+      expect(prisma.ticket.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ distinct: ['passengerId'] }),
+      );
+      expect(prisma.parcel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ distinct: ['senderId'] }),
+      );
+    });
+  });
 });

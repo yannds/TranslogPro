@@ -106,6 +106,58 @@ export class AnalyticsService {
   }
 
   /**
+   * Segmentation des clients (CUSTOMER) par ACTIVITÉ — pas par rôle.
+   *
+   * Le rôle CUSTOMER unifie voyageur + expéditeur ; la distinction utile pour
+   * la BI (combien de voyageurs purs, combien d'expéditeurs purs, combien font
+   * les deux) se calcule sur l'activité observée :
+   *   - has_ticket = au moins un Ticket avec passengerId = userId
+   *   - has_parcel = au moins un Parcel avec senderId    = userId
+   *
+   * Implémentation : 3 requêtes O(N) :
+   *   1. count des CUSTOMER du tenant
+   *   2. distinct passengerId depuis Ticket
+   *   3. distinct senderId    depuis Parcel
+   * Puis intersection en mémoire — suffisant tant que N(customers) < ~100k.
+   * Au-delà : projeter via une vue matérialisée (CustomerActivity).
+   */
+  async getCustomerSegmentation(tenantId: string) {
+    const [totalCustomers, ticketBuyers, parcelSenders] = await Promise.all([
+      this.prisma.user.count({ where: { tenantId, userType: 'CUSTOMER' } }),
+      this.prisma.ticket.findMany({
+        where:    { tenantId },
+        select:   { passengerId: true },
+        distinct: ['passengerId'],
+      }),
+      this.prisma.parcel.findMany({
+        where:    { tenantId },
+        select:   { senderId: true },
+        distinct: ['senderId'],
+      }),
+    ]);
+
+    const travelers = new Set(ticketBuyers.map(t => t.passengerId));
+    const shippers  = new Set(parcelSenders.map(p => p.senderId).filter((s): s is string => !!s));
+
+    let both = 0;
+    for (const id of travelers) if (shippers.has(id)) both++;
+
+    const travelersOnly = travelers.size - both;
+    const shippersOnly  = shippers.size  - both;
+    const active        = travelers.size + shippers.size - both;
+    const inactive      = Math.max(0, totalCustomers - active);
+
+    return {
+      total:         totalCustomers,
+      active,
+      inactive,
+      travelersOnly,
+      shippersOnly,
+      both,
+    };
+  }
+
+  /**
    * Top routes par revenu sur une période.
    */
   async getTopRoutes(tenantId: string, from: Date, to: Date, limit = 10) {

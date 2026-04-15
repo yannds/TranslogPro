@@ -3,8 +3,20 @@
  *
  * Future intégration : GET /api/v1/tenants/:id/analytics/weekly
  */
+import { Users, Ticket, Package, Loader2 } from 'lucide-react';
 import { MiniBarChart } from './MiniBarChart';
 import type { ChartPoint } from './types';
+import { useFetch } from '../../lib/hooks/useFetch';
+import { useAuth }  from '../../lib/auth/auth.context';
+
+interface SegmentationData {
+  total:         number;
+  active:        number;
+  inactive:      number;
+  travelersOnly: number;
+  shippersOnly:  number;
+  both:          number;
+}
 
 // ─── Données mock ─────────────────────────────────────────────────────────────
 
@@ -19,6 +31,63 @@ const PASSENGERS_BY_LINE: ChartPoint[] = [
   { label: 'BZV↔NKY', value: 18 }, { label: 'PNR↔DOL', value: 14 },
   { label: 'BZV↔OUE', value: 9  },
 ];
+
+// ─── Sous-composant : Segmentation Clients ────────────────────────────────────
+// Source backend : GET /analytics/customer-segmentation. La distinction
+// voyageur/expéditeur ne se base PAS sur le rôle (CUSTOMER unifié) mais sur
+// l'activité observée (Ticket.passengerId / Parcel.senderId).
+
+function CustomerSegmentationWidget() {
+  const { user } = useAuth();
+  const url = user?.tenantId ? `/api/tenants/${user.tenantId}/analytics/customer-segmentation` : null;
+  const { data, loading, error } = useFetch<SegmentationData>(url, [user?.tenantId]);
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Users className="w-4 h-4 text-teal-400" aria-hidden />
+        <h3 className="text-sm font-semibold text-white">Segmentation clients par activité</h3>
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 text-slate-500 py-6 justify-center">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-xs">Chargement…</span>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-400 py-2">{error}</p>}
+      {data && (
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+            <p className="text-slate-400">Total clients</p>
+            <p className="text-lg font-bold text-white">{data.total.toLocaleString('fr-FR')}</p>
+          </div>
+          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+            <p className="text-slate-400">Actifs</p>
+            <p className="text-lg font-bold text-white">{data.active.toLocaleString('fr-FR')}</p>
+            <p className="text-[10px] text-slate-500">{data.inactive.toLocaleString('fr-FR')} inactifs</p>
+          </div>
+          <div className="rounded-lg bg-teal-900/30 border border-teal-800/40 px-3 py-2">
+            <Ticket className="w-3 h-3 text-teal-400 inline mb-0.5" aria-hidden />
+            <span className="text-teal-300 ml-1">Voyageurs uniquement</span>
+            <p className="text-lg font-bold text-white">{data.travelersOnly.toLocaleString('fr-FR')}</p>
+          </div>
+          <div className="rounded-lg bg-orange-900/30 border border-orange-800/40 px-3 py-2">
+            <Package className="w-3 h-3 text-orange-400 inline mb-0.5" aria-hidden />
+            <span className="text-orange-300 ml-1">Expéditeurs uniquement</span>
+            <p className="text-lg font-bold text-white">{data.shippersOnly.toLocaleString('fr-FR')}</p>
+          </div>
+          <div className="col-span-2 rounded-lg bg-violet-900/30 border border-violet-800/40 px-3 py-2">
+            <span className="text-violet-300">Voyageurs ET expéditeurs</span>
+            <p className="text-lg font-bold text-white">{data.both.toLocaleString('fr-FR')}</p>
+            <p className="text-[10px] text-slate-400">
+              Clients qui voyagent et expédient — segment à fort potentiel cross-sell.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
@@ -39,6 +108,7 @@ export function PageAnalytics() {
             data={PASSENGERS_BY_LINE}
           />
         </div>
+        <CustomerSegmentationWidget />
       </div>
     </div>
   );

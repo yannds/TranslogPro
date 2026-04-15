@@ -57,6 +57,16 @@ export class AnalyticsController {
     return this.analyticsService.getOccupancyRate(tenantId, tripId);
   }
 
+  /**
+   * Segmentation client par activité (voyageur / expéditeur / les deux).
+   * Source de vérité : tables Ticket + Parcel — pas le rôle.
+   */
+  @Get('customer-segmentation')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  customerSegmentation(@TenantId() tenantId: string) {
+    return this.analyticsService.getCustomerSegmentation(tenantId);
+  }
+
   @Get('top-routes')
   @RequirePermission(Permission.STATS_READ_TENANT)
   topRoutes(
