@@ -551,7 +551,12 @@ function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, erro
       {loading && <p className="text-sm text-slate-500">Chargement des utilisateurs IAM…</p>}
       {!loading && (users ?? []).length === 0 && (
         <p className="text-sm text-slate-500">
-          Aucun user IAM disponible. Tous les users du tenant ont déjà un profil personnel.
+          Aucun user IAM éligible. Un user est éligible s'il est de type STAFF (pas un client) et n'a pas encore de profil personnel.
+        </p>
+      )}
+      {!loading && (users ?? []).length > 0 && (
+        <p className="text-xs text-slate-400">
+          {(users ?? []).length} user(s) éligible(s) — non listés : déjà personnel, ou clients du tenant.
         </p>
       )}
       {!loading && (users ?? []).length > 0 && (

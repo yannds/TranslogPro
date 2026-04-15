@@ -23,6 +23,7 @@ import {
   seedTenantRoles,
   ensureDefaultAgency,
   DEFAULT_AGENCY_NAME,
+  backfillDriverUserTypeZombie,
 } from './iam.seed';
 
 const prisma = new PrismaClient();
@@ -464,6 +465,12 @@ async function main() {
 
   await upsertDriverProfile(driver.id, TENANT1_ID);
   console.log(`[Dev Seed] ✅ driver@tenant1.dev (DRIVER + profil complet, id=${driver.id})`);
+
+  // ── Cleanup Phase 5 : zombie userType='DRIVER' des DB pré-existantes ─────────
+  const zombieReport = await backfillDriverUserTypeZombie(prisma);
+  if (zombieReport.fixed > 0) {
+    console.log(`[Dev Seed] 🧹 ${zombieReport.fixed} user(s) userType=DRIVER → STAFF`);
+  }
 
   // ── Résumé ───────────────────────────────────────────────────────────────────
   console.log('[Dev Seed] Terminé.');

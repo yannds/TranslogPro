@@ -503,6 +503,22 @@ export async function ensureDefaultAgency(
  * Appel idempotent — skip tenants qui ont déjà au moins une agence.
  * Les users CUSTOMER restent sans agence (ils n'en ont pas besoin).
  */
+/**
+ * Backfill Phase 5 cleanup : convertit tout user avec userType='DRIVER'
+ * (zombie legacy) en userType='STAFF'. À rejouer sur toute DB pré-existante
+ * au merge de la refonte Staff/StaffAssignment pour nettoyer les données
+ * orphelines. Idempotent.
+ */
+export async function backfillDriverUserTypeZombie(
+  prismaClient: PrismaClient,
+): Promise<{ fixed: number }> {
+  const res = await prismaClient.user.updateMany({
+    where: { userType: 'DRIVER' },
+    data:  { userType: 'STAFF' },
+  });
+  return { fixed: res.count };
+}
+
 export async function backfillDefaultAgencies(
   prismaClient: PrismaClient,
   language:     TenantLanguage = 'fr',
