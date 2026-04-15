@@ -15,6 +15,7 @@ import { TripService } from '@modules/trip/trip.service';
 import { PrismaService } from '@infra/database/prisma.service';
 import { WorkflowEngine } from '@core/workflow/workflow.engine';
 import { IEventBus } from '@infra/eventbus/interfaces/eventbus.interface';
+import { SchedulingGuardService } from '@modules/scheduling-guard/scheduling-guard.service';
 import { TripState, TripAction } from '@common/constants/workflow-states';
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
@@ -68,15 +69,27 @@ function makeEventBus(): jest.Mocked<IEventBus> {
   return { publish: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<IEventBus>;
 }
 
+// SchedulingGuardService — mock « assignable » par défaut pour ne pas bloquer create()
+function makeSchedulingGuard(): jest.Mocked<SchedulingGuardService> {
+  return {
+    checkAssignability: jest.fn().mockResolvedValue({ canAssign: true, reasons: [] }),
+  } as unknown as jest.Mocked<SchedulingGuardService>;
+}
+
 function buildService(overrides: Partial<{
   prisma:   ReturnType<typeof makePrisma>;
   workflow: ReturnType<typeof makeWorkflow>;
   eventBus: ReturnType<typeof makeEventBus>;
+  guard:    ReturnType<typeof makeSchedulingGuard>;
 }> = {}) {
   const prisma   = overrides.prisma   ?? makePrisma();
   const workflow = overrides.workflow  ?? makeWorkflow();
   const eventBus = overrides.eventBus  ?? makeEventBus();
-  return { service: new TripService(prisma, workflow, eventBus), prisma, workflow, eventBus };
+  const guard    = overrides.guard    ?? makeSchedulingGuard();
+  return {
+    service: new TripService(prisma, workflow, guard, eventBus),
+    prisma, workflow, eventBus, guard,
+  };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

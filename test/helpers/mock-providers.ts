@@ -250,6 +250,9 @@ export function createPrismaMock() {
     transaction:           common({ id: 'tx-01', amount: 5000, type: 'IN', registerId: FIXTURE_REGISTER.id, createdAt: new Date() }),
     // Staff model (used by CrewService, StaffModule)
     staff:                 common({ id: 'stf-01', userId: USER_ID, tenantId: TENANT_ID, agencyId: AGENCY_ID, role: 'DRIVER', status: 'ACTIVE' }),
+    // Agency CRUD (AgencyModule) — count=1 déclenche l'invariant "dernière agence" dans les e2e DELETE.
+    agency:                common({ id: AGENCY_ID, tenantId: TENANT_ID, name: 'Siège', stationId: null }),
+    station:               common({ id: 'st-01', tenantId: TENANT_ID, name: 'Gare Test' }),
     feedback:              common(FIXTURE_FEEDBACK),
     rating:                common({ entityId: TRIP_ID, averageRating: 4.2, count: 10 }),
     safetyAlert:           common(FIXTURE_ALERT),

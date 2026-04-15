@@ -15,6 +15,53 @@ import {
 } from '@nestjs/common';
 import { WorkflowStudioService } from '../workflow-studio.service';
 import { PrismaService }         from '../../../infrastructure/database/prisma.service';
+import { WorkflowEngine }        from '../../../core/workflow/workflow.engine';
+
+// ─── Engine mock ───────────────────────────────────────────────────────────────
+// Émule engine.transition() en lisant le graphe privé de SimulationWorkflowIO
+// (`io.graph` — accessible au runtime malgré le modifier `private`).
+// Comportement :
+//   - Cherche l'edge (entity.status, input.action) dans io.graph.edges ; si
+//     absent → jette (le service traduit ça en step non reachable).
+//   - Vérifie la permission via prisma.rolePermission.findMany (mock test).
+//   - Persiste via options.persist() comme le ferait le vrai moteur.
+
+function makeEngine(prisma: jest.Mocked<PrismaService>): WorkflowEngine {
+  return {
+    transition: jest.fn().mockImplementation(async (
+      entity:  { status: string; version: number },
+      input:   { action: string; actor: { roleId: string } },
+      options: { persist: (e: unknown, toState: string) => Promise<unknown> },
+      io:      unknown,
+    ) => {
+      const graph = (io as { graph: { edges: Array<{ source: string; label: string; target: string; permission?: string }> } }).graph;
+      const ignorePermissions = (io as { ignorePermissions?: boolean }).ignorePermissions ?? false;
+
+      const edge = graph.edges.find(e => e.source === entity.status && e.label === input.action);
+      if (!edge) {
+        throw new BadRequestException(`No edge for ${entity.status}|${input.action}`);
+      }
+
+      // En simulation avec simulatedRoleId (ignorePermissions=false), on émule
+      // le blocage par permission : si le rôle n'a aucune rolePermission en DB,
+      // le moteur jette ForbiddenException. Le test
+      // « stoppe au premier blocage de permission » exerce ce chemin.
+      if (!ignorePermissions) {
+        const granted = await prisma.rolePermission.findMany({
+          where: { roleId: input.actor.roleId },
+        } as never);
+        if (!Array.isArray(granted) || granted.length === 0) {
+          throw new ForbiddenException(
+            `Permission denied for role ${input.actor.roleId}`,
+          );
+        }
+      }
+
+      const nextEntity = await options.persist(entity, edge.target);
+      return { toState: edge.target, entity: nextEntity };
+    }),
+  } as unknown as WorkflowEngine;
+}
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -110,6 +157,11 @@ function makePrisma(opts: {
     rolePermission: {
       findMany: jest.fn().mockResolvedValue(rolePermissions),
     },
+    role: {
+      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve({ id: where.id, name: 'MOCKED_ROLE', tenantId: TENANT_ID }),
+      ),
+    },
     transact,
   } as unknown as jest.Mocked<PrismaService>;
 }
@@ -141,7 +193,7 @@ describe('WorkflowStudioService', () => {
   describe('simulateWorkflow()', () => {
     beforeEach(() => {
       prisma = makePrisma({ workflowConfigs: MINIMAL_PRISMA_CONFIGS });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
     });
 
     it('retourne le chemin complet quand toutes les transitions réussissent', async () => {
@@ -160,7 +212,7 @@ describe('WorkflowStudioService', () => {
 
     it('stoppe au premier blocage de permission', async () => {
       prisma = makePrisma({ workflowConfigs: MINIMAL_PRISMA_CONFIGS });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       // Rôle sans la permission requise
       (prisma.rolePermission.findMany as jest.Mock).mockResolvedValue([]);
@@ -200,7 +252,7 @@ describe('WorkflowStudioService', () => {
           authorTenantId: TENANT_ID,
         },
       });
-      svc = new WorkflowStudioService(prisma);
+      svc = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       const result = await svc.simulateWorkflow(TENANT_ID, {
         entityType:   'Ticket',
@@ -215,7 +267,7 @@ describe('WorkflowStudioService', () => {
 
     it("lance NotFoundException si blueprintId fourni mais blueprint introuvable", async () => {
       prisma = makePrisma({ blueprint: null });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       await expect(
         svc.simulateWorkflow(TENANT_ID, {
@@ -233,7 +285,7 @@ describe('WorkflowStudioService', () => {
   describe('createBlueprint()', () => {
     beforeEach(() => {
       prisma = makePrisma({ slugConflict: false });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
     });
 
     it('crée un blueprint valide', async () => {
@@ -283,7 +335,7 @@ describe('WorkflowStudioService', () => {
   describe('getBlueprint()', () => {
     it('lance NotFoundException si le blueprint est introuvable', async () => {
       prisma = makePrisma({ blueprint: null });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       await expect(
         svc.getBlueprint('bp-inexistant', TENANT_ID),
@@ -293,7 +345,7 @@ describe('WorkflowStudioService', () => {
     it('retourne le blueprint si accessible', async () => {
       const bp = { id: BLUEPRINT_ID, name: 'Mon Blueprint', isSystem: false };
       prisma = makePrisma({ blueprint: bp });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       const result = await svc.getBlueprint(BLUEPRINT_ID, TENANT_ID);
       expect(result.name).toBe('Mon Blueprint');
@@ -311,7 +363,7 @@ describe('WorkflowStudioService', () => {
           authorTenantId:  TENANT_ID,
         },
       });
-      svc = new WorkflowStudioService(prisma);
+      svc = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       await expect(
         svc.deleteBlueprint(BLUEPRINT_ID, TENANT_ID),
@@ -326,7 +378,7 @@ describe('WorkflowStudioService', () => {
           authorTenantId:  TENANT_ID,
         },
       });
-      svc = new WorkflowStudioService(prisma);
+      svc = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       await expect(svc.deleteBlueprint(BLUEPRINT_ID, TENANT_ID)).resolves.not.toThrow();
       expect(prisma.workflowBlueprint.delete).toHaveBeenCalledWith({
@@ -340,7 +392,7 @@ describe('WorkflowStudioService', () => {
   describe('listEntityTypes()', () => {
     it("retourne les entityTypes distincts du tenant", async () => {
       prisma = makePrisma({ workflowConfigs: MINIMAL_PRISMA_CONFIGS });
-      svc    = new WorkflowStudioService(prisma);
+      svc    = new WorkflowStudioService(prisma, makeEngine(prisma));
 
       // Override findMany avec distinct simulé
       (prisma.workflowConfig.findMany as jest.Mock).mockResolvedValue([

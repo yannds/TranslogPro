@@ -73,7 +73,7 @@ describe('WhiteLabelService', () => {
       redis = makeRedis(cached);
       service = new WhiteLabelService(prisma, redis as unknown as any);
       const result = await service.getBrand(T);
-      expect(redis.get).toHaveBeenCalledWith(`brand:${T}`);
+      expect(redis.get).toHaveBeenCalledWith(`wl:brand:${T}`);
       expect(prisma.tenantBrand.findUnique).not.toHaveBeenCalled();
     });
 
@@ -85,7 +85,7 @@ describe('WhiteLabelService', () => {
     it('stocke la marque en cache Redis après lecture DB', async () => {
       await service.getBrand(T);
       expect(redis.setex).toHaveBeenCalledWith(
-        `brand:${T}`,
+        `wl:brand:${T}`,
         300,
         expect.any(String),
       );
@@ -125,7 +125,7 @@ describe('WhiteLabelService', () => {
         bgColor:      '#ffffff',
         fontFamily:   'Inter, sans-serif',
       });
-      expect(redis.del).toHaveBeenCalledWith(`brand:${T}`);
+      expect(redis.del).toHaveBeenCalledWith(`wl:brand:${T}`);
     });
   });
 
@@ -135,7 +135,7 @@ describe('WhiteLabelService', () => {
     it('supprime la marque et invalide le cache', async () => {
       await service.remove(T);
       expect(prisma.tenantBrand.delete).toHaveBeenCalledWith({ where: { tenantId: T } });
-      expect(redis.del).toHaveBeenCalledWith(`brand:${T}`);
+      expect(redis.del).toHaveBeenCalledWith(`wl:brand:${T}`);
     });
   });
 

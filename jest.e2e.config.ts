@@ -7,6 +7,9 @@ const config: Config = {
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
+  // @pdfme/* est distribué en ESM uniquement — ts-jest doit les transformer
+  // (sinon le runtime CommonJS de Jest jette "Cannot use import statement outside a module").
+  transformIgnorePatterns: ['node_modules/(?!(@pdfme)/)'],
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
