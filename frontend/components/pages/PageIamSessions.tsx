@@ -2,9 +2,10 @@
  * PageIamSessions — Sessions actives du tenant
  *
  * Fonctionnalités :
- *   - DataTableMaster : tri, recherche, pagination
+ *   - DataTableMaster : tri, recherche, pagination, export multi-format
  *   - Informations : utilisateur, IP, user-agent, créée le, expire le
- *   - Révoquer une session individuelle (row action + confirmation Dialog)
+ *   - Clic ligne → modale détail avec option révocation
+ *   - Révoquer aussi via row action directe (raccourci)
  */
 import { useState, useCallback } from 'react';
 import { KeyRound, RefreshCw, Trash2, Monitor, Smartphone } from 'lucide-react';
@@ -58,10 +59,10 @@ function buildColumns(currentUserId: string): Column<Session>[] {
       sortable: true,
       cellRenderer: (_v, row) => (
         <div>
-          <p className="text-sm font-medium text-white flex items-center gap-1.5">
+          <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
             {row.user.name}
             {row.user.id === currentUserId && (
-              <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-1.5 py-0.5">
+              <span className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
                 vous
               </span>
             )}
@@ -79,7 +80,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
           {isMobile(String(v))
             ? <Smartphone size={13} className="text-slate-400 shrink-0" />
             : <Monitor size={13} className="text-slate-400 shrink-0" />}
-          <span className="text-xs text-slate-400 max-w-[220px] truncate">
+          <span className="text-xs text-slate-500 dark:text-slate-400 max-w-[220px] truncate">
             {uaShort(v ? String(v) : undefined)}
           </span>
         </div>
@@ -92,7 +93,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
       sortable: true,
       width: '130px',
       cellRenderer: (v) => (
-        <span className="font-mono text-xs text-slate-400">{v ? String(v) : '—'}</span>
+        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{v ? String(v) : '—'}</span>
       ),
     },
     {
@@ -101,7 +102,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
-        <span className="text-xs text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
       ),
       csvValue: (v) => formatDate(String(v)),
     },
@@ -111,11 +112,83 @@ function buildColumns(currentUserId: string): Column<Session>[] {
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
-        <span className="text-xs text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(String(v))}</span>
       ),
       csvValue: (v) => formatDate(String(v)),
     },
   ];
+}
+
+// ─── Modale détail session ────────────────────────────────────────────────────
+
+function SessionDetailDialog({
+  session,
+  currentUserId,
+  onClose,
+  onRevoke,
+  revoking,
+  err,
+}: {
+  session:        Session | null;
+  currentUserId:  string;
+  onClose:        () => void;
+  onRevoke:       () => void;
+  revoking:       boolean;
+  err:            string;
+}) {
+  if (!session) return null;
+  const isOwn = session.user.id === currentUserId;
+  return (
+    <Dialog
+      open={!!session}
+      onOpenChange={o => { if (!o) onClose(); }}
+      title="Détail de la session"
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>Fermer</Button>
+          <Button variant="destructive" size="sm" onClick={onRevoke} disabled={revoking}>
+            <Trash2 size={13} />
+            {revoking ? 'Révocation…' : 'Révoquer'}
+          </Button>
+        </>
+      }
+    >
+      <dl className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+        <div className="py-2.5 grid grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">Utilisateur</dt>
+          <dd className="col-span-2 text-slate-900 dark:text-slate-100">
+            <span className="font-medium">{session.user.name}</span>
+            {isOwn && (
+              <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
+                vous
+              </span>
+            )}
+            <p className="text-xs text-slate-500 mt-0.5">{session.user.email}</p>
+          </dd>
+        </div>
+        <div className="py-2.5 grid grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">IP</dt>
+          <dd className="col-span-2 font-mono text-slate-900 dark:text-slate-100">{session.ipAddress ?? '—'}</dd>
+        </div>
+        <div className="py-2.5 grid grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">Appareil</dt>
+          <dd className="col-span-2 text-xs text-slate-700 dark:text-slate-300 break-all">
+            {uaShort(session.userAgent)}
+          </dd>
+        </div>
+        <div className="py-2.5 grid grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">Créée le</dt>
+          <dd className="col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.createdAt)}</dd>
+        </div>
+        <div className="py-2.5 grid grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">Expire le</dt>
+          <dd className="col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.expiresAt)}</dd>
+        </div>
+      </dl>
+      {err && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{err}</p>}
+    </Dialog>
+  );
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -161,11 +234,11 @@ export function PageIamSessions() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <KeyRound size={24} className="text-indigo-400" />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <KeyRound size={24} className="text-indigo-500 dark:text-indigo-400" />
             Sessions actives
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
             {loading ? 'Chargement…' : `${sessions.length} session(s) ouverte(s)`}
           </p>
         </div>
@@ -175,7 +248,7 @@ export function PageIamSessions() {
         </Button>
       </div>
 
-      {/* Tableau */}
+      {/* Tableau — clic ligne = détail + option révocation */}
       <DataTableMaster<Session>
         columns={columns}
         data={sessions}
@@ -185,34 +258,21 @@ export function PageIamSessions() {
         defaultPageSize={25}
         searchPlaceholder="Rechercher (utilisateur, IP, appareil…)"
         emptyMessage="Aucune session active"
-        onExportCsv="sessions.csv"
+        exportFormats={['csv', 'json']}
+        exportFilename="sessions"
+        onRowClick={(row) => { setTarget(row); setErr(''); }}
         stickyHeader
       />
 
-      {/* Confirmation révocation */}
-      <Dialog
-        open={!!target}
-        onOpenChange={o => { if (!o) setTarget(null); }}
-        title="Révoquer la session"
-        description="L'utilisateur sera déconnecté immédiatement."
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>Annuler</Button>
-            <Button variant="destructive" size="sm" onClick={handleRevoke} disabled={revoking}>
-              {revoking ? 'Révocation…' : 'Révoquer'}
-            </Button>
-          </>
-        }
-      >
-        {target && (
-          <div className="space-y-2 text-sm text-slate-300">
-            <p><strong className="text-white">{target.user.name}</strong> ({target.user.email})</p>
-            <p className="text-slate-400">IP : {target.ipAddress ?? '—'}</p>
-            {err && <p className="text-red-400 text-xs">{err}</p>}
-          </div>
-        )}
-      </Dialog>
+      {/* Modale détail / révocation */}
+      <SessionDetailDialog
+        session={target}
+        currentUserId={user?.id ?? ''}
+        onClose={() => setTarget(null)}
+        onRevoke={handleRevoke}
+        revoking={revoking}
+        err={err}
+      />
     </div>
   );
 }

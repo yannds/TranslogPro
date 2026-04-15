@@ -363,13 +363,14 @@ model AuditLog {
   createdAt DateTime @default(now())
   userId    String?
   tenantId  String
-  plane     String   // control | data
-  level     String   // info | warn | critical
-  action    String   // ex: "data.ticket.board.agency"
-  resource  String   // ex: "Ticket:clx..."
-  oldValue  Json?
-  newValue  Json?
-  ipAddress String?
+  plane          String   // control | data | http
+  level          String   // info | warn | critical
+  action         String   // ex: "data.ticket.board.agency"
+  resource       String   // ex: "Ticket:clx..."
+  oldValue       Json?
+  newValue       Json?
+  ipAddress      String?
+  securityLevel  String?  // INTERNAL | CONFIDENTIAL | RESTRICTED
 
   user User? @relation(fields: [userId], references: [id])
 

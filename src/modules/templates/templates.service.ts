@@ -20,6 +20,7 @@ import {
 } from '../../infrastructure/storage/interfaces/storage.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { CreateTemplateDto, UpdateTemplateDto, DuplicateTemplateDto } from './dto/create-template.dto';
+import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
 
 @Injectable()
 export class TemplatesService {
@@ -308,5 +309,58 @@ export class TemplatesService {
     }
 
     throw new NotFoundException(`Template "${slug}" sans source (body ni storageKey)`);
+  }
+
+  // ─── Pack de démarrage ──────────────────────────────────────────────────────
+
+  /**
+   * Restaure (ou complète) le pack de démarrage : duplique en copies tenant éditables
+   * les templates système listés dans STARTER_PACK_SLUGS qui ne sont pas encore présents.
+   * Idempotent — ne touche pas aux templates tenant existants (même slug).
+   */
+  async restoreStarterPack(tenantId: string, actor: CurrentUserPayload) {
+    const systemTemplates = await this.prisma.documentTemplate.findMany({
+      where: { tenantId: null, slug: { in: STARTER_PACK_SLUGS }, isActive: true },
+    });
+
+    if (systemTemplates.length === 0) {
+      throw new NotFoundException(
+        'Aucun template système trouvé — exécuter `npm run db:seed` pour charger le catalogue',
+      );
+    }
+
+    const created: string[] = [];
+    const skipped: string[] = [];
+
+    for (const sys of systemTemplates) {
+      const already = await this.prisma.documentTemplate.findFirst({
+        where: { tenantId, slug: sys.slug },
+      });
+      if (already) { skipped.push(sys.slug); continue; }
+
+      await this.prisma.documentTemplate.create({
+        data: {
+          tenantId,
+          name:        sys.name,
+          slug:        sys.slug,
+          docType:     sys.docType,
+          format:      sys.format,
+          engine:      sys.engine,
+          schemaJson:  sys.schemaJson ?? undefined,
+          varsSchema:  sys.varsSchema ?? {},
+          body:        sys.body,
+          version:     1,
+          isSystem:    false,
+          isActive:    true,
+          createdById: actor.id,
+        },
+      });
+      created.push(sys.slug);
+    }
+
+    this.logger.log(
+      `Pack de démarrage restauré pour tenant ${tenantId} : ${created.length} créés, ${skipped.length} ignorés`,
+    );
+    return { created, skipped };
   }
 }

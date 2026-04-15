@@ -18,13 +18,15 @@ import { apiFetch } from '../api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
-  id:       string;
-  email:    string;
-  name:     string | null;
-  tenantId: string;
-  roleId:   string | null;
-  roleName: string | null;
-  userType: string;
+  id:             string;
+  email:          string;
+  name:           string | null;
+  tenantId:       string;
+  roleId:         string | null;
+  roleName:       string | null;
+  userType:       string;
+  /** moduleKey SaaS actifs pour le tenant (ex: 'TICKETING', 'QHSE'). */
+  enabledModules: string[];
 }
 
 interface AuthContextValue {
@@ -32,6 +34,8 @@ interface AuthContextValue {
   loading: boolean;
   login:   (email: string, password: string) => Promise<void>;
   logout:  () => Promise<void>;
+  /** Force la relecture du user (utile après toggle de module). */
+  refresh: () => Promise<void>;
 }
 
 // ─── Contexte ─────────────────────────────────────────────────────────────────
@@ -72,8 +76,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     navigate('/login', { replace: true });
   }, [navigate]);
 
+  const refresh = useCallback(async () => {
+    try {
+      const fresh = await apiFetch<AuthUser>('/api/auth/me', { skipRedirectOn401: true });
+      setUser(fresh);
+    } catch {
+      setUser(null);
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

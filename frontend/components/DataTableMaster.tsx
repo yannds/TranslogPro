@@ -5,9 +5,10 @@
  *   - Tri multi-colonne (clic en-tête, indicateur ↑↓)
  *   - Recherche globale full-text (debounce 300ms)
  *   - Pagination configurable (taille de page : 10 / 25 / 50 / 100)
+ *   - Lignes toujours cliquables (cursor pointer + keyboard Enter/Space → onRowClick)
  *   - Actions par ligne (RowAction : label, icon, onClick, hidden, disabled)
- *   - Sélection multiple (checkbox + action groupée)
- *   - Export CSV côté client
+ *   - Sélection multiple (checkbox) — actions batch visibles uniquement si > 1 sélectionné
+ *   - Export multi-format : CSV, JSON, XLS, PDF (dropdown)
  *   - Dark mode (classe CSS dark sur l'ancêtre)
  *   - WCAG 2.1 : aria-sort, aria-label, rôles table corrects
  *   - Skeleton loader (pulse CSS) pendant le chargement
@@ -24,23 +25,28 @@
  *   ]}
  *   data={tickets}
  *   loading={isLoading}
+ *   onRowClick={(row) => openDetail(row.id)}
  *   rowActions={[
  *     { label: 'Imprimer', onClick: (row) => printTicket(row.id) },
  *     { label: 'Annuler',  onClick: (row) => cancelTicket(row.id),
  *       hidden: (row) => row.status !== 'CONFIRMED' },
  *   ]}
- *   onExportCsv
+ *   exportFormats={['csv', 'json', 'xls', 'pdf']}
+ *   exportFilename="billets"
  *   emptyMessage="Aucun billet trouvé"
  * />
  * ```
  */
 import {
-  useState, useMemo, useCallback, useEffect, ChangeEvent, KeyboardEvent,
+  useState, useMemo, useCallback, useEffect, useRef, ChangeEvent, KeyboardEvent,
 } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SortDir = 'asc' | 'desc';
+
+/** Formats d'export disponibles */
+export type ExportFormat = 'csv' | 'json' | 'xls' | 'pdf';
 
 export interface Column<T> {
   key:          keyof T & string;
@@ -49,7 +55,7 @@ export interface Column<T> {
   align?:       'left' | 'center' | 'right';
   width?:       string;                        // ex: '120px', '10%'
   cellRenderer?: (value: T[keyof T], row: T) => React.ReactNode;
-  csvValue?:    (value: T[keyof T], row: T) => string;  // pour export CSV
+  csvValue?:    (value: T[keyof T], row: T) => string;  // pour export
 }
 
 export interface RowAction<T> {
@@ -79,7 +85,14 @@ export interface DataTableMasterProps<T extends { id: string }> {
   defaultPageSize?: 10 | 25 | 50 | 100;
   searchPlaceholder?: string;
   emptyMessage?:  string;
-  onExportCsv?:   boolean | string;   // true = "export.csv", string = nom du fichier
+  /** Formats d'export à proposer. Affiche un menu déroulant "Exporter". */
+  exportFormats?: ExportFormat[];
+  /** Nom de fichier de base sans extension (défaut: 'export') */
+  exportFilename?: string;
+  /** Rétro-compatibilité — préférez exportFormats={['csv']} + exportFilename.
+   *  Active l'export CSV seul si exportFormats est absent. */
+  onExportCsv?:   boolean | string;
+  /** Callback déclenché au clic sur une ligne (edit ou vue détail selon contexte) */
   onRowClick?:    (row: T) => void;
   className?:     string;
   stickyHeader?:  boolean;
@@ -108,6 +121,8 @@ function cellToString<T>(col: Column<T>, row: T): string {
   return String(val);
 }
 
+// ── Export CSV ────────────────────────────────────────────────────────────────
+
 function exportToCsv<T>(columns: Column<T>[], data: T[], filename: string) {
   const header = columns.map(c => `"${c.header.replace(/"/g, '""')}"`).join(',');
   const rows   = data.map(row =>
@@ -118,13 +133,89 @@ function exportToCsv<T>(columns: Column<T>[], data: T[], filename: string) {
   );
   const csv  = [header, ...rows].join('\r\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  triggerDownload(blob, filename);
+}
+
+// ── Export JSON ───────────────────────────────────────────────────────────────
+
+function exportToJson<T>(columns: Column<T>[], data: T[], filename: string) {
+  const records = data.map(row =>
+    Object.fromEntries(columns.map(col => [col.key, cellToString(col, row)])),
+  );
+  const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+  triggerDownload(blob, filename);
+}
+
+// ── Export XLS (HTML table → Excel) ──────────────────────────────────────────
+
+function exportToXls<T>(columns: Column<T>[], data: T[], filename: string) {
+  const ths  = columns.map(c => `<th>${escHtml(c.header)}</th>`).join('');
+  const trs  = data.map(row =>
+    '<tr>' + columns.map(col => `<td>${escHtml(cellToString(col, row))}</td>`).join('') + '</tr>',
+  ).join('');
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook>
+    <x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Export</x:Name>
+    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    </head><body><table border="1">${ths ? `<thead><tr>${ths}</tr></thead>` : ''}<tbody>${trs}</tbody></table></body></html>`;
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  triggerDownload(blob, filename);
+}
+
+// ── Export PDF (impression navigateur via blob URL) ───────────────────────────
+
+function exportToPdf<T>(columns: Column<T>[], data: T[], title: string) {
+  const ths = columns.map(c => `<th>${escHtml(c.header)}</th>`).join('');
+  const trs = data.map(row =>
+    '<tr>' + columns.map(col => `<td>${escHtml(cellToString(col, row))}</td>`).join('') + '</tr>',
+  ).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>${escHtml(title)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 11px; }
+      h2   { font-size: 14px; margin-bottom: 8px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+      th { background: #f0f0f0; font-weight: 600; }
+      tr:nth-child(even) { background: #f9f9f9; }
+      @media print { button { display: none; } }
+    </style></head><body>
+    <h2>${escHtml(title)}</h2>
+    <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+    <br><button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+    <script>setTimeout(function(){ window.print(); }, 400);</script>
+    </body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
+  window.open(url, '_blank');
+  // Révocation différée pour laisser le navigateur charger la page
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
   a.href     = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const FORMAT_LABELS: Record<ExportFormat, string> = {
+  csv:  'CSV',
+  json: 'JSON',
+  xls:  'XLS',
+  pdf:  'PDF',
+};
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -139,6 +230,8 @@ function DataTableMaster<T extends { id: string }>({
   defaultPageSize = 25,
   searchPlaceholder = 'Rechercher…',
   emptyMessage = 'Aucun résultat',
+  exportFormats,
+  exportFilename,
   onExportCsv,
   onRowClick,
   className = '',
@@ -150,11 +243,32 @@ function DataTableMaster<T extends { id: string }>({
   const [page,       setPage]       = useState(1);
   const [pageSize,   setPageSize]   = useState<number>(defaultPageSize);
   const [selected,   setSelected]   = useState<Set<string>>(new Set());
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef                   = useRef<HTMLDivElement>(null);
 
   const debouncedSearch = useDebounce(search, 300);
 
   // Réinitialise la page quand la recherche change
   useEffect(() => { setPage(1); }, [debouncedSearch]);
+
+  // Ferme le menu export si clic hors
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportOpen]);
+
+  // ── Formats d'export effectifs (rétro-compat onExportCsv) ──────────────────
+  const activeFormats: ExportFormat[] = useMemo(() => {
+    if (exportFormats && exportFormats.length > 0) return exportFormats;
+    if (onExportCsv) return ['csv'];
+    return [];
+  }, [exportFormats, onExportCsv]);
 
   // ── Filtrage ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -214,18 +328,29 @@ function DataTableMaster<T extends { id: string }>({
 
   const selectedRows  = sorted.filter(r => selected.has(String(getNestedValue(r, keyField))));
 
-  // ── Export CSV ──────────────────────────────────────────────────────────────
-  const handleCsv = () => {
-    const fname = typeof onExportCsv === 'string' ? onExportCsv : 'export.csv';
-    exportToCsv(columns, sorted, fname);
+  // ── Export ──────────────────────────────────────────────────────────────────
+  const baseFilename = exportFilename
+    ?? (typeof onExportCsv === 'string' ? onExportCsv.replace(/\.csv$/i, '') : 'export');
+
+  const handleExport = (fmt: ExportFormat) => {
+    setExportOpen(false);
+    switch (fmt) {
+      case 'csv':  exportToCsv(columns, sorted, `${baseFilename}.csv`);   break;
+      case 'json': exportToJson(columns, sorted, `${baseFilename}.json`); break;
+      case 'xls':  exportToXls(columns, sorted, `${baseFilename}.xls`);  break;
+      case 'pdf':  exportToPdf(columns, sorted, baseFilename);            break;
+    }
   };
 
   // ── Skeleton ────────────────────────────────────────────────────────────────
   const skeletonRows = Array.from({ length: pageSize > 10 ? 10 : pageSize });
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
-  const hasRowActions = rowActions && rowActions.length > 0;
-  const hasBulkAct    = bulkActions && bulkActions.length > 0;
+  const hasRowActions  = rowActions && rowActions.length > 0;
+  const hasBulkAct     = bulkActions && bulkActions.length > 0;
+  /** Actions batch visibles uniquement quand PLUS D'UN élément sélectionné */
+  const showBulkPanel  = hasBulkAct && selected.size > 1;
+  const hasExport      = activeFormats.length > 0;
 
   return (
     <div className={`dtm-root ${className}`} role="region" aria-label="Tableau de données">
@@ -242,8 +367,8 @@ function DataTableMaster<T extends { id: string }>({
         />
 
         <div className="dtm-toolbar-right">
-          {/* Actions groupées si sélection */}
-          {hasBulkAct && selected.size > 0 && (
+          {/* Actions groupées — uniquement si > 1 élément sélectionné */}
+          {showBulkPanel && (
             <div className="dtm-bulk-actions" role="group" aria-label="Actions groupées">
               <span className="dtm-sel-count">{selected.size} sélectionné(s)</span>
               {bulkActions!.map((action, i) => (
@@ -262,16 +387,34 @@ function DataTableMaster<T extends { id: string }>({
             </div>
           )}
 
-          {/* Export CSV */}
-          {onExportCsv && (
-            <button
-              className="dtm-btn dtm-btn-secondary"
-              onClick={handleCsv}
-              aria-label="Exporter en CSV"
-              disabled={sorted.length === 0}
-            >
-              ↓ CSV
-            </button>
+          {/* Export multi-format */}
+          {hasExport && (
+            <div className="dtm-export-wrap" ref={exportRef}>
+              <button
+                className="dtm-btn dtm-btn-secondary"
+                onClick={() => setExportOpen(o => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={exportOpen}
+                disabled={sorted.length === 0}
+              >
+                ↓ Exporter {activeFormats.length > 1 ? '▾' : `(${FORMAT_LABELS[activeFormats[0]]})`}
+              </button>
+              {exportOpen && (
+                <ul className="dtm-export-menu" role="listbox" aria-label="Format d'export">
+                  {activeFormats.map(fmt => (
+                    <li key={fmt}>
+                      <button
+                        className="dtm-export-item"
+                        role="option"
+                        onClick={() => handleExport(fmt)}
+                      >
+                        {FORMAT_LABELS[fmt]}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
           {/* Taille de page */}
@@ -366,14 +509,21 @@ function DataTableMaster<T extends { id: string }>({
               </tr>
             ) : (
               pageData.map((row, rowIdx) => {
-                const rowKey = String(getNestedValue(row, keyField));
+                const rowKey    = String(getNestedValue(row, keyField));
                 const isSelected = selected.has(rowKey);
                 return (
                   <tr
                     key={rowKey}
-                    className={`dtm-row ${isSelected ? 'dtm-row-selected' : ''} ${rowIdx % 2 === 0 ? 'dtm-row-even' : ''}`}
+                    className={`dtm-row dtm-row-clickable ${isSelected ? 'dtm-row-selected' : ''} ${rowIdx % 2 === 0 ? 'dtm-row-even' : ''}`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    style={onRowClick ? { cursor: 'pointer' } : undefined}
+                    onKeyDown={(e: KeyboardEvent) => {
+                      if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onRowClick(row);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="row"
                     aria-rowindex={rowIdx + 1}
                     aria-selected={hasBulkAct ? isSelected : undefined}
                   >
@@ -477,7 +627,7 @@ function DataTableMaster<T extends { id: string }>({
 
       {/* ── Styles (inlined pour portabilité) ───────────────────────────────── */}
       <style>{`
-        .dtm-root { font-family: system-ui, sans-serif; font-size: 14px; color: #1a1a1a; }
+        .dtm-root { font-family: system-ui, sans-serif; font-size: 14px; color: #111827; }
         .dark .dtm-root { color: #e5e7eb; }
 
         /* Toolbar */
@@ -502,6 +652,18 @@ function DataTableMaster<T extends { id: string }>({
         .dtm-bulk-actions { display: flex; align-items: center; gap: 6px; }
         .dtm-sel-count { font-size: 12px; color: #6366f1; font-weight: 600; }
 
+        /* Export dropdown */
+        .dtm-export-wrap { position: relative; }
+        .dtm-export-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;
+          background: #fff; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 0;
+          min-width: 110px; box-shadow: 0 4px 12px rgba(0,0,0,.1); list-style: none; margin: 0; }
+        .dark .dtm-export-menu { background: #1f2937; border-color: #374151; }
+        .dtm-export-item { width: 100%; text-align: left; padding: 7px 14px; font-size: 13px;
+          background: none; border: none; cursor: pointer; color: #374151; }
+        .dtm-export-item:hover { background: #f3f4f6; }
+        .dark .dtm-export-item { color: #e5e7eb; }
+        .dark .dtm-export-item:hover { background: #374151; }
+
         /* Table wrapper */
         .dtm-table-wrapper { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
         .dark .dtm-table-wrapper { border-color: #374151; }
@@ -509,11 +671,13 @@ function DataTableMaster<T extends { id: string }>({
         .dtm-sticky thead th { position: sticky; top: 0; z-index: 1; }
 
         /* Header */
-        .dtm-th { padding: 10px 12px; background: #1a1a1a; color: #fff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; user-select: none; }
+        .dtm-th { padding: 10px 12px; background: #f1f5f9; color: #374151; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; user-select: none; border-bottom: 1px solid #e2e8f0; }
+        .dark .dtm-th { background: #1e293b; color: #e2e8f0; border-bottom-color: #334155; }
         .dtm-th-sort { cursor: pointer; }
-        .dtm-th-sort:hover { background: #333; }
+        .dtm-th-sort:hover { background: #e2e8f0; }
+        .dark .dtm-th-sort:hover { background: #334155; }
         .dtm-th-check, .dtm-th-actions { width: 44px; }
-        .dtm-sort-icon { color: #9ca3af; font-size: 11px; }
+        .dtm-sort-icon { color: #94a3b8; font-size: 11px; }
 
         /* Alignment */
         .dtm-align-left   { text-align: left; }
@@ -530,6 +694,9 @@ function DataTableMaster<T extends { id: string }>({
         .dark .dtm-row:hover { background: #1f2937; }
         .dark .dtm-row-even { background: #111827; }
         .dark .dtm-row-selected { background: #312e81 !important; }
+        /* Toutes les lignes sont cliquables */
+        .dtm-row-clickable { cursor: pointer; }
+        .dtm-row-clickable:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
 
         /* Cells */
         .dtm-td { padding: 9px 12px; font-size: 13px; vertical-align: middle; }

@@ -395,7 +395,9 @@ export function PageIamUsers() {
         defaultPageSize={25}
         searchPlaceholder="Rechercher (nom, email, rôle, agence…)"
         emptyMessage={users?.length === 0 ? 'Aucun utilisateur.' : 'Aucun résultat pour ce rôle.'}
-        onExportCsv="utilisateurs.csv"
+        exportFormats={['csv', 'json', 'xls']}
+        exportFilename="utilisateurs"
+        onRowClick={(row) => { setEditUser(row); setActionErr(null); }}
         stickyHeader
       />
 

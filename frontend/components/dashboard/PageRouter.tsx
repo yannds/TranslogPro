@@ -52,6 +52,10 @@ const LazyIamRoles       = lazy(() => import('../pages/PageIamRoles').then(m => 
 const LazyIamAudit       = lazy(() => import('../pages/PageIamAudit').then(m => ({ default: m.PageIamAudit })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamSessions    = lazy(() => import('../pages/PageIamSessions').then(m => ({ default: m.PageIamSessions })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyModules        = lazy(() => import('../pages/PageModules').then(m => ({ default: m.PageModules })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTemplateStudio = lazy(() => import('../pages/PageTemplateStudio').then(m => ({ default: m.PageTemplateStudio })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,10 +115,13 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'maintenance-planning': return <PageWip title="Planning garage" />;
     case 'maintenance-alerts':  return <PageWip title="Alertes techniques" />;
     case 'fleet-docs':
-    case 'fleet-docs-alerts':   return <LazyFleetDocs />;
+    case 'fleet-docs-alerts':
+    case 'fleet-docs-consumables':
+    case 'fleet-docs-config':   return <LazyFleetDocs />;
 
     // ── Chauffeurs & Équipages ─────────────────────────────────────────────
     case 'drivers':
+    case 'drivers-list':
     case 'driver-licenses':
     case 'driver-rest':
     case 'driver-trainings':
@@ -125,8 +132,10 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── QHSE ───────────────────────────────────────────────────────────────
     case 'qhse-accidents':
+    case 'qhse-accidents-list':
     case 'qhse-disputes':
     case 'qhse-procedures':     return <LazyQhse />;
+    case 'qhse-config':         return <PageWip title="Configuration QHSE" />;
 
     // ── CRM ────────────────────────────────────────────────────────────────
     case 'crm-clients':         return <PageCrm />;
@@ -143,16 +152,17 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'safety-sos':          return <PageWip title="Alertes SOS" />;
 
     // ── Workflow Studio ────────────────────────────────────────────────────
-    case 'workflow-studio':     return <LazyWorkflowStudio />;
+    case 'workflow-studio':
+    case 'wf-designer':         return <LazyWorkflowStudio />;
     case 'wf-blueprints':       return <LazyWfBlueprints />;
     case 'wf-marketplace':      return <LazyWfMarketplace />;
     case 'wf-simulate':         return <LazyWfSimulate />;
 
     // ── Paramètres & White-label ───────────────────────────────────────────
-    case 'modules':             return <PageWip title="Modules & Extensions" />;
+    case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
     case 'integrations':        return <PageWip title="Intégrations API" />;
-    case 'documents-templates': return <PageWip title="Modèles de documents" />;
+    case 'documents-templates': return <LazyTemplateStudio />;
 
     // ── IAM ────────────────────────────────────────────────────────────────
     case 'iam-users':           return <LazyIamUsers />;

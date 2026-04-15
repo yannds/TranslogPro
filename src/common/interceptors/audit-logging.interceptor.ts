@@ -83,6 +83,20 @@ function levelFromStatus(status: number): string {
   return 'info';
 }
 
+/**
+ * Niveau de sécurité de la donnée (classification ISO 27001).
+ *   RESTRICTED   — opérations de contrôle (plane=control) ou erreurs serveur
+ *   CONFIDENTIAL — opérations sensibles (warn) ou mutations authentifiées
+ *   INTERNAL     — opérations routinières authentifiées
+ */
+function securityLevelFromContext(actionKind: string, status: number): string {
+  if (status >= 500) return 'RESTRICTED';
+  if (actionKind === 'LOGIN') return 'INTERNAL';
+  if (status >= 400) return 'CONFIDENTIAL';
+  if (actionKind === 'DELETE') return 'CONFIDENTIAL';
+  return 'INTERNAL';
+}
+
 /** Extrait l'IP réelle en tenant compte des proxies. */
 function extractIp(req: AuditReq): string {
   const fwd = req.headers['x-forwarded-for'];
@@ -169,13 +183,14 @@ export class AuditLoggingInterceptor implements NestInterceptor {
     this.prisma.auditLog.create({
       data: {
         tenantId,
-        userId:    req.user?.id ?? null,
-        plane:     'http',
-        level:     levelFromStatus(statusCode),
-        action:    `${actionKind}:${req.method.toUpperCase()} ${path}`,
-        resource:  path,
-        ipAddress: extractIp(req),
-        newValue:  newValue as any,
+        userId:        req.user?.id ?? null,
+        plane:         'http',
+        level:         levelFromStatus(statusCode),
+        action:        `${actionKind}:${req.method.toUpperCase()} ${path}`,
+        resource:      path,
+        ipAddress:     extractIp(req),
+        securityLevel: securityLevelFromContext(actionKind, statusCode),
+        newValue:      newValue as any,
       },
     }).catch((err: unknown) => {
       // Échec silencieux pour ne pas impacter la réponse métier

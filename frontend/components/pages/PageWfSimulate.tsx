@@ -13,10 +13,10 @@
  * Dark mode : classes Tailwind dark: via ThemeProvider
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   FlaskConical, Play, RotateCcw, CheckCircle2, XCircle,
-  ChevronRight, AlertCircle, Loader2,
+  ChevronRight, AlertCircle, Loader2, Zap,
 } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiFetch } from '../../lib/api';
@@ -26,6 +26,75 @@ import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
 import type { WorkflowGraph, SimResult } from '../workflow/types';
+
+// ─── Génération automatique de scénarios depuis le graphe ─────────────────────
+
+interface Scenario {
+  name:         string;
+  description:  string;
+  initialState: string;
+  actions:      string[];
+}
+
+/** Parcours en profondeur pour trouver des chemins de l'état initial vers un terminal */
+function buildScenarios(graph: WorkflowGraph | null): Scenario[] {
+  if (!graph || graph.nodes.length === 0) return [];
+
+  const initNode     = graph.nodes.find(n => n.type === 'initial');
+  const terminalNodes = graph.nodes.filter(n => n.type === 'terminal');
+  if (!initNode) return [];
+
+  // Adjacence : fromState → [{ action, toState }]
+  const adj: Record<string, { action: string; to: string }[]> = {};
+  graph.edges.forEach(e => {
+    if (!adj[e.source]) adj[e.source] = [];
+    adj[e.source]!.push({ action: e.label, to: e.target });
+  });
+
+  // DFS — limite de profondeur pour éviter les cycles infinis
+  const paths: { actions: string[]; finalState: string }[] = [];
+  const MAX_DEPTH = 12;
+
+  function dfs(state: string, actions: string[], visited: Set<string>) {
+    if (actions.length > MAX_DEPTH) return;
+    const isTerminal = terminalNodes.some(t => t.id === state);
+    if (isTerminal && actions.length > 0) {
+      paths.push({ actions: [...actions], finalState: state });
+      if (paths.length >= 6) return; // Limiter à 6 scénarios
+      return;
+    }
+    const next = adj[state] ?? [];
+    for (const { action, to } of next) {
+      if (visited.has(to)) continue; // éviter cycles
+      visited.add(to);
+      dfs(to, [...actions, action], new Set(visited));
+      if (paths.length >= 6) return;
+    }
+  }
+
+  const startVisited = new Set([initNode.id]);
+  dfs(initNode.id, [], startVisited);
+
+  // Ajouter aussi des scénarios partiels pertinents (ex: happy path + blocages)
+  const scenarios: Scenario[] = paths.map((p, i) => ({
+    name:         i === 0 ? 'Chemin nominal' : `Chemin ${i + 1}`,
+    description:  `${initNode.id} → ${p.finalState} (${p.actions.length} étape${p.actions.length > 1 ? 's' : ''})`,
+    initialState: initNode.id,
+    actions:      p.actions,
+  }));
+
+  // Ajouter un scénario "partiel" avec juste les 2 premières actions
+  if (paths[0] && paths[0].actions.length > 2) {
+    scenarios.push({
+      name:         'Test partiel',
+      description:  `Valider les 2 premières transitions`,
+      initialState: initNode.id,
+      actions:      paths[0].actions.slice(0, 2),
+    });
+  }
+
+  return scenarios;
+}
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -50,6 +119,8 @@ export function PageWfSimulate() {
   const [actionsText,  setActionsText]  = useState('');
   const [contextText,  setContextText]  = useState('{}');
   const [roleId,       setRoleId]       = useState('');
+
+  const scenarios = useMemo(() => buildScenarios(graph), [graph]);
 
   // ── Step 3 : résultats ──
   const [result,      setResult]      = useState<SimResult | null>(null);
@@ -253,6 +324,41 @@ export function PageWfSimulate() {
                   </div>
                 )}
               </div>
+
+              {/* Scénarios auto-générés */}
+              {scenarios.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" aria-hidden />
+                    Scénarios
+                  </p>
+                  <div className="space-y-1">
+                    {scenarios.map((sc, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setInitialState(sc.initialState);
+                          setActionsText(sc.actions.join(','));
+                        }}
+                        className="w-full flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-2 text-left transition-colors group"
+                        disabled={simLoading}
+                      >
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-slate-400 transition-colors">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{sc.name}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{sc.description}</p>
+                          <p className="text-[10px] font-mono text-blue-600 dark:text-blue-400 truncate mt-0.5">
+                            {sc.actions.join(' → ')}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Contexte guards */}
               <div className="space-y-1.5">

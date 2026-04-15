@@ -465,7 +465,13 @@ export function PageIamRoles() {
         loading={false}
         rowActions={ROW_ACTIONS}
         emptyMessage="Aucun rôle défini"
-        onExportCsv="roles.csv"
+        exportFormats={['csv', 'json']}
+        exportFilename="roles"
+        onRowClick={(row) => {
+          setPermRole(row);
+          setPermSet(new Set(row.permissions.map(p => p.permission)));
+          setPermErr('');
+        }}
       />
 
       {/* Create dialog */}

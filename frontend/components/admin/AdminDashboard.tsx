@@ -60,9 +60,10 @@ export function AdminDashboard() {
   const permissions = ROLE_PERMISSIONS[(authUser?.roleName ?? '') as RoleKey] ?? [];
 
   const { sections, activeId } = useNavigation({
-    config:      ADMIN_NAV,
+    config:         ADMIN_NAV,
     permissions,
-    currentHref: location.pathname,
+    enabledModules: authUser?.enabledModules ?? [],
+    currentHref:    location.pathname,
   });
 
   const activeHref = location.pathname;

@@ -30,6 +30,19 @@ export class TemplatesController {
     return this.templates.findAll(tenantId);
   }
 
+  /**
+   * Liste les templates système disponibles (inspirations / bases de départ).
+   * IMPORTANT : déclarer cette route AVANT @Get(':id') — sinon "system" matche le paramètre :id.
+   */
+  @Get('system')
+  @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
+  findSystem(
+    @Param('tenantId') _tenantId: string,
+    @Query('docType') docType?: string,
+  ) {
+    return this.templates.findSystemTemplates(docType);
+  }
+
   @Get(':id')
   @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
   findOne(@Param('tenantId') tenantId: string, @Param('id') id: string) {
@@ -61,18 +74,6 @@ export class TemplatesController {
     return this.templates.getUploadUrl(tenantId, id);
   }
 
-  // ─── Templates système (inspiration / base) ────────────────────────────────
-
-  /** Liste les templates système disponibles (inspirations / bases de départ). */
-  @Get('system')
-  @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
-  findSystem(
-    @Param('tenantId') _tenantId: string,
-    @Query('docType') docType?: string,
-  ) {
-    return this.templates.findSystemTemplates(docType);
-  }
-
   // ─── Duplication ──────────────────────────────────────────────────────────
 
   /**
@@ -88,6 +89,22 @@ export class TemplatesController {
     @CurrentUser() actor: CurrentUserPayload,
   ) {
     return this.templates.duplicate(tenantId, id, dto, actor);
+  }
+
+  // ─── Pack de démarrage ────────────────────────────────────────────────────
+
+  /**
+   * Restaure le pack de démarrage : copies éditables des templates système de base.
+   * Idempotent — ne touche pas aux templates existants (même slug).
+   * POST /tenants/:tenantId/templates/restore-starter-pack
+   */
+  @Post('restore-starter-pack')
+  @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
+  restoreStarterPack(
+    @Param('tenantId') tenantId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.templates.restoreStarterPack(tenantId, actor);
   }
 
   // ─── pdfme Designer ───────────────────────────────────────────────────────

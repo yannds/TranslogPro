@@ -16,6 +16,16 @@ const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL ?? 'postgresql://postgres:app_password@localhost:5432/translog' } },
 });
 
+// Slugs du pack de démarrage dupliqué automatiquement à l'onboarding d'un tenant.
+// Ces templates reçoivent une copie tenantId=<id> immédiatement éditable.
+export const STARTER_PACK_SLUGS = [
+  'ticket-a5',
+  'invoice-a4',
+  'receipt-thermal',
+  'manifest-a4',
+  'parcel-label',
+];
+
 interface TemplateMeta {
   slug:        string;
   name:        string;
@@ -35,23 +45,24 @@ interface TemplateFile {
 const SEED_DIR = __dirname;
 const TEMPLATE_FILES = [
   'invoice-a4.template.json',
+  'invoice-simple-a5.template.json',
   'ticket-a5.template.json',
+  'boarding-pass-a6.template.json',
   'baggage-tag.template.json',
   'parcel-label.template.json',
+  'parcel-label-multi.template.json',
   'manifest-a4.template.json',
   'packing-list-a4.template.json',
   'receipt-thermal.template.json',
+  'receipt-a4.template.json',
   'envelope-c5.template.json',
   'envelope-dl.template.json',
-  'parcel-label-multi.template.json',
 ];
 
 const SYSTEM_ACTOR = '00000000-0000-0000-0000-000000000000';
 
-async function main() {
-  console.log('═══════════════════════════════════════════════');
-  console.log('  TranslogPro — Seed Templates pdfme');
-  console.log('═══════════════════════════════════════════════\n');
+export async function seedSystemTemplates(client: PrismaClient = prisma) {
+  console.log('\n📄 Seeding document templates système (pdfme)…');
 
   for (const filename of TEMPLATE_FILES) {
     const filepath = path.join(SEED_DIR, filename);
@@ -70,13 +81,13 @@ async function main() {
     }
 
     // Upsert : trouver par slug + tenantId null + version 1
-    const existing = await prisma.documentTemplate.findFirst({
+    const existing = await client.documentTemplate.findFirst({
       where: { tenantId: null, slug: _meta.slug, version: 1 },
     });
 
     if (existing) {
       // Mettre à jour le schéma (redesign possible lors des upgrades)
-      await prisma.documentTemplate.update({
+      await client.documentTemplate.update({
         where: { id: existing.id },
         data: {
           name:       _meta.name,
@@ -89,7 +100,7 @@ async function main() {
       });
       console.log(`  ✓ Mis à jour : ${_meta.slug}`);
     } else {
-      await prisma.documentTemplate.create({
+      await client.documentTemplate.create({
         data: {
           tenantId:    null,
           name:        _meta.name,
@@ -114,6 +125,9 @@ async function main() {
   console.log('═══════════════════════════════════════════════');
 }
 
-main()
-  .catch(e => { console.error('\n❌', e.message); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+// Exécution standalone : `ts-node server/seed/templates/templates.seeder.ts`
+if (require.main === module) {
+  seedSystemTemplates()
+    .catch((e: Error) => { console.error('\n❌', e.message); process.exit(1); })
+    .finally(() => prisma.$disconnect());
+}

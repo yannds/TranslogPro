@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Designer }         from '@pdfme/ui';
-import { text, image, barcodes } from '@pdfme/schemas';
+import { text, image, barcodes, rectangle, line, ellipse } from '@pdfme/schemas';
 import type { Template }    from '@pdfme/common';
 import { VariablesPanel }   from './VariablesPanel';
 import type { VariablesPanelProps } from './VariablesPanel';
@@ -42,6 +42,9 @@ const PLUGINS = {
   text,
   image,
   qrcode: barcodes.qrcode,
+  rectangle,
+  line,
+  ellipse,
 };
 
 // ─── Composant ────────────────────────────────────────────────────────────────
@@ -113,7 +116,10 @@ export function TemplateDesigner({
         font: {
           NotoSans: {
             fallback: true,
-            data: 'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9X6VLkqnW5.woff2',
+            data: 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff',
+          },
+          'NotoSans-Bold': {
+            data: 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff',
           },
         },
       },

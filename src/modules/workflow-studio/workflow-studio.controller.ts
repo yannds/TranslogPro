@@ -47,6 +47,15 @@ export class WorkflowStudioController {
     return this.studio.getTenantGraph(tenantId, entityType);
   }
 
+  @Get('graph/:entityType/metadata')
+  @RequirePermission(Permission.WORKFLOW_STUDIO_READ_TENANT)
+  getEntityTypeMetadata(
+    @Param('tenantId')   tenantId:   string,
+    @Param('entityType') entityType: string,
+  ) {
+    return this.studio.getEntityTypeMetadata(tenantId, entityType);
+  }
+
   @Put('graph')
   @RequirePermission(Permission.WORKFLOW_STUDIO_WRITE_TENANT)
   saveTenantGraph(

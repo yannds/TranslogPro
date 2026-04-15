@@ -24,6 +24,8 @@ export interface NavLeaf {
   badge?:        string | number;
   /** L'item est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];
+  /** moduleKey SaaS requis — l'item est masqué si le module n'est pas actif pour le tenant */
+  moduleKey?:    string;
   /** Marque l'item comme "en développement" — visible mais désactivé */
   wip?:          boolean;
 }
@@ -37,6 +39,8 @@ export interface NavGroup {
   icon:          string;
   /** Le groupe est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];
+  /** moduleKey SaaS requis — le groupe est masqué si le module n'est pas actif */
+  moduleKey?:    string;
   children:      NavLeaf[];
 }
 
@@ -50,6 +54,8 @@ export interface NavSection {
   items:         NavItem[];
   /** La section est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];
+  /** moduleKey SaaS requis — toute la section est masquée si le module n'est pas actif */
+  moduleKey?:    string;
 }
 
 // ─── Config complète d'un portail ─────────────────────────────────────────────

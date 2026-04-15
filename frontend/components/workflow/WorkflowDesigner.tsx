@@ -38,6 +38,18 @@ import type { WorkflowGraph, SimResult, SimOverlay } from './types';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
+// ─── Métadonnées contextuelles ────────────────────────────────────────────────
+
+interface WorkflowMetadata {
+  entityType:           string;
+  states:               string[];
+  actions:              string[];
+  permissions:          string[];
+  availableGuards:      string[];
+  availableSideEffects: string[];
+  fromSystemBlueprint:  boolean;
+}
+
 // ─── Node / Edge types (mémoïsés hors du composant pour éviter les re-render) ─
 
 const NODE_TYPES = { workflowState: StateNode } as const;
@@ -81,6 +93,7 @@ export function WorkflowDesigner({
   onSaved,
 }: WorkflowDesignerProps) {
   const [graph,        setGraph]        = useState<WorkflowGraph | null>(initialGraph ?? null);
+  const [metadata,     setMetadata]     = useState<WorkflowMetadata | null>(null);
   const [nodes,        setNodes,  onNodesChange]  = useNodesState<RFNodeData>([]);
   const [edges,        setEdges,  onEdgesChange]  = useEdgesState<RFEdgeData>([]);
   const [_simOverlay,  setSimOverlay]   = useState<SimOverlay>({});
@@ -92,23 +105,30 @@ export function WorkflowDesigner({
   const [error,        setError]        = useState<string | null>(null);
   const [isDirty,      setIsDirty]      = useState(false);
 
-  // ─── Charger graphe depuis l'API ──────────────────────────────────────────
+  // ─── Charger graphe + métadonnées depuis l'API ───────────────────────────
 
   useEffect(() => {
     if (initialGraph) {
       syncGraphToRF(initialGraph);
       setGraph(initialGraph);
       setLoadingGraph(false);
-      return;
+    } else {
+      setLoadingGraph(true);
+      apiFetch<WorkflowGraph>(`/api/tenants/${tenantId}/workflow-studio/graph/${entityType}`)
+        .then(g => {
+          setGraph(g);
+          syncGraphToRF(g);
+        })
+        .catch(e => setError((e as Error).message))
+        .finally(() => setLoadingGraph(false));
     }
-    setLoadingGraph(true);
-    apiFetch<WorkflowGraph>(`/api/tenants/${tenantId}/workflow-studio/graph/${entityType}`)
-      .then(g => {
-        setGraph(g);
-        syncGraphToRF(g);
-      })
-      .catch(e => setError((e as Error).message))
-      .finally(() => setLoadingGraph(false));
+
+    // Chargement des métadonnées contextuelles (indépendant du graphe)
+    apiFetch<WorkflowMetadata>(
+      `/api/tenants/${tenantId}/workflow-studio/graph/${entityType}/metadata`,
+    )
+      .then(setMetadata)
+      .catch(() => { /* non bloquant */ });
   }, [tenantId, entityType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncGraphToRF = useCallback((g: WorkflowGraph) => {
@@ -231,15 +251,19 @@ export function WorkflowDesigner({
   }, [nodes, setNodes]);
 
   // Applique les éditions du panneau propriétés dans les nodes/edges RF
+  // IMPORTANT : met aussi à jour editPanel.data sinon le prochain rendu
+  // réécrit l'ancienne valeur dans les inputs (perd chaque frappe).
   const applyNodeEdit = useCallback((data: RFNodeData) => {
     if (!editPanel || editPanel.type !== 'node') return;
     setNodes((ns: Node<RFNodeData>[]) => ns.map((n: Node<RFNodeData>) => n.id === editPanel.id ? { ...n, data } : n));
+    setEditPanel(prev => prev ? ({ ...prev, data }) as EditPanel : null);
     setIsDirty(true);
   }, [editPanel, setNodes]);
 
   const applyEdgeEdit = useCallback((data: RFEdgeData) => {
     if (!editPanel || editPanel.type !== 'edge') return;
     setEdges((es: Edge<RFEdgeData>[]) => es.map((e: Edge<RFEdgeData>) => e.id === editPanel.id ? { ...e, data, label: data.action } : e));
+    setEditPanel(prev => prev ? ({ ...prev, data }) as EditPanel : null);
     setIsDirty(true);
   }, [editPanel, setEdges]);
 
@@ -370,7 +394,7 @@ export function WorkflowDesigner({
               <NodePropsEditor data={editPanel.data} onChange={applyNodeEdit} />
             )}
             {editPanel.type === 'edge' && (
-              <EdgePropsEditor data={editPanel.data} onChange={applyEdgeEdit} />
+              <EdgePropsEditor data={editPanel.data} onChange={applyEdgeEdit} metadata={metadata} />
             )}
           </div>
         )}
@@ -384,6 +408,17 @@ export function WorkflowDesigner({
               tenantId={tenantId}
               entityType={entityType}
               nodes={liveGraph?.nodes ?? []}
+              availableActions={
+                /* Dérive directement du graphe en cours d'édition — indépendant de metadata.
+                   Fallback sur metadata si graphe vide. */
+                (liveGraph?.edges ?? []).length > 0
+                  ? [...new Set((liveGraph?.edges ?? []).map(e => e.label).filter(Boolean))]
+                  : (metadata?.actions ?? [])
+              }
+              availableGuards={
+                /* Guards présents dans les transitions du graphe actif */
+                [...new Set((liveGraph?.edges ?? []).flatMap(e => e.guards ?? []))]
+              }
               onSimResult={handleSimResult}
               onClear={handleSimClear}
             />
@@ -425,21 +460,138 @@ function NodePropsEditor({ data, onChange }: { data: RFNodeData; onChange: (d: R
 
 // ─── EdgePropsEditor ─────────────────────────────────────────────────────────
 
-function EdgePropsEditor({ data, onChange }: { data: RFEdgeData; onChange: (d: RFEdgeData) => void }) {
+function EdgePropsEditor({
+  data,
+  onChange,
+  metadata,
+}: {
+  data:      RFEdgeData;
+  onChange:  (d: RFEdgeData) => void;
+  metadata?: WorkflowMetadata | null;
+}) {
+  const guards      = data.guards     ?? [];
+  const sideEffects = data.sideEffects ?? [];
+
+  const toggleGuard = (g: string) => {
+    const next = guards.includes(g) ? guards.filter(x => x !== g) : [...guards, g];
+    onChange({ ...data, guards: next });
+  };
+
+  const toggleSideEffect = (s: string) => {
+    const next = sideEffects.includes(s) ? sideEffects.filter(x => x !== s) : [...sideEffects, s];
+    onChange({ ...data, sideEffects: next });
+  };
+
+  const actionListId    = 'wf-actions-list';
+  const permListId      = 'wf-perms-list';
+
   return (
-    <div className="space-y-2">
-      <Field label="Action" value={data.action} onChange={v => onChange({ ...data, action: v })} mono />
-      <Field label="Permission" value={data.permission} onChange={v => onChange({ ...data, permission: v })} mono />
-      <Field
-        label="Guards (virgule)"
-        value={data.guards?.join(', ') ?? ''}
-        onChange={v => onChange({ ...data, guards: v.split(',').map(s => s.trim()).filter(Boolean) })}
-      />
-      <Field
-        label="SideEffects (virgule)"
-        value={data.sideEffects?.join(', ') ?? ''}
-        onChange={v => onChange({ ...data, sideEffects: v.split(',').map(s => s.trim()).filter(Boolean) })}
-      />
+    <div className="space-y-3">
+      {/* Action */}
+      <div>
+        <label className="block text-[10px] text-slate-500 mb-0.5">Action / Verbe</label>
+        <input
+          list={actionListId}
+          type="text"
+          value={data.action}
+          onChange={e => onChange({ ...data, action: e.target.value })}
+          className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-mono"
+          placeholder="ex: confirm, cancel…"
+        />
+        {metadata && metadata.actions.length > 0 && (
+          <datalist id={actionListId}>
+            {metadata.actions.map(a => <option key={a} value={a} />)}
+          </datalist>
+        )}
+      </div>
+
+      {/* Permission */}
+      <div>
+        <label className="block text-[10px] text-slate-500 mb-0.5">Permission requise</label>
+        <input
+          list={permListId}
+          type="text"
+          value={data.permission}
+          onChange={e => onChange({ ...data, permission: e.target.value })}
+          className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-mono"
+          placeholder="plane.module.action.scope"
+        />
+        {metadata && metadata.permissions.length > 0 && (
+          <datalist id={permListId}>
+            {metadata.permissions.map(p => <option key={p} value={p} />)}
+          </datalist>
+        )}
+      </div>
+
+      {/* Guards */}
+      <div>
+        <label className="block text-[10px] text-slate-500 mb-1">
+          Guards{guards.length > 0 && <span className="ml-1 text-blue-500">({guards.length})</span>}
+        </label>
+        {metadata?.availableGuards ? (
+          <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+            {metadata.availableGuards.map(g => (
+              <label key={g} className="flex items-center gap-1.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={guards.includes(g)}
+                  onChange={() => toggleGuard(g)}
+                  className="accent-blue-600"
+                />
+                <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300 group-hover:text-blue-600">
+                  {g}
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <input
+            type="text"
+            value={guards.join(', ')}
+            onChange={e => onChange({ ...data, guards: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+            className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+            placeholder="guard1, guard2"
+          />
+        )}
+      </div>
+
+      {/* SideEffects */}
+      <div>
+        <label className="block text-[10px] text-slate-500 mb-1">
+          Side Effects{sideEffects.length > 0 && <span className="ml-1 text-emerald-500">({sideEffects.length})</span>}
+        </label>
+        {metadata?.availableSideEffects ? (
+          <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+            {metadata.availableSideEffects.map(s => (
+              <label key={s} className="flex items-center gap-1.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={sideEffects.includes(s)}
+                  onChange={() => toggleSideEffect(s)}
+                  className="accent-emerald-600"
+                />
+                <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300 group-hover:text-emerald-600">
+                  {s}
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <input
+            type="text"
+            value={sideEffects.join(', ')}
+            onChange={e => onChange({ ...data, sideEffects: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+            className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+            placeholder="effect1, effect2"
+          />
+        )}
+      </div>
+
+      {metadata?.fromSystemBlueprint && (
+        <p className="text-[9px] text-amber-500 italic">
+          Suggestions basées sur le blueprint système — pas encore de config active.
+        </p>
+      )}
     </div>
   );
 }

@@ -390,6 +390,7 @@ export class TenantIamService {
         select: {
           id: true, createdAt: true, plane: true, level: true,
           action: true, resource: true, ipAddress: true,
+          securityLevel: true, newValue: true,
           userId: true,
           user: { select: { email: true, name: true } },
         },

@@ -149,8 +149,12 @@ export class PermissionGuard implements CanActivate {
   async hasPermission(roleId: string, permission: string): Promise<boolean> {
     const cacheKey = `iam:perm:${roleId}:${permission}`;
 
-    const cached = await this.redis.get(cacheKey);
-    if (cached !== null) return cached === '1';
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached !== null) return cached === '1';
+    } catch {
+      // Redis indisponible → fallback DB sans bloquer
+    }
 
     const rp = await this.prisma.rolePermission.findFirst({
       where: { roleId, permission },

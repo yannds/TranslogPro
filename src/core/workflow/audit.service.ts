@@ -17,6 +17,8 @@ export type AuditPlane = 'control' | 'data';
  */
 export type AuditLevel = 'info' | 'warn' | 'critical';
 
+export type SecurityLevel = 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED';
+
 export interface AuditEntry {
   tenantId:      string;
   userId?:       string;       // DB User.id (optionnel — events système n'ont pas d'acteur)
@@ -33,6 +35,7 @@ export interface AuditEntry {
   ipAddress?:    string;
   plane?:        AuditPlane;
   level?:        AuditLevel;
+  securityLevel?: SecurityLevel;
 }
 
 @Injectable()
@@ -46,17 +49,20 @@ export class AuditService {
     const level = entry.level ?? this.inferLevel(entry.action);
 
     try {
+      const securityLevel = entry.securityLevel ?? this.inferSecurityLevel(plane, level);
+
       await this.prisma.auditLog.create({
         data: {
-          tenantId:  entry.tenantId,
-          userId:    entry.userId   ?? null,
-          action:    entry.action,             // permission string exercée
-          resource:  entry.resource,
+          tenantId:      entry.tenantId,
+          userId:        entry.userId   ?? null,
+          action:        entry.action,
+          resource:      entry.resource,
           plane,
           level,
-          oldValue:  entry.oldValue as Prisma.InputJsonValue | undefined,
-          newValue:  entry.newValue as Prisma.InputJsonValue | undefined,
-          ipAddress: entry.ipAddress ?? null,
+          securityLevel,
+          oldValue:      entry.oldValue as Prisma.InputJsonValue | undefined,
+          newValue:      entry.newValue as Prisma.InputJsonValue | undefined,
+          ipAddress:     entry.ipAddress ?? null,
         },
       });
 
@@ -76,6 +82,13 @@ export class AuditService {
   }
 
   // ── Inference helpers ──────────────────────────────────────────────────────
+
+  private inferSecurityLevel(plane: AuditPlane, level: AuditLevel): SecurityLevel {
+    if (plane === 'control') return 'RESTRICTED';
+    if (level === 'critical') return 'RESTRICTED';
+    if (level === 'warn')     return 'CONFIDENTIAL';
+    return 'INTERNAL';
+  }
 
   private inferPlane(action: string): AuditPlane {
     return action.startsWith('control.') ? 'control' : 'data';

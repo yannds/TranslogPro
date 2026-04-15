@@ -200,7 +200,20 @@ export class WorkflowMarketplaceService {
    * seedé), la méthode log un warning et ne bloque pas l'onboarding.
    */
   async onTenantCreated(tenantId: string, adminUserId: string): Promise<void> {
-    const defaultSlugs = ['ticket-standard', 'parcel-standard'];
+    // Slugs des blueprints système à installer automatiquement pour chaque nouveau tenant.
+    // Un blueprint par entityType — le premier système rencontré pour chaque type.
+    const defaultSlugs = [
+      'ticket-full-lifecycle', // Ticket
+      'trip-standard',         // Trip
+      'parcel-standard',       // Parcel
+      'bus-maintenance',       // Bus
+      'maintenance-ticket',    // Maintenance
+      'manifest-standard',     // Manifest
+      'claim-sav',             // Claim
+      'checklist-departure',   // Checklist
+      'driver-availability',   // Driver
+      'crew-assignment',       // Crew
+    ];
 
     for (const slug of defaultSlugs) {
       const bp = await this.prisma.workflowBlueprint.findFirst({

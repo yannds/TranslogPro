@@ -131,17 +131,26 @@ export class WorkflowGraphAdapter {
     sideEffects: unknown;
     isActive:    boolean;
   }> {
-    return graph.edges.map(e => ({
-      tenantId,
-      entityType:   graph.entityType,
-      fromState:    e.source,
-      action:       e.label,
-      toState:      e.target,
-      requiredPerm: e.permission,
-      guards:       e.guards,
-      sideEffects:  e.sideEffects,
-      isActive:     true,
-    }));
+    // Dédupliquer par (fromState, action) — contrainte unique DB n'inclut pas toState
+    const seen = new Set<string>();
+    return graph.edges
+      .filter(e => {
+        const key = `${e.source}::${e.label}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(e => ({
+        tenantId,
+        entityType:   graph.entityType ?? '',
+        fromState:    e.source,
+        action:       e.label,
+        toState:      e.target,
+        requiredPerm: e.permission ?? '',
+        guards:       e.guards ?? [],
+        sideEffects:  e.sideEffects ?? [],
+        isActive:     true,
+      }));
   }
 
   /**

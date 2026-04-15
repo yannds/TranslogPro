@@ -4,6 +4,7 @@ import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/inte
 import { Inject } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { seedTenantRoles } from '../../../prisma/seeds/iam.seed';
+import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
 
 export interface OnboardTenantDto {
   name:       string;
@@ -65,6 +66,9 @@ export class OnboardingService {
       // 4. Modules de base activés
       await this.seedInstalledModules(tx as unknown as PrismaService, tenant.id);
 
+      // 4bis. Pack de démarrage — copies éditables des templates de documents
+      await this.seedStarterTemplates(tx as unknown as PrismaService, tenant.id, admin.id);
+
       // 5. Marquer tenant ACTIVE
       await tx.tenant.update({
         where: { id: tenant.id },
@@ -108,6 +112,47 @@ export class OnboardingService {
       data:           configs.map(c => ({ ...c, tenantId, guards: [], sideEffects: [], isActive: true, version: 1 })),
       skipDuplicates: true,
     });
+  }
+
+  /**
+   * Duplique les templates système du pack de démarrage en copies éditables pour le tenant.
+   * Idempotent — skip les slugs déjà dupliqués (en cas de re-onboarding).
+   */
+  private async seedStarterTemplates(prisma: PrismaService, tenantId: string, createdById: string) {
+    const systemTemplates = await prisma.documentTemplate.findMany({
+      where: { tenantId: null, slug: { in: STARTER_PACK_SLUGS }, isActive: true },
+    });
+
+    if (systemTemplates.length === 0) {
+      this.logger.warn(`Pack de démarrage : aucun template système trouvé — exécuter 'npm run db:seed' d'abord`);
+      return;
+    }
+
+    for (const sys of systemTemplates) {
+      const already = await prisma.documentTemplate.findFirst({
+        where: { tenantId, slug: sys.slug },
+      });
+      if (already) continue;
+
+      await prisma.documentTemplate.create({
+        data: {
+          tenantId,
+          name:        sys.name,
+          slug:        sys.slug,
+          docType:     sys.docType,
+          format:      sys.format,
+          engine:      sys.engine,
+          schemaJson:  sys.schemaJson ?? undefined,
+          varsSchema:  sys.varsSchema ?? {},
+          body:        sys.body,
+          version:     1,
+          isSystem:    false,
+          isActive:    true,
+          createdById,
+        },
+      });
+    }
+    this.logger.log(`Pack de démarrage : ${systemTemplates.length} templates dupliqués pour tenant ${tenantId}`);
   }
 
   private async seedInstalledModules(prisma: PrismaService, tenantId: string) {

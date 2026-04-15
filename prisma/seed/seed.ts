@@ -1,0 +1,408 @@
+/**
+ * Prisma seed — Marketplace Blueprints TranslogPro
+ *
+ * Exécuter avec : npx prisma db seed
+ *
+ * Crée les blueprints système et publics du marketplace.
+ * Idempotent : upsert par slug + version.
+ */
+
+import { PrismaClient } from '@prisma/client';
+import { seedSystemTemplates } from '../../server/seed/templates/templates.seeder';
+
+const prisma = new PrismaClient();
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function edge(source: string, label: string, target: string, permission = '', guards: string[] = []) {
+  return {
+    id:          `${source}___${label}___${target}`,
+    source,
+    target,
+    label,
+    permission,
+    guards,
+    sideEffects: [] as string[],
+    metadata:    {},
+  };
+}
+
+function node(id: string, type: 'initial' | 'state' | 'terminal', x: number, y: number) {
+  return { id, label: id.replace(/_/g, ' '), type, position: { x, y }, metadata: {} };
+}
+
+function graph(entityType: string, nodes: ReturnType<typeof node>[], edges: ReturnType<typeof edge>[]) {
+  return { entityType, nodes, edges, version: '1.0.0', checksum: '', metadata: {} };
+}
+
+// ─── Blueprints ───────────────────────────────────────────────────────────────
+
+const BLUEPRINTS = [
+
+  // ── Ticket : cycle de vie complet ─────────────────────────────────────────
+  {
+    slug: 'ticket-full-lifecycle', name: 'Ticket — Cycle complet',
+    description: 'DRAFT → CONFIRMED → BOARDED → COMPLETED avec annulation et remboursement possible. Idéal pour la billetterie passager standard.',
+    entityType: 'Ticket', isPublic: true, isSystem: true, tags: ['ticket', 'billetterie', 'standard'],
+    graphData: graph('Ticket', [
+      node('DRAFT',       'initial',  60,  60),
+      node('CONFIRMED',   'state',   280,  60),
+      node('CHECKED_IN',  'state',   500,  60),
+      node('BOARDED',     'state',   720,  60),
+      node('COMPLETED',   'terminal', 940,  60),
+      node('CANCELLED',   'terminal', 280, 220),
+      node('REFUNDED',    'terminal', 500, 220),
+      node('NO_SHOW',     'terminal', 720, 220),
+    ], [
+      edge('DRAFT',      'confirm',       'CONFIRMED',  'data.ticket.create.agency'),
+      edge('CONFIRMED',  'check_in',      'CHECKED_IN', 'data.ticket.scan.agency'),
+      edge('CONFIRMED',  'cancel',        'CANCELLED',  'data.ticket.cancel.agency'),
+      edge('CHECKED_IN', 'board',         'BOARDED',    'data.traveler.verify.agency'),
+      edge('CHECKED_IN', 'cancel',        'CANCELLED',  'data.ticket.cancel.agency'),
+      edge('BOARDED',    'complete',      'COMPLETED',  'data.trip.update.agency'),
+      edge('BOARDED',    'mark_no_show',  'NO_SHOW',    'data.trip.update.agency'),
+      edge('CANCELLED',  'refund',        'REFUNDED',   'data.cashier.transaction.own'),
+    ]),
+  },
+
+  // ── Ticket : express (sans check-in) ─────────────────────────────────────
+  {
+    slug: 'ticket-express', name: 'Ticket — Express (sans check-in)',
+    description: 'Workflow simplifié : vente directe, embarquement, fin de trajet. Adapté aux courtes distances.',
+    entityType: 'Ticket', isPublic: true, isSystem: false, tags: ['ticket', 'express', 'simplifié'],
+    graphData: graph('Ticket', [
+      node('SOLD',      'initial',  60,  80),
+      node('BOARDING',  'state',   280,  80),
+      node('DONE',      'terminal', 500,  80),
+      node('VOIDED',    'terminal', 280, 220),
+    ], [
+      edge('SOLD',     'start_boarding', 'BOARDING', 'data.ticket.scan.agency'),
+      edge('SOLD',     'void',           'VOIDED',   'data.ticket.cancel.agency'),
+      edge('BOARDING', 'complete',       'DONE',     'data.trip.update.agency'),
+      edge('BOARDING', 'void',           'VOIDED',   'data.ticket.cancel.agency'),
+    ]),
+  },
+
+  // ── Trip : trajet planifié ────────────────────────────────────────────────
+  {
+    slug: 'trip-standard', name: 'Trajet — Opérationnel standard',
+    description: 'PLANNED → CONFIRMED → BOARDING → IN_PROGRESS → COMPLETED. Gestion des retards et annulations.',
+    entityType: 'Trip', isPublic: true, isSystem: true, tags: ['trip', 'trajet', 'transport'],
+    graphData: graph('Trip', [
+      node('PLANNED',     'initial',   60,  80),
+      node('CONFIRMED',   'state',    280,  80),
+      node('BOARDING',    'state',    500,  80),
+      node('IN_PROGRESS', 'state',    720,  80),
+      node('COMPLETED',   'terminal', 940,  80),
+      node('DELAYED',     'state',    720, 220),
+      node('CANCELLED',   'terminal', 500, 220),
+    ], [
+      edge('PLANNED',     'confirm',    'CONFIRMED',   'data.trip.create.tenant'),
+      edge('CONFIRMED',   'open_boarding', 'BOARDING', 'data.trip.update.agency'),
+      edge('CONFIRMED',   'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
+      edge('BOARDING',    'depart',     'IN_PROGRESS', 'data.trip.update.agency'),
+      edge('BOARDING',    'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
+      edge('IN_PROGRESS', 'arrive',     'COMPLETED',   'data.trip.update.agency'),
+      edge('IN_PROGRESS', 'report_delay', 'DELAYED',   'control.trip.delay.agency'),
+      edge('DELAYED',     'resume',     'IN_PROGRESS', 'data.trip.update.agency'),
+      edge('DELAYED',     'cancel',     'CANCELLED',   'control.trip.cancel.tenant'),
+    ]),
+  },
+
+  // ── Trip : charter ────────────────────────────────────────────────────────
+  {
+    slug: 'trip-charter', name: 'Trajet — Affrètement / Charter',
+    description: 'Workflow spécialisé pour les trajets charter avec pré-réservation et validation client.',
+    entityType: 'Trip', isPublic: true, isSystem: false, tags: ['trip', 'charter', 'affrètement'],
+    graphData: graph('Trip', [
+      node('REQUESTED',  'initial',   60,  80),
+      node('QUOTED',     'state',    280,  80),
+      node('APPROVED',   'state',    500,  80),
+      node('EXECUTING',  'state',    720,  80),
+      node('COMPLETED',  'terminal', 940,  80),
+      node('REJECTED',   'terminal', 280, 220),
+      node('ABORTED',    'terminal', 720, 220),
+    ], [
+      edge('REQUESTED', 'send_quote',  'QUOTED',    'data.trip.create.tenant'),
+      edge('QUOTED',    'approve',     'APPROVED',  'data.trip.create.tenant'),
+      edge('QUOTED',    'reject',      'REJECTED',  'control.trip.cancel.tenant'),
+      edge('APPROVED',  'start',       'EXECUTING', 'data.trip.update.agency'),
+      edge('EXECUTING', 'complete',    'COMPLETED', 'data.trip.update.agency'),
+      edge('EXECUTING', 'abort',       'ABORTED',   'control.trip.cancel.tenant'),
+    ]),
+  },
+
+  // ── Parcel : colis standard ───────────────────────────────────────────────
+  {
+    slug: 'parcel-standard', name: 'Colis — Traçabilité complète',
+    description: 'REGISTERED → SORTED → LOADED → IN_TRANSIT → DELIVERED. Gestion des pertes et retours.',
+    entityType: 'Parcel', isPublic: true, isSystem: true, tags: ['parcel', 'colis', 'logistique'],
+    graphData: graph('Parcel', [
+      node('REGISTERED',  'initial',   60,  80),
+      node('SORTED',      'state',    280,  80),
+      node('LOADED',      'state',    500,  80),
+      node('IN_TRANSIT',  'state',    720,  80),
+      node('DELIVERED',   'terminal', 940,  80),
+      node('MISSING',     'terminal', 500, 220),
+      node('RETURNED',    'terminal', 720, 220),
+    ], [
+      edge('REGISTERED', 'sort',        'SORTED',     'data.parcel.scan.agency'),
+      edge('SORTED',     'load',        'LOADED',     'data.parcel.update.agency'),
+      edge('SORTED',     'mark_missing','MISSING',    'data.parcel.report.agency'),
+      edge('LOADED',     'depart',      'IN_TRANSIT', 'data.parcel.update.agency'),
+      edge('IN_TRANSIT', 'deliver',     'DELIVERED',  'data.parcel.update.agency'),
+      edge('IN_TRANSIT', 'report_lost', 'MISSING',    'data.parcel.report.agency'),
+      edge('IN_TRANSIT', 'return',      'RETURNED',   'data.parcel.update.agency'),
+    ]),
+  },
+
+  // ── Bus : maintenance préventive ──────────────────────────────────────────
+  {
+    slug: 'bus-maintenance', name: 'Bus — Cycle de maintenance',
+    description: 'Suivi de l\'état opérationnel du véhicule : OPERATIONAL → INSPECTION → MAINTENANCE → REPAIRED.',
+    entityType: 'Bus', isPublic: true, isSystem: true, tags: ['bus', 'maintenance', 'flotte'],
+    graphData: graph('Bus', [
+      node('OPERATIONAL',  'initial',  60,  80),
+      node('INSPECTION',   'state',   280,  80),
+      node('MAINTENANCE',  'state',   500,  80),
+      node('REPAIRED',     'state',   720,  80),
+      node('DECOMMISSIONED', 'terminal', 940, 80),
+      node('EMERGENCY',    'state',   500, 220),
+    ], [
+      edge('OPERATIONAL', 'schedule_inspection', 'INSPECTION',  'data.fleet.status.agency'),
+      edge('OPERATIONAL', 'emergency_breakdown', 'EMERGENCY',   'data.fleet.status.agency'),
+      edge('INSPECTION',  'pass',                'OPERATIONAL', 'data.maintenance.approve.tenant'),
+      edge('INSPECTION',  'fail',                'MAINTENANCE', 'data.maintenance.approve.tenant'),
+      edge('MAINTENANCE', 'repaired',            'REPAIRED',    'data.maintenance.update.own'),
+      edge('REPAIRED',    'validate',            'OPERATIONAL', 'data.maintenance.approve.tenant'),
+      edge('REPAIRED',    'decommission',        'DECOMMISSIONED', 'control.fleet.manage.tenant'),
+      edge('EMERGENCY',   'fix',                 'MAINTENANCE', 'data.maintenance.update.own'),
+      edge('MAINTENANCE', 'decommission',        'DECOMMISSIONED', 'control.fleet.manage.tenant'),
+    ]),
+  },
+
+  // ── Fiche maintenance ─────────────────────────────────────────────────────
+  {
+    slug: 'maintenance-ticket', name: 'Maintenance — Fiche d\'intervention',
+    description: 'Cycle de vie d\'une fiche de maintenance : OPEN → IN_PROGRESS → VALIDATED → CLOSED.',
+    entityType: 'Maintenance', isPublic: true, isSystem: true, tags: ['maintenance', 'garage', 'intervention'],
+    graphData: graph('Maintenance', [
+      node('OPEN',        'initial',  60,  80),
+      node('ASSIGNED',    'state',   280,  80),
+      node('IN_PROGRESS', 'state',   500,  80),
+      node('PENDING_PARTS', 'state', 500, 220),
+      node('DONE',        'state',   720,  80),
+      node('VALIDATED',   'terminal', 940, 80),
+      node('CANCELLED',   'terminal', 720, 220),
+    ], [
+      edge('OPEN',          'assign',        'ASSIGNED',     'data.maintenance.approve.tenant'),
+      edge('ASSIGNED',      'start_work',    'IN_PROGRESS',  'data.maintenance.update.own'),
+      edge('ASSIGNED',      'cancel',        'CANCELLED',    'data.maintenance.approve.tenant'),
+      edge('IN_PROGRESS',   'wait_parts',    'PENDING_PARTS','data.maintenance.update.own'),
+      edge('IN_PROGRESS',   'complete',      'DONE',         'data.maintenance.update.own'),
+      edge('PENDING_PARTS', 'parts_arrived', 'IN_PROGRESS',  'data.maintenance.update.own'),
+      edge('DONE',          'validate',      'VALIDATED',    'data.maintenance.approve.tenant'),
+      edge('DONE',          'reopen',        'IN_PROGRESS',  'data.maintenance.approve.tenant'),
+    ]),
+  },
+
+  // ── Manifeste ─────────────────────────────────────────────────────────────
+  {
+    slug: 'manifest-standard', name: 'Manifeste — Signature & Archivage',
+    description: 'DRAFT → SUBMITTED → SIGNED → ARCHIVED. Workflow de validation des manifestes de voyage.',
+    entityType: 'Manifest', isPublic: true, isSystem: true, tags: ['manifest', 'signature', 'conformité'],
+    graphData: graph('Manifest', [
+      node('DRAFT',     'initial',  60,  80),
+      node('SUBMITTED', 'state',   280,  80),
+      node('SIGNED',    'state',   500,  80),
+      node('ARCHIVED',  'terminal', 720, 80),
+      node('REJECTED',  'terminal', 280, 220),
+    ], [
+      edge('DRAFT',     'submit',   'SUBMITTED', 'data.manifest.generate.agency'),
+      edge('SUBMITTED', 'sign',     'SIGNED',    'data.manifest.sign.agency'),
+      edge('SUBMITTED', 'reject',   'REJECTED',  'data.manifest.sign.agency'),
+      edge('SIGNED',    'archive',  'ARCHIVED',  'data.manifest.print.agency'),
+      edge('REJECTED',  'revise',   'DRAFT',     'data.manifest.generate.agency'),
+    ]),
+  },
+
+  // ── Réclamation SAV ───────────────────────────────────────────────────────
+  {
+    slug: 'claim-sav', name: 'Réclamation SAV — Traitement complet',
+    description: 'OPEN → INVESTIGATING → RESOLVED/REJECTED. Workflow SAV avec escalade possible.',
+    entityType: 'Claim', isPublic: true, isSystem: true, tags: ['sav', 'réclamation', 'qualité'],
+    graphData: graph('Claim', [
+      node('OPEN',         'initial',  60,  80),
+      node('ASSIGNED',     'state',   280,  80),
+      node('INVESTIGATING','state',   500,  80),
+      node('ESCALATED',    'state',   500, 220),
+      node('RESOLVED',     'terminal', 720, 80),
+      node('REJECTED',     'terminal', 720, 220),
+    ], [
+      edge('OPEN',          'assign',     'ASSIGNED',     'data.sav.report.agency'),
+      edge('ASSIGNED',      'investigate','INVESTIGATING', 'data.sav.deliver.agency'),
+      edge('INVESTIGATING', 'resolve',    'RESOLVED',     'data.sav.claim.tenant'),
+      edge('INVESTIGATING', 'reject',     'REJECTED',     'data.sav.claim.tenant'),
+      edge('INVESTIGATING', 'escalate',   'ESCALATED',    'data.sav.claim.tenant'),
+      edge('ESCALATED',     'resolve',    'RESOLVED',     'data.sav.claim.tenant'),
+      edge('ESCALATED',     'reject',     'REJECTED',     'data.sav.claim.tenant'),
+    ]),
+  },
+
+  // ── Checklist départ ─────────────────────────────────────────────────────
+  {
+    slug: 'checklist-departure', name: 'Checklist — Pré-départ obligatoire',
+    description: 'Vérifications pré-départ : technique, sécurité, documents. Bloque le départ si non validée.',
+    entityType: 'Checklist', isPublic: true, isSystem: true, tags: ['checklist', 'sécurité', 'départ'],
+    graphData: graph('Checklist', [
+      node('PENDING',      'initial',  60,  80),
+      node('TECH_CHECK',   'state',   280,  80),
+      node('SAFETY_CHECK', 'state',   500,  80),
+      node('DOCS_CHECK',   'state',   720,  80),
+      node('APPROVED',     'terminal', 940, 80),
+      node('BLOCKED',      'terminal', 500, 220),
+    ], [
+      edge('PENDING',      'start_tech',    'TECH_CHECK',   'data.maintenance.update.own'),
+      edge('TECH_CHECK',   'pass_tech',     'SAFETY_CHECK', 'data.maintenance.update.own'),
+      edge('TECH_CHECK',   'fail_tech',     'BLOCKED',      'data.maintenance.update.own'),
+      edge('SAFETY_CHECK', 'pass_safety',   'DOCS_CHECK',   'data.trip.update.agency'),
+      edge('SAFETY_CHECK', 'fail_safety',   'BLOCKED',      'data.trip.update.agency'),
+      edge('DOCS_CHECK',   'approve_all',   'APPROVED',     'data.manifest.sign.agency'),
+      edge('DOCS_CHECK',   'docs_missing',  'BLOCKED',      'data.manifest.sign.agency'),
+      edge('BLOCKED',      'fix_and_retry', 'PENDING',      'data.maintenance.approve.tenant'),
+    ]),
+  },
+
+  // ── Équipage — affectation et repos ──────────────────────────────────────
+  {
+    slug: 'crew-assignment', name: 'Équipage — Affectation & Repos',
+    description: 'Gestion du cycle d\'affectation d\'un équipage : STANDBY → BRIEFING → ON_DUTY → DEBRIEFING → REST.',
+    entityType: 'Crew', isPublic: true, isSystem: true, tags: ['équipage', 'RH', 'affectation'],
+    graphData: graph('Crew', [
+      node('STANDBY',    'initial',  60,  80),
+      node('BRIEFING',   'state',   280,  80),
+      node('ON_DUTY',    'state',   500,  80),
+      node('DEBRIEFING', 'state',   720,  80),
+      node('REST',       'state',   720, 220),
+      node('SUSPENDED',  'terminal', 500, 220),
+    ], [
+      edge('STANDBY',    'assign_briefing', 'BRIEFING',   'control.driver.manage.tenant'),
+      edge('BRIEFING',   'start_duty',      'ON_DUTY',    'data.trip.update.agency'),
+      edge('BRIEFING',   'cancel',          'STANDBY',    'control.driver.manage.tenant'),
+      edge('ON_DUTY',    'end_duty',        'DEBRIEFING', 'control.trip.log_event.own'),
+      edge('ON_DUTY',    'emergency_off',   'SUSPENDED',  'control.driver.manage.tenant'),
+      edge('DEBRIEFING', 'start_rest',      'REST',       'data.driver.rest.own'),
+      edge('REST',       'rest_complete',   'STANDBY',    'data.driver.rest.own'),
+      edge('SUSPENDED',  'reinstate',       'STANDBY',    'control.driver.manage.tenant'),
+    ]),
+  },
+
+  // ── Chauffeur — disponibilité ─────────────────────────────────────────────
+  {
+    slug: 'driver-availability', name: 'Chauffeur — Disponibilité & Repos',
+    description: 'Gestion de la disponibilité chauffeur : AVAILABLE → ON_DUTY → REST_REQUIRED → RESTING.',
+    entityType: 'Driver', isPublic: true, isSystem: true, tags: ['chauffeur', 'RH', 'temps de repos'],
+    graphData: graph('Driver', [
+      node('AVAILABLE',    'initial',  60,  80),
+      node('ASSIGNED',     'state',   280,  80),
+      node('ON_DUTY',      'state',   500,  80),
+      node('REST_REQUIRED','state',   720,  80),
+      node('RESTING',      'state',   720, 220),
+      node('SUSPENDED',    'terminal', 500, 220),
+    ], [
+      edge('AVAILABLE',     'assign',        'ASSIGNED',      'control.driver.manage.tenant'),
+      edge('ASSIGNED',      'start_duty',    'ON_DUTY',       'data.trip.update.agency'),
+      edge('ASSIGNED',      'unassign',      'AVAILABLE',     'control.driver.manage.tenant'),
+      edge('ON_DUTY',       'end_shift',     'REST_REQUIRED', 'control.trip.log_event.own'),
+      edge('ON_DUTY',       'emergency_off', 'SUSPENDED',     'control.driver.manage.tenant'),
+      edge('REST_REQUIRED', 'start_rest',    'RESTING',       'data.driver.rest.own'),
+      edge('RESTING',       'rest_complete', 'AVAILABLE',     'data.driver.rest.own'),
+      edge('SUSPENDED',     'reinstate',     'AVAILABLE',     'control.driver.manage.tenant'),
+    ]),
+  },
+];
+
+// ─── Seed ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  console.log('🌱 Seeding workflow blueprints marketplace…');
+
+  // Catégorie par défaut
+  const cats = await Promise.all([
+    prisma.blueprintCategory.upsert({
+      where:  { slug: 'transport-core' },
+      update: { name: 'Transport — Cœur', sortOrder: 1 },
+      create: { name: 'Transport — Cœur', slug: 'transport-core', icon: '🚌', sortOrder: 1 },
+    }),
+    prisma.blueprintCategory.upsert({
+      where:  { slug: 'operations' },
+      update: { name: 'Opérations', sortOrder: 2 },
+      create: { name: 'Opérations', slug: 'operations', icon: '⚙️', sortOrder: 2 },
+    }),
+    prisma.blueprintCategory.upsert({
+      where:  { slug: 'qualite-sav' },
+      update: { name: 'Qualité & SAV', sortOrder: 3 },
+      create: { name: 'Qualité & SAV', slug: 'qualite-sav', icon: '🎗️', sortOrder: 3 },
+    }),
+    prisma.blueprintCategory.upsert({
+      where:  { slug: 'rh-conformite' },
+      update: { name: 'RH & Conformité', sortOrder: 4 },
+      create: { name: 'RH & Conformité', slug: 'rh-conformite', icon: '👥', sortOrder: 4 },
+    }),
+  ]);
+
+  const [transportCat, opsCat, qualiteCat, rhCat] = cats;
+
+  const categoryMap: Record<string, string> = {
+    Ticket:      transportCat!.id,
+    Trip:        transportCat!.id,
+    Parcel:      opsCat!.id,
+    Bus:         opsCat!.id,
+    Maintenance: opsCat!.id,
+    Manifest:    opsCat!.id,
+    Claim:       qualiteCat!.id,
+    Checklist:   opsCat!.id,
+    Driver:      rhCat!.id,
+    Crew:        rhCat!.id,
+  };
+
+  let created = 0;
+  let updated = 0;
+
+  for (const bp of BLUEPRINTS) {
+    const existing = await prisma.workflowBlueprint.findFirst({
+      where: { authorTenantId: null, slug: bp.slug },
+    });
+
+    const data = {
+      name:           bp.name,
+      description:    bp.description,
+      entityType:     bp.entityType,
+      graphJson:      bp.graphData as any,
+      checksum:       Buffer.from(JSON.stringify(bp.graphData)).toString('base64').slice(0, 64),
+      isPublic:       bp.isPublic,
+      isSystem:       bp.isSystem,
+      tags:           bp.tags as any,
+      version:        '1.0.0',
+      authorTenantId: null,
+      categoryId:     categoryMap[bp.entityType] ?? null,
+    };
+
+    if (existing) {
+      await prisma.workflowBlueprint.update({ where: { id: existing.id }, data });
+      updated++;
+    } else {
+      await prisma.workflowBlueprint.create({ data: { ...data, slug: bp.slug } });
+      created++;
+    }
+  }
+
+  console.log(`✅ Blueprints — ${created} créés, ${updated} mis à jour`);
+
+  // ── Templates de documents système (factures, billets, talons, manifestes…) ──
+  await seedSystemTemplates(prisma);
+}
+
+main()
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

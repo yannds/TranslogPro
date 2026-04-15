@@ -31,9 +31,11 @@ import type {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UseNavigationOptions {
-  config:      PortalNavConfig;
-  permissions: string[];       // liste des permissions de l'utilisateur
-  currentHref?: string;        // pour marquer l'item actif
+  config:          PortalNavConfig;
+  permissions:     string[];            // liste des permissions de l'utilisateur
+  /** moduleKey SaaS actifs pour le tenant. `undefined` = pas de filtrage par module (back-compat). */
+  enabledModules?: string[];
+  currentHref?:    string;              // pour marquer l'item actif
 }
 
 interface UseNavigationResult {
@@ -54,8 +56,17 @@ function isVisible(anyOf: string[] | undefined, perms: Set<string>): boolean {
   return anyOf.some(p => perms.has(p));
 }
 
-function resolveLeaf(leaf: NavLeaf, perms: Set<string>, _currentHref?: string): ResolvedNavLeaf | null {
+/** Un item masqué par module si `moduleKey` est défini ET absent de `modules`.
+ *  Si `modules` est `null`, le filtrage par module est désactivé (back-compat). */
+function moduleVisible(moduleKey: string | undefined, modules: Set<string> | null): boolean {
+  if (!moduleKey) return true;
+  if (modules === null) return true;
+  return modules.has(moduleKey);
+}
+
+function resolveLeaf(leaf: NavLeaf, perms: Set<string>, modules: Set<string> | null): ResolvedNavLeaf | null {
   if (!isVisible(leaf.anyOf, perms)) return null;
+  if (!moduleVisible(leaf.moduleKey, modules)) return null;
   return {
     id:     leaf.id,
     label:  leaf.label,
@@ -66,9 +77,9 @@ function resolveLeaf(leaf: NavLeaf, perms: Set<string>, _currentHref?: string): 
   };
 }
 
-function resolveItem(item: NavItem, perms: Set<string>, currentHref?: string): ResolvedNavItem | null {
+function resolveItem(item: NavItem, perms: Set<string>, modules: Set<string> | null): ResolvedNavItem | null {
   if (item.kind === 'leaf') {
-    const leaf = resolveLeaf(item, perms, currentHref);
+    const leaf = resolveLeaf(item, perms, modules);
     if (!leaf) return null;
     return leaf;
   }
@@ -76,9 +87,10 @@ function resolveItem(item: NavItem, perms: Set<string>, currentHref?: string): R
   // Group
   const group = item as NavGroup;
   if (!isVisible(group.anyOf, perms)) return null;
+  if (!moduleVisible(group.moduleKey, modules)) return null;
 
   const children = group.children
-    .map(c => resolveLeaf(c, perms, currentHref))
+    .map(c => resolveLeaf(c, perms, modules))
     .filter((c): c is ResolvedNavLeaf => c !== null);
 
   if (children.length === 0) return null;
@@ -92,11 +104,12 @@ function resolveItem(item: NavItem, perms: Set<string>, currentHref?: string): R
   };
 }
 
-function resolveSection(section: NavSection, perms: Set<string>, currentHref?: string): ResolvedNavSection | null {
+function resolveSection(section: NavSection, perms: Set<string>, modules: Set<string> | null): ResolvedNavSection | null {
   if (!isVisible(section.anyOf, perms)) return null;
+  if (!moduleVisible(section.moduleKey, modules)) return null;
 
   const items = section.items
-    .map(item => resolveItem(item, perms, currentHref))
+    .map(item => resolveItem(item, perms, modules))
     .filter((i): i is ResolvedNavItem => i !== null);
 
   if (items.length === 0) return null;
@@ -108,16 +121,21 @@ function resolveSection(section: NavSection, perms: Set<string>, currentHref?: s
   };
 }
 
-/** Trouve l'id de l'item actif en comparant href avec currentHref */
+/** Trouve l'id de l'item actif en comparant href avec currentHref.
+ *  Les enfants sont testés EN PREMIER : le groupe hérite du href du premier
+ *  enfant, donc il faut éviter qu'il "vole" le match avant l'enfant réel.
+ */
 function findActiveId(sections: ResolvedNavSection[], currentHref: string): string | null {
   for (const section of sections) {
     for (const item of section.items) {
-      if (item.href === currentHref) return item.id;
+      // 1. Chercher dans les enfants d'abord
       if (item.children) {
         for (const child of item.children) {
           if (child.href === currentHref) return child.id;
         }
       }
+      // 2. Tester l'item lui-même seulement si pas d'enfant correspondant
+      if (!item.children && item.href === currentHref) return item.id;
     }
   }
   return null;
@@ -128,15 +146,22 @@ function findActiveId(sections: ResolvedNavSection[], currentHref: string): stri
 export function useNavigation({
   config,
   permissions,
+  enabledModules,
   currentHref,
 }: UseNavigationOptions): UseNavigationResult {
   const perms = useMemo(() => permSet(permissions), [permissions]);
 
+  // null = pas de filtrage par module (back-compat). Sinon Set pour lookup O(1).
+  const modules = useMemo<Set<string> | null>(
+    () => (enabledModules === undefined ? null : new Set(enabledModules)),
+    [enabledModules],
+  );
+
   const sections = useMemo<ResolvedNavSection[]>(() =>
     config.sections
-      .map(s => resolveSection(s, perms, currentHref))
+      .map(s => resolveSection(s, perms, modules))
       .filter((s): s is ResolvedNavSection => s !== null),
-    [config, perms, currentHref],
+    [config, perms, modules],
   );
 
   const inferredActiveId = useMemo<string | null>(() => {

@@ -365,6 +365,15 @@ else
   warn "Dev seed skip (utilisateurs déjà créés)"
 fi
 
+# ─── Seed Prisma principal : blueprints workflows + templates de documents ────
+info "Seed Prisma principal (blueprints + templates système)..."
+if npm run db:seed --silent >/tmp/translog-seed.log 2>&1; then
+  SEED_TEMPLATES=$(grep -c "Créé\|Mis à jour" /tmp/translog-seed.log 2>/dev/null || echo "?")
+  ok "Seed Prisma terminé ($SEED_TEMPLATES entrées créées/mises à jour)"
+else
+  warn "Seed Prisma partiel ou échoué — voir /tmp/translog-seed.log"
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # BLOC 5 — MinIO
 # ═══════════════════════════════════════════════════════════════

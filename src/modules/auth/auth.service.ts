@@ -5,6 +5,7 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { TenantModuleService } from '../tenant/tenant-module.service';
 
 /** Durée de validité d'une session (30 jours). */
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1_000;
@@ -17,20 +18,25 @@ const SESSION_TTL_MS = 30 * 24 * 3600 * 1_000;
 const SESSION_TOKEN_BYTES = 32;
 
 export interface AuthUserDto {
-  id:       string;
-  email:    string;
-  name:     string | null;
-  tenantId: string;
-  roleId:   string | null;
-  roleName: string | null;
-  userType: string;
+  id:              string;
+  email:           string;
+  name:            string | null;
+  tenantId:        string;
+  roleId:          string | null;
+  roleName:        string | null;
+  userType:        string;
+  /** Liste des `moduleKey` SaaS actifs pour le tenant de l'utilisateur. */
+  enabledModules:  string[];
 }
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:  PrismaService,
+    private readonly modules: TenantModuleService,
+  ) {}
 
   // ─── Sign-in ───────────────────────────────────────────────────────────────
 
@@ -102,7 +108,7 @@ export class AuthService {
 
     return {
       token,
-      user: this.toDto(user),
+      user: await this.toDto(user),
     };
   }
 
@@ -136,6 +142,8 @@ export class AuthService {
     return this.toDto(session.user);
   }
 
+
+
   // ─── Sign-out ─────────────────────────────────────────────────────────────
 
   async signOut(token: string): Promise<void> {
@@ -164,19 +172,21 @@ export class AuthService {
 
   // ─── Helpers privés ───────────────────────────────────────────────────────
 
-  private toDto(user: {
+  private async toDto(user: {
     id: string; email: string; name: string | null;
     tenantId: string; roleId: string | null; userType: string;
     role?: { name: string } | null;
-  }): AuthUserDto {
+  }): Promise<AuthUserDto> {
+    const enabledModules = await this.modules.listActiveKeys(user.tenantId);
     return {
-      id:       user.id,
-      email:    user.email,
-      name:     user.name,
-      tenantId: user.tenantId,
-      roleId:   user.roleId,
-      roleName: user.role?.name ?? null,
-      userType: user.userType,
+      id:             user.id,
+      email:          user.email,
+      name:           user.name,
+      tenantId:       user.tenantId,
+      roleId:         user.roleId,
+      roleName:       user.role?.name ?? null,
+      userType:       user.userType,
+      enabledModules,
     };
   }
 

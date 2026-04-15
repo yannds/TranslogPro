@@ -192,6 +192,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'SAV & Réclamations',
           icon: 'MessageSquareWarning',
           anyOf: [P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER],
+          moduleKey: 'SAV_MODULE',
           children: [
             { kind: 'leaf', id: 'sav-claims',    label: 'Réclamations',        href: '/admin/sav/claims',    icon: 'FileWarning', anyOf: [P.SAV_CLAIM] },
             { kind: 'leaf', id: 'sav-reports',   label: 'Signalements',        href: '/admin/sav/reports',   icon: 'Flag',        anyOf: [P.SAV_REPORT] },
@@ -223,7 +224,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ],
           children: [
             { kind: 'leaf', id: 'pricing-grid',   label: 'Grille tarifaire',    href: '/admin/pricing',        icon: 'Grid3x3',     anyOf: [P.PRICING_MANAGE, P.PRICING_READ] },
-            { kind: 'leaf', id: 'pricing-yield',  label: 'Yield Management',    href: '/admin/pricing/yield',  icon: 'TrendingUp',  anyOf: [P.PRICING_YIELD] },
+            { kind: 'leaf', id: 'pricing-yield',  label: 'Yield Management',    href: '/admin/pricing/yield',  icon: 'TrendingUp',  anyOf: [P.PRICING_YIELD], moduleKey: 'YIELD_ENGINE' },
             { kind: 'leaf', id: 'pricing-promo',  label: 'Promotions',          href: '/admin/pricing/promo',  icon: 'Percent',     anyOf: [P.PRICING_MANAGE], wip: true },
           ],
         },
@@ -304,6 +305,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Maintenance / Garage',
           icon: 'Wrench',
           anyOf: [P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE],
+          moduleKey: 'GARAGE_PRO',
           children: [
             { kind: 'leaf', id: 'maintenance-list',     label: 'Fiches de maintenance',  href: '/admin/maintenance',          icon: 'ClipboardCheck', anyOf: [P.MAINTENANCE_APPROVE] },
             { kind: 'leaf', id: 'maintenance-planning', label: 'Planning garage',         href: '/admin/maintenance/planning', icon: 'CalendarClock',  anyOf: [P.MAINTENANCE_APPROVE] },
@@ -316,6 +318,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Documents & Consommables',
           icon: 'FileCheck',
           anyOf: [P.FLEET_MANAGE, P.DRIVER_MANAGE],
+          moduleKey: 'FLEET_DOCS',
           children: [
             { kind: 'leaf', id: 'fleet-docs-alerts',      label: 'Documents en alerte',   href: '/admin/fleet-docs',                icon: 'FileWarning',    anyOf: [P.FLEET_MANAGE] },
             { kind: 'leaf', id: 'fleet-docs-consumables', label: 'Consommables',           href: '/admin/fleet-docs/consumables',    icon: 'Gauge',          anyOf: [P.FLEET_MANAGE] },
@@ -337,6 +340,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Chauffeurs',
           icon: 'Steer',
           anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
+          moduleKey: 'DRIVER_PROFILE',
           children: [
             { kind: 'leaf', id: 'drivers-list',        label: 'Liste des chauffeurs',   href: '/admin/drivers',                  icon: 'Users',          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE] },
             { kind: 'leaf', id: 'driver-licenses',     label: 'Permis & Habilitations', href: '/admin/drivers/licenses',         icon: 'IdCard',         anyOf: [P.DRIVER_MANAGE, P.DRIVER_PROFILE] },
@@ -359,6 +363,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Équipages',
           icon: 'UsersRound',
           anyOf: [P.CREW_MANAGE],
+          moduleKey: 'CREW_BRIEFING',
           children: [
             { kind: 'leaf', id: 'crew-planning',   label: 'Planning équipages',  href: '/admin/crew/planning',  icon: 'CalendarRange',  anyOf: [P.CREW_MANAGE] },
             { kind: 'leaf', id: 'crew-briefing',   label: 'Briefings pré-départ', href: '/admin/crew/briefing', icon: 'ClipboardCheck', anyOf: [P.CREW_MANAGE] },
@@ -379,6 +384,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Accidents & Incidents',
           icon: 'AlertOctagon',
           anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT],
+          moduleKey: 'QHSE',
           children: [
             { kind: 'leaf', id: 'qhse-accidents-list',   label: 'Rapports d\'accidents', href: '/admin/qhse/accidents',          icon: 'FileWarning',    anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT] },
             { kind: 'leaf', id: 'qhse-disputes',         label: 'Litiges & Sinistres',    href: '/admin/qhse/disputes',          icon: 'Gavel',          anyOf: [P.QHSE_MANAGE] },
@@ -391,6 +397,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           href: '/admin/qhse/procedures',
           icon: 'ListChecks',
           anyOf: [P.QHSE_MANAGE],
+          moduleKey: 'QHSE',
         },
         {
           kind: 'leaf',
@@ -408,6 +415,7 @@ export const ADMIN_NAV: PortalNavConfig = {
       id: 'crm',
       title: 'Commercial',
       anyOf: [P.CRM_READ, P.CAMPAIGN_MANAGE],
+      moduleKey: 'CRM',
       items: [
         {
           kind: 'leaf',
@@ -522,6 +530,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'Workflow Studio',
           icon: 'GitFork',
           anyOf: [P.WORKFLOW_STUDIO_READ, P.WORKFLOW_STUDIO_WRITE, P.WORKFLOW_SIMULATE],
+          moduleKey: 'WORKFLOW_STUDIO',
           children: [
             { kind: 'leaf', id: 'wf-designer',    label: 'Éditeur de workflows',  href: '/admin/workflow-studio',            icon: 'PenLine',       anyOf: [P.WORKFLOW_STUDIO_WRITE] },
             { kind: 'leaf', id: 'wf-blueprints',  label: 'Blueprints',            href: '/admin/workflow-studio/blueprints', icon: 'ScrollText',    anyOf: [P.WORKFLOW_STUDIO_READ] },
@@ -544,6 +553,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           href: '/admin/settings/branding',
           icon: 'Palette',
           anyOf: [P.SETTINGS_MANAGE],
+          moduleKey: 'WHITE_LABEL',
         },
         {
           kind: 'leaf',

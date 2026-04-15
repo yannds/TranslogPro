@@ -65,6 +65,7 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
   const [error,           setError]           = useState<string | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<DocTemplate | null>(null);
   const [duplicating,     setDuplicating]     = useState<string | null>(null);
+  const [restoringPack,   setRestoringPack]   = useState(false);
   const [filterDocType,   setFilterDocType]   = useState<string>('');
 
   // ─── Chargement ─────────────────────────────────────────────────────────
@@ -124,6 +125,39 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
     }
   };
 
+  const handleRestorePack = async () => {
+    if (!window.confirm(
+      'Restaurer le pack de démarrage ?\n\n' +
+      'Cette action crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) ' +
+      'qui ne sont pas encore présents dans vos templates personnalisés. Les templates existants ne sont pas modifiés.',
+    )) return;
+
+    try {
+      setRestoringPack(true);
+      const res = await fetch(
+        `${apiBase}/tenants/${tenantId}/templates/restore-starter-pack`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: '{}',
+        },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { created, skipped } = await res.json() as { created: string[]; skipped: string[] };
+      await loadTemplates();
+      alert(
+        `Pack restauré.\n` +
+        `• Créés : ${created.length}${created.length ? ` (${created.join(', ')})` : ''}\n` +
+        `• Déjà présents : ${skipped.length}`,
+      );
+    } catch (e: any) {
+      alert(`Erreur lors de la restauration : ${e.message}`);
+    } finally {
+      setRestoringPack(false);
+    }
+  };
+
   const handleDelete = async (template: DocTemplate) => {
     if (!window.confirm(`Supprimer le template "${template.name}" ?`)) return;
 
@@ -180,8 +214,8 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
         </p>
       </div>
 
-      {/* Filtre */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      {/* Filtre + action pack */}
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         {['', 'TICKET', 'INVOICE', 'LABEL', 'MANIFEST', 'PACKING_LIST'].map(dt => (
           <button
             key={dt || 'all'}
@@ -199,6 +233,25 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
             {dt ? DOC_TYPE_LABELS[dt] : 'Tous'}
           </button>
         ))}
+
+        <button
+          onClick={handleRestorePack}
+          disabled={restoringPack}
+          title="Crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) manquants"
+          style={{
+            marginLeft: 'auto',
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            border: '1px solid #1a3a5c',
+            borderRadius: '20px',
+            background: restoringPack ? '#e5e7eb' : '#fff',
+            color: restoringPack ? '#9ca3af' : '#1a3a5c',
+            cursor: restoringPack ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {restoringPack ? 'Restauration…' : '⟲ Restaurer le pack de démarrage'}
+        </button>
       </div>
 
       {error && (

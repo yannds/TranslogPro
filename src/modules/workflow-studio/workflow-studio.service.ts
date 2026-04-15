@@ -15,14 +15,35 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService }          from '../../infrastructure/database/prisma.service';
 import { WorkflowGraphAdapter, PrismaWorkflowConfig }   from '../../core/workflow/adapters/workflow-graph.adapter';
 import { WorkflowValidator }      from '../../core/workflow/validators/workflow.validator';
 import { WorkflowGraph, SimulationResult, SimulationStep } from '../../core/workflow/types/graph.types';
 import { CreateBlueprintDto, UpdateBlueprintDto, WorkflowGraphDto } from './dto/create-blueprint.dto';
 import { SimulateWorkflowDto }    from './dto/simulate-workflow.dto';
+import { DEFAULT_REGISTRY }       from '../../core/workflow/validators/workflow.validator';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface EntityTypeMetadata {
+  entityType:           string;
+  /** États présents dans le graphe actif (ou blueprint système si pas encore configuré) */
+  states:               string[];
+  /** Actions/verbes des transitions */
+  actions:              string[];
+  /** Permissions référencées dans ce graphe */
+  permissions:          string[];
+  /** Guards disponibles dans le registre applicatif */
+  availableGuards:      string[];
+  /** SideEffects disponibles dans le registre applicatif */
+  availableSideEffects: string[];
+  /** true si le graphe provient du blueprint système (tenant pas encore configuré) */
+  fromSystemBlueprint:  boolean;
+}
 
 @Injectable()
 export class WorkflowStudioService {
@@ -95,6 +116,50 @@ export class WorkflowStudioService {
 
     this.logger.log(`Graphe ${graph.entityType} sauvegardé pour tenant=${tenantId} par actorId=${actorId}`);
     return this.getTenantGraph(tenantId, graph.entityType);
+  }
+
+  // ─── Métadonnées contextuelles ──────────────────────────────────────────────
+
+  /**
+   * Retourne les métadonnées contextuelles d'un entityType :
+   *   - états et actions du graphe actif (ou du blueprint système si non configuré)
+   *   - registre complet guards/sideEffects
+   *   - permissions déjà utilisées dans ce graphe (suggestions)
+   *
+   * Sécurité : lecture seule, aucune donnée sensible exposée.
+   */
+  async getEntityTypeMetadata(
+    tenantId:   string,
+    entityType: string,
+  ): Promise<EntityTypeMetadata> {
+    let graph = await this.getTenantGraph(tenantId, entityType);
+    let fromSystemBlueprint = false;
+
+    // Fallback vers le blueprint système si le tenant n'a pas encore de config
+    if (graph.nodes.length === 0) {
+      const systemBp = await this.prisma.workflowBlueprint.findFirst({
+        where:   { entityType, isSystem: true },
+        orderBy: { usageCount: 'desc' },
+      });
+      if (systemBp) {
+        graph = systemBp.graphJson as unknown as typeof graph;
+        fromSystemBlueprint = true;
+      }
+    }
+
+    const states      = graph.nodes.map(n => n.id);
+    const actions     = [...new Set(graph.edges.map(e => e.label))].sort();
+    const permissions = [...new Set(graph.edges.map(e => e.permission).filter(Boolean))].sort();
+
+    return {
+      entityType,
+      states,
+      actions,
+      permissions,
+      availableGuards:      DEFAULT_REGISTRY.guards,
+      availableSideEffects: DEFAULT_REGISTRY.sideEffects,
+      fromSystemBlueprint,
+    };
   }
 
   // ─── CRUD Blueprints ────────────────────────────────────────────────────────
@@ -245,52 +310,90 @@ export class WorkflowStudioService {
 
     const graph = bp.graphJson as unknown as WorkflowGraph;
 
-    await this.prisma.transact(async (tx) => {
-      const txPrisma = tx as unknown as PrismaService;
+    if (!graph?.entityType) {
+      throw new BadRequestException(
+        `Le blueprint ${blueprintId} n'a pas d'entityType défini dans son graphJson`,
+      );
+    }
 
-      // Désactiver les configs existantes
-      await txPrisma.workflowConfig.updateMany({
-        where: { tenantId, entityType: graph.entityType, isActive: true },
-        data:  { isActive: false },
+    if (!graph.edges || graph.edges.length === 0) {
+      throw new BadRequestException(
+        `Le blueprint ${blueprintId} ne contient aucune transition (graphe vide)`,
+      );
+    }
+
+    try {
+      await this.prisma.transact(async (tx) => {
+        const txPrisma = tx as unknown as PrismaService;
+
+        // Désactiver les configs existantes
+        await txPrisma.workflowConfig.updateMany({
+          where: { tenantId, entityType: graph.entityType, isActive: true },
+          data:  { isActive: false },
+        });
+
+        // Résoudre le prochain numéro de version
+        const versionAgg = await txPrisma.workflowConfig.aggregate({
+          where: { tenantId, entityType: graph.entityType },
+          _max:  { version: true },
+        });
+        const nextVersion = (versionAgg._max.version ?? 0) + 1;
+
+        // Créer les nouvelles configs depuis le graphe
+        const inputs = WorkflowGraphAdapter.toPrismaCreateInputs(graph, tenantId);
+        for (const input of inputs) {
+          await txPrisma.workflowConfig.create({ data: { ...input, version: nextVersion } as any });
+        }
+
+        // Upsert BlueprintInstall
+        await txPrisma.blueprintInstall.upsert({
+          where:  { tenantId_blueprintId: { tenantId, blueprintId } },
+          create: {
+            tenantId,
+            blueprintId,
+            snapshotJson: graph as any,
+            isDirty:      false,
+            installedBy:  actorId,
+          },
+          update: {
+            snapshotJson: graph as any,
+            isDirty:      false,
+            installedBy:  actorId,
+            installedAt:  new Date(),
+          },
+        });
+
+        // Incrémenter le compteur d'utilisation
+        await txPrisma.workflowBlueprint.update({
+          where: { id: blueprintId },
+          data:  { usageCount: { increment: 1 } },
+        });
       });
-
-      // Résoudre le prochain numéro de version
-      const versionAgg = await txPrisma.workflowConfig.aggregate({
-        where: { tenantId, entityType: graph.entityType },
-        _max:  { version: true },
-      });
-      const nextVersion = (versionAgg._max.version ?? 0) + 1;
-
-      // Créer les nouvelles configs depuis le graphe
-      const inputs = WorkflowGraphAdapter.toPrismaCreateInputs(graph, tenantId);
-      for (const input of inputs) {
-        await txPrisma.workflowConfig.create({ data: { ...input, version: nextVersion } as any });
+    } catch (err) {
+      // Convertir les erreurs Prisma en réponses HTTP exploitables
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2002') {
+          throw new BadRequestException(
+            `Conflit de données lors de l'installation (contrainte unique P2002). ` +
+            `Réessayez ou vérifiez les transitions du blueprint.`,
+          );
+        }
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            `Tenant ou ressource inexistant (contrainte FK P2003). ` +
+            `Vérifiez que le tenant est correctement initialisé.`,
+          );
+        }
+        throw new InternalServerErrorException(
+          `Erreur base de données lors de l'installation [${err.code}]: ${err.message}`,
+        );
       }
-
-      // Upsert BlueprintInstall
-      await txPrisma.blueprintInstall.upsert({
-        where:  { tenantId_blueprintId: { tenantId, blueprintId } },
-        create: {
-          tenantId,
-          blueprintId,
-          snapshotJson: graph as any,
-          isDirty:      false,
-          installedBy:  actorId,
-        },
-        update: {
-          snapshotJson: graph as any,
-          isDirty:      false,
-          installedBy:  actorId,
-          installedAt:  new Date(),
-        },
-      });
-
-      // Incrémenter le compteur d'utilisation
-      await txPrisma.workflowBlueprint.update({
-        where: { id: blueprintId },
-        data:  { usageCount: { increment: 1 } },
-      });
-    });
+      // Reraise les HttpExceptions telles quelles
+      if (err instanceof Error && 'getStatus' in err) throw err;
+      throw new InternalServerErrorException(
+        `Erreur inattendue lors de l'installation du blueprint: ${(err as Error).message}`,
+      );
+    }
 
     this.logger.log(`Blueprint ${blueprintId} installé sur tenant=${tenantId} par actorId=${actorId}`);
     return this.getTenantGraph(tenantId, graph.entityType);
