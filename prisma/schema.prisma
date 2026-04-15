@@ -16,12 +16,12 @@ datasource db {
 // ─────────────────────────────────────────────────────────────
 
 model Tenant {
-  id              String            @id @default(uuid())
+  id              String  @id @default(uuid())
   name            String
-  slug            String            @unique
-  settings        Json              @default("{}")
-  isActive        Boolean           @default(true)
-  provisionStatus String            @default("PENDING")
+  slug            String  @unique
+  settings        Json    @default("{}")
+  isActive        Boolean @default(true)
+  provisionStatus String  @default("PENDING")
   // PENDING | PROVISIONING | ACTIVE | SUSPENDED
 
   // ── Localisation & devise (drive l'interface i18n) ──────────────────────────
@@ -29,9 +29,9 @@ model Tenant {
   //   Valeurs supportées : fr | en (extensible vers ln, ktu, es, pt, ar, wo)
   // timezone : IANA TZ (ex: "Africa/Brazzaville"). Par défaut Afrique centrale.
   // currency : code ISO 4217 (ex: "XAF"). Drive l'affichage des montants.
-  language String  @default("fr")
-  timezone String  @default("Africa/Brazzaville")
-  currency String  @default("XAF")
+  language String @default("fr")
+  timezone String @default("Africa/Brazzaville")
+  currency String @default("XAF")
 
   // ── Informations société (optionnelles) ─────────────────────────────────────
   // Utilisées sur les documents officiels (billets, factures, manifestes).
@@ -40,8 +40,8 @@ model Tenant {
   rccm        String?
   phoneNumber String?
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users           User[]
   agencies        Agency[]
@@ -64,24 +64,24 @@ model Tenant {
 // Paramètres opérationnels par tenant — 1:1 avec Tenant.
 // Chargés en cache (TTL 5min) pour ne pas pénaliser les affichages haute fréquence.
 model TenantConfig {
-  id   String @id @default(cuid())
+  id       String @id @default(cuid())
   tenantId String @unique
 
   // ── Géo-sécurité ─────────────────────────────────────────────
   // Distance maximale (km) pour le score de corrélation GPS Safety
-  proximityThresholdKm     Float  @default(5.0)
+  proximityThresholdKm     Float @default(5.0)
   // Score minimum pour auto-vérifier une alerte (Safety + PublicReporter)
-  autoVerifyScoreThreshold Float  @default(0.9)
+  autoVerifyScoreThreshold Float @default(0.9)
   // PublicReporter : distance (km) pour score=1.0 (linéaire jusqu'à 0)
-  publicProximityKm        Float  @default(0.5)
+  publicProximityKm        Float @default(0.5)
 
   // ── Affichage gare ────────────────────────────────────────────
   // Scope par défaut des écrans (station | city | tenant)
-  displayScopeDefault  String @default("station")
+  displayScopeDefault String @default("station")
   // Nombre max de trajets retournés par l'endpoint display
-  displayTakeLimit     Int    @default(20)
+  displayTakeLimit    Int    @default(20)
   // Horizon de prévision en heures (combien d'heures à venir afficher)
-  displayHorizonHours  Int    @default(6)
+  displayHorizonHours Int    @default(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -114,6 +114,7 @@ model TenantBrand {
   updatedAt       DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@map("tenant_brands")
 }
 
@@ -155,28 +156,30 @@ model Agency {
   name      String
   stationId String?
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id])
-  station       Station?      @relation(fields: [stationId], references: [id])
-  users         User[]
-  cashRegisters CashRegister[]
+  tenant                   Tenant                  @relation(fields: [tenantId], references: [id])
+  station                  Station?                @relation(fields: [stationId], references: [id])
+  users                    User[]
+  cashRegisters            CashRegister[]
+  staffAssignments         StaffAssignment[]
+  staffAssignmentCoverages StaffAssignmentAgency[]
 
   @@index([tenantId])
   @@map("agencies")
 }
 
 model User {
-  id          String   @id @default(cuid())
-  tenantId    String
-  agencyId    String?
-  email       String   @unique
-  name        String?
-  image       String?
-  roleId      String?
-  userType    String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
-  preferences Json     @default("{}")    // siège préféré, gares fav (clients)
-  loyaltyScore Float   @default(0)       // calculé — clients uniquement
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  tenantId     String
+  agencyId     String?
+  email        String   @unique
+  name         String?
+  image        String?
+  roleId       String?
+  userType     String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
+  preferences  Json     @default("{}") // siège préféré, gares fav (clients)
+  loyaltyScore Float    @default(0) // calculé — clients uniquement
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id])
   agency                 Agency?                 @relation(fields: [agencyId], references: [id])
@@ -212,8 +215,8 @@ model Role {
 
 // Permission: référence canonique (lookup/description uniquement)
 model Permission {
-  id          String  @id @default(cuid())
-  key         String  @unique
+  id          String @id @default(cuid())
+  key         String @unique
   // FORMAT: {plane}.{module}.{action}.{scope}
   description String
 
@@ -257,9 +260,9 @@ model Session {
 model Account {
   id           String    @id @default(cuid())
   userId       String
-  providerId   String  // "credential" | "google" | ...
-  accountId    String  // email pour credential
-  password     String?   // hash bcrypt (credential uniquement)
+  providerId   String // "credential" | "google" | ...
+  accountId    String // email pour credential
+  password     String? // hash bcrypt (credential uniquement)
   accessToken  String?
   refreshToken String?
   expiresAt    DateTime?
@@ -275,11 +278,11 @@ model Account {
 // ─────────────────────────────────────────────────────────────
 
 model InstalledModule {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   tenantId  String
   moduleKey String
   // YIELD_ENGINE | GARAGE_PRO | SAV_MODULE | SCHEDULER | QUOTA_MANAGER
-  config    Json   @default("{}")
+  config    Json    @default("{}")
   isActive  Boolean @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -289,13 +292,13 @@ model InstalledModule {
 }
 
 model NotificationPreference {
-  id        String  @id @default(cuid())
-  userId    String  @unique
-  tenantId  String
-  sms       Boolean @default(true)
-  whatsapp  Boolean @default(true)
-  push      Boolean @default(true)
-  email     Boolean @default(false)
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  tenantId String
+  sms      Boolean @default(true)
+  whatsapp Boolean @default(true)
+  push     Boolean @default(true)
+  email    Boolean @default(false)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -312,21 +315,21 @@ model NotificationPreference {
 //   FAILED    → échec définitif (3 tentatives épuisées)
 //   READ      → lu par l'utilisateur (IN_APP uniquement)
 model Notification {
-  id           String    @id @default(cuid())
-  tenantId     String
-  userId       String
-  channel      String    // SMS | WHATSAPP | PUSH | EMAIL | IN_APP
-  templateId   String    // identifiant du template (ex: "ticket.confirmed")
-  title        String?
-  body         String
-  metadata     Json      @default("{}")   // variables substituées, IDs liés
-  status       String    @default("PENDING")
-  externalRef  String?   // SID Twilio ou message_id WhatsApp
-  failReason   String?
-  attempts     Int       @default(0)      // nombre de tentatives d'envoi
-  sentAt       DateTime?
-  readAt       DateTime?
-  createdAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  tenantId    String
+  userId      String
+  channel     String // SMS | WHATSAPP | PUSH | EMAIL | IN_APP
+  templateId  String // identifiant du template (ex: "ticket.confirmed")
+  title       String?
+  body        String
+  metadata    Json      @default("{}") // variables substituées, IDs liés
+  status      String    @default("PENDING")
+  externalRef String? // SID Twilio ou message_id WhatsApp
+  failReason  String?
+  attempts    Int       @default(0) // nombre de tentatives d'envoi
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -348,9 +351,9 @@ model WorkflowConfig {
   fromState     String
   action        String
   toState       String
-  requiredPerm  String   // ex: "data.ticket.scan.agency"
-  guards        Json     @default("[]")      // GuardDefinition[]
-  sideEffects   Json     @default("[]")      // SideEffectDefinition[]
+  requiredPerm  String // ex: "data.ticket.scan.agency"
+  guards        Json     @default("[]") // GuardDefinition[]
+  sideEffects   Json     @default("[]") // SideEffectDefinition[]
   version       Int      @default(1)
   effectiveFrom DateTime @default(now())
   isActive      Boolean  @default(true)
@@ -384,18 +387,18 @@ model WorkflowTransition {
 // ─────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  userId    String?
-  tenantId  String
-  plane          String   // control | data | http
-  level          String   // info | warn | critical
-  action         String   // ex: "data.ticket.board.agency"
-  resource       String   // ex: "Ticket:clx..."
-  oldValue       Json?
-  newValue       Json?
-  ipAddress      String?
-  securityLevel  String?  // INTERNAL | CONFIDENTIAL | RESTRICTED
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  userId        String?
+  tenantId      String
+  plane         String // control | data | http
+  level         String // info | warn | critical
+  action        String // ex: "data.ticket.board.agency"
+  resource      String // ex: "Ticket:clx..."
+  oldValue      Json?
+  newValue      Json?
+  ipAddress     String?
+  securityLevel String? // INTERNAL | CONFIDENTIAL | RESTRICTED
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -409,8 +412,8 @@ model AuditLog {
 model OutboxEvent {
   id            String    @id @default(cuid())
   tenantId      String
-  eventType     String    // ex: "ticket.boarded"
-  aggregateType String    // TICKET | TRIP | PARCEL | ...
+  eventType     String // ex: "ticket.boarded"
+  aggregateType String // TICKET | TRIP | PARCEL | ...
   aggregateId   String
   payload       Json
   status        String    @default("PENDING")
@@ -456,18 +459,18 @@ model DeadLetterEvent {
 // Ne jamais supprimer les lignes — utiliser revokedAt pour indiquer la fin.
 model ImpersonationSession {
   id             String    @id @default(uuid())
-  actorId        String    // User.id de l'agent SA ou Support
-  actorTenantId  String    // toujours "00000000-0000-0000-0000-000000000000"
-  targetTenantId String    // tenant client ciblé
-  token          String    @unique  // JWT signé (référence — non stocké en clair)
-  tokenHash      String    @unique  // SHA-256(token) — pour révocation sans stocker le token
+  actorId        String // User.id de l'agent SA ou Support
+  actorTenantId  String // toujours "00000000-0000-0000-0000-000000000000"
+  targetTenantId String // tenant client ciblé
+  token          String    @unique // JWT signé (référence — non stocké en clair)
+  tokenHash      String    @unique // SHA-256(token) — pour révocation sans stocker le token
   status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
-  reason         String?   // justification saisie par l'agent (audit)
+  reason         String? // justification saisie par l'agent (audit)
   ipAddress      String?
   userAgent      String?
   expiresAt      DateTime
   revokedAt      DateTime?
-  revokedBy      String?   // userId qui a révoqué (peut être différent de actorId)
+  revokedBy      String? // userId qui a révoqué (peut être différent de actorId)
   createdAt      DateTime  @default(now())
 
   @@index([actorId, createdAt])
@@ -481,24 +484,24 @@ model ImpersonationSession {
 // ─────────────────────────────────────────────────────────────
 
 model Station {
-  id          String  @id @default(cuid())
+  id          String @id @default(cuid())
   tenantId    String
   name        String
-  city        String  @default("")  // Ville de rattachement — hiérarchie Tenant > Ville > Gare
-  coordinates Json    // { lat: Float, lng: Float }
-  type        String  // PRINCIPALE | RELAIS
+  city        String @default("") // Ville de rattachement — hiérarchie Tenant > Ville > Gare
+  coordinates Json // { lat: Float, lng: Float }
+  type        String // PRINCIPALE | RELAIS
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id])
-  agencies    Agency[]
-  routesOrigin      Route[]  @relation("RouteOrigin")
-  routesDestination Route[]  @relation("RouteDestination")
+  tenant            Tenant     @relation(fields: [tenantId], references: [id])
+  agencies          Agency[]
+  routesOrigin      Route[]    @relation("RouteOrigin")
+  routesDestination Route[]    @relation("RouteDestination")
   waypoints         Waypoint[]
   parcelsTo         Parcel[]   @relation("ParcelDestination")
   shipmentsTo       Shipment[] @relation("ShipmentDestination")
   travelersDropoff  Traveler[] @relation("TravelerDropOff")
 
   @@index([tenantId])
-  @@index([tenantId, city])  // Lookup multi-gares par ville (DisplayService scope=city)
+  @@index([tenantId, city]) // Lookup multi-gares par ville (DisplayService scope=city)
   @@map("stations")
 }
 
@@ -527,7 +530,7 @@ model Waypoint {
   stationId         String
   order             Int
   isMandatoryStop   Boolean @default(false)
-  estimatedWaitTime Int?    // minutes
+  estimatedWaitTime Int? // minutes
   isAlertZone       Boolean @default(false)
   alertDescription  String?
 
@@ -543,46 +546,112 @@ model Waypoint {
 // ─────────────────────────────────────────────────────────────
 
 model Bus {
-  id                  String  @id @default(cuid())
-  tenantId            String
-  plateNumber         String  @unique
-  model               String
-  capacity            Int
-  luggageCapacityKg   Float
-  luggageCapacityM3   Float
-  seatLayout          Json?   // Plan de salle numéroté — OBLIGATOIRE avant vente
-  status              String  @default("AVAILABLE")
+  id                String @id @default(cuid())
+  tenantId          String
+  plateNumber       String @unique
+  model             String
+  capacity          Int
+  luggageCapacityKg Float
+  luggageCapacityM3 Float
+  seatLayout        Json? // Plan de salle numéroté — OBLIGATOIRE avant vente
+  status            String @default("AVAILABLE")
   // AVAILABLE | BOARDING | DEPARTED | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE
-  version             Int     @default(1)
+  version           Int    @default(1)
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  trips              Trip[]
-  maintenanceReports MaintenanceReport[]
-  costProfile        BusCostProfile?
-  vehicleDocuments   VehicleDocument[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  trips               Trip[]
+  maintenanceReports  MaintenanceReport[]
+  costProfile         BusCostProfile?
+  vehicleDocuments    VehicleDocument[]
   consumableTrackings ConsumableTracking[]
 
   @@index([tenantId, status])
   @@map("buses")
 }
 
+// ─── PERSONNEL : Staff (enveloppe RH) + StaffAssignment (postes occupés) ───
+//
+// Staff représente l'enveloppe RH d'un employé du tenant (paie, rattachement
+// administratif, statut global). Les postes métier effectivement occupés
+// (rôle, agence, licence, dispo) sont portés par StaffAssignment — un Staff
+// peut avoir 0..N affectations.
+//
+// Voir DESIGN_Staff_Assignment.md (sections 4.1 à 4.3).
+//
+// PHASE 1 (en cours) : les colonnes role/licenseData/isAvailable/
+// totalDriveTimeToday sont conservées en double-écriture pour permettre
+// un rollback sans perte. Elles seront supprimées en Phase 5.
 model Staff {
-  id                  String  @id @default(cuid())
-  tenantId            String
-  agencyId            String?
-  userId              String  @unique
-  role                String  // DRIVER | HOSTESS | MECHANIC
-  status              String  @default("ACTIVE")  // ACTIVE | SUSPENDED
-  licenseData         Json    @default("{}")
-  isAvailable         Boolean @default(true)
-  totalDriveTimeToday Float   @default(0)
-  createdAt           DateTime @default(now())
+  id        String   @id @default(cuid())
+  tenantId  String
+  agencyId  String? // agence de rattachement administratif (RH/paie)
+  userId    String   @unique
+  status    String   @default("ACTIVE") // ACTIVE | SUSPENDED | ARCHIVED
+  hireDate  DateTime @default(now()) // date d'embauche (RH)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Transition Phase 1 → Phase 5 : colonnes dupliquées sur StaffAssignment
+  role                String // DRIVER | HOSTESS | MECHANIC | AGENT | CONTROLLER | SUPERVISOR — @deprecated, voir assignments
+  licenseData         Json    @default("{}") // @deprecated, voir assignments
+  isAvailable         Boolean @default(true) // @deprecated, voir assignments
+  totalDriveTimeToday Float   @default(0) // @deprecated, voir assignments
   // Remis à 0 chaque jour à minuit par un scheduler
 
-  user User @relation(fields: [userId], references: [id])
+  user        User              @relation(fields: [userId], references: [id])
+  assignments StaffAssignment[]
 
   @@index([tenantId, role, isAvailable])
+  @@index([tenantId, status])
   @@map("staff")
+}
+
+// StaffAssignment — un poste occupé par un Staff sur une agence ou sur tout le tenant.
+//
+// Couverture (voir DESIGN_Staff_Assignment.md §4.3) :
+//   agencyId renseigné, pas de coverageAgencies  → MONO (1 agence)
+//   agencyId null, pas de coverageAgencies       → TENANT-WIDE (toutes)
+//   agencyId null, N coverageAgencies            → MULTI-SPÉCIFIQUE (N agences)
+// Combinaison interdite : agencyId renseigné + coverageAgencies (validation applicative).
+//
+// Clôture plutôt que suppression : endDate + status=CLOSED pour préserver l'historique.
+model StaffAssignment {
+  id                  String    @id @default(cuid())
+  staffId             String
+  role                String // DRIVER | HOSTESS | MECHANIC | AGENT | CONTROLLER | SUPERVISOR
+  agencyId            String? // null + 0 coverageAgencies = tenant-wide ; null + N = multi-spécifique
+  startDate           DateTime  @default(now())
+  endDate             DateTime? // null = affectation active
+  status              String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  licenseData         Json      @default("{}")
+  isAvailable         Boolean   @default(true)
+  totalDriveTimeToday Float     @default(0) // pertinent si role=DRIVER — reset par scheduler minuit
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  staff            Staff                   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  agency           Agency?                 @relation(fields: [agencyId], references: [id])
+  coverageAgencies StaffAssignmentAgency[]
+
+  @@index([staffId, status])
+  @@index([role, status, isAvailable])
+  @@index([agencyId, role, status])
+  @@map("staff_assignments")
+}
+
+// StaffAssignmentAgency — table de jointure pour le cas multi-spécifique.
+// Ne pas utiliser si StaffAssignment.agencyId est renseigné (validation applicative).
+model StaffAssignmentAgency {
+  assignmentId String
+  agencyId     String
+  createdAt    DateTime @default(now())
+
+  assignment StaffAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  agency     Agency          @relation(fields: [agencyId], references: [id])
+
+  @@id([assignmentId, agencyId])
+  @@index([agencyId])
+  @@map("staff_assignment_agencies")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -590,35 +659,35 @@ model Staff {
 // ─────────────────────────────────────────────────────────────
 
 model Trip {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   tenantId           String
   routeId            String
   busId              String
   driverId           String
-  status             String   @default("PLANNED")
+  status             String    @default("PLANNED")
   // PLANNED | OPEN | BOARDING | IN_PROGRESS | IN_PROGRESS_PAUSED
   // IN_PROGRESS_DELAYED | COMPLETED | CANCELLED
-  roadbook           Json     @default("{}")
+  roadbook           Json      @default("{}")
   // Stocké en DB (pas MinIO) pour permettre les requêtes sur waypoints
   departureScheduled DateTime
   arrivalScheduled   DateTime
   currentLat         Float?
   currentLng         Float?
   lastGpsAt          DateTime?
-  displayNote        String?  // texte court pour écrans d'affichage gare
-  displayColor       String?  // code couleur hex (#FF9800 = ambre retard)
-  version            Int      @default(1)
+  displayNote        String? // texte court pour écrans d'affichage gare
+  displayColor       String? // code couleur hex (#FF9800 = ambre retard)
+  version            Int       @default(1)
 
-  tenant      Tenant          @relation(fields: [tenantId], references: [id])
-  route       Route           @relation(fields: [routeId], references: [id])
-  bus         Bus             @relation(fields: [busId], references: [id])
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  route           Route             @relation(fields: [routeId], references: [id])
+  bus             Bus               @relation(fields: [busId], references: [id])
   checklists      Checklist[]
   incidents       Incident[]
   shipments       Shipment[]
   tripEvents      TripEvent[]
   crewAssignments CrewAssignment[]
   feedbacks       Feedback[]
-  travelers       Traveler[]         @relation("TripTravelers")
+  travelers       Traveler[]        @relation("TripTravelers")
   costSnapshot    TripCostSnapshot?
 
   @@index([tenantId, status])
@@ -651,8 +720,8 @@ model Incident {
   tripId              String?
   busId               String?
   reportedById        String
-  type                String    // MECHANICAL | SECURITY | HEALTH | LOST_OBJECT | SOS | ACCIDENT
-  severity            String    // LOW | MEDIUM | HIGH | CRITICAL
+  type                String // MECHANICAL | SECURITY | HEALTH | LOST_OBJECT | SOS | ACCIDENT
+  severity            String // LOW | MEDIUM | HIGH | CRITICAL
   description         String
   locationDescription String?
   metadata            Json      @default("{}")
@@ -662,7 +731,7 @@ model Incident {
   assigneeId          String?
   resolution          String?
   resolvedAt          DateTime?
-  claimId             String?   // FK vers Claim si incident déclenche un SAV
+  claimId             String? // FK vers Claim si incident déclenche un SAV
   createdAt           DateTime  @default(now())
 
   trip Trip? @relation(fields: [tripId], references: [id])
@@ -678,7 +747,7 @@ model MaintenanceReport {
   tenantId      String
   busId         String
   incidentId    String?
-  type          String    // PREVENTIVE | CORRECTIVE | EMERGENCY
+  type          String // PREVENTIVE | CORRECTIVE | EMERGENCY
   description   String
   scheduledAt   DateTime
   odometer      Float?
@@ -707,22 +776,22 @@ model MaintenanceReport {
 // ─────────────────────────────────────────────────────────────
 
 model Ticket {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   tripId        String
   passengerId   String
   passengerName String
   seatNumber    String?
   pricePaid     Float
-  status        String   @default("CREATED")
+  status        String    @default("CREATED")
   // CREATED | PENDING_PAYMENT | CONFIRMED | CHECKED_IN | BOARDED | COMPLETED
   // CANCELLED | EXPIRED
   expiresAt     DateTime?
-  qrCode        String   @unique
+  qrCode        String    @unique
   // Format: base64url(payload).HMAC-SHA256(payload, tenant_hmac_key)
   agencyId      String
-  version       Int      @default(1)
-  createdAt     DateTime @default(now())
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now())
 
   @@index([tenantId, tripId, status])
   @@index([qrCode])
@@ -749,12 +818,12 @@ model Traveler {
 }
 
 model Baggage {
-  id       String @id @default(cuid())
-  tenantId String
-  ticketId String
-  count    Int    @default(1)
-  weight   Float
-  type     String // CABIN | HOLD
+  id        String @id @default(cuid())
+  tenantId  String
+  ticketId  String
+  count     Int    @default(1)
+  weight    Float
+  type      String // CABIN | HOLD
   surcharge Float  @default(0)
 
   @@index([ticketId])
@@ -772,8 +841,8 @@ model Parcel {
   trackingCode  String   @unique
   weight        Float
   price         Float
-  destinationId String   // FK Station (plus un String libre)
-  recipientInfo Json     // { name, phone, address }
+  destinationId String // FK Station (plus un String libre)
+  recipientInfo Json // { name, phone, address }
   shipmentId    String?
   status        String   @default("CREATED")
   // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED
@@ -796,7 +865,7 @@ model Shipment {
   id              String   @id @default(cuid())
   tenantId        String
   tripId          String
-  destinationId   String   // FK Station (plus un String libre)
+  destinationId   String // FK Station (plus un String libre)
   totalWeight     Float    @default(0)
   remainingWeight Float
   status          String   @default("OPEN")
@@ -804,8 +873,8 @@ model Shipment {
   version         Int      @default(1)
   createdAt       DateTime @default(now())
 
-  trip        Trip      @relation(fields: [tripId], references: [id])
-  destination Station   @relation("ShipmentDestination", fields: [destinationId], references: [id])
+  trip        Trip     @relation(fields: [tripId], references: [id])
+  destination Station  @relation("ShipmentDestination", fields: [destinationId], references: [id])
   parcels     Parcel[]
 
   @@index([tenantId, tripId])
@@ -834,15 +903,15 @@ model PricingRules {
 }
 
 model CashRegister {
-  id             String        @id @default(cuid())
+  id             String    @id @default(cuid())
   tenantId       String
   agencyId       String
   agentId        String
-  openedAt       DateTime      @default(now())
+  openedAt       DateTime  @default(now())
   closedAt       DateTime?
   initialBalance Float
   finalBalance   Float?
-  auditStatus    String        @default("OPEN")
+  auditStatus    String    @default("OPEN")
   // OPEN | CLOSED | DISCREPANCY
 
   agency       Agency        @relation(fields: [agencyId], references: [id])
@@ -853,15 +922,15 @@ model CashRegister {
 }
 
 model Transaction {
-  id              String   @id @default(cuid())
-  tenantId        String
-  cashRegisterId  String
-  type            String   // TICKET | PARCEL | LUGGAGE_FEE | REFUND
-  amount          Float
-  paymentMethod   String   // CASH | MOBILE_MONEY
-  externalRef     String?  // Référence Flutterwave/Paystack (idempotent)
-  metadata        Json     @default("{}")
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  tenantId       String
+  cashRegisterId String
+  type           String // TICKET | PARCEL | LUGGAGE_FEE | REFUND
+  amount         Float
+  paymentMethod  String // CASH | MOBILE_MONEY
+  externalRef    String? // Référence Flutterwave/Paystack (idempotent)
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
 
   cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
 
@@ -880,12 +949,12 @@ model LostFoundItem {
   tripId       String
   reporterId   String
   description  String
-  photoUrl     String?   // MinIO signed URL — TTL 30 jours post-remise
+  photoUrl     String? // MinIO signed URL — TTL 30 jours post-remise
   status       String    @default("FOUND")
   // FOUND | CLAIMED | DISPOSED
   claimedAt    DateTime?
   claimedBy    String?
-  signatureUrl String?   // Photo pièce ID — TTL 15min (biométrique)
+  signatureUrl String? // Photo pièce ID — TTL 15min (biométrique)
   createdAt    DateTime  @default(now())
 
   @@index([tenantId, status])
@@ -895,10 +964,10 @@ model LostFoundItem {
 model Claim {
   id          String    @id @default(cuid())
   tenantId    String
-  type        String    // PARCEL_DAMAGE | PARCEL_LOSS | SERVICE | REFUND_REQUEST | SAFETY
+  type        String // PARCEL_DAMAGE | PARCEL_LOSS | SERVICE | REFUND_REQUEST | SAFETY
   reporterId  String
-  entityId    String    // parcelId ou ticketId
-  entityType  String    // PARCEL | TICKET | INCIDENT
+  entityId    String // parcelId ou ticketId
+  entityType  String // PARCEL | TICKET | INCIDENT
   description String
   status      String    @default("OPEN")
   // OPEN | UNDER_INVESTIGATION | RESOLVED | REJECTED | CLOSED
@@ -917,19 +986,19 @@ model Claim {
 // TripEvent: événements opérationnels normaux du voyage (pauses, checkpoints GPS, délais)
 // Partage l'interface BaseEvent avec Incident — discriminé par le champ type
 model TripEvent {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tripId      String
-  type        String
+  id         String   @id @default(cuid())
+  tenantId   String
+  tripId     String
+  type       String
   // PAUSE_START | PAUSE_END | CHECKPOINT_REACHED | DELAY_DECLARED
   // DELAY_DETECTED | DEPARTURE_ANOMALY | GEOFENCE_EXIT
-  severity    String   @default("LOW")  // LOW | MEDIUM | HIGH | CRITICAL
-  reportedBy  String   // userId du chauffeur ou 'SYSTEM'
-  gpsLat      Float?
-  gpsLng      Float?
-  metadata    Json     @default("{}")   // durée pause, nom checkpoint, etc.
-  claimId     String?                   // FK Claim si l'événement déclenche un SAV
-  createdAt   DateTime @default(now())
+  severity   String   @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
+  reportedBy String // userId du chauffeur ou 'SYSTEM'
+  gpsLat     Float?
+  gpsLng     Float?
+  metadata   Json     @default("{}") // durée pause, nom checkpoint, etc.
+  claimId    String? // FK Claim si l'événement déclenche un SAV
+  createdAt  DateTime @default(now())
 
   trip Trip @relation(fields: [tripId], references: [id])
 
@@ -947,11 +1016,11 @@ model SafetyAlert {
   tenantId          String
   tripId            String?
   reporterId        String
-  type              String   // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
+  type              String // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
   description       String?
   gpsLat            Float?
   gpsLng            Float?
-  verificationScore Float    @default(0)  // 0..1 — corrélation GPS bus/déclarant
+  verificationScore Float    @default(0) // 0..1 — corrélation GPS bus/déclarant
   status            String   @default("PENDING")
   // PENDING | VERIFIED | UNVERIFIED | DISMISSED
   source            String   @default("IN_APP") // IN_APP | PUBLIC_REPORT
@@ -966,20 +1035,20 @@ model SafetyAlert {
 
 // Feedback: note brute soumise par un voyageur après un trajet
 model Feedback {
-  id             String   @id @default(cuid())
-  tenantId       String
-  userId         String
-  tripId         String?
-  driverId       String?  // Staff.id
-  busId          String?
-  agencyId       String?
-  ratings        Json     @default("{}")
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String
+  tripId        String?
+  driverId      String? // Staff.id
+  busId         String?
+  agencyId      String?
+  ratings       Json     @default("{}")
   // { conduct: 0-5, punctuality: 0-5, comfort: 0-5, baggage: 0-5 }
-  comment        String?
-  rgpdConsentAt  DateTime // consentement RGPD obligatoire à la soumission
-  createdAt      DateTime @default(now())
+  comment       String?
+  rgpdConsentAt DateTime // consentement RGPD obligatoire à la soumission
+  createdAt     DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user User  @relation(fields: [userId], references: [id])
   trip Trip? @relation(fields: [tripId], references: [id])
 
   @@index([tenantId, tripId])
@@ -990,13 +1059,13 @@ model Feedback {
 
 // Rating: agrégat calculé — mis à jour asynchroniquement via side effect trip.completed
 model Rating {
-  id          String   @id @default(cuid())
-  tenantId    String
-  entityType  String   // DRIVER | BUS | AGENCY
-  entityId    String   // Staff.id | Bus.id | Agency.id
-  avgScore    Float    @default(0)
-  count       Int      @default(0)
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  tenantId   String
+  entityType String // DRIVER | BUS | AGENCY
+  entityId   String // Staff.id | Bus.id | Agency.id
+  avgScore   Float    @default(0)
+  count      Int      @default(0)
+  updatedAt  DateTime @updatedAt
 
   @@unique([tenantId, entityType, entityId])
   @@index([tenantId, entityType])
@@ -1012,11 +1081,11 @@ model CrewAssignment {
   tenantId  String
   tripId    String
   staffId   String
-  crewRole  String    // CO_PILOT | HOSTESS | SECURITY | MECHANIC_ON_BOARD
+  crewRole  String // CO_PILOT | HOSTESS | SECURITY | MECHANIC_ON_BOARD
   briefedAt DateTime? // null = pas encore briefé (guard CREW_BRIEFED)
   createdAt DateTime  @default(now())
 
-  trip          Trip                @relation(fields: [tripId], references: [id])
+  trip           Trip                @relation(fields: [tripId], references: [id])
   briefingRecord CrewBriefingRecord?
 
   @@unique([tripId, staffId])
@@ -1032,7 +1101,7 @@ model PublicReport {
   id                  String    @id @default(cuid())
   tenantId            String
   plateOrParkNumber   String
-  type                String    // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
+  type                String // DANGEROUS_DRIVING | ACCIDENT | BREAKDOWN | OTHER
   description         String
   reporterGpsLat      Float?
   reporterGpsLng      Float?
@@ -1042,7 +1111,7 @@ model PublicReport {
   // PENDING | VERIFIED | UNVERIFIED | DISMISSED
   correlatedBusId     String?
   photoUrl            String?
-  reporterIp          String    // pour rate limiting audit
+  reporterIp          String // pour rate limiting audit
   createdAt           DateTime  @default(now())
 
   @@index([tenantId, status])
@@ -1058,7 +1127,7 @@ model Campaign {
   id          String   @id @default(cuid())
   tenantId    String
   name        String
-  criteria    Json     @default("{}")  // segments de voyageurs ciblés
+  criteria    Json     @default("{}") // segments de voyageurs ciblés
   messageText String
   status      String   @default("DRAFT")
   // DRAFT | ACTIVE | PAUSED | COMPLETED
@@ -1090,16 +1159,16 @@ model GpsPosition {
 }
 
 model TripTemplate {
-  id               String    @id @default(cuid())
-  tenantId         String
-  routeId          String
-  weekdays         Json      // [0..6] jours de la semaine
-  departureTime    String    // "HH:MM"
-  defaultBusId     String?
-  defaultDriverId  String?
-  isActive         Boolean   @default(true)
-  effectiveUntil   DateTime?
-  createdAt        DateTime  @default(now())
+  id              String    @id @default(cuid())
+  tenantId        String
+  routeId         String
+  weekdays        Json // [0..6] jours de la semaine
+  departureTime   String // "HH:MM"
+  defaultBusId    String?
+  defaultDriverId String?
+  isActive        Boolean   @default(true)
+  effectiveUntil  DateTime?
+  createdAt       DateTime  @default(now())
 
   @@index([tenantId, isActive])
   @@map("trip_templates")
@@ -1125,30 +1194,30 @@ model BlueprintCategory {
 /// Un blueprint est un snapshot figé d'un graphe de workflow : il ne change jamais
 /// une fois publié (immutable history). Pour modifier, on publie une nouvelle version.
 model WorkflowBlueprint {
-  id             String   @id @default(cuid())
+  id             String             @id @default(cuid())
   name           String
   slug           String
   description    String?
-  entityType     String   // Ticket | Parcel | Trip | Claim
+  entityType     String // Ticket | Parcel | Trip | Claim
   /// Graphe sérialisé comme WorkflowGraph JSON (nodes + edges)
   graphJson      Json
   /// SHA-256 de graphJson — tamper detection à l'import
   checksum       String
-  version        String   @default("1.0.0")
-  isPublic       Boolean  @default(false)  // false = PRIVATE (visible qu'à authorTenantId)
-  isSystem       Boolean  @default(false)  // true = seed système non supprimable
+  version        String             @default("1.0.0")
+  isPublic       Boolean            @default(false) // false = PRIVATE (visible qu'à authorTenantId)
+  isSystem       Boolean            @default(false) // true = seed système non supprimable
   categoryId     String?
   category       BlueprintCategory? @relation(fields: [categoryId], references: [id])
   /// Tenant auteur (null = blueprint système)
   authorTenantId String?
   /// Tags de recherche
-  tags           Json     @default("[]")   // string[]
+  tags           Json               @default("[]") // string[]
   /// Compteur installations (dénormalisé pour ranking marketplace)
-  usageCount     Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  usageCount     Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  installs       BlueprintInstall[]
+  installs BlueprintInstall[]
 
   @@unique([authorTenantId, slug, version])
   @@index([entityType, isPublic])
@@ -1160,16 +1229,16 @@ model WorkflowBlueprint {
 /// Chaque installation snapshot le graphJson au moment de l'install
 /// pour que les mises à jour du blueprint n'affectent pas les tenants existants.
 model BlueprintInstall {
-  id           String   @id @default(cuid())
+  id           String            @id @default(cuid())
   tenantId     String
   blueprintId  String
   blueprint    WorkflowBlueprint @relation(fields: [blueprintId], references: [id])
   /// Snapshot du graphJson au moment de l'installation
   snapshotJson Json
   /// Indique si le tenant a personnalisé le workflow après l'installation
-  isDirty      Boolean  @default(false)
-  installedAt  DateTime @default(now())
-  installedBy  String   // userId
+  isDirty      Boolean           @default(false)
+  installedAt  DateTime          @default(now())
+  installedBy  String // userId
 
   @@unique([tenantId, blueprintId])
   @@index([tenantId])
@@ -1184,10 +1253,10 @@ model DocumentTemplate {
   id          String   @id @default(cuid())
   // tenantId null = template système (partagé entre tous les tenants)
   tenantId    String?
-  name        String                   // Nom lisible : "Billet A4 FR"
-  slug        String                   // Identifiant machine : "ticket-a4-fr"
-  docType     String                   // TICKET | MANIFEST | INVOICE | LABEL | PACKING_LIST
-  format      String                   // A4 | A5 | THERMAL_80MM | LABEL_62MM | ENVELOPE_C5 | BAGGAGE_TAG
+  name        String // Nom lisible : "Billet A4 FR"
+  slug        String // Identifiant machine : "ticket-a4-fr"
+  docType     String // TICKET | MANIFEST | INVOICE | LABEL | PACKING_LIST
+  format      String // A4 | A5 | THERMAL_80MM | LABEL_62MM | ENVELOPE_C5 | BAGGAGE_TAG
   engine      String   @default("HBS") // HBS | PUPPETEER | PDFME
   // Chemin MinIO vers le fichier source .hbs (null = template inline stocké dans `body`)
   storageKey  String?
@@ -1221,23 +1290,23 @@ model BusCostProfile {
   tenantId                String
   busId                   String   @unique
   // Coûts variables directs
-  fuelConsumptionPer100Km Float    // litres / 100 km
-  fuelPricePerLiter       Float    // prix actuel du carburant (XOF/litre)
+  fuelConsumptionPer100Km Float // litres / 100 km
+  fuelPricePerLiter       Float // prix actuel du carburant (XOF/litre)
   // AdBlue — moteurs Euro 6 (Mercedes Actros, Iveco Stralis…)
   adBlueCostPerLiter      Float    @default(0.18) // coût AdBlue au litre (€)
   adBlueRatioFuel         Float    @default(0.05) // fraction AdBlue / volume carburant
   // Maintenance au km (ADR-23 — remplace forfait mensuel biaisé)
   maintenanceCostPerKm    Float    @default(0.05) // coût d'entretien par km (XOF/km)
   // Frais de départ
-  stationFeePerDeparture  Float    @default(0)    // redevance gare routière par départ
-  driverAllowancePerTrip  Float    @default(0)    // indemnités fixes par trajet (XOF)
-  tollFeesPerTrip         Float    @default(0)    // péages fixes par trajet (XOF)
+  stationFeePerDeparture  Float    @default(0) // redevance gare routière par départ
+  driverAllowancePerTrip  Float    @default(0) // indemnités fixes par trajet (XOF)
+  tollFeesPerTrip         Float    @default(0) // péages fixes par trajet (XOF)
   // Coûts fixes mensuels (proratisés par trajet dans ProfitabilityService)
-  driverMonthlySalary     Float    // salaire mensuel conducteur assigné (XOF)
-  annualInsuranceCost     Float    // assurance annuelle (XOF)
-  monthlyAgencyFees       Float    // frais fixes agence / mois (XOF)
+  driverMonthlySalary     Float // salaire mensuel conducteur assigné (XOF)
+  annualInsuranceCost     Float // assurance annuelle (XOF)
+  monthlyAgencyFees       Float // frais fixes agence / mois (XOF)
   // Amortissement simplifié
-  purchasePrice           Float    // prix d'achat (XOF)
+  purchasePrice           Float // prix d'achat (XOF)
   depreciationYears       Int      @default(10)
   residualValue           Float    @default(0)
   // Nombre moyen de trajets par mois (utilisé pour la proratisation des fixes)
@@ -1246,6 +1315,7 @@ model BusCostProfile {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   bus    Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+
   @@index([tenantId])
   @@map("bus_cost_profiles")
 }
@@ -1253,42 +1323,42 @@ model BusCostProfile {
 // ── Snapshot de rentabilité calculé par trajet (immuable après clôture) ───────
 // Généré automatiquement à la transition Trip → COMPLETED.
 model TripCostSnapshot {
-  id       String @id @default(cuid())
-  tenantId String
-  tripId   String @unique
+  id                    String   @id @default(cuid())
+  tenantId              String
+  tripId                String   @unique
   // ── Coûts variables directs ──────────────────────────────────
-  fuelCost          Float
-  adBlueCost        Float   @default(0)
-  maintenanceCost   Float   @default(0)  // km-based (ADR-23)
-  stationFee        Float   @default(0)
-  tollFees          Float
-  driverAllowance   Float
-  totalVariableCost Float
+  fuelCost              Float
+  adBlueCost            Float    @default(0)
+  maintenanceCost       Float    @default(0) // km-based (ADR-23)
+  stationFee            Float    @default(0)
+  tollFees              Float
+  driverAllowance       Float
+  totalVariableCost     Float
   // ── Coûts fixes proratisés (par trajet) ─────────────────────
-  driverDailyCost    Float
-  insuranceDailyCost Float
-  agencyDailyCost    Float
-  depreciationDaily  Float
-  totalFixedCost     Float
-  totalCost          Float
+  driverDailyCost       Float
+  insuranceDailyCost    Float
+  agencyDailyCost       Float
+  depreciationDaily     Float
+  totalFixedCost        Float
+  totalCost             Float
   // ── Revenus ─────────────────────────────────────────────────
-  ticketRevenue     Float   @default(0)
-  parcelRevenue     Float   @default(0)
-  totalRevenue      Float   @default(0)
+  ticketRevenue         Float    @default(0)
+  parcelRevenue         Float    @default(0)
+  totalRevenue          Float    @default(0)
   // ── Marges (ADR-27) ─────────────────────────────────────────
-  operationalMargin     Float   @default(0)  // revenu - coûts variables
-  operationalMarginRate Float   @default(0)
-  agencyCommission      Float   @default(0)  // commission agence post-snapshot
-  netTenantRevenue      Float   @default(0)  // totalRevenue - agencyCommission
-  netMargin             Float   // revenu tenant net - coût total
-  marginRate            Float   // netMargin / totalCost
+  operationalMargin     Float    @default(0) // revenu - coûts variables
+  operationalMarginRate Float    @default(0)
+  agencyCommission      Float    @default(0) // commission agence post-snapshot
+  netTenantRevenue      Float    @default(0) // totalRevenue - agencyCommission
+  netMargin             Float // revenu tenant net - coût total
+  marginRate            Float // netMargin / totalCost
   // ── KPIs ────────────────────────────────────────────────────
-  bookedSeats       Int
-  totalSeats        Int
-  fillRate          Float   // 0.0 – 1.0
-  breakEvenSeats    Int
-  profitabilityTag  String  // PROFITABLE | BREAK_EVEN | DEFICIT
-  computedAt        DateTime @default(now())
+  bookedSeats           Int
+  totalSeats            Int
+  fillRate              Float // 0.0 – 1.0
+  breakEvenSeats        Int
+  profitabilityTag      String // PROFITABLE | BREAK_EVEN | DEFICIT
+  computedAt            DateTime @default(now())
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
@@ -1306,7 +1376,7 @@ model TripAnalytics {
   busId     String
   // Date du trajet (tronquée à minuit UTC pour agrégation journalière)
   tripDate  DateTime
-  dayOfWeek Int      // 0=Lundi … 6=Dimanche
+  dayOfWeek Int // 0=Lundi … 6=Dimanche
 
   avgFillRate      Float
   avgNetMargin     Float
@@ -1317,8 +1387,8 @@ model TripAnalytics {
   deficitCount     Int   @default(0)
 
   // Flags calculés sur fenêtre glissante 12 semaines
-  isGoldenDay  Boolean @default(false) // fillRate > 0.85 sur ce jour-de-semaine historiquement
-  isBlackRoute Boolean @default(false) // > 50 % des trajets déficitaires sur les 90 derniers jours
+  isGoldenDay    Boolean @default(false) // fillRate > 0.85 sur ce jour-de-semaine historiquement
+  isBlackRoute   Boolean @default(false) // > 50 % des trajets déficitaires sur les 90 derniers jours
   // Prix de référence moyen (base pour le yield)
   referencePrice Float?
 
@@ -1338,9 +1408,9 @@ model TripAnalytics {
 model VehicleDocumentType {
   id                    String  @id @default(cuid())
   tenantId              String
-  name                  String                    // "Assurance RC" , "Carte grise" …
-  code                  String                    // "INSURANCE" | "REGISTRATION" | etc. (libre)
-  alertDaysBeforeExpiry Int     @default(30)      // alerte J-30 par défaut
+  name                  String // "Assurance RC" , "Carte grise" …
+  code                  String // "INSURANCE" | "REGISTRATION" | etc. (libre)
+  alertDaysBeforeExpiry Int     @default(30) // alerte J-30 par défaut
   isMandatory           Boolean @default(true)
   isActive              Boolean @default(true)
 
@@ -1359,8 +1429,8 @@ model VehicleDocument {
   tenantId     String
   busId        String
   typeId       String
-  fileKey      String?   // MinIO key (null si document non encore uploadé)
-  referenceNo  String?   // Numéro de l'assurance, plaque immat…
+  fileKey      String? // MinIO key (null si document non encore uploadé)
+  referenceNo  String? // Numéro de l'assurance, plaque immat…
   issuedAt     DateTime?
   expiresAt    DateTime?
   status       String    @default("MISSING")
@@ -1384,13 +1454,13 @@ model VehicleDocument {
 // alertKmBefore      = déclencher l'alerte X km avant la fin de vie.
 // Exemples : Pneus (50 000 km, alerte à 5 000 km), Vidange (10 000 km, alerte à 1 000 km)
 model ConsumableType {
-  id                 String  @id @default(cuid())
-  tenantId           String
-  name               String                     // "Pneus AV", "Vidange moteur", "Filtres"…
-  code               String                     // "TIRES_FRONT", "OIL_CHANGE"… (libre)
-  nominalLifetimeKm  Float                      // durée de vie en km
-  alertKmBefore      Float                      // km avant fin de vie pour alerte
-  isActive           Boolean @default(true)
+  id                String  @id @default(cuid())
+  tenantId          String
+  name              String // "Pneus AV", "Vidange moteur", "Filtres"…
+  code              String // "TIRES_FRONT", "OIL_CHANGE"… (libre)
+  nominalLifetimeKm Float // durée de vie en km
+  alertKmBefore     Float // km avant fin de vie pour alerte
+  isActive          Boolean @default(true)
 
   trackings ConsumableTracking[]
 
@@ -1404,18 +1474,18 @@ model ConsumableType {
 // Le scheduler compare currentKm vs (lastReplacedKm + nominalLifetimeKm - alertKmBefore)
 // pour publier un événement fleet.consumable.alert_due.
 model ConsumableTracking {
-  id              String    @id @default(cuid())
-  tenantId        String
-  busId           String
-  typeId          String
-  lastReplacedKm  Float?    // kilométrage au dernier remplacement (null = jamais remplacé)
-  lastReplacedAt  DateTime?
-  currentKm       Float     @default(0) // kilométrage actuel du bus (synchronisé depuis GPS/TripEvent)
-  status          String    @default("OK")
+  id             String    @id @default(cuid())
+  tenantId       String
+  busId          String
+  typeId         String
+  lastReplacedKm Float? // kilométrage au dernier remplacement (null = jamais remplacé)
+  lastReplacedAt DateTime?
+  currentKm      Float     @default(0) // kilométrage actuel du bus (synchronisé depuis GPS/TripEvent)
+  status         String    @default("OK")
   // OK | ALERT | OVERDUE
-  nextDueKm       Float?    // calculé : lastReplacedKm + nominalLifetimeKm
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  nextDueKm      Float? // calculé : lastReplacedKm + nominalLifetimeKm
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   bus  Bus            @relation(fields: [busId], references: [id], onDelete: Cascade)
   type ConsumableType @relation(fields: [typeId], references: [id])
@@ -1428,15 +1498,15 @@ model ConsumableTracking {
 // ── Intervenant sur un rapport de maintenance ─────────────────────────────────
 // Trace qui a fait quoi : mécanicien, nettoyeur, contrôleur technique…
 model MaintenanceIntervenant {
-  id            String    @id @default(cuid())
-  tenantId      String
-  reportId      String
-  staffId       String?   // Staff.id si interne (null si prestataire externe)
-  externalName  String?   // Nom si prestataire externe
-  role          String    // "MECHANIC" | "CLEANER" | "TECHNICAL_INSPECTOR" | … (libre)
-  hoursWorked   Float?
-  notes         String?
-  createdAt     DateTime  @default(now())
+  id           String   @id @default(cuid())
+  tenantId     String
+  reportId     String
+  staffId      String? // Staff.id si interne (null si prestataire externe)
+  externalName String? // Nom si prestataire externe
+  role         String // "MECHANIC" | "CLEANER" | "TECHNICAL_INSPECTOR" | … (libre)
+  hoursWorked  Float?
+  notes        String?
+  createdAt    DateTime @default(now())
 
   report MaintenanceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
@@ -1448,16 +1518,16 @@ model MaintenanceIntervenant {
 // ── Pièce / consommable remplacé dans un rapport de maintenance ────────────────
 // Remplace l'ancien champ partsUsed Json pour permettre des requêtes structurées.
 model MaintenancePart {
-  id               String    @id @default(cuid())
+  id               String   @id @default(cuid())
   tenantId         String
   reportId         String
-  consumableTypeId String?   // null si pièce ad-hoc non cataloguée
-  partName         String    // Nom libre (ex: "Filtre à huile Mann W 719/30")
-  partReference    String?   // Référence constructeur
-  quantity         Float     @default(1)
+  consumableTypeId String? // null si pièce ad-hoc non cataloguée
+  partName         String // Nom libre (ex: "Filtre à huile Mann W 719/30")
+  partReference    String? // Référence constructeur
+  quantity         Float    @default(1)
   unitCostXaf      Float?
-  kmAtReplacement  Float?    // km du bus au moment du remplacement
-  createdAt        DateTime  @default(now())
+  kmAtReplacement  Float? // km du bus au moment du remplacement
+  createdAt        DateTime @default(now())
 
   report MaintenanceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
@@ -1476,12 +1546,12 @@ model MaintenancePart {
 // maxDrivingMinutesPerWeek= conduite max sur 7 jours glissants.
 // Ces valeurs sont chargées par le SchedulingGuardService avant toute assignation.
 model DriverRestConfig {
-  id                       String  @id @default(cuid())
-  tenantId                 String  @unique
-  minRestMinutes           Int     @default(660)   // 11h = 660 min
-  maxDrivingMinutesPerDay  Int     @default(540)   // 9h = 540 min
-  maxDrivingMinutesPerWeek Int     @default(3360)  // 56h = 3360 min
-  alertBeforeEndRestMin    Int     @default(30)    // prévenir 30 min avant fin repos autorisé
+  id                       String @id @default(cuid())
+  tenantId                 String @unique
+  minRestMinutes           Int    @default(660) // 11h = 660 min
+  maxDrivingMinutesPerDay  Int    @default(540) // 9h = 540 min
+  maxDrivingMinutesPerWeek Int    @default(3360) // 56h = 3360 min
+  alertBeforeEndRestMin    Int    @default(30) // prévenir 30 min avant fin repos autorisé
 
   @@map("driver_rest_configs")
 }
@@ -1495,7 +1565,7 @@ model DriverRestPeriod {
   staffId   String
   startedAt DateTime
   endedAt   DateTime?
-  source    String    // AUTO | MANUAL | MEDICAL
+  source    String // AUTO | MANUAL | MEDICAL
   notes     String?
   createdAt DateTime  @default(now())
 
@@ -1507,19 +1577,19 @@ model DriverRestPeriod {
 // Un chauffeur peut avoir plusieurs catégories (B, D, EC…).
 // La colonne Staff.licenseData est conservée pour rétro-compatibilité.
 model DriverLicense {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   tenantId     String
   staffId      String
-  category     String    // "B" | "D" | "EC" | … (libre)
+  category     String // "B" | "D" | "EC" | … (libre)
   licenseNo    String
   issuedAt     DateTime
   expiresAt    DateTime
-  issuingState String?   // Pays ou état émetteur
-  fileKey      String?   // Scan du permis — MinIO key
-  status       String    @default("VALID")
+  issuingState String? // Pays ou état émetteur
+  fileKey      String? // Scan du permis — MinIO key
+  status       String   @default("VALID")
   // VALID | EXPIRING | EXPIRED | SUSPENDED
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([tenantId, staffId])
   @@index([tenantId, expiresAt])
@@ -1530,14 +1600,14 @@ model DriverLicense {
 // ── Catalogue des types de formation obligatoire (par tenant) ─────────────────
 // frequencyDays = récurrence obligatoire en jours (ex: premiers secours tous les 365j).
 model DriverTrainingType {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   tenantId      String
-  name          String                    // "Premiers secours", "Conduite défensive"…
-  code          String                    // "FIRST_AID", "DEFENSIVE_DRIVING"… (libre)
-  frequencyDays Int      @default(365)   // récurrence annuelle par défaut
-  durationHours Float    @default(8)
-  isMandatory   Boolean  @default(true)
-  isActive      Boolean  @default(true)
+  name          String // "Premiers secours", "Conduite défensive"…
+  code          String // "FIRST_AID", "DEFENSIVE_DRIVING"… (libre)
+  frequencyDays Int     @default(365) // récurrence annuelle par défaut
+  durationHours Float   @default(8)
+  isMandatory   Boolean @default(true)
+  isActive      Boolean @default(true)
 
   trainings DriverTraining[]
 
@@ -1549,19 +1619,19 @@ model DriverTrainingType {
 // ── Planning de formation par chauffeur ──────────────────────────────────────
 // Généré automatiquement par le scheduler (tous les frequencyDays depuis la dernière completion).
 model DriverTraining {
-  id          String    @id @default(cuid())
-  tenantId    String
-  staffId     String
-  typeId      String
-  scheduledAt DateTime
-  completedAt DateTime?
-  status      String    @default("PLANNED")
+  id           String    @id @default(cuid())
+  tenantId     String
+  staffId      String
+  typeId       String
+  scheduledAt  DateTime
+  completedAt  DateTime?
+  status       String    @default("PLANNED")
   // PLANNED | COMPLETED | MISSED | CANCELLED
-  trainerName String?
+  trainerName  String?
   locationName String?
-  fileKey     String?   // Attestation MinIO
-  notes       String?
-  createdAt   DateTime  @default(now())
+  fileKey      String? // Attestation MinIO
+  notes        String?
+  createdAt    DateTime  @default(now())
 
   type DriverTrainingType @relation(fields: [typeId], references: [id])
 
@@ -1575,15 +1645,15 @@ model DriverTraining {
 // Si le score CRM d'un chauffeur descend sous scoreBelowThreshold,
 // le système génère automatiquement une DriverRemediationAction de type actionType.
 model DriverRemediationRule {
-  id                  String   @id @default(cuid())
+  id                  String  @id @default(cuid())
   tenantId            String
   name                String
-  scoreBelowThreshold Float    // ex: 3.5 sur 5
-  actionType          String   // "TRAINING" | "WARNING" | "SUSPENSION" (libre)
-  trainingTypeId      String?  // si actionType = TRAINING, quelle formation déclencher
-  suspensionDays      Int?     // si actionType = SUSPENSION, durée
-  priority            Int      @default(0) // ordre d'évaluation des règles
-  isActive            Boolean  @default(true)
+  scoreBelowThreshold Float // ex: 3.5 sur 5
+  actionType          String // "TRAINING" | "WARNING" | "SUSPENSION" (libre)
+  trainingTypeId      String? // si actionType = TRAINING, quelle formation déclencher
+  suspensionDays      Int? // si actionType = SUSPENSION, durée
+  priority            Int     @default(0) // ordre d'évaluation des règles
+  isActive            Boolean @default(true)
 
   actions DriverRemediationAction[]
 
@@ -1593,17 +1663,17 @@ model DriverRemediationRule {
 
 // ── Action de remédiation déclenchée pour un chauffeur ───────────────────────
 model DriverRemediationAction {
-  id          String    @id @default(cuid())
-  tenantId    String
-  staffId     String
-  ruleId      String
-  scoreAtTrigger Float  // score au moment du déclenchement
-  status      String    @default("PENDING")
+  id             String    @id @default(cuid())
+  tenantId       String
+  staffId        String
+  ruleId         String
+  scoreAtTrigger Float // score au moment du déclenchement
+  status         String    @default("PENDING")
   // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
-  triggeredAt DateTime  @default(now())
-  dueAt       DateTime?
-  completedAt DateTime?
-  notes       String?
+  triggeredAt    DateTime  @default(now())
+  dueAt          DateTime?
+  completedAt    DateTime?
+  notes          String?
 
   rule DriverRemediationRule @relation(fields: [ruleId], references: [id])
 
@@ -1619,13 +1689,13 @@ model DriverRemediationAction {
 // ── Catalogue des équipements de sécurité obligatoires (par tenant) ───────────
 // Exemples : Gilets, Lampes torches, Trousse de secours, Cales, Sangles, Triangles, Cric
 model BriefingEquipmentType {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   tenantId    String
-  name        String                        // "Gilets de sécurité"
-  code        String                        // "SAFETY_VESTS" (libre)
-  requiredQty Int      @default(1)
-  isMandatory Boolean  @default(true)
-  isActive    Boolean  @default(true)
+  name        String // "Gilets de sécurité"
+  code        String // "SAFETY_VESTS" (libre)
+  requiredQty Int     @default(1)
+  isMandatory Boolean @default(true)
+  isActive    Boolean @default(true)
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1637,18 +1707,18 @@ model BriefingEquipmentType {
 // checkedItems = JSON : [{ equipmentTypeId, qty, ok, notes }]
 // allEquipmentOk = computed field : true si tous les items mandatory sont OK.
 model CrewBriefingRecord {
-  id               String    @id @default(cuid())
-  tenantId         String
-  assignmentId     String    @unique
-  conductedById    String    // Staff.id du responsable de briefing (driver ou co-pilot)
-  checkedItems     Json      @default("[]")
+  id             String   @id @default(cuid())
+  tenantId       String
+  assignmentId   String   @unique
+  conductedById  String // Staff.id du responsable de briefing (driver ou co-pilot)
+  checkedItems   Json     @default("[]")
   // [{ equipmentTypeId: string, qty: number, ok: boolean, notes?: string }]
-  allEquipmentOk   Boolean   @default(false)
-  briefingNotes    String?
-  gpsLat           Float?    // position GPS au moment du briefing
-  gpsLng           Float?
-  completedAt      DateTime  @default(now())
-  createdAt        DateTime  @default(now())
+  allEquipmentOk Boolean  @default(false)
+  briefingNotes  String?
+  gpsLat         Float? // position GPS au moment du briefing
+  gpsLng         Float?
+  completedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   assignment CrewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
@@ -1664,16 +1734,16 @@ model CrewBriefingRecord {
 // Exemples : Léger (0 blessé grave), Lourd (blessé grave), Mortel (décès)
 // Les codes sont libres pour s'adapter à la réglementation locale.
 model AccidentSeverityType {
-  id               String  @id @default(cuid())
-  tenantId         String
-  name             String                    // "Accident léger", "Accident grave"…
-  code             String                    // "MINOR" | "SERIOUS" | "FATAL" (libre)
-  color            String  @default("#f59e0b") // couleur dashboard
-  requiresQhse     Boolean @default(false)   // déclenche alerte QHSE automatique
-  requiresPolice   Boolean @default(false)   // déclenche consigne "Appeler la police"
-  requiresInsurer  Boolean @default(false)   // déclenche contact assureur obligatoire
-  sortOrder        Int     @default(0)
-  isActive         Boolean @default(true)
+  id              String  @id @default(cuid())
+  tenantId        String
+  name            String // "Accident léger", "Accident grave"…
+  code            String // "MINOR" | "SERIOUS" | "FATAL" (libre)
+  color           String  @default("#f59e0b") // couleur dashboard
+  requiresQhse    Boolean @default(false) // déclenche alerte QHSE automatique
+  requiresPolice  Boolean @default(false) // déclenche consigne "Appeler la police"
+  requiresInsurer Boolean @default(false) // déclenche contact assureur obligatoire
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
 
   accidents AccidentReport[]
 
@@ -1686,35 +1756,35 @@ model AccidentSeverityType {
 // Créé par le chauffeur, co-pilote ou agent QHSE depuis leurs apps respectives.
 // Peut déclencher un workflow QHSE (QhseProcedureExecution).
 model AccidentReport {
-  id               String    @id @default(cuid())
-  tenantId         String
-  incidentId       String?   @unique  // FK vers Incident existant (si venu du système incident)
-  tripId           String?
-  busId            String?
-  severityTypeId   String
-  reportedById     String              // Staff.id (driver/crew) ou User.id (QHSE agent)
-  reportedByRole   String              // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT"
-  occurredAt       DateTime
-  gpsLat           Float?
-  gpsLng           Float?
-  locationDesc     String?
-  description      String    @db.Text
-  circumstance     String?   @db.Text // description circonstances (route, météo, tiers…)
-  photoKeys        Json      @default("[]")  // string[] clés MinIO photos
-  status           String    @default("OPEN")
+  id             String    @id @default(cuid())
+  tenantId       String
+  incidentId     String?   @unique // FK vers Incident existant (si venu du système incident)
+  tripId         String?
+  busId          String?
+  severityTypeId String
+  reportedById   String // Staff.id (driver/crew) ou User.id (QHSE agent)
+  reportedByRole String // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT"
+  occurredAt     DateTime
+  gpsLat         Float?
+  gpsLng         Float?
+  locationDesc   String?
+  description    String    @db.Text
+  circumstance   String?   @db.Text // description circonstances (route, météo, tiers…)
+  photoKeys      Json      @default("[]") // string[] clés MinIO photos
+  status         String    @default("OPEN")
   // OPEN | UNDER_INVESTIGATION | LEGAL | SETTLED | CLOSED
-  assignedQhseId   String?   // QHSE responsible assigned
-  closedAt         DateTime?
-  closedById       String?
-  closingNotes     String?   @db.Text
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  assignedQhseId String? // QHSE responsible assigned
+  closedAt       DateTime?
+  closedById     String?
+  closingNotes   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  severityType       AccidentSeverityType      @relation(fields: [severityTypeId], references: [id])
-  thirdParties       AccidentThirdParty[]
-  injuries           AccidentInjury[]
-  disputeTracking    DisputeTracking?
-  procedureExecs     QhseProcedureExecution[]
+  severityType    AccidentSeverityType     @relation(fields: [severityTypeId], references: [id])
+  thirdParties    AccidentThirdParty[]
+  injuries        AccidentInjury[]
+  disputeTracking DisputeTracking?
+  procedureExecs  QhseProcedureExecution[]
 
   @@index([tenantId, status])
   @@index([tenantId, occurredAt])
@@ -1724,18 +1794,18 @@ model AccidentReport {
 
 // ── Tiers impliqués dans un accident ─────────────────────────────────────────
 model AccidentThirdParty {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   tenantId      String
   reportId      String
-  type          String    // "VEHICLE" | "PEDESTRIAN" | "PROPERTY" | "OTHER" (libre)
+  type          String // "VEHICLE" | "PEDESTRIAN" | "PROPERTY" | "OTHER" (libre)
   name          String?
   phone         String?
-  plateNumber   String?   // si véhicule
+  plateNumber   String? // si véhicule
   vehicleModel  String?
-  insuranceRef  String?   // numéro d'assurance tiers
-  statementFile String?   // MinIO — constat amiable signé
+  insuranceRef  String? // numéro d'assurance tiers
+  statementFile String? // MinIO — constat amiable signé
   notes         String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime @default(now())
 
   report AccidentReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
@@ -1746,24 +1816,24 @@ model AccidentThirdParty {
 
 // ── Blessures enregistrées dans l'accident ───────────────────────────────────
 model AccidentInjury {
-  id              String    @id @default(cuid())
-  tenantId        String
-  reportId        String
-  personType      String    // "PASSENGER" | "DRIVER" | "CREW" | "PEDESTRIAN" | "THIRD_PARTY"
-  personName      String?
-  ticketId        String?   // FK Ticket si c'est un passager
-  severity        String    // "MINOR" | "SERIOUS" | "CRITICAL" | "FATAL" (libre)
-  hospitalId      String?   // FK Hospital si transfert hospitalier
-  hospitalName    String?   // Nom libre si hôpital non répertorié
-  admittedAt      DateTime?
-  dischargedAt    DateTime?
-  medicalNotes    String?   @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  tenantId     String
+  reportId     String
+  personType   String // "PASSENGER" | "DRIVER" | "CREW" | "PEDESTRIAN" | "THIRD_PARTY"
+  personName   String?
+  ticketId     String? // FK Ticket si c'est un passager
+  severity     String // "MINOR" | "SERIOUS" | "CRITICAL" | "FATAL" (libre)
+  hospitalId   String? // FK Hospital si transfert hospitalier
+  hospitalName String? // Nom libre si hôpital non répertorié
+  admittedAt   DateTime?
+  dischargedAt DateTime?
+  medicalNotes String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  report       AccidentReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  hospital     Hospital?       @relation(fields: [hospitalId], references: [id])
-  followUps    MedicalFollowUp[]
+  report    AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  hospital  Hospital?         @relation(fields: [hospitalId], references: [id])
+  followUps MedicalFollowUp[]
 
   @@index([reportId])
   @@index([tenantId])
@@ -1790,15 +1860,15 @@ model Hospital {
 
 // ── Suivi médical d'une blessure ─────────────────────────────────────────────
 model MedicalFollowUp {
-  id              String    @id @default(cuid())
-  tenantId        String
-  injuryId        String
-  date            DateTime
+  id               String    @id @default(cuid())
+  tenantId         String
+  injuryId         String
+  date             DateTime
   practitionerName String?
-  notes           String?   @db.Text
-  nextAppointment DateTime?
-  fileKey         String?   // Compte-rendu médical MinIO
-  createdAt       DateTime  @default(now())
+  notes            String?   @db.Text
+  nextAppointment  DateTime?
+  fileKey          String? // Compte-rendu médical MinIO
+  createdAt        DateTime  @default(now())
 
   injury AccidentInjury @relation(fields: [injuryId], references: [id], onDelete: Cascade)
 
@@ -1813,20 +1883,20 @@ model DisputeTracking {
   reportId        String    @unique
   mode            String    @default("INSURANCE")
   // "INSURANCE" | "AMICABLE" | "LEGAL"
-  insurerRef      String?   // Numéro de dossier assureur
+  insurerRef      String? // Numéro de dossier assureur
   insurerName     String?
-  adjusterId      String?   // Nom de l'expert mandaté
+  adjusterId      String? // Nom de l'expert mandaté
   status          String    @default("OPEN")
   // OPEN | PENDING_ADJUSTER | NEGOTIATION | AGREED | CLOSED | CONTESTED
-  estimatedTotal  Float?    // Estimation du sinistre total
+  estimatedTotal  Float? // Estimation du sinistre total
   advancedAmount  Float     @default(0) // Montant pré-financé par l'entreprise
-  finalSettlement Float?    // Montant final agréé
+  finalSettlement Float? // Montant final agréé
   settledAt       DateTime?
   closingNotes    String?   @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  report   AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report   AccidentReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
   expenses DisputeExpense[]
 
   @@index([tenantId, status])
@@ -1838,11 +1908,11 @@ model DisputeExpense {
   id           String    @id @default(cuid())
   tenantId     String
   disputeId    String
-  type         String    // "REPAIR" | "MEDICAL" | "LEGAL" | "TOWING" | "OTHER" (libre)
+  type         String // "REPAIR" | "MEDICAL" | "LEGAL" | "TOWING" | "OTHER" (libre)
   description  String
   amountXaf    Float
   paidAt       DateTime?
-  fileKey      String?   // Justificatif MinIO
+  fileKey      String? // Justificatif MinIO
   approvedById String?
   createdAt    DateTime  @default(now())
 
@@ -1857,13 +1927,13 @@ model DisputeExpense {
 // Une procédure est associée à un type de déclencheur (ex: ACCIDENT_FATAL).
 // Le code du trigger est libre pour s'adapter à la réglementation locale.
 model QhseProcedure {
-  id            String   @id @default(cuid())
-  tenantId      String
-  name          String
-  triggerCode   String   // "ACCIDENT_FATAL" | "ACCIDENT_SERIOUS" | "FIRE" | "BREAKDOWN" (libre)
-  description   String?
-  isActive      Boolean  @default(true)
-  version       Int      @default(1)
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String
+  triggerCode String // "ACCIDENT_FATAL" | "ACCIDENT_SERIOUS" | "FIRE" | "BREAKDOWN" (libre)
+  description String?
+  isActive    Boolean @default(true)
+  version     Int     @default(1)
 
   steps      QhseProcedureStep[]
   executions QhseProcedureExecution[]
@@ -1875,15 +1945,15 @@ model QhseProcedure {
 
 // ── Étapes d'une procédure QHSE ──────────────────────────────────────────────
 model QhseProcedureStep {
-  id            String   @id @default(cuid())
-  procedureId   String
-  order         Int
-  description   String   @db.Text
-  responsible   String   // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT" (libre)
-  isVerification Boolean @default(false) // si true, l'exécutant doit cocher OK
+  id              String  @id @default(cuid())
+  procedureId     String
+  order           Int
+  description     String  @db.Text
+  responsible     String // "DRIVER" | "CREW" | "QHSE" | "STATION_AGENT" (libre)
+  isVerification  Boolean @default(false) // si true, l'exécutant doit cocher OK
   isPhotoRequired Boolean @default(false)
 
-  procedure QhseProcedure   @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  procedure QhseProcedure       @relation(fields: [procedureId], references: [id], onDelete: Cascade)
   stepExecs QhseStepExecution[]
 
   @@unique([procedureId, order])
@@ -1892,18 +1962,18 @@ model QhseProcedureStep {
 
 // ── Exécution d'une procédure (1 par accident / trigger) ─────────────────────
 model QhseProcedureExecution {
-  id            String    @id @default(cuid())
-  tenantId      String
-  reportId      String
-  procedureId   String
-  startedById   String    // qui a lancé la procédure
-  startedAt     DateTime  @default(now())
-  completedAt   DateTime?
-  status        String    @default("IN_PROGRESS")
+  id          String    @id @default(cuid())
+  tenantId    String
+  reportId    String
+  procedureId String
+  startedById String // qui a lancé la procédure
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  status      String    @default("IN_PROGRESS")
   // IN_PROGRESS | COMPLETED | ABORTED
 
-  report    AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  procedure QhseProcedure     @relation(fields: [procedureId], references: [id])
+  report    AccidentReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  procedure QhseProcedure       @relation(fields: [procedureId], references: [id])
   stepExecs QhseStepExecution[]
 
   @@index([tenantId, reportId])
@@ -1912,14 +1982,14 @@ model QhseProcedureExecution {
 
 // ── Exécution d'une étape individuelle ───────────────────────────────────────
 model QhseStepExecution {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   executionId  String
   stepId       String
   executedById String
-  executedAt   DateTime  @default(now())
-  isOk         Boolean   @default(true)
+  executedAt   DateTime @default(now())
+  isOk         Boolean  @default(true)
   notes        String?
-  photoKey     String?   // MinIO si isPhotoRequired
+  photoKey     String? // MinIO si isPhotoRequired
 
   execution QhseProcedureExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
   step      QhseProcedureStep      @relation(fields: [stepId], references: [id])
@@ -1933,21 +2003,20 @@ model QhseStepExecution {
 // ─────────────────────────────────────────────────────────────
 
 model Attachment {
-  id          String   @id @default(cuid())
-  tenantId    String
-  entityType  String   // CUSTOMER | STAFF | VEHICLE | TRIP | INCIDENT | PARCEL...
-  entityId    String
-  kind        String   // CONTRACT | ID_CARD | LICENSE | CERTIFICATE | PHOTO | OTHER
-  fileName    String
-  mimeType    String
-  size        Int
-  storageKey  String   // MinIO key
-  checksum    String?  // SHA-256
-  uploadedBy  String?  // userId
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  tenantId   String
+  entityType String // CUSTOMER | STAFF | VEHICLE | TRIP | INCIDENT | PARCEL...
+  entityId   String
+  kind       String // CONTRACT | ID_CARD | LICENSE | CERTIFICATE | PHOTO | OTHER
+  fileName   String
+  mimeType   String
+  size       Int
+  storageKey String // MinIO key
+  checksum   String? // SHA-256
+  uploadedBy String? // userId
+  createdAt  DateTime @default(now())
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, kind])
   @@map("attachments")
 }
-

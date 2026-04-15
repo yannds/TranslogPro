@@ -71,8 +71,15 @@ async function upsertUserWithCredential(opts: {
   return user;
 }
 
-/** Crée un profil Driver complet (Staff + license + rest config tenant). */
+/** Crée un profil Driver complet (Staff + StaffAssignment + license + rest config tenant). */
 async function upsertDriverProfile(userId: string, tenantId: string) {
+  const licenseData = {
+    licenseNo:    'DL-CG-2021-00041',
+    category:     'D',
+    expiresAt:    '2027-03-10',
+    issuingState: 'Congo',
+  };
+
   // ── 1. Profil Staff DRIVER ──────────────────────────────────────────────────
   const profile = await prisma.staff.upsert({
     where:  { userId },
@@ -82,16 +89,29 @@ async function upsertDriverProfile(userId: string, tenantId: string) {
       tenantId,
       role:        'DRIVER',
       status:      'ACTIVE',
-      licenseData: {
-        licenseNo:    'DL-CG-2021-00041',
-        category:     'D',
-        expiresAt:    '2027-03-10',
-        issuingState: 'Congo',
-      },
+      licenseData,
       isAvailable:         true,
       totalDriveTimeToday: 0,
     },
   });
+
+  // ── 1bis. StaffAssignment miroir (Phase 1 transition) ───────────────────────
+  const existingAssignment = await prisma.staffAssignment.findFirst({
+    where: { staffId: profile.id, role: 'DRIVER', status: 'ACTIVE' },
+  });
+  if (!existingAssignment) {
+    await prisma.staffAssignment.create({
+      data: {
+        staffId:             profile.id,
+        role:                'DRIVER',
+        agencyId:            profile.agencyId, // null accepté = tenant-wide en dev
+        status:              'ACTIVE',
+        licenseData,
+        isAvailable:         true,
+        totalDriveTimeToday: 0,
+      },
+    });
+  }
 
   // ── 2. Permis de conduire (table dédiée) ────────────────────────────────────
   // staffId n'est pas unique → vérifier avant d'insérer
@@ -127,6 +147,42 @@ async function upsertDriverProfile(userId: string, tenantId: string) {
   });
 
   return profile;
+}
+
+/**
+ * Backfill Phase 1 : pour chaque Staff sans StaffAssignment actif, créer une
+ * ligne miroir à partir des colonnes legacy (role, agencyId, licenseData…).
+ * Idempotent — peut être rejoué sans duplication.
+ *
+ * Voir DESIGN_Staff_Assignment.md §6 (Phase 1) et §7.
+ */
+async function backfillStaffAssignments() {
+  const staffWithoutAssignment = await prisma.staff.findMany({
+    where:   { assignments: { none: { status: 'ACTIVE' } } },
+    select:  { id: true, role: true, agencyId: true, licenseData: true, isAvailable: true, totalDriveTimeToday: true, createdAt: true },
+  });
+
+  if (staffWithoutAssignment.length === 0) {
+    console.log('[Dev Seed] ✅ Aucun Staff à rétro-migrer (StaffAssignments déjà en place)');
+    return;
+  }
+
+  for (const s of staffWithoutAssignment) {
+    await prisma.staffAssignment.create({
+      data: {
+        staffId:             s.id,
+        role:                s.role,
+        agencyId:            s.agencyId,
+        startDate:           s.createdAt,
+        status:              'ACTIVE',
+        licenseData:         s.licenseData as any,
+        isAvailable:         s.isAvailable,
+        totalDriveTimeToday: s.totalDriveTimeToday,
+      },
+    });
+  }
+
+  console.log(`[Dev Seed] ✅ ${staffWithoutAssignment.length} StaffAssignment(s) créés depuis Staff legacy`);
 }
 
 /** Active tous les modules SaaS pour un tenant donné (dev only). */
@@ -454,6 +510,9 @@ async function main() {
 
   await upsertDriverProfile(driver.id, TENANT1_ID);
   console.log(`[Dev Seed] ✅ driver@tenant1.dev (DRIVER + profil complet, id=${driver.id})`);
+
+  // ── 7. Backfill Phase 1 : StaffAssignment pour tout Staff legacy ────────────
+  await backfillStaffAssignments();
 
   // ── Résumé ───────────────────────────────────────────────────────────────────
   console.log('[Dev Seed] Terminé.');
