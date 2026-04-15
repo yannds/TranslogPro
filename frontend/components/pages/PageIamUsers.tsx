@@ -33,7 +33,6 @@ interface UserRow {
   id:        string;
   email:     string;
   name:      string | null;
-  userType:  string;
   roleId:    string | null;
   agencyId:  string | null;
   createdAt: string;
@@ -47,7 +46,6 @@ interface CreateForm {
   password: string;
   roleId:   string;
   agencyId: string;
-  userType: 'STAFF' | 'DRIVER';
 }
 
 interface EditForm {
@@ -92,17 +90,6 @@ function buildColumns(currentUserId: string): Column<UserRow>[] {
       csvValue: (_v, row) => row.role?.name ?? '',
     },
     {
-      key: 'userType',
-      header: 'Type',
-      sortable: true,
-      width: '100px',
-      cellRenderer: (v) => (
-        <Badge variant={String(v) === 'DRIVER' ? 'warning' : 'default'}>
-          {String(v)}
-        </Badge>
-      ),
-    },
-    {
       key: 'agency',
       header: 'Agence',
       sortable: true,
@@ -138,7 +125,7 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
   error:    string | null;
 }) {
   const [f, setF] = useState<CreateForm>({
-    email: '', name: '', password: '', roleId: '', agencyId: '', userType: 'STAFF',
+    email: '', name: '', password: '', roleId: '', agencyId: '',
   });
   const set = <K extends keyof CreateForm>(k: K, v: CreateForm[K]) =>
     setF(p => ({ ...p, [k]: v }));
@@ -183,15 +170,6 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
             className={inp} disabled={busy}>
             <option value="">— Aucun rôle —</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Type</label>
-          <select value={f.userType}
-            onChange={e => set('userType', e.target.value as 'STAFF' | 'DRIVER')}
-            className={inp} disabled={busy}>
-            <option value="STAFF">STAFF</option>
-            <option value="DRIVER">DRIVER</option>
           </select>
         </div>
       </div>
@@ -249,7 +227,6 @@ function EditUserForm({ user, roles, onSubmit, onCancel, busy, error }: {
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
           <p>Email : <span className="font-mono">{user.email}</span></p>
-          <p>Type  : {user.userType}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -301,7 +278,6 @@ export function PageIamUsers() {
         password: f.password,
         roleId:   f.roleId   || undefined,
         agencyId: f.agencyId || undefined,
-        userType: f.userType,
       });
       setShowCreate(false); refetch();
     } catch (e) { setActionErr((e as Error).message); }

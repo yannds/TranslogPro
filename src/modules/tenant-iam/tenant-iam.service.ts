@@ -112,7 +112,7 @@ export class TenantIamService {
         tenantId,
         roleId:   dto.roleId   ?? null,
         agencyId: dto.agencyId ?? null,
-        userType: dto.userType ?? 'STAFF',
+        userType: 'STAFF',
       },
       select: {
         id: true, email: true, name: true, userType: true,
@@ -149,7 +149,15 @@ export class TenantIamService {
         roleId: true, agencyId: true, createdAt: true,
         role:         { select: { id: true, name: true } },
         agency:       { select: { id: true, name: true } },
-        staffProfile: { select: { id: true, role: true, status: true } },
+        staffProfile: {
+          select: {
+            id: true, status: true,
+            assignments: {
+              where: { status: 'ACTIVE' },
+              select: { id: true, role: true, agencyId: true },
+            },
+          },
+        },
       },
     });
     if (!user) throw new NotFoundException(`Utilisateur ${userId} introuvable`);

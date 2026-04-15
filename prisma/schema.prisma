@@ -178,6 +178,16 @@ model User {
   userType     String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
   preferences  Json     @default("{}") // siège préféré, gares fav (clients)
   loyaltyScore Float    @default(0) // calculé — clients uniquement
+
+  // ── MFA / TOTP ─────────────────────────────────────────────────
+  // Infrastructure prête ; activation par tenant (plateforme, caissiers…)
+  // via flag d'activation côté service. `mfaEnabled` reste à false tant
+  // que l'utilisateur n'a pas finalisé le setup (scan QR + code valide).
+  mfaEnabled      Boolean   @default(false)
+  mfaSecret       String?   // secret base32 TOTP (à chiffrer en prod — KMS)
+  mfaBackupCodes  String[]  @default([]) // codes de secours (hash bcrypt), single-use
+  mfaVerifiedAt   DateTime? // moment d'activation effective
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -578,9 +588,9 @@ model Bus {
 //
 // Voir DESIGN_Staff_Assignment.md (sections 4.1 à 4.3).
 //
-// PHASE 1 (en cours) : les colonnes role/licenseData/isAvailable/
-// totalDriveTimeToday sont conservées en double-écriture pour permettre
-// un rollback sans perte. Elles seront supprimées en Phase 5.
+// Phase 5 : colonnes legacy (role/licenseData/isAvailable/totalDriveTimeToday)
+// supprimées — toutes les requêtes métier passent désormais par
+// StaffAssignment. Voir DESIGN_Staff_Assignment.md §6.
 model Staff {
   id        String   @id @default(cuid())
   tenantId  String
@@ -591,17 +601,9 @@ model Staff {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  // ── Transition Phase 1 → Phase 5 : colonnes dupliquées sur StaffAssignment
-  role                String // DRIVER | HOSTESS | MECHANIC | AGENT | CONTROLLER | SUPERVISOR — @deprecated, voir assignments
-  licenseData         Json    @default("{}") // @deprecated, voir assignments
-  isAvailable         Boolean @default(true) // @deprecated, voir assignments
-  totalDriveTimeToday Float   @default(0) // @deprecated, voir assignments
-  // Remis à 0 chaque jour à minuit par un scheduler
-
   user        User              @relation(fields: [userId], references: [id])
   assignments StaffAssignment[]
 
-  @@index([tenantId, role, isAvailable])
   @@index([tenantId, status])
   @@map("staff")
 }

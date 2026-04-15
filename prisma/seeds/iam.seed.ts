@@ -562,7 +562,7 @@ export async function backfillDefaultAgencies(
       where: {
         tenantId: tenant.id,
         agencyId: null,
-        userType: { in: ['STAFF', 'DRIVER'] },
+        userType: 'STAFF',
       },
       data: { agencyId: defaultAgencyId },
     });
@@ -631,6 +631,70 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Shipment', fromState: 'LOADED',    action: 'DEPART',  toState: 'IN_TRANSIT', requiredPerm: 'data.trip.update.agency'    },
   { entityType: 'Shipment', fromState: 'IN_TRANSIT',action: 'ARRIVE',  toState: 'ARRIVED',    requiredPerm: 'data.trip.update.agency'    },
   { entityType: 'Shipment', fromState: 'ARRIVED',   action: 'CLOSE',   toState: 'CLOSED',     requiredPerm: 'data.shipment.group.agency' },
+
+  // ─── Entités blueprint-first ─────────────────────────────────────────────
+  // Ces workflows n'étaient jusque-là présents que dans le marketplace
+  // (blueprints système). Les exposer en WorkflowConfig runtime les rend
+  // simulables dans PageWfSimulate et modifiables dans le Designer.
+  // Les labels d'action suivent snake_case (aligné avec les edge.label des
+  // blueprints) — c'est volontaire, la cohérence avec le blueprint importe
+  // plus que l'uniformité avec Trip/Ticket (UPPERCASE historique).
+
+  // Maintenance — cycle intervention mécanicien (blueprint maintenance-ticket)
+  { entityType: 'Maintenance', fromState: 'OPEN',          action: 'assign',        toState: 'ASSIGNED',     requiredPerm: 'data.maintenance.approve.tenant' },
+  { entityType: 'Maintenance', fromState: 'ASSIGNED',      action: 'start_work',    toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Maintenance', fromState: 'ASSIGNED',      action: 'cancel',        toState: 'CANCELLED',    requiredPerm: 'data.maintenance.approve.tenant' },
+  { entityType: 'Maintenance', fromState: 'IN_PROGRESS',   action: 'wait_parts',    toState: 'PENDING_PARTS',requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Maintenance', fromState: 'IN_PROGRESS',   action: 'complete',      toState: 'DONE',         requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Maintenance', fromState: 'PENDING_PARTS', action: 'parts_arrived', toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Maintenance', fromState: 'DONE',          action: 'validate',      toState: 'VALIDATED',    requiredPerm: 'data.maintenance.approve.tenant' },
+  { entityType: 'Maintenance', fromState: 'DONE',          action: 'reopen',        toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.approve.tenant' },
+
+  // Claim — SAV réclamation (blueprint claim-sav)
+  { entityType: 'Claim', fromState: 'OPEN',          action: 'assign',      toState: 'ASSIGNED',      requiredPerm: 'data.sav.report.agency'   },
+  { entityType: 'Claim', fromState: 'ASSIGNED',      action: 'investigate', toState: 'INVESTIGATING', requiredPerm: 'data.sav.deliver.agency'  },
+  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'resolve',     toState: 'RESOLVED',      requiredPerm: 'data.sav.claim.tenant'    },
+  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
+  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'escalate',    toState: 'ESCALATED',     requiredPerm: 'data.sav.claim.tenant'    },
+  { entityType: 'Claim', fromState: 'ESCALATED',     action: 'resolve',     toState: 'RESOLVED',      requiredPerm: 'data.sav.claim.tenant'    },
+  { entityType: 'Claim', fromState: 'ESCALATED',     action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
+
+  // Manifest — signature & archivage (blueprint manifest-standard)
+  { entityType: 'Manifest', fromState: 'DRAFT',     action: 'submit',   toState: 'SUBMITTED', requiredPerm: 'data.manifest.generate.agency' },
+  { entityType: 'Manifest', fromState: 'SUBMITTED', action: 'sign',     toState: 'SIGNED',    requiredPerm: 'data.manifest.sign.agency'     },
+  { entityType: 'Manifest', fromState: 'SUBMITTED', action: 'reject',   toState: 'REJECTED',  requiredPerm: 'data.manifest.sign.agency'     },
+  { entityType: 'Manifest', fromState: 'SIGNED',    action: 'archive',  toState: 'ARCHIVED',  requiredPerm: 'data.manifest.print.agency'    },
+  { entityType: 'Manifest', fromState: 'REJECTED',  action: 'revise',   toState: 'DRAFT',     requiredPerm: 'data.manifest.generate.agency' },
+
+  // Checklist — pré-départ (blueprint checklist-departure)
+  { entityType: 'Checklist', fromState: 'PENDING',      action: 'start_tech',    toState: 'TECH_CHECK',   requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Checklist', fromState: 'TECH_CHECK',   action: 'pass_tech',     toState: 'SAFETY_CHECK', requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Checklist', fromState: 'TECH_CHECK',   action: 'fail_tech',     toState: 'BLOCKED',      requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'Checklist', fromState: 'SAFETY_CHECK', action: 'pass_safety',   toState: 'DOCS_CHECK',   requiredPerm: 'data.trip.update.agency'         },
+  { entityType: 'Checklist', fromState: 'SAFETY_CHECK', action: 'fail_safety',   toState: 'BLOCKED',      requiredPerm: 'data.trip.update.agency'         },
+  { entityType: 'Checklist', fromState: 'DOCS_CHECK',   action: 'approve_all',   toState: 'APPROVED',     requiredPerm: 'data.manifest.sign.agency'       },
+  { entityType: 'Checklist', fromState: 'DOCS_CHECK',   action: 'docs_missing',  toState: 'BLOCKED',      requiredPerm: 'data.manifest.sign.agency'       },
+  { entityType: 'Checklist', fromState: 'BLOCKED',      action: 'fix_and_retry', toState: 'PENDING',      requiredPerm: 'data.maintenance.approve.tenant' },
+
+  // Crew — affectation & briefing équipage (blueprint crew-assignment)
+  { entityType: 'Crew', fromState: 'STANDBY',    action: 'assign_briefing', toState: 'BRIEFING',   requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Crew', fromState: 'BRIEFING',   action: 'start_duty',      toState: 'ON_DUTY',    requiredPerm: 'data.trip.update.agency'      },
+  { entityType: 'Crew', fromState: 'BRIEFING',   action: 'cancel',          toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Crew', fromState: 'ON_DUTY',    action: 'end_duty',        toState: 'DEBRIEFING', requiredPerm: 'control.trip.log_event.own'   },
+  { entityType: 'Crew', fromState: 'ON_DUTY',    action: 'emergency_off',   toState: 'SUSPENDED',  requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Crew', fromState: 'DEBRIEFING', action: 'start_rest',      toState: 'REST',       requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'Crew', fromState: 'REST',       action: 'rest_complete',   toState: 'STANDBY',    requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'Crew', fromState: 'SUSPENDED',  action: 'reinstate',       toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
+
+  // Driver — disponibilité & repos (blueprint driver-availability)
+  { entityType: 'Driver', fromState: 'AVAILABLE',     action: 'assign',        toState: 'ASSIGNED',      requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Driver', fromState: 'ASSIGNED',      action: 'start_duty',    toState: 'ON_DUTY',       requiredPerm: 'data.trip.update.agency'      },
+  { entityType: 'Driver', fromState: 'ASSIGNED',      action: 'unassign',      toState: 'AVAILABLE',     requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Driver', fromState: 'ON_DUTY',       action: 'end_shift',     toState: 'REST_REQUIRED', requiredPerm: 'control.trip.log_event.own'   },
+  { entityType: 'Driver', fromState: 'ON_DUTY',       action: 'emergency_off', toState: 'SUSPENDED',     requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'Driver', fromState: 'REST_REQUIRED', action: 'start_rest',    toState: 'RESTING',       requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'Driver', fromState: 'RESTING',       action: 'rest_complete', toState: 'AVAILABLE',     requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'Driver', fromState: 'SUSPENDED',     action: 'reinstate',     toState: 'AVAILABLE',     requiredPerm: 'control.driver.manage.tenant' },
 ];
 
 export async function backfillDefaultWorkflows(

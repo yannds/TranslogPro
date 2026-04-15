@@ -22,10 +22,6 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   agencyId?: string;
-
-  @IsOptional()
-  @IsEnum(['STAFF', 'DRIVER'])
-  userType?: 'STAFF' | 'DRIVER';
 }
 
 export class UpdateUserDto {

@@ -89,7 +89,13 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/api/tenants/11111111-1111-1111-1111-111111111111/tickets/my\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/api/tenants/11111111-1111-1111-1111-111111111111/parcels/my\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/api/tenants/11111111-1111-1111-1111-111111111111/analytics/customer-segmentation\")",
-      "Bash(cat jest.config.*)"
+      "Bash(cat jest.config.*)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx\\)$\")",
+      "Bash(ls -la /Users/dsyann/TranslogPro/server/seed/workflows/*.json)",
+      "Bash(grep -E \"\\\\.\\(ts|json\\)$\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT s.id, s.role AS staff_role, a.role AS asg_role FROM staff s LEFT JOIN staff_assignments a ON a.\\\\\"staffId\\\\\"=s.id WHERE a.status='ACTIVE';\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"\\\\d staff\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -t -c \"SELECT s.id, s.status, COUNT\\(a.id\\) AS active_assignments FROM staff s LEFT JOIN staff_assignments a ON a.\\\\\"staffId\\\\\"=s.id AND a.status='ACTIVE' GROUP BY s.id, s.status;\")"
     ],
     "additionalDirectories": [
       "/tmp"

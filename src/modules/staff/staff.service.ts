@@ -6,17 +6,14 @@ import { Inject } from '@nestjs/common';
 export interface CreateStaffDto {
   email:    string;
   name:     string;
-  role:     string;
-  agencyId?: string | null;
-  licenseData?: Record<string, unknown>;
+  role:     string;                            // rôle métier de la 1ère affectation
+  agencyId?: string | null;                    // home admin + agence de la 1ère affectation
+  licenseData?: Record<string, unknown>;       // licence portée par la 1ère affectation
 }
 
 export interface UpdateStaffDto {
-  name?:        string;
-  role?:        string;
-  agencyId?:    string | null;
-  licenseData?: Record<string, unknown>;
-  isAvailable?: boolean;
+  name?:     string;
+  agencyId?: string | null;                    // home admin uniquement (rôle/dispo gérés via StaffAssignment)
 }
 
 @Injectable()
@@ -47,17 +44,10 @@ export class StaffService {
       userType: 'STAFF',
     });
 
-    // Phase 2 : double-écriture Staff + StaffAssignment (sera simplifiée Phase 5)
-    const licenseData = (dto.licenseData ?? {}) as any;
+    // Phase 5 : Staff = enveloppe RH ; les colonnes legacy (role/license/dispo)
+    // ont été supprimées. Le poste métier est porté par StaffAssignment.
     const staff = await this.prisma.staff.create({
-      data: {
-        userId:      user.id,
-        tenantId,
-        agencyId,
-        role:        dto.role,
-        licenseData,
-        status:      'ACTIVE',
-      },
+      data: { userId: user.id, tenantId, agencyId, status: 'ACTIVE' },
     });
     await this.prisma.staffAssignment.create({
       data: {
@@ -65,7 +55,7 @@ export class StaffService {
         role:        dto.role,
         agencyId,
         status:      'ACTIVE',
-        licenseData,
+        licenseData: (dto.licenseData ?? {}) as any,
       },
     });
 
@@ -136,16 +126,8 @@ export class StaffService {
       if (!agency) throw new BadRequestException(`Agence ${agencyId} introuvable dans ce tenant`);
     }
 
-    const licenseData = (dto.licenseData ?? {}) as any;
     const staff = await this.prisma.staff.create({
-      data: {
-        userId,
-        tenantId,
-        agencyId,
-        role:        dto.role,
-        licenseData,
-        status:      'ACTIVE',
-      },
+      data: { userId, tenantId, agencyId, status: 'ACTIVE' },
     });
     await this.prisma.staffAssignment.create({
       data: {
@@ -153,7 +135,7 @@ export class StaffService {
         role:        dto.role,
         agencyId,
         status:      'ACTIVE',
-        licenseData,
+        licenseData: (dto.licenseData ?? {}) as any,
       },
     });
 
@@ -169,6 +151,10 @@ export class StaffService {
     return staff;
   }
 
+  /**
+   * Met à jour le profil RH du Staff (name + agence de rattachement).
+   * Les rôles, dispo et licences se gèrent via StaffAssignmentService.
+   */
   async update(tenantId: string, userId: string, dto: UpdateStaffDto) {
     const staff = await this.findOne(tenantId, userId);
 
@@ -179,37 +165,13 @@ export class StaffService {
       });
     }
 
-    const updated = await this.prisma.staff.update({
+    return this.prisma.staff.update({
       where: { userId },
       data:  {
-        ...(dto.role        !== undefined ? { role:        dto.role }                : {}),
-        ...(dto.agencyId    !== undefined ? { agencyId:    dto.agencyId ?? null }    : {}),
-        ...(dto.licenseData !== undefined ? { licenseData: dto.licenseData as any }  : {}),
-        ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable }         : {}),
+        ...(dto.agencyId !== undefined ? { agencyId: dto.agencyId ?? null } : {}),
       },
       include: { user: true },
     });
-
-    // Phase 2 : double-écriture sur l'affectation active courante.
-    // Le rôle Staff legacy reste mono — on synchronise l'unique affectation
-    // ACTIVE (cas standard avant Phase 4 qui exposera la gestion N rôles).
-    const activeAssignment = await this.prisma.staffAssignment.findFirst({
-      where:  { staffId: staff.id, status: 'ACTIVE' },
-      orderBy: { startDate: 'desc' },
-    });
-    if (activeAssignment) {
-      await this.prisma.staffAssignment.update({
-        where: { id: activeAssignment.id },
-        data:  {
-          ...(dto.role        !== undefined ? { role:        dto.role }                : {}),
-          ...(dto.agencyId    !== undefined ? { agencyId:    dto.agencyId ?? null }    : {}),
-          ...(dto.licenseData !== undefined ? { licenseData: dto.licenseData as any }  : {}),
-          ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable }         : {}),
-        },
-      });
-    }
-
-    return updated;
   }
 
   async suspend(tenantId: string, userId: string) {
@@ -234,8 +196,8 @@ export class StaffService {
 
   async archive(tenantId: string, userId: string) {
     const staff = await this.findOne(tenantId, userId);
-    await this.prisma.staff.update({ where: { userId }, data: { status: 'ARCHIVED', isAvailable: false } });
-    // Cascade : clore toutes les affectations ouvertes (invariant §5.2)
+    await this.prisma.staff.update({ where: { userId }, data: { status: 'ARCHIVED' } });
+    // Cascade : clore toutes les affectations ouvertes (invariant DESIGN §5.2)
     await this.prisma.staffAssignment.updateMany({
       where: { staffId: staff.id, status: { in: ['ACTIVE', 'SUSPENDED'] } },
       data:  { status: 'CLOSED', endDate: new Date(), isAvailable: false },

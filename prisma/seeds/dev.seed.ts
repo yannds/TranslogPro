@@ -45,10 +45,10 @@ async function upsertUserWithCredential(opts: {
   name:     string;
   roleId:   string | null;
   password: string;
-  userType?: 'STAFF' | 'DRIVER';
   agencyId?: string | null;
 }) {
-  const { tenantId, email, name, roleId, password, userType = 'STAFF', agencyId } = opts;
+  const { tenantId, email, name, roleId, password, agencyId } = opts;
+  const userType = 'STAFF';
 
   const user = await prisma.user.upsert({
     where:  { email },
@@ -80,35 +80,26 @@ async function upsertDriverProfile(userId: string, tenantId: string) {
     issuingState: 'Congo',
   };
 
-  // ── 1. Profil Staff DRIVER ──────────────────────────────────────────────────
+  // ── 1. Profil Staff (enveloppe RH) ──────────────────────────────────────────
   const profile = await prisma.staff.upsert({
     where:  { userId },
-    update: { role: 'DRIVER', isAvailable: true },
-    create: {
-      userId,
-      tenantId,
-      role:        'DRIVER',
-      status:      'ACTIVE',
-      licenseData,
-      isAvailable:         true,
-      totalDriveTimeToday: 0,
-    },
+    update: {},
+    create: { userId, tenantId, status: 'ACTIVE' },
   });
 
-  // ── 1bis. StaffAssignment miroir (Phase 1 transition) ───────────────────────
+  // ── 1bis. StaffAssignment DRIVER (poste métier) — idempotent ────────────────
   const existingAssignment = await prisma.staffAssignment.findFirst({
     where: { staffId: profile.id, role: 'DRIVER', status: 'ACTIVE' },
   });
   if (!existingAssignment) {
     await prisma.staffAssignment.create({
       data: {
-        staffId:             profile.id,
-        role:                'DRIVER',
-        agencyId:            profile.agencyId, // null accepté = tenant-wide en dev
-        status:              'ACTIVE',
+        staffId:     profile.id,
+        role:        'DRIVER',
+        agencyId:    profile.agencyId, // null accepté = tenant-wide en dev
+        status:      'ACTIVE',
         licenseData,
-        isAvailable:         true,
-        totalDriveTimeToday: 0,
+        isAvailable: true,
       },
     });
   }
@@ -147,42 +138,6 @@ async function upsertDriverProfile(userId: string, tenantId: string) {
   });
 
   return profile;
-}
-
-/**
- * Backfill Phase 1 : pour chaque Staff sans StaffAssignment actif, créer une
- * ligne miroir à partir des colonnes legacy (role, agencyId, licenseData…).
- * Idempotent — peut être rejoué sans duplication.
- *
- * Voir DESIGN_Staff_Assignment.md §6 (Phase 1) et §7.
- */
-async function backfillStaffAssignments() {
-  const staffWithoutAssignment = await prisma.staff.findMany({
-    where:   { assignments: { none: { status: 'ACTIVE' } } },
-    select:  { id: true, role: true, agencyId: true, licenseData: true, isAvailable: true, totalDriveTimeToday: true, createdAt: true },
-  });
-
-  if (staffWithoutAssignment.length === 0) {
-    console.log('[Dev Seed] ✅ Aucun Staff à rétro-migrer (StaffAssignments déjà en place)');
-    return;
-  }
-
-  for (const s of staffWithoutAssignment) {
-    await prisma.staffAssignment.create({
-      data: {
-        staffId:             s.id,
-        role:                s.role,
-        agencyId:            s.agencyId,
-        startDate:           s.createdAt,
-        status:              'ACTIVE',
-        licenseData:         s.licenseData as any,
-        isAvailable:         s.isAvailable,
-        totalDriveTimeToday: s.totalDriveTimeToday,
-      },
-    });
-  }
-
-  console.log(`[Dev Seed] ✅ ${staffWithoutAssignment.length} StaffAssignment(s) créés depuis Staff legacy`);
 }
 
 /** Active tous les modules SaaS pour un tenant donné (dev only). */
@@ -505,14 +460,10 @@ async function main() {
     name:     'Jean-Baptiste Mabou',
     roleId:   driverRoleId,
     password: 'Admin1234!',
-    userType: 'DRIVER',
   });
 
   await upsertDriverProfile(driver.id, TENANT1_ID);
   console.log(`[Dev Seed] ✅ driver@tenant1.dev (DRIVER + profil complet, id=${driver.id})`);
-
-  // ── 7. Backfill Phase 1 : StaffAssignment pour tout Staff legacy ────────────
-  await backfillStaffAssignments();
 
   // ── Résumé ───────────────────────────────────────────────────────────────────
   console.log('[Dev Seed] Terminé.');

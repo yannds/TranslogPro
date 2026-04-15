@@ -55,12 +55,10 @@ interface StaffRow {
   userId:        string;
   tenantId:      string;
   agencyId:      string | null;
-  role:          StaffRole | string;          // legacy — supprimé en Phase 5
   status:        StaffStatus | string;
-  isAvailable:   boolean;
-  licenseData:   Record<string, unknown> | null;
+  hireDate:      string;
   createdAt:     string;
-  assignments?:  AssignmentSummary[];          // Phase 2 : affectations actives
+  assignments?:  AssignmentSummary[];          // postes actifs (lus depuis StaffAssignment)
   user: {
     id:    string;
     email: string;
@@ -113,10 +111,8 @@ interface CreateForm {
 interface AgencyOption { id: string; name: string }
 
 interface EditForm {
-  name:        string;
-  role:        StaffRole | string;
-  agencyId:    string;
-  isAvailable: boolean;
+  name:     string;
+  agencyId: string;   // home administrative — rôle/dispo gérés via AssignmentsManager
 }
 
 const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
@@ -301,10 +297,8 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
   onPreviewChange?: (open: boolean) => void;
 }) {
   const [f, setF] = useState<EditForm>({
-    name:        staff.user?.name ?? '',
-    role:        staff.role,
-    agencyId:    staff.agencyId ?? '',
-    isAvailable: staff.isAvailable,
+    name:     staff.user?.name ?? '',
+    agencyId: staff.agencyId ?? '',
   });
   const set = <K extends keyof EditForm>(k: K, v: EditForm[K]) =>
     setF(p => ({ ...p, [k]: v }));
@@ -320,29 +314,19 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
             className={inp} disabled={busy} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Fonction</label>
-          <select value={f.role}
-            onChange={e => set('role', e.target.value as StaffRole)}
-            className={inp} disabled={busy}>
-            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Agence</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Agence de rattachement
+          </label>
           <select value={f.agencyId}
             onChange={e => set('agencyId', e.target.value)}
             className={inp} disabled={busy}>
             <option value="">— Aucune agence —</option>
             {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
+          <p className="text-xs text-slate-400">
+            Pour gérer les rôles métier et la disponibilité, ouvrez « Affectations » depuis la liste.
+          </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input type="checkbox" checked={f.isAvailable}
-            onChange={e => set('isAvailable', e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-            disabled={busy} />
-          Disponible pour affectation
-        </label>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
           <p>Email : <span className="font-mono">{staff.user?.email}</span></p>
           <p>Statut : {staff.status}</p>
@@ -661,10 +645,8 @@ export function PagePersonnel() {
     setBusy(true); setActionErr(null);
     try {
       await apiPatch(`${base}/${editTarget.userId}`, {
-        name:        f.name,
-        role:        f.role,
-        agencyId:    f.agencyId || null,
-        isAvailable: f.isAvailable,
+        name:     f.name,
+        agencyId: f.agencyId || null,
       });
       setEditTarget(null); refetch();
     } catch (e) { setActionErr((e as Error).message); }
