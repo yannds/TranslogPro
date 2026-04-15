@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { TrendingUp, TrendingDown, BarChart3, Percent, RefreshCw } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
-import { useTenantConfig } from '../../providers/TenantConfigProvider';
+import { useAuth } from '../../lib/auth/auth.context';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
 import { Badge } from '../ui/Badge';
@@ -69,7 +69,8 @@ function periodDates(days: number): { from: string; to: string } {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function PageProfitability() {
-  const { tenantId } = useTenantConfig();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
 
   const [periodDays, setPeriodDays] = useState(30);
   const { from, to } = periodDates(periodDays);

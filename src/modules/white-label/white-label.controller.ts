@@ -17,7 +17,7 @@ import { UpsertBrandDto }       from './dto/upsert-brand.dto';
 import { RequirePermission }    from '../../common/decorators/require-permission.decorator';
 import { Permission }           from '../../common/constants/permissions';
 
-@Controller('api/v1/tenants/:tenantId/brand')
+@Controller({ version: '1', path: 'tenants/:tenantId/brand' })
 export class WhiteLabelController {
   constructor(private readonly service: WhiteLabelService) {}
 

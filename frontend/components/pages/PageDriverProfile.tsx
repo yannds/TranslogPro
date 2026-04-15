@@ -3,15 +3,6 @@
  *
  * Module Driver & HR : suivi complet du personnel de conduite.
  *
- * TODO (données) :
- *   - GET /tenants/:tid/driver-profile/licenses/alerts             → permis expirants
- *   - GET /tenants/:tid/driver-profile/trainings/overdue           → formations en retard
- *   - GET /tenants/:tid/driver-profile/drivers/:id/rest-compliance → statut repos
- *   - GET /tenants/:tid/driver-profile/drivers/:id/remediation/actions
- *   - GET /tenants/:tid/driver-profile/drivers/:id/licenses
- *   - GET /tenants/:tid/driver-profile/drivers/:id/trainings
- *   - GET /tenants/:tid/driver-profile/rest-config                 → config repos tenant
- *
  * Accessibilité : WCAG 2.1 AA
  * Dark mode : Tailwind dark:
  */
@@ -21,21 +12,53 @@ import {
   UserCheck, AlertTriangle, Plus,
   ChevronRight, Shield, Coffee, GraduationCap,
 } from 'lucide-react';
+import { useAuth } from '../../lib/auth/auth.context';
+import { useFetch } from '../../lib/hooks/useFetch';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
-// ─── Types provisoires ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LicenseAlert {
+  id:          string;
+  staffId:     string;
+  staffName:   string;
+  licenseNo:   string;
+  category:    string;
+  expiresAt:   string;
+  daysUntilExpiry: number;
+}
 
 interface DriverSummary {
-  id:           string;
-  name:         string;
-  licenseValid: boolean;
-  restOk:       boolean;
-  remediationPending: boolean;
-  trainingOverdue: boolean;
+  id:     string;
+  userId: string;
+  user:   { email: string; displayName?: string | null };
+  isAvailable: boolean;
+}
+
+interface OverdueTraining {
+  id:         string;
+  staffId:    string;
+  staffName:  string;
+  typeName:   string;
+  scheduledAt: string;
+}
+
+interface RemediationRule {
+  id:                  string;
+  actionType:          string;
+  crmScoreThreshold:   number;
+  isActive:            boolean;
+}
+
+interface RestConfig {
+  minRestMinutes:             number;
+  maxDrivingMinutesPerDay:    number;
+  maxDrivingMinutesPerWeek:   number;
+  alertBeforeEndRestMin:      number;
 }
 
 type Tab = 'overview' | 'licenses' | 'rest' | 'trainings' | 'remediation';
@@ -74,17 +97,29 @@ function KpiCard({
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageDriverProfile() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
+
   const [tab, setTab]         = useState<Tab>('overview');
   const [_selectedDriver, setSelectedDriver] = useState<string | null>(null);
 
-  // TODO: fetch depuis l'API
-  const loading       = false;
-  const drivers: DriverSummary[] = [];
+  const base = `/api/tenants/${tenantId}`;
 
-  const licenseAlertCount     = drivers.filter(d => !d.licenseValid).length;
-  const restBlockedCount      = drivers.filter(d => !d.restOk).length;
-  const remediationCount      = drivers.filter(d => d.remediationPending).length;
-  const overdueTrainingCount  = drivers.filter(d => d.trainingOverdue).length;
+  const { data: drivers,     loading: loadingDrivers }    = useFetch<DriverSummary[]>(`${base}/staff?role=DRIVER`, [tenantId]);
+  const { data: licAlerts,   loading: loadingLic }        = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
+  const { data: overdueTrainings, loading: loadingTrainings } = useFetch<OverdueTraining[]>(`${base}/driver-profile/trainings/overdue`, [tenantId]);
+  const { data: restConfig,  loading: loadingRest }       = useFetch<RestConfig>(`${base}/driver-profile/rest-config`, [tenantId]);
+  const { data: remediations, loading: loadingRemediation } = useFetch<RemediationRule[]>(
+    tab === 'remediation' ? `${base}/driver-profile/remediation-rules` : null,
+    [tenantId, tab],
+  );
+
+  const loading = loadingDrivers || loadingLic;
+
+  const licenseAlertCount    = licAlerts?.length    ?? 0;
+  const overdueTrainingCount = overdueTrainings?.length ?? 0;
+  const remediationCount     = remediations?.length ?? 0;
+  const restBlockedCount     = 0; // requires per-driver rest-compliance calls
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview',    label: "Vue d'ensemble" },
@@ -112,10 +147,10 @@ export function PageDriverProfile() {
       {/* ── KPIs ── */}
       <section aria-label="Indicateurs chauffeurs">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Permis en alerte"      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loading} />
-          <KpiCard label="Chauffeurs bloqués"    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={loading} />
-          <KpiCard label="Actions remédiation"   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loading} />
-          <KpiCard label="Formations en retard"  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loading} />
+          <KpiCard label="Permis en alerte"      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loadingLic} />
+          <KpiCard label="Chauffeurs bloqués"    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={false} />
+          <KpiCard label="Actions remédiation"   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loadingRemediation} />
+          <KpiCard label="Formations en retard"  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loadingTrainings} />
         </div>
       </section>
 
@@ -144,13 +179,9 @@ export function PageDriverProfile() {
         </div>
       </nav>
 
-      {/* ── Panneau Vue d'ensemble ── */}
+      {/* ── Vue d'ensemble ── */}
       {tab === 'overview' && (
-        <section
-          id="tabpanel-driver-overview"
-          role="tabpanel"
-          aria-labelledby="tab-driver-overview"
-        >
+        <section id="tabpanel-driver-overview" role="tabpanel" aria-labelledby="tab-driver-overview">
           <Card>
             <CardHeader
               heading="Liste des chauffeurs"
@@ -161,46 +192,47 @@ export function PageDriverProfile() {
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
                 </div>
-              ) : drivers.length === 0 ? (
+              ) : !drivers || drivers.length === 0 ? (
                 <div className="py-16 text-center text-slate-500 dark:text-slate-400" role="status">
-                  {/* TODO: afficher la vraie liste depuis GET /staff?role=DRIVER */}
                   <UserCheck className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
                   <p className="font-medium">Aucun chauffeur enregistré</p>
                   <p className="text-sm mt-1">Ajoutez des chauffeurs via le module Personnel</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
-                  {drivers.map(d => (
-                    <li key={d.id}>
-                      <button
-                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
-                        onClick={() => setSelectedDriver(d.id)}
-                        aria-label={`Ouvrir le dossier de ${d.name}`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div
-                            className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-slate-300"
-                            aria-hidden
-                          >
-                            {d.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{d.name}</p>
-                            <div className="flex gap-2 mt-0.5">
-                              {!d.licenseValid    && <Badge variant="danger"  size="sm">Permis expiré</Badge>}
-                              {!d.restOk          && <Badge variant="warning" size="sm">En repos</Badge>}
-                              {d.remediationPending && <Badge variant="danger" size="sm">Remédiation</Badge>}
-                              {d.trainingOverdue  && <Badge variant="warning" size="sm">Formation due</Badge>}
-                              {d.licenseValid && d.restOk && !d.remediationPending && !d.trainingOverdue && (
-                                <Badge variant="success" size="sm">Conforme</Badge>
-                              )}
+                  {drivers.map(d => {
+                    const name = d.user.displayName ?? d.user.email;
+                    const hasLicAlert = licAlerts?.some(a => a.staffId === d.id) ?? false;
+                    return (
+                      <li key={d.id}>
+                        <button
+                          className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                          onClick={() => setSelectedDriver(d.id)}
+                          aria-label={`Ouvrir le dossier de ${name}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-slate-300"
+                              aria-hidden
+                            >
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{name}</p>
+                              <div className="flex gap-2 mt-0.5">
+                                {hasLicAlert && <Badge variant="danger" size="sm">Permis expiré</Badge>}
+                                {!d.isAvailable && <Badge variant="warning" size="sm">En repos</Badge>}
+                                {!hasLicAlert && d.isAvailable && (
+                                  <Badge variant="success" size="sm">Conforme</Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
+                          <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
@@ -208,7 +240,7 @@ export function PageDriverProfile() {
         </section>
       )}
 
-      {/* ── Panneau Permis ── */}
+      {/* ── Permis ── */}
       {tab === 'licenses' && (
         <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses">
           <Card>
@@ -221,17 +253,42 @@ export function PageDriverProfile() {
                 </Button>
               }
             />
-            <CardContent>
-              {/* TODO: fetch depuis GET /driver-profile/licenses/alerts */}
-              <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                TODO — charger les alertes permis depuis l'API
-              </p>
+            <CardContent className="p-0">
+              {loadingLic ? (
+                <div className="p-6 space-y-3" aria-busy="true">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : !licAlerts || licAlerts.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
+                  <Shield className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden />
+                  <p className="font-medium">Aucune alerte permis active</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {licAlerts.map(a => (
+                    <li key={a.id} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{a.staffName}</p>
+                        <p className="text-xs text-slate-500 font-mono">{a.licenseNo} · Cat. {a.category}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs tabular-nums text-slate-500">
+                          {a.expiresAt ? new Date(a.expiresAt).toLocaleDateString('fr-FR') : '—'}
+                        </span>
+                        <Badge variant={a.daysUntilExpiry <= 0 ? 'danger' : 'warning'} size="sm">
+                          {a.daysUntilExpiry <= 0 ? 'Expiré' : `J-${a.daysUntilExpiry}`}
+                        </Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </section>
       )}
 
-      {/* ── Panneau Repos ── */}
+      {/* ── Repos ── */}
       {tab === 'rest' && (
         <section id="tabpanel-driver-rest" role="tabpanel" aria-labelledby="tab-driver-rest">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -239,122 +296,147 @@ export function PageDriverProfile() {
               <CardHeader
                 heading="Configuration repos"
                 description="Seuils minimaux par tenant (11h défaut, configurable)"
-                action={
-                  <Button variant="ghost" size="sm" aria-label="Modifier la configuration de repos">
-                    Modifier
-                  </Button>
-                }
               />
               <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/rest-config */}
-                <dl className="space-y-3 text-sm">
-                  {[
-                    { label: 'Repos minimum',     key: 'minRestMinutes',          unit: 'min', todo: true },
-                    { label: 'Conduite max/jour',  key: 'maxDrivingMinutesPerDay', unit: 'min', todo: true },
-                    { label: 'Conduite max/sem.',  key: 'maxDrivingMinutesPerWeek',unit: 'min', todo: true },
-                  ].map(item => (
-                    <div key={item.key} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
-                      <dt className="text-slate-600 dark:text-slate-400">{item.label}</dt>
-                      <dd className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">
-                        {item.todo ? <Skeleton className="h-4 w-16 inline-block" /> : `— ${item.unit}`}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+                {loadingRest ? (
+                  <div className="space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  </div>
+                ) : restConfig ? (
+                  <dl className="space-y-3 text-sm">
+                    {[
+                      { label: 'Repos minimum',         value: `${restConfig.minRestMinutes} min` },
+                      { label: 'Conduite max/jour',      value: `${restConfig.maxDrivingMinutesPerDay} min` },
+                      { label: 'Conduite max/sem.',      value: `${restConfig.maxDrivingMinutesPerWeek} min` },
+                      { label: 'Alerte avant fin repos', value: `${restConfig.alertBeforeEndRestMin} min` },
+                    ].map(item => (
+                      <div key={item.label} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <dt className="text-slate-600 dark:text-slate-400">{item.label}</dt>
+                        <dd className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
+                    Aucune configuration de repos définie
+                  </p>
+                )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader
-                heading="Chauffeurs en repos"
-                description="Périodes de repos actives (endedAt null)"
+                heading="Chauffeurs disponibles"
+                description="Statut de disponibilité actuel"
               />
-              <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/drivers/:id/rest-compliance pour chaque chauffeur */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                  TODO — charger les périodes actives
-                </p>
+              <CardContent className="p-0">
+                {loadingDrivers ? (
+                  <div className="p-6 space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                  </div>
+                ) : !drivers || drivers.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Aucun chauffeur</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                    {drivers.map(d => (
+                      <li key={d.id} className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-slate-800 dark:text-slate-200">
+                          {d.user.displayName ?? d.user.email}
+                        </span>
+                        <Badge variant={d.isAvailable ? 'success' : 'warning'} size="sm">
+                          {d.isAvailable ? 'Disponible' : 'En repos'}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
           </div>
         </section>
       )}
 
-      {/* ── Panneau Formations ── */}
+      {/* ── Formations ── */}
       {tab === 'trainings' && (
         <section id="tabpanel-driver-trainings" role="tabpanel" aria-labelledby="tab-driver-trainings">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader
-                heading="Formations en retard"
-                description="Formations planifiées dont la date est dépassée"
-              />
-              <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/trainings/overdue */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                  TODO — charger les formations overdue
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader
-                heading="Catalogue formations"
-                description="Types de formations obligatoires"
-                action={
-                  <Button size="sm" aria-label="Créer un type de formation">
-                    <Plus className="w-4 h-4 mr-1" aria-hidden /> Type
-                  </Button>
-                }
-              />
-              <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/training-types */}
-                <ul className="space-y-2 text-sm" aria-label="Types de formation">
-                  <li className="text-slate-500 dark:text-slate-400 py-4 text-center">
-                    TODO — charger les types de formation
-                  </li>
+          <Card>
+            <CardHeader
+              heading="Formations en retard"
+              description="Formations planifiées dont la date est dépassée"
+            />
+            <CardContent className="p-0">
+              {loadingTrainings ? (
+                <div className="p-6 space-y-3" aria-busy="true">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : !overdueTrainings || overdueTrainings.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
+                  <GraduationCap className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden />
+                  <p className="font-medium">Toutes les formations sont à jour</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {overdueTrainings.map(t => (
+                    <li key={t.id} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{t.staffName}</p>
+                        <p className="text-xs text-slate-500">{t.typeName}</p>
+                      </div>
+                      <Badge variant="warning" size="sm">
+                        {new Date(t.scheduledAt).toLocaleDateString('fr-FR')}
+                      </Badge>
+                    </li>
+                  ))}
                 </ul>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
       )}
 
-      {/* ── Panneau Remédiation ── */}
+      {/* ── Remédiation ── */}
       {tab === 'remediation' && (
         <section id="tabpanel-driver-remediation" role="tabpanel" aria-labelledby="tab-driver-remediation">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader
-                heading="Actions de remédiation en cours"
-                description="Déclenchées automatiquement quand le score CRM passe sous le seuil"
-              />
-              <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/drivers/:id/remediation/actions */}
+          <Card>
+            <CardHeader
+              heading="Règles de remédiation"
+              description="Seuils CRM → actions configurées pour ce tenant"
+              action={
+                <Button size="sm" aria-label="Créer une règle de remédiation">
+                  <Plus className="w-4 h-4 mr-1" aria-hidden /> Règle
+                </Button>
+              }
+            />
+            <CardContent className="p-0">
+              {loadingRemediation ? (
+                <div className="p-6 space-y-3" aria-busy="true">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : !remediations || remediations.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                  TODO — charger les actions de remédiation actives
+                  Aucune règle de remédiation configurée
                 </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader
-                heading="Règles de remédiation"
-                description="Seuils CRM → actions configurées pour ce tenant"
-                action={
-                  <Button size="sm" aria-label="Créer une règle de remédiation">
-                    <Plus className="w-4 h-4 mr-1" aria-hidden /> Règle
-                  </Button>
-                }
-              />
-              <CardContent>
-                {/* TODO: fetch depuis GET /driver-profile/remediation-rules */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-                  TODO — charger les règles
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {remediations.map(r => (
+                    <li key={r.id} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
+                          {r.actionType}
+                        </p>
+                        <p className="text-xs text-slate-500 font-mono">
+                          Seuil CRM: {r.crmScoreThreshold}
+                        </p>
+                      </div>
+                      <Badge variant={r.isActive ? 'success' : 'default'} size="sm">
+                        {r.isActive ? 'Actif' : 'Inactif'}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </section>
       )}
     </main>

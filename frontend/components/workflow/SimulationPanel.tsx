@@ -15,28 +15,17 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowNode, SimResult, SimOverlay } from './types';
 import { ReactFlowAdapter } from './ReactFlowAdapter';
+import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 interface SimulationPanelProps {
-  tenantId:    string;
-  entityType:  string;
-  nodes:       WorkflowNode[];
+  tenantId:     string;
+  entityType:   string;
+  nodes:        WorkflowNode[];
   blueprintId?: string;
-  onSimResult: (result: SimResult, overlay: SimOverlay) => void;
-  onClear:     () => void;
-  fetchFn?: (url: string, body: unknown) => Promise<SimResult>;
-  className?: string;
-}
-
-async function defaultFetchSim(url: string, body: unknown): Promise<SimResult> {
-  const res = await fetch(url, {
-    method:      'POST',
-    headers:     { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body:        JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  onSimResult:  (result: SimResult, overlay: SimOverlay) => void;
+  onClear:      () => void;
+  className?:   string;
 }
 
 export function SimulationPanel({
@@ -46,7 +35,6 @@ export function SimulationPanel({
   blueprintId,
   onSimResult,
   onClear,
-  fetchFn = defaultFetchSim,
   className,
 }: SimulationPanelProps) {
   const initialStates = nodes.filter(n => n.type === 'initial');
@@ -66,15 +54,20 @@ export function SimulationPanel({
       let ctx: Record<string, unknown> = {};
       try { ctx = JSON.parse(context); } catch { /* keep empty */ }
 
-      const url = `/api/tenants/${tenantId}/workflow-studio/simulate`;
-      const sim = await fetchFn(url, {
-        entityType,
-        initialState,
-        actions: actionList,
-        simulatedRoleId: roleId || undefined,
-        context: ctx,
-        blueprintId: blueprintId || undefined,
-      });
+      const sim = await apiFetch<SimResult>(
+        `/api/tenants/${tenantId}/workflow-studio/simulate`,
+        {
+          method: 'POST',
+          body: {
+            entityType,
+            initialState,
+            actions: actionList,
+            simulatedRoleId: roleId || undefined,
+            context: ctx,
+            blueprintId: blueprintId || undefined,
+          },
+        },
+      );
 
       setResult(sim);
       const overlay = ReactFlowAdapter.buildSimOverlay(sim);
@@ -84,7 +77,7 @@ export function SimulationPanel({
     } finally {
       setLoading(false);
     }
-  }, [tenantId, entityType, initialState, actions, context, roleId, blueprintId, fetchFn, onSimResult]);
+  }, [tenantId, entityType, initialState, actions, context, roleId, blueprintId, onSimResult]);
 
   const handleClear = useCallback(() => {
     setResult(null);

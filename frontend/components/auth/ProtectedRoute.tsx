@@ -1,23 +1,19 @@
 /**
  * ProtectedRoute — Garde de route basée sur la session
  *
- * Affiche :
- *   - Spinner de chargement pendant la vérification initiale
- *   - LoginPage si l'utilisateur n'est pas authentifié
+ * Comportement :
+ *   - Spinner de chargement pendant la vérification de session initiale
+ *   - Redirection vers /login (React Router Navigate) si non authentifié
  *   - Children si la session est valide
  *
  * Usage :
- *   <AuthProvider>
- *     <ProtectedRoute>
- *       <AdminDashboard />
- *     </ProtectedRoute>
- *   </AuthProvider>
+ *   <Route path="/admin/*" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
  */
 
 import { type ReactNode } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
-import { LoginPage } from './LoginPage';
 
 // ─── Spinner de chargement ────────────────────────────────────────────────────
 
@@ -26,6 +22,7 @@ function LoadingScreen() {
     <div
       role="status"
       aria-label="Vérification de la session…"
+      aria-live="polite"
       className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-950"
     >
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-600 animate-pulse">
@@ -40,9 +37,14 @@ function LoadingScreen() {
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <LoadingScreen />;
-  if (!user)   return <LoginPage />;
+
+  if (!user) {
+    // Mémorise l'URL cible pour rediriger après connexion
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
   return <>{children}</>;
 }

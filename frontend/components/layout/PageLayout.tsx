@@ -19,7 +19,6 @@
 import { type ReactNode } from 'react';
 import { cn }                from '../../lib/utils';
 import { SkeletonTable, SkeletonText } from '../ui/Skeleton';
-import { ThemeToggle }       from '../theme/ThemeProvider';
 
 export interface Breadcrumb {
   label: string;
@@ -76,7 +75,6 @@ export function PageLayout({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {actions}
-              <ThemeToggle />
             </div>
           </div>
         </div>

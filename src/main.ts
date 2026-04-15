@@ -4,15 +4,41 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { RedisIoAdapter } from './infrastructure/redis-io.adapter';
+import { SECRET_SERVICE, ISecretService } from './infrastructure/secret/interfaces/secret.interface';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
+    bufferLogs: false, // true perdrait les logs si crash avant listen()
   });
+
+  // Redis adapter socket.io (doit être configuré avant listen())
+  const secretService = app.get<ISecretService>(SECRET_SERVICE);
+  const redisConfig = await secretService.getSecretObject<{
+    HOST: string; PORT: string; PASSWORD?: string;
+  }>('platform/redis');
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis(
+    redisConfig.HOST,
+    parseInt(redisConfig.PORT, 10),
+    redisConfig.PASSWORD,
+  );
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // API Versioning
   app.enableVersioning({ type: VersioningType.URI });
   app.setGlobalPrefix('api');
+
+  // HTTP Security headers (CSP, X-Frame-Options, HSTS, etc.)
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: false, // Vite assets en dev
+  }));
+
+  // Cookie parser (lecture du cookie translog_session sur /api/auth/me, etc.)
+  app.use(cookieParser());
 
   // Validation globale
   app.useGlobalPipes(
@@ -30,7 +56,9 @@ async function bootstrap() {
 
   // CORS (configuré par tenant en production via Kong)
   app.enableCors({
-    origin: process.env.NODE_ENV === 'development' ? '*' : false,
+    origin:      process.env.NODE_ENV === 'development'
+      ? ['http://localhost:5173', 'http://localhost:5174']
+      : false,
     credentials: true,
   });
 

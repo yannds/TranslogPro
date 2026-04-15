@@ -35,6 +35,7 @@ import { SimulationPanel } from './SimulationPanel';
 import { BlueprintPanel }  from './BlueprintPanel';
 import { ReactFlowAdapter, type RFNode, type RFEdge, type RFNodeData, type RFEdgeData } from './ReactFlowAdapter';
 import type { WorkflowGraph, SimResult, SimOverlay } from './types';
+import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 // ─── Node / Edge types (mémoïsés hors du composant pour éviter les re-render) ─
@@ -69,13 +70,6 @@ interface WorkflowDesignerProps {
   initialGraph?: WorkflowGraph;
   /** Appelé après sauvegarde réussie */
   onSaved?:   (graph: WorkflowGraph) => void;
-  fetchFn?:   (url: string, opts?: RequestInit) => Promise<unknown>;
-}
-
-async function defaultFetch(url: string, opts?: RequestInit): Promise<unknown> {
-  const res = await fetch(url, { credentials: 'include', ...opts });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 // ─── Composant principal ───────────────────────────────────────────────────────
@@ -85,7 +79,6 @@ export function WorkflowDesigner({
   entityType,
   initialGraph,
   onSaved,
-  fetchFn = defaultFetch,
 }: WorkflowDesignerProps) {
   const [graph,        setGraph]        = useState<WorkflowGraph | null>(initialGraph ?? null);
   const [nodes,        setNodes,  onNodesChange]  = useNodesState<RFNodeData>([]);
@@ -109,9 +102,8 @@ export function WorkflowDesigner({
       return;
     }
     setLoadingGraph(true);
-    fetchFn(`/api/tenants/${tenantId}/workflow-studio/graph/${entityType}`)
-      .then(data => {
-        const g = data as WorkflowGraph;
+    apiFetch<WorkflowGraph>(`/api/tenants/${tenantId}/workflow-studio/graph/${entityType}`)
+      .then(g => {
         setGraph(g);
         syncGraphToRF(g);
       })
@@ -171,14 +163,10 @@ export function WorkflowDesigner({
       const updatedGraph = ReactFlowAdapter.fromReactFlow(
         nodes as RFNode[], edges as RFEdge[], entityType,
       );
-      const saved = await fetchFn(
+      const saved = await apiFetch<WorkflowGraph>(
         `/api/tenants/${tenantId}/workflow-studio/graph`,
-        {
-          method:  'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(updatedGraph),
-        },
-      ) as WorkflowGraph;
+        { method: 'PUT', body: updatedGraph },
+      );
 
       setGraph(saved);
       syncGraphToRF(saved);
@@ -191,21 +179,21 @@ export function WorkflowDesigner({
     } finally {
       setSaving(false);
     }
-  }, [tenantId, entityType, nodes, edges, fetchFn, syncGraphToRF, onSaved]);
+  }, [tenantId, entityType, nodes, edges, syncGraphToRF, onSaved]);
 
   // ─── Installer un blueprint ───────────────────────────────────────────────
 
   const handleInstall = useCallback(async (blueprintId: string) => {
-    const installed = await fetchFn(
+    const installed = await apiFetch<WorkflowGraph>(
       `/api/tenants/${tenantId}/workflow-studio/blueprints/${blueprintId}/install`,
       { method: 'POST' },
-    ) as WorkflowGraph;
+    );
     setGraph(installed);
     syncGraphToRF(installed);
     setIsDirty(false);
     setSaveMsg(`Blueprint installé — graphe rechargé`);
     setTimeout(() => setSaveMsg(null), 3000);
-  }, [tenantId, fetchFn, syncGraphToRF]);
+  }, [tenantId, syncGraphToRF]);
 
   // ─── Panneau propriétés (clic nœud/arête) ────────────────────────────────
 

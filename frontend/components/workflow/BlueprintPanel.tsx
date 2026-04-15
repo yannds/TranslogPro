@@ -8,6 +8,7 @@
  */
 import { useState, useCallback, useRef } from 'react';
 import type { WorkflowGraph, BlueprintSummary } from './types';
+import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 interface BlueprintPanelProps {
@@ -15,13 +16,6 @@ interface BlueprintPanelProps {
   currentGraph?: WorkflowGraph;
   className?:    string;
   onInstall:     (blueprintId: string) => Promise<void>;
-  fetchFn?:      (url: string, opts?: RequestInit) => Promise<unknown>;
-}
-
-async function defaultFetch(url: string, opts?: RequestInit): Promise<unknown> {
-  const res = await fetch(url, { credentials: 'include', ...opts });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 type Tab = 'marketplace' | 'export' | 'import';
@@ -31,7 +25,6 @@ export function BlueprintPanel({
   currentGraph,
   className,
   onInstall,
-  fetchFn = defaultFetch,
 }: BlueprintPanelProps) {
   const [tab,        setTab]        = useState<Tab>('marketplace');
   const [blueprints, setBlueprints] = useState<BlueprintSummary[]>([]);
@@ -51,15 +44,15 @@ export function BlueprintPanel({
     setError(null);
     try {
       const url = `/api/tenants/${tenantId}/workflow-studio/blueprints` +
-        (entityType ? `?entityType=${entityType}` : '');
-      const data = await fetchFn(url) as BlueprintSummary[];
+        (entityType ? `?entityType=${encodeURIComponent(entityType)}` : '');
+      const data = await apiFetch<BlueprintSummary[]>(url);
       setBlueprints(data);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoadingBps(false);
     }
-  }, [tenantId, fetchFn]);
+  }, [tenantId]);
 
   const handleTabChange = useCallback((t: Tab) => {
     setTab(t);
@@ -108,14 +101,13 @@ export function BlueprintPanel({
       try { parsed = JSON.parse(importJson); }
       catch { throw new Error('JSON invalide'); }
 
-      await fetchFn(`/api/tenants/${tenantId}/workflow-marketplace/blueprints/import`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+      await apiFetch(`/api/tenants/${tenantId}/workflow-marketplace/blueprints/import`, {
+        method: 'POST',
+        body:   {
           graphJson: parsed,
-          checksum:  (parsed as any).checksum ?? '',
+          checksum:  (parsed as Record<string, unknown>)['checksum'] ?? '',
           name:      importName || undefined,
-        }),
+        },
       });
 
       setImportMsg('Blueprint importé avec succès. Rechargez la marketplace pour le voir.');
@@ -125,7 +117,7 @@ export function BlueprintPanel({
     } finally {
       setImportBusy(false);
     }
-  }, [tenantId, importJson, importName, fetchFn]);
+  }, [tenantId, importJson, importName]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 

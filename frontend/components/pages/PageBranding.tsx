@@ -16,7 +16,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Palette, Save, RotateCcw, Eye, Bus } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPut } from '../../lib/api';
-import { useTenantConfig } from '../../providers/TenantConfigProvider';
+import { useAuth } from '../../lib/auth/auth.context';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
@@ -141,10 +141,12 @@ function BrandPreview({ brand }: { brand: BrandConfig }) {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function PageBranding() {
-  const { tenantId } = useTenantConfig();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
 
+  const brandUrl = tenantId ? `/api/v1/tenants/${tenantId}/brand` : null;
   const { data: remote, loading, error: fetchError, refetch } = useFetch<BrandConfig>(
-    `/api/v1/tenants/${tenantId}/brand`,
+    brandUrl,
     [tenantId],
   );
 

@@ -50,6 +50,9 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../lib/auth/auth.context';
+import { LogOut } from 'lucide-react';
 import {
   LayoutDashboard, Bell, MapPin, Ticket, Package, MessageSquareWarning,
   Landmark, Tags, Receipt, BarChart3, Brain, Bus, Wrench, Users, Users2,
@@ -71,6 +74,9 @@ import { PageDriverProfile }     from '../pages/PageDriverProfile';
 import { PageCrewBriefing }      from '../pages/PageCrewBriefing';
 import { PageQhse }              from '../pages/PageQhse';
 import { PageWorkflowStudio }    from '../pages/PageWorkflowStudio';
+import { PageWfBlueprints }      from '../pages/PageWfBlueprints';
+import { PageWfMarketplace }     from '../pages/PageWfMarketplace';
+import { PageWfSimulate }        from '../pages/PageWfSimulate';
 import { PageProfitability }     from '../pages/PageProfitability';
 import { PageBranding }          from '../pages/PageBranding';
 
@@ -106,24 +112,6 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
 // ─── Types locaux ──────────────────────────────────────────────────────────────
 
 type RoleKey = keyof typeof ROLE_PERMISSIONS;
-
-interface MockUser {
-  name:        string;
-  role:        RoleKey;
-  agence:      string;
-  avatar:      string;
-}
-
-// ─── Données de démo ──────────────────────────────────────────────────────────
-
-const DEMO_USERS: MockUser[] = [
-  { name: 'Evariste Moukala',     role: 'SUPER_ADMIN',    agence: 'Plateforme',               avatar: 'EM' },
-  { name: 'Christelle Itoua',     role: 'TENANT_ADMIN',   agence: 'Congo Express — Direction', avatar: 'CI' },
-  { name: 'Patrick Ngouabi',      role: 'AGENCY_MANAGER', agence: 'Congo Express — BZV',       avatar: 'PN' },
-  { name: 'Aurore Batéké',        role: 'SUPERVISOR',     agence: 'Congo Express — BZV',       avatar: 'AB' },
-  { name: 'Sylvère Makosso',      role: 'CASHIER',        agence: 'Congo Express — BZV',       avatar: 'SM' },
-  { name: 'Nadège Nkounkou',      role: 'STATION_AGENT',  agence: 'Congo Express — PNR',       avatar: 'NN' },
-];
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -542,37 +530,8 @@ function PageCrm() {
 }
 
 function PageIam() {
-  return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-white">Utilisateurs & Rôles</h1>
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800">
-              <th className="text-left p-4 text-slate-500 font-medium">Nom</th>
-              <th className="text-left p-4 text-slate-500 font-medium">Rôle</th>
-              <th className="text-left p-4 text-slate-500 font-medium">Agence</th>
-              <th className="text-left p-4 text-slate-500 font-medium">Statut</th>
-              <th className="text-left p-4 text-slate-500 font-medium">Dernière connexion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {DEMO_USERS.map((u, i) => (
-              <tr key={i} className="border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors">
-                <td className="p-4 text-slate-100 font-medium">{u.name}</td>
-                <td className="p-4">
-                  <span className="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded">{u.role}</span>
-                </td>
-                <td className="p-4 text-slate-400">{u.agence}</td>
-                <td className="p-4"><span className="text-xs text-emerald-400 font-semibold">Actif</span></td>
-                <td className="p-4 text-slate-500 tabular-nums">14/04/2026 14:22</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  // Stub — sera remplacé par le vrai CRUD IAM (S2.1)
+  return <PageWip title="Utilisateurs & Rôles" />;
 }
 
 function PageSafety() {
@@ -720,9 +679,9 @@ function PageRouter({ activeId }: { activeId: string | null }) {
     case 'safety-monitor':     return <PageWip title="Suivi temps réel" />;
     case 'safety-sos':         return <PageWip title="Alertes SOS" />;
     case 'workflow-studio':    return <PageWorkflowStudio />;
-    case 'wf-blueprints':      return <PageWorkflowStudio />;
-    case 'wf-marketplace':     return <PageWorkflowStudio />;
-    case 'wf-simulate':        return <PageWorkflowStudio />;
+    case 'wf-blueprints':      return <PageWfBlueprints />;
+    case 'wf-marketplace':     return <PageWfMarketplace />;
+    case 'wf-simulate':        return <PageWfSimulate />;
     case 'modules':            return <PageWip title="Modules & Extensions" />;
     case 'white-label':        return <PageBranding />;
     case 'integrations':       return <PageWip title="Intégrations API" />;
@@ -744,18 +703,17 @@ function PageRouter({ activeId }: { activeId: string | null }) {
 // ─── Sidebar nav items renderer ──────────────────────────────────────────────
 
 function SidebarNavItem({
-  item, activeId, onSelect, depth: _depth = 0,
+  item, activeHref, depth: _depth = 0,
 }: {
-  item:     ResolvedNavItem;
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  depth?:   number;
+  item:       ResolvedNavItem;
+  activeHref: string | null;
+  depth?:     number;
 }) {
-  const [expanded, setExpanded] = useState(() => {
-    if (!item.children) return false;
-    return item.children.some(c => c.id === activeId);
-  });
-  const isActive = item.id === activeId || item.children?.some(c => c.id === activeId);
+  const navigate = useNavigate();
+
+  const isChildActive = item.children?.some(c => c.href === activeHref) ?? false;
+  const [expanded, setExpanded] = useState(() => isChildActive);
+  const isActive = item.href === activeHref || isChildActive;
 
   if (item.children) {
     return (
@@ -781,11 +739,12 @@ function SidebarNavItem({
             {item.children.map(child => (
               <li key={child.id}>
                 <button
-                  onClick={() => onSelect(child.id)}
+                  onClick={() => !child.wip && navigate(child.href)}
                   disabled={child.wip}
+                  aria-current={child.href === activeHref ? 'page' : undefined}
                   className={cn(
                     'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors text-left',
-                    child.id === activeId
+                    child.href === activeHref
                       ? 'bg-teal-900/40 text-teal-300 font-medium'
                       : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60',
                     child.wip && 'opacity-40 cursor-not-allowed',
@@ -811,11 +770,12 @@ function SidebarNavItem({
   return (
     <li>
       <button
-        onClick={() => onSelect(item.id)}
+        onClick={() => !item.wip && navigate(item.href)}
         disabled={item.wip}
+        aria-current={item.href === activeHref ? 'page' : undefined}
         className={cn(
           'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
-          item.id === activeId
+          item.href === activeHref
             ? 'bg-teal-900/40 text-teal-300'
             : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
           item.wip && 'opacity-40 cursor-not-allowed',
@@ -837,23 +797,21 @@ function SidebarNavItem({
 // ─── AdminDashboard ───────────────────────────────────────────────────────────
 
 export function AdminDashboard() {
-  const [currentUserIdx, setCurrentUserIdx] = useState(0);
-  const currentUser = DEMO_USERS[currentUserIdx]!;
-  const permissions = ROLE_PERMISSIONS[currentUser.role] ?? [];
+  const { user: authUser, logout } = useAuth();
+  const location = useLocation();
 
-  const { sections, activeId, setActiveId: _setActiveId } = useNavigation({
+  // Permissions dérivées du rôle réel de l'utilisateur connecté
+  const permissions = ROLE_PERMISSIONS[(authUser?.roleName ?? '') as RoleKey] ?? [];
+
+  const { sections, activeId } = useNavigation({
     config:      ADMIN_NAV,
     permissions,
-    currentHref: '/admin',
+    currentHref: location.pathname,
   });
 
-  const [localActiveId, setLocalActiveId] = useState<string | null>('dashboard');
+  // Navigation sidebar — activeHref piloté par l'URL courante
+  const activeHref = location.pathname;
 
-  const effectiveActiveId = localActiveId ?? activeId;
-
-  const handleSelect = (id: string) => setLocalActiveId(id);
-
-  // Build custom sidebar content from resolved sections
   const sidebarContent = useMemo(() => (
     <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4" aria-label="Navigation principale">
       {sections.map(section => (
@@ -868,15 +826,14 @@ export function AdminDashboard() {
               <SidebarNavItem
                 key={item.id}
                 item={item}
-                activeId={effectiveActiveId}
-                onSelect={handleSelect}
+                activeHref={activeHref}
               />
             ))}
           </ul>
         </div>
       ))}
     </nav>
-  ), [sections, effectiveActiveId]);
+  ), [sections, activeHref]);
 
   const logo = (
     <div className="flex items-center gap-2">
@@ -886,34 +843,32 @@ export function AdminDashboard() {
   );
 
   const userPanel = (
-    <div className="space-y-3">
-      {/* Role switcher (démo uniquement) */}
-      <div>
-        <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Démo — profil</p>
-        <select
-          value={currentUserIdx}
-          onChange={e => { setCurrentUserIdx(Number(e.target.value)); setLocalActiveId('dashboard'); }}
-          className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
-        >
-          {DEMO_USERS.map((u, i) => (
-            <option key={i} value={i}>{u.role}</option>
-          ))}
-        </select>
+    <div className="flex items-center gap-2.5">
+      {/* Avatar initiales */}
+      <div
+        className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0"
+        aria-hidden
+      >
+        {(authUser?.name ?? authUser?.email ?? '?').slice(0, 2).toUpperCase()}
       </div>
-      {/* User info */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-          {currentUser.avatar}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-200 truncate">{currentUser.name}</p>
-          <p className="text-[10px] text-slate-500 truncate">{currentUser.agence}</p>
-        </div>
+      {/* Infos utilisateur */}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-200 truncate">
+          {authUser?.name ?? authUser?.email}
+        </p>
+        <p className="text-[10px] text-slate-500 truncate">
+          {authUser?.roleName ?? authUser?.userType}
+        </p>
       </div>
-      <div className="text-[10px] text-slate-600 tabular-nums">
-        {sections.reduce((acc, s) => acc + s.items.reduce((a, i) => a + 1 + (i.children?.length ?? 0), 0), 0)} items visibles
-        {' '}· {permissions.length} permissions
-      </div>
+      {/* Déconnexion */}
+      <button
+        onClick={() => void logout()}
+        title="Déconnexion"
+        aria-label="Se déconnecter"
+        className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+      >
+        <LogOut className="w-4 h-4" />
+      </button>
     </div>
   );
 
@@ -936,7 +891,7 @@ export function AdminDashboard() {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto bg-slate-950" role="main">
-        <PageRouter activeId={effectiveActiveId} />
+        <PageRouter activeId={activeId} />
       </main>
     </div>
   );

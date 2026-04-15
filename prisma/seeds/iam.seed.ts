@@ -165,6 +165,23 @@ const TENANT_ROLES: Array<{
       'data.manifest.print.agency',
       'data.parcel.print.agency',
       'data.invoice.print.agency',
+      // Templates de documents
+      'data.template.read.agency',
+      'data.template.write.agency',
+      'data.template.delete.agency',
+      // Driver & HR
+      'control.driver.manage.tenant',
+      'data.driver.profile.agency',
+      // QHSE & Accidents
+      'control.qhse.manage.tenant',
+      'data.accident.report.own',
+      // Workflow Studio & Marketplace
+      'control.workflow.studio.read.tenant',
+      'control.workflow.studio.write.tenant',
+      'control.workflow.marketplace.read.tenant',
+      'control.workflow.marketplace.publish.tenant',
+      'control.workflow.blueprint.import.tenant',
+      'control.workflow.simulate.tenant',
     ],
   },
   {

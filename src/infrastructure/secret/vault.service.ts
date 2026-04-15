@@ -1,14 +1,35 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as vault from 'node-vault';
 import { ISecretService, VaultCertificate } from './interfaces/secret.interface';
 
+/**
+ * VaultService — client HashiCorp Vault avec initialisation lazy.
+ *
+ * Pourquoi lazy et pas onModuleInit ?
+ * SecretModule est @Global() → NestJS lui attribue distance=0 et l'initialise
+ * APRÈS les modules à distance=1 (DatabaseModule, etc.). PrismaService appelait
+ * getSecret() avant que onModuleInit ait tourné → this.client undefined.
+ * Avec une init lazy, le client est créé au premier appel, quel que soit l'ordre.
+ */
 @Injectable()
-export class VaultService implements ISecretService, OnModuleInit {
+export class VaultService implements ISecretService {
   private readonly logger = new Logger(VaultService.name);
-  private client: vault.client;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private client: any | null = null;
   private cache = new Map<string, { value: string; expiresAt: number }>();
+  private initPromise: Promise<void> | null = null;
 
-  async onModuleInit() {
+  // ─── Initialisation lazy ─────────────────────────────────────────────────────
+
+  private ensureClient(): Promise<void> {
+    if (this.client) return Promise.resolve();
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.initClient();
+    return this.initPromise;
+  }
+
+  private async initClient(): Promise<void> {
     const vaultAddr = process.env.VAULT_ADDR;
     if (!vaultAddr) throw new Error('VAULT_ADDR environment variable is required');
 
@@ -18,26 +39,26 @@ export class VaultService implements ISecretService, OnModuleInit {
       apiVersion: 'v1',
       endpoint: vaultAddr,
       token: process.env.VAULT_TOKEN,
-      // En production: utiliser AppRole ou Kubernetes auth
     });
 
-    // En production: authentification AppRole
     if (process.env.NODE_ENV === 'production') {
       await this.authenticateWithAppRole();
     }
 
-    await this.healthCheck();
     this.logger.log(`✅ Vault connected at ${vaultAddr}`);
   }
+
+  // ─── Auth AppRole (production) ────────────────────────────────────────────────
 
   private async authenticateWithAppRole(): Promise<void> {
     const roleId = process.env.VAULT_ROLE_ID;
     const secretId = process.env.VAULT_SECRET_ID;
     if (!roleId || !secretId) throw new Error('VAULT_ROLE_ID and VAULT_SECRET_ID required in production');
-
     const result = await this.client.approleLogin({ role_id: roleId, secret_id: secretId });
     this.client.token = result.auth.client_token;
   }
+
+  // ─── API publique ─────────────────────────────────────────────────────────────
 
   async getSecret(path: string, key: string): Promise<string> {
     const cacheKey = `${path}::${key}`;
@@ -48,12 +69,12 @@ export class VaultService implements ISecretService, OnModuleInit {
     const value = (obj as Record<string, string>)[key];
     if (!value) throw new Error(`Secret not found: ${path}/${key}`);
 
-    // Cache 30s — les secrets ne changent pas fréquemment
     this.cache.set(cacheKey, { value, expiresAt: Date.now() + 30_000 });
     return value;
   }
 
   async getSecretObject<T = Record<string, string>>(path: string): Promise<T> {
+    await this.ensureClient();
     try {
       const result = await this.client.read(`secret/data/${path}`);
       return result.data.data as T;
@@ -64,14 +85,15 @@ export class VaultService implements ISecretService, OnModuleInit {
   }
 
   async putSecret(path: string, data: Record<string, string>): Promise<void> {
+    await this.ensureClient();
     await this.client.write(`secret/data/${path}`, { data });
-    // Invalider le cache pour ce path
     for (const [key] of this.cache) {
       if (key.startsWith(`${path}::`)) this.cache.delete(key);
     }
   }
 
   async issueCertificate(commonName: string, ttl = '24h'): Promise<VaultCertificate> {
+    await this.ensureClient();
     const result = await this.client.write('pki/issue/translog-services', {
       common_name: commonName,
       ttl,
@@ -87,6 +109,7 @@ export class VaultService implements ISecretService, OnModuleInit {
 
   async healthCheck(): Promise<boolean> {
     try {
+      await this.ensureClient();
       await this.client.health();
       return true;
     } catch {

@@ -18,7 +18,7 @@ import { UpsertBusCostProfileDto } from './dto/bus-cost-profile.dto';
 import { RequirePermission }      from '../../common/decorators/require-permission.decorator';
 import { Permission }             from '../../common/constants/permissions';
 
-@Controller('api/v1/tenants/:tenantId')
+@Controller({ version: '1', path: 'tenants/:tenantId' })
 export class PricingController {
   constructor(
     private readonly profitability: ProfitabilityService,

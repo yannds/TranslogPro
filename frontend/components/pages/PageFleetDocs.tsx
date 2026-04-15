@@ -4,26 +4,21 @@
  * Module Fleet Docs : suivi des documents (assurance, carte grise, CT…)
  * et consommables (pneus, vidange…) avec alertes prédictives.
  *
- * TODO (données) :
- *   - GET /tenants/:tid/fleet-docs/documents/alerts      → docs expirés/expirant
- *   - GET /tenants/:tid/fleet-docs/buses/:busId/documents → docs par bus
- *   - GET /tenants/:tid/fleet-docs/buses/:busId/consumables → consommables par bus
- *   - GET /tenants/:tid/fleet-docs/document-types         → types de documents configurés
- *   - GET /tenants/:tid/fleet-docs/consumable-types        → types de consommables configurés
- *
  * Accessibilité : WCAG 2.1 AA — aria-labels, rôles, focus visible, contrast 4.5:1
  * Dark mode : classes Tailwind dark: — automatique via ThemeProvider
  */
 
 import { useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus } from 'lucide-react';
+import { useAuth } from '../../lib/auth/auth.context';
+import { useFetch } from '../../lib/hooks/useFetch';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
-// ─── Types provisoires (remplacer par les types générés depuis l'API) ──────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DocAlertItem {
   id:          string;
@@ -45,6 +40,22 @@ interface ConsumableItem {
   currentKm:      number;
   nextDueKm:      number | null;
   lastReplacedKm: number | null;
+}
+
+interface DocumentType {
+  id:          string;
+  name:        string;
+  code:        string;
+  isMandatory: boolean;
+  validityDays: number | null;
+}
+
+interface ConsumableType {
+  id:                string;
+  name:              string;
+  code:              string;
+  replacementKm:     number;
+  alertThresholdKm:  number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,8 +85,6 @@ function consumableLabel(s: string): string {
   return 'OK';
 }
 
-// ─── Composant statistiques rapides ──────────────────────────────────────────
-
 interface StatCardProps {
   label:     string;
   value:     number | string;
@@ -91,7 +100,6 @@ function StatCard({ label, value, icon, highlight = 'neutral', loading }: StatCa
     success: 'text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
     neutral: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
   };
-
   return (
     <article
       className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
@@ -111,26 +119,35 @@ function StatCard({ label, value, icon, highlight = 'neutral', loading }: StatCa
   );
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
-
 type Tab = 'alerts' | 'consumables' | 'types';
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageFleetDocs() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
   const [tab, setTab] = useState<Tab>('alerts');
 
-  // TODO: remplacer par useSWR / React Query sur l'API fleet-docs
-  const loading = false;
+  const base = `/api/tenants/${tenantId}/fleet-docs`;
 
-  // TODO: données depuis API
-  const docAlerts: DocAlertItem[] = [];
-  const consumables: ConsumableItem[] = [];
+  const { data: docAlerts,      loading: loadingAlerts }      = useFetch<DocAlertItem[]>(`${base}/documents/alerts`, [tenantId]);
+  const { data: consumables,    loading: loadingConsumables }  = useFetch<ConsumableItem[]>(
+    tab === 'consumables' ? `${base}/buses/all/consumables` : null,
+    [tenantId, tab],
+  );
+  const { data: documentTypes,  loading: loadingDocTypes }     = useFetch<DocumentType[]>(
+    tab === 'types' ? `${base}/document-types` : null,
+    [tenantId, tab],
+  );
+  const { data: consumableTypes, loading: loadingConsTypes }   = useFetch<ConsumableType[]>(
+    tab === 'types' ? `${base}/consumable-types` : null,
+    [tenantId, tab],
+  );
 
-  const expiredCount  = docAlerts.filter(d => d.status === 'EXPIRED').length;
-  const expiringCount = docAlerts.filter(d => d.status === 'EXPIRING').length;
-  const missingCount  = docAlerts.filter(d => d.status === 'MISSING').length;
-  const overdueCount  = consumables.filter(c => c.status === 'OVERDUE').length;
+  const expiredCount  = docAlerts?.filter(d => d.status === 'EXPIRED').length  ?? 0;
+  const expiringCount = docAlerts?.filter(d => d.status === 'EXPIRING').length ?? 0;
+  const missingCount  = docAlerts?.filter(d => d.status === 'MISSING').length  ?? 0;
+  const overdueCount  = consumables?.filter(c => c.status === 'OVERDUE').length ?? 0;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'alerts',      label: 'Documents en alerte' },
@@ -159,34 +176,10 @@ export function PageFleetDocs() {
       {/* ── KPIs ── */}
       <section aria-label="Indicateurs clés documents">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Expirés"
-            value={expiredCount}
-            icon={<AlertTriangle className="w-5 h-5" aria-hidden />}
-            highlight="danger"
-            loading={loading}
-          />
-          <StatCard
-            label="Expirent bientôt"
-            value={expiringCount}
-            icon={<Clock className="w-5 h-5" aria-hidden />}
-            highlight="warning"
-            loading={loading}
-          />
-          <StatCard
-            label="Manquants"
-            value={missingCount}
-            icon={<FileText className="w-5 h-5" aria-hidden />}
-            highlight="danger"
-            loading={loading}
-          />
-          <StatCard
-            label="Consommables dépassés"
-            value={overdueCount}
-            icon={<Wrench className="w-5 h-5" aria-hidden />}
-            highlight={overdueCount > 0 ? 'danger' : 'success'}
-            loading={loading}
-          />
+          <StatCard label="Expirés"              value={expiredCount}  icon={<AlertTriangle className="w-5 h-5" />} highlight="danger"                                   loading={loadingAlerts} />
+          <StatCard label="Expirent bientôt"     value={expiringCount} icon={<Clock className="w-5 h-5" />}        highlight="warning"                                  loading={loadingAlerts} />
+          <StatCard label="Manquants"            value={missingCount}  icon={<FileText className="w-5 h-5" />}     highlight="danger"                                   loading={loadingAlerts} />
+          <StatCard label="Consommables dépassés" value={overdueCount} icon={<Wrench className="w-5 h-5" />}      highlight={overdueCount > 0 ? 'danger' : 'success'}  loading={loadingConsumables} />
         </div>
       </section>
 
@@ -214,14 +207,9 @@ export function PageFleetDocs() {
         </div>
       </nav>
 
-      {/* ── Panneau Documents en alerte ── */}
+      {/* ── Documents en alerte ── */}
       {tab === 'alerts' && (
-        <section
-          id="tabpanel-alerts"
-          role="tabpanel"
-          aria-labelledby="tab-alerts"
-          aria-live="polite"
-        >
+        <section id="tabpanel-alerts" role="tabpanel" aria-labelledby="tab-alerts" aria-live="polite">
           <Card>
             <CardHeader
               heading="Documents en alerte"
@@ -233,13 +221,11 @@ export function PageFleetDocs() {
               }
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingAlerts ? (
                 <div className="p-6 space-y-3" aria-busy="true" aria-label="Chargement des alertes">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : docAlerts.length === 0 ? (
+              ) : !docAlerts || docAlerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
                   <p className="font-medium">Tous les documents sont à jour</p>
@@ -288,14 +274,9 @@ export function PageFleetDocs() {
         </section>
       )}
 
-      {/* ── Panneau Consommables ── */}
+      {/* ── Consommables ── */}
       {tab === 'consumables' && (
-        <section
-          id="tabpanel-consumables"
-          role="tabpanel"
-          aria-labelledby="tab-consumables"
-          aria-live="polite"
-        >
+        <section id="tabpanel-consumables" role="tabpanel" aria-labelledby="tab-consumables" aria-live="polite">
           <Card>
             <CardHeader
               heading="Suivi consommables"
@@ -308,13 +289,11 @@ export function PageFleetDocs() {
               }
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingConsumables ? (
                 <div className="p-6 space-y-3" aria-busy="true">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-14 w-full" />
-                  ))}
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
                 </div>
-              ) : consumables.length === 0 ? (
+              ) : !consumables || consumables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
                   <p className="font-medium">Aucun consommable en alerte</p>
@@ -368,13 +347,9 @@ export function PageFleetDocs() {
         </section>
       )}
 
-      {/* ── Panneau Configuration ── */}
+      {/* ── Configuration ── */}
       {tab === 'types' && (
-        <section
-          id="tabpanel-types"
-          role="tabpanel"
-          aria-labelledby="tab-types"
-        >
+        <section id="tabpanel-types" role="tabpanel" aria-labelledby="tab-types">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader
@@ -386,11 +361,35 @@ export function PageFleetDocs() {
                   </Button>
                 }
               />
-              <CardContent>
-                {/* TODO: liste des VehicleDocumentType depuis GET /fleet-docs/document-types */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-                  TODO — charger depuis l'API
-                </p>
+              <CardContent className="p-0">
+                {loadingDocTypes ? (
+                  <div className="p-6 space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !documentTypes || documentTypes.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
+                    Aucun type de document configuré
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                    {documentTypes.map(dt => (
+                      <li key={dt.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{dt.name}</p>
+                          <p className="text-xs text-slate-500 font-mono">{dt.code}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {dt.validityDays && (
+                            <span className="text-xs text-slate-400">{dt.validityDays}j</span>
+                          )}
+                          <Badge variant={dt.isMandatory ? 'warning' : 'default'} size="sm">
+                            {dt.isMandatory ? 'Obligatoire' : 'Optionnel'}
+                          </Badge>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 
@@ -404,11 +403,28 @@ export function PageFleetDocs() {
                   </Button>
                 }
               />
-              <CardContent>
-                {/* TODO: liste des ConsumableType depuis GET /fleet-docs/consumable-types */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-                  TODO — charger depuis l'API
-                </p>
+              <CardContent className="p-0">
+                {loadingConsTypes ? (
+                  <div className="p-6 space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !consumableTypes || consumableTypes.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
+                    Aucun type de consommable configuré
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                    {consumableTypes.map(ct => (
+                      <li key={ct.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{ct.name}</p>
+                          <p className="text-xs text-slate-500 font-mono">{ct.code}</p>
+                        </div>
+                        <span className="text-xs text-slate-400 tabular-nums">{ct.replacementKm.toLocaleString()} km</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
           </div>

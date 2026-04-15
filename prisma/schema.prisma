@@ -230,10 +230,11 @@ model Session {
 }
 
 model Account {
-  id           String  @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  providerId   String
-  accountId    String
+  providerId   String  // "credential" | "google" | ...
+  accountId    String  // email pour credential
+  password     String?   // hash bcrypt (credential uniquement)
   accessToken  String?
   refreshToken String?
   expiresAt    DateTime?

@@ -4,14 +4,6 @@
  * Module QHSE : gestion complète des accidents, suivi des litiges assurance/
  * gré-à-gré et exécution des procédures QHSE pas-à-pas.
  *
- * TODO (données) :
- *   - GET /tenants/:tid/qhse/accidents?status=OPEN                → rapports ouverts
- *   - GET /tenants/:tid/qhse/accidents/:id                        → détail complet
- *   - GET /tenants/:tid/qhse/accidents/:id/dispute                → litige
- *   - GET /tenants/:tid/qhse/procedures                           → procédures configurées
- *   - GET /tenants/:tid/qhse/severity-types                       → catalogue sévérités
- *   - GET /tenants/:tid/qhse/hospitals                            → hôpitaux référencés
- *
  * Accessibilité : WCAG 2.1 AA — aria-live pour mises à jour, landmark roles
  * Dark mode : Tailwind dark:
  */
@@ -22,13 +14,15 @@ import {
   MapPin, Clock, Users, ChevronRight,
   CheckCircle2,
 } from 'lucide-react';
+import { useAuth } from '../../lib/auth/auth.context';
+import { useFetch } from '../../lib/hooks/useFetch';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
-// ─── Types provisoires ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AccidentSummary {
   id:           string;
@@ -51,9 +45,24 @@ interface ProcedureSummary {
   isActive:    boolean;
 }
 
+interface SeverityType {
+  id:     string;
+  code:   string;
+  label:  string;
+  color:  string;
+  level:  number;
+}
+
+interface Hospital {
+  id:      string;
+  name:    string;
+  city:    string;
+  phone:   string | null;
+}
+
 type Tab = 'accidents' | 'disputes' | 'procedures' | 'config';
 
-// ─── Statut accident → variant badge ─────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function accidentStatusVariant(s: string): 'danger' | 'warning' | 'info' | 'default' {
   if (s === 'OPEN')               return 'danger';
@@ -76,16 +85,30 @@ function accidentStatusLabel(s: string): string {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageQhse() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
+
   const [tab, setTab] = useState<Tab>('accidents');
 
-  // TODO: fetch API
-  const loading    = false;
-  const accidents: AccidentSummary[]    = [];
-  const procedures: ProcedureSummary[]  = [];
+  const base = `/api/tenants/${tenantId}/qhse`;
 
-  const openCount   = accidents.filter(a => a.status === 'OPEN').length;
-  const injuredTotal = accidents.reduce((sum, a) => sum + a.injuryCount, 0);
-  const disputeCount = accidents.filter(a => a.hasDispute).length;
+  const { data: accidents,  loading: loadingAccidents }  = useFetch<AccidentSummary[]>(`${base}/accidents`, [tenantId]);
+  const { data: procedures, loading: loadingProcedures } = useFetch<ProcedureSummary[]>(
+    tab === 'procedures' || tab === 'accidents' ? `${base}/procedures` : null,
+    [tenantId, tab],
+  );
+  const { data: severities, loading: loadingSeverities } = useFetch<SeverityType[]>(
+    tab === 'config' ? `${base}/severity-types` : null,
+    [tenantId, tab],
+  );
+  const { data: hospitals, loading: loadingHospitals } = useFetch<Hospital[]>(
+    tab === 'config' ? `${base}/hospitals` : null,
+    [tenantId, tab],
+  );
+
+  const openCount    = accidents?.filter(a => a.status === 'OPEN').length ?? 0;
+  const injuredTotal = accidents?.reduce((sum, a) => sum + a.injuryCount, 0) ?? 0;
+  const disputeCount = accidents?.filter(a => a.hasDispute).length ?? 0;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'accidents',  label: "Rapports d'accidents" },
@@ -114,21 +137,21 @@ export function PageQhse() {
       <section aria-label="Indicateurs QHSE">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Accidents ouverts',  value: openCount,     icon: <AlertOctagon className="w-5 h-5" />, hl: openCount > 0 ? 'danger' : 'success' },
-            { label: 'Blessés (total)',    value: injuredTotal,  icon: <Users className="w-5 h-5" />,        hl: injuredTotal > 0 ? 'warning' : 'success' },
-            { label: 'Litiges en cours',   value: disputeCount,  icon: <Gavel className="w-5 h-5" />,        hl: disputeCount > 0 ? 'warning' : 'success' },
-            { label: 'Procédures config.', value: procedures.length, icon: <ClipboardCheck className="w-5 h-5" />, hl: 'neutral' },
-          ].map(({ label, value, icon, hl }) => (
+            { label: 'Accidents ouverts',  value: openCount,           icon: <AlertOctagon className="w-5 h-5" />,   hl: openCount > 0 ? 'danger' : 'success',   loading: loadingAccidents },
+            { label: 'Blessés (total)',    value: injuredTotal,        icon: <Users className="w-5 h-5" />,          hl: injuredTotal > 0 ? 'warning' : 'success', loading: loadingAccidents },
+            { label: 'Litiges en cours',   value: disputeCount,        icon: <Gavel className="w-5 h-5" />,          hl: disputeCount > 0 ? 'warning' : 'success', loading: loadingAccidents },
+            { label: 'Procédures config.', value: procedures?.length ?? 0, icon: <ClipboardCheck className="w-5 h-5" />, hl: 'neutral',                            loading: loadingProcedures },
+          ].map(({ label, value, icon, hl, loading }) => (
             <article
               key={label}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
               aria-label={`${label}: ${loading ? 'chargement' : value}`}
             >
               <div className={cn('p-3 rounded-lg shrink-0', {
-                'bg-red-50 dark:bg-red-900/20 text-red-500':       hl === 'danger',
-                'bg-amber-50 dark:bg-amber-900/20 text-amber-500': hl === 'warning',
+                'bg-red-50 dark:bg-red-900/20 text-red-500':           hl === 'danger',
+                'bg-amber-50 dark:bg-amber-900/20 text-amber-500':     hl === 'warning',
                 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500': hl === 'success',
-                'bg-slate-100 dark:bg-slate-800 text-slate-500':   hl === 'neutral',
+                'bg-slate-100 dark:bg-slate-800 text-slate-500':       hl === 'neutral',
               })} aria-hidden>
                 {icon}
               </div>
@@ -176,14 +199,9 @@ export function PageQhse() {
         </div>
       </nav>
 
-      {/* ── Panneau Accidents ── */}
+      {/* ── Accidents ── */}
       {tab === 'accidents' && (
-        <section
-          id="tabpanel-qhse-accidents"
-          role="tabpanel"
-          aria-labelledby="tab-qhse-accidents"
-          aria-live="polite"
-        >
+        <section id="tabpanel-qhse-accidents" role="tabpanel" aria-labelledby="tab-qhse-accidents" aria-live="polite">
           <Card>
             <CardHeader
               heading="Rapports d'accidents"
@@ -196,11 +214,11 @@ export function PageQhse() {
               }
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingAccidents ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
                 </div>
-              ) : accidents.length === 0 ? (
+              ) : !accidents || accidents.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
                   <p className="font-medium">Aucun accident enregistré</p>
@@ -209,10 +227,7 @@ export function PageQhse() {
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list" aria-label="Liste des accidents">
                   {accidents.map(acc => (
-                    <li
-                      key={acc.id}
-                      className="px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                    >
+                    <li key={acc.id} className="px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-4 min-w-0">
                           <div
@@ -252,7 +267,7 @@ export function PageQhse() {
                         </div>
                         <button
                           className="shrink-0 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                          aria-label={`Voir le détail de l'accident ${acc.id}`}
+                          aria-label={`Voir le détail de l'accident`}
                         >
                           <ChevronRight className="w-4 h-4 text-slate-400" aria-hidden />
                         </button>
@@ -266,7 +281,7 @@ export function PageQhse() {
         </section>
       )}
 
-      {/* ── Panneau Litiges ── */}
+      {/* ── Litiges ── */}
       {tab === 'disputes' && (
         <section id="tabpanel-qhse-disputes" role="tabpanel" aria-labelledby="tab-qhse-disputes">
           <Card>
@@ -274,17 +289,42 @@ export function PageQhse() {
               heading="Suivi des litiges"
               description="Assurance vs gré-à-gré — frais et dédommagements"
             />
-            <CardContent>
-              {/* TODO: fetch depuis GET /qhse/accidents?hasDispute=true avec dispute inclus */}
-              <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                TODO — charger les litiges en cours depuis l'API
-              </p>
+            <CardContent className="p-0">
+              {loadingAccidents ? (
+                <div className="p-6 space-y-3" aria-busy="true">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+                </div>
+              ) : !accidents?.filter(a => a.hasDispute).length ? (
+                <div className="flex flex-col items-center py-12 text-slate-500 dark:text-slate-400" role="status">
+                  <Gavel className="w-10 h-10 mb-2 text-slate-300 dark:text-slate-600" aria-hidden />
+                  <p className="font-medium">Aucun litige en cours</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {accidents!.filter(a => a.hasDispute).map(acc => (
+                    <li key={acc.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
+                          {acc.busPlate ?? 'Bus non précisé'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(acc.occurredAt).toLocaleDateString('fr-FR')}
+                          {acc.location ? ` — ${acc.location}` : ''}
+                        </p>
+                      </div>
+                      <Badge variant={accidentStatusVariant(acc.status)} size="sm">
+                        {accidentStatusLabel(acc.status)}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </section>
       )}
 
-      {/* ── Panneau Procédures QHSE ── */}
+      {/* ── Procédures QHSE ── */}
       {tab === 'procedures' && (
         <section id="tabpanel-qhse-procedures" role="tabpanel" aria-labelledby="tab-qhse-procedures">
           <Card>
@@ -298,11 +338,11 @@ export function PageQhse() {
               }
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingProcedures ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
                 </div>
-              ) : procedures.length === 0 ? (
+              ) : !procedures || procedures.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-12 text-center">
                   Aucune procédure configurée — créez des procédures liées aux codes de sévérité
                 </p>
@@ -338,7 +378,7 @@ export function PageQhse() {
         </section>
       )}
 
-      {/* ── Panneau Configuration ── */}
+      {/* ── Configuration ── */}
       {tab === 'config' && (
         <section id="tabpanel-qhse-config" role="tabpanel" aria-labelledby="tab-qhse-config">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -348,9 +388,29 @@ export function PageQhse() {
                 description="Léger, Lourd, Mortel — configurables par tenant"
                 action={<Button size="sm" aria-label="Ajouter un type de sévérité"><Plus className="w-4 h-4 mr-1" />Type</Button>}
               />
-              <CardContent>
-                {/* TODO: fetch GET /qhse/severity-types */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">TODO — charger les types</p>
+              <CardContent className="p-0">
+                {loadingSeverities ? (
+                  <div className="p-6 space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !severities || severities.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">Aucun type configuré</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                    {severities.map(s => (
+                      <li key={s.id} className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} aria-hidden />
+                          <div>
+                            <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{s.label}</p>
+                            <p className="text-xs text-slate-500 font-mono">{s.code}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-slate-400">Niveau {s.level}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 
@@ -360,9 +420,26 @@ export function PageQhse() {
                 description="Établissements hospitaliers pour suivi des blessés"
                 action={<Button size="sm" aria-label="Ajouter un hôpital"><Plus className="w-4 h-4 mr-1" />Hôpital</Button>}
               />
-              <CardContent>
-                {/* TODO: fetch GET /qhse/hospitals */}
-                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">TODO — charger les hôpitaux</p>
+              <CardContent className="p-0">
+                {loadingHospitals ? (
+                  <div className="p-6 space-y-3" aria-busy="true">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !hospitals || hospitals.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">Aucun hôpital référencé</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                    {hospitals.map(h => (
+                      <li key={h.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{h.name}</p>
+                          <p className="text-xs text-slate-500">{h.city}</p>
+                        </div>
+                        {h.phone && <span className="text-xs text-slate-400 font-mono">{h.phone}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
           </div>

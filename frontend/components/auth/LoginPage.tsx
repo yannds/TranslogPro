@@ -3,14 +3,15 @@
  *
  * Formulaire email + mot de passe.
  * Appel : POST /api/auth/sign-in via useAuth().login()
- * Succès : redirect vers / (AdminDashboard)
- * Erreur : message inline, pas de page d'erreur séparée
+ * Succès : redirect vers l'URL d'origine (location.state.from) ou /admin
+ * Erreur : message inline accessible (role="alert")
  *
  * Accessibilité : WCAG 2.1 AA — aria-labels, focus visible, autocomplete
- * Dark mode : classes Tailwind dark: via ThemeProvider
+ * Thème : dark exclusif (pas de mode clair)
  */
 
 import { useState, type FormEvent } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { ApiError } from '../../lib/api';
@@ -18,8 +19,13 @@ import { cn } from '../../lib/utils';
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
-export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
+export function LoginPage() {
   const { login } = useAuth();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  // Rediriger vers la page demandée avant la déconnexion, sinon /admin
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/admin';
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +39,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
 
     try {
       await login(email, password);
-      onSuccess?.();
+      navigate(from, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401 || err.status === 400) {
@@ -95,7 +101,8 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="prenom.nom@congosxpress.cg"
+              placeholder="prenom.nom@translogpro.io"
+              aria-describedby={error ? 'login-error' : undefined}
               className={cn(
                 'w-full rounded-lg border bg-slate-800 px-3 py-2.5 text-sm text-white placeholder:text-slate-500',
                 'border-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30',
@@ -136,7 +143,8 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
             disabled={loading || !email || !password}
             className={cn(
               'w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white transition-colors',
-              'hover:bg-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+              'hover:bg-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+              'focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >

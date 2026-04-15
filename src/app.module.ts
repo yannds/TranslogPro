@@ -56,11 +56,13 @@ import { DriverProfileModule }   from './modules/driver-profile/driver-profile.m
 import { CrewBriefingModule }    from './modules/crew-briefing/crew-briefing.module';
 import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
+import { AuthModule }            from './modules/auth/auth.module';
 
 // Guards & Middleware
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
 import { ModuleGuard }           from './core/iam/guards/module.guard';
 import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
+import { SessionMiddleware }     from './core/iam/middleware/session.middleware';
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
 
@@ -142,6 +144,8 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     QhseModule,
     // Scheduling Guard — garde-fou avant affectation trajet/bus/chauffeur
     SchedulingGuardModule,
+    // Auth — sign-in / sign-out / me (credential provider)
+    AuthModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes
@@ -158,6 +162,11 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // SessionMiddleware DOIT tourner en premier — hydrate req.user pour tous les guards
+    consumer
+      .apply(SessionMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+
     consumer
       .apply(TenantMiddleware)
       .forRoutes({ path: '*', method: RequestMethod.ALL });

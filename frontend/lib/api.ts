@@ -30,6 +30,11 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Base URL — par défaut '' (chemin relatif au document courant) */
   baseUrl?: string;
+  /**
+   * Si true, un 401 lève une ApiError sans rediriger vers /login.
+   * Utile pour le check initial de session (on veut juste null, pas un reload).
+   */
+  skipRedirectOn401?: boolean;
 }
 
 /**
@@ -42,7 +47,7 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
  */
 export async function apiFetch<T = unknown>(
   path: string,
-  { body, baseUrl = '', ...init }: ApiFetchOptions = {},
+  { body, baseUrl = '', skipRedirectOn401 = false, ...init }: ApiFetchOptions = {},
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
 
@@ -59,11 +64,13 @@ export async function apiFetch<T = unknown>(
   });
 
   if (res.status === 401) {
-    // Session expirée → redirect vers la page de login
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+    if (!skipRedirectOn401 && typeof window !== 'undefined') {
+      // Éviter de rediriger si on est déjà sur /login (prévient la boucle infinie)
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
-    throw new ApiError(401, null, 'Session expirée — redirection vers /login');
+    throw new ApiError(401, null, 'Session expirée');
   }
 
   if (!res.ok) {

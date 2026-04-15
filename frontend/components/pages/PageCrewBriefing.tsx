@@ -4,12 +4,6 @@
  * Module Crew Briefing : checklist équipements de sécurité obligatoires
  * avant chaque trajet.
  *
- * TODO (données) :
- *   - GET /tenants/:tid/crew-briefing/briefings/incomplete        → briefings KO
- *   - GET /tenants/:tid/crew-briefing/briefings/history?limit=50  → historique
- *   - GET /tenants/:tid/crew-briefing/equipment-types             → catalogue équipements
- *   - POST /tenants/:tid/crew-briefing/briefings                  → créer briefing
- *
  * Accessibilité : WCAG 2.1 AA — aria-checked sur checkboxes, live regions
  * Dark mode : Tailwind dark:
  */
@@ -19,13 +13,15 @@ import {
   ShieldCheck, ShieldAlert, ClipboardList, Plus, CheckCircle2,
   XCircle, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { useAuth } from '../../lib/auth/auth.context';
+import { useFetch } from '../../lib/hooks/useFetch';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
-// ─── Types provisoires ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BriefingRecord {
   id:             string;
@@ -66,20 +62,34 @@ function ConformityIndicator({ ok }: { ok: boolean }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageCrewBriefing() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
+
   const [tab, setTab]       = useState<Tab>('incomplete');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // TODO: fetch API
-  const loading  = false;
-  const incomplete: BriefingRecord[] = [];
-  const history: BriefingRecord[]    = [];
-  const equipment: EquipmentType[]   = [];
+  const base = `/api/tenants/${tenantId}/crew-briefing`;
+
+  const { data: incomplete, loading: loadingIncomplete } = useFetch<BriefingRecord[]>(
+    `${base}/briefings/incomplete`,
+    [tenantId],
+  );
+  const { data: history, loading: loadingHistory } = useFetch<BriefingRecord[]>(
+    tab === 'history' ? `${base}/briefings/history?limit=50` : null,
+    [tenantId, tab],
+  );
+  const { data: equipment, loading: loadingEquipment } = useFetch<EquipmentType[]>(
+    tab === 'equipment' ? `${base}/equipment-types` : null,
+    [tenantId, tab],
+  );
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'incomplete', label: 'Non conformes' },
     { id: 'history',    label: 'Historique' },
     { id: 'equipment',  label: 'Équipements' },
   ];
+
+  const incompleteCount = incomplete?.length ?? 0;
 
   return (
     <main className="p-6 space-y-6" role="main" aria-label="Briefings équipages pré-départ">
@@ -102,45 +112,45 @@ export function PageCrewBriefing() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Briefings non conformes: ${incomplete.length}`}
+            aria-label={`Briefings non conformes: ${incompleteCount}`}
           >
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 shrink-0" aria-hidden>
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Non conformes</p>
-              {loading ? <Skeleton className="h-7 w-8 mt-1" /> : (
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{incomplete.length}</p>
+              {loadingIncomplete ? <Skeleton className="h-7 w-8 mt-1" /> : (
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{incompleteCount}</p>
               )}
             </div>
           </article>
 
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Briefings aujourd'hui: ${history.length}`}
+            aria-label={`Briefings historique: chargement`}
           >
             <div className="p-3 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-500 shrink-0" aria-hidden>
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Ce jour</p>
-              {loading ? <Skeleton className="h-7 w-8 mt-1" /> : (
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{history.length}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Historique</p>
+              {loadingHistory ? <Skeleton className="h-7 w-8 mt-1" /> : (
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{history?.length ?? '—'}</p>
               )}
             </div>
           </article>
 
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Équipements configurés: ${equipment.length}`}
+            aria-label={`Équipements configurés: ${equipment?.length ?? '—'}`}
           >
             <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0" aria-hidden>
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Types équipements</p>
-              {loading ? <Skeleton className="h-7 w-8 mt-1" /> : (
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{equipment.length}</p>
+              {loadingEquipment ? <Skeleton className="h-7 w-8 mt-1" /> : (
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{equipment?.length ?? '—'}</p>
               )}
             </div>
           </article>
@@ -167,12 +177,12 @@ export function PageCrewBriefing() {
               )}
             >
               {t.label}
-              {t.id === 'incomplete' && incomplete.length > 0 && (
+              {t.id === 'incomplete' && incompleteCount > 0 && (
                 <span
                   className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold"
-                  aria-label={`${incomplete.length} non conformes`}
+                  aria-label={`${incompleteCount} non conformes`}
                 >
-                  {incomplete.length}
+                  {incompleteCount}
                 </span>
               )}
             </button>
@@ -180,7 +190,7 @@ export function PageCrewBriefing() {
         </div>
       </nav>
 
-      {/* ── Panneau Non conformes ── */}
+      {/* ── Non conformes ── */}
       {tab === 'incomplete' && (
         <section
           id="tabpanel-briefing-incomplete"
@@ -194,11 +204,11 @@ export function PageCrewBriefing() {
               description="Trajets dont au moins un équipement obligatoire est manquant"
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingIncomplete ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
                 </div>
-              ) : incomplete.length === 0 ? (
+              ) : !incomplete || incomplete.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
                   <p className="font-medium">Tous les briefings sont conformes</p>
@@ -253,20 +263,18 @@ export function PageCrewBriefing() {
         </section>
       )}
 
-      {/* ── Panneau Historique ── */}
+      {/* ── Historique ── */}
       {tab === 'history' && (
         <section id="tabpanel-briefing-history" role="tabpanel" aria-labelledby="tab-briefing-history">
           <Card>
             <CardHeader heading="Historique des briefings" description="50 derniers briefings enregistrés" />
             <CardContent className="p-0">
-              {/* TODO: fetch depuis GET /crew-briefing/briefings/history */}
-              {loading ? (
+              {loadingHistory ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : history.length === 0 ? (
+              ) : !history || history.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-12 text-center">
-                  {/* TODO: fetch depuis GET /tenants/:tid/crew-briefing/briefings/history?limit=50 */}
                   Aucun briefing dans l'historique
                 </p>
               ) : (
@@ -289,7 +297,7 @@ export function PageCrewBriefing() {
         </section>
       )}
 
-      {/* ── Panneau Équipements ── */}
+      {/* ── Équipements ── */}
       {tab === 'equipment' && (
         <section id="tabpanel-briefing-equipment" role="tabpanel" aria-labelledby="tab-briefing-equipment">
           <Card>
@@ -303,11 +311,11 @@ export function PageCrewBriefing() {
               }
             />
             <CardContent className="p-0">
-              {loading ? (
+              {loadingEquipment ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : equipment.length === 0 ? (
+              ) : !equipment || equipment.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-12 text-center">
                   Aucun équipement configuré — cliquez sur « Équipement » pour commencer
                 </p>

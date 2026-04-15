@@ -29,12 +29,13 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   WsException,
 } from '@nestjs/websockets';
-import { Logger, OnModuleInit, Inject } from '@nestjs/common';
+import { Logger, Inject } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { Redis } from 'ioredis';
-import { createAdapter } from '@socket.io/redis-adapter';
+
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
@@ -55,7 +56,7 @@ interface AuthenticatedSocket extends Socket {
   namespace: '/realtime',
 })
 export class DisplayGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer() server: Server;
   private readonly logger     = new Logger(DisplayGateway.name);
@@ -67,7 +68,7 @@ export class DisplayGateway
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  async afterInit(_server: Server): Promise<void> {
     const config = await this.secretService.getSecretObject<{
       HOST: string; PORT: string; PASSWORD?: string;
     }>('platform/redis');
@@ -77,9 +78,6 @@ export class DisplayGateway
       port:     parseInt(config.PORT, 10),
       password: config.PASSWORD,
     });
-
-    const pubClient = this.publisher.getClient();
-    this.server.adapter(createAdapter(pubClient, this.subscriber));
 
     // Pattern : translog:{tenantId}:{eventType}
     await this.subscriber.psubscribe('translog:*', (err) => {

@@ -8,14 +8,12 @@ import {
   OnGatewayDisconnect,
   WsException,
 } from '@nestjs/websockets';
-import { Logger, Inject, OnModuleInit } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { Redis } from 'ioredis';
-import { createAdapter } from '@socket.io/redis-adapter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 import { DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
-import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
+
 import { v4 as uuidv4 } from 'uuid';
 
 // ─── Types stricts ────────────────────────────────────────────────────────────
@@ -71,35 +69,15 @@ const GPS_THROTTLE_MS   = 1_000;
   namespace: '/gps',
 })
 export class TrackingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() server: Server;
-  private readonly logger     = new Logger(TrackingGateway.name);
-  private subscriber: Redis;
+  private readonly logger = new Logger(TrackingGateway.name);
 
   constructor(
-    private readonly prisma:     PrismaService,
-    private readonly publisher:  RedisPublisherService,
-    @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    private readonly prisma:    PrismaService,
+    private readonly publisher: RedisPublisherService,
   ) {}
-
-  async onModuleInit(): Promise<void> {
-    const config = await this.secretService.getSecretObject<{
-      HOST: string; PORT: string; PASSWORD?: string;
-    }>('platform/redis');
-
-    this.subscriber = new Redis({
-      host:     config.HOST,
-      port:     parseInt(config.PORT, 10),
-      password: config.PASSWORD,
-    });
-
-    // Redis adapter pour scalabilité horizontale (multi-pod)
-    const pubClient = this.publisher.getClient();
-    this.server.adapter(createAdapter(pubClient, this.subscriber));
-
-    this.logger.log('TrackingGateway initialised with Redis adapter on /gps');
-  }
 
   // ─── Connexion / Déconnexion ─────────────────────────────────────────────────
 
