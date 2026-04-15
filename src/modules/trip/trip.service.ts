@@ -5,6 +5,8 @@ import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus
 import { EventTypes } from '../../common/types/domain-event.type';
 import { TripState } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { ownershipWhere, assertOwnership } from '../../common/helpers/scope-filter';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { SchedulingGuardService } from '../scheduling-guard/scheduling-guard.service';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,23 +46,31 @@ export class TripService {
     });
   }
 
-  async findAll(tenantId: string, filters?: { agencyId?: string; status?: string }) {
+  async findAll(
+    tenantId: string,
+    filters?: { agencyId?: string; status?: string },
+    scope?:   ScopeContext,
+  ) {
     return this.prisma.trip.findMany({
       where: {
         tenantId,
         ...(filters?.status ? { status: filters.status } : {}),
+        // Enforcement scope : un chauffeur (.own) ne voit que ses trajets.
+        ...(scope ? ownershipWhere(scope, 'driverId') : {}),
       },
       include: { route: true, bus: true },
       orderBy: { departureScheduled: 'asc' },
     });
   }
 
-  async findOne(tenantId: string, id: string) {
+  async findOne(tenantId: string, id: string, scope?: ScopeContext) {
     const trip = await this.prisma.trip.findFirst({
       where:   { id, tenantId },
       include: { route: true, bus: true, travelers: true },
     });
     if (!trip) throw new NotFoundException(`Trip ${id} not found`);
+    // Enforcement scope : un chauffeur ne peut pas lire le trip d'un autre.
+    if (scope) assertOwnership(scope, trip, 'driverId');
     return trip;
   }
 

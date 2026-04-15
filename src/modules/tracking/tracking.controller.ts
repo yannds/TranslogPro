@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { TrackingService } from './tracking.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission } from '../../common/constants/permissions';
 
 @Controller('tenants/:tenantId/tracking')
@@ -23,8 +24,12 @@ export class TrackingController {
 
   @Get('trips/:tripId/position')
   @RequirePermission(Permission.TRIP_READ_OWN)
-  lastPosition(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
-    return this.trackingService.getLastPosition(tenantId, tripId);
+  lastPosition(
+    @TenantId() tenantId: string,
+    @Param('tripId') tripId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.trackingService.getLastPosition(tenantId, tripId, scope);
   }
 
   @Get('trips/:tripId/history')
@@ -32,8 +37,9 @@ export class TrackingController {
   history(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
+    @ScopeCtx() scope: ScopeContext,
     @Query('limit') limit?: string,
   ) {
-    return this.trackingService.getTripHistory(tenantId, tripId, limit ? parseInt(limit) : 500);
+    return this.trackingService.getTripHistory(tenantId, tripId, limit ? parseInt(limit) : 500, scope);
   }
 }
