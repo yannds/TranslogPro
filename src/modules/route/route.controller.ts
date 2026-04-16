@@ -7,6 +7,8 @@ import {
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
+import { SetWaypointsDto } from './dto/set-waypoints.dto';
+import { SetSegmentPricesDto } from './dto/set-segment-prices.dto';
 
 /**
  * CRUD des lignes (routes) — scope `.tenant`.
@@ -36,7 +38,37 @@ export class RouteController {
   @Get(':id')
   @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.routes.findOne(tenantId, id);
+    return this.routes.findOneWithWaypoints(tenantId, id);
+  }
+
+  // ── Waypoints (escales) ────────────────────────────────────────────────
+
+  @Patch(':id/waypoints')
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  setWaypoints(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: SetWaypointsDto,
+  ) {
+    return this.routes.setWaypoints(tenantId, id, dto.waypoints);
+  }
+
+  // ── Matrice de prix segment ────────────────────────────────────────────
+
+  @Get(':id/segment-prices')
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  getSegmentPrices(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.routes.getSegmentPrices(tenantId, id);
+  }
+
+  @Patch(':id/segment-prices')
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  bulkSetSegmentPrices(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: SetSegmentPricesDto,
+  ) {
+    return this.routes.bulkSetSegmentPrices(tenantId, id, dto.prices);
   }
 
   @Post()

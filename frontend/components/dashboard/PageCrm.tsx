@@ -18,6 +18,7 @@ import {
 import { useFetch }              from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth }               from '../../lib/auth/auth.context';
+import { useI18n }                from '../../lib/i18n/useI18n';
 import { Button }                from '../ui/Button';
 import { Badge }                 from '../ui/Badge';
 import { Dialog }                from '../ui/Dialog';
@@ -74,11 +75,11 @@ function getPhone(prefs: Record<string, unknown> | null): string {
 
 // ─── Colonnes ─────────────────────────────────────────────────────────────────
 
-function buildColumns(): Column<CustomerRow>[] {
+function buildColumns(t: (m: Record<string, string>) => string): Column<CustomerRow>[] {
   return [
     {
       key: 'name',
-      header: 'Client',
+      header: t('crmPage.colClient'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-3">
@@ -97,7 +98,7 @@ function buildColumns(): Column<CustomerRow>[] {
     },
     {
       key: 'preferences',
-      header: 'Téléphone',
+      header: t('crmPage.colPhone'),
       sortable: false,
       cellRenderer: (_v, row) => (
         <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
@@ -108,7 +109,7 @@ function buildColumns(): Column<CustomerRow>[] {
     },
     {
       key: 'loyaltyScore',
-      header: 'Fidélité',
+      header: t('crmPage.colLoyalty'),
       sortable: true,
       width: '140px',
       cellRenderer: (v) => {
@@ -126,7 +127,7 @@ function buildColumns(): Column<CustomerRow>[] {
     },
     {
       key: 'createdAt',
-      header: 'Inscrit le',
+      header: t('crmPage.colRegistered'),
       sortable: true,
       width: '110px',
       cellRenderer: (v) => (
@@ -147,6 +148,7 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<CreateForm>({ email: '', name: '', phone: '' });
   const set = <K extends keyof CreateForm>(k: K, v: CreateForm[K]) =>
     setF(p => ({ ...p, [k]: v }));
@@ -166,7 +168,7 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom complet <span aria-hidden className="text-red-500">*</span>
+            {t('crmPage.fullName')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.name}
             onChange={e => set('name', e.target.value)}
@@ -174,14 +176,14 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
             autoComplete="name" />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Téléphone</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('crmPage.colPhone')}</label>
           <input type="tel" value={f.phone}
             onChange={e => set('phone', e.target.value)}
             className={inp} disabled={busy} placeholder="+242 06 123 4567"
             autoComplete="tel" />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.create')} pendingLabel={t('common.creating')} />
     </form>
   );
 }
@@ -197,6 +199,7 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
   error:    string | null;
   onPreviewChange?: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<EditForm>({
     name:         customer.name ?? '',
     phone:        getPhone(customer.preferences),
@@ -210,20 +213,20 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
       <ErrorAlert error={error} />
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('crmPage.fullName')}</label>
           <input type="text" value={f.name}
             onChange={e => set('name', e.target.value)}
             className={inp} disabled={busy} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Téléphone</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('crmPage.colPhone')}</label>
           <input type="tel" value={f.phone}
             onChange={e => set('phone', e.target.value)}
             className={inp} disabled={busy} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Score fidélité
+            {t('crmPage.loyaltyScore')}
           </label>
           <input type="number" min={0} step={1} value={f.loyaltyScore}
             onChange={e => set('loyaltyScore', e.target.value)}
@@ -231,12 +234,12 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
           <p>Email : <span className="font-mono">{customer.email}</span></p>
-          <p>Inscrit : {new Date(customer.createdAt).toLocaleDateString('fr-FR')}</p>
+          <p>{t('crmPage.registered')} : {new Date(customer.createdAt).toLocaleDateString('fr-FR')}</p>
         </div>
 
         {/* Pièces jointes du voyageur */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Pièces jointes</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">{t('crmPage.attachments')}</h3>
           <DocumentAttachments
             tenantId={tenantId}
             entityType="CUSTOMER"
@@ -246,14 +249,14 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
           />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
     </form>
   );
 }
 
 // ─── KPIs (calculés depuis la liste) ──────────────────────────────────────────
 
-function CrmKpis({ customers }: { customers: CustomerRow[] }) {
+function CrmKpis({ customers, t }: { customers: CustomerRow[]; t: (m: Record<string, string>) => string }) {
   const total      = customers.length;
   const newMonth   = customers.filter(c => {
     const d = new Date(c.createdAt);
@@ -264,10 +267,10 @@ function CrmKpis({ customers }: { customers: CustomerRow[] }) {
   const avgScore   = total === 0 ? 0 : customers.reduce((s, c) => s + (c.loyaltyScore ?? 0), 0) / total;
 
   const items = [
-    { label: 'Clients',           value: total.toLocaleString('fr-FR'),      sub: 'au total',         color: 'teal' },
-    { label: 'Nouveaux ce mois',  value: newMonth.toLocaleString('fr-FR'),   sub: 'inscriptions',     color: 'emerald' },
-    { label: 'Clients Platinum',  value: platinum.toLocaleString('fr-FR'),   sub: '≥ 4 000 pts',      color: 'amber' },
-    { label: 'Score moyen',       value: avgScore.toFixed(0),                sub: 'fidélité',         color: 'blue' },
+    { label: t('crmPage.customers'),        value: total.toLocaleString('fr-FR'),      sub: t('crmPage.total'),         color: 'teal' },
+    { label: t('crmPage.newThisMonth'),    value: newMonth.toLocaleString('fr-FR'),   sub: t('crmPage.registrations'), color: 'emerald' },
+    { label: t('crmPage.platinumCust'),    value: platinum.toLocaleString('fr-FR'),   sub: '≥ 4 000 pts',      color: 'amber' },
+    { label: t('crmPage.avgScore'),        value: avgScore.toFixed(0),                sub: t('crmPage.loyalty'),       color: 'blue' },
   ] as const;
 
   const palette: Record<string, string> = {
@@ -278,7 +281,7 @@ function CrmKpis({ customers }: { customers: CustomerRow[] }) {
   };
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {items.map(it => (
         <div key={it.label} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{it.label}</p>
@@ -294,6 +297,7 @@ function CrmKpis({ customers }: { customers: CustomerRow[] }) {
 
 export function PageCrm() {
   const { user: me } = useAuth();
+  const { t } = useI18n();
   const tenantId = me?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/crm`;
 
@@ -349,20 +353,20 @@ export function PageCrm() {
     finally { setBusy(false); }
   };
 
-  const columns = buildColumns();
+  const columns = buildColumns(t);
   const rowActions: RowAction<CustomerRow>[] = [
     {
-      label:   'Voir la fiche',
+      label:   t('crmPage.viewProfile'),
       icon:    <UserCircle size={13} />,
       onClick: (row) => { setDetailTarget(row); setActionErr(null); },
     },
     {
-      label:   'Modifier',
+      label:   t('common.edit'),
       icon:    <Pencil size={13} />,
       onClick: (row) => { setEditTarget(row); setActionErr(null); },
     },
     {
-      label:   'Archiver',
+      label:   t('common.archive'),
       icon:    <Archive size={13} />,
       danger:  true,
       onClick: (row) => { setArchiveTarget(row); setActionErr(null); },
@@ -378,19 +382,19 @@ export function PageCrm() {
             <Users2 className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">CRM — Clients</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('crmPage.title')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {list ? `${list.total} client(s) enregistré(s)` : 'Gestion des clients'}
+              {list ? `${list.total} ${t('crmPage.customerCount')}` : t('crmPage.customerMgmt')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
-          <Plus className="w-4 h-4 mr-2" aria-hidden />Nouveau voyageur
+          <Plus className="w-4 h-4 mr-2" aria-hidden />{t('crmPage.newCustomer')}
         </Button>
       </div>
 
       {/* KPIs */}
-      <CrmKpis customers={customers} />
+      <CrmKpis customers={customers} t={t} />
 
       <ErrorAlert error={error ?? actionErr} icon />
 
@@ -403,8 +407,8 @@ export function PageCrm() {
           rowActions={rowActions}
           defaultSort={{ key: 'createdAt', dir: 'desc' }}
           defaultPageSize={25}
-          searchPlaceholder="Rechercher (nom, email, téléphone…)"
-          emptyMessage={list && list.total === 0 ? 'Aucun voyageur. Cliquez sur « Nouveau voyageur » pour commencer.' : 'Aucun résultat.'}
+          searchPlaceholder={t('crmPage.searchPlaceholder')}
+          emptyMessage={list && list.total === 0 ? t('crmPage.emptyMsg') : t('crmPage.noResult')}
           exportFormats={['csv', 'json', 'xls']}
           exportFilename="voyageurs"
           onRowClick={(row) => { setDetailTarget(row); setActionErr(null); }}
@@ -429,8 +433,8 @@ export function PageCrm() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouveau voyageur"
-        description="Créez un compte voyageur dans votre CRM."
+        title={t('crmPage.newCustomer')}
+        description={t('crmPage.createDesc')}
         size="md"
       >
         <CreateCustomerForm
@@ -445,7 +449,7 @@ export function PageCrm() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) { setEditPreviewOpen(false); setEditTarget(null); } }}
-        title="Modifier le voyageur"
+        title={t('crmPage.editCustomer')}
         description={editTarget?.email}
         size={editPreviewOpen ? '3xl' : 'md'}
       >
@@ -466,12 +470,12 @@ export function PageCrm() {
       <Dialog
         open={!!archiveTarget}
         onOpenChange={o => { if (!o) setArchiveTarget(null); }}
-        title="Archiver le voyageur"
-        description={`Archiver « ${archiveTarget?.name ?? archiveTarget?.email} » ? Le compte ne sera plus visible mais ses données restent conservées.`}
+        title={t('crmPage.archiveCustomer')}
+        description={`${t('common.archive')} « ${archiveTarget?.name ?? archiveTarget?.email} » ? ${t('crmPage.archiveDesc')}`}
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setArchiveTarget(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
             </Button>
             <Button
               onClick={handleArchive}
@@ -480,7 +484,7 @@ export function PageCrm() {
               variant="destructive"
             >
               <Archive className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Archivage…' : 'Archiver'}
+              {busy ? t('crmPage.archiving') : t('common.archive')}
             </Button>
           </div>
         }

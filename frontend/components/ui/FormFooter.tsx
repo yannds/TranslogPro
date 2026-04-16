@@ -7,6 +7,7 @@
 
 import { X, Check } from 'lucide-react';
 import { Button } from './Button';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 export interface FormFooterProps {
   onCancel: () => void;
@@ -23,12 +24,14 @@ export function FormFooter({
   busy,
   submitLabel,
   pendingLabel,
-  cancelLabel = 'Annuler',
+  cancelLabel,
 }: FormFooterProps) {
+  const { t } = useI18n();
+  const resolvedCancel = cancelLabel ?? t('common.cancel');
   return (
     <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
       <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-        <X className="w-4 h-4 mr-1.5" aria-hidden />{cancelLabel}
+        <X className="w-4 h-4 mr-1.5" aria-hidden />{resolvedCancel}
       </Button>
       <Button type="submit" disabled={busy} loading={busy}>
         <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? pendingLabel : submitLabel}

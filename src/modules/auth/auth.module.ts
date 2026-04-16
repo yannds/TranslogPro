@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TenantModule } from '../tenant/tenant.module';
+import { MfaModule }    from '../mfa/mfa.module';
 
 /**
  * AuthModule — credential sign-in / sign-out / me.
@@ -15,7 +16,7 @@ import { TenantModule } from '../tenant/tenant.module';
  * @UseGuards(RedisRateLimitGuard) est utilisé dans AuthController.
  */
 @Module({
-  imports:     [TenantModule],
+  imports:     [TenantModule, MfaModule],
   controllers: [AuthController],
   providers:   [AuthService],
   exports:     [AuthService],

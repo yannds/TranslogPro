@@ -23,6 +23,7 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,39 @@ type DemoRoleKeyQ = keyof typeof ROLE_PERMISSIONS;
 
 const DEMO_ROLES_Q: DemoRoleKeyQ[] = ['QUAI_AGENT', 'SUPERVISOR', 'STATION_AGENT'];
 
+// ─── i18n ────────────────────────────────────────────────────────────────────
+
+const TQ = {
+  // Tabs
+  tabManifest:       tm('Manifeste', 'Manifest'),
+  tabLoading:        tm('Chargement', 'Loading'),
+  tabScanner:        tm('Scanner', 'Scanner'),
+  // Manifeste
+  free:              tm('Libre', 'Free'),
+  confirmed:         tm('Confirmé', 'Confirmed'),
+  onBoard:           tm('À bord', 'On Board'),
+  absent:            tm('Absent', 'Absent'),
+  blocked:           tm('Bloqué', 'Blocked'),
+  seatLabel:         tm('Siège', 'Seat'),
+  // Chargement
+  loadingProgress:   tm('Progression chargement', 'Loading Progress'),
+  loaded:            tm('Chargé', 'Loaded'),
+  waiting:           tm('En attente', 'Waiting'),
+  missing:           tm('Manquant', 'Missing'),
+  load:              tm('Charger', 'Load'),
+  // Scanner
+  scanTicketOrParcel:tm('Scanner billet ou colis', 'Scan Ticket or Parcel'),
+  scan:              tm('Scan', 'Scan'),
+  scanValid:         tm('Scan validé', 'Scan Valid'),
+  invalidCode:       tm('Code invalide', 'Invalid Code'),
+  passengerRegistered:tm('Passager/colis enregistré', 'Passenger/parcel registered'),
+  formatNotRecognized:tm('Format non reconnu — TLP-XXXXXX ou COL-XXXXXX', 'Format not recognized — TLP-XXXXXX or COL-XXXXXX'),
+  history:           tm('Historique', 'History'),
+  // Main
+  boarding:          tm('Embarquement', 'Boarding'),
+  onBoardCount:      tm('à bord', 'on board'),
+};
+
 function filterTabsQ(permissions: string[], badges: Record<TabQ, number | undefined>): TabQDef[] {
   const perms = new Set(permissions);
   const all: TabQDef[] = [
@@ -56,6 +90,12 @@ function filterTabsQ(permissions: string[], badges: Record<TabQ, number | undefi
   ];
   return all.filter(t => t.anyOf.some(p => perms.has(p)));
 }
+
+const TAB_LABELS_Q: Record<TabQ, ReturnType<typeof tm>> = {
+  manifeste:  TQ.tabManifest,
+  chargement: TQ.tabLoading,
+  scanner:    TQ.tabScanner,
+};
 
 type SeatStatus = 'LIBRE' | 'CONFIRME' | 'BORDE' | 'ABSENT' | 'BLOQUE';
 
@@ -113,23 +153,24 @@ const COLIS_LIST: Colis[] = [
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SEAT_CONFIG: Record<SeatStatus, { bg: string; text: string; label: string }> = {
-  LIBRE:    { bg: 'bg-slate-800 border-slate-700',           text: 'text-slate-500', label: 'Libre' },
-  CONFIRME: { bg: 'bg-teal-700 border-teal-600',             text: 'text-white',     label: 'Confirmé' },
-  BORDE:    { bg: 'bg-emerald-600 border-emerald-500',       text: 'text-white',     label: 'À bord' },
-  ABSENT:   { bg: 'bg-amber-700/60 border-amber-600',        text: 'text-amber-200', label: 'Absent' },
-  BLOQUE:   { bg: 'bg-slate-900 border-slate-800',           text: 'text-slate-700', label: 'Bloqué' },
+const SEAT_CONFIG: Record<SeatStatus, { bg: string; text: string; labelKey: ReturnType<typeof tm> }> = {
+  LIBRE:    { bg: 'bg-slate-800 border-slate-700',           text: 'text-slate-500', labelKey: TQ.free },
+  CONFIRME: { bg: 'bg-teal-700 border-teal-600',             text: 'text-white',     labelKey: TQ.confirmed },
+  BORDE:    { bg: 'bg-emerald-600 border-emerald-500',       text: 'text-white',     labelKey: TQ.onBoard },
+  ABSENT:   { bg: 'bg-amber-700/60 border-amber-600',        text: 'text-amber-200', labelKey: TQ.absent },
+  BLOQUE:   { bg: 'bg-slate-900 border-slate-800',           text: 'text-slate-700', labelKey: TQ.blocked },
 };
 
 const COLIS_STATUS_CONFIG = {
-  CHARGE:     { cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-700', label: 'Chargé' },
-  EN_ATTENTE: { cls: 'bg-amber-900/40 text-amber-300 border-amber-700',       label: 'En attente' },
-  MANQUANT:   { cls: 'bg-red-900/40 text-red-300 border-red-700',             label: 'Manquant' },
+  CHARGE:     { cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-700', labelKey: TQ.loaded },
+  EN_ATTENTE: { cls: 'bg-amber-900/40 text-amber-300 border-amber-700',       labelKey: TQ.waiting },
+  MANQUANT:   { cls: 'bg-red-900/40 text-red-300 border-red-700',             labelKey: TQ.missing },
 };
 
 // ─── Manifeste ────────────────────────────────────────────────────────────────
 
 function TabManifeste() {
+  const { t } = useI18n();
   const [hoveredSeat, setHoveredSeat] = useState<Seat | null>(null);
   const counts = {
     CONFIRME: SEATS.filter(s => s.status === 'CONFIRME').length,
@@ -141,11 +182,11 @@ function TabManifeste() {
   return (
     <div className="p-4 space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {Object.entries(counts).map(([status, count]) => (
           <div key={status} className={cn('rounded-lg border p-2 text-center', SEAT_CONFIG[status as SeatStatus].bg)}>
             <p className={cn('text-lg font-black', SEAT_CONFIG[status as SeatStatus].text)}>{count}</p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">{SEAT_CONFIG[status as SeatStatus].label}</p>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">{t(SEAT_CONFIG[status as SeatStatus].labelKey)}</p>
           </div>
         ))}
       </div>
@@ -153,7 +194,7 @@ function TabManifeste() {
       {/* Hover info */}
       {hoveredSeat && hoveredSeat.passager && (
         <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm">
-          <span className="text-slate-400">Siège {hoveredSeat.numero} :</span>{' '}
+          <span className="text-slate-400">{t(TQ.seatLabel)} {hoveredSeat.numero} :</span>{' '}
           <span className="text-white font-medium">{hoveredSeat.passager}</span>
         </div>
       )}
@@ -199,7 +240,7 @@ function TabManifeste() {
         {Object.entries(SEAT_CONFIG).filter(([s]) => s !== 'BLOQUE').map(([status, cfg]) => (
           <div key={status} className="flex items-center gap-1.5">
             <div className={cn('w-3 h-3 rounded border', cfg.bg)} />
-            <span className="text-[10px] text-slate-400">{cfg.label}</span>
+            <span className="text-[10px] text-slate-400">{t(cfg.labelKey)}</span>
           </div>
         ))}
       </div>
@@ -210,6 +251,7 @@ function TabManifeste() {
 // ─── Chargement ───────────────────────────────────────────────────────────────
 
 function TabChargement() {
+  const { t } = useI18n();
   const [colis, setColis] = useState(COLIS_LIST);
   const charged = colis.filter(c => c.status === 'CHARGE').length;
 
@@ -222,7 +264,7 @@ function TabChargement() {
       {/* Progress */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-slate-400 font-medium">Progression chargement</span>
+          <span className="text-slate-400 font-medium">{t(TQ.loadingProgress)}</span>
           <span className="text-white font-bold">{charged} / {colis.length}</span>
         </div>
         <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
@@ -247,7 +289,7 @@ function TabChargement() {
                       'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border',
                       cfg.cls,
                     )}>
-                      {cfg.label}
+                      {t(cfg.labelKey)}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-white truncate">
@@ -262,7 +304,7 @@ function TabChargement() {
                     onClick={() => markLoaded(c.id)}
                     className="shrink-0 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
                   >
-                    Charger
+                    {t(TQ.load)}
                   </button>
                 )}
               </div>
@@ -277,6 +319,7 @@ function TabChargement() {
 // ─── Scanner ──────────────────────────────────────────────────────────────────
 
 function TabScanner() {
+  const { t } = useI18n();
   const [code, setCode]         = useState('');
   const [scanned, setScanned]   = useState<string[]>([]);
   const [lastResult, setResult] = useState<'OK' | 'INVALID' | null>(null);
@@ -293,7 +336,7 @@ function TabScanner() {
     <div className="p-4 space-y-4">
       {/* Input */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Scanner billet ou colis</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t(TQ.scanTicketOrParcel)}</p>
         <div className="flex gap-2">
           <input
             value={code}
@@ -307,7 +350,7 @@ function TabScanner() {
             onClick={handleScan}
             className="px-4 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 text-sm"
           >
-            Scan
+            {t(TQ.scan)}
           </button>
         </div>
       </div>
@@ -322,9 +365,9 @@ function TabScanner() {
         )}>
           <span className="text-3xl">{lastResult === 'OK' ? '✓' : '✕'}</span>
           <div>
-            <p className="font-bold">{lastResult === 'OK' ? 'Scan validé' : 'Code invalide'}</p>
+            <p className="font-bold">{lastResult === 'OK' ? t(TQ.scanValid) : t(TQ.invalidCode)}</p>
             <p className="text-xs opacity-70 mt-0.5">
-              {lastResult === 'OK' ? 'Passager/colis enregistré' : 'Format non reconnu — TLP-XXXXXX ou COL-XXXXXX'}
+              {lastResult === 'OK' ? t(TQ.passengerRegistered) : t(TQ.formatNotRecognized)}
             </p>
           </div>
         </div>
@@ -334,7 +377,7 @@ function TabScanner() {
       {scanned.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Historique ({scanned.length})
+            {t(TQ.history)} ({scanned.length})
           </p>
           <div className="space-y-1.5 max-h-60 overflow-y-auto">
             {scanned.map((s, i) => (
@@ -361,6 +404,7 @@ function TabScanner() {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function QuaiAgentApp() {
+  const { t } = useI18n();
   const [roleIdx, setRoleIdx] = useState(0);
   const roleKey               = DEMO_ROLES_Q[roleIdx] as DemoRoleKeyQ;
   const permissions           = ROLE_PERMISSIONS[roleKey] ?? [];
@@ -402,7 +446,7 @@ export function QuaiAgentApp() {
               {DEMO_ROLES_Q.map((r, i) => <option key={r} value={i}>{r}</option>)}
             </select>
             <span className="inline-flex items-center gap-1.5 bg-amber-900/60 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg text-xs font-bold uppercase animate-pulse">
-              Embarquement
+              {t(TQ.boarding)}
             </span>
           </div>
         </div>
@@ -415,29 +459,29 @@ export function QuaiAgentApp() {
             />
           </div>
           <span className="text-xs text-slate-400 tabular-nums shrink-0">
-            {boarded}/{capacity} à bord
+            {boarded}/{capacity} {t(TQ.onBoardCount)}
           </span>
         </div>
       </header>
 
       {/* Tabs — filtrés par permissions */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
-        {TABS.map(t => (
+        {TABS.map(td => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={td.id}
+            onClick={() => setTab(td.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors relative',
-              effectiveTab === t.id
+              effectiveTab === td.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300',
             )}
           >
-            <span className="text-base">{t.icon}</span>
-            {t.label}
-            {t.badge != null && t.badge > 0 && (
+            <span className="text-base">{td.icon}</span>
+            {t(TAB_LABELS_Q[td.id])}
+            {td.badge != null && td.badge > 0 && (
               <span className="absolute top-1.5 right-3 w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                {t.badge}
+                {td.badge}
               </span>
             )}
           </button>

@@ -27,6 +27,8 @@
 import { useState, type FormEvent } from 'react';
 import { cn } from '../../lib/utils';
 import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
+import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,12 +50,81 @@ interface TabDef {
   anyOf: string[];
 }
 
+// ─── i18n ────────────────────────────────────────────────────────────────────
+
+const T = {
+  // Tabs
+  tabSale:          tm('Vente', 'Sale'),
+  tabCheckin:       tm('Check-in', 'Check-in'),
+  tabParcels:       tm('Colis', 'Parcels'),
+  tabCashier:       tm('Caisse', 'Cashier'),
+  // Vente
+  upcomingDepartures:  tm('Prochains départs', 'Upcoming Departures'),
+  full:                tm('Complet', 'Full'),
+  seats:               tm('places', 'seats'),
+  platform:            tm('Quai', 'Platform'),
+  ticketIssued:        tm('Billet émis !', 'Ticket Issued!'),
+  printOrSms:          tm('Imprimez le billet ou envoyez par SMS.', 'Print the ticket or send by SMS.'),
+  ticketCode:          tm('Code billet', 'Ticket Code'),
+  passenger:           tm('Passager', 'Passenger'),
+  trip:                tm('Trajet', 'Trip'),
+  departure:           tm('Départ', 'Departure'),
+  price:               tm('Prix', 'Price'),
+  print:               tm('Imprimer', 'Print'),
+  newTicket:           tm('Nouveau billet', 'New Ticket'),
+  firstName:           tm('Prénom', 'First Name'),
+  lastName:            tm('Nom', 'Last Name'),
+  phoneLabel:          tm('Téléphone', 'Phone'),
+  back:                tm('Retour', 'Back'),
+  issueTicket:         tm('Émettre le billet', 'Issue Ticket'),
+  // Check-in
+  scanTicket:          tm('Scanner un billet', 'Scan a Ticket'),
+  verify:              tm('Vérifier', 'Verify'),
+  statusValid:         tm('VALIDE — Accès autorisé', 'VALID — Access Granted'),
+  statusAlreadyBoarded:tm('DÉJÀ EMBARQUÉ — Doublon possible', 'ALREADY BOARDED — Possible Duplicate'),
+  statusCancelled:     tm('ANNULÉ — Accès refusé', 'CANCELLED — Access Denied'),
+  statusNotFound:      tm('CODE INCONNU — Vérifier le billet', 'UNKNOWN CODE — Check Ticket'),
+  confirmBoarding:     tm('Confirmer l\'embarquement', 'Confirm Boarding'),
+  seat:                tm('Siège', 'Seat'),
+  code:                tm('Code', 'Code'),
+  // Colis
+  parcelRegistration:  tm('Enregistrement colis', 'Parcel Registration'),
+  sender:              tm('Expéditeur', 'Sender'),
+  senderPlaceholder:   tm('Nom de l\'expéditeur', 'Sender name'),
+  recipient:           tm('Destinataire', 'Recipient'),
+  recipientPlaceholder:tm('Nom du destinataire', 'Recipient name'),
+  recipientPhone:      tm('Téléphone destinataire', 'Recipient Phone'),
+  destination:         tm('Destination', 'Destination'),
+  weightKg:            tm('Poids (kg)', 'Weight (kg)'),
+  descriptionLabel:    tm('Description', 'Description'),
+  registerParcel:      tm('Enregistrer le colis', 'Register Parcel'),
+  parcelRegistered:    tm('Colis enregistré !', 'Parcel Registered!'),
+  trackingCode:        tm('Code de suivi', 'Tracking Code'),
+  newParcel:           tm('Nouveau colis', 'New Parcel'),
+  // Caisse
+  dayTotal:            tm('Total journée', 'Day Total'),
+  ticketsSold:         tm('Billets vendus', 'Tickets Sold'),
+  parcels:             tm('Colis', 'Parcels'),
+  byPaymentMode:       tm('Par mode de paiement', 'By Payment Mode'),
+  recentTransactions:  tm('Transactions récentes', 'Recent Transactions'),
+  // Main
+  onDuty:              tm('En service', 'On Duty'),
+  noPermission:        tm('Aucune permission configurée', 'No Permissions Configured'),
+};
+
 const ALL_TABS: TabDef[] = [
   { id: 'vente',   label: 'Vente',    icon: '🎫', anyOf: [P_TICKET_CREATE] },
   { id: 'checkin', label: 'Check-in', icon: '✅', anyOf: [P_TICKET_SCAN, P_TRAVELER_VERIFY] },
   { id: 'colis',   label: 'Colis',    icon: '📦', anyOf: [P_PARCEL_CREATE, P_PARCEL_SCAN] },
   { id: 'caisse',  label: 'Caisse',   icon: '💰', anyOf: [P_CASHIER_OPEN, P_CASHIER_TX] },
 ];
+
+const TAB_LABELS: Record<Tab, ReturnType<typeof tm>> = {
+  vente:   T.tabSale,
+  checkin: T.tabCheckin,
+  colis:   T.tabParcels,
+  caisse:  T.tabCashier,
+};
 
 function filterTabs(permissions: string[]): TabDef[] {
   const perms = new Set(permissions);
@@ -95,13 +166,11 @@ const MOCK_TICKET: Record<string, CheckInResult> = {
   'TLP-Q1Q2Q3': { valid: false, code: 'TLP-Q1Q2Q3', passenger: 'N/A',             trip: 'N/A',                     seat: 'N/A', status: 'NOT_FOUND' },
 };
 
-function formatXAF(n: number) {
-  return new Intl.NumberFormat('fr-SN', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(n);
-}
-
 // ─── Tab: Vente ───────────────────────────────────────────────────────────────
 
 function TabVente() {
+  const { t } = useI18n();
+  const formatXAF = useCurrencyFormatter();
   const [selectedTrip, setSelectedTrip]   = useState<UpcomingTrip | null>(null);
   const [ticketIssued, setTicketIssued]   = useState(false);
   const [ticketCode]                       = useState(() => `TLP-${Date.now().toString(36).toUpperCase()}`);
@@ -112,29 +181,29 @@ function TabVente() {
       <div className="p-5 flex flex-col items-center gap-5">
         <div className="w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-2xl text-white">✓</div>
         <div className="text-center">
-          <p className="text-xl font-bold text-white">Billet émis !</p>
-          <p className="text-slate-400 text-sm mt-1">Imprimez le billet ou envoyez par SMS.</p>
+          <p className="text-xl font-bold text-white">{t('stationAgent.ticketIssued')}</p>
+          <p className="text-slate-400 text-sm mt-1">{t('stationAgent.printOrSms')}</p>
         </div>
         <div className="bg-slate-900 rounded-xl border border-slate-700 p-5 w-full max-w-sm">
-          <p className="text-xs text-slate-400 uppercase tracking-widest mb-1 text-center">Code billet</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest mb-1 text-center">{t('stationAgent.ticketCode')}</p>
           <p className="text-3xl font-mono font-black text-teal-300 text-center tracking-widest">{ticketCode}</p>
           <div className="mt-4 space-y-2 text-sm">
-            <InfoRow label="Passager" value={`${passenger.prenom} ${passenger.nom}`} />
-            <InfoRow label="Trajet" value={`Dakar → ${selectedTrip.destination}`} />
-            <InfoRow label="Départ" value={selectedTrip.heureDepart} />
-            <InfoRow label="Quai" value={selectedTrip.quai} />
-            <InfoRow label="Prix" value={formatXAF(selectedTrip.prix)} />
+            <InfoRow label={t('stationAgent.passenger')} value={`${passenger.prenom} ${passenger.nom}`} />
+            <InfoRow label={t('stationAgent.trip')} value={`Dakar → ${selectedTrip.destination}`} />
+            <InfoRow label={t('stationAgent.departure')} value={selectedTrip.heureDepart} />
+            <InfoRow label={t('stationAgent.platform')} value={selectedTrip.quai} />
+            <InfoRow label={t('stationAgent.price')} value={formatXAF(selectedTrip.prix)} />
           </div>
         </div>
         <div className="flex gap-3 w-full max-w-sm">
           <button className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-semibold text-sm hover:bg-teal-700">
-            Imprimer
+            {t('stationAgent.print')}
           </button>
           <button
             onClick={() => { setSelectedTrip(null); setTicketIssued(false); }}
             className="flex-1 py-2.5 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600"
           >
-            Nouveau billet
+            {t('stationAgent.newTicket')}
           </button>
         </div>
       </div>
@@ -149,7 +218,7 @@ function TabVente() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-bold text-white">Dakar → {selectedTrip.destination}</p>
-              <p className="text-sm text-teal-300">{selectedTrip.heureDepart} · Quai {selectedTrip.quai} · {selectedTrip.agence}</p>
+              <p className="text-sm text-teal-300">{selectedTrip.heureDepart} · {t('stationAgent.platform')} {selectedTrip.quai} · {selectedTrip.agence}</p>
             </div>
             <p className="text-xl font-bold text-teal-300">{formatXAF(selectedTrip.prix)}</p>
           </div>
@@ -157,9 +226,9 @@ function TabVente() {
 
         {/* Passenger form */}
         <div className="space-y-3 mb-5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Prénom</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.firstName')}</label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 value={passenger.prenom}
@@ -168,7 +237,7 @@ function TabVente() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Nom</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.lastName')}</label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 value={passenger.nom}
@@ -178,7 +247,7 @@ function TabVente() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Téléphone</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.phoneLabel')}</label>
             <input
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               value={passenger.telephone}
@@ -193,14 +262,14 @@ function TabVente() {
             onClick={() => setSelectedTrip(null)}
             className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-600"
           >
-            Retour
+            {t('stationAgent.back')}
           </button>
           <button
             onClick={() => setTicketIssued(true)}
             disabled={!passenger.prenom || !passenger.nom || !passenger.telephone}
             className="flex-1 py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 disabled:opacity-40"
           >
-            Émettre le billet · {formatXAF(selectedTrip.prix)}
+            {t('stationAgent.issueTicket')} · {formatXAF(selectedTrip.prix)}
           </button>
         </div>
       </div>
@@ -209,7 +278,7 @@ function TabVente() {
 
   return (
     <div className="p-5 space-y-4">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Prochains départs</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.upcomingDepartures')}</p>
       {UPCOMING_TRIPS.map(trip => (
         <button
           key={trip.id}
@@ -228,15 +297,15 @@ function TabVente() {
             </div>
             <div>
               <p className="font-semibold text-white">{trip.destination}</p>
-              <p className="text-xs text-slate-400 mt-0.5">Quai {trip.quai} · {trip.agence}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{t('stationAgent.platform')} {trip.quai} · {trip.agence}</p>
             </div>
           </div>
           <div className="text-right">
             <p className="font-bold text-teal-300">{formatXAF(trip.prix)}</p>
             {trip.placesLibres === 0 ? (
-              <p className="text-xs text-red-400 mt-0.5">Complet</p>
+              <p className="text-xs text-red-400 mt-0.5">{t('stationAgent.full')}</p>
             ) : (
-              <p className="text-xs text-slate-400 mt-0.5">{trip.placesLibres} places</p>
+              <p className="text-xs text-slate-400 mt-0.5">{trip.placesLibres} {t('stationAgent.seats')}</p>
             )}
           </div>
         </button>
@@ -248,6 +317,7 @@ function TabVente() {
 // ─── Tab: Check-in ────────────────────────────────────────────────────────────
 
 function TabCheckin() {
+  const { t } = useI18n();
   const [code, setCode]           = useState('');
   const [result, setResult]       = useState<CheckInResult | null>(null);
 
@@ -258,15 +328,15 @@ function TabCheckin() {
   }
 
   const statusConfig = {
-    OK:              { cls: 'bg-emerald-900/60 border-emerald-700 text-emerald-300', icon: '✓', label: 'VALIDE — Accès autorisé' },
-    ALREADY_BOARDED: { cls: 'bg-orange-900/60 border-orange-700 text-orange-300',   icon: '⚠', label: 'DÉJÀ EMBARQUÉ — Doublon possible' },
-    CANCELLED:       { cls: 'bg-red-900/60 border-red-700 text-red-300',            icon: '✕', label: 'ANNULÉ — Accès refusé' },
-    NOT_FOUND:       { cls: 'bg-slate-800 border-slate-700 text-slate-400',         icon: '?', label: 'CODE INCONNU — Vérifier le billet' },
+    OK:              { cls: 'bg-emerald-900/60 border-emerald-700 text-emerald-300', icon: '✓', label: t('stationAgent.statusValid') },
+    ALREADY_BOARDED: { cls: 'bg-orange-900/60 border-orange-700 text-orange-300',   icon: '⚠', label: t('stationAgent.statusAlreadyBoarded') },
+    CANCELLED:       { cls: 'bg-red-900/60 border-red-700 text-red-300',            icon: '✕', label: t('stationAgent.statusCancelled') },
+    NOT_FOUND:       { cls: 'bg-slate-800 border-slate-700 text-slate-400',         icon: '?', label: t('stationAgent.statusNotFound') },
   };
 
   return (
     <div className="p-5 space-y-5">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Scanner un billet</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.scanTicket')}</p>
 
       <form onSubmit={handleScan} className="flex gap-3">
         <input
@@ -280,7 +350,7 @@ function TabCheckin() {
           type="submit"
           className="px-5 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700"
         >
-          Vérifier
+          {t('stationAgent.verify')}
         </button>
       </form>
 
@@ -295,15 +365,15 @@ function TabCheckin() {
           </div>
           {result.status !== 'NOT_FOUND' && (
             <div className="space-y-2 text-sm">
-              <InfoRow label="Passager" value={result.passenger} />
-              <InfoRow label="Trajet"   value={result.trip} />
-              <InfoRow label="Siège"    value={result.seat} />
-              <InfoRow label="Code"     value={result.code} />
+              <InfoRow label={t('stationAgent.passenger')} value={result.passenger} />
+              <InfoRow label={t('stationAgent.trip')}      value={result.trip} />
+              <InfoRow label={t('stationAgent.seat')}      value={result.seat} />
+              <InfoRow label={t('stationAgent.code')}      value={result.code} />
             </div>
           )}
           {result.status === 'OK' && (
             <button className="mt-4 w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700">
-              Confirmer l'embarquement
+              {t('stationAgent.confirmBoarding')}
             </button>
           )}
         </div>
@@ -315,6 +385,7 @@ function TabCheckin() {
 // ─── Tab: Colis ───────────────────────────────────────────────────────────────
 
 function TabColis() {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     expediteur: '', destinataire: '', telephone: '', destination: 'Ziguinchor', description: '', poids: '',
   });
@@ -325,23 +396,23 @@ function TabColis() {
     return (
       <div className="p-5 flex flex-col items-center gap-4">
         <div className="w-14 h-14 bg-purple-500 rounded-full flex items-center justify-center text-2xl text-white">📦</div>
-        <p className="text-xl font-bold text-white">Colis enregistré !</p>
+        <p className="text-xl font-bold text-white">{t('stationAgent.parcelRegistered')}</p>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-sm">
-          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">Code de suivi</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">{t('stationAgent.trackingCode')}</p>
           <p className="text-3xl font-mono font-black text-purple-300 text-center tracking-widest">{trackCode}</p>
           <div className="mt-4 space-y-2 text-sm">
-            <InfoRow label="Expéditeur"  value={form.expediteur} />
-            <InfoRow label="Destinataire" value={form.destinataire} />
-            <InfoRow label="Destination" value={form.destination} />
-            <InfoRow label="Description" value={form.description} />
-            <InfoRow label="Poids"       value={`${form.poids} kg`} />
+            <InfoRow label={t('stationAgent.sender')}      value={form.expediteur} />
+            <InfoRow label={t('stationAgent.recipient')}   value={form.destinataire} />
+            <InfoRow label={t('stationAgent.destination')} value={form.destination} />
+            <InfoRow label={t('stationAgent.descriptionLabel')} value={form.description} />
+            <InfoRow label={t('stationAgent.weightKg')}    value={`${form.poids} kg`} />
           </div>
         </div>
         <button
           onClick={() => { setSubmitted(false); setForm({ expediteur: '', destinataire: '', telephone: '', destination: 'Ziguinchor', description: '', poids: '' }); }}
           className="py-2.5 px-8 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600"
         >
-          Nouveau colis
+          {t('stationAgent.newParcel')}
         </button>
       </div>
     );
@@ -349,11 +420,11 @@ function TabColis() {
 
   return (
     <div className="p-5 space-y-3">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Enregistrement colis</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.parcelRegistration')}</p>
       {[
-        { label: 'Expéditeur', key: 'expediteur', placeholder: 'Nom de l\'expéditeur' },
-        { label: 'Destinataire', key: 'destinataire', placeholder: 'Nom du destinataire' },
-        { label: 'Téléphone destinataire', key: 'telephone', placeholder: '+221 77 000 00 00' },
+        { label: t('stationAgent.sender'), key: 'expediteur', placeholder: t('stationAgent.senderPlaceholder') },
+        { label: t('stationAgent.recipient'), key: 'destinataire', placeholder: t('stationAgent.recipientPlaceholder') },
+        { label: t('stationAgent.recipientPhone'), key: 'telephone', placeholder: '+221 77 000 00 00' },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{label}</label>
@@ -365,9 +436,9 @@ function TabColis() {
           />
         </div>
       ))}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Destination</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.destination')}</label>
           <select
             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             value={form.destination}
@@ -379,7 +450,7 @@ function TabColis() {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Poids (kg)</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.weightKg')}</label>
           <input
             type="number"
             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -390,7 +461,7 @@ function TabColis() {
         </div>
       </div>
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Description</label>
+        <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.descriptionLabel')}</label>
         <input
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           placeholder="Vêtements, alimentation, fragile..."
@@ -403,7 +474,7 @@ function TabColis() {
         disabled={!form.expediteur || !form.destinataire || !form.poids}
         className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 disabled:opacity-40 mt-2"
       >
-        Enregistrer le colis
+        {t('stationAgent.registerParcel')}
       </button>
     </div>
   );
@@ -412,6 +483,8 @@ function TabColis() {
 // ─── Tab: Caisse ──────────────────────────────────────────────────────────────
 
 function TabCaisse() {
+  const { t } = useI18n();
+  const formatXAF = useCurrencyFormatter();
   const sales = [
     { heure: '07:15', passager: 'Moussa Diallo',   destination: 'Ziguinchor',  prix: 8000,  mode: 'Cash' },
     { heure: '07:28', passager: 'Fatou Ba',         destination: 'Kaolack',     prix: 2800,  mode: 'Wave' },
@@ -426,24 +499,24 @@ function TabCaisse() {
   return (
     <div className="p-5 space-y-5">
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="bg-teal-900/40 border border-teal-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-teal-400 uppercase tracking-wider font-semibold">Total journée</p>
+          <p className="text-xs text-teal-400 uppercase tracking-wider font-semibold">{t('stationAgent.dayTotal')}</p>
           <p className="text-2xl font-black text-white mt-1">{formatXAF(total)}</p>
         </div>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Billets vendus</p>
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t('stationAgent.ticketsSold')}</p>
           <p className="text-2xl font-black text-white mt-1">{sales.length}</p>
         </div>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Colis</p>
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t('stationAgent.parcels')}</p>
           <p className="text-2xl font-black text-white mt-1">3</p>
         </div>
       </div>
 
       {/* By mode */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Par mode de paiement</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('stationAgent.byPaymentMode')}</p>
         <div className="flex gap-2 flex-wrap">
           {Object.entries(byMode).map(([mode, amt]) => (
             <span key={mode} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
@@ -456,7 +529,7 @@ function TabCaisse() {
 
       {/* Transaction list */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Transactions récentes</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('stationAgent.recentTransactions')}</p>
         <div className="space-y-2">
           {sales.map((s, i) => (
             <div key={i} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
@@ -494,6 +567,7 @@ type DemoRoleKey = keyof typeof ROLE_PERMISSIONS;
 const DEMO_ROLES: DemoRoleKey[] = ['STATION_AGENT', 'SUPERVISOR', 'CASHIER', 'AGENCY_MANAGER'];
 
 export function StationAgentApp() {
+  const { t } = useI18n();
   const [roleIdx, setRoleIdx]   = useState(0);
   const roleKey                  = DEMO_ROLES[roleIdx] as DemoRoleKey;
   const permissions              = ROLE_PERMISSIONS[roleKey] ?? [];
@@ -528,7 +602,7 @@ export function StationAgentApp() {
             {DEMO_ROLES.map((r, i) => <option key={r} value={i}>{r}</option>)}
           </select>
           <span className="text-xs bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-2 py-1 rounded-lg font-semibold">
-            En service
+            {t('stationAgent.onDuty')}
           </span>
           <span className="text-sm font-mono text-slate-400">
             {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -538,24 +612,24 @@ export function StationAgentApp() {
 
       {/* Tabs — filtrés par permissions */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
-        {TABS.map(t => (
+        {TABS.map(td => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={td.id}
+            onClick={() => setTab(td.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-1 py-3 text-xs font-semibold uppercase tracking-wide transition-colors',
-              effectiveTab === t.id
+              effectiveTab === td.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50',
             )}
           >
-            <span className="text-base">{t.icon}</span>
-            {t.label}
+            <span className="text-base">{td.icon}</span>
+            {t(TAB_LABELS[td.id])}
           </button>
         ))}
         {TABS.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-3 text-xs text-slate-600">
-            Aucune permission configurée
+            {t('stationAgent.noPermission')}
           </div>
         )}
       </div>

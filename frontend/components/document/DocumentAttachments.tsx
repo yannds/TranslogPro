@@ -16,6 +16,7 @@ import { Upload, Trash2, Download, FileText, Image as ImgIcon, Loader2, AlertTri
 import { useFetch }    from '../../lib/hooks/useFetch';
 import { apiFetch, apiDelete, ApiError } from '../../lib/api';
 import { Badge }       from '../ui/Badge';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 export type AttachmentEntityType = 'CUSTOMER' | 'STAFF' | 'VEHICLE' | 'TRIP' | 'INCIDENT' | 'PARCEL';
 export type AttachmentKind = 'CONTRACT' | 'ID_CARD' | 'LICENSE' | 'CERTIFICATE' | 'PHOTO' | 'OTHER';
@@ -33,14 +34,39 @@ export interface Attachment {
   createdAt:  string;
 }
 
-const KIND_LABELS: Record<AttachmentKind, string> = {
-  CONTRACT:    'Contrat',
-  ID_CARD:     'Pièce d\u2019identité',
-  LICENSE:     'Permis',
-  CERTIFICATE: 'Certificat',
-  PHOTO:       'Photo',
-  OTHER:       'Autre',
+// ─── i18n ────────────────────────────────────────────────────────────────────
+
+const T = {
+  kindContract:    tm('Contrat', 'Contract'),
+  kindIdCard:      tm('Pièce d\u2019identité', 'ID Card'),
+  kindLicense:     tm('Permis', 'License'),
+  kindCertificate: tm('Certificat', 'Certificate'),
+  kindPhoto:       tm('Photo', 'Photo'),
+  kindOther:       tm('Autre', 'Other'),
+
+  docType:         tm('Type de document', 'Document type'),
+  uploading:       tm('Envoi en cours\u2026', 'Uploading\u2026'),
+  dropOrBrowse:    tm('Déposer un fichier ou cliquez pour parcourir', 'Drop a file or click to browse'),
+  fileTooLarge:    tm('Fichier trop lourd', 'File too large'),
+  loading:         tm('Chargement\u2026', 'Loading\u2026'),
+  noAttachments:   tm('Aucune pièce jointe.', 'No attachments.'),
+  confirmDelete:   tm('Supprimer', 'Delete'),
+  clickToShow:     tm('Cliquer pour afficher', 'Click to show'),
+  clickToHide:     tm('Cliquer pour masquer', 'Click to hide'),
+  previewUnavail:  tm('Aperçu non disponible pour ce type de fichier.', 'Preview not available for this file type.'),
+  open:            tm('Ouvrir', 'Open'),
 };
+
+function kindLabels(t: (m: Record<string, string | undefined>) => string): Record<AttachmentKind, string> {
+  return {
+    CONTRACT:    t('documents.kindContract'),
+    ID_CARD:     t('documents.kindIdCard'),
+    LICENSE:     t('documents.kindLicense'),
+    CERTIFICATE: t('documents.kindCertificate'),
+    PHOTO:       t('documents.kindPhoto'),
+    OTHER:       t('documents.kindOther'),
+  };
+}
 
 const KIND_OPTIONS: AttachmentKind[] = ['CONTRACT', 'ID_CARD', 'LICENSE', 'CERTIFICATE', 'PHOTO', 'OTHER'];
 
@@ -73,6 +99,8 @@ export interface DocumentAttachmentsProps {
 export function DocumentAttachments({
   tenantId, entityType, entityId, allowedKinds, readOnly = false, onPreviewChange,
 }: DocumentAttachmentsProps) {
+  const { t } = useI18n();
+  const KIND_LABELS = kindLabels(t);
   const base = `/api/tenants/${tenantId}/attachments`;
   const url  = entityId ? `${base}?entityType=${entityType}&entityId=${encodeURIComponent(entityId)}` : null;
 
@@ -92,7 +120,7 @@ export function DocumentAttachments({
 
   const upload = useCallback(async (file: File) => {
     if (file.size > MAX_MB * 1024 * 1024) {
-      setUploadErr(`Fichier trop lourd (max ${MAX_MB} Mo)`);
+      setUploadErr(`${t('documents.fileTooLarge')} (max ${MAX_MB} Mo)`);
       return;
     }
     setBusy(true); setUploadErr(null); setProgress(10);
@@ -129,7 +157,7 @@ export function DocumentAttachments({
   };
 
   const handleDelete = async (att: Attachment) => {
-    if (!confirm(`Supprimer « ${att.fileName} » ?`)) return;
+    if (!confirm(`${t('documents.confirmDelete')} « ${att.fileName} » ?`)) return;
     try {
       await apiDelete(`${base}/${att.id}`);
       refetch();
@@ -147,7 +175,7 @@ export function DocumentAttachments({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400" htmlFor="att-kind">
-              Type de document
+              {t('documents.docType')}
             </label>
             <select
               id="att-kind"
@@ -176,7 +204,7 @@ export function DocumentAttachments({
               ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
               : <Upload className="w-4 h-4" aria-hidden />}
             <span>
-              {busy ? 'Envoi en cours…' : 'Déposer un fichier ou cliquez pour parcourir'}
+              {busy ? t('documents.uploading') : t('documents.dropOrBrowse')}
               <span className="ml-2 text-xs text-slate-400">(PDF/JPG/PNG/DOCX/XLSX, max {MAX_MB} Mo)</span>
             </span>
             <input
@@ -221,11 +249,11 @@ export function DocumentAttachments({
         )}
 
         {loading && !data && (
-          <p className="text-xs text-slate-500 dark:text-slate-400">Chargement…</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('documents.loading')}</p>
         )}
 
         {data && data.length === 0 && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 italic">Aucune pièce jointe.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 italic">{t('documents.noAttachments')}</p>
         )}
 
         {data && data.map(att => {
@@ -266,7 +294,7 @@ export function DocumentAttachments({
                     <span>{new Date(att.createdAt).toLocaleDateString('fr-FR')}</span>
                     {isPreviewable && (
                       <span className="inline-flex items-center gap-1 text-teal-700 dark:text-teal-300">
-                        <Eye className="w-3 h-3" aria-hidden />Cliquer pour {isActive ? 'masquer' : 'afficher'}
+                        <Eye className="w-3 h-3" aria-hidden />{isActive ? t('documents.clickToHide') : t('documents.clickToShow')}
                       </span>
                     )}
                   </div>
@@ -324,6 +352,7 @@ function InlinePreview({
   downloadUrl: string;
   onClose:     () => void;
 }) {
+  const { t } = useI18n();
   const isImage = attachment.mimeType.startsWith('image/');
   const isPdf   = attachment.mimeType === 'application/pdf';
 
@@ -349,7 +378,7 @@ function InlinePreview({
             className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
           >
             <ExternalLink className="w-3.5 h-3.5" aria-hidden />
-            <span className="hidden sm:inline">Ouvrir</span>
+            <span className="hidden sm:inline">{t('documents.open')}</span>
           </a>
           <button
             type="button"
@@ -379,7 +408,7 @@ function InlinePreview({
         )}
         {!isImage && !isPdf && (
           <p className="p-6 text-sm text-slate-500 dark:text-slate-400">
-            Aperçu non disponible pour ce type de fichier.
+            {t('documents.previewUnavail')}
           </p>
         )}
       </div>

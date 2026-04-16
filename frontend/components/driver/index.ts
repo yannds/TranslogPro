@@ -1,1 +1,2 @@
-export { DriverSpace } from './DriverSpace';
+export { DriverSpace }     from './DriverSpace';
+export { DriverDashboard } from './DriverDashboard';

@@ -10,11 +10,43 @@
 import { useState, useCallback } from 'react';
 import { KeyRound, RefreshCw, Trash2, Monitor, Smartphone } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch }   from '../../lib/hooks/useFetch';
 import { apiDelete, ApiError } from '../../lib/api';
 import { Button }     from '../ui/Button';
 import { Dialog }     from '../ui/Dialog';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+const T = {
+  // titles
+  activeSessions:     tm('Sessions actives', 'Active Sessions'),
+  sessionDetail:      tm('Détail de la session', 'Session Detail'),
+
+  // columns
+  colUser:            tm('Utilisateur', 'User'),
+  colDeviceBrowser:   tm('Appareil / Navigateur', 'Device / Browser'),
+  colCreatedAt:       tm('Créée le', 'Created'),
+  colExpiresAt:       tm('Expire le', 'Expires'),
+  colDevice:          tm('Appareil', 'Device'),
+
+  // labels
+  you:                tm('vous', 'you'),
+  ip:                 tm('IP', 'IP'),
+
+  // buttons
+  revoke:             tm('Révoquer', 'Revoke'),
+  revoking:           tm('Révocation\u2026', 'Revoking\u2026'),
+  refresh:            tm('Actualiser', 'Refresh'),
+
+  // messages
+  loading:            tm('Chargement\u2026', 'Loading\u2026'),
+  sessionCount:       tm('session(s) ouverte(s)', 'open session(s)'),
+  searchPlaceholder:  tm('Rechercher (utilisateur, IP, appareil\u2026)', 'Search (user, IP, device\u2026)'),
+  emptyMessage:       tm('Aucune session active', 'No active sessions'),
+  errorGeneric:       tm('Erreur', 'Error'),
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,11 +83,11 @@ function uaShort(ua?: string) {
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(currentUserId: string): Column<Session>[] {
+function buildColumns(currentUserId: string, t: (map: Record<string, string>) => string): Column<Session>[] {
   return [
     {
       key: 'user',
-      header: 'Utilisateur',
+      header: t('LIamSessions.colUser'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div>
@@ -63,7 +95,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
             {row.user.name}
             {row.user.id === currentUserId && (
               <span className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
-                vous
+                {t('LIamSessions.you')}
               </span>
             )}
           </p>
@@ -74,7 +106,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
     },
     {
       key: 'userAgent',
-      header: 'Appareil / Navigateur',
+      header: t('LIamSessions.colDeviceBrowser'),
       cellRenderer: (v) => (
         <div className="flex items-center gap-1.5">
           {isMobile(String(v))
@@ -89,7 +121,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
     },
     {
       key: 'ipAddress',
-      header: 'IP',
+      header: t('LIamSessions.ip'),
       sortable: true,
       width: '130px',
       cellRenderer: (v) => (
@@ -98,7 +130,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
     },
     {
       key: 'createdAt',
-      header: 'Créée le',
+      header: t('LIamSessions.colCreatedAt'),
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
@@ -108,7 +140,7 @@ function buildColumns(currentUserId: string): Column<Session>[] {
     },
     {
       key: 'expiresAt',
-      header: 'Expire le',
+      header: t('LIamSessions.colExpiresAt'),
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
@@ -136,54 +168,55 @@ function SessionDetailDialog({
   revoking:       boolean;
   err:            string;
 }) {
+  const { t } = useI18n();
   if (!session) return null;
   const isOwn = session.user.id === currentUserId;
   return (
     <Dialog
       open={!!session}
       onOpenChange={o => { if (!o) onClose(); }}
-      title="Détail de la session"
-      size="md"
+      title={t('LIamSessions.sessionDetail')}
+      size="lg"
       footer={
         <>
-          <Button variant="ghost" size="sm" onClick={onClose}>Fermer</Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>{t('common.close')}</Button>
           <Button variant="destructive" size="sm" onClick={onRevoke} disabled={revoking}>
             <Trash2 size={13} />
-            {revoking ? 'Révocation…' : 'Révoquer'}
+            {revoking ? t('LIamSessions.revoking') : t('LIamSessions.revoke')}
           </Button>
         </>
       }
     >
       <dl className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
-        <div className="py-2.5 grid grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">Utilisateur</dt>
-          <dd className="col-span-2 text-slate-900 dark:text-slate-100">
+        <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colUser')}</dt>
+          <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100">
             <span className="font-medium">{session.user.name}</span>
             {isOwn && (
               <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
-                vous
+                {t('LIamSessions.you')}
               </span>
             )}
             <p className="text-xs text-slate-500 mt-0.5">{session.user.email}</p>
           </dd>
         </div>
-        <div className="py-2.5 grid grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">IP</dt>
-          <dd className="col-span-2 font-mono text-slate-900 dark:text-slate-100">{session.ipAddress ?? '—'}</dd>
+        <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.ip')}</dt>
+          <dd className="sm:col-span-2 font-mono text-slate-900 dark:text-slate-100">{session.ipAddress ?? '—'}</dd>
         </div>
-        <div className="py-2.5 grid grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">Appareil</dt>
-          <dd className="col-span-2 text-xs text-slate-700 dark:text-slate-300 break-all">
+        <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colDevice')}</dt>
+          <dd className="sm:col-span-2 text-xs text-slate-700 dark:text-slate-300 break-all">
             {uaShort(session.userAgent)}
           </dd>
         </div>
-        <div className="py-2.5 grid grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">Créée le</dt>
-          <dd className="col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.createdAt)}</dd>
+        <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colCreatedAt')}</dt>
+          <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.createdAt)}</dd>
         </div>
-        <div className="py-2.5 grid grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">Expire le</dt>
-          <dd className="col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.expiresAt)}</dd>
+        <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colExpiresAt')}</dt>
+          <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.expiresAt)}</dd>
         </div>
       </dl>
       {err && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{err}</p>}
@@ -195,6 +228,7 @@ function SessionDetailDialog({
 
 export function PageIamSessions() {
   const { user }  = useAuth();
+  const { t } = useI18n();
   const tenantId  = user?.tenantId ?? '';
   const base      = `/api/v1/tenants/${tenantId}/iam`;
 
@@ -215,14 +249,14 @@ export function PageIamSessions() {
       setTarget(null);
       reload();
     } catch (e) {
-      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
+      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('LIamSessions.errorGeneric'));
     } finally { setRevoking(false); }
   }
 
-  const columns    = buildColumns(user?.id ?? '');
+  const columns    = buildColumns(user?.id ?? '', t);
   const rowActions: RowAction<Session>[] = [
     {
-      label:   'Révoquer',
+      label:   t('LIamSessions.revoke'),
       icon:    <Trash2 size={13} />,
       danger:  true,
       onClick: (row) => { setTarget(row); setErr(''); },
@@ -236,15 +270,15 @@ export function PageIamSessions() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <KeyRound size={24} className="text-indigo-500 dark:text-indigo-400" />
-            Sessions actives
+            {t('LIamSessions.activeSessions')}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            {loading ? 'Chargement…' : `${sessions.length} session(s) ouverte(s)`}
+            {loading ? t('LIamSessions.loading') : `${sessions.length} ${t('LIamSessions.sessionCount')}`}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={reload} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span className="ml-1">Actualiser</span>
+          <span className="ml-1">{t('LIamSessions.refresh')}</span>
         </Button>
       </div>
 
@@ -256,8 +290,8 @@ export function PageIamSessions() {
         rowActions={rowActions}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
-        searchPlaceholder="Rechercher (utilisateur, IP, appareil…)"
-        emptyMessage="Aucune session active"
+        searchPlaceholder={t('LIamSessions.searchPlaceholder')}
+        emptyMessage={t('LIamSessions.emptyMessage')}
         exportFormats={['csv', 'json']}
         exportFilename="sessions"
         onRowClick={(row) => { setTarget(row); setErr(''); }}

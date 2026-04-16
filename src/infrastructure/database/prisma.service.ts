@@ -1,7 +1,19 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Inject, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { ISecretService, SECRET_SERVICE } from '../secret/interfaces/secret.interface';
 import { TenantContextService } from './tenant-context.service';
+
+/**
+ * Injecte app.tenant_id dans la session PostgreSQL (scope transaction).
+ *
+ * Utilise `set_config('app.tenant_id', $1, true)` au lieu de `SET LOCAL`
+ * car SET LOCAL ne supporte pas les paramètres positionnels ($1) en PostgreSQL,
+ * tandis que set_config() est une fonction SQL standard qui les accepte.
+ * Le 3ᵉ argument `true` = LOCAL (scoped à la transaction en cours).
+ */
+function setTenantLocal(tx: Prisma.TransactionClient, tenantId: string) {
+  return tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+}
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -26,17 +38,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     await this.$connect();
     this.logger.log('✅ Database connected');
 
-    // Extension Prisma pour injecter SET LOCAL app.tenant_id automatiquement
+    // Extension Prisma pour injecter app.tenant_id automatiquement
     this.$extends({
       query: {
         $allModels: {
-          async $allOperations({ args, query, model, operation }) {
+          async $allOperations({ args, query }) {
             const ctx = TenantContextService.getStore();
             if (!ctx?.tenantId) return query(args);
 
-            // Wrapper dans une transaction pour SET LOCAL
-            return (this as any).$transaction(async (tx: PrismaClient) => {
-              await tx.$executeRaw`SET LOCAL app.tenant_id = ${ctx.tenantId}`;
+            return (this as any).$transaction(async (tx: Prisma.TransactionClient) => {
+              await setTenantLocal(tx, ctx.tenantId);
               return query(args);
             });
           },
@@ -52,7 +63,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   /** Exécute une transaction avec SET LOCAL tenant_id */
   async withTenant<T>(tenantId: string, fn: (tx: PrismaService) => Promise<T>): Promise<T> {
     return this.$transaction(async (tx) => {
-      await tx.$executeRaw`SET LOCAL app.tenant_id = ${tenantId}`;
+      await setTenantLocal(tx, tenantId);
       return fn(tx as unknown as PrismaService);
     });
   }
@@ -62,7 +73,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     const ctx = TenantContextService.getStore();
     return this.$transaction(async (tx) => {
       if (ctx?.tenantId) {
-        await tx.$executeRaw`SET LOCAL app.tenant_id = ${ctx.tenantId}`;
+        await setTenantLocal(tx, ctx.tenantId);
       }
       return fn(tx);
     });

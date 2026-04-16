@@ -123,6 +123,190 @@ export class RouteService {
     });
   }
 
+  // ── Waypoints (escales) ──────────────────────────────────────────────────
+
+  async findOneWithWaypoints(tenantId: string, id: string) {
+    const route = await this.prisma.route.findFirst({
+      where: { id, tenantId },
+      include: {
+        origin:      { select: { id: true, name: true, city: true } },
+        destination: { select: { id: true, name: true, city: true } },
+        waypoints:   { include: { station: { select: { id: true, name: true, city: true } } }, orderBy: { order: 'asc' } },
+        segmentPrices: true,
+      },
+    });
+    if (!route) throw new NotFoundException(`Ligne ${id} introuvable`);
+    return route;
+  }
+
+  async setWaypoints(tenantId: string, routeId: string, waypoints: {
+    stationId: string; order: number; distanceFromOriginKm: number;
+    tollCostXaf?: number; checkpointCosts?: unknown[];
+    isMandatoryStop?: boolean; estimatedWaitTime?: number;
+  }[]) {
+    await this.findOne(tenantId, routeId);
+
+    // Vérifier que toutes les stations existent
+    for (const wp of waypoints) {
+      await this.assertStationBelongsToTenant(tenantId, wp.stationId);
+    }
+
+    // Remplacer tous les waypoints (atomique)
+    await this.prisma.transact(async (tx) => {
+      await tx.waypoint.deleteMany({ where: { routeId } });
+      if (waypoints.length > 0) {
+        await tx.waypoint.createMany({
+          data: waypoints.map(wp => ({
+            routeId,
+            stationId:            wp.stationId,
+            order:                wp.order,
+            distanceFromOriginKm: wp.distanceFromOriginKm,
+            tollCostXaf:          wp.tollCostXaf ?? 0,
+            checkpointCosts:      wp.checkpointCosts ?? [],
+            isMandatoryStop:      wp.isMandatoryStop ?? false,
+            estimatedWaitTime:    wp.estimatedWaitTime,
+          })),
+        });
+      }
+    });
+
+    // Auto-générer la matrice de prix (toutes paires, prix = 0 si pas encore configuré)
+    await this.generateSegmentPriceMatrix(tenantId, routeId);
+
+    return this.findOneWithWaypoints(tenantId, routeId);
+  }
+
+  // ── Matrice de prix segment ────────────────────────────────────────────────
+
+  async getSegmentPrices(tenantId: string, routeId: string) {
+    await this.findOne(tenantId, routeId);
+    return this.prisma.routeSegmentPrice.findMany({
+      where: { routeId },
+      include: {
+        fromStation: { select: { id: true, name: true } },
+        toStation:   { select: { id: true, name: true } },
+      },
+      orderBy: [{ fromStationId: 'asc' }, { toStationId: 'asc' }],
+    });
+  }
+
+  async setSegmentPrice(tenantId: string, routeId: string, fromStationId: string, toStationId: string, basePriceXaf: number) {
+    await this.findOne(tenantId, routeId);
+    return this.prisma.routeSegmentPrice.upsert({
+      where: { routeId_fromStationId_toStationId: { routeId, fromStationId, toStationId } },
+      update: { basePriceXaf },
+      create: { routeId, fromStationId, toStationId, basePriceXaf },
+    });
+  }
+
+  async bulkSetSegmentPrices(tenantId: string, routeId: string, prices: { fromStationId: string; toStationId: string; basePriceXaf: number }[]) {
+    await this.findOne(tenantId, routeId);
+    const results = [];
+    for (const p of prices) {
+      results.push(await this.prisma.routeSegmentPrice.upsert({
+        where: { routeId_fromStationId_toStationId: { routeId, fromStationId: p.fromStationId, toStationId: p.toStationId } },
+        update: { basePriceXaf: p.basePriceXaf },
+        create: { routeId, fromStationId: p.fromStationId, toStationId: p.toStationId, basePriceXaf: p.basePriceXaf },
+      }));
+    }
+    return results;
+  }
+
+  /**
+   * Auto-génère toutes les paires (from, to) possibles sur un itinéraire.
+   * Les stations sont : [origin, ...waypoints ordonnés, destination].
+   * Seules les paires dans le sens du trajet sont créées (from.order < to.order).
+   *
+   * Proposition de prix :
+   *  - Origine → Destination = basePrice de la route (toujours synchronisé)
+   *  - Autres paires (nouvelles uniquement) = prix au prorata de la distance
+   *    ex. si A→C = 500 km / 9000 XAF et B est à 200 km de A,
+   *        alors A→B ≈ 200/500 × 9000 = 3600 XAF
+   */
+  private async generateSegmentPriceMatrix(tenantId: string, routeId: string) {
+    const route = await this.prisma.route.findFirst({
+      where: { id: routeId, tenantId },
+      include: { waypoints: { orderBy: { order: 'asc' } } },
+    });
+    if (!route) return;
+
+    const totalKm   = route.distanceKm || 1; // éviter division par 0
+    const basePrice  = route.basePrice  || 0;
+
+    // Tableau ordonné : [{ stationId, distanceFromOriginKm }]
+    const stops = [
+      { stationId: route.originId, distanceFromOriginKm: 0 },
+      ...route.waypoints.map(w => ({
+        stationId:            w.stationId,
+        distanceFromOriginKm: w.distanceFromOriginKm,
+      })),
+      { stationId: route.destinationId, distanceFromOriginKm: totalKm },
+    ];
+
+    // Supprimer les segments obsolètes (stations qui ne font plus partie du trajet)
+    const validStationIds = stops.map(s => s.stationId);
+    await this.prisma.routeSegmentPrice.deleteMany({
+      where: {
+        routeId,
+        OR: [
+          { fromStationId: { notIn: validStationIds } },
+          { toStationId:   { notIn: validStationIds } },
+        ],
+      },
+    });
+
+    for (let i = 0; i < stops.length; i++) {
+      for (let j = i + 1; j < stops.length; j++) {
+        const isFullRoute = i === 0 && j === stops.length - 1;
+        const segmentKm   = stops[j].distanceFromOriginKm - stops[i].distanceFromOriginKm;
+        const proposed     = isFullRoute
+          ? basePrice
+          : Math.round((segmentKm / totalKm) * basePrice);
+
+        if (isFullRoute) {
+          // Origine → Destination : toujours synchronisé avec basePrice
+          await this.prisma.routeSegmentPrice.upsert({
+            where: {
+              routeId_fromStationId_toStationId: {
+                routeId,
+                fromStationId: stops[i].stationId,
+                toStationId:   stops[j].stationId,
+              },
+            },
+            update: { basePriceXaf: basePrice },
+            create: {
+              routeId,
+              fromStationId: stops[i].stationId,
+              toStationId:   stops[j].stationId,
+              basePriceXaf:  basePrice,
+            },
+          });
+        } else {
+          // Segments intermédiaires : proposer un prix au prorata, ne pas écraser un prix existant (> 0)
+          const existing = await this.prisma.routeSegmentPrice.findUnique({
+            where: {
+              routeId_fromStationId_toStationId: {
+                routeId,
+                fromStationId: stops[i].stationId,
+                toStationId:   stops[j].stationId,
+              },
+            },
+          });
+          if (!existing) {
+            await this.prisma.routeSegmentPrice.create({
+              data: {
+                routeId,
+                fromStationId: stops[i].stationId,
+                toStationId:   stops[j].stationId,
+                basePriceXaf:  proposed,
+              },
+            });
+          }
+        }
+      }
+    }
+  }
+
   listStations(tenantId: string) {
     return this.prisma.station.findMany({
       where:   { tenantId },

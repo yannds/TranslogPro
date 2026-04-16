@@ -5,6 +5,7 @@
  * Illustration : colis avec des jambes qui s'enfuit des rayonnages.
  */
 import { cn } from '../../../lib/utils';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 interface Props {
   onTrack?: () => void;
@@ -108,6 +109,7 @@ function ParcelLostSvg({ className }: { className?: string }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function NotFoundParcel({ onTrack, className }: Props) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -120,20 +122,18 @@ export function NotFoundParcel({ onTrack, className }: Props) {
 
       <div className="text-center max-w-lg space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-xs font-mono font-semibold tracking-widest uppercase">
-          Erreur 404
+          {t('notFoundParcel.badge')}
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-          Avis de passage :{' '}
+          {t('notFoundParcel.title1')}{' '}
           <span className="text-amber-500 dark:text-amber-400">
-            Page introuvable.
+            {t('notFoundParcel.title2')}
           </span>
         </h1>
 
         <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-          On a vérifié tous les racks de l&apos;entrepôt et scanné chaque manifeste,
-          mais cette URL reste introuvable en soute. Elle a dû être livrée à une
-          mauvaise adresse ou est encore coincée au centre de tri.
+          {t('notFoundParcel.body')}
         </p>
       </div>
 
@@ -149,11 +149,11 @@ export function NotFoundParcel({ onTrack, className }: Props) {
         <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
           <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
         </svg>
-        Suivre un autre colis
+        {t('notFoundParcel.button')}
       </button>
 
       <p className="text-xs text-slate-400 dark:text-slate-600 font-mono">
-        404 · Colis égaré · TranslogPro
+        {t('notFoundParcel.footer')}
       </p>
     </div>
   );

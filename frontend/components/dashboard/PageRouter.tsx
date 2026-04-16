@@ -9,12 +9,12 @@
  * Ce composant retourne directement le JSX — Suspense l'enveloppe en amont.
  */
 import { lazy } from 'react';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ── Pages internes légères (eager) ────────────────────────────────────────────
 import { PageDashboard } from './PageDashboard';
 import { PageAnalytics } from './PageAnalytics';
 import { PageAiRoutes }  from './PageAiRoutes';
-import { PageFleet }     from './PageFleet';
 import { PageCashier }   from './PageCashier';
 import { PageCrm }       from './PageCrm';
 import { PageSafety }    from './PageSafety';
@@ -29,6 +29,8 @@ const LazyFleetDocs      = lazy(() => import('../pages/PageFleetDocs').then(m =>
 const LazyDriverProfile  = lazy(() => import('../pages/PageDriverProfile').then(m => ({ default: m.PageDriverProfile })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCrewBriefing   = lazy(() => import('../pages/PageCrewBriefing').then(m => ({ default: m.PageCrewBriefing })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverBriefing = lazy(() => import('../pages/PageDriverBriefing').then(m => ({ default: m.PageDriverBriefing })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyQhse           = lazy(() => import('../pages/PageQhse').then(m => ({ default: m.PageQhse })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -73,6 +75,44 @@ const LazyTripPlanning   = lazy(() => import('../pages/PageTripPlanning').then(m
 const LazyRoutes         = lazy(() => import('../pages/PageRoutes').then(m => ({ default: m.PageRoutes })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTripDelays     = lazy(() => import('../pages/PageTripDelays').then(m => ({ default: m.PageTripDelays })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyFleetVehicles       = lazy(() => import('../pages/PageFleetVehicles').then(m => ({ default: m.PageFleetVehicles })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyFleetSeats          = lazy(() => import('../pages/PageFleetSeats').then(m => ({ default: m.PageFleetSeats })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyFleetTracking       = lazy(() => import('../pages/PageFleetTracking').then(m => ({ default: m.PageFleetTracking })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyMaintenanceList     = lazy(() => import('../pages/PageMaintenanceList').then(m => ({ default: m.PageMaintenanceList })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyMaintenancePlanning = lazy(() => import('../pages/PageMaintenancePlanning').then(m => ({ default: m.PageMaintenancePlanning })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyMaintenanceAlerts   = lazy(() => import('../pages/PageMaintenanceAlerts').then(m => ({ default: m.PageMaintenanceAlerts })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyParcelNew           = lazy(() => import('../pages/PageParcelNew').then(m => ({ default: m.PageParcelNew })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyParcelsList         = lazy(() => import('../pages/PageParcelsList').then(m => ({ default: m.PageParcelsList })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyShipments           = lazy(() => import('../pages/PageShipments').then(m => ({ default: m.PageShipments })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverRest          = lazy(() => import('../pages/PageDriverRest').then(m => ({ default: m.PageDriverRest })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverTrip          = lazy(() => import('../pages/PageDriverTrip').then(m => ({ default: m.PageDriverTrip })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverManifest      = lazy(() => import('../pages/PageDriverManifest').then(m => ({ default: m.PageDriverManifest })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverCheckin       = lazy(() => import('../pages/PageDriverCheckin').then(m => ({ default: m.PageDriverCheckin })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverEvents        = lazy(() => import('../pages/PageDriverEvents').then(m => ({ default: m.PageDriverEvents })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverReport        = lazy(() => import('../pages/PageDriverReport').then(m => ({ default: m.PageDriverReport })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverMaint         = lazy(() => import('../pages/PageDriverMaint').then(m => ({ default: m.PageDriverMaint })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverSchedule      = lazy(() => import('../pages/PageDriverSchedule').then(m => ({ default: m.PageDriverSchedule })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverDocs          = lazy(() => import('../pages/PageDriverDocs').then(m => ({ default: m.PageDriverDocs })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazySellTicket          = lazy(() => import('../pages/PageSellTicket').then(m => ({ default: m.PageSellTicket })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,9 +120,12 @@ export interface PageRouterProps {
   activeId: string | null;
 }
 
+
 // ─── Routeur ──────────────────────────────────────────────────────────────────
 
 export function PageRouter({ activeId }: PageRouterProps) {
+  const { t } = useI18n();
+
   switch (activeId) {
     // ── Dashboard ──────────────────────────────────────────────────────────
     case 'dashboard':           return <PageDashboard />;
@@ -95,42 +138,43 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'trips-delays':        return <LazyTripDelays />;
 
     // ── Billetterie ────────────────────────────────────────────────────────
-    case 'tickets-new':         return <PageWip title="Vendre un billet" />;
-    case 'tickets-list':        return <PageWip title="Billets émis" />;
-    case 'tickets-cancel':      return <PageWip title="Annulations" />;
+    case 'tickets-new':         return <PageWip title={t('router.sellTicket')} />;
+    case 'tickets-list':        return <PageWip title={t('router.issuedTickets')} />;
+    case 'tickets-cancel':      return <PageWip title={t('router.cancellations')} />;
 
     // ── Colis & Manifestes ─────────────────────────────────────────────────
-    case 'manifests':           return <PageWip title="Manifestes" />;
-    case 'parcel-new':          return <PageWip title="Enregistrer un colis" />;
-    case 'parcels-list':        return <PageWip title="Suivi colis" />;
-    case 'shipments':           return <PageWip title="Expéditions groupées" />;
+    case 'manifests':           return <PageWip title={t('router.manifests')} />;
+    case 'parcel-new':          return <LazyParcelNew />;
+    case 'parcels-list':        return <LazyParcelsList />;
+    case 'shipments':           return <LazyShipments />;
 
     // ── SAV ────────────────────────────────────────────────────────────────
-    case 'sav-claims':          return <PageWip title="Réclamations SAV" />;
-    case 'sav-reports':         return <PageWip title="Signalements" />;
-    case 'sav-returns':         return <PageWip title="Remboursements" />;
+    case 'sav-claims':          return <PageWip title={t('router.savClaims')} />;
+    case 'sav-reports':         return <PageWip title={t('router.savReports')} />;
+    case 'sav-returns':         return <PageWip title={t('router.savRefunds')} />;
 
     // ── Finance ────────────────────────────────────────────────────────────
     case 'cashier':             return <PageCashier />;
-    case 'pricing-grid':        return <PageWip title="Grille tarifaire" />;
+    case 'pricing-grid':        return <PageWip title={t('router.pricingGrid')} />;
     case 'pricing-yield':       return <LazyProfitability />;
-    case 'pricing-promo':       return <PageWip title="Promotions" />;
-    case 'invoices':            return <PageWip title="Facturation" />;
+    case 'pricing-promo':       return <PageWip title={t('router.promotions')} />;
+    case 'invoices':            return <PageWip title={t('router.invoicing')} />;
 
     // ── Analytique & IA ────────────────────────────────────────────────────
     case 'analytics':           return <PageAnalytics />;
     case 'ai-routes':           return <PageAiRoutes />;
-    case 'ai-fleet':            return <PageWip title="Optimisation flotte" />;
-    case 'ai-demand':           return <PageWip title="Prévisions demande" />;
-    case 'ai-pricing':          return <PageWip title="Tarifs dynamiques" />;
-    case 'reports':             return <PageWip title="Rapports périodiques" />;
+    case 'ai-fleet':            return <PageWip title={t('router.fleetOptim')} />;
+    case 'ai-demand':           return <PageWip title={t('router.demandForecast')} />;
+    case 'ai-pricing':          return <PageWip title={t('router.dynamicPricing')} />;
+    case 'reports':             return <PageWip title={t('router.periodicReports')} />;
 
     // ── Flotte & Maintenance ───────────────────────────────────────────────
-    case 'fleet-vehicles':      return <PageFleet />;
-    case 'fleet-seats':         return <PageWip title="Plans de sièges" />;
-    case 'maintenance-list':    return <PageWip title="Fiches de maintenance" />;
-    case 'maintenance-planning': return <PageWip title="Planning garage" />;
-    case 'maintenance-alerts':  return <PageWip title="Alertes techniques" />;
+    case 'fleet-vehicles':      return <LazyFleetVehicles />;
+    case 'fleet-tracking':      return <LazyFleetTracking />;
+    case 'fleet-seats':         return <LazyFleetSeats />;
+    case 'maintenance-list':    return <LazyMaintenanceList />;
+    case 'maintenance-planning': return <LazyMaintenancePlanning />;
+    case 'maintenance-alerts':  return <LazyMaintenanceAlerts />;
     case 'fleet-docs':               return <LazyFleetDocs initialTab="alerts" />;
 
     // ── Chauffeurs & Équipages ─────────────────────────────────────────────
@@ -138,30 +182,61 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // par la page elle-même ; une seule route parent suffit.
     case 'drivers':             return <LazyDriverProfile initialTab="overview" />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
+    case 'drv-briefing':        return <LazyDriverBriefing />;
+
+    // ── Portail Chauffeur (items DRIVER_NAV) ───────────────────────────────
+    case 'drv-home':            return <LazyDriverTrip />;
+    case 'drv-manifest':        return <LazyDriverManifest />;
+    case 'drv-checkin':         return <LazyDriverCheckin />;
+    case 'drv-events':          return <LazyDriverEvents />;
+    case 'drv-report':          return <LazyDriverReport />;
+    case 'drv-maint':           return <LazyDriverMaint />;
+    case 'drv-schedule':        return <LazyDriverSchedule />;
+    case 'drv-docs':            return <LazyDriverDocs />;
+    case 'drv-rest':            return <LazyDriverRest />;
+    case 'drv-feedback':        return <PageWip title={t('router.drvFeedback')} />;
+
+    // ── Portail Agent de Gare (items STATION_AGENT_NAV) ────────────────────
+    case 'sa-home':             return <PageWip title={t('router.saHome')} />;
+    case 'sa-sell':             return <LazySellTicket />;
+    case 'sa-checkin':          return <PageWip title={t('router.saCheckin')} />;
+    case 'sa-luggage':          return <PageWip title={t('router.saLuggage')} />;
+    case 'sa-parcel':           return <PageWip title={t('router.saParcel')} />;
+    case 'sa-manifest':         return <PageWip title={t('router.saManifest')} />;
+    case 'sa-cashier':          return <PageCashier />;
+    case 'sa-receipts':         return <PageWip title={t('router.saReceipts')} />;
+    case 'sa-display':          return <PageWip title={t('router.saDisplay')} />;
+    case 'sa-sav':              return <PageWip title={t('router.saIncident')} />;
+
+    // ── Portail Agent de Quai (items QUAI_AGENT_NAV) ───────────────────────
+    case 'qa-home':             return <PageWip title={t('router.qaHome')} />;
+    case 'qa-scan':             return <PageWip title={t('router.qaScan')} />;
+    case 'qa-boarding':         return <PageWip title={t('router.qaBoarding')} />;
+    case 'qa-manifest':         return <PageWip title={t('router.qaManifest')} />;
+    case 'qa-luggage':          return <PageWip title={t('router.qaLuggage')} />;
+    case 'qa-delay':            return <PageWip title={t('router.qaDelay')} />;
+    case 'qa-display':          return <PageWip title={t('router.qaDisplay')} />;
+    case 'qa-sav':              return <PageWip title={t('router.qaIncident')} />;
     case 'staff-list':
     case 'personnel':           return <LazyPersonnel />;
     case 'crew-planning':       return <LazyCrewPlanning />;
 
     // ── QHSE ───────────────────────────────────────────────────────────────
-    case 'qhse-accidents':
-    case 'qhse-accidents-list':
-    case 'qhse-disputes':
-    case 'qhse-procedures':     return <LazyQhse />;
-    case 'qhse-config':         return <PageWip title="Configuration QHSE" />;
+    case 'qhse':                return <LazyQhse />;
 
     // ── CRM ────────────────────────────────────────────────────────────────
     case 'crm-clients':         return <PageCrm />;
-    case 'crm-campaigns':       return <PageWip title="Campagnes marketing" />;
-    case 'crm-loyalty':         return <PageWip title="Programme fidélité" />;
-    case 'crm-feedback':        return <PageWip title="Avis & Feedbacks" />;
+    case 'crm-campaigns':       return <PageWip title={t('router.campaigns')} />;
+    case 'crm-loyalty':         return <PageWip title={t('router.loyalty')} />;
+    case 'crm-feedback':        return <PageWip title={t('router.feedback')} />;
 
     // ── Affichage & Sécurité ───────────────────────────────────────────────
     case 'display-screens':     return <PageDisplay />;
-    case 'display-quais':       return <PageWip title="Gestion des quais" />;
-    case 'display-announcements': return <PageWip title="Annonces gare" />;
+    case 'display-quais':       return <PageWip title={t('router.platformMgmt')} />;
+    case 'display-announcements': return <PageWip title={t('router.stationAnnounce')} />;
     case 'safety-incidents':    return <PageSafety />;
-    case 'safety-monitor':      return <PageWip title="Suivi temps réel" />;
-    case 'safety-sos':          return <PageWip title="Alertes SOS" />;
+    case 'safety-monitor':      return <PageWip title={t('router.liveMonitor')} />;
+    case 'safety-sos':          return <PageWip title={t('router.sosAlerts')} />;
 
     // ── Workflow Studio ────────────────────────────────────────────────────
     case 'workflow-studio':
@@ -176,7 +251,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
     case 'tenant-company':      return <LazyCompanySetup />;
-    case 'integrations':        return <PageWip title="Intégrations API" />;
+    case 'integrations':        return <PageWip title={t('router.apiIntegrations')} />;
     case 'documents-templates': return <LazyTemplateStudio />;
 
     // ── IAM ────────────────────────────────────────────────────────────────
@@ -186,16 +261,16 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'iam-sessions':        return <LazyIamSessions />;
 
     // ── Platform (SUPER_ADMIN) ─────────────────────────────────────────────
-    case 'tenants':             return <PageWip title="Gestion des tenants" />;
-    case 'platform-staff':      return <PageWip title="Staff plateforme" />;
-    case 'impersonation':       return <PageWip title="Impersonation JIT" />;
+    case 'tenants':             return <PageWip title={t('router.tenantMgmt')} />;
+    case 'platform-staff':      return <PageWip title={t('router.platformStaff')} />;
+    case 'impersonation':       return <PageWip title={t('router.impersonation')} />;
 
     // ── Debug ──────────────────────────────────────────────────────────────
-    case 'debug-workflow':      return <PageWip title="Workflow debug" />;
-    case 'debug-outbox':        return <PageWip title="Outbox replay" />;
+    case 'debug-workflow':      return <PageWip title={t('router.wfDebug')} />;
+    case 'debug-outbox':        return <PageWip title={t('router.outboxReplay')} />;
 
     // ── Divers ─────────────────────────────────────────────────────────────
-    case 'notifications':       return <PageWip title="Notifications" />;
+    case 'notifications':       return <PageWip title={t('router.notifications')} />;
 
     default:                    return <PageDashboard />;
   }

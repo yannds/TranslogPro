@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { TrendingUp, TrendingDown, BarChart3, Percent, RefreshCw } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
 import { Badge } from '../ui/Badge';
@@ -41,11 +43,11 @@ function formatPct(rate: number) {
   return `${(rate * 100).toFixed(1)} %`;
 }
 
-const TAG_LABELS: Record<string, string> = {
-  PROFITABLE:       'Rentable',
-  BREAK_EVEN:       'Équilibre',
-  UNPROFITABLE:     'Déficitaire',
-  HIGHLY_PROFITABLE: 'Très rentable',
+const TAG_LABELS_I18N: Record<string, string> = {
+  PROFITABLE:        'profitability.profitable',
+  BREAK_EVEN:        'profitability.breakEven',
+  UNPROFITABLE:      'profitability.unprofitable',
+  HIGHLY_PROFITABLE: 'profitability.highlyProfit',
 };
 
 const TAG_VARIANTS: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
@@ -70,7 +72,9 @@ function periodDates(days: number): { from: string; to: string } {
 
 export function PageProfitability() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
+  const { operational } = useTenantConfig();
 
   const [periodDays, setPeriodDays] = useState(30);
   const { from, to } = periodDates(periodDays);
@@ -81,9 +85,9 @@ export function PageProfitability() {
   );
 
   const PERIODS = [
-    { label: '7 jours',  days: 7  },
-    { label: '30 jours', days: 30 },
-    { label: '90 jours', days: 90 },
+    { label: t('profitability.days7'),  days: 7  },
+    { label: t('profitability.days30'), days: 30 },
+    { label: t('profitability.days90'), days: 90 },
   ];
 
   return (
@@ -92,9 +96,9 @@ export function PageProfitability() {
       {/* En-tête */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Rentabilité</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('profitability.title')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Analyse des coûts et marges par trajet
+            {t('profitability.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -140,7 +144,7 @@ export function PageProfitability() {
       )}
 
       {/* KPIs principaux */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
@@ -154,28 +158,28 @@ export function PageProfitability() {
         ) : data ? (
           <>
             <KpiCard
-              label="Recette totale"
-              value={formatCurrency(data.totalRevenue)}
+              label={t('profitability.totalRevenue')}
+              value={formatCurrency(data.totalRevenue, operational.currencySymbol)}
               icon={<TrendingUp className="w-5 h-5" aria-hidden />}
               accent="emerald"
             />
             <KpiCard
-              label="Coûts totaux"
-              value={formatCurrency(data.totalCost)}
+              label={t('profitability.totalCosts')}
+              value={formatCurrency(data.totalCost, operational.currencySymbol)}
               icon={<TrendingDown className="w-5 h-5" aria-hidden />}
               accent="red"
             />
             <KpiCard
-              label="Marge nette"
-              value={formatCurrency(data.totalNetMargin)}
-              sub={`Taux : ${formatPct(data.globalNetMarginRate)}`}
+              label={t('profitability.netMargin')}
+              value={formatCurrency(data.totalNetMargin, operational.currencySymbol)}
+              sub={`${t('profitability.rate')} : ${formatPct(data.globalNetMarginRate)}`}
               icon={<BarChart3 className="w-5 h-5" aria-hidden />}
               accent={data.totalNetMargin >= 0 ? 'blue' : 'red'}
             />
             <KpiCard
-              label="Taux de remplissage"
+              label={t('profitability.fillRate')}
               value={formatPct(data.avgFillRate)}
-              sub={`${data.tripCount} trajets analysés`}
+              sub={`${data.tripCount} ${t('profitability.tripsAnalyzed')}`}
               icon={<Percent className="w-5 h-5" aria-hidden />}
               accent="amber"
             />
@@ -188,13 +192,13 @@ export function PageProfitability() {
         <Card>
           <CardHeader>
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Répartition par rentabilité
+              {t('profitability.breakdownTitle')}
             </h2>
           </CardHeader>
           <CardContent>
             {Object.keys(data.byTag).length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-                Aucune donnée sur cette période
+                {t('profitability.noDataPeriod')}
               </p>
             ) : (
               <div className="space-y-3">
@@ -205,7 +209,7 @@ export function PageProfitability() {
                     <div key={tag} className="flex items-center gap-4">
                       <div className="w-32 shrink-0">
                         <Badge variant={TAG_VARIANTS[tag] ?? 'default'}>
-                          {TAG_LABELS[tag] ?? tag}
+                          {TAG_LABELS_I18N[tag] ? t(TAG_LABELS_I18N[tag]) : tag}
                         </Badge>
                       </div>
                       <div className="flex-1 flex items-center gap-3">
@@ -222,7 +226,7 @@ export function PageProfitability() {
                           />
                         </div>
                         <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums w-20 text-right shrink-0">
-                          {count} trajet{count > 1 ? 's' : ''} ({pct.toFixed(0)} %)
+                          {count} {count > 1 ? t('profitability.trips') : t('profitability.trip')} ({pct.toFixed(0)} %)
                         </span>
                       </div>
                     </div>

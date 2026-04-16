@@ -20,6 +20,7 @@ import {
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -38,6 +39,7 @@ interface Category {
   sortOrder: number;
 }
 
+
 // ─── Blueprint Card ───────────────────────────────────────────────────────────
 
 function MarketplaceCard({
@@ -51,6 +53,7 @@ function MarketplaceCard({
   onInstall:  (id: string) => void;
   installing: string | null;
 }) {
+  const { t } = useI18n();
   const isInstalled = bp.installs && bp.installs.length > 0;
 
   return (
@@ -65,12 +68,12 @@ function MarketplaceCard({
             <div className="flex flex-wrap gap-1">
               {bp.isSystem && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                  <Shield className="w-2.5 h-2.5" aria-hidden /> Système
+                  <Shield className="w-2.5 h-2.5" aria-hidden /> {t('wfMarketplace.system')}
                 </span>
               )}
               {isInstalled && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                  <Check className="w-2.5 h-2.5" aria-hidden /> Installé
+                  <Check className="w-2.5 h-2.5" aria-hidden /> {t('wfMarketplace.installed')}
                 </span>
               )}
             </div>
@@ -102,10 +105,10 @@ function MarketplaceCard({
             <span>v{bp.version}</span>
           </div>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => onPreview(bp)} className="text-xs py-1">Aperçu</Button>
+            <Button size="sm" variant="outline" onClick={() => onPreview(bp)} className="text-xs py-1">{t('wfMarketplace.preview')}</Button>
             <Button size="sm" onClick={() => onInstall(bp.id)} disabled={installing === bp.id} className="text-xs py-1">
               <Download className="w-3 h-3 mr-1" aria-hidden />
-              {installing === bp.id ? '…' : 'Installer'}
+              {installing === bp.id ? '…' : t('wfMarketplace.install')}
             </Button>
           </div>
         </div>
@@ -118,6 +121,7 @@ function MarketplaceCard({
 
 export function PageWfMarketplace() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const [search,         setSearch]         = useState('');
@@ -152,7 +156,7 @@ export function PageWfMarketplace() {
     setInstallMsg(null);
     try {
       await apiPost(`/api/tenants/${tenantId}/workflow-studio/blueprints/${id}/install`, {});
-      setInstallMsg('Blueprint installé. Accédez au Studio pour l\'utiliser.');
+      setInstallMsg(t('wfMarketplace.installedMsg'));
       setPreviewBp(null);
       refetch();
     } catch (e) {
@@ -175,13 +179,13 @@ export function PageWfMarketplace() {
             <Store className="w-5 h-5 text-purple-600 dark:text-purple-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Marketplace</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('wfMarketplace.marketplace')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {blueprints ? `${blueprints.length} blueprint(s) disponible(s)` : 'Modèles prêts à l\'emploi'}
+              {blueprints ? `${blueprints.length} ${t('wfMarketplace.blueprintsAvail')}` : t('wfMarketplace.readyToUse')}
             </p>
           </div>
         </div>
-        <button type="button" onClick={refetch} disabled={loading} aria-label="Actualiser"
+        <button type="button" onClick={refetch} disabled={loading} aria-label={t('wfMarketplace.refresh')}
           className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
           <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} aria-hidden />
         </button>
@@ -204,24 +208,24 @@ export function PageWfMarketplace() {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden />
           <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher un blueprint…"
+            placeholder={t('wfMarketplace.searchBlueprint')}
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
         </div>
         <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)}
           className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-          <option value="">Tous les types</option>
-          {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          <option value="">{t('wfMarketplace.allTypes')}</option>
+          {ENTITY_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
         </select>
         {categories && categories.length > 0 && (
           <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
             className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-            <option value="">Toutes les catégories</option>
+            <option value="">{t('wfMarketplace.allCategories')}</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}
         {(filterEntity || filterCategory || search) && (
           <Button variant="ghost" size="sm" onClick={() => { setFilterEntity(''); setFilterCategory(''); setSearch(''); }}>
-            <X className="w-4 h-4 mr-1" aria-hidden /> Réinitialiser
+            <X className="w-4 h-4 mr-1" aria-hidden /> {t('wfMarketplace.reset')}
           </Button>
         )}
       </div>
@@ -243,9 +247,9 @@ export function PageWfMarketplace() {
               <GitFork className="w-8 h-8 text-slate-400" aria-hidden />
             </div>
           </div>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1">Aucun blueprint trouvé</h3>
+          <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{t('wfMarketplace.noBlueprintFound')}</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {search || filterEntity || filterCategory ? 'Modifiez les filtres.' : 'La marketplace est vide.'}
+            {search || filterEntity || filterCategory ? t('wfMarketplace.changeFilters') : t('wfMarketplace.emptyMarketplace')}
           </p>
         </div>
       ) : (
@@ -260,16 +264,16 @@ export function PageWfMarketplace() {
       <Dialog
         open={!!previewBp}
         onOpenChange={open => { if (!open) setPreviewBp(null); }}
-        title={previewBp?.name ?? 'Aperçu'}
+        title={previewBp?.name ?? t('wfMarketplace.preview')}
         description={previewBp?.description ?? `Blueprint ${previewBp?.entityType} · v${previewBp?.version}`}
         size="xl"
         footer={
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => setPreviewBp(null)}>Fermer</Button>
+            <Button variant="outline" onClick={() => setPreviewBp(null)}>{t('common.close')}</Button>
             {previewBp && (
               <Button onClick={() => handleInstall(previewBp.id)} disabled={installing === previewBp.id}>
                 <Download className="w-4 h-4 mr-1.5" aria-hidden />
-                {installing === previewBp.id ? 'Installation…' : 'Installer ce Blueprint'}
+                {installing === previewBp.id ? t('wfMarketplace.installing') : t('wfMarketplace.installThisBp')}
               </Button>
             )}
           </div>
@@ -280,8 +284,8 @@ export function PageWfMarketplace() {
             {/* Badges */}
             <div className="flex flex-wrap gap-2">
               <Badge variant="default">{previewBp.entityType}</Badge>
-              {previewBp.isSystem && <Badge variant="warning">Système</Badge>}
-              {previewBp.isPublic && <Badge variant="info">Public</Badge>}
+              {previewBp.isSystem && <Badge variant="warning">{t('wfMarketplace.system')}</Badge>}
+              {previewBp.isPublic && <Badge variant="info">{t('wfMarketplace.public')}</Badge>}
               {previewBp.category && <Badge variant="default">{previewBp.category.name}</Badge>}
             </div>
 
@@ -299,12 +303,12 @@ export function PageWfMarketplace() {
             {/* Graph stats */}
             {graph ? (
               <div className="space-y-3">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Structure du workflow</p>
-                <div className="grid grid-cols-3 gap-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('wfMarketplace.wfStructure')}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
-                    { label: 'États',       value: (graph as any).nodes?.length ?? 0 },
-                    { label: 'Transitions', value: (graph as any).edges?.length ?? 0 },
-                    { label: 'Version',     value: `v${previewBp.version}` },
+                    { label: t('wfMarketplace.states'),       value: (graph as any).nodes?.length ?? 0 },
+                    { label: t('wfMarketplace.transitions'), value: (graph as any).edges?.length ?? 0 },
+                    { label: t('wfMarketplace.version'),     value: `v${previewBp.version}` },
                   ].map(stat => (
                     <div key={stat.label} className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-3 text-center">
                       <div className="text-2xl font-bold text-slate-900 dark:text-white">{stat.value}</div>
@@ -315,7 +319,7 @@ export function PageWfMarketplace() {
 
                 {/* States */}
                 <div>
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">États</p>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{t('wfMarketplace.states')}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(graph as any).nodes?.map((n: any) => (
                       <span key={n.id} className={cn(
@@ -332,7 +336,7 @@ export function PageWfMarketplace() {
 
                 {/* Transitions */}
                 <div>
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Transitions</p>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{t('wfMarketplace.transitions')}</p>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {(graph as any).edges?.map((e: any) => (
                       <div key={e.id} className="flex items-center gap-2 text-xs bg-slate-50 dark:bg-slate-900 rounded px-2 py-1.5">

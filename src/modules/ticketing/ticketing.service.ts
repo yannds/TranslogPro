@@ -23,13 +23,23 @@ export class TicketingService {
   ) {}
 
   async issue(tenantId: string, dto: IssueTicketDto, actor: CurrentUserPayload, idempotencyKey?: string) {
-    // 1. Calculate price
+    // 0. Résoudre les stations de montée/descente
+    const trip = await this.prisma.trip.findUniqueOrThrow({
+      where: { id: dto.tripId },
+      include: { route: true },
+    });
+    const boardingStationId  = dto.boardingStationId  ?? trip.route.originId;
+    const alightingStationId = dto.alightingStationId;
+
+    // 1. Calculate price (segment-aware)
     const price = await this.pricing.calculate({
       tenantId,
-      tripId:       dto.tripId,
-      fareClass:    dto.fareClass,
-      discountCode: dto.discountCode,
-      luggageKg:    dto.luggageKg,
+      tripId:              dto.tripId,
+      fareClass:           dto.fareClass,
+      boardingStationId,
+      alightingStationId,
+      discountCode:        dto.discountCode,
+      luggageKg:           dto.luggageKg,
     });
 
     // 2. Create ticket in PENDING_PAYMENT with expiry
@@ -39,16 +49,19 @@ export class TicketingService {
       const t = await tx.ticket.create({
         data: {
           tenantId,
-          tripId:        dto.tripId,
-          passengerId:   actor.id,
-          passengerName: dto.passengerName,
-          seatNumber:    dto.seatNumber,
-          pricePaid:     price.total,
-          agencyId:      actor.agencyId ?? '',
-          status:        'PENDING_PAYMENT',
-          qrCode:        `pending-${uuidv4()}`,   // placeholder; replaced on confirm
+          tripId:             dto.tripId,
+          passengerId:        actor.id,
+          passengerName:      dto.passengerName,
+          seatNumber:         dto.seatNumber,
+          boardingStationId,
+          alightingStationId,
+          fareClass:          dto.fareClass,
+          pricePaid:          price.total,
+          agencyId:           actor.agencyId ?? '',
+          status:             'PENDING_PAYMENT',
+          qrCode:             `pending-${uuidv4()}`,
           expiresAt,
-          version:       0,
+          version:            0,
         },
       });
 

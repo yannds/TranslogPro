@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Patch, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
 import { FleetService } from './fleet.service';
 import { CreateBusDto } from './dto/create-bus.dto';
+import { UpdateBusDto } from './dto/update-bus.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -15,6 +16,24 @@ export class FleetController {
   @RequirePermission(Permission.FLEET_MANAGE_TENANT)
   create(@TenantId() tenantId: string, @Body() dto: CreateBusDto) {
     return this.fleetService.createBus(tenantId, dto);
+  }
+
+  /** Modifier fiche véhicule (immat, modèle, type, capacité, année, agence) */
+  @Patch('buses/:id')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  update(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateBusDto,
+  ) {
+    return this.fleetService.updateBus(tenantId, id, dto);
+  }
+
+  /** Supprimer véhicule — refusé si voyages actifs */
+  @Delete('buses/:id')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  remove(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.fleetService.deleteBus(tenantId, id);
   }
 
   /**
@@ -59,5 +78,47 @@ export class FleetController {
   @Get('buses/:id/display')
   getDisplay(@Param('tenantId') tenantId: string, @Param('id') id: string) {
     return this.fleetService.getDisplayInfo(tenantId, id);
+  }
+
+  // ── Photos véhicule (intérieur/extérieur — affichage Portail Voyageur) ─────
+
+  /** Étape 1 — réserver une URL d'upload présignée. */
+  @Post('buses/:id/photos/upload-url')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  requestPhotoUpload(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('ext') ext: string,
+  ) {
+    return this.fleetService.requestPhotoUpload(tenantId, id, ext ?? 'jpg');
+  }
+
+  /** Étape 2 — confirmer l'upload (commit du fileKey). */
+  @Post('buses/:id/photos')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  addPhoto(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('fileKey') fileKey: string,
+  ) {
+    return this.fleetService.addPhoto(tenantId, id, fileKey);
+  }
+
+  /** Lister les photos avec URLs de téléchargement présignées (24h). */
+  @Get('buses/:id/photos')
+  @RequirePermission(Permission.FLEET_STATUS_AGENCY)
+  listPhotos(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.fleetService.getPhotosWithUrls(tenantId, id);
+  }
+
+  /** Supprimer une photo (S3 + array). */
+  @Delete('buses/:id/photos')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  removePhoto(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('fileKey') fileKey: string,
+  ) {
+    return this.fleetService.removePhoto(tenantId, id, fileKey);
   }
 }

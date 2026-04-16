@@ -8,6 +8,9 @@ import { MiniBarChart } from './MiniBarChart';
 import type { ChartPoint } from './types';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { useAuth }  from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
+
 
 interface SegmentationData {
   total:         number;
@@ -39,6 +42,7 @@ const PASSENGERS_BY_LINE: ChartPoint[] = [
 
 function CustomerSegmentationWidget() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const url = user?.tenantId ? `/api/tenants/${user.tenantId}/analytics/customer-segmentation` : null;
   const { data, loading, error } = useFetch<SegmentationData>(url, [user?.tenantId]);
 
@@ -46,41 +50,41 @@ function CustomerSegmentationWidget() {
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <Users className="w-4 h-4 text-teal-400" aria-hidden />
-        <h3 className="text-sm font-semibold text-white">Segmentation clients par activité</h3>
+        <h3 className="text-sm font-semibold text-white">{t('analytics.segTitle')}</h3>
       </div>
       {loading && (
         <div className="flex items-center gap-2 text-slate-500 py-6 justify-center">
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-xs">Chargement…</span>
+          <span className="text-xs">{t('analytics.loading')}</span>
         </div>
       )}
       {error && <p className="text-xs text-red-400 py-2">{error}</p>}
       {data && (
-        <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-            <p className="text-slate-400">Total clients</p>
+            <p className="text-slate-400">{t('analytics.totalCustomers')}</p>
             <p className="text-lg font-bold text-white">{data.total.toLocaleString('fr-FR')}</p>
           </div>
           <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-            <p className="text-slate-400">Actifs</p>
+            <p className="text-slate-400">{t('analytics.active')}</p>
             <p className="text-lg font-bold text-white">{data.active.toLocaleString('fr-FR')}</p>
-            <p className="text-[10px] text-slate-500">{data.inactive.toLocaleString('fr-FR')} inactifs</p>
+            <p className="text-[10px] text-slate-500">{data.inactive.toLocaleString('fr-FR')} {t('analytics.inactive')}</p>
           </div>
           <div className="rounded-lg bg-teal-900/30 border border-teal-800/40 px-3 py-2">
             <Ticket className="w-3 h-3 text-teal-400 inline mb-0.5" aria-hidden />
-            <span className="text-teal-300 ml-1">Voyageurs uniquement</span>
+            <span className="text-teal-300 ml-1">{t('analytics.travelersOnly')}</span>
             <p className="text-lg font-bold text-white">{data.travelersOnly.toLocaleString('fr-FR')}</p>
           </div>
           <div className="rounded-lg bg-orange-900/30 border border-orange-800/40 px-3 py-2">
             <Package className="w-3 h-3 text-orange-400 inline mb-0.5" aria-hidden />
-            <span className="text-orange-300 ml-1">Expéditeurs uniquement</span>
+            <span className="text-orange-300 ml-1">{t('analytics.shippersOnly')}</span>
             <p className="text-lg font-bold text-white">{data.shippersOnly.toLocaleString('fr-FR')}</p>
           </div>
-          <div className="col-span-2 rounded-lg bg-violet-900/30 border border-violet-800/40 px-3 py-2">
-            <span className="text-violet-300">Voyageurs ET expéditeurs</span>
+          <div className="sm:col-span-2 rounded-lg bg-violet-900/30 border border-violet-800/40 px-3 py-2">
+            <span className="text-violet-300">{t('analytics.travelersAndShip')}</span>
             <p className="text-lg font-bold text-white">{data.both.toLocaleString('fr-FR')}</p>
             <p className="text-[10px] text-slate-400">
-              Clients qui voyagent et expédient — segment à fort potentiel cross-sell.
+              {t('analytics.crossSellHint')}
             </p>
           </div>
         </div>
@@ -92,19 +96,21 @@ function CustomerSegmentationWidget() {
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function PageAnalytics() {
+  const { operational } = useTenantConfig();
+  const { t } = useI18n();
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Tableaux analytiques</h1>
+      <h1 className="text-2xl font-bold text-white">{t('analytics.title')}</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <MiniBarChart
-            label="Recette 7 derniers jours (FCFA ×1M)"
+            label={`${t('analytics.revenueLast7')} (${operational.currencySymbol} ×1M)`}
             data={REVENUE_7D}
           />
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <MiniBarChart
-            label="Passagers par ligne (milliers)"
+            label={t('analytics.paxByLine')}
             data={PASSENGERS_BY_LINE}
           />
         </div>

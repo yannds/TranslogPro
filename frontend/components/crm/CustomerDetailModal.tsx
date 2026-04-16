@@ -13,6 +13,8 @@ import {
   Ticket as TicketIcon, FileText, Star, MessageCircle, Calendar, MapPin, BadgeCheck,
 } from 'lucide-react';
 import { useFetch }         from '../../lib/hooks/useFetch';
+import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
+import { useI18n }          from '../../lib/i18n/useI18n';
 import { Dialog }           from '../ui/Dialog';
 import { Badge }            from '../ui/Badge';
 import { Button }           from '../ui/Button';
@@ -62,6 +64,7 @@ interface CustomerDetail {
 }
 
 type TabId = 'info' | 'docs' | 'tickets' | 'interactions';
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +155,8 @@ export function CustomerDetailModal({
 }: CustomerDetailModalProps) {
   const [tab, setTab] = useState<TabId>('info');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const fmtCurrency = useCurrencyFormatter();
+  const { t } = useI18n();
 
   const { data, loading, error } = useFetch<CustomerDetail>(
     open && customerId && tenantId
@@ -167,13 +172,13 @@ export function CustomerDetailModal({
     <Dialog
       open={open}
       onOpenChange={o => { if (!o) { setPreviewOpen(false); onClose(); } }}
-      title={data?.name ?? 'Fiche voyageur'}
+      title={data?.name ?? t('crm.travelerCard')}
       description={data?.email ?? undefined}
       size={previewOpen ? '3xl' : 'xl'}
     >
       {/* États de chargement */}
       {loading && !data && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Chargement…</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('ui.loading')}</p>
       )}
       {error && (
         <div role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</div>
@@ -187,7 +192,7 @@ export function CustomerDetailModal({
               {data.image
                 ? <img src={data.image} alt="" className="h-14 w-14 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
                 : (
-                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center text-white text-xl font-semibold">
+                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 dark:from-teal-700 dark:to-teal-900 flex items-center justify-center text-white text-xl font-semibold">
                     {(data.name ?? data.email).charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -214,19 +219,19 @@ export function CustomerDetailModal({
             {/* Actions rapides */}
             <div className="flex flex-wrap gap-2 sm:ml-auto">
               {phone && (
-                <a href={`tel:${phone}`} title="Appeler" aria-label="Appeler">
+                <a href={`tel:${phone}`} title={t('crm.call')} aria-label={t('crm.call')}>
                   <Button type="button" variant="outline" size="sm">
-                    <Phone className="w-4 h-4 mr-1.5" aria-hidden />Appeler
+                    <Phone className="w-4 h-4 mr-1.5" aria-hidden />{t('crm.call')}
                   </Button>
                 </a>
               )}
-              <a href={`mailto:${data.email}`} title="Envoyer un email" aria-label="Envoyer un email">
+              <a href={`mailto:${data.email}`} title={t('crm.sendEmail')} aria-label={t('crm.sendEmail')}>
                 <Button type="button" variant="outline" size="sm">
                   <Mail className="w-4 h-4 mr-1.5" aria-hidden />Email
                 </Button>
               </a>
               {phone && (
-                <a href={`sms:${phone}`} title="Envoyer un SMS" aria-label="Envoyer un SMS">
+                <a href={`sms:${phone}`} title={t('crm.sendSms')} aria-label={t('crm.sendSms')}>
                   <Button type="button" variant="outline" size="sm">
                     <MessageSquare className="w-4 h-4 mr-1.5" aria-hidden />SMS
                   </Button>
@@ -234,42 +239,42 @@ export function CustomerDetailModal({
               )}
               {onAddToCampaign && (
                 <Button type="button" variant="outline" size="sm" onClick={onAddToCampaign}>
-                  <Megaphone className="w-4 h-4 mr-1.5" aria-hidden />Campagne
+                  <Megaphone className="w-4 h-4 mr-1.5" aria-hidden />{t('crm.campaign')}
                 </Button>
               )}
               {onEdit && (
                 <Button type="button" size="sm" onClick={onEdit}>
-                  <Pencil className="w-4 h-4 mr-1.5" aria-hidden />Éditer
+                  <Pencil className="w-4 h-4 mr-1.5" aria-hidden />{t('common.edit')}
                 </Button>
               )}
             </div>
           </div>
 
           {/* ─── KPIs synthétiques ───────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard icon={<TicketIcon className="w-4 h-4" />} label="Billets" value={String(data.ticketCount)} />
-            <StatCard icon={<BadgeCheck className="w-4 h-4" />} label="Total dépensé" value={`${data.totalSpent.toFixed(0)} FCFA`} />
-            <StatCard icon={<MessageCircle className="w-4 h-4" />} label="Feedbacks" value={String(data.feedbackCount)} />
-            <StatCard icon={<Calendar className="w-4 h-4" />} label="Inscrit le" value={new Date(data.createdAt).toLocaleDateString('fr-FR')} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard icon={<TicketIcon className="w-4 h-4" />} label={t('crm.tickets')} value={String(data.ticketCount)} />
+            <StatCard icon={<BadgeCheck className="w-4 h-4" />} label={t('crm.totalSpent')} value={fmtCurrency(data.totalSpent)} />
+            <StatCard icon={<MessageCircle className="w-4 h-4" />} label={t('crm.feedbacks')} value={String(data.feedbackCount)} />
+            <StatCard icon={<Calendar className="w-4 h-4" />} label={t('crm.registeredOn')} value={new Date(data.createdAt).toLocaleDateString('fr-FR')} />
           </div>
 
           {/* ─── Onglets ────────────────────────────────────────────────── */}
-          <div role="tablist" aria-label="Fiche voyageur" className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800 -mb-px">
-            <Tab id="info"         activeId={tab} onSelect={setTab} icon={<UserCircle  className="w-4 h-4" aria-hidden />} label="Informations" />
-            <Tab id="docs"         activeId={tab} onSelect={setTab} icon={<FileText    className="w-4 h-4" aria-hidden />} label="Documents" />
-            <Tab id="tickets"      activeId={tab} onSelect={setTab} icon={<TicketIcon  className="w-4 h-4" aria-hidden />} label="Billets" count={data.ticketCount} />
-            <Tab id="interactions" activeId={tab} onSelect={setTab} icon={<MessageCircle className="w-4 h-4" aria-hidden />} label="Interactions" count={data.feedbackCount} />
+          <div role="tablist" aria-label={t('crm.travelerCard')} className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800 -mb-px">
+            <Tab id="info"         activeId={tab} onSelect={setTab} icon={<UserCircle  className="w-4 h-4" aria-hidden />} label={t('crm.information')} />
+            <Tab id="docs"         activeId={tab} onSelect={setTab} icon={<FileText    className="w-4 h-4" aria-hidden />} label={t('common.documents')} />
+            <Tab id="tickets"      activeId={tab} onSelect={setTab} icon={<TicketIcon  className="w-4 h-4" aria-hidden />} label={t('crm.tickets')} count={data.ticketCount} />
+            <Tab id="interactions" activeId={tab} onSelect={setTab} icon={<MessageCircle className="w-4 h-4" aria-hidden />} label={t('crm.interactions')} count={data.feedbackCount} />
           </div>
 
           {/* ─── Panneaux ───────────────────────────────────────────────── */}
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
             {tab === 'info' && (
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <InfoRow label="Email">{data.email}</InfoRow>
-                <InfoRow label="Téléphone">{phone || <span className="text-slate-400">—</span>}</InfoRow>
-                <InfoRow label="Score fidélité">{data.loyaltyScore.toFixed(0)}</InfoRow>
-                <InfoRow label="Agence">{data.agency?.name ?? <span className="text-slate-400">—</span>}</InfoRow>
-                <InfoRow label="Inscrit le">{new Date(data.createdAt).toLocaleString('fr-FR')}</InfoRow>
+                <InfoRow label={t('common.email')}>{data.email}</InfoRow>
+                <InfoRow label={t('common.phone')}>{phone || <span className="text-slate-400">—</span>}</InfoRow>
+                <InfoRow label={t('crm.loyaltyScore')}>{data.loyaltyScore.toFixed(0)}</InfoRow>
+                <InfoRow label={t('common.agency')}>{data.agency?.name ?? <span className="text-slate-400">—</span>}</InfoRow>
+                <InfoRow label={t('crm.registeredOn')}>{new Date(data.createdAt).toLocaleString('fr-FR')}</InfoRow>
                 <InfoRow label="ID">
                   <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{data.id}</code>
                 </InfoRow>
@@ -289,25 +294,25 @@ export function CustomerDetailModal({
             {tab === 'tickets' && (
               <div className="space-y-2">
                 {data.tickets.length === 0 && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 italic">Aucun billet.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 italic">{t('crm.noTicket')}</p>
                 )}
-                {data.tickets.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2">
+                {data.tickets.map(tk => (
+                  <div key={tk.id} className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2">
                     <TicketIcon className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {t.trip?.route?.name ?? 'Trajet inconnu'}
+                        {tk.trip?.route?.name ?? t('crm.unknownRoute')}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {t.trip?.departureAt
-                          ? new Date(t.trip.departureAt).toLocaleString('fr-FR')
-                          : new Date(t.createdAt).toLocaleString('fr-FR')}
+                        {tk.trip?.departureAt
+                          ? new Date(tk.trip.departureAt).toLocaleString('fr-FR')
+                          : new Date(tk.createdAt).toLocaleString('fr-FR')}
                       </p>
                     </div>
                     <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300">
-                      {(t.pricePaid ?? 0).toFixed(0)} FCFA
+                      {fmtCurrency(tk.pricePaid ?? 0)}
                     </span>
-                    {statusBadge(t.status)}
+                    {statusBadge(tk.status)}
                   </div>
                 ))}
               </div>
@@ -317,7 +322,7 @@ export function CustomerDetailModal({
               <div className="space-y-2">
                 {data.feedbacks.length === 0 && (
                   <p className="text-sm text-slate-500 dark:text-slate-400 italic">
-                    Aucune interaction enregistrée (plaintes, avis, appels).
+                    {t('crm.noInteraction')}
                   </p>
                 )}
                 {data.feedbacks.map(f => {

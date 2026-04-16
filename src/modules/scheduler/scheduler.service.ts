@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { DriverProfileService } from '../driver-profile/driver-profile.service';
 
 /**
  * PRD §IV.11 — Module M : Scheduler & Récurrence.
@@ -9,12 +10,16 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
  *   1. Génération automatique des Trip depuis les TripTemplate
  *   2. Expiration des tickets PENDING_PAYMENT après 15min (configurable)
  *   3. Gestion des exceptions (jours fériés, suspensions)
+ *   4. Fermeture automatique des périodes de repos expirées (toutes les 5 min)
  */
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly driverProfile: DriverProfileService,
+  ) {}
 
   /**
    * Expire les tickets PENDING_PAYMENT dont le timeout est dépassé.
@@ -79,6 +84,18 @@ export class SchedulerService {
       });
 
       this.logger.debug(`Trip généré depuis template ${tpl.id} pour ${departureScheduled.toISOString()}`);
+    }
+  }
+
+  /**
+   * Ferme automatiquement les périodes de repos dont la durée minimale
+   * est atteinte. Publie DRIVER_REST_COMPLETED pour chaque clôture.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async autoCloseExpiredRestPeriods(): Promise<void> {
+    const closed = await this.driverProfile.autoCloseExpiredRestPeriods();
+    if (closed > 0) {
+      this.logger.log(`Périodes de repos auto-clôturées : ${closed}`);
     }
   }
 

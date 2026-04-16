@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Param, Body } from '@nestjs/common';
-import { TenantService, CreateTenantDto, UpdateCompanyInfoDto } from './tenant.service';
+import { TenantService, CreateTenantDto, UpdateCompanyInfoDto, UpdateBusinessConfigDto } from './tenant.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -63,5 +63,22 @@ export class TenantController {
   @Get(':id/config')
   getConfig(@Param('id') id: string) {
     return this.tenantService.getAggregatedConfig(id);
+  }
+
+  // ── Business config ─────────────────────────────────────────────────────────
+
+  @Get(':id/business-config')
+  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  getBusinessConfig(@Param('id') id: string) {
+    return this.tenantService.getBusinessConfig(id);
+  }
+
+  @Patch(':id/business-config')
+  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  updateBusinessConfig(
+    @Param('id') id: string,
+    @Body() dto: UpdateBusinessConfigDto,
+  ) {
+    return this.tenantService.updateBusinessConfig(id, dto);
   }
 }

@@ -1,0 +1,1208 @@
+/**
+ * PageFleetVehicles — « Véhicules »
+ *
+ * CRUD flotte de bus. Source de vérité pour les plans de sièges et la
+ * maintenance (les deux autres pages réutilisent la même liste).
+ *
+ * API :
+ *   GET    /api/tenants/:tid/fleet/buses
+ *   POST   /api/tenants/:tid/fleet/buses                 body: CreateBusDto
+ *   PATCH  /api/tenants/:tid/fleet/buses/:id/status      body: { status }
+ */
+
+import { useMemo, useState, useEffect, type FormEvent } from 'react';
+import { useNavigate }                     from 'react-router-dom';
+import {
+  Bus, Plus, Wrench, CheckCircle2, LayoutGrid, Power, Pencil, Trash2, FileText, X,
+  Camera, Upload, ImageOff, ChevronDown, ChevronUp, Gauge, Coins,
+} from 'lucide-react';
+import { useAuth }                         from '../../lib/auth/auth.context';
+import { useFetch }                        from '../../lib/hooks/useFetch';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiFetch } from '../../lib/api';
+import { useI18n }                     from '../../lib/i18n/useI18n';
+import type { TranslationMap }             from '../../lib/i18n/types';
+import { Badge }                           from '../ui/Badge';
+import { Button }                          from '../ui/Button';
+import { Dialog }                          from '../ui/Dialog';
+import { ErrorAlert }                      from '../ui/ErrorAlert';
+import { FormFooter }                      from '../ui/FormFooter';
+import { inputClass as inp }               from '../ui/inputClass';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
+import { useTenantConfig }                 from '../../providers/TenantConfigProvider';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type BusType   = 'STANDARD' | 'CONFORT' | 'VIP' | 'MINIBUS';
+type BusStatus = 'AVAILABLE' | 'IN_SERVICE' | 'MAINTENANCE' | 'OFFLINE';
+type FuelType  = 'DIESEL' | 'PETROL' | 'BIO_DIESEL' | 'HYBRID' | 'ELECTRIC';
+type EngineType = 'EURO_3' | 'EURO_4' | 'EURO_5' | 'EURO_6';
+
+interface BusRow {
+  id:                  string;
+  tenantId:            string;
+  plateNumber:         string;
+  model?:              string | null;
+  type?:               BusType | null;
+  capacity:            number;
+  status:              BusStatus;
+  year?:               number | null;
+  agencyId?:           string | null;
+  seatLayout?:         Record<string, unknown> | null;
+  vin?:                string | null;
+  fuelType?:           FuelType | null;
+  engineType?:         EngineType | null;
+  fuelTankCapacityL?:  number | null;
+  adBlueTankCapacityL?: number | null;
+  luggageCapacityKg?:  number | null;
+  luggageCapacityM3?:  number | null;
+  registrationDate?:   string | null;
+  purchaseDate?:       string | null;
+  purchasePrice?:      number | null;
+  initialOdometerKm?:  number | null;
+  currentOdometerKm?:  number | null;
+  fuelConsumptionPer100Km?:  number | null;
+  adBlueConsumptionPer100Km?: number | null;
+}
+
+interface AgencyRow { id: string; name: string; }
+
+interface BusFormValues {
+  plateNumber:         string;
+  model:               string;
+  type:                BusType;
+  capacity:            string;
+  year:                string;
+  agencyId:            string;
+  // Technique
+  vin:                 string;
+  fuelType:            string;
+  engineType:          string;
+  fuelTankCapacityL:   string;
+  adBlueTankCapacityL: string;
+  luggageCapacityKg:   string;
+  luggageCapacityM3:   string;
+  registrationDate:    string;
+  purchaseDate:        string;
+  purchasePrice:              string;
+  initialOdometerKm:          string;
+  fuelConsumptionPer100Km:    string;
+  adBlueConsumptionPer100Km:  string;
+}
+
+const EMPTY_FORM: BusFormValues = {
+  plateNumber: '', model: '', type: 'STANDARD', capacity: '50', year: '', agencyId: '',
+  vin: '', fuelType: '', engineType: '', fuelTankCapacityL: '', adBlueTankCapacityL: '',
+  luggageCapacityKg: '', luggageCapacityM3: '', registrationDate: '', purchaseDate: '',
+  purchasePrice: '', initialOdometerKm: '',
+  fuelConsumptionPer100Km: '', adBlueConsumptionPer100Km: '',
+};
+
+const STATUS_LABEL: Record<BusStatus, TranslationMap> = {
+  AVAILABLE:   tm('Disponible', 'Available'),
+  IN_SERVICE:  tm('En service', 'In Service'),
+  MAINTENANCE: tm('Maintenance', 'Maintenance'),
+  OFFLINE:     tm('Hors service', 'Offline'),
+};
+
+const STATUS_VARIANT: Record<BusStatus, 'success' | 'warning' | 'danger' | 'default'> = {
+  AVAILABLE:   'success',
+  IN_SERVICE:  'warning',
+  MAINTENANCE: 'danger',
+  OFFLINE:     'default',
+};
+
+const TYPE_LABEL: Record<BusType, TranslationMap> = {
+  STANDARD: tm('Standard', 'Standard'),
+  CONFORT:  tm('Confort', 'Comfort'),
+  VIP:      tm('VIP', 'VIP'),
+  MINIBUS:  tm('Minibus', 'Minibus'),
+};
+
+const FUEL_TYPE_LABEL: Record<FuelType, TranslationMap> = {
+  DIESEL:     tm('Diesel', 'Diesel'),
+  PETROL:     tm('Essence', 'Petrol'),
+  BIO_DIESEL: tm('Biodiesel', 'Biodiesel'),
+  HYBRID:     tm('Hybride', 'Hybrid'),
+  ELECTRIC:   tm('Électrique', 'Electric'),
+};
+
+const ENGINE_TYPE_LABEL: Record<EngineType, TranslationMap> = {
+  EURO_3: tm('Euro 3', 'Euro 3'),
+  EURO_4: tm('Euro 4', 'Euro 4'),
+  EURO_5: tm('Euro 5', 'Euro 5'),
+  EURO_6: tm('Euro 6', 'Euro 6'),
+};
+
+const T = {
+  // Page
+  pageTitle:              tm('Véhicules', 'Vehicles'),
+  pageSubtitle:           tm('Flotte du tenant — profil, capacité, statut opérationnel.', 'Tenant fleet — profile, capacity, operational status.'),
+  addVehicle:             tm('Ajouter un véhicule', 'Add Vehicle'),
+  editVehicle:            tm('Modifier le véhicule', 'Edit Vehicle'),
+  deleteVehicle:          tm('Supprimer le véhicule', 'Delete Vehicle'),
+  changeStatus:           tm('Changer le statut', 'Change Status'),
+  seatPlan:               tm('Plan de sièges', 'Seat Plan'),
+  // KPIs
+  kpiVehicles:            tm('Véhicules', 'Vehicles'),
+  kpiAvailable:           tm('Disponibles', 'Available'),
+  kpiInService:           tm('En service', 'In Service'),
+  kpiMaintenance:         tm('Maintenance', 'Maintenance'),
+  // Form labels
+  registration:           tm('Immatriculation', 'Registration'),
+  model:                  tm('Modèle', 'Model'),
+  type:                   tm('Type', 'Type'),
+  capacity:               tm('Capacité', 'Capacity'),
+  year:                   tm('Année', 'Year'),
+  homeAgency:             tm('Agence de rattachement', 'Home Agency'),
+  selectPlaceholder:      tm('— Sélectionner —', '— Select —'),
+  // Technical details
+  technicalDetails:       tm('Détails techniques', 'Technical Details'),
+  chassisVin:             tm('N° de châssis (VIN)', 'Chassis No. (VIN)'),
+  fuel:                   tm('Carburant', 'Fuel'),
+  engineStandard:         tm('Norme moteur', 'Engine Standard'),
+  fuelTank:               tm('Réservoir carburant (L)', 'Fuel Tank (L)'),
+  adBlueTank:             tm('Réservoir AdBlue (L)', 'AdBlue Tank (L)'),
+  luggageKg:              tm('Capacité soute (kg)', 'Luggage Capacity (kg)'),
+  luggageM3:              tm('Capacité soute (m³)', 'Luggage Capacity (m³)'),
+  firstRegistrationDate:  tm('Date de 1ère immatriculation', 'First Registration Date'),
+  purchaseDate:           tm('Date d\'acquisition', 'Purchase Date'),
+  purchasePrice:          tm('Prix d\'achat', 'Purchase Price'),
+  initialMileage:         tm('Kilométrage initial (km)', 'Initial Mileage (km)'),
+  fuelConsumption:        tm('Conso. carburant déclarée (L/100km)', 'Declared Fuel Consumption (L/100km)'),
+  adBlueConsumption:      tm('Conso. AdBlue déclarée (L/100km)', 'Declared AdBlue Consumption (L/100km)'),
+  notSpecified:           tm('— Non renseigné —', '— Not specified —'),
+  // Photos
+  vehiclePhotos:          tm('Photos du véhicule', 'Vehicle Photos'),
+  addPhoto:               tm('Ajouter', 'Add'),
+  uploading:              tm('Upload…', 'Uploading…'),
+  loadingPhotos:          tm('Chargement…', 'Loading…'),
+  noPhotos:               tm('Aucune photo. Recommandé : 1 extérieur + 2 intérieur (Portail Voyageur).', 'No photos. Recommended: 1 exterior + 2 interior (Traveler Portal).'),
+  deletePhoto:            tm('Supprimer la photo', 'Delete photo'),
+  photoAlt:               tm('Photo véhicule', 'Vehicle photo'),
+  // Cost profile
+  costProfile:            tm('Profil de coûts', 'Cost Profile'),
+  configured:             tm('Configuré', 'Configured'),
+  notConfigured:          tm('Non configuré', 'Not configured'),
+  consumption:            tm('Consommation', 'Consumption'),
+  fuelConsumptionLabel:   tm('Conso. carburant (L/100km)', 'Fuel Consumption (L/100km)'),
+  fuelPriceLabel:         tm('Prix carburant (XAF/L)', 'Fuel Price (XAF/L)'),
+  adBlueCostLabel:        tm('Coût AdBlue (€/L)', 'AdBlue Cost (€/L)'),
+  adBlueRatioLabel:       tm('Ratio AdBlue/carburant', 'AdBlue/Fuel Ratio'),
+  costPerTrip:            tm('Coûts par trajet', 'Cost Per Trip'),
+  maintenancePerKm:       tm('Maintenance (XAF/km)', 'Maintenance (XAF/km)'),
+  stationFee:             tm('Redevance gare (XAF)', 'Station Fee (XAF)'),
+  driverAllowance:        tm('Indemnité chauffeur (XAF)', 'Driver Allowance (XAF)'),
+  tollFees:               tm('Péages forfait (XAF)', 'Toll Fees (XAF)'),
+  fixedCharges:           tm('Charges fixes', 'Fixed Charges'),
+  driverSalary:           tm('Salaire mensuel chauffeur (XAF)', 'Monthly Driver Salary (XAF)'),
+  annualInsurance:        tm('Assurance annuelle (XAF)', 'Annual Insurance (XAF)'),
+  agencyFees:             tm('Frais agence/mois (XAF)', 'Agency Fees/Month (XAF)'),
+  depreciation:           tm('Amortissement', 'Depreciation'),
+  purchasePriceCost:      tm("Prix d'achat (XAF)", "Purchase Price (XAF)"),
+  depreciationYears:      tm('Durée amortissement (années)', 'Depreciation Period (years)'),
+  residualValue:          tm('Valeur résiduelle (XAF)', 'Residual Value (XAF)'),
+  avgTripsPerMonth:       tm('Trajets moyens/mois', 'Avg Trips/Month'),
+  saveCostProfile:        tm('Enregistrer le profil de coûts', 'Save Cost Profile'),
+  costProfileSaved:       tm('Profil enregistré', 'Profile saved'),
+  // DataTable
+  seats:                  tm('sièges', 'seats'),
+  plan:                   tm('Plan', 'Plan'),
+  planConfigured:         tm('Configuré', 'Configured'),
+  planMissing:            tm('Absent', 'Missing'),
+  agency:                 tm('Agence', 'Agency'),
+  status:                 tm('Statut', 'Status'),
+  searchPlaceholder:      tm('Rechercher un véhicule…', 'Search for a vehicle…'),
+  emptyMessage:           tm('Aucun véhicule enregistré.', 'No vehicles registered.'),
+  // Row actions
+  tracking:               tm('Suivi km / Carburant', 'Mileage / Fuel Tracking'),
+  papers:                 tm('Papiers', 'Papers'),
+  // Dialogs
+  createTitle:            tm('Ajouter un véhicule', 'Add Vehicle'),
+  createDescription:      tm('Immatriculation unique par tenant.', 'Unique registration per tenant.'),
+  deleteConfirm:          tm('Action irréversible — refusée si des voyages actifs le référencent.', 'Irreversible action — denied if active trips reference it.'),
+  current:                tm('Actuel', 'Current'),
+  fleetIndicators:        tm('Indicateurs flotte', 'Fleet Indicators'),
+};
+
+// ─── Formulaire ───────────────────────────────────────────────────────────────
+
+function BusForm({
+  agencies, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel, currencyCode,
+}: {
+  agencies:     AgencyRow[];
+  initial:      BusFormValues;
+  onSubmit:     (v: BusFormValues) => void;
+  onCancel:     () => void;
+  busy:         boolean;
+  error:        string | null;
+  submitLabel:  string;
+  pendingLabel: string;
+  currencyCode: string;
+}) {
+  const { t } = useI18n();
+  const [f, setF] = useState<BusFormValues>(initial);
+  const [showTech, setShowTech] = useState(false);
+  const patch = (p: Partial<BusFormValues>) => setF(prev => ({ ...prev, ...p }));
+
+  // Ouvrir les détails techniques si un champ technique est déjà rempli
+  useEffect(() => {
+    const hasTech = !!(f.vin || f.fuelType || f.engineType || f.fuelTankCapacityL ||
+      f.adBlueTankCapacityL || f.luggageCapacityKg || f.luggageCapacityM3 ||
+      f.registrationDate || f.purchaseDate || f.purchasePrice || f.initialOdometerKm);
+    if (hasTech) setShowTech(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <form
+      onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}
+      className="space-y-4"
+    >
+      <ErrorAlert error={error} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="space-y-1.5 lg:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.registration')} <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input type="text" required value={f.plateNumber}
+            onChange={e => patch({ plateNumber: e.target.value.toUpperCase() })}
+            className={inp} disabled={busy} placeholder="KA-4421-B" />
+        </div>
+        <div className="space-y-1.5 lg:col-span-3">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.model')}
+          </label>
+          <input type="text" value={f.model}
+            onChange={e => patch({ model: e.target.value })}
+            className={inp} disabled={busy} placeholder="Yutong ZK6122H" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.type')} <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select required value={f.type}
+            onChange={e => patch({ type: e.target.value as BusType })}
+            className={inp} disabled={busy}>
+            {(Object.keys(TYPE_LABEL) as BusType[]).map(k => (
+              <option key={k} value={k}>{t(TYPE_LABEL[k])}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.capacity')} <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <input type="number" min={1} required value={f.capacity}
+            onChange={e => patch({ capacity: e.target.value })}
+            className={inp} disabled={busy} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.year')}
+          </label>
+          <input type="number" min={1980} max={2100} value={f.year}
+            onChange={e => patch({ year: e.target.value })}
+            className={inp} disabled={busy} placeholder="2020" />
+        </div>
+        <div className="space-y-1.5 lg:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('LFleetVehicles.homeAgency')} <span aria-hidden className="text-red-500">*</span>
+          </label>
+          <select required value={f.agencyId}
+            onChange={e => patch({ agencyId: e.target.value })}
+            className={inp} disabled={busy}>
+            <option value="">{t('LFleetVehicles.selectPlaceholder')}</option>
+            {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ── Détails techniques (collapsible) ─────────────────────────────── */}
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <button type="button"
+          onClick={() => setShowTech(!showTech)}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800">
+          <span className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 text-slate-400" aria-hidden />
+            {t('LFleetVehicles.technicalDetails')}
+          </span>
+          {showTech
+            ? <ChevronUp className="w-4 h-4 text-slate-400" aria-hidden />
+            : <ChevronDown className="w-4 h-4 text-slate-400" aria-hidden />}
+        </button>
+
+        {showTech && (
+          <div className="px-4 py-4 space-y-4 border-t border-slate-200 dark:border-slate-700">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.chassisVin')}
+                </label>
+                <input type="text" value={f.vin}
+                  onChange={e => patch({ vin: e.target.value.toUpperCase() })}
+                  className={inp} disabled={busy} placeholder="1HGBH41JXMN109186" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.fuel')}
+                </label>
+                <select value={f.fuelType}
+                  onChange={e => patch({ fuelType: e.target.value })}
+                  className={inp} disabled={busy}>
+                  <option value="">{t('LFleetVehicles.notSpecified')}</option>
+                  {(Object.keys(FUEL_TYPE_LABEL) as FuelType[]).map(k => (
+                    <option key={k} value={k}>{t(FUEL_TYPE_LABEL[k])}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.engineStandard')}
+                </label>
+                <select value={f.engineType}
+                  onChange={e => patch({ engineType: e.target.value })}
+                  className={inp} disabled={busy}>
+                  <option value="">{t('LFleetVehicles.notSpecified')}</option>
+                  {(Object.keys(ENGINE_TYPE_LABEL) as EngineType[]).map(k => (
+                    <option key={k} value={k}>{t(ENGINE_TYPE_LABEL[k])}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.fuelTank')}
+                </label>
+                <input type="number" min={0} step="0.1" value={f.fuelTankCapacityL}
+                  onChange={e => patch({ fuelTankCapacityL: e.target.value })}
+                  className={inp} disabled={busy} placeholder="300" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.adBlueTank')}
+                </label>
+                <input type="number" min={0} step="0.1" value={f.adBlueTankCapacityL}
+                  onChange={e => patch({ adBlueTankCapacityL: e.target.value })}
+                  className={inp} disabled={busy} placeholder="40" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.luggageKg')}
+                </label>
+                <input type="number" min={0} step="0.1" value={f.luggageCapacityKg}
+                  onChange={e => patch({ luggageCapacityKg: e.target.value })}
+                  className={inp} disabled={busy} placeholder="500" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t(T.luggageM3)}
+                </label>
+                <input type="number" min={0} step="0.1" value={f.luggageCapacityM3}
+                  onChange={e => patch({ luggageCapacityM3: e.target.value })}
+                  className={inp} disabled={busy} placeholder="8" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.firstRegistrationDate')}
+                </label>
+                <input type="date" value={f.registrationDate}
+                  onChange={e => patch({ registrationDate: e.target.value })}
+                  className={inp} disabled={busy} />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.purchaseDate')}
+                </label>
+                <input type="date" value={f.purchaseDate}
+                  onChange={e => patch({ purchaseDate: e.target.value })}
+                  className={inp} disabled={busy} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.purchasePrice')} ({currencyCode})
+                </label>
+                <input type="number" min={0} value={f.purchasePrice}
+                  onChange={e => patch({ purchasePrice: e.target.value })}
+                  className={inp} disabled={busy} placeholder="45 000 000" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.initialMileage')}
+                </label>
+                <input type="number" min={0} value={f.initialOdometerKm}
+                  onChange={e => patch({ initialOdometerKm: e.target.value })}
+                  className={inp} disabled={busy} placeholder="0" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.fuelConsumption')}
+                </label>
+                <input type="number" min={0} step="0.1" value={f.fuelConsumptionPer100Km}
+                  onChange={e => patch({ fuelConsumptionPer100Km: e.target.value })}
+                  className={inp} disabled={busy} placeholder="35" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {t('LFleetVehicles.adBlueConsumption')}
+                </label>
+                <input type="number" min={0} step="0.01" value={f.adBlueConsumptionPer100Km}
+                  onChange={e => patch({ adBlueConsumptionPer100Km: e.target.value })}
+                  className={inp} disabled={busy} placeholder="1.75" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <FormFooter onCancel={onCancel} busy={busy}
+        submitLabel={submitLabel} pendingLabel={pendingLabel} />
+    </form>
+  );
+}
+
+// ─── Gestionnaire de photos ───────────────────────────────────────────────────
+
+interface PhotoItem { fileKey: string; url: string; expiresAt: string; }
+
+function BusPhotoManager({ tenantId, busId }: { tenantId: string; busId: string }) {
+  const { t } = useI18n();
+  const base = `/api/tenants/${tenantId}/fleet/buses/${busId}/photos`;
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const reload = async () => {
+    setLoading(true); setErr(null);
+    try { setPhotos(await apiGet<PhotoItem[]>(base)); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [busId]);
+
+  const handleFile = async (file: File) => {
+    setUploading(true); setErr(null);
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const { uploadUrl, fileKey } = await apiPost<{ uploadUrl: string; fileKey: string }>(
+        `${base}/upload-url`, { ext },
+      );
+      const put = await fetch(uploadUrl, {
+        method: 'PUT',
+        body:   file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      });
+      if (!put.ok) throw new Error(`Upload échoué (${put.status})`);
+      await apiPost(base, { fileKey });
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setUploading(false); }
+  };
+
+  const handleDelete = async (fileKey: string) => {
+    setErr(null);
+    try {
+      await apiFetch(base, { method: 'DELETE', body: { fileKey } });
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+  };
+
+  return (
+    <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" aria-hidden />
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            {t('LFleetVehicles.vehiclePhotos')}
+          </h3>
+          <span className="text-xs text-slate-500">({photos.length})</span>
+        </div>
+        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/50 cursor-pointer">
+          <Upload className="w-3.5 h-3.5" aria-hidden />
+          {uploading ? t('LFleetVehicles.uploading') : t('LFleetVehicles.addPhoto')}
+          <input type="file" accept="image/jpeg,image/png,image/webp"
+            className="hidden" disabled={uploading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+        </label>
+      </div>
+
+      {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
+
+      {loading ? (
+        <p className="text-xs text-slate-500">{t('LFleetVehicles.loadingPhotos')}</p>
+      ) : photos.length === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-3">
+          <ImageOff className="w-4 h-4" aria-hidden />
+          {t('LFleetVehicles.noPhotos')}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {photos.map(p => (
+            <div key={p.fileKey}
+              className="relative group aspect-video rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+              <img src={p.url} alt={t('LFleetVehicles.photoAlt')}
+                className="w-full h-full object-cover" loading="lazy" />
+              <button type="button"
+                onClick={() => handleDelete(p.fileKey)}
+                aria-label={t('LFleetVehicles.deletePhoto')}
+                className="absolute top-1 right-1 p-1 rounded-md bg-red-600/90 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700">
+                <Trash2 className="w-3 h-3" aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Profil de coûts ─────────────────────────────────────────────────────────
+
+interface BusCostProfile {
+  fuelConsumptionPer100Km: number;
+  fuelPricePerLiter: number;
+  adBlueCostPerLiter: number;
+  adBlueRatioFuel: number;
+  maintenanceCostPerKm: number;
+  stationFeePerDeparture: number;
+  driverAllowancePerTrip: number;
+  tollFeesPerTrip: number;
+  driverMonthlySalary: number;
+  annualInsuranceCost: number;
+  monthlyAgencyFees: number;
+  purchasePrice: number;
+  depreciationYears: number;
+  residualValue: number;
+  avgTripsPerMonth: number;
+}
+
+const COST_DEFAULTS: BusCostProfile = {
+  fuelConsumptionPer100Km: 0,
+  fuelPricePerLiter: 0,
+  adBlueCostPerLiter: 0.18,
+  adBlueRatioFuel: 0.05,
+  maintenanceCostPerKm: 0.05,
+  stationFeePerDeparture: 0,
+  driverAllowancePerTrip: 0,
+  tollFeesPerTrip: 0,
+  driverMonthlySalary: 0,
+  annualInsuranceCost: 0,
+  monthlyAgencyFees: 0,
+  purchasePrice: 0,
+  depreciationYears: 10,
+  residualValue: 0,
+  avgTripsPerMonth: 30,
+};
+
+function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: string }) {
+  const { t } = useI18n();
+  const base = `/api/v1/tenants/${tenantId}/buses/${busId}/cost-profile`;
+  const [form, setForm] = useState<BusCostProfile>({ ...COST_DEFAULTS });
+  const [configured, setConfigured] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setErr(null);
+      try {
+        const data = await apiGet<BusCostProfile>(base);
+        if (!cancelled) { setForm(data); setConfigured(true); }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const status = (e as { status?: number }).status;
+          if (status === 404) { setForm({ ...COST_DEFAULTS }); setConfigured(false); }
+          else setErr((e as Error).message);
+        }
+      } finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busId]);
+
+  const patch = (p: Partial<BusCostProfile>) => {
+    setForm(prev => ({ ...prev, ...p }));
+    setSuccess(false);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setErr(null); setSuccess(false);
+    try {
+      await apiPut(base, form);
+      setConfigured(true);
+      setSuccess(true);
+    } catch (ex) { setErr((ex as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const numField = (
+    key: keyof BusCostProfile,
+    label: string,
+    required = false,
+    step = 'any' as string,
+  ) => (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type="number"
+        step={step}
+        min={0}
+        value={form[key]}
+        onChange={e => patch({ [key]: e.target.value === '' ? 0 : Number(e.target.value) })}
+        className={inp}
+        disabled={saving}
+        required={required}
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Coins className="w-4 h-4 text-teal-600 dark:text-teal-400" aria-hidden />
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            {t('LFleetVehicles.costProfile')}
+          </h3>
+          {loading ? (
+            <span className="text-xs text-slate-500">…</span>
+          ) : configured ? (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+              {t('LFleetVehicles.configured')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+              {t('LFleetVehicles.notConfigured')}
+            </span>
+          )}
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-slate-400" aria-hidden />
+          : <ChevronDown className="w-4 h-4 text-slate-400" aria-hidden />}
+      </button>
+
+      {open && (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {err && <ErrorAlert error={err} />}
+
+          {/* Groupe 1 — Consommation */}
+          <fieldset className="space-y-3">
+            <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {t('LFleetVehicles.consumption')}
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {numField('fuelConsumptionPer100Km', t('LFleetVehicles.fuelConsumptionLabel'), true)}
+              {numField('fuelPricePerLiter', t('LFleetVehicles.fuelPriceLabel'), true)}
+              {numField('adBlueCostPerLiter', t('LFleetVehicles.adBlueCostLabel'))}
+              {numField('adBlueRatioFuel', t('LFleetVehicles.adBlueRatioLabel'))}
+            </div>
+          </fieldset>
+
+          {/* Groupe 2 — Coûts par trajet */}
+          <fieldset className="space-y-3">
+            <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {t('LFleetVehicles.costPerTrip')}
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {numField('maintenanceCostPerKm', t('LFleetVehicles.maintenancePerKm'))}
+              {numField('stationFeePerDeparture', t('LFleetVehicles.stationFee'))}
+              {numField('driverAllowancePerTrip', t('LFleetVehicles.driverAllowance'))}
+              {numField('tollFeesPerTrip', t('LFleetVehicles.tollFees'))}
+            </div>
+          </fieldset>
+
+          {/* Groupe 3 — Charges fixes */}
+          <fieldset className="space-y-3">
+            <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {t('LFleetVehicles.fixedCharges')}
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {numField('driverMonthlySalary', t('LFleetVehicles.driverSalary'), true)}
+              {numField('annualInsuranceCost', t('LFleetVehicles.annualInsurance'), true)}
+              {numField('monthlyAgencyFees', t('LFleetVehicles.agencyFees'), true)}
+            </div>
+          </fieldset>
+
+          {/* Groupe 4 — Amortissement */}
+          <fieldset className="space-y-3">
+            <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {t('LFleetVehicles.depreciation')}
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {numField('purchasePrice', t('LFleetVehicles.purchasePriceCost'), true)}
+              {numField('depreciationYears', t('LFleetVehicles.depreciationYears'))}
+              {numField('residualValue', t('LFleetVehicles.residualValue'))}
+              {numField('avgTripsPerMonth', t('LFleetVehicles.avgTripsPerMonth'))}
+            </div>
+          </fieldset>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={saving}>
+              {saving ? t('common.saving') : t('LFleetVehicles.saveCostProfile')}
+            </Button>
+            {success && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                {t('LFleetVehicles.costProfileSaved')} ✓
+              </span>
+            )}
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
+
+function buildColumns(agencies: AgencyRow[], t: (m: Record<string, string>) => string): Column<BusRow>[] {
+  const agencyName = (id?: string | null) =>
+    id ? (agencies.find(a => a.id === id)?.name ?? '—') : '—';
+
+  return [
+    {
+      key: 'plateNumber',
+      header: t('LFleetVehicles.registration'),
+      sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <Bus className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
+          <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+            {row.plateNumber}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'model',
+      header: t('LFleetVehicles.model'),
+      sortable: true,
+      cellRenderer: (_v, row) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400">
+          {row.model || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'type',
+      header: t('LFleetVehicles.type'),
+      sortable: true,
+      cellRenderer: (v) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400">
+          {v ? t(TYPE_LABEL[v as BusType]) : '—'}
+        </span>
+      ),
+      csvValue: (v) => (v ? t(TYPE_LABEL[v as BusType]) : ''),
+    },
+    {
+      key: 'capacity',
+      header: t('LFleetVehicles.capacity'),
+      sortable: true,
+      align: 'right',
+      cellRenderer: (v) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
+          {v as number} {t('LFleetVehicles.seats')}
+        </span>
+      ),
+      csvValue: (v) => String(v),
+    },
+    {
+      key: 'currentOdometerKm',
+      header: 'Km',
+      sortable: true,
+      align: 'right',
+      cellRenderer: (v) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
+          {v != null ? `${(v as number).toLocaleString('fr-FR')} km` : '—'}
+        </span>
+      ),
+      csvValue: (v) => (v != null ? String(v) : ''),
+    },
+    {
+      key: 'agencyId',
+      header: t('LFleetVehicles.agency'),
+      sortable: true,
+      cellRenderer: (v) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400">
+          {agencyName(v as string | null)}
+        </span>
+      ),
+      csvValue: (v) => agencyName(v as string | null),
+    },
+    {
+      key: 'seatLayout',
+      header: t('LFleetVehicles.plan'),
+      cellRenderer: (v) =>
+        v
+          ? <Badge variant="success" size="sm">{t('LFleetVehicles.planConfigured')}</Badge>
+          : <Badge variant="warning" size="sm">{t('LFleetVehicles.planMissing')}</Badge>,
+      csvValue: (v) => (v ? t('LFleetVehicles.planConfigured') : t('LFleetVehicles.planMissing')),
+    },
+    {
+      key: 'status',
+      header: t('LFleetVehicles.status'),
+      sortable: true,
+      cellRenderer: (v) => (
+        <Badge variant={STATUS_VARIANT[v as BusStatus]} size="sm">
+          {t(STATUS_LABEL[v as BusStatus])}
+        </Badge>
+      ),
+      csvValue: (v) => t(STATUS_LABEL[v as BusStatus]),
+    },
+  ];
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function toFormValues(bus: BusRow): BusFormValues {
+  const dateToStr = (d?: string | null) => d ? d.slice(0, 10) : '';
+  return {
+    plateNumber:         bus.plateNumber,
+    model:               bus.model ?? '',
+    type:                (bus.type ?? 'STANDARD') as BusType,
+    capacity:            String(bus.capacity),
+    year:                bus.year ? String(bus.year) : '',
+    agencyId:            bus.agencyId ?? '',
+    vin:                 bus.vin ?? '',
+    fuelType:            bus.fuelType ?? '',
+    engineType:          bus.engineType ?? '',
+    fuelTankCapacityL:   bus.fuelTankCapacityL != null ? String(bus.fuelTankCapacityL) : '',
+    adBlueTankCapacityL: bus.adBlueTankCapacityL != null ? String(bus.adBlueTankCapacityL) : '',
+    luggageCapacityKg:   bus.luggageCapacityKg ? String(bus.luggageCapacityKg) : '',
+    luggageCapacityM3:   bus.luggageCapacityM3 ? String(bus.luggageCapacityM3) : '',
+    registrationDate:    dateToStr(bus.registrationDate),
+    purchaseDate:        dateToStr(bus.purchaseDate),
+    purchasePrice:              bus.purchasePrice != null ? String(bus.purchasePrice) : '',
+    initialOdometerKm:          bus.initialOdometerKm != null ? String(bus.initialOdometerKm) : '',
+    fuelConsumptionPer100Km:    bus.fuelConsumptionPer100Km != null ? String(bus.fuelConsumptionPer100Km) : '',
+    adBlueConsumptionPer100Km:  bus.adBlueConsumptionPer100Km != null ? String(bus.adBlueConsumptionPer100Km) : '',
+  };
+}
+
+function formToPayload(f: BusFormValues) {
+  const numOrUndef = (v: string) => v ? Number(v) : undefined;
+  const strOrUndef = (v: string) => v || undefined;
+  return {
+    plateNumber:         f.plateNumber.trim(),
+    model:               f.model.trim() || undefined,
+    type:                f.type,
+    capacity:            Number(f.capacity),
+    year:                f.year ? Number(f.year) : undefined,
+    agencyId:            f.agencyId,
+    vin:                 strOrUndef(f.vin.trim()),
+    fuelType:            strOrUndef(f.fuelType),
+    engineType:          strOrUndef(f.engineType),
+    fuelTankCapacityL:   numOrUndef(f.fuelTankCapacityL),
+    adBlueTankCapacityL: numOrUndef(f.adBlueTankCapacityL),
+    luggageCapacityKg:   numOrUndef(f.luggageCapacityKg),
+    luggageCapacityM3:   numOrUndef(f.luggageCapacityM3),
+    registrationDate:    strOrUndef(f.registrationDate),
+    purchaseDate:        strOrUndef(f.purchaseDate),
+    purchasePrice:              numOrUndef(f.purchasePrice),
+    initialOdometerKm:          numOrUndef(f.initialOdometerKm),
+    fuelConsumptionPer100Km:    numOrUndef(f.fuelConsumptionPer100Km),
+    adBlueConsumptionPer100Km:  numOrUndef(f.adBlueConsumptionPer100Km),
+  };
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export function PageFleetVehicles() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { operational } = useTenantConfig();
+  const { t } = useI18n();
+  const tenantId = user?.tenantId ?? '';
+  const base     = `/api/tenants/${tenantId}/fleet/buses`;
+
+  const { data: buses, loading, error, refetch } = useFetch<BusRow[]>(
+    tenantId ? base : null, [tenantId],
+  );
+  const { data: agencies } = useFetch<AgencyRow[]>(
+    tenantId ? `/api/tenants/${tenantId}/agencies` : null, [tenantId],
+  );
+
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [editBus,      setEditBus]      = useState<BusRow | null>(null);
+  const [statusBus,    setStatusBus]    = useState<BusRow | null>(null);
+  const [deleteBus,    setDeleteBus]    = useState<BusRow | null>(null);
+  const [busy,         setBusy]         = useState(false);
+  const [actionErr,    setActionErr]    = useState<string | null>(null);
+
+  const kpi = useMemo(() => {
+    const list = buses ?? [];
+    return {
+      total:       list.length,
+      available:   list.filter(b => b.status === 'AVAILABLE').length,
+      inService:   list.filter(b => b.status === 'IN_SERVICE').length,
+      maintenance: list.filter(b => b.status === 'MAINTENANCE').length,
+    };
+  }, [buses]);
+
+  const handleCreate = async (f: BusFormValues) => {
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPost(base, formToPayload(f));
+      setShowCreate(false); refetch();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const handleEdit = async (f: BusFormValues) => {
+    if (!editBus) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`${base}/${editBus.id}`, formToPayload(f));
+      setEditBus(null); refetch();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const handleStatusChange = async (bus: BusRow, status: BusStatus) => {
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`${base}/${bus.id}/status`, { status });
+      setStatusBus(null); refetch();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteBus) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiDelete(`${base}/${deleteBus.id}`);
+      setDeleteBus(null); refetch();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const columns = useMemo(() => buildColumns(agencies ?? [], t), [agencies, t]);
+
+  const rowActions: RowAction<BusRow>[] = [
+    {
+      label:   t('common.edit'),
+      icon:    <Pencil size={13} />,
+      onClick: (row) => { setActionErr(null); setEditBus(row); },
+    },
+    {
+      label:   t('LFleetVehicles.tracking'),
+      icon:    <Gauge size={13} />,
+      onClick: (row) => navigate(`/admin/fleet/tracking?busId=${row.id}`),
+    },
+    {
+      label:   t('LFleetVehicles.changeStatus'),
+      icon:    <Power size={13} />,
+      onClick: (row) => { setActionErr(null); setStatusBus(row); },
+    },
+    {
+      label:   t('LFleetVehicles.seatPlan'),
+      icon:    <LayoutGrid size={13} />,
+      onClick: (row) => navigate(`/admin/fleet/seats?busId=${row.id}`),
+    },
+    {
+      label:   t('LFleetVehicles.papers'),
+      icon:    <FileText size={13} />,
+      onClick: (row) => navigate(`/admin/fleet-docs?busId=${row.id}`),
+    },
+    {
+      label:   t('common.delete'),
+      icon:    <Trash2 size={13} />,
+      danger:  true,
+      onClick: (row) => { setActionErr(null); setDeleteBus(row); },
+    },
+  ];
+
+  return (
+    <main className="p-6 space-y-6" role="main" aria-label={t('LFleetVehicles.pageTitle')}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
+            <Bus className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LFleetVehicles.pageTitle')}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              {t('LFleetVehicles.pageSubtitle')}
+            </p>
+          </div>
+        </div>
+        <Button onClick={() => { setActionErr(null); setShowCreate(true); }}>
+          <Plus className="w-4 h-4 mr-2" aria-hidden />
+          {t('LFleetVehicles.addVehicle')}
+        </Button>
+      </div>
+
+      <ErrorAlert error={error || actionErr} icon />
+
+      <section aria-label={t('LFleetVehicles.fleetIndicators')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Kpi label={t('LFleetVehicles.kpiVehicles')}    value={kpi.total}       icon={<Bus className="w-5 h-5" />} />
+        <Kpi label={t('LFleetVehicles.kpiAvailable')}   value={kpi.available}   icon={<CheckCircle2 className="w-5 h-5" />} tone="success" />
+        <Kpi label={t('LFleetVehicles.kpiInService')}   value={kpi.inService}   icon={<Bus className="w-5 h-5" />} tone="warning" />
+        <Kpi label={t('LFleetVehicles.kpiMaintenance')} value={kpi.maintenance} icon={<Wrench className="w-5 h-5" />} tone="danger" />
+      </section>
+
+      <DataTableMaster<BusRow>
+        columns={columns}
+        data={buses ?? []}
+        loading={loading}
+        rowActions={rowActions}
+        defaultSort={{ key: 'plateNumber', dir: 'asc' }}
+        defaultPageSize={25}
+        searchPlaceholder={t('LFleetVehicles.searchPlaceholder')}
+        emptyMessage={t('LFleetVehicles.emptyMessage')}
+        exportFormats={['csv', 'json', 'xls', 'pdf']}
+        exportFilename="vehicules"
+        onRowClick={(row) => { setActionErr(null); setEditBus(row); }}
+        stickyHeader
+      />
+
+      {/* Modifier */}
+      <Dialog
+        open={!!editBus}
+        onOpenChange={o => { if (!o) setEditBus(null); }}
+        title={t('LFleetVehicles.editVehicle')}
+        description={editBus?.plateNumber}
+        size="xl"
+      >
+        {editBus && (
+          <>
+            <BusForm
+              agencies={agencies ?? []}
+              initial={toFormValues(editBus)}
+              onSubmit={handleEdit}
+              onCancel={() => setEditBus(null)}
+              busy={busy}
+              error={actionErr}
+              submitLabel={t('common.save')}
+              pendingLabel={t('common.saving')}
+              currencyCode={operational.currency}
+            />
+            <BusPhotoManager tenantId={tenantId} busId={editBus.id} />
+            <BusCostProfileSection tenantId={tenantId} busId={editBus.id} />
+          </>
+        )}
+      </Dialog>
+
+      {/* Supprimer */}
+      <Dialog
+        open={!!deleteBus}
+        onOpenChange={o => { if (!o) setDeleteBus(null); }}
+        title={t('LFleetVehicles.deleteVehicle')}
+        description={`${t('common.delete')} "${deleteBus?.plateNumber}" ? ${t('LFleetVehicles.deleteConfirm')}`}
+        footer={
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setDeleteBus(null)} disabled={busy}>
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleDelete}
+              disabled={busy}
+              className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
+              {busy ? t('common.deleting') : t('common.delete')}
+            </Button>
+          </div>
+        }
+      >
+        {actionErr && <p className="text-sm text-red-600 dark:text-red-400">{actionErr}</p>}
+        <div />
+      </Dialog>
+
+      <Dialog
+        open={showCreate}
+        onOpenChange={o => { if (!o) setShowCreate(false); }}
+        title={t('LFleetVehicles.createTitle')}
+        description={t('LFleetVehicles.createDescription')}
+        size="xl"
+      >
+        <BusForm
+          agencies={agencies ?? []}
+          initial={EMPTY_FORM}
+          onSubmit={handleCreate}
+          onCancel={() => setShowCreate(false)}
+          busy={busy}
+          error={actionErr}
+          submitLabel={t('common.create')}
+          pendingLabel={t('common.creating')}
+          currencyCode={operational.currency}
+        />
+      </Dialog>
+
+      {/* Changer le statut */}
+      <Dialog
+        open={!!statusBus}
+        onOpenChange={o => { if (!o) setStatusBus(null); }}
+        title={t('LFleetVehicles.changeStatus')}
+        description={statusBus?.plateNumber}
+        size="sm"
+      >
+        {statusBus && (
+          <div className="space-y-2">
+            <ErrorAlert error={actionErr} />
+            {(['AVAILABLE','IN_SERVICE','MAINTENANCE','OFFLINE'] as BusStatus[]).map(s => (
+              <button key={s}
+                type="button"
+                disabled={busy || s === statusBus.status}
+                onClick={() => handleStatusChange(statusBus, s)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 disabled:opacity-50 disabled:cursor-not-allowed text-left">
+                <span className="text-sm text-slate-800 dark:text-slate-200">{t(STATUS_LABEL[s])}</span>
+                {s === statusBus.status
+                  ? <Badge variant="default" size="sm">{t('LFleetVehicles.current')}</Badge>
+                  : <Badge variant={STATUS_VARIANT[s]} size="sm">{t(STATUS_LABEL[s])}</Badge>}
+              </button>
+            ))}
+          </div>
+        )}
+      </Dialog>
+    </main>
+  );
+}
+
+function Kpi({
+  label, value, icon, tone = 'default',
+}: {
+  label: string; value: number; icon: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'danger';
+}) {
+  const toneClass = {
+    default: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400',
+    success: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400',
+    warning: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
+    danger:  'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
+  }[tone];
+  return (
+    <article
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex items-center gap-3"
+      aria-label={`${label}: ${value}`}
+    >
+      <div className={`p-2.5 rounded-lg shrink-0 ${toneClass}`} aria-hidden>{icon}</div>
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">
+          {value.toLocaleString('fr-FR')}
+        </p>
+      </div>
+    </article>
+  );
+}

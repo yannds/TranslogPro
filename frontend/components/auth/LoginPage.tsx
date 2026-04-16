@@ -16,16 +16,19 @@ import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { t }     = useI18n();
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  // Rediriger vers la page demandée avant la déconnexion, sinon /admin
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/admin';
+  // Rediriger vers la page demandée avant la déconnexion, sinon laisser
+  // HomeRedirect choisir le portail selon (userType, permissions).
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -43,12 +46,12 @@ export function LoginPage() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401 || err.status === 400) {
-          setError('Email ou mot de passe incorrect.');
+          setError(t('auth.badCredentials'));
         } else {
-          setError(`Erreur serveur (${err.status}). Réessayez dans un instant.`);
+          setError(`${t('auth.serverError')} (${err.status}). ${t('auth.serverRetry')}`);
         }
       } else {
-        setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+        setError(t('auth.networkError'));
       }
     } finally {
       setLoading(false);
@@ -65,7 +68,7 @@ export function LoginPage() {
             <Bus className="w-8 h-8 text-white" aria-hidden />
           </div>
           <h1 className="text-2xl font-bold text-white">TranslogPro</h1>
-          <p className="text-slate-400 text-sm mt-1">Connectez-vous à votre espace</p>
+          <p className="text-slate-400 text-sm mt-1">{t('auth.subtitle')}</p>
         </div>
 
         {/* Formulaire */}
@@ -92,7 +95,7 @@ export function LoginPage() {
               htmlFor="login-email"
               className="block text-sm font-medium text-slate-300"
             >
-              Adresse e-mail
+              {t('auth.emailLabel')}
             </label>
             <input
               id="login-email"
@@ -118,7 +121,7 @@ export function LoginPage() {
               htmlFor="login-password"
               className="block text-sm font-medium text-slate-300"
             >
-              Mot de passe
+              {t('auth.passwordLabel')}
             </label>
             <input
               id="login-password"
@@ -148,12 +151,12 @@ export function LoginPage() {
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
-            {loading ? 'Connexion…' : 'Se connecter'}
+            {loading ? t('auth.signing') : t('auth.signIn')}
           </button>
         </form>
 
         <p className="text-center text-xs text-slate-600">
-          TranslogPro © 2026 — Tous droits réservés
+          {t('auth.copyright')}
         </p>
       </div>
     </div>

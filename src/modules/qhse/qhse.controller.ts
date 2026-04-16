@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, Query,
+  Controller, Get, Post, Patch, Delete, Param, Body, Query,
 } from '@nestjs/common';
 import {
   QhseService,
@@ -44,6 +44,26 @@ export class QhseController {
   @RequirePermission(Permission.ACCIDENT_REPORT_OWN)
   listSeverityTypes(@TenantId() tenantId: string) {
     return this.svc.listSeverityTypes(tenantId);
+  }
+
+  @Patch('severity-types/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  updateSeverityType(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: {
+      name?: string; code?: string; color?: string;
+      requiresQhse?: boolean; requiresPolice?: boolean; requiresInsurer?: boolean;
+      sortOrder?: number; isActive?: boolean;
+    },
+  ) {
+    return this.svc.updateSeverityType(tenantId, id, body);
+  }
+
+  @Delete('severity-types/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  deleteSeverityType(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.svc.deleteSeverityType(tenantId, id);
   }
 
   // ── Accident Reports ───────────────────────────────────────────────────────
@@ -172,6 +192,25 @@ export class QhseController {
     return this.svc.listHospitals(tenantId);
   }
 
+  @Patch('hospitals/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  updateHospital(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: {
+      name?: string; city?: string; address?: string; phone?: string;
+      gpsLat?: number; gpsLng?: number; isActive?: boolean;
+    },
+  ) {
+    return this.svc.updateHospital(tenantId, id, body);
+  }
+
+  @Delete('hospitals/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  deleteHospital(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.svc.deleteHospital(tenantId, id);
+  }
+
   // ── Disputes ───────────────────────────────────────────────────────────────
 
   @Post('accidents/:id/dispute')
@@ -237,6 +276,22 @@ export class QhseController {
   @RequirePermission(Permission.QHSE_MANAGE_TENANT)
   listProcedures(@TenantId() tenantId: string) {
     return this.svc.listProcedures(tenantId);
+  }
+
+  @Patch('procedures/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  updateProcedure(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { name?: string; description?: string; isActive?: boolean },
+  ) {
+    return this.svc.updateProcedure(tenantId, id, body);
+  }
+
+  @Delete('procedures/:id')
+  @RequirePermission(Permission.QHSE_MANAGE_TENANT)
+  deleteProcedure(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.svc.deleteProcedure(tenantId, id);
   }
 
   @Post('procedures/execute')

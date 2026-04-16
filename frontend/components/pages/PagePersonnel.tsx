@@ -27,6 +27,7 @@ import {
 import { useFetch }                from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth }                 from '../../lib/auth/auth.context';
+import { useI18n }             from '../../lib/i18n/useI18n';
 import { Button }                  from '../ui/Button';
 import { Badge }                   from '../ui/Badge';
 import { Dialog }                  from '../ui/Dialog';
@@ -64,6 +65,15 @@ interface StaffRow {
     email: string;
     name:  string | null;
   };
+}
+
+interface AssignmentSummary {
+  id:          string;
+  role:        string;
+  agencyId:    string | null;
+  status:      string;
+  isAvailable: boolean;
+  startDate:   string;
 }
 
 interface AssignmentDetail {
@@ -115,26 +125,106 @@ interface EditForm {
   agencyId: string;   // home administrative — rôle/dispo gérés via AssignmentsManager
 }
 
-const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
-  { value: 'DRIVER',     label: 'Chauffeur' },
-  { value: 'HOSTESS',    label: 'Hôtesse / Steward' },
-  { value: 'MECHANIC',   label: 'Mécanicien' },
-  { value: 'AGENT',      label: 'Agent de gare' },
-  { value: 'CONTROLLER', label: 'Contrôleur' },
-  { value: 'SUPERVISOR', label: 'Superviseur' },
-];
+// ─── i18n ─────────────────────────────────────────────────────────────────────
 
-function roleLabel(value: string): string {
-  return ROLE_OPTIONS.find(r => r.value === value)?.label ?? value;
-}
+const T = {
+  pageTitle:              tm('Personnel', 'Staff'),
+  staffCount:             tm('membre(s) du personnel', 'staff member(s)'),
+  staffManagement:        tm('Gestion du personnel', 'Staff Management'),
+  newMember:              tm('Nouveau membre', 'New Member'),
+  editMember:             tm('Modifier le membre', 'Edit Member'),
+  fromIam:                tm('Depuis IAM', 'From IAM'),
+  assignments:            tm('Affectations', 'Assignments'),
+  newAssignment:          tm('Nouvelle affectation', 'New Assignment'),
+  addAssignment:          tm('Ajouter une affectation', 'Add an assignment'),
+  promote:                tm('Promouvoir', 'Promote'),
+  archiveAction:          tm('Archiver', 'Archive'),
+  suspendAction:          tm('Suspendre', 'Suspend'),
+  reactivateAction:       tm('Réactiver', 'Reactivate'),
+  coverage:               tm('Couverture', 'Coverage'),
+  monoAgency:             tm('Une seule agence', 'Single Agency'),
+  tenantWide:             tm('Toutes les agences du tenant', 'All Tenant Agencies'),
+  multiAgency:            tm('Plusieurs agences à choisir', 'Select Multiple Agencies'),
+  coveredAgencies:        tm('Agences couvertes', 'Covered Agencies'),
+  initialRole:            tm('Rôle métier initial', 'Initial Role'),
+  attachments:            tm('Pièces jointes', 'Attachments'),
+  function_:              tm('Fonction', 'Function'),
+  statusActive:           tm('Actif', 'Active'),
+  statusSuspended:        tm('Suspendu', 'Suspended'),
+  statusArchived:         tm('Archivé', 'Archived'),
+  closeAssignment:        tm('Clôturer', 'Close'),
+  available:              tm('Dispo', 'Available'),
+  hired:                  tm('Embauché', 'Hired'),
+  member:                 tm('Membre', 'Member'),
+  noActiveAssignment:     tm('Aucune affectation active', 'No active assignment'),
+  fullName:               tm('Nom complet', 'Full Name'),
+  homeAgency:             tm('Agence de rattachement', 'Home Agency'),
+  noAgency:               tm('— Aucune agence —', '— No Agency —'),
+  noAgencyShort:          tm('— Aucune —', '— None —'),
+  selectAgency:           tm('— Sélectionner —', '— Select —'),
+  allFunctions:           tm('Toutes fonctions', 'All Functions'),
+  allStatuses:            tm('Tous statuts', 'All Statuses'),
+  filterByFunction:       tm('Filtrer par fonction', 'Filter by Function'),
+  filterByStatus:         tm('Filtrer par statut', 'Filter by Status'),
+  searchPlaceholder:      tm('Rechercher (nom, email, fonction…)', 'Search (name, email, function...)'),
+  emptyFirst:             tm('Aucun membre. Cliquez sur « Nouveau membre » pour commencer.', 'No members. Click "New Member" to start.'),
+  emptySearch:            tm('Aucun résultat.', 'No results.'),
+  createDialogTitle:      tm('Nouveau membre du personnel', 'New Staff Member'),
+  createDialogDesc:       tm('Le membre recevra un mot de passe temporaire par email.', 'The member will receive a temporary password by email.'),
+  archiveDialogTitle:     tm('Archiver le membre', 'Archive Member'),
+  archiveBusy:            tm('Archivage…', 'Archiving...'),
+  archiveConfirmPre:      tm('Archiver «\u00a0', 'Archive "'),
+  archiveConfirmPost:     tm('\u00a0» ? Le membre ne sera plus visible mais ses données restent conservées.', '"? The member will no longer be visible but data will be preserved.'),
+  promoteDialogTitle:     tm('Promouvoir un utilisateur IAM en personnel', 'Promote an IAM User to Staff'),
+  promoteDialogDesc:      tm("Sélectionnez un user existant qui n'a pas encore de profil personnel.", 'Select an existing user without a staff profile.'),
+  assignDialogDesc:       tm('Un staff peut occuper plusieurs postes (rôle × agence). Couverture mono / tenant-wide / multi-spécifique.', 'A staff can hold multiple positions (role x agency). Mono / tenant-wide / multi-specific coverage.'),
+  loadingIamUsers:        tm('Chargement des utilisateurs IAM…', 'Loading IAM users...'),
+  noEligibleUsers:        tm("Aucun user IAM éligible. Un user est éligible s'il est de type STAFF (pas un client) et n'a pas encore de profil personnel.", 'No eligible IAM users. A user is eligible if they are of type STAFF (not a customer) and do not yet have a staff profile.'),
+  eligibleCount:          tm('user(s) éligible(s) — non listés : déjà personnel, ou clients du tenant.', 'eligible user(s) — unlisted: already staff, or tenant customers.'),
+  iamUser:                tm('Utilisateur IAM', 'IAM User'),
+  selectError:            tm('Sélectionnez une agence', 'Select an agency'),
+  selectMultiError:       tm('Sélectionnez au moins une agence', 'Select at least one agency'),
+  noAssignment:           tm('Aucune affectation. Ajoutez-en une ci-dessous.', 'No assignments. Add one below.'),
+  allTenant:              tm('Tout le tenant', 'Entire Tenant'),
+  sinceDate:              tm('Depuis le', 'Since'),
+  closedDate:             tm('clôturée le', 'closed on'),
+  suspendedBadge:         tm('Suspendue', 'Suspended'),
+  closedBadge:            tm('Clôturée', 'Closed'),
+  unavailableBadge:       tm('Indispo', 'Unavailable'),
+  editHint:               tm('Pour gérer les rôles métier et la disponibilité, ouvrez « Affectations » depuis la liste.', 'To manage job roles and availability, open "Assignments" from the list.'),
+  emailLabel:             tm('Email', 'Email'),
+  statusLabel:            tm('Statut', 'Status'),
+  roleDriver:             tm('Chauffeur', 'Driver'),
+  roleHostess:            tm('Hôtesse / Steward', 'Hostess / Steward'),
+  roleMechanic:           tm('Mécanicien', 'Mechanic'),
+  roleAgent:              tm('Agent de gare', 'Station Agent'),
+  roleController:         tm('Contrôleur', 'Controller'),
+  roleSupervisor:         tm('Superviseur', 'Supervisor'),
+  addFooter:              tm('Ajouter', 'Add'),
+  addingFooter:           tm('Ajout…', 'Adding...'),
+  createFooter:           tm('Créer', 'Create'),
+  creatingFooter:         tm('Création…', 'Creating...'),
+};
+
+const ROLE_OPTIONS: { value: StaffRole; label: Record<string, string> }[] = [
+  { value: 'DRIVER',     label: T.roleDriver },
+  { value: 'HOSTESS',    label: T.roleHostess },
+  { value: 'MECHANIC',   label: T.roleMechanic },
+  { value: 'AGENT',      label: T.roleAgent },
+  { value: 'CONTROLLER', label: T.roleController },
+  { value: 'SUPERVISOR', label: T.roleSupervisor },
+];
 
 // ─── Colonnes ─────────────────────────────────────────────────────────────────
 
-function buildColumns(): Column<StaffRow>[] {
+function buildColumns(t: (map: Record<string, string>) => string, dict: typeof import('../../lib/i18n/translations').TRANSLATIONS): Column<StaffRow>[] {
+  const roleLabel = (value: string): string =>
+    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? tm(value, value));
+
   return [
     {
       key: 'user',
-      header: 'Membre',
+      header: t('LPersonnel.member'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-3">
@@ -153,11 +243,11 @@ function buildColumns(): Column<StaffRow>[] {
     },
     {
       key: 'assignments',
-      header: 'Affectations',
+      header: t('LPersonnel.assignments'),
       cellRenderer: (_v, row) => {
         const list = row.assignments ?? [];
         if (list.length === 0) {
-          return <span className="text-xs text-slate-400 italic">Aucune affectation active</span>;
+          return <span className="text-xs text-slate-400 italic">{t('LPersonnel.noActiveAssignment')}</span>;
         }
         return (
           <div className="flex flex-wrap gap-1.5">
@@ -173,43 +263,45 @@ function buildColumns(): Column<StaffRow>[] {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: t('LPersonnel.statusLabel'),
       sortable: true,
       width: '120px',
       cellRenderer: (v) => {
         const s = String(v);
-        if (s === 'ACTIVE')    return <Badge variant="success">Actif</Badge>;
-        if (s === 'SUSPENDED') return <Badge variant="warning">Suspendu</Badge>;
-        if (s === 'ARCHIVED')  return <Badge variant="default">Archivé</Badge>;
+        if (s === 'ACTIVE')    return <Badge variant="success">{t('LPersonnel.statusActive')}</Badge>;
+        if (s === 'SUSPENDED') return <Badge variant="warning">{t('LPersonnel.statusSuspended')}</Badge>;
+        if (s === 'ARCHIVED')  return <Badge variant="default">{t('LPersonnel.statusArchived')}</Badge>;
         return <Badge variant="default">{s}</Badge>;
       },
       csvValue: (v) => String(v),
     },
     {
-      key: 'isAvailable',
-      header: 'Dispo',
-      sortable: true,
+      key: 'availability',
+      header: t('LPersonnel.available'),
       width: '90px',
       align: 'center',
-      cellRenderer: (v) => (
-        <span
-          aria-label={v ? 'Disponible' : 'Indisponible'}
-          className={
-            'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ' +
-            (v
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-              : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400')
-          }
-        >
-          <span className={'h-1.5 w-1.5 rounded-full ' + (v ? 'bg-emerald-500' : 'bg-slate-400')} aria-hidden />
-          {v ? 'Oui' : 'Non'}
-        </span>
-      ),
-      csvValue: (v) => (v ? 'oui' : 'non'),
+      cellRenderer: (_v, row) => {
+        const available = row.assignments?.some(a => a.isAvailable) ?? false;
+        return (
+          <span
+            aria-label={available ? 'Disponible' : 'Indisponible'}
+            className={
+              'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ' +
+              (available
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400')
+            }
+          >
+            <span className={'h-1.5 w-1.5 rounded-full ' + (available ? 'bg-emerald-500' : 'bg-slate-400')} aria-hidden />
+            {available ? t('common.yes') : t('common.no')}
+          </span>
+        );
+      },
+      csvValue: (_v, row) => (row.assignments?.some(a => a.isAvailable) ? 'oui' : 'non'),
     },
     {
       key: 'createdAt',
-      header: 'Embauché',
+      header: t('LPersonnel.hired'),
       sortable: true,
       width: '110px',
       cellRenderer: (v) => (
@@ -231,6 +323,7 @@ function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
   error:    string | null;
   agencies: AgencyOption[];
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<CreateForm>({
     email: '', name: '', role: 'DRIVER', agencyId: '',
   });
@@ -240,19 +333,19 @@ function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Email <span aria-hidden className="text-red-500">*</span>
+            {t('common.email')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="email" required value={f.email}
             onChange={e => set('email', e.target.value)}
             className={inp} disabled={busy} placeholder="prenom.nom@example.com"
             autoComplete="email" />
         </div>
-        <div className="col-span-2 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom complet <span aria-hidden className="text-red-500">*</span>
+            {t('LPersonnel.fullName')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.name}
             onChange={e => set('name', e.target.value)}
@@ -261,27 +354,27 @@ function CreateStaffForm({ onSubmit, onCancel, busy, error, agencies }: {
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Fonction <span aria-hidden className="text-red-500">*</span>
+            {t('LPersonnel.function_')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select value={f.role}
             onChange={e => set('role', e.target.value as StaffRole)}
             className={inp} disabled={busy}>
-            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Agence
+            {t('common.agency')}
           </label>
           <select value={f.agencyId}
             onChange={e => set('agencyId', e.target.value)}
             className={inp} disabled={busy}>
-            <option value="">— Aucune agence —</option>
+            <option value="">{t('LPersonnel.noAgency')}</option>
             {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('LPersonnel.createFooter')} pendingLabel={t('LPersonnel.creatingFooter')} />
     </form>
   );
 }
@@ -296,6 +389,7 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
   agencies: AgencyOption[];
   onPreviewChange?: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<EditForm>({
     name:     staff.user?.name ?? '',
     agencyId: staff.agencyId ?? '',
@@ -308,33 +402,33 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
       <ErrorAlert error={error} />
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('LPersonnel.fullName')}</label>
           <input type="text" value={f.name}
             onChange={e => set('name', e.target.value)}
             className={inp} disabled={busy} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Agence de rattachement
+            {t('LPersonnel.homeAgency')}
           </label>
           <select value={f.agencyId}
             onChange={e => set('agencyId', e.target.value)}
             className={inp} disabled={busy}>
-            <option value="">— Aucune agence —</option>
+            <option value="">{t('LPersonnel.noAgency')}</option>
             {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <p className="text-xs text-slate-400">
-            Pour gérer les rôles métier et la disponibilité, ouvrez « Affectations » depuis la liste.
+            {t('LPersonnel.editHint')}
           </p>
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p>Email : <span className="font-mono">{staff.user?.email}</span></p>
-          <p>Statut : {staff.status}</p>
+          <p>{t('LPersonnel.emailLabel')} : <span className="font-mono">{staff.user?.email}</span></p>
+          <p>{t('LPersonnel.statusLabel')} : {staff.status}</p>
         </div>
 
         {/* Pièces jointes (contrat, permis, certifications) */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Pièces jointes</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">{t('LPersonnel.attachments')}</h3>
           <DocumentAttachments
             tenantId={tenantId}
             entityType="STAFF"
@@ -344,7 +438,7 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
           />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
     </form>
   );
 }
@@ -359,6 +453,10 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
   onAction:  () => void;                       // callback after mutation pour refetch
   onError:   (msg: string) => void;
 }) {
+  const { t } = useI18n();
+  const roleLabel = (value: string): string =>
+    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? tm(value, value));
+
   const url = `/api/tenants/${tenantId}/staff/${staff.userId}/assignments`;
   const { data: list, refetch } = useFetch<AssignmentDetail[]>(url, [staff.userId]);
 
@@ -376,10 +474,10 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
     try {
       const body: Record<string, unknown> = { role: form.role };
       if (form.coverage === 'mono') {
-        if (!form.agencyId) { onError('Sélectionnez une agence'); return; }
+        if (!form.agencyId) { onError(t('LPersonnel.selectError')); return; }
         body.agencyId = form.agencyId;
       } else if (form.coverage === 'multi') {
-        if (form.coverageAgencyIds.length === 0) { onError('Sélectionnez au moins une agence'); return; }
+        if (form.coverageAgencyIds.length === 0) { onError(t('LPersonnel.selectMultiError')); return; }
         body.coverageAgencyIds = form.coverageAgencyIds;
       } // tenant : rien à envoyer
 
@@ -411,7 +509,7 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
             ? a.agency?.name ?? a.agencyId
             : a.coverageAgencies.length > 0
               ? a.coverageAgencies.map(c => c.agency.name).join(', ')
-              : 'Tout le tenant';
+              : t('LPersonnel.allTenant');
           const CoverageIcon = a.agencyId ? MapPin : a.coverageAgencies.length > 0 ? Users : Globe2;
 
           return (
@@ -423,21 +521,21 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="info">{roleLabel(a.role)}</Badge>
-                  {a.status === 'SUSPENDED' && <Badge variant="warning">Suspendue</Badge>}
-                  {a.status === 'CLOSED'    && <Badge variant="default">Clôturée</Badge>}
-                  {a.status === 'ACTIVE' && !a.isAvailable && <Badge variant="default">Indispo</Badge>}
+                  {a.status === 'SUSPENDED' && <Badge variant="warning">{t('LPersonnel.suspendedBadge')}</Badge>}
+                  {a.status === 'CLOSED'    && <Badge variant="default">{t('LPersonnel.closedBadge')}</Badge>}
+                  {a.status === 'ACTIVE' && !a.isAvailable && <Badge variant="default">{t('LPersonnel.unavailableBadge')}</Badge>}
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                   <CoverageIcon className="w-3.5 h-3.5" aria-hidden /> {coverageLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Depuis le {new Date(a.startDate).toLocaleDateString('fr-FR')}
-                  {a.endDate && ` — clôturée le ${new Date(a.endDate).toLocaleDateString('fr-FR')}`}
+                  {t('LPersonnel.sinceDate')} {new Date(a.startDate).toLocaleDateString('fr-FR')}
+                  {a.endDate && ` — ${t('LPersonnel.closedDate')} ${new Date(a.endDate).toLocaleDateString('fr-FR')}`}
                 </p>
               </div>
               {!closed && (
                 <Button variant="outline" onClick={() => close(a.id)} disabled={busy}>
-                  <Archive className="w-3.5 h-3.5 mr-1" aria-hidden /> Clôturer
+                  <Archive className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('LPersonnel.closeAssignment')}
                 </Button>
               )}
             </div>
@@ -445,56 +543,56 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
         })}
         {(list ?? []).length === 0 && (
           <p className="text-sm text-slate-500 italic text-center py-4">
-            Aucune affectation. Ajoutez-en une ci-dessous.
+            {t('LPersonnel.noAssignment')}
           </p>
         )}
       </div>
 
       {!showAdd && (
         <Button onClick={() => setShowAdd(true)}>
-          <Plus className="w-4 h-4 mr-1.5" aria-hidden /> Ajouter une affectation
+          <Plus className="w-4 h-4 mr-1.5" aria-hidden /> {t('LPersonnel.addAssignment')}
         </Button>
       )}
 
       {showAdd && (
         <form onSubmit={submit} className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900/50">
-          <h4 className="text-sm font-semibold">Nouvelle affectation</h4>
+          <h4 className="text-sm font-semibold">{t('LPersonnel.newAssignment')}</h4>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium">Rôle</label>
+            <label className="block text-sm font-medium">{t('common.role')}</label>
             <select value={form.role} onChange={e => setF('role', e.target.value as StaffRole)}
               className={inp} disabled={busy}>
-              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
             </select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium">Couverture</label>
+            <label className="block text-sm font-medium">{t('LPersonnel.coverage')}</label>
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <input type="radio" name="cov" checked={form.coverage === 'mono'}
                   onChange={() => setF('coverage', 'mono')} disabled={busy} />
-                Une seule agence
+                {t('LPersonnel.monoAgency')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="radio" name="cov" checked={form.coverage === 'tenant'}
                   onChange={() => setF('coverage', 'tenant')} disabled={busy} />
-                Toutes les agences du tenant
+                {t('LPersonnel.tenantWide')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="radio" name="cov" checked={form.coverage === 'multi'}
                   onChange={() => setF('coverage', 'multi')} disabled={busy} />
-                Plusieurs agences à choisir
+                {t('LPersonnel.multiAgency')}
               </label>
             </div>
           </div>
 
           {form.coverage === 'mono' && (
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">Agence</label>
+              <label className="block text-sm font-medium">{t('common.agency')}</label>
               <select value={form.agencyId} onChange={e => setF('agencyId', e.target.value)}
                 className={inp} disabled={busy}>
-                <option value="">— Sélectionner —</option>
+                <option value="">{t('LPersonnel.selectAgency')}</option>
                 {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
@@ -502,7 +600,7 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
 
           {form.coverage === 'multi' && (
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">Agences couvertes</label>
+              <label className="block text-sm font-medium">{t('LPersonnel.coveredAgencies')}</label>
               <div className="max-h-40 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
                 {agencies.map(a => (
                   <label key={a.id} className="flex items-center gap-2 text-sm">
@@ -521,7 +619,7 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
             </div>
           )}
 
-          <FormFooter onCancel={() => setShowAdd(false)} busy={busy} submitLabel="Ajouter" pendingLabel="Ajout…" />
+          <FormFooter onCancel={() => setShowAdd(false)} busy={busy} submitLabel={t('LPersonnel.addFooter')} pendingLabel={t('LPersonnel.addingFooter')} />
         </form>
       )}
     </div>
@@ -538,6 +636,7 @@ function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, erro
   onCancel: () => void;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const { data: users, loading } = useFetch<EligibleUser[]>(
     `/api/tenants/${tenantId}/staff/eligible-users`, [tenantId],
   );
@@ -548,24 +647,24 @@ function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, erro
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
       <ErrorAlert error={error} />
-      {loading && <p className="text-sm text-slate-500">Chargement des utilisateurs IAM…</p>}
+      {loading && <p className="text-sm text-slate-500">{t('LPersonnel.loadingIamUsers')}</p>}
       {!loading && (users ?? []).length === 0 && (
         <p className="text-sm text-slate-500">
-          Aucun user IAM éligible. Un user est éligible s'il est de type STAFF (pas un client) et n'a pas encore de profil personnel.
+          {t('LPersonnel.noEligibleUsers')}
         </p>
       )}
       {!loading && (users ?? []).length > 0 && (
         <p className="text-xs text-slate-400">
-          {(users ?? []).length} user(s) éligible(s) — non listés : déjà personnel, ou clients du tenant.
+          {(users ?? []).length} {t('LPersonnel.eligibleCount')}
         </p>
       )}
       {!loading && (users ?? []).length > 0 && (
         <>
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium">Utilisateur IAM</label>
+            <label className="block text-sm font-medium">{t('LPersonnel.iamUser')}</label>
             <select value={f.userId} onChange={e => set('userId', e.target.value)}
               className={inp} required disabled={busy}>
-              <option value="">— Sélectionner —</option>
+              <option value="">{t('LPersonnel.selectAgency')}</option>
               {(users ?? []).map(u => (
                 <option key={u.id} value={u.id}>
                   {u.name ?? u.email} ({u.email}{u.agency ? ` · ${u.agency.name}` : ''})
@@ -573,26 +672,26 @@ function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, erro
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">Rôle métier initial</label>
+              <label className="block text-sm font-medium">{t('LPersonnel.initialRole')}</label>
               <select value={f.role} onChange={e => set('role', e.target.value as StaffRole)}
                 className={inp} disabled={busy}>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">Agence de rattachement</label>
+              <label className="block text-sm font-medium">{t('LPersonnel.homeAgency')}</label>
               <select value={f.agencyId} onChange={e => set('agencyId', e.target.value)}
                 className={inp} disabled={busy}>
-                <option value="">— Aucune —</option>
+                <option value="">{t('LPersonnel.noAgencyShort')}</option>
                 {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           </div>
         </>
       )}
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Promouvoir" pendingLabel="…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('LPersonnel.promote')} pendingLabel="..." />
     </form>
   );
 }
@@ -601,6 +700,7 @@ function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, erro
 
 export function PagePersonnel() {
   const { user: me } = useAuth();
+  const { t } = useI18n();
   const tenantId = me?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/staff`;
 
@@ -690,32 +790,32 @@ export function PagePersonnel() {
     finally { setBusy(false); }
   };
 
-  const columns = buildColumns();
+  const columns = buildColumns(t, dict);
   const rowActions: RowAction<StaffRow>[] = [
     {
-      label:   'Affectations',
+      label:   t('LPersonnel.assignments'),
       icon:    <Briefcase size={13} />,
       onClick: (row) => { setAssignmentsTarget(row); setActionErr(null); },
     },
     {
-      label:   'Modifier',
+      label:   t('common.edit'),
       icon:    <Pencil size={13} />,
       onClick: (row) => { setEditTarget(row); setActionErr(null); },
     },
     {
-      label:   'Suspendre',
+      label:   t('LPersonnel.suspendAction'),
       icon:    <Power size={13} />,
       hidden:  (row) => row.status !== 'ACTIVE',
       onClick: (row) => void handleToggleSuspend(row),
     },
     {
-      label:   'Réactiver',
+      label:   t('LPersonnel.reactivateAction'),
       icon:    <Power size={13} />,
       hidden:  (row) => row.status !== 'SUSPENDED',
       onClick: (row) => void handleToggleSuspend(row),
     },
     {
-      label:   'Archiver',
+      label:   t('LPersonnel.archiveAction'),
       icon:    <Archive size={13} />,
       danger:  true,
       hidden:  (row) => row.status === 'ARCHIVED',
@@ -737,18 +837,18 @@ export function PagePersonnel() {
             <IdCard className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Personnel</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LPersonnel.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {staffList ? `${staffList.length} membre(s) du personnel` : 'Gestion du personnel'}
+              {staffList ? `${staffList.length} ${t('LPersonnel.staffCount')}` : t('LPersonnel.staffManagement')}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { setShowPromote(true); setActionErr(null); }}>
-            <Users className="w-4 h-4 mr-2" aria-hidden />Depuis IAM
+            <Users className="w-4 h-4 mr-2" aria-hidden />{t('LPersonnel.fromIam')}
           </Button>
           <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
-            <Plus className="w-4 h-4 mr-2" aria-hidden />Nouveau membre
+            <Plus className="w-4 h-4 mr-2" aria-hidden />{t('LPersonnel.newMember')}
           </Button>
         </div>
       </div>
@@ -756,16 +856,16 @@ export function PagePersonnel() {
       {/* Filtres */}
       <div className="flex flex-wrap gap-3">
         <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className={filterCls}
-          aria-label="Filtrer par fonction">
-          <option value="">Toutes fonctions</option>
-          {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          aria-label={t('LPersonnel.filterByFunction')}>
+          <option value="">{t('LPersonnel.allFunctions')}</option>
+          {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={filterCls}
-          aria-label="Filtrer par statut">
-          <option value="">Tous statuts</option>
-          <option value="ACTIVE">Actif</option>
-          <option value="SUSPENDED">Suspendu</option>
-          <option value="ARCHIVED">Archivé</option>
+          aria-label={t('LPersonnel.filterByStatus')}>
+          <option value="">{t('LPersonnel.allStatuses')}</option>
+          <option value="ACTIVE">{t('LPersonnel.statusActive')}</option>
+          <option value="SUSPENDED">{t('LPersonnel.statusSuspended')}</option>
+          <option value="ARCHIVED">{t('LPersonnel.statusArchived')}</option>
         </select>
       </div>
 
@@ -780,8 +880,8 @@ export function PagePersonnel() {
           rowActions={rowActions}
           defaultSort={{ key: 'createdAt', dir: 'desc' }}
           defaultPageSize={25}
-          searchPlaceholder="Rechercher (nom, email, fonction…)"
-          emptyMessage={staffList?.length === 0 ? 'Aucun membre. Cliquez sur « Nouveau membre » pour commencer.' : 'Aucun résultat.'}
+          searchPlaceholder={t('LPersonnel.searchPlaceholder')}
+          emptyMessage={staffList?.length === 0 ? t('LPersonnel.emptyFirst') : t('LPersonnel.emptySearch')}
           exportFormats={['csv', 'json', 'xls']}
           exportFilename="personnel"
           onRowClick={(row) => { setEditTarget(row); setActionErr(null); }}
@@ -793,9 +893,9 @@ export function PagePersonnel() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouveau membre du personnel"
-        description="Le membre recevra un mot de passe temporaire par email."
-        size="md"
+        title={t('LPersonnel.createDialogTitle')}
+        description={t('LPersonnel.createDialogDesc')}
+        size="lg"
       >
         <CreateStaffForm
           onSubmit={handleCreate}
@@ -810,9 +910,9 @@ export function PagePersonnel() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) { setEditPreviewOpen(false); setEditTarget(null); } }}
-        title="Modifier le membre"
+        title={t('LPersonnel.editMember')}
         description={editTarget?.user?.email}
-        size={editPreviewOpen ? '3xl' : 'md'}
+        size={editPreviewOpen ? '3xl' : 'lg'}
       >
         {editTarget && (
           <EditStaffForm
@@ -832,9 +932,9 @@ export function PagePersonnel() {
       <Dialog
         open={!!assignmentsTarget}
         onOpenChange={o => { if (!o) setAssignmentsTarget(null); }}
-        title={`Affectations — ${assignmentsTarget?.user?.name ?? assignmentsTarget?.user?.email ?? ''}`}
-        description="Un staff peut occuper plusieurs postes (rôle × agence). Couverture mono / tenant-wide / multi-spécifique."
-        size="lg"
+        title={`${t('LPersonnel.assignments')} — ${assignmentsTarget?.user?.name ?? assignmentsTarget?.user?.email ?? ''}`}
+        description={t('LPersonnel.assignDialogDesc')}
+        size="xl"
       >
         {assignmentsTarget && (
           <div className="space-y-3">
@@ -855,9 +955,9 @@ export function PagePersonnel() {
       <Dialog
         open={showPromote}
         onOpenChange={o => { if (!o) setShowPromote(false); }}
-        title="Promouvoir un utilisateur IAM en personnel"
-        description="Sélectionnez un user existant qui n'a pas encore de profil personnel."
-        size="md"
+        title={t('LPersonnel.promoteDialogTitle')}
+        description={t('LPersonnel.promoteDialogDesc')}
+        size="lg"
       >
         <PromoteFromIamForm
           tenantId={tenantId}
@@ -873,12 +973,12 @@ export function PagePersonnel() {
       <Dialog
         open={!!archiveTarget}
         onOpenChange={o => { if (!o) setArchiveTarget(null); }}
-        title="Archiver le membre"
-        description={`Archiver « ${archiveTarget?.user?.name ?? archiveTarget?.user?.email} » ? Le membre ne sera plus visible mais ses données restent conservées.`}
+        title={t('LPersonnel.archiveDialogTitle')}
+        description={`${t('LPersonnel.archiveConfirmPre')}${archiveTarget?.user?.name ?? archiveTarget?.user?.email}${t('LPersonnel.archiveConfirmPost')}`}
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setArchiveTarget(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
             </Button>
             <Button
               onClick={handleArchive}
@@ -887,7 +987,7 @@ export function PagePersonnel() {
               variant="destructive"
             >
               <Archive className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Archivage…' : 'Archiver'}
+              {busy ? t('LPersonnel.archiveBusy') : t('LPersonnel.archiveAction')}
             </Button>
           </div>
         }

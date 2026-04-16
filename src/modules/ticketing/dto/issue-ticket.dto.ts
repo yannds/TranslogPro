@@ -20,6 +20,13 @@ export class IssueTicketDto {
   @IsEnum(FareClass)
   fareClass: FareClass;
 
+  @IsUUID()
+  @IsOptional()
+  boardingStationId?: string;   // défaut = route.originId
+
+  @IsUUID()
+  alightingStationId: string;   // obligatoire — gare de descente
+
   @IsString()
   @IsOptional()
   seatNumber?: string;

@@ -11,14 +11,18 @@
  *   // sections contient uniquement les groupes + items accessibles
  */
 
+import type { TranslationMap } from '../i18n/types';
+
 export type NavItemId = string;
+/** Label: string simple OU TranslationMap (résolu en string par useNavigation via t()) */
+type Label = string | TranslationMap;
 
 // ─── Item feuille ─────────────────────────────────────────────────────────────
 
 export interface NavLeaf {
   kind:          'leaf';
   id:            NavItemId;
-  label:         string;
+  label:         Label;
   href:          string;
   icon:          string;          // lucide icon name — résolu dans le composant
   badge?:        string | number;
@@ -35,7 +39,7 @@ export interface NavLeaf {
 export interface NavGroup {
   kind:          'group';
   id:            NavItemId;
-  label:         string;
+  label:         Label;
   icon:          string;
   /** Le groupe est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];
@@ -50,7 +54,7 @@ export type NavItem = NavLeaf | NavGroup;
 
 export interface NavSection {
   id:            string;
-  title?:        string;          // undefined = pas de titre (section anonyme)
+  title?:        Label;           // undefined = pas de titre (section anonyme)
   items:         NavItem[];
   /** La section est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];

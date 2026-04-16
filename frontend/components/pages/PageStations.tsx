@@ -15,17 +15,47 @@ import {
   MapPin, Plus, Pencil, Trash2, Building2, Link as LinkIcon,
 } from 'lucide-react';
 import { useAuth }                          from '../../lib/auth/auth.context';
+import { useI18n }                      from '../../lib/i18n/useI18n';
 import { useFetch }                         from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete }     from '../../lib/api';
-import { Card, CardHeader, CardContent }    from '../ui/Card';
 import { Badge }                            from '../ui/Badge';
-import { Skeleton }                         from '../ui/Skeleton';
 import { Button }                           from '../ui/Button';
 import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
 import { FormFooter }                       from '../ui/FormFooter';
 import { inputClass as inp }                from '../ui/inputClass';
 import { LocationPicker }                   from '../ui/LocationPicker';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+const T = {
+  pageTitle:        tm('Gares & Stations', 'Stations'),
+  pageDesc:         tm("Points d'origine et de destination pour lignes, colis et voyageurs.", 'Origin and destination points for routes, parcels and travelers.'),
+  newStation:       tm('Nouvelle station', 'New Station'),
+  stationName:      tm('Nom de la station', 'Station Name'),
+  city:             tm('Ville', 'City'),
+  stationType:      tm('Type', 'Type'),
+  typePrincipale:   tm('Principale', 'Main'),
+  typeRelais:       tm('Relais', 'Relay'),
+  editStation:      tm('Modifier la station', 'Edit Station'),
+  deleteStation:    tm('Supprimer la station', 'Delete Station'),
+  dialogNewDesc:    tm('Ajoutez une gare ou un relais au tenant.', 'Add a station or relay to the tenant.'),
+  stations:         tm('Stations', 'Stations'),
+  principales:      tm('Principales', 'Main Stations'),
+  citiesCovered:    tm('Villes couvertes', 'Cities Covered'),
+  references:       tm('Références', 'References'),
+  searchStation:    tm('Rechercher une station…', 'Search for a station…'),
+  noStations:       tm('Aucune station enregistrée', 'No stations registered'),
+  deleteDesc:       tm('Cette action est irréversible.', 'This action is irreversible.'),
+  deleteWarning:    tm(
+    'La suppression sera refusée par le serveur tant qu\'ils n\'auront pas été réaffectés.',
+    'Deletion will be refused by the server until they are reassigned.',
+  ),
+  refsWarning:      tm('objet(s) référencent cette station.', 'object(s) reference this station.'),
+  placeholderName:  tm('ex. Gare centrale', 'e.g. Central Station'),
+  placeholderCity:  tm('ex. Brazzaville', 'e.g. Brazzaville'),
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +111,7 @@ function StationForm({
   submitLabel:  string;
   pendingLabel: string;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<StationFormValues>(initial);
   const patch = (p: Partial<StationFormValues>) => setF(prev => ({ ...prev, ...p }));
 
@@ -93,31 +124,31 @@ function StationForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Nom de la station <span aria-hidden className="text-red-500">*</span>
+          {t('LStations.stationName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => patch({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder="ex. Gare centrale" />
+          className={inp} disabled={busy} placeholder={t('LStations.placeholderName')} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Ville <span aria-hidden className="text-red-500">*</span>
+            {t('LStations.city')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.city}
             onChange={e => patch({ city: e.target.value })}
-            className={inp} disabled={busy} placeholder="ex. Brazzaville" />
+            className={inp} disabled={busy} placeholder={t('LStations.placeholderCity')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Type <span aria-hidden className="text-red-500">*</span>
+            {t('common.type')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.type}
             onChange={e => patch({ type: e.target.value as StationType })}
             className={inp} disabled={busy}>
-            <option value="PRINCIPALE">Principale</option>
-            <option value="RELAIS">Relais</option>
+            <option value="PRINCIPALE">{t('LStations.typePrincipale')}</option>
+            <option value="RELAIS">{t('LStations.typeRelais')}</option>
           </select>
         </div>
       </div>
@@ -143,6 +174,7 @@ function StationForm({
 
 export function PageStations() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/stations`;
 
@@ -202,15 +234,55 @@ export function PageStations() {
     finally { setBusy(false); }
   };
 
-  const sortedStations = useMemo(
-    () => [...(stations ?? [])].sort((a, b) =>
-      a.city.localeCompare(b.city) || a.name.localeCompare(b.name),
-    ),
-    [stations],
-  );
+  const stationColumns: Column<StationRow>[] = useMemo(() => [
+    {
+      key: 'name', header: t('LStations.stations'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-sm font-medium t-text truncate">{row.name}</p>
+            <p className="text-[11px] t-text-2 truncate tabular-nums">
+              {row.coordinates.lat.toFixed(4)}, {row.coordinates.lng.toFixed(4)}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    { key: 'city', header: t('LStations.city'), sortable: true },
+    {
+      key: 'type', header: t('common.type'), sortable: true, width: '120px',
+      cellRenderer: (v) => (
+        <Badge variant={v === 'PRINCIPALE' ? 'success' : 'info'} size="sm">
+          {v === 'PRINCIPALE' ? t('LStations.typePrincipale') : t('LStations.typeRelais')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'id', header: t('LStations.references'), align: 'right' as const, width: '120px',
+      cellRenderer: (_v, row) => {
+        const refs = refsCount(row._count);
+        return <Badge variant={refs > 0 ? 'warning' : 'default'} size="sm">{refs}</Badge>;
+      },
+    },
+  ], [t, dict]);
+
+  const stationRowActions: RowAction<StationRow>[] = useMemo(() => [
+    {
+      label: t('common.edit'),
+      icon: <Pencil className="w-4 h-4" />,
+      onClick: row => { setActionErr(null); setEditTarget(row); },
+    },
+    {
+      label: t('common.delete'),
+      icon: <Trash2 className="w-4 h-4" />,
+      onClick: row => { setActionErr(null); setDeleteTarget(row); },
+      danger: true,
+    },
+  ], [t, dict]);
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Gares et stations">
+    <main className="p-6 space-y-6" role="main" aria-label={t('LStations.pageTitle')}>
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -218,120 +290,47 @@ export function PageStations() {
             <MapPin className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Gares &amp; Stations</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LStations.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Points d'origine et de destination pour lignes, colis et voyageurs.
+              {t('LStations.pageDesc')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setActionErr(null); setShowCreate(true); }}>
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          Nouvelle station
+          {t('LStations.newStation')}
         </Button>
       </div>
 
       <ErrorAlert error={error || actionErr} icon />
 
       {/* KPIs */}
-      <section aria-label="Indicateurs stations" className="grid grid-cols-3 gap-4">
-        <Kpi label="Stations"         value={kpi.total}     icon={<MapPin     className="w-5 h-5" />} />
-        <Kpi label="Principales"      value={kpi.principal} icon={<Building2  className="w-5 h-5" />} />
-        <Kpi label="Villes couvertes" value={kpi.cities}    icon={<LinkIcon   className="w-5 h-5" />} />
+      <section aria-label={t('LStations.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Kpi label={t('LStations.stations')}      value={kpi.total}     icon={<MapPin     className="w-5 h-5" />} />
+        <Kpi label={t('LStations.principales')}   value={kpi.principal} icon={<Building2  className="w-5 h-5" />} />
+        <Kpi label={t('LStations.citiesCovered')} value={kpi.cities}    icon={<LinkIcon   className="w-5 h-5" />} />
       </section>
 
-      {/* Liste */}
-      <Card>
-        <CardHeader
-          heading={`${sortedStations.length} station${sortedStations.length > 1 ? 's' : ''}`}
-          description="Triées par ville puis par nom"
-        />
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-3" aria-busy="true">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
-            </div>
-          ) : sortedStations.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
-              <MapPin className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">Aucune station enregistrée</p>
-              <p className="text-sm mt-1">Cliquez sur « Nouvelle station » pour commencer.</p>
-            </div>
-          ) : (
-            <div role="table" aria-label="Liste des stations">
-              <div
-                role="row"
-                className="grid grid-cols-[1fr_140px_110px_140px_120px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
-              >
-                <div role="columnheader">Station</div>
-                <div role="columnheader">Ville</div>
-                <div role="columnheader">Type</div>
-                <div role="columnheader" className="text-right">Références</div>
-                <div role="columnheader" className="text-right">Actions</div>
-              </div>
-              <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
-                {sortedStations.map(s => {
-                  const refs = refsCount(s._count);
-                  return (
-                    <li
-                      key={s.id}
-                      role="row"
-                      className="grid grid-cols-[1fr_140px_110px_140px_120px] gap-3 px-6 py-3 items-center"
-                    >
-                      <div role="cell" className="flex items-center gap-2 min-w-0">
-                        <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{s.name}</p>
-                          <p className="text-[11px] text-slate-500 truncate tabular-nums">
-                            {s.coordinates.lat.toFixed(4)}, {s.coordinates.lng.toFixed(4)}
-                          </p>
-                        </div>
-                      </div>
-                      <div role="cell" className="text-sm text-slate-600 dark:text-slate-400 truncate">
-                        {s.city}
-                      </div>
-                      <div role="cell">
-                        <Badge variant={s.type === 'PRINCIPALE' ? 'success' : 'info'} size="sm">
-                          {s.type === 'PRINCIPALE' ? 'Principale' : 'Relais'}
-                        </Badge>
-                      </div>
-                      <div role="cell" className="text-right">
-                        <Badge variant={refs > 0 ? 'warning' : 'default'} size="sm">{refs}</Badge>
-                      </div>
-                      <div role="cell" className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { setActionErr(null); setEditTarget(s); }}
-                          className="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                          aria-label={`Modifier ${s.name}`}
-                          title="Modifier"
-                        >
-                          <Pencil className="w-4 h-4" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setActionErr(null); setDeleteTarget(s); }}
-                          className="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                          aria-label={`Supprimer ${s.name}`}
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" aria-hidden />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Liste — DataTableMaster (tri, recherche, pagination, export) */}
+      <DataTableMaster<StationRow>
+        columns={stationColumns}
+        data={stations ?? []}
+        loading={loading}
+        defaultSort={{ key: 'city', dir: 'asc' }}
+        searchPlaceholder={t('LStations.searchStation')}
+        emptyMessage={t('LStations.noStations')}
+        rowActions={stationRowActions}
+        onRowClick={row => { setActionErr(null); setEditTarget(row); }}
+        exportFormats={['csv', 'json']}
+        exportFilename="stations"
+      />
 
       {/* Modal créer */}
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouvelle station"
-        description="Ajoutez une gare ou un relais au tenant."
+        title={t('LStations.newStation')}
+        description={t('LStations.dialogNewDesc')}
         size="lg"
       >
         <StationForm
@@ -341,8 +340,8 @@ export function PageStations() {
           onCancel={() => setShowCreate(false)}
           busy={busy}
           error={actionErr}
-          submitLabel="Créer"
-          pendingLabel="Création…"
+          submitLabel={t('common.create')}
+          pendingLabel={t('common.creating')}
         />
       </Dialog>
 
@@ -350,7 +349,7 @@ export function PageStations() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title="Modifier la station"
+        title={t('LStations.editStation')}
         description={editTarget?.name}
         size="lg"
       >
@@ -368,8 +367,8 @@ export function PageStations() {
             onCancel={() => setEditTarget(null)}
             busy={busy}
             error={actionErr}
-            submitLabel="Enregistrer"
-            pendingLabel="Enregistrement…"
+            submitLabel={t('common.save')}
+            pendingLabel={t('common.saving')}
           />
         )}
       </Dialog>
@@ -378,16 +377,16 @@ export function PageStations() {
       <Dialog
         open={!!deleteTarget}
         onOpenChange={o => { if (!o) setDeleteTarget(null); }}
-        title="Supprimer la station"
+        title={t('LStations.deleteStation')}
         description={
           deleteTarget
-            ? `Supprimer « ${deleteTarget.name} » ? Cette action est irréversible.`
+            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('LStations.deleteDesc')}`
             : undefined
         }
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={busy}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleDelete}
@@ -395,7 +394,7 @@ export function PageStations() {
               className="bg-red-600 hover:bg-red-700 text-white border-red-600"
             >
               <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Suppression…' : 'Supprimer'}
+              {busy ? t('common.deleting') : t('common.delete')}
             </Button>
           </div>
         }
@@ -403,8 +402,7 @@ export function PageStations() {
         <ErrorAlert error={actionErr} />
         {deleteTarget && refsCount(deleteTarget._count) > 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
-            Attention : {refsCount(deleteTarget._count)} objet(s) référencent cette station.
-            La suppression sera refusée par le serveur tant qu'ils n'auront pas été réaffectés.
+            {refsCount(deleteTarget._count)} {t('LStations.refsWarning')} {t('LStations.deleteWarning')}
           </p>
         )}
         <div />

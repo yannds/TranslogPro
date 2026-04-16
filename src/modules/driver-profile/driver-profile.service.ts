@@ -136,6 +136,29 @@ export class DriverProfileService {
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
+  // ─── Scope helpers ────────────────────────────────────────────────────────
+  //
+  // Rappel modèle : Staff.userId référence User.id — staff.id et user.id sont
+  // DEUX ids différents. Les endpoints drivers exposent :staffId (l'id du
+  // Staff), pas l'id du User. ScopeContext.userId est l'id User (issu de la
+  // session). Pour valider un scope='own', il faut donc traduire staffId en
+  // staff.userId via une lecture DB et comparer à scope.userId.
+
+  private async _assertStaffOwnership(
+    tenantId: string,
+    staffId:  string,
+    scope?:   ScopeContext,
+  ): Promise<void> {
+    if (!scope || scope.scope !== 'own') return;
+    const staff = await this.prisma.staff.findFirst({
+      where:  { id: staffId, tenantId },
+      select: { userId: true },
+    });
+    if (!staff || staff.userId !== scope.userId) {
+      throw new ForbiddenException(`Scope 'own' violation — staff not owned by actor`);
+    }
+  }
+
   // ─── Rest Config ──────────────────────────────────────────────────────────
 
   async getRestConfig(tenantId: string) {
@@ -230,11 +253,12 @@ export class DriverProfileService {
    * de pouvoir être affecté à un nouveau trajet.
    * Retourne { canDrive: boolean, restRemainingMinutes: number }.
    */
-  async checkRestCompliance(tenantId: string, staffId: string): Promise<{
+  async checkRestCompliance(tenantId: string, staffId: string, scope?: ScopeContext): Promise<{
     canDrive: boolean;
     restRemainingMinutes: number;
     activeRestPeriod: { id: string; startedAt: Date } | null;
   }> {
+    await this._assertStaffOwnership(tenantId, staffId, scope);
     const config = await this.getRestConfig(tenantId);
 
     // Cherche une période de repos ouverte (endedAt null)
@@ -278,10 +302,7 @@ export class DriverProfileService {
   }
 
   async startRestPeriod(tenantId: string, dto: StartRestPeriodDto, scope?: ScopeContext) {
-    // Scope own : un chauffeur ne peut démarrer une période QUE pour lui-même.
-    if (scope?.scope === 'own' && dto.staffId !== scope.userId) {
-      throw new ForbiddenException(`Scope 'own' violation — staffId ≠ actor.id`);
-    }
+    await this._assertStaffOwnership(tenantId, dto.staffId, scope);
     // Ferme toute période ouverte existante (défensive — ne devrait pas arriver)
     await this.prisma.driverRestPeriod.updateMany({
       where: { tenantId, staffId: dto.staffId, endedAt: null },
@@ -311,7 +332,7 @@ export class DriverProfileService {
       where: { id: periodId, tenantId },
     });
     if (!period) throw new NotFoundException(`Période de repos ${periodId} introuvable`);
-    if (scope) assertOwnership(scope, period, 'staffId');
+    await this._assertStaffOwnership(tenantId, period.staffId, scope);
     if (period.endedAt) throw new BadRequestException('Période déjà terminée');
 
     const config      = await this.getRestConfig(tenantId);
@@ -327,13 +348,64 @@ export class DriverProfileService {
       });
     }
 
-    return this.prisma.driverRestPeriod.update({
+    const updated = await this.prisma.driverRestPeriod.update({
       where: { id: periodId },
       data:  { endedAt },
     });
+
+    await this._publishDriverEvent(tenantId, period.staffId, EventTypes.DRIVER_REST_ENDED, {
+      restPeriodId:    periodId,
+      durationMinutes: durationMin,
+      source:          'MANUAL',
+    });
+
+    return updated;
   }
 
-  async getRestHistory(tenantId: string, staffId: string, limit = 20) {
+  /**
+   * Ferme automatiquement les périodes de repos dont la durée minimale
+   * est atteinte. Appelé par le cron toutes les 5 minutes.
+   */
+  async autoCloseExpiredRestPeriods(): Promise<number> {
+    const tenants = await this.prisma.tenant.findMany({ select: { id: true } });
+    let closed = 0;
+
+    for (const tenant of tenants) {
+      const config = await this.getRestConfig(tenant.id);
+
+      const cutoff = new Date(Date.now() - config.minRestMinutes * 60_000);
+      const expired = await this.prisma.driverRestPeriod.findMany({
+        where: {
+          tenantId:  tenant.id,
+          endedAt:   null,
+          startedAt: { lte: cutoff },
+        },
+      });
+
+      for (const period of expired) {
+        const endedAt     = new Date(period.startedAt.getTime() + config.minRestMinutes * 60_000);
+        const durationMin = config.minRestMinutes;
+
+        await this.prisma.driverRestPeriod.update({
+          where: { id: period.id },
+          data:  { endedAt },
+        });
+
+        await this._publishDriverEvent(tenant.id, period.staffId, EventTypes.DRIVER_REST_COMPLETED, {
+          restPeriodId:    period.id,
+          durationMinutes: durationMin,
+          source:          'AUTO_CLOSED',
+        });
+
+        closed++;
+      }
+    }
+
+    return closed;
+  }
+
+  async getRestHistory(tenantId: string, staffId: string, limit = 20, scope?: ScopeContext) {
+    await this._assertStaffOwnership(tenantId, staffId, scope);
     return this.prisma.driverRestPeriod.findMany({
       where:   { tenantId, staffId },
       orderBy: { startedAt: 'desc' },
@@ -471,6 +543,53 @@ export class DriverProfileService {
       where:   { tenantId, isActive: true },
       orderBy: { priority: 'asc' },
     });
+  }
+
+  async updateRemediationRule(
+    tenantId: string,
+    id: string,
+    dto: Partial<CreateRemediationRuleDto> & { isActive?: boolean },
+  ) {
+    const rule = await this.prisma.driverRemediationRule.findFirst({ where: { id, tenantId } });
+    if (!rule) throw new NotFoundException(`Règle ${id} introuvable`);
+    return this.prisma.driverRemediationRule.update({
+      where: { id },
+      data: {
+        name:                dto.name,
+        scoreBelowThreshold: dto.scoreBelowThreshold,
+        actionType:          dto.actionType ? dto.actionType.toUpperCase() : undefined,
+        trainingTypeId:      dto.trainingTypeId,
+        suspensionDays:      dto.suspensionDays,
+        priority:            dto.priority,
+        isActive:            dto.isActive,
+      },
+    });
+  }
+
+  async deleteRemediationRule(tenantId: string, id: string) {
+    const rule = await this.prisma.driverRemediationRule.findFirst({ where: { id, tenantId } });
+    if (!rule) throw new NotFoundException(`Règle ${id} introuvable`);
+    return this.prisma.driverRemediationRule.update({
+      where: { id },
+      data:  { isActive: false },
+    });
+  }
+
+  async deleteLicense(tenantId: string, id: string) {
+    const lic = await this.prisma.driverLicense.findFirst({ where: { id, tenantId } });
+    if (!lic) throw new NotFoundException(`Permis ${id} introuvable`);
+    await this.prisma.driverLicense.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  async deleteTraining(tenantId: string, id: string) {
+    const training = await this.prisma.driverTraining.findFirst({ where: { id, tenantId } });
+    if (!training) throw new NotFoundException(`Formation ${id} introuvable`);
+    if (training.status === TRAINING_STATUS.COMPLETED) {
+      throw new BadRequestException('Une formation complétée ne peut pas être supprimée');
+    }
+    await this.prisma.driverTraining.delete({ where: { id } });
+    return { ok: true };
   }
 
   /**
@@ -653,6 +772,8 @@ export class DriverProfileService {
       payload:       { staffId, ...payload },
       occurredAt:    new Date(),
     };
-    await this.eventBus.publish(event, null);
+    // Pas de transaction englobante — on utilise le client Prisma principal
+    // comme PrismaTransactionClient (même interface pour create/update).
+    await this.eventBus.publish(event, this.prisma);
   }
 }

@@ -12,12 +12,79 @@
 import { useState, useCallback } from 'react';
 import { ScrollText, Search, Filter } from 'lucide-react';
 import { useAuth }  from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { Input }    from '../ui/Input';
 import { Button }   from '../ui/Button';
 import { Select }   from '../ui/Select';
 import { Dialog }   from '../ui/Dialog';
 import DataTableMaster, { type Column } from '../DataTableMaster';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+const T = {
+  // titles
+  accessLog:          tm("Journal d'acc\u00e8s", 'Access Log'),
+  logDetailTitle:     tm('Détails du Log — Format ISO 27001', 'Log Details — ISO 27001 Format'),
+  logDetailDesc:      tm('Informations détaillées du log de sécurité', 'Detailed security log information'),
+
+  // columns
+  colDate:            tm('Date', 'Date'),
+  colLevel:           tm('Niveau', 'Level'),
+  colAction:          tm('Action', 'Action'),
+  colResource:        tm('Ressource', 'Resource'),
+  colUser:            tm('Utilisateur', 'User'),
+  colIp:              tm('IP', 'IP'),
+
+  // labels
+  eventId:            tm("ID de l'\u00e9v\u00e9nement", 'Event ID'),
+  timestamp:          tm('Horodatage', 'Timestamp'),
+  eventSource:        tm("Source de l'\u00e9v\u00e9nement", 'Event Source'),
+  eventType:          tm("Type d'\u00e9v\u00e9nement", 'Event Type'),
+  category:           tm('Catégorie', 'Category'),
+  severity:           tm('Sévérité', 'Severity'),
+  securityLevel:      tm('Niveau de sécurité', 'Security Level'),
+  descriptionLabel:   tm('Description', 'Description'),
+  user:               tm('Utilisateur', 'User'),
+  context:            tm('Contexte', 'Context'),
+  module:             tm('Module', 'Module'),
+  endpoint:           tm('Endpoint', 'Endpoint'),
+  method:             tm('Méthode', 'Method'),
+  result:             tm('Résultat', 'Result'),
+  rawRequest:         tm('Requête brute (newValue)', 'Raw request (newValue)'),
+  systemAnonymous:    tm('Système / anonyme', 'System / anonymous'),
+
+  // filters
+  serverFilters:      tm('Filtres serveur', 'Server Filters'),
+  allLevels:          tm('Tous niveaux', 'All levels'),
+  searchAction:       tm('Rechercher action\u2026', 'Search action\u2026'),
+  since:              tm('Depuis', 'Since'),
+  until:              tm("Jusqu'au", 'Until'),
+  reset:              tm('Réinitialiser', 'Reset'),
+  apply:              tm('Appliquer', 'Apply'),
+
+  // messages
+  loading:            tm('Chargement\u2026', 'Loading\u2026'),
+  totalEntries:       tm('entrée(s) au total — affichage des {count} plus récentes', 'total entries — showing {count} most recent'),
+  searchPlaceholder:  tm('Recherche locale (action, ressource, IP\u2026)', 'Local search (action, resource, IP\u2026)'),
+  emptyMessage:       tm('Aucune entrée pour ces critères', 'No entries for these criteria'),
+
+  // derive labels
+  connection:         tm('CONNEXION', 'LOGIN'),
+  deletion:           tm('SUPPRESSION', 'DELETION'),
+  creation:           tm('CRÉATION', 'CREATION'),
+  modification:       tm('MODIFICATION', 'MODIFICATION'),
+  consultation:       tm('CONSULTATION', 'CONSULTATION'),
+  revocation:         tm('RÉVOCATION', 'REVOCATION'),
+  exportLabel:        tm('EXPORT', 'EXPORT'),
+
+  // derive descriptions
+  loginFailed:        tm('Tentative de connexion échouée', 'Failed login attempt'),
+  loginSuccess:       tm('Connexion réussie', 'Successful login'),
+  deletionOn:         tm('Suppression sur', 'Deletion on'),
+  creationOn:         tm('Création/modification sur', 'Creation/modification on'),
+  onLabel:            tm('sur', 'on'),
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,28 +181,29 @@ function deriveCategory(action: string, module?: string): string {
   if (src.includes('cashier') || src.includes('pricing')) return 'FINANCE';
   if (src.includes('maintenance')) return 'MAINTENANCE';
   if (src.includes('integration')) return 'INTEGRATION';
-  return 'SYSTÈME';
+  return 'SYSTEM';
 }
 
 /**
  * Dérive l'Action lisible depuis actionType ou la string action.
  */
-function deriveActionLabel(action: string, actionType?: string): string {
+function deriveActionLabel(action: string, actionType?: string, t?: (map: Record<string, string>) => string): string {
+  const tr = t ?? ((m: Record<string, string>) => m.fr ?? '');
   const src = (actionType ?? action).toUpperCase();
-  if (src.includes('LOGIN') || src.includes('SIGN_IN')) return 'CONNEXION';
-  if (src.includes('DELETE') || src.includes('SUPPRESSION')) return 'SUPPRESSION';
-  if (src === 'EXPORT') return 'EXPORT';
-  if (src.includes('WRITE') || src.includes('POST') || src.includes('CREATE')) return 'CRÉATION';
-  if (src.includes('WRITE') || src.includes('PATCH') || src.includes('PUT') || src.includes('UPDATE')) return 'MODIFICATION';
-  if (src.includes('READ') || src.includes('GET')) return 'CONSULTATION';
-  if (src.includes('REVOKE')) return 'RÉVOCATION';
+  if (src.includes('LOGIN') || src.includes('SIGN_IN')) return tr(T.connection);
+  if (src.includes('DELETE') || src.includes('SUPPRESSION')) return tr(T.deletion);
+  if (src === 'EXPORT') return tr(T.exportLabel);
+  if (src.includes('WRITE') || src.includes('POST') || src.includes('CREATE')) return tr(T.creation);
+  if (src.includes('WRITE') || src.includes('PATCH') || src.includes('PUT') || src.includes('UPDATE')) return tr(T.modification);
+  if (src.includes('READ') || src.includes('GET')) return tr(T.consultation);
+  if (src.includes('REVOKE')) return tr(T.revocation);
   return src;
 }
 
 /**
  * Construit une description lisible depuis les données disponibles.
  */
-function deriveDescription(entry: AuditEntry): string {
+function deriveDescription(entry: AuditEntry, t: (map: Record<string, string>) => string): string {
   const nv = entry.newValue ?? {};
   const outcome = String(nv['outcome'] ?? '');
   const email   = entry.user?.email ?? String(nv['userId'] ?? '');
@@ -144,76 +212,78 @@ function deriveDescription(entry: AuditEntry): string {
 
   if (at.includes('LOGIN')) {
     return outcome === 'FAILURE'
-      ? `Tentative de connexion échouée${email ? ' : ' + email : ''}`
-      : `Connexion réussie${email ? ' : ' + email : ''}`;
+      ? `${t('LIamAudit.loginFailed')}${email ? ' : ' + email : ''}`
+      : `${t('LIamAudit.loginSuccess')}${email ? ' : ' + email : ''}`;
   }
   if (at.includes('DELETE'))
-    return `Suppression sur ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
+    return `${t('LIamAudit.deletionOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
   if (at.includes('WRITE') || at.includes('CREATE'))
-    return `Création/modification sur ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
-  return `${at} sur ${module}`;
+    return `${t('LIamAudit.creationOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
+  return `${at} ${t('LIamAudit.onLabel')} ${module}`;
 }
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-const COLUMNS: Column<AuditEntry>[] = [
-  {
-    key: 'createdAt',
-    header: 'Date',
-    sortable: true,
-    width: '150px',
-    cellRenderer: (v) => (
-      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono">
-        {formatDate(String(v))}
-      </span>
-    ),
-    csvValue: (v) => formatDate(String(v)),
-  },
-  {
-    key: 'level',
-    header: 'Niveau',
-    sortable: true,
-    width: '90px',
-    cellRenderer: (v) => <LevelBadge level={String(v)} />,
-  },
-  {
-    key: 'action',
-    header: 'Action',
-    sortable: true,
-    cellRenderer: (v) => (
-      <span className="font-mono text-xs text-slate-800 dark:text-slate-200 max-w-[260px] truncate block">
-        {String(v)}
-      </span>
-    ),
-  },
-  {
-    key: 'resource',
-    header: 'Ressource',
-    sortable: true,
-    cellRenderer: (v) => (
-      <span className="text-xs text-slate-500 dark:text-slate-400 max-w-[180px] truncate block">{String(v)}</span>
-    ),
-  },
-  {
-    key: 'user',
-    header: 'Utilisateur',
-    cellRenderer: (_v, row) => row.user ? (
-      <div>
-        <p className="text-xs text-slate-800 dark:text-slate-200">{row.user.name}</p>
-        <p className="text-xs text-slate-500">{row.user.email}</p>
-      </div>
-    ) : <span className="text-xs text-slate-400 dark:text-slate-600 italic">—</span>,
-    csvValue: (_v, row) => row.user ? `${row.user.name} <${row.user.email}>` : '',
-  },
-  {
-    key: 'ipAddress',
-    header: 'IP',
-    width: '120px',
-    cellRenderer: (v) => (
-      <span className="text-xs text-slate-500 font-mono">{v ? String(v) : '—'}</span>
-    ),
-  },
-];
+function buildColumns(t: (map: Record<string, string>) => string): Column<AuditEntry>[] {
+  return [
+    {
+      key: 'createdAt',
+      header: t('LIamAudit.colDate'),
+      sortable: true,
+      width: '150px',
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono">
+          {formatDate(String(v))}
+        </span>
+      ),
+      csvValue: (v) => formatDate(String(v)),
+    },
+    {
+      key: 'level',
+      header: t('LIamAudit.colLevel'),
+      sortable: true,
+      width: '90px',
+      cellRenderer: (v) => <LevelBadge level={String(v)} />,
+    },
+    {
+      key: 'action',
+      header: t('LIamAudit.colAction'),
+      sortable: true,
+      cellRenderer: (v) => (
+        <span className="font-mono text-xs text-slate-800 dark:text-slate-200 max-w-[260px] truncate block">
+          {String(v)}
+        </span>
+      ),
+    },
+    {
+      key: 'resource',
+      header: t('LIamAudit.colResource'),
+      sortable: true,
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-500 dark:text-slate-400 max-w-[180px] truncate block">{String(v)}</span>
+      ),
+    },
+    {
+      key: 'user',
+      header: t('LIamAudit.colUser'),
+      cellRenderer: (_v, row) => row.user ? (
+        <div>
+          <p className="text-xs text-slate-800 dark:text-slate-200">{row.user.name}</p>
+          <p className="text-xs text-slate-500">{row.user.email}</p>
+        </div>
+      ) : <span className="text-xs text-slate-400 dark:text-slate-600 italic">—</span>,
+      csvValue: (_v, row) => row.user ? `${row.user.name} <${row.user.email}>` : '',
+    },
+    {
+      key: 'ipAddress',
+      header: t('LIamAudit.colIp'),
+      width: '120px',
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-500 font-mono">{v ? String(v) : '—'}</span>
+      ),
+    },
+  ];
+}
 
 // ─── Modale détail ISO 27001 ───────────────────────────────────────────────────
 
@@ -224,6 +294,7 @@ function AuditDetailDialog({
   entry: AuditEntry | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [rawOpen, setRawOpen] = useState(false);
   if (!entry) return null;
 
@@ -238,65 +309,65 @@ function AuditDetailDialog({
 
   const eventType   = deriveEventType(entry.plane, entry.action);
   const category    = deriveCategory(entry.action, nv['module'] as string | undefined);
-  const actionLabel = deriveActionLabel(entry.action, actionType);
-  const description = deriveDescription(entry);
+  const actionLabel = deriveActionLabel(entry.action, actionType, t);
+  const description = deriveDescription(entry, t);
   const secLevel    = entry.securityLevel ?? 'INTERNAL';
 
   return (
     <Dialog
       open={!!entry}
       onOpenChange={o => { if (!o) onClose(); }}
-      title="Détails du Log — Format ISO 27001"
-      description="Informations détaillées du log de sécurité"
-      size="lg"
-      footer={<Button variant="outline" size="sm" onClick={onClose}>Fermer</Button>}
+      title={t('LIamAudit.logDetailTitle')}
+      description={t('LIamAudit.logDetailDesc')}
+      size="xl"
+      footer={<Button variant="outline" size="sm" onClick={onClose}>{t('common.close')}</Button>}
     >
       <div className="space-y-4 text-sm">
 
         {/* Bloc 1 — Identité */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">ID de l&apos;événement</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.eventId')}</p>
             <p className="font-mono text-xs text-slate-800 dark:text-slate-200 break-all">{entry.id}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Horodatage</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.timestamp')}</p>
             <p className="font-mono text-xs text-slate-800 dark:text-slate-200">{formatDate(entry.createdAt)}</p>
           </div>
         </div>
 
         {/* Bloc 2 — Source */}
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Source de l&apos;événement</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.eventSource')}</p>
           <p className="text-xs text-slate-800 dark:text-slate-200 uppercase font-mono">{entry.plane}</p>
         </div>
 
         <div className="border-t border-slate-100 dark:border-slate-800" />
 
         {/* Bloc 3 — Classification */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Type d&apos;événement</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.eventType')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{eventType}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Catégorie</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.category')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{category}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Action</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.colAction')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{actionLabel}</p>
           </div>
         </div>
 
         {/* Bloc 4 — Sévérité + Niveau sécurité */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sévérité</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.severity')}</p>
             <LevelBadge level={entry.level} />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Niveau de sécurité</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.securityLevel')}</p>
             <SecLevelBadge level={secLevel} />
           </div>
         </div>
@@ -305,7 +376,7 @@ function AuditDetailDialog({
 
         {/* Bloc 5 — Description */}
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Description</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.descriptionLabel')}</p>
           <p className="text-sm text-slate-800 dark:text-slate-200 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600">
             {description}
           </p>
@@ -314,46 +385,46 @@ function AuditDetailDialog({
         <div className="border-t border-slate-100 dark:border-slate-800" />
 
         {/* Bloc 6 — Utilisateur + Contexte */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Utilisateur</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('LIamAudit.user')}</p>
             <div className="space-y-0.5">
               {entry.user ? (
                 <>
                   <p className="text-xs text-slate-800 dark:text-slate-200">
-                    <span className="text-slate-500">Email :</span> {entry.user.email}
+                    <span className="text-slate-500">{t('common.email')} :</span> {entry.user.email}
                   </p>
                   <p className="text-xs text-slate-800 dark:text-slate-200">
-                    <span className="text-slate-500">Nom :</span> {entry.user.name}
+                    <span className="text-slate-500">{t('common.name')} :</span> {entry.user.name}
                   </p>
                 </>
               ) : (
-                <p className="text-xs italic text-slate-400">Système / anonyme</p>
+                <p className="text-xs italic text-slate-400">{t('LIamAudit.systemAnonymous')}</p>
               )}
               {roleName !== '—' && (
                 <p className="text-xs text-slate-800 dark:text-slate-200">
-                  <span className="text-slate-500">Rôle :</span> {roleName}
+                  <span className="text-slate-500">{t('common.role')} :</span> {roleName}
                 </p>
               )}
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500 not-italic">IP :</span> {entry.ipAddress ?? '—'}
+                <span className="text-slate-500 not-italic">{t('LIamAudit.colIp')} :</span> {entry.ipAddress ?? '—'}
               </p>
             </div>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Contexte</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('LIamAudit.context')}</p>
             <div className="space-y-0.5">
               <p className="text-xs text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500">Module :</span> {module}
+                <span className="text-slate-500">{t('LIamAudit.module')} :</span> {module}
               </p>
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200 break-all">
-                <span className="text-slate-500 not-italic">Endpoint :</span> {endpoint}
+                <span className="text-slate-500 not-italic">{t('LIamAudit.endpoint')} :</span> {endpoint}
               </p>
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500 not-italic">Méthode :</span> {method}
+                <span className="text-slate-500 not-italic">{t('LIamAudit.method')} :</span> {method}
               </p>
               <p className="text-xs text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500">Résultat :</span>{' '}
+                <span className="text-slate-500">{t('LIamAudit.result')} :</span>{' '}
                 <span className={outcome === 'SUCCESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                   {outcome}
                 </span>
@@ -372,7 +443,7 @@ function AuditDetailDialog({
                 className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                 onClick={() => setRawOpen(o => !o)}
               >
-                {rawOpen ? '▾' : '▸'} Requête brute (newValue)
+                {rawOpen ? '▾' : '▸'} {t('LIamAudit.rawRequest')}
               </button>
               {rawOpen && (
                 <pre className="mt-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap break-all">
@@ -391,6 +462,7 @@ function AuditDetailDialog({
 
 export function PageIamAudit() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/v1/tenants/${tenantId}/iam`;
 
@@ -422,6 +494,7 @@ export function PageIamAudit() {
   }, []);
 
   const items = data?.items ?? [];
+  const columns = buildColumns(t);
 
   return (
     <div className="p-6 space-y-6">
@@ -429,24 +502,24 @@ export function PageIamAudit() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <ScrollText size={24} className="text-indigo-500 dark:text-indigo-400" />
-          Journal d&apos;accès
+          {t('LIamAudit.accessLog')}
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           {data
-            ? `${data.total} entrée(s) au total — affichage des ${items.length} plus récentes`
-            : 'Chargement…'}
+            ? `${data.total} ${t('LIamAudit.totalEntries').replace('{count}', String(items.length))}`
+            : t('LIamAudit.loading')}
         </p>
       </div>
 
       {/* Filtres serveur */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">
-          <Filter size={14} /> Filtres serveur
+          <Filter size={14} /> {t('LIamAudit.serverFilters')}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <Select
             options={[
-              { value: '', label: 'Tous niveaux' },
+              { value: '', label: t('LIamAudit.allLevels') },
               { value: 'info', label: 'info' },
               { value: 'warn', label: 'warn' },
               { value: 'critical', label: 'critical' },
@@ -455,7 +528,7 @@ export function PageIamAudit() {
             onChange={e => setDraft(d => ({ ...d, level: e.target.value }))}
           />
           <Input
-            placeholder="Rechercher action…"
+            placeholder={t('LIamAudit.searchAction')}
             value={draft.action}
             onChange={e => setDraft(d => ({ ...d, action: e.target.value }))}
           />
@@ -468,32 +541,32 @@ export function PageIamAudit() {
             type="date"
             value={draft.from}
             onChange={e => setDraft(d => ({ ...d, from: e.target.value }))}
-            title="Depuis"
+            title={t('LIamAudit.since')}
           />
           <Input
             type="date"
             value={draft.to}
             onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
-            title="Jusqu'au"
+            title={t('LIamAudit.until')}
           />
         </div>
         <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" onClick={resetFilters}>Réinitialiser</Button>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>{t('LIamAudit.reset')}</Button>
           <Button size="sm" onClick={applyFilters}>
-            <Search size={13} className="mr-1" /> Appliquer
+            <Search size={13} className="mr-1" /> {t('LIamAudit.apply')}
           </Button>
         </div>
       </div>
 
       {/* Tableau */}
       <DataTableMaster<AuditEntry>
-        columns={COLUMNS}
+        columns={columns}
         data={items}
         loading={loading}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
-        searchPlaceholder="Recherche locale (action, ressource, IP…)"
-        emptyMessage="Aucune entrée pour ces critères"
+        searchPlaceholder={t('LIamAudit.searchPlaceholder')}
+        emptyMessage={t('LIamAudit.emptyMessage')}
         exportFormats={['csv', 'json', 'pdf']}
         exportFilename="audit-log"
         onRowClick={setDetail}

@@ -20,10 +20,13 @@ import { UserDetailDialog } from '../iam/UserDetailDialog';
 import { useFetch }            from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth }             from '../../lib/auth/auth.context';
+import { useI18n }              from '../../lib/i18n/useI18n';
 import { Button }              from '../ui/Button';
 import { Badge }               from '../ui/Badge';
 import { Dialog }              from '../ui/Dialog';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
+
+// ─── i18n (string-key based — see locales/fr.ts → iamUsers) ──────────────────
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,11 +60,11 @@ interface EditForm {
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(currentUserId: string): Column<UserRow>[] {
+function buildColumns(currentUserId: string, t: (key: string) => string): Column<UserRow>[] {
   return [
     {
       key: 'name',
-      header: 'Utilisateur',
+      header: t('iamUsers.colUser'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-3">
@@ -72,7 +75,7 @@ function buildColumns(currentUserId: string): Column<UserRow>[] {
             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
               {row.name ?? '—'}
               {row.id === currentUserId && (
-                <span className="ml-2 text-[10px] text-blue-500">(vous)</span>
+                <span className="ml-2 text-[10px] text-blue-500">{t('iamUsers.you')}</span>
               )}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{row.email}</p>
@@ -83,7 +86,7 @@ function buildColumns(currentUserId: string): Column<UserRow>[] {
     },
     {
       key: 'role',
-      header: 'Rôle',
+      header: t('common.role'),
       sortable: true,
       cellRenderer: (_v, row) => row.role
         ? <Badge variant="info">{row.role.name}</Badge>
@@ -92,7 +95,7 @@ function buildColumns(currentUserId: string): Column<UserRow>[] {
     },
     {
       key: 'agency',
-      header: 'Agence',
+      header: t('common.agency'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -103,7 +106,7 @@ function buildColumns(currentUserId: string): Column<UserRow>[] {
     },
     {
       key: 'createdAt',
-      header: 'Créé le',
+      header: t('iamUsers.colCreatedAt'),
       sortable: true,
       width: '110px',
       cellRenderer: (v) => (
@@ -125,6 +128,7 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<CreateForm>({
     email: '', name: '', password: '', roleId: '', agencyId: '',
   });
@@ -140,10 +144,10 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
           {error}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Email <span aria-hidden className="text-red-500">*</span>
+            {t('common.email')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="email" required value={f.email}
             onChange={e => set('email', e.target.value)}
@@ -151,7 +155,7 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom complet <span aria-hidden className="text-red-500">*</span>
+            {t('iamUsers.fullName')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.name}
             onChange={e => set('name', e.target.value)}
@@ -159,27 +163,27 @@ function CreateUserForm({ roles, onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Mot de passe <span aria-hidden className="text-red-500">*</span>
+            {t('common.password')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="password" required minLength={8} value={f.password}
             onChange={e => set('password', e.target.value)}
-            className={inp} disabled={busy} placeholder="8 caractères min." />
+            className={inp} disabled={busy} placeholder={t('iamUsers.minChars')} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rôle</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.role')}</label>
           <select value={f.roleId} onChange={e => set('roleId', e.target.value)}
             className={inp} disabled={busy}>
-            <option value="">— Aucun rôle —</option>
+            <option value="">{t('iamUsers.noRole')}</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Création…' : 'Créer'}
+          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? t('common.creating') : t('common.create')}
         </Button>
       </div>
     </form>
@@ -196,6 +200,7 @@ function EditUserForm({ user, roles, onSubmit, onCancel, busy, error }: {
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<EditForm>({
     name: user.name ?? '', roleId: user.roleId ?? '', agencyId: user.agencyId ?? '',
   });
@@ -213,29 +218,29 @@ function EditUserForm({ user, roles, onSubmit, onCancel, busy, error }: {
       )}
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('iamUsers.fullName')}</label>
           <input type="text" value={f.name}
             onChange={e => set('name', e.target.value)}
             className={inp} disabled={busy} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rôle</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.role')}</label>
           <select value={f.roleId} onChange={e => set('roleId', e.target.value)}
             className={inp} disabled={busy}>
-            <option value="">— Aucun rôle —</option>
+            <option value="">{t('iamUsers.noRole')}</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p>Email : <span className="font-mono">{user.email}</span></p>
+          <p>{t('common.email')} : <span className="font-mono">{user.email}</span></p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Enregistrement…' : 'Enregistrer'}
+          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? t('common.saving') : t('common.save')}
         </Button>
       </div>
     </form>
@@ -246,6 +251,7 @@ function EditUserForm({ user, roles, onSubmit, onCancel, busy, error }: {
 
 export function PageIamUsers() {
   const { user: me } = useAuth();
+  const { t } = useI18n();
   const tenantId = me?.tenantId ?? '';
   const base     = `/api/v1/tenants/${tenantId}/iam`;
 
@@ -310,7 +316,7 @@ export function PageIamUsers() {
   };
 
   const handleRevokeSessions = async (row: UserRow) => {
-    if (!confirm(`Forcer la déconnexion de "${row.name ?? row.email}" ? Toutes ses sessions actives seront révoquées.`)) return;
+    if (!confirm(t('iamUsers.forceDisconnect').replace('{name}', row.name ?? row.email))) return;
     setBusy(true); setActionErr(null);
     try {
       await apiPost(`${base}/users/${row.id}/revoke-sessions`);
@@ -318,26 +324,26 @@ export function PageIamUsers() {
     finally { setBusy(false); }
   };
 
-  const columns    = buildColumns(me?.id ?? '');
+  const columns    = buildColumns(me?.id ?? '', t);
   const rowActions: RowAction<UserRow>[] = [
     {
-      label:    'Voir',
+      label:    t('common.view'),
       icon:     <Eye size={13} />,
       onClick:  (row) => { setViewUser(row); setActionErr(null); },
     },
     {
-      label:    'Modifier',
+      label:    t('common.edit'),
       icon:     <Pencil size={13} />,
       onClick:  (row) => { setEditUser(row); setActionErr(null); },
     },
     {
-      label:    'Forcer reconnexion',
+      label:    t('iamUsers.forceReconnect'),
       icon:     <LogOut size={13} />,
       hidden:   (row) => row.id === (me?.id ?? ''),
       onClick:  handleRevokeSessions,
     },
     {
-      label:    'Supprimer',
+      label:    t('common.delete'),
       icon:     <Trash2 size={13} />,
       danger:   true,
       hidden:   (row) => row.id === (me?.id ?? ''),
@@ -354,14 +360,14 @@ export function PageIamUsers() {
             <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Utilisateurs</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('iamUsers.users')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {users ? `${users.length} utilisateur(s)` : 'Gestion des comptes'}
+              {users ? `${users.length} ${t('iamUsers.userCount')}` : t('iamUsers.accountManagement')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
-          <Plus className="w-4 h-4 mr-2" aria-hidden />Nouvel utilisateur
+          <Plus className="w-4 h-4 mr-2" aria-hidden />{t('iamUsers.newUser')}
         </Button>
       </div>
 
@@ -372,7 +378,7 @@ export function PageIamUsers() {
           onChange={e => setFilterRole(e.target.value)}
           className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         >
-          <option value="">Tous les rôles</option>
+          <option value="">{t('iamUsers.allRoles')}</option>
           {roleList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
       </div>
@@ -391,10 +397,10 @@ export function PageIamUsers() {
         rowActions={rowActions}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
-        searchPlaceholder="Rechercher (nom, email, rôle, agence…)"
-        emptyMessage={users?.length === 0 ? 'Aucun utilisateur.' : 'Aucun résultat pour ce rôle.'}
+        searchPlaceholder={t('iamUsers.searchPlaceholder')}
+        emptyMessage={users?.length === 0 ? t('iamUsers.emptyNoUsers') : t('iamUsers.emptyNoResult')}
         exportFormats={['csv', 'json', 'xls']}
-        exportFilename="utilisateurs"
+        exportFilename={t('iamUsers.exportFilename')}
         onRowClick={(row) => { setViewUser(row); setActionErr(null); }}
         stickyHeader
       />
@@ -411,9 +417,9 @@ export function PageIamUsers() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouvel utilisateur"
-        description="Créez un compte dans votre organisation."
-        size="md"
+        title={t('iamUsers.newUser')}
+        description={t('iamUsers.createDesc')}
+        size="lg"
       >
         <CreateUserForm
           roles={roleList}
@@ -428,7 +434,7 @@ export function PageIamUsers() {
       <Dialog
         open={!!editUser}
         onOpenChange={o => { if (!o) setEditUser(null); }}
-        title="Modifier l'utilisateur"
+        title={t('iamUsers.editUser')}
         description={editUser?.email}
         size="md"
       >
@@ -448,12 +454,12 @@ export function PageIamUsers() {
       <Dialog
         open={!!deleteUser}
         onOpenChange={o => { if (!o) setDeleteUser(null); }}
-        title="Supprimer l'utilisateur"
-        description={`Supprimer "${deleteUser?.name ?? deleteUser?.email}" ? Toutes ses sessions seront révoquées.`}
+        title={t('iamUsers.deleteUser')}
+        description={t('iamUsers.deleteDesc').replace('{name}', deleteUser?.name ?? deleteUser?.email ?? '')}
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setDeleteUser(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
             </Button>
             <Button
               onClick={handleDelete}
@@ -461,7 +467,7 @@ export function PageIamUsers() {
               className="bg-red-600 hover:bg-red-700 text-white border-red-600"
             >
               <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Suppression…' : 'Supprimer'}
+              {busy ? t('common.deleting') : t('common.delete')}
             </Button>
           </div>
         }

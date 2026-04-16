@@ -11,8 +11,9 @@
 
 import { useMemo } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
-import { LogOut, Sun, Moon, Home } from 'lucide-react';
+import { LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
+import { useI18n }            from '../../lib/i18n/useI18n';
 import { useNavigation }      from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
 import { CUSTOMER_NAV }       from '../../lib/navigation/nav.config';
@@ -64,6 +65,7 @@ function SidebarSection({ title, items, activeHref }: { title?: string; items: R
 export function CustomerDashboard() {
   const { user, logout }  = useAuth();
   const { theme, toggle } = useTheme();
+  const { t }             = useI18n();
   const location = useLocation();
 
   // Garde-fou : seuls les CUSTOMER accèdent à /customer.
@@ -75,6 +77,7 @@ export function CustomerDashboard() {
   const { sections, activeId } = useNavigation({
     config:         CUSTOMER_NAV,
     permissions:    user?.permissions ?? [],
+    t,
     enabledModules: user?.enabledModules ?? [],
     currentHref:    location.pathname,
   });

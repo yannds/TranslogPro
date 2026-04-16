@@ -32,8 +32,9 @@ export const LANGUAGE_META: Record<Language, {
   wo:  { label: 'Wolof',      dir: 'ltr', flag: '🇸🇳', dateLocale: 'fr-SN' },
 };
 
-/** Map d'une clé vers toutes les traductions disponibles */
-export type TranslationMap = Record<Language, string>;
+/** Map d'une clé vers toutes les traductions disponibles.
+ *  fr et en sont obligatoires ; les autres langues ont un fallback automatique vers fr. */
+export type TranslationMap = { fr: string; en: string } & Partial<Record<Exclude<Language, 'fr' | 'en'>, string>>;
 
 /** Dictionnaire complet de l'application */
 export interface TranslogTranslations {
@@ -73,6 +74,50 @@ export interface TranslogTranslations {
     ARRIVED:             TranslationMap;
     IN_TRANSIT:          TranslationMap;
     MAINTENANCE:         TranslationMap;
+  };
+  // ── Actions communes (boutons, formulaires)
+  common: {
+    save:        TranslationMap;
+    create:      TranslationMap;
+    edit:        TranslationMap;
+    delete:      TranslationMap;
+    cancel:      TranslationMap;
+    close:       TranslationMap;
+    add:         TranslationMap;
+    remove:      TranslationMap;
+    archive:     TranslationMap;
+    suspend:     TranslationMap;
+    reactivate:  TranslationMap;
+    export:      TranslationMap;
+    filter:      TranslationMap;
+    saving:      TranslationMap;
+    creating:    TranslationMap;
+    deleting:    TranslationMap;
+    yes:         TranslationMap;
+    no:          TranslationMap;
+    actions:     TranslationMap;
+    details:     TranslationMap;
+    settings:    TranslationMap;
+    name:        TranslationMap;
+    email:       TranslationMap;
+    phone:       TranslationMap;
+    address:     TranslationMap;
+    role:        TranslationMap;
+    agency:      TranslationMap;
+    date:        TranslationMap;
+    type:        TranslationMap;
+    description: TranslationMap;
+    password:    TranslationMap;
+    select:      TranslationMap;
+    none:        TranslationMap;
+    all:         TranslationMap;
+    active:      TranslationMap;
+    suspended:   TranslationMap;
+    archived:    TranslationMap;
+    view:        TranslationMap;
+    required:    TranslationMap;
+    optional:    TranslationMap;
+    documents:   TranslationMap;
   };
   // ── Interface générale
   ui: {

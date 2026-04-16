@@ -22,6 +22,7 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,50 @@ interface DriverTabDef {
   icon:  string;
   anyOf: string[];
 }
+
+// ─── i18n ────────────────────────────────────────────────────────────────────
+
+const TD = {
+  // Tabs
+  tabMyTrips:        tm('Mes Trajets', 'My Trips'),
+  tabChecklists:     tm('Checklists', 'Checklists'),
+  tabIncidents:      tm('Incidents', 'Incidents'),
+  // Trajets
+  daySchedule:       tm('Programme du jour', 'Day Schedule'),
+  inProgress:        tm('En cours', 'In Progress'),
+  planned:           tm('Prévu', 'Planned'),
+  completed:         tm('Terminé', 'Completed'),
+  kmDriven:          tm('km parcourus', 'km driven'),
+  kmRemaining:       tm('km restants', 'km remaining'),
+  passengers:        tm('passagers', 'passengers'),
+  reportStop:        tm('Signaler un arrêt', 'Report a Stop'),
+  navigation:        tm('Navigation', 'Navigation'),
+  viewManifest:      tm('Voir le manifeste', 'View Manifest'),
+  // Checklists
+  checklistComplete: tm('Checklist complète !', 'Checklist Complete!'),
+  preDepChecklist:   tm('Checklist pré-départ', 'Pre-departure Checklist'),
+  // Incidents
+  incidentType:      tm('Type d\'incident', 'Incident Type'),
+  descriptionLabel:  tm('Description', 'Description'),
+  descPlaceholder:   tm('Décrivez l\'incident en détail...', 'Describe the incident in detail...'),
+  locationLabel:     tm('Localisation', 'Location'),
+  sendReport:        tm('Envoyer le signalement', 'Send Report'),
+  incidentReported:  tm('Incident signalé', 'Incident Reported'),
+  dispatcherNotified:tm('Le dispatcher et la direction ont été notifiés.', 'The dispatcher and management have been notified.'),
+  incidentRef:       tm('Référence incident', 'Incident Reference'),
+  reportAnother:     tm('Signaler un autre incident', 'Report Another Incident'),
+  // Header
+  onDuty:            tm('En service', 'On Duty'),
+  sosAlert:          tm('Alerte SOS envoyée au dispatcher !', 'SOS Alert Sent to Dispatcher!'),
+  cancelSos:         tm('Annuler', 'Cancel'),
+  arrival:           tm('Arrivée', 'Arrival'),
+};
+
+const TAB_LABELS_D: Record<DriverTab, ReturnType<typeof tm>> = {
+  trajets:    TD.tabMyTrips,
+  checklists: TD.tabChecklists,
+  incidents:  TD.tabIncidents,
+};
 
 const ALL_DRIVER_TABS: DriverTabDef[] = [
   { id: 'trajets',    label: 'Mes Trajets',  icon: '🗺️', anyOf: [P_TRIP_READ_OWN] },
@@ -140,18 +185,19 @@ const INITIAL_CHECKLISTS: CheckGroup[] = [
 
 // ─── Trip status config ───────────────────────────────────────────────────────
 
-const TRIP_STATUS: Record<TripDriverStatus, { cls: string; label: string }> = {
-  EN_COURS: { cls: 'bg-teal-900/60 text-teal-300 border-teal-700',    label: 'En cours' },
-  PREVU:    { cls: 'bg-sky-900/60 text-sky-300 border-sky-700',       label: 'Prévu' },
-  TERMINE:  { cls: 'bg-slate-800 text-slate-500 border-slate-700',    label: 'Terminé' },
+const TRIP_STATUS: Record<TripDriverStatus, { cls: string; labelKey: ReturnType<typeof tm> }> = {
+  EN_COURS: { cls: 'bg-teal-900/60 text-teal-300 border-teal-700',    labelKey: TD.inProgress },
+  PREVU:    { cls: 'bg-sky-900/60 text-sky-300 border-sky-700',       labelKey: TD.planned },
+  TERMINE:  { cls: 'bg-slate-800 text-slate-500 border-slate-700',    labelKey: TD.completed },
 };
 
 // ─── Onglet Trajets ───────────────────────────────────────────────────────────
 
 function TabTrajets() {
+  const { t } = useI18n();
   return (
     <div className="p-4 space-y-3">
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Programme du jour — 14 avril 2026</p>
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t(TD.daySchedule)} — 14 avril 2026</p>
       {DRIVER_TRIPS.map(trip => {
         const cfg      = TRIP_STATUS[trip.statut];
         const progress = trip.distanceKm > 0 ? (trip.parcouru / trip.distanceKm) * 100 : 0;
@@ -181,7 +227,7 @@ function TabTrajets() {
                 </p>
               </div>
               <span className={cn('text-xs font-bold px-2.5 py-1 rounded-lg border uppercase', cfg.cls)}>
-                {cfg.label}
+                {t(cfg.labelKey)}
               </span>
             </div>
 
@@ -189,8 +235,8 @@ function TabTrajets() {
             {trip.statut === 'EN_COURS' && (
               <div>
                 <div className="flex justify-between text-xs text-slate-400 mb-1">
-                  <span>{trip.parcouru} km parcourus</span>
-                  <span>{trip.distanceKm - trip.parcouru} km restants</span>
+                  <span>{trip.parcouru} {t(TD.kmDriven)}</span>
+                  <span>{trip.distanceKm - trip.parcouru} {t(TD.kmRemaining)}</span>
                 </div>
                 <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                   <div
@@ -204,7 +250,7 @@ function TabTrajets() {
             {/* Footer stats */}
             <div className="flex items-center gap-4 text-sm">
               <span className="text-slate-400">
-                👥 {trip.statut === 'PREVU' ? '-' : trip.passagers}/{trip.capacite} passagers
+                👥 {trip.statut === 'PREVU' ? '-' : trip.passagers}/{trip.capacite} {t(TD.passengers)}
               </span>
               <span className="text-slate-400">
                 📏 {trip.distanceKm} km
@@ -215,16 +261,16 @@ function TabTrajets() {
             {trip.statut === 'EN_COURS' && (
               <div className="flex gap-2">
                 <button className="flex-1 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700">
-                  Signaler un arrêt
+                  {t(TD.reportStop)}
                 </button>
                 <button className="flex-1 py-2 bg-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-600">
-                  Navigation
+                  {t(TD.navigation)}
                 </button>
               </div>
             )}
             {trip.statut === 'PREVU' && (
               <button className="w-full py-2 border border-teal-700 text-teal-300 rounded-xl text-sm font-semibold hover:bg-teal-900/40">
-                Voir le manifeste
+                {t(TD.viewManifest)}
               </button>
             )}
           </div>
@@ -237,6 +283,7 @@ function TabTrajets() {
 // ─── Onglet Checklists ────────────────────────────────────────────────────────
 
 function TabChecklists() {
+  const { t } = useI18n();
   const [groups, setGroups] = useState(INITIAL_CHECKLISTS);
 
   function toggleItem(groupId: string, itemId: string) {
@@ -260,7 +307,7 @@ function TabChecklists() {
       )}>
         <div className="flex justify-between text-sm mb-2">
           <span className={allDone ? 'text-emerald-300 font-semibold' : 'text-slate-400'}>
-            {allDone ? 'Checklist complète !' : 'Checklist pré-départ'}
+            {allDone ? t(TD.checklistComplete) : t(TD.preDepChecklist)}
           </span>
           <span className={allDone ? 'text-emerald-300 font-bold' : 'text-white font-bold'}>
             {checkedItems}/{totalItems}
@@ -329,6 +376,7 @@ function TabChecklists() {
 // ─── Onglet Incidents ─────────────────────────────────────────────────────────
 
 function TabIncidents() {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     type: 'PANNE_MECANIQUE', description: '', localisation: '',
   });
@@ -349,18 +397,18 @@ function TabIncidents() {
       <div className="p-4 flex flex-col items-center gap-4 py-10">
         <div className="w-14 h-14 bg-amber-500 rounded-full flex items-center justify-center text-2xl">📤</div>
         <div className="text-center">
-          <p className="text-xl font-bold text-white">Incident signalé</p>
-          <p className="text-sm text-slate-400 mt-1">Le dispatcher et la direction ont été notifiés.</p>
+          <p className="text-xl font-bold text-white">{t(TD.incidentReported)}</p>
+          <p className="text-sm text-slate-400 mt-1">{t(TD.dispatcherNotified)}</p>
         </div>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full">
-          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">Référence incident</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">{t(TD.incidentRef)}</p>
           <p className="text-2xl font-mono font-black text-amber-300 text-center">{incidentId}</p>
         </div>
         <button
           onClick={() => { setSubmitted(false); setForm({ type: 'PANNE_MECANIQUE', description: '', localisation: '' }); }}
           className="py-2.5 px-8 bg-slate-700 text-white rounded-xl font-semibold text-sm"
         >
-          Signaler un autre incident
+          {t(TD.reportAnother)}
         </button>
       </div>
     );
@@ -370,8 +418,8 @@ function TabIncidents() {
     <div className="p-4 space-y-4">
       {/* Type */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Type d'incident</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t(TD.incidentType)}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {TYPES.map(t => (
             <button
               key={t.id}
@@ -393,12 +441,12 @@ function TabIncidents() {
       {/* Description */}
       <div>
         <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-          Description
+          {t(TD.descriptionLabel)}
         </label>
         <textarea
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
           rows={4}
-          placeholder="Décrivez l'incident en détail..."
+          placeholder={t(TD.descPlaceholder)}
           value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
@@ -407,7 +455,7 @@ function TabIncidents() {
       {/* Localisation */}
       <div>
         <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-          Localisation
+          {t(TD.locationLabel)}
         </label>
         <div className="flex gap-2">
           <input
@@ -430,7 +478,7 @@ function TabIncidents() {
         disabled={!form.description.trim()}
         className="w-full py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 disabled:opacity-40 text-sm"
       >
-        Envoyer le signalement
+        {t(TD.sendReport)}
       </button>
     </div>
   );
@@ -439,6 +487,7 @@ function TabIncidents() {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function DriverSpace() {
+  const { t } = useI18n();
   const [roleIdx, setRoleIdx] = useState(0);
   const roleKey               = DEMO_ROLES_D[roleIdx] as DemoRoleKeyD;
   const permissions           = ROLE_PERMISSIONS[roleKey] ?? [];
@@ -466,7 +515,7 @@ export function DriverSpace() {
               <p className="font-bold text-white text-sm">Christophe Mabou</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                <p className="text-xs text-emerald-400 font-semibold">En service</p>
+                <p className="text-xs text-emerald-400 font-semibold">{t(TD.onDuty)}</p>
               </div>
             </div>
           </div>
@@ -496,8 +545,8 @@ export function DriverSpace() {
         {/* SOS alert */}
         {sos && (
           <div className="mt-3 bg-red-900/60 border border-red-700 rounded-xl px-3 py-2.5 flex items-center gap-2">
-            <span className="text-red-300 text-sm font-bold animate-pulse">🚨 Alerte SOS envoyée au dispatcher !</span>
-            <button onClick={() => setSos(false)} className="ml-auto text-xs text-red-400 underline">Annuler</button>
+            <span className="text-red-300 text-sm font-bold animate-pulse">🚨 {t(TD.sosAlert)}</span>
+            <button onClick={() => setSos(false)} className="ml-auto text-xs text-red-400 underline">{t(TD.cancelSos)}</button>
           </div>
         )}
       </header>
@@ -519,7 +568,7 @@ export function DriverSpace() {
               <div className="h-full bg-teal-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
             </div>
             <p className="text-xs text-teal-500 mt-1">
-              {active.parcouru} km parcourus · {active.distanceKm - active.parcouru} km restants · Arrivée {active.heureArrivee}
+              {active.parcouru} {t(TD.kmDriven)} · {active.distanceKm - active.parcouru} {t(TD.kmRemaining)} · {t(TD.arrival)} {active.heureArrivee}
             </p>
           </div>
         );
@@ -527,19 +576,19 @@ export function DriverSpace() {
 
       {/* ── Tabs — filtrés par permissions ───────────────────────── */}
       <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
-        {TABS.map(t => (
+        {TABS.map(td => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={td.id}
+            onClick={() => setTab(td.id)}
             className={cn(
               'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors',
-              effectiveTab === t.id
+              effectiveTab === td.id
                 ? 'text-teal-400 border-b-2 border-teal-500 bg-slate-800'
                 : 'text-slate-500 hover:text-slate-300',
             )}
           >
-            <span className="text-base">{t.icon}</span>
-            {t.label}
+            <span className="text-base">{td.icon}</span>
+            {t(TAB_LABELS_D[td.id])}
           </button>
         ))}
       </div>

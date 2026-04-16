@@ -73,9 +73,14 @@ export interface TripRow {
 }
 
 export interface BusLite   { id: string; plateNumber: string; model?: string | null }
+export interface StaffAssignmentLite {
+  id: string; role: string; agencyId: string | null;
+  status: string; isAvailable: boolean; startDate: string;
+}
 export interface StaffLite {
-  id: string; userId: string; role: string; isAvailable: boolean;
-  user: { email: string; name?: string | null; displayName?: string | null };
+  id: string; userId: string;
+  assignments: StaffAssignmentLite[];
+  user: { id: string; email: string; name?: string | null; displayName?: string | null };
 }
 export interface RouteLite { id: string; name: string; distanceKm?: number; basePrice?: number }
 

@@ -1,0 +1,172 @@
+/**
+ * PortalShell — Enveloppe générique pour les portails contextuels
+ * (driver, station-agent, quai-agent).
+ *
+ * Regroupe sidebar + topbar user + zone de contenu (Suspense + PageRouter).
+ * AdminDashboard et CustomerDashboard n'utilisent PAS ce composant : ils
+ * gardent leur shell historique pour éviter toute régression sur les
+ * portails les plus utilisés.
+ *
+ * Les portails qui consomment ce shell passent :
+ *   - config           : PortalNavConfig (DRIVER_NAV, STATION_AGENT_NAV…)
+ *   - roleFallbackLabel: libellé affiché si authUser.roleName est null
+ *   - ariaNavLabel     : label accessibilité de la sidebar
+ */
+
+import { useMemo, Suspense }  from 'react';
+import { useLocation }        from 'react-router-dom';
+import { LogOut, Sun, Moon }  from 'lucide-react';
+import { useAuth }            from '../../lib/auth/auth.context';
+import { useI18n }             from '../../lib/i18n/useI18n';
+import { useNavigation }      from '../../lib/hooks/useNavigation';
+import { useTheme }           from '../theme/ThemeProvider';
+import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
+import { PageRouter }         from '../dashboard/PageRouter';
+import type { PortalNavConfig, ResolvedNavItem } from '../../lib/navigation/nav.types';
+
+function PageLoadingFallback() {
+  return (
+    <div className="p-6 flex items-center justify-center min-h-[50vh]">
+      <div
+        className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"
+        role="status"
+        aria-label="Chargement…"
+      />
+    </div>
+  );
+}
+
+interface SidebarSectionProps {
+  title?:     string;
+  items:      ResolvedNavItem[];
+  activeHref: string;
+}
+
+function SidebarSection({ title, items, activeHref }: SidebarSectionProps) {
+  return (
+    <div>
+      {title && (
+        <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest t-text-2">
+          {title}
+        </div>
+      )}
+      <ul role="list" className="space-y-0.5">
+        {items.map(item => (
+          <SidebarNavItem key={item.id} item={item} activeHref={activeHref} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export interface PortalShellProps {
+  config:            PortalNavConfig;
+  roleFallbackLabel: string;
+  ariaNavLabel:      string;
+}
+
+export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalShellProps) {
+  const { user: authUser, logout } = useAuth();
+  const { theme, toggle }          = useTheme();
+  const { t }                      = useI18n();
+  const location = useLocation();
+
+  const permissions = authUser?.permissions ?? [];
+
+  const { sections, activeId } = useNavigation({
+    config,
+    permissions,
+    t,
+    enabledModules: authUser?.enabledModules ?? [],
+    currentHref:    location.pathname,
+  });
+
+  const activeHref = location.pathname;
+
+  const sidebarContent = useMemo(() => (
+    <nav
+      className="flex-1 overflow-y-auto px-2 py-3 space-y-4"
+      aria-label={ariaNavLabel}
+    >
+      {sections.map(section => (
+        <SidebarSection
+          key={section.id}
+          title={section.title}
+          items={section.items}
+          activeHref={activeHref}
+        />
+      ))}
+    </nav>
+  ), [sections, activeHref, ariaNavLabel]);
+
+  const logo = (
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center text-white font-black text-sm">
+        T
+      </div>
+      <span className="font-bold t-text text-sm tracking-wide">
+        TranslogPro
+      </span>
+    </div>
+  );
+
+  const userPanel = (
+    <div className="flex items-center gap-2.5">
+      <div
+        className="w-8 h-8 rounded-full bg-teal-600 dark:bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0"
+        aria-hidden
+      >
+        {(authUser?.name ?? authUser?.email ?? '?').slice(0, 2).toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium t-text-body truncate">
+          {authUser?.name ?? authUser?.email}
+        </p>
+        <p className="text-[10px] text-slate-500 truncate">
+          {authUser?.roleName ?? roleFallbackLabel}
+        </p>
+      </div>
+
+      <button
+        onClick={toggle}
+        title={theme === 'dark' ? t('portal.lightMode') : t('portal.darkMode')}
+        aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+        className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-700/60 dark:hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+      >
+        {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
+
+      <button
+        onClick={() => void logout()}
+        title={t('portal.logout')}
+        aria-label="Se déconnecter"
+        className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+      >
+        <LogOut className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen overflow-hidden t-app">
+      <aside
+        aria-label={ariaNavLabel}
+        className="hidden lg:flex flex-col w-64 shrink-0 t-sidebar border-r t-border"
+      >
+        <div className="flex h-14 items-center px-4 border-b t-border shrink-0">
+          {logo}
+        </div>
+        {sidebarContent}
+        <div className="shrink-0 border-t t-border p-3">
+          {userPanel}
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto t-app" role="main">
+        <Suspense fallback={<PageLoadingFallback />}>
+          <PageRouter activeId={activeId} />
+        </Suspense>
+      </main>
+    </div>
+  );
+}

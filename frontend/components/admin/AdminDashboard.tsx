@@ -8,6 +8,7 @@ import { useMemo, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
 import { LogOut, Sun, Moon }  from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
+import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation } from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
 import { ADMIN_NAV }          from '../../lib/navigation/nav.config';
@@ -53,6 +54,7 @@ function SidebarSection({ title, items, activeHref }: SidebarSectionProps) {
 export function AdminDashboard() {
   const { user: authUser, logout } = useAuth();
   const { theme, toggle }          = useTheme();
+  const { t }                      = useI18n();
   const location = useLocation();
 
   // Source unique : permissions résolues backend dans /api/auth/me (zéro
@@ -62,6 +64,7 @@ export function AdminDashboard() {
   const { sections, activeId } = useNavigation({
     config:         ADMIN_NAV,
     permissions,
+    t,
     enabledModules: authUser?.enabledModules ?? [],
     currentHref:    location.pathname,
   });
@@ -115,7 +118,7 @@ export function AdminDashboard() {
       {/* Toggle Jour / Nuit */}
       <button
         onClick={toggle}
-        title={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+        title={theme === 'dark' ? t('portal.lightMode') : t('portal.darkMode')}
         aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
         className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-700/60 dark:hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
       >
@@ -124,7 +127,7 @@ export function AdminDashboard() {
 
       <button
         onClick={() => void logout()}
-        title="Déconnexion"
+        title={t('portal.logout')}
         aria-label="Se déconnecter"
         className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
       >

@@ -17,7 +17,7 @@ import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
 import { useNotifications }    from '../../lib/hooks/useNotifications';
 import { useTenantConfig }     from '../../providers/TenantConfigProvider';
-import type { Language }       from '../../lib/i18n/types';
+import type { Language, TranslationMap } from '../../lib/i18n/types';
 import { LANGUAGE_META }       from '../../lib/i18n/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ interface QuaiScreenProps {
 
 function Countdown({ targetDate, t, dict }: {
   targetDate: Date;
-  t:   (m: Record<Language, string>) => string;
+  t:   (m: string | TranslationMap) => string;
   dict: ReturnType<typeof useI18n>['dict'];
 }) {
   const [now, setNow] = useState(new Date());
@@ -64,7 +64,7 @@ function Countdown({ targetDate, t, dict }: {
   if (diff === 0) {
     return (
       <span className="text-emerald-400 text-5xl xl:text-6xl font-black animate-pulse">
-        {t(dict.status.DEPARTED)}
+        {t('status.DEPARTED')}
       </span>
     );
   }
@@ -120,7 +120,7 @@ function LiveClock({ dateLocale }: { dateLocale: string }) {
 function Ticker({ notifications, lang, t, dict }: {
   notifications: ReturnType<typeof useNotifications>['notifications'];
   lang:  Language;
-  t:     (m: Record<Language, string>) => string;
+  t:     (m: string | TranslationMap) => string;
   dict:  ReturnType<typeof useI18n>['dict'];
 }) {
   const texts = notifications.map(n => n.message[lang] ?? n.message['fr'] ?? '');
@@ -205,10 +205,10 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
               'w-24 h-20 xl:w-28 xl:h-24 shadow-lg shrink-0',
             )}
             style={{ backgroundColor: 'var(--color-primary)' }}
-            aria-label={`${t(dict.ui.platform_label)} ${p.platform}`}
+            aria-label={`${t('ui.platform_label')} ${p.platform}`}
           >
             <p className="text-xs font-bold uppercase tracking-widest text-white/70">
-              {t(dict.ui.platform_label)}
+              {t('ui.platform_label')}
             </p>
             <p className="text-5xl xl:text-6xl font-black text-white leading-none">{p.platform}</p>
           </div>
@@ -230,7 +230,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
               </span>
             )}
             <p className="text-slate-400 text-sm mt-2">
-              {t(dict.ui.departure_in)}&nbsp;
+              {t('ui.departure_in')}&nbsp;
               <Countdown targetDate={p.departAt} t={t} dict={dict} />
             </p>
           </div>
@@ -250,7 +250,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
 
       {/* ── Destination ─────────────────────────────────────────── */}
       <section
-        aria-label={t(dict.col.destination)}
+        aria-label={t('col.destination')}
         className={cn(
           'px-6 xl:px-8 py-5 xl:py-6 shrink-0',
           'bg-gradient-to-r from-[var(--color-primary)]/10 to-transparent',
@@ -260,7 +260,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         <div className="flex items-end justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-primary)] mb-1">
-              {t(dict.col.destination)}
+              {t('col.destination')}
             </p>
             <p className="text-5xl xl:text-6xl font-black uppercase tracking-wide text-white">
               {p.destination}
@@ -271,7 +271,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
           </div>
           <div className="text-right flex flex-col items-end gap-2">
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest">{t(dict.col.time)}</p>
+              <p className="text-xs text-slate-500 uppercase tracking-widest">{t('col.time')}</p>
               <p className="text-6xl xl:text-7xl font-black text-[var(--color-primary)] tabular-nums leading-none">
                 {p.departureTime}
               </p>
@@ -294,7 +294,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         {/* Bus */}
         <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.bus)}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.bus')}</p>
             <p className="text-xl xl:text-2xl font-black text-white font-mono">{p.busPlate}</p>
             <p className="text-sm text-slate-400 mt-1">{p.busModel}</p>
           </div>
@@ -307,7 +307,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         {/* Passagers */}
         <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.passengers)}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.passengers')}</p>
             <div className="flex items-end gap-1">
               <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.passengersOnBoard}</p>
               <p className="text-xl text-slate-500 mb-1">/{p.capacity}</p>
@@ -325,7 +325,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         {/* Colis */}
         <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.parcels)}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.parcels')}</p>
             <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.parcelsLoaded}</p>
             <p className="text-sm text-slate-400 mt-1">chargés</p>
           </div>
@@ -338,14 +338,14 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         {/* Chauffeur */}
         <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t(dict.col.driver)}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.driver')}</p>
             <p className="text-xl xl:text-2xl font-bold text-white leading-tight">{p.driverName}</p>
             <p className="text-sm text-slate-400 mt-1">{p.agencyName}</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
             <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
-              {t(dict.ui.on_board)}
+              {t('ui.on_board')}
             </span>
           </div>
         </div>

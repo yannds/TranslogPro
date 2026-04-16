@@ -5,6 +5,7 @@
  * Illustration : bus sur une route qui disparaît, GPS affolé.
  */
 import { cn } from '../../../lib/utils';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 interface Props {
   onRecalculate?: () => void;
@@ -126,6 +127,7 @@ function GpsLostSvg({ className }: { className?: string }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function NotFoundDriver({ onRecalculate, className }: Props) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -138,20 +140,18 @@ export function NotFoundDriver({ onRecalculate, className }: Props) {
 
       <div className="text-center max-w-lg space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs font-mono font-semibold tracking-widest uppercase">
-          Erreur 404
+          {t('notFoundDriver.badge')}
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-          Faites demi-tour{' '}
+          {t('notFoundDriver.title1')}{' '}
           <span className="text-green-600 dark:text-green-400">
-            dès que possible&nbsp;!
+            {t('notFoundDriver.title2')}
           </span>
         </h1>
 
         <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-          Notre GPS interne vient de perdre le signal. Vous vous trouvez
-          actuellement sur une route non répertoriée. Inutile d&apos;appeler la
-          dépanneuse, on vous aide à retrouver l&apos;autoroute principale.
+          {t('notFoundDriver.body')}
         </p>
       </div>
 
@@ -168,11 +168,11 @@ export function NotFoundDriver({ onRecalculate, className }: Props) {
         <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
           <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
         </svg>
-        Recalculer l&apos;itinéraire
+        {t('notFoundDriver.button')}
       </button>
 
       <p className="text-xs text-slate-400 dark:text-slate-600 font-mono">
-        404 · Route inconnue · TranslogPro
+        {t('notFoundDriver.footer')}
       </p>
     </div>
   );

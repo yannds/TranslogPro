@@ -23,6 +23,7 @@ import { I18nContext }    from '../lib/i18n/useI18n';
 import type { Language }  from '../lib/i18n/types';
 import { LANGUAGE_META }  from '../lib/i18n/types';
 import { TRANSLATIONS }   from '../lib/i18n/translations';
+import { resolveKey }     from '../lib/i18n/locales';
 
 const STORAGE_KEY = 'translog-lang';
 
@@ -96,8 +97,14 @@ export function I18nProvider({
   }, [lang]);
 
   const t = useCallback(
-    (map: Record<Language, string>): string =>
-      map[lang] ?? map['fr'] ?? Object.values(map)[0] ?? '',
+    (keyOrMap: string | Record<string, string | undefined>): string => {
+      // String key: 'namespace.key' → lookup in locale files
+      if (typeof keyOrMap === 'string') {
+        return resolveKey(keyOrMap, lang);
+      }
+      // TranslationMap object (backward compat — sera supprimé)
+      return keyOrMap[lang] ?? keyOrMap['fr'] ?? Object.values(keyOrMap).find(v => v != null) ?? '';
+    },
     [lang],
   );
 

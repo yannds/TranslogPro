@@ -24,21 +24,28 @@ model Tenant {
   provisionStatus String  @default("PENDING")
   // PENDING | PROVISIONING | ACTIVE | SUSPENDED
 
-  // ── Localisation & devise (drive l'interface i18n) ──────────────────────────
-  // language : code ISO 639-1 — pilote l'affichage frontend via I18nProvider
-  //   Valeurs supportées : fr | en (extensible vers ln, ktu, es, pt, ar, wo)
-  // timezone : IANA TZ (ex: "Africa/Brazzaville"). Par défaut Afrique centrale.
-  // currency : code ISO 4217 (ex: "XAF"). Drive l'affichage des montants.
-  language String @default("fr")
-  timezone String @default("Africa/Brazzaville")
-  currency String @default("XAF")
+  // ── Localisation & régional ─────────────────────────────────────────────────
+  // country    : ISO 3166-1 alpha-2 (ex: "CG"). Drive les villes, TZ, devise par défaut.
+  // language   : ISO 639-1 — pilote l'affichage frontend via I18nProvider
+  // timezone   : IANA TZ (ex: "Africa/Brazzaville")
+  // currency   : ISO 4217 (ex: "XAF")
+  // dateFormat : format d'affichage des dates
+  country    String @default("CG")
+  city       String @default("")
+  language   String @default("fr")
+  timezone   String @default("Africa/Brazzaville")
+  currency   String @default("XAF")
+  dateFormat String @default("DD/MM/YYYY")
 
-  // ── Informations société (optionnelles) ─────────────────────────────────────
+  // ── Informations société ──────────────────────────────────────────────────
   // Utilisées sur les documents officiels (billets, factures, manifestes).
-  // RCCM : Registre du Commerce et du Crédit Mobilier — numéro légal.
-  // phoneNumber : contact principal affiché sur le portail public.
+  // taxId : identifiant fiscal/registre commerce (RCCM, NIF, TIN selon le pays)
   rccm        String?
   phoneNumber String?
+  email       String?
+  website     String?
+  address     String?
+  taxId       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -56,7 +63,9 @@ model Tenant {
   config          TenantConfig?
   brand           TenantBrand?
   businessConfig  TenantBusinessConfig?
-  busCostProfiles BusCostProfile[]
+  busCostProfiles  BusCostProfile[]
+  fuelLogs         FuelLog[]
+  odometerReadings OdometerReading[]
 
   @@map("tenants")
 }
@@ -162,6 +171,7 @@ model Agency {
   cashRegisters            CashRegister[]
   staffAssignments         StaffAssignment[]
   staffAssignmentCoverages StaffAssignmentAgency[]
+  buses                    Bus[]
 
   @@index([tenantId])
   @@map("agencies")
@@ -195,6 +205,7 @@ model User {
   agency                 Agency?                 @relation(fields: [agencyId], references: [id])
   role                   Role?                   @relation(fields: [roleId], references: [id])
   sessions               Session[]
+  mfaChallenges          MfaChallenge[]
   accounts               Account[]
   auditLogs              AuditLog[]
   checklists             Checklist[]
@@ -265,6 +276,39 @@ model Session {
   @@index([userId])
   @@index([tenantId])
   @@map("sessions")
+}
+
+/// Challenge MFA — pré-session "en attente" entre étape 1 (password OK) et
+/// étape 2 (code TOTP/backup vérifié). Délibérément SÉPARÉ de Session :
+/// toute requête API authentifiée lit Session, donc un challenge non finalisé
+/// ne doit JAMAIS pouvoir donner accès, même par erreur.
+///
+/// Cycle de vie :
+///   1. AuthService.signIn (à venir) crée la ligne, pose le `token` dans un
+///      cookie pré-session HttpOnly distinct (`translog_mfa_challenge`).
+///   2. POST /auth/mfa/verify lit le cookie, vérifie le code, supprime la
+///      ligne et crée une vraie Session.
+///   3. Si attempts >= MAX (5) ou expiresAt dépassé → ligne supprimée, user
+///      doit recommencer le sign-in.
+///
+/// Pas de FK CASCADE sur User volontairement : la ligne est éphémère (5min),
+/// elle expire avant qu'un user puisse être supprimé.
+model MfaChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  token     String   @unique // 256 bits — posé dans cookie pré-session
+  ipAddress String?
+  userAgent String?
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt]) // pour un éventuel cron de purge
+  @@map("mfa_challenges")
 }
 
 model Account {
@@ -501,14 +545,18 @@ model Station {
   coordinates Json // { lat: Float, lng: Float }
   type        String // PRINCIPALE | RELAIS
 
-  tenant            Tenant     @relation(fields: [tenantId], references: [id])
-  agencies          Agency[]
-  routesOrigin      Route[]    @relation("RouteOrigin")
-  routesDestination Route[]    @relation("RouteDestination")
-  waypoints         Waypoint[]
-  parcelsTo         Parcel[]   @relation("ParcelDestination")
-  shipmentsTo       Shipment[] @relation("ShipmentDestination")
-  travelersDropoff  Traveler[] @relation("TravelerDropOff")
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  agencies           Agency[]
+  routesOrigin       Route[]             @relation("RouteOrigin")
+  routesDestination  Route[]             @relation("RouteDestination")
+  waypoints          Waypoint[]
+  segmentsFrom       RouteSegmentPrice[] @relation("SegmentFrom")
+  segmentsTo         RouteSegmentPrice[] @relation("SegmentTo")
+  ticketsBoarding    Ticket[]            @relation("TicketBoarding")
+  ticketsAlighting   Ticket[]            @relation("TicketAlighting")
+  parcelsTo          Parcel[]            @relation("ParcelDestination")
+  shipmentsTo        Shipment[]          @relation("ShipmentDestination")
+  travelersDropoff   Traveler[]          @relation("TravelerDropOff")
 
   @@index([tenantId])
   @@index([tenantId, city]) // Lookup multi-gares par ville (DisplayService scope=city)
@@ -516,39 +564,71 @@ model Station {
 }
 
 model Route {
-  id            String @id @default(cuid())
-  tenantId      String
-  name          String
-  originId      String
-  destinationId String
-  distanceKm    Float
-  basePrice     Float
+  id                       String  @id @default(cuid())
+  tenantId                 String
+  name                     String
+  originId                 String
+  destinationId            String
+  distanceKm               Float
+  basePrice                Float
+  allowProportionalFallback Boolean @default(false)
+  // Si true et qu'un segment n'a pas de prix configuré,
+  // le pricing engine calcule proportionnellement à la distance.
+  // Si false → vente bloquée ("Tarif non configuré").
 
-  tenant      Tenant     @relation(fields: [tenantId], references: [id])
-  origin      Station    @relation("RouteOrigin", fields: [originId], references: [id])
-  destination Station    @relation("RouteDestination", fields: [destinationId], references: [id])
-  waypoints   Waypoint[]
-  trips       Trip[]
+  tenant        Tenant              @relation(fields: [tenantId], references: [id])
+  origin        Station             @relation("RouteOrigin", fields: [originId], references: [id])
+  destination   Station             @relation("RouteDestination", fields: [destinationId], references: [id])
+  waypoints     Waypoint[]
+  segmentPrices RouteSegmentPrice[]
+  trips         Trip[]
 
   @@index([tenantId])
   @@map("routes")
 }
 
 model Waypoint {
-  id                String  @id @default(cuid())
-  routeId           String
-  stationId         String
-  order             Int
-  isMandatoryStop   Boolean @default(false)
-  estimatedWaitTime Int? // minutes
-  isAlertZone       Boolean @default(false)
-  alertDescription  String?
+  id                   String  @id @default(cuid())
+  routeId              String
+  stationId            String
+  order                Int
+  distanceFromOriginKm Float   @default(0) // km depuis l'origine
+  tollCostXaf          Float   @default(0) // péages entre le waypoint précédent et celui-ci
+  checkpointCosts      Json    @default("[]")
+  // Array de charges intermédiaires entre le waypoint précédent et celui-ci.
+  // Format : [{ type: "PEAGE"|"POLICE"|"DOUANE"|"EAUX_FORETS"|"FRONTIERE"|"AUTRE",
+  //             name: "Poste Nganga", costXaf: 500 }]
+  // costXaf = 0 si le point de contrôle n'implique pas de frais pour le bus.
+  isMandatoryStop      Boolean @default(false)
+  estimatedWaitTime    Int? // minutes
+  isAlertZone          Boolean @default(false)
+  alertDescription     String?
 
-  route   Route   @relation(fields: [routeId], references: [id])
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
   station Station @relation(fields: [stationId], references: [id])
 
   @@unique([routeId, order])
   @@map("waypoints")
+}
+
+// ── Matrice de prix par paire de stations sur une route ──────────────────────
+// Chaque entrée représente le tarif de base (avant classe/yield/taxes) pour
+// un passager montant à fromStation et descendant à toStation.
+// Prix = 0 signifie « non configuré » (vente bloquée sauf fallback autorisé).
+model RouteSegmentPrice {
+  id            String @id @default(cuid())
+  routeId       String
+  fromStationId String
+  toStationId   String
+  basePriceXaf  Float  @default(0) // 0 = non configuré
+
+  route       Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  fromStation Station @relation("SegmentFrom", fields: [fromStationId], references: [id])
+  toStation   Station @relation("SegmentTo", fields: [toStationId], references: [id])
+
+  @@unique([routeId, fromStationId, toStationId])
+  @@index([routeId])
+  @@map("route_segment_prices")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -556,27 +636,92 @@ model Waypoint {
 // ─────────────────────────────────────────────────────────────
 
 model Bus {
-  id                String @id @default(cuid())
+  id                String  @id @default(cuid())
   tenantId          String
-  plateNumber       String @unique
+  agencyId          String?
+  plateNumber       String  @unique
   model             String
+  type              String? // STANDARD | CONFORT | VIP | MINIBUS (validé côté DTO)
+  year              Int?
   capacity          Int
   luggageCapacityKg Float
   luggageCapacityM3 Float
   seatLayout        Json? // Plan de salle numéroté — OBLIGATOIRE avant vente
-  status            String @default("AVAILABLE")
+  photos            String[] @default([]) // Clés MinIO des photos (intérieur/extérieur)
+  status            String  @default("AVAILABLE")
   // AVAILABLE | BOARDING | DEPARTED | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE
-  version           Int    @default(1)
+  version           Int     @default(1)
+
+  // ── Champs techniques véhicule (optionnels) ─────────────────────────────
+  vin                    String?  // Numéro de châssis / VIN
+  fuelType               String?  // DIESEL | PETROL | BIO_DIESEL | HYBRID | ELECTRIC
+  engineType             String?  // EURO_3 | EURO_4 | EURO_5 | EURO_6
+  fuelTankCapacityL      Float?   // Capacité réservoir carburant (litres)
+  adBlueTankCapacityL    Float?   // Capacité réservoir AdBlue (litres)
+  registrationDate       DateTime? // Date de 1ère immatriculation
+  purchaseDate           DateTime? // Date d'acquisition
+  purchasePrice          Float?   // Prix d'achat (XOF)
+  initialOdometerKm      Float?   // Kilométrage à l'enregistrement
+  currentOdometerKm      Float?   // Dernier relevé kilométrique connu
+  fuelConsumptionPer100Km Float?  // Consommation déclarée/constructeur (L/100km)
+  adBlueConsumptionPer100Km Float? // Consommation AdBlue déclarée (L/100km) — moteurs Euro 6
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  agency              Agency?              @relation(fields: [agencyId], references: [id])
   trips               Trip[]
   maintenanceReports  MaintenanceReport[]
   costProfile         BusCostProfile?
   vehicleDocuments    VehicleDocument[]
   consumableTrackings ConsumableTracking[]
+  fuelLogs            FuelLog[]
+  odometerReadings    OdometerReading[]
 
   @@index([tenantId, status])
+  @@index([tenantId, agencyId])
   @@map("buses")
+}
+
+// ─── Suivi kilométrique — relevés d'odomètre horodatés ──────────────────────
+model OdometerReading {
+  id          String   @id @default(cuid())
+  tenantId    String
+  busId       String
+  readingKm   Float    // Valeur odomètre (km)
+  readingDate DateTime @default(now()) // Date/heure du relevé
+  source      String   @default("MANUAL") // MANUAL | TRIP | MAINTENANCE | GPS
+  note        String?
+  createdById String?  // Utilisateur ayant saisi le relevé
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bus    Bus    @relation(fields: [busId], references: [id])
+
+  @@index([tenantId, busId])
+  @@index([busId, readingDate])
+  @@map("odometer_readings")
+}
+
+// ─── Suivi carburant & AdBlue ────────────────────────────────────────────────
+model FuelLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  busId       String
+  logDate     DateTime @default(now()) // Date/heure du plein
+  fuelType    String   // DIESEL | PETROL | ADBLUE
+  quantityL   Float    // Quantité (litres)
+  pricePerL   Float?   // Prix unitaire (XOF/litre)
+  totalCost   Float?   // Coût total (XOF) — calculé ou saisi
+  odometerKm  Float?   // Kilométrage au moment du plein
+  stationName String?  // Nom de la station-service
+  fullTank    Boolean  @default(false) // Plein complet (pour calcul consommation réelle)
+  note        String?
+  createdById String?  // Utilisateur ayant saisi le plein
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bus    Bus    @relation(fields: [busId], references: [id])
+
+  @@index([tenantId, busId])
+  @@index([busId, logDate])
+  @@map("fuel_logs")
 }
 
 // ─── PERSONNEL : Staff (enveloppe RH) + StaffAssignment (postes occupés) ───
@@ -778,22 +923,28 @@ model MaintenanceReport {
 // ─────────────────────────────────────────────────────────────
 
 model Ticket {
-  id            String    @id @default(cuid())
-  tenantId      String
-  tripId        String
-  passengerId   String
-  passengerName String
-  seatNumber    String?
-  pricePaid     Float
-  status        String    @default("CREATED")
+  id                 String    @id @default(cuid())
+  tenantId           String
+  tripId             String
+  passengerId        String
+  passengerName      String
+  seatNumber         String?
+  boardingStationId  String    // Gare de montée (défaut = route.originId)
+  alightingStationId String    // Gare de descente (défaut = route.destinationId)
+  fareClass          String    @default("STANDARD") // STANDARD | CONFORT | VIP | STANDING
+  pricePaid          Float
+  status             String    @default("CREATED")
   // CREATED | PENDING_PAYMENT | CONFIRMED | CHECKED_IN | BOARDED | COMPLETED
   // CANCELLED | EXPIRED
-  expiresAt     DateTime?
-  qrCode        String    @unique
+  expiresAt          DateTime?
+  qrCode             String    @unique
   // Format: base64url(payload).HMAC-SHA256(payload, tenant_hmac_key)
-  agencyId      String
-  version       Int       @default(1)
-  createdAt     DateTime  @default(now())
+  agencyId           String
+  version            Int       @default(1)
+  createdAt          DateTime  @default(now())
+
+  boardingStation  Station @relation("TicketBoarding", fields: [boardingStationId], references: [id])
+  alightingStation Station @relation("TicketAlighting", fields: [alightingStationId], references: [id])
 
   @@index([tenantId, tripId, status])
   @@index([qrCode])

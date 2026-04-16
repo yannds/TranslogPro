@@ -112,6 +112,8 @@ const TENANT_ROLES: Array<{
       'control.fleet.manage.tenant',
       'control.fleet.layout.tenant',
       'control.bus.capacity.tenant',
+      'data.fleet.tracking.tenant',
+      'data.fleet.tracking_create.agency',
       'control.campaign.manage.tenant',
       'control.staff.manage.tenant',
       // Data
@@ -256,10 +258,10 @@ const TENANT_ROLES: Array<{
     isSystem: true,
     permissions: [
       'data.trip.read.own',
-      'data.trip.update.agency',   // départ, arrivée
+      'data.trip.update.agency',       // départ, arrivée
       'data.trip.check.own',
       'data.trip.report.own',
-      'data.trip.log_event.own',
+      'control.trip.log_event.own',    // plan de perm aligné sur constants + state graph
       'control.trip.delay.agency',
       'data.ticket.scan.agency',
       'data.traveler.verify.agency',
@@ -268,6 +270,12 @@ const TENANT_ROLES: Array<{
       'data.notification.read.own',
       'data.session.revoke.own',
       'data.manifest.print.agency',
+      'data.driver.rest.own',          // périodes de repos (start/end)
+      'data.driver.profile.agency',   // briefing équipements, profil chauffeur
+      'data.fleet.status.agency',     // lire la liste des bus (manifeste, panne)
+      'data.ticket.read.agency',      // liste passagers du trajet
+      'data.maintenance.update.own',   // signalement de panne depuis le terrain
+      'data.feedback.submit.own',      // retours voyageur post-trajet
     ],
   },
   {

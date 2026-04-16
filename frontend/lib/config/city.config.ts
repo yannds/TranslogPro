@@ -114,12 +114,5 @@ export function getCitiesForTenant(countryCode: string, includeInterstate = true
   return [...local, ...hubs];
 }
 
-/** Pays supportés (pour le tenant config) */
-export const SUPPORTED_COUNTRIES = [
-  { code: 'CG', name: 'République du Congo', flag: '🇨🇬', defaultLang: 'fr' as const },
-  { code: 'CD', name: 'RD Congo',            flag: '🇨🇩', defaultLang: 'fr' as const },
-  { code: 'GA', name: 'Gabon',               flag: '🇬🇦', defaultLang: 'fr' as const },
-  { code: 'CM', name: 'Cameroun',            flag: '🇨🇲', defaultLang: 'fr' as const },
-  { code: 'AO', name: 'Angola',              flag: '🇦🇴', defaultLang: 'pt' as const },
-  { code: 'SN', name: 'Sénégal',             flag: '🇸🇳', defaultLang: 'wo' as const },
-];
+/** Pays supportés — réexporté depuis regional.config.ts (source de vérité) */
+export { COUNTRIES as SUPPORTED_COUNTRIES } from './regional.config';

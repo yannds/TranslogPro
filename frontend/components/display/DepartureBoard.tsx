@@ -18,7 +18,7 @@ import { useI18n }               from '../../lib/i18n/useI18n';
 import { useNotifications }      from '../../lib/hooks/useNotifications';
 import { useTenantConfig }       from '../../providers/TenantConfigProvider';
 import type { Notification }     from '../../lib/hooks/useNotifications';
-import type { Language }         from '../../lib/i18n/types';
+import type { Language, TranslationMap } from '../../lib/i18n/types';
 import { LANGUAGE_META }         from '../../lib/i18n/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ const DEMO_ARRIVALS: BoardRow[] = [
 interface TickerProps {
   notifications: Notification[];
   lang:          Language;
-  t:             (map: Record<Language, string>) => string;
+  t:             (map: TranslationMap) => string;
   dict:          ReturnType<typeof useI18n>['dict'];
   isConnected:   boolean;
 }
@@ -288,7 +288,7 @@ function BoardRowItem({
   mode:     BoardMode;
   registry: ReturnType<typeof useTenantConfig>['statuses'];
   lang:     Language;
-  t:        (map: Record<Language, string>) => string;
+  t:        (map: TranslationMap) => string;
   dict:     ReturnType<typeof useI18n>['dict'];
 }) {
   const cfg        = registry[row.statusId];
@@ -432,8 +432,8 @@ export function DepartureBoard({
   const localizedStationName =
     stationNamei18n?.[lang] ?? stationName;
 
-  const tDepartures = t(dict.board.departures);
-  const tArrivals   = t(dict.board.arrivals);
+  const tDepartures = t('board.departures');
+  const tArrivals   = t('board.arrivals');
 
   return (
     <div
@@ -478,7 +478,7 @@ export function DepartureBoard({
               className="text-xs xl:text-sm font-semibold uppercase tracking-wider mt-0.5"
               style={{ color: 'var(--color-primary)' }}
             >
-              {t(dict.ui.board_title)}&nbsp;
+              {t('ui.board_title')}&nbsp;
               <span className="font-black">
                 {mode === 'DEPARTURES' ? tDepartures : tArrivals}
               </span>
@@ -525,13 +525,13 @@ export function DepartureBoard({
           'text-[var(--color-primary)] text-[10px] xl:text-xs font-bold uppercase tracking-widest',
         )}
       >
-        <span>{t(dict.col.time)}</span>
-        <span>{mode === 'DEPARTURES' ? t(dict.col.destination) : t(dict.col.origin)}</span>
-        <span className="hidden sm:block">{t(dict.col.bus)}</span>
-        <span className="hidden md:block">{t(dict.col.agency)}</span>
-        <span className="text-center">{t(dict.col.platform)}</span>
-        <span>{t(dict.col.status)}</span>
-        <span className="hidden lg:block">{t(dict.col.remarks)}</span>
+        <span>{t('col.time')}</span>
+        <span>{mode === 'DEPARTURES' ? t('col.destination') : t('col.origin')}</span>
+        <span className="hidden sm:block">{t('col.bus')}</span>
+        <span className="hidden md:block">{t('col.agency')}</span>
+        <span className="text-center">{t('col.platform')}</span>
+        <span>{t('col.status')}</span>
+        <span className="hidden lg:block">{t('col.remarks')}</span>
       </div>
 
       {/* ── Rows ───────────────────────────────────────────────────────── */}
@@ -543,7 +543,7 @@ export function DepartureBoard({
       >
         {displayRows.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-slate-500 text-lg font-semibold">
-            {t(dict.ui.no_data)}
+            {t('ui.no_data')}
           </div>
         ) : (
           displayRows.map(row => (

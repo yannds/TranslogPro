@@ -2,7 +2,7 @@
  * utils.ts — Utilitaires fondamentaux de la Core Library
  *
  * cn()     : Fusion intelligente de classes Tailwind (clsx + tailwind-merge)
- * fmt*()   : Formatters localisés (dates, montants FCFA)
+ * fmt*()   : Formatters localisés (dates, montants)
  * debounce : Hook debounce réutilisable
  */
 import { type ClassValue, clsx } from 'clsx';
@@ -13,10 +13,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Formate un montant en FCFA (fr-FR locale) */
-export function fmtCfa(amount: number | null | undefined): string {
+/** Formate un montant avec symbole de devise (fr-FR locale) */
+export function fmtCfa(amount: number | null | undefined, symbol = 'FCFA'): string {
   if (amount == null) return '—';
-  return `${amount.toLocaleString('fr-FR')} FCFA`;
+  return `${amount.toLocaleString('fr-FR')} ${symbol}`;
 }
 
 /** Formate une date en français (dd/mm/yyyy HH:MM) */

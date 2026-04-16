@@ -87,17 +87,32 @@ export async function apiFetch<T = unknown>(
   if (!res.ok) {
     let errorBody: unknown = null;
     try { errorBody = await res.json(); } catch { /* ignore */ }
+
+    // Extraire le message le plus utile du body d'erreur NestJS
+    const detail =
+      (errorBody && typeof errorBody === 'object' && 'detail' in errorBody && typeof (errorBody as Record<string, unknown>).detail === 'string')
+        ? (errorBody as Record<string, string>).detail
+      : (errorBody && typeof errorBody === 'object' && 'message' in errorBody && typeof (errorBody as Record<string, unknown>).message === 'string')
+        ? (errorBody as Record<string, string>).message
+      : null;
+
     throw new ApiError(
       res.status,
       errorBody,
-      `Erreur API ${res.status} sur ${path}`,
+      detail ?? `Erreur API ${res.status} sur ${path}`,
     );
   }
 
-  // 204 No Content
+  // 204 No Content ou body vide (NestJS retourne 200 + Content-Length: 0 pour null)
   if (res.status === 204) return undefined as unknown as T;
 
-  return res.json() as Promise<T>;
+  const contentLength = res.headers.get('content-length');
+  if (contentLength === '0') return null as unknown as T;
+
+  const text = await res.text();
+  if (!text) return null as unknown as T;
+
+  return JSON.parse(text) as T;
 }
 
 // ─── Raccourcis ───────────────────────────────────────────────────────────────

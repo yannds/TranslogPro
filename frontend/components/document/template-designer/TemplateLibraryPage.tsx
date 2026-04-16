@@ -17,6 +17,58 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { TemplateDesigner } from './TemplateDesigner';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useI18n } from '../../../lib/i18n/useI18n';
+
+// ─── Palette dépendante du thème ─────────────────────────────────────────────
+const lightPalette = {
+  surface:        '#fff',
+  surfaceMuted:   '#f9fafb',
+  surfaceOwned:   '#f5f3ff',
+  surfaceDanger:  '#fef2f2',
+  surfaceBadge:   '#f3f4f6',
+  surfaceBlue:    '#dbeafe',
+  border:         '#e5e7eb',
+  borderStrong:   '#d1d5db',
+  borderOwned:    '#c7d2fe',
+  borderDanger:   '#fca5a5',
+  textPrimary:    '#111827',
+  textHeading:    '#1a3a5c',
+  textBody:       '#374151',
+  textMuted:      '#6b7280',
+  textFaint:      '#9ca3af',
+  textDanger:     '#dc2626',
+  badgeBlueText:  '#1d4ed8',
+  primary:        '#1a3a5c',
+  primaryMuted:   '#93c5fd',
+  primaryOnDark:  '#fff',
+  disabledBg:     '#e5e7eb',
+  disabledText:   '#9ca3af',
+};
+const darkPalette: typeof lightPalette = {
+  surface:        '#1e293b', // slate-800
+  surfaceMuted:   '#0f172a', // slate-950
+  surfaceOwned:   '#312e81', // indigo-900
+  surfaceDanger:  '#450a0a', // red-950
+  surfaceBadge:   '#334155', // slate-700
+  surfaceBlue:    '#1e3a8a', // blue-900
+  border:         '#334155',
+  borderStrong:   '#475569', // slate-600
+  borderOwned:    '#4338ca', // indigo-700
+  borderDanger:   '#7f1d1d', // red-900
+  textPrimary:    '#f1f5f9', // slate-100
+  textHeading:    '#e2e8f0', // slate-200
+  textBody:       '#cbd5e1', // slate-300
+  textMuted:      '#94a3b8', // slate-400
+  textFaint:      '#64748b', // slate-500
+  textDanger:     '#f87171', // red-400
+  badgeBlueText:  '#93c5fd', // blue-300
+  primary:        '#3b82f6', // blue-500
+  primaryMuted:   '#1e3a8a',
+  primaryOnDark:  '#fff',
+  disabledBg:     '#334155',
+  disabledText:   '#64748b',
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,27 +90,101 @@ interface TemplateLibraryPageProps {
   apiBase?: string;
 }
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  TICKET:       'Billet de voyage',
-  INVOICE:      'Facture',
-  LABEL:        'Étiquette / Talon',
-  MANIFEST:     'Manifeste',
-  PACKING_LIST: 'Bordereau',
+// ─── i18n ────────────────────────────────────────────────────────────────────
+
+const T = {
+  // Doc type labels
+  dtTicket:       tm('Billet de voyage', 'Travel Ticket'),
+  dtInvoice:      tm('Facture', 'Invoice'),
+  dtLabel:        tm('Étiquette / Talon', 'Label / Stub'),
+  dtManifest:     tm('Manifeste', 'Manifest'),
+  dtPackingList:  tm('Bordereau', 'Packing List'),
+
+  // Format labels
+  fmtA4:          tm('A4', 'A4'),
+  fmtA5:          tm('A5', 'A5'),
+  fmtThermal:     tm('Thermique 80mm', 'Thermal 80mm'),
+  fmtLabel62:     tm('Label 62mm / A6', 'Label 62mm / A6'),
+  fmtBaggage:     tm('99×210mm (Bagage)', '99×210mm (Baggage)'),
+  fmtEnvC5:       tm('Enveloppe C5', 'Envelope C5'),
+  fmtEnvDL:       tm('Enveloppe DL', 'Envelope DL'),
+
+  // Page text
+  pageTitle:      tm('Templates d\'impression', 'Print Templates'),
+  pageDesc:       tm(
+    'Personnalisez vos modèles de factures, billets et étiquettes. Dupliquez un modèle de base puis modifiez les zones et variables selon vos besoins.',
+    'Customize your invoice, ticket and label templates. Duplicate a base template then modify zones and variables to fit your needs.',
+  ),
+  filterAll:      tm('Tous', 'All'),
+  restorePackBtn: tm('⟲ Restaurer le pack de démarrage', '⟲ Restore Starter Pack'),
+  restoring:      tm('Restauration…', 'Restoring…'),
+  restoreTitle:   tm(
+    'Crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) manquants',
+    'Creates editable copies of missing base templates (ticket, invoice, receipt, manifest, label)',
+  ),
+  loading:        tm('Chargement…', 'Loading…'),
+  yourTemplates:  tm('Vos templates personnalisés', 'Your Custom Templates'),
+  systemModels:   tm('Modèles de base (système)', 'Base Templates (System)'),
+  systemDesc:     tm(
+    'Ces modèles sont fournis par TranslogPro. Dupliquez-en un pour créer votre propre version personnalisable.',
+    'These templates are provided by TranslogPro. Duplicate one to create your own customizable version.',
+  ),
+  errorLoadTpl:   tm('Erreur de chargement des templates', 'Failed to load templates'),
+
+  // Dialog/prompt text
+  promptDupName:  tm('Nom pour votre copie de', 'Name for your copy of'),
+  dupSuffix:      tm('Personnalisé', 'Custom'),
+  errorDup:       tm('Erreur lors de la duplication', 'Duplication error'),
+  confirmRestore: tm(
+    'Restaurer le pack de démarrage ?\n\nCette action crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) qui ne sont pas encore présents dans vos templates personnalisés. Les templates existants ne sont pas modifiés.',
+    'Restore the starter pack?\n\nThis creates editable copies of base templates (ticket, invoice, receipt, manifest, label) not yet present in your custom templates. Existing templates are not modified.',
+  ),
+  packRestored:   tm('Pack restauré.', 'Pack restored.'),
+  packCreated:    tm('Créés', 'Created'),
+  packSkipped:    tm('Déjà présents', 'Already present'),
+  errorRestore:   tm('Erreur lors de la restauration', 'Restoration error'),
+  confirmDelete:  tm('Supprimer le template', 'Delete template'),
+  errorDelete:    tm('Erreur lors de la suppression', 'Deletion error'),
+
+  // Card actions
+  system:         tm('Système', 'System'),
+  edit:           tm('✏ Éditer', '✏ Edit'),
+  delete:         tm('Supprimer', 'Delete'),
+  duplicateBtn:   tm('⊕ Dupliquer & personnaliser', '⊕ Duplicate & Customize'),
+  duplicating:    tm('Copie en cours…', 'Copying…'),
 };
 
-const FORMAT_LABELS: Record<string, string> = {
-  A4:           'A4',
-  A5:           'A5',
-  THERMAL_80MM: 'Thermique 80mm',
-  LABEL_62MM:   'Label 62mm / A6',
-  BAGGAGE_TAG:  '99×210mm (Bagage)',
-  ENVELOPE_C5:  'Enveloppe C5',
-  ENVELOPE_DL:  'Enveloppe DL',
-};
+// Derived lookup maps — call inside component to get translated values
+function docTypeLabels(t: (m: Record<string, string | undefined>) => string): Record<string, string> {
+  return {
+    TICKET:       t('templates.dtTicket'),
+    INVOICE:      t('templates.dtInvoice'),
+    LABEL:        t('templates.dtLabel'),
+    MANIFEST:     t('templates.dtManifest'),
+    PACKING_LIST: t('templates.dtPackingList'),
+  };
+}
+
+function formatLabels(t: (m: Record<string, string | undefined>) => string): Record<string, string> {
+  return {
+    A4:           t(T.fmtA4),
+    A5:           t(T.fmtA5),
+    THERMAL_80MM: t('templates.fmtThermal'),
+    LABEL_62MM:   t(T.fmtLabel62),
+    BAGGAGE_TAG:  t('templates.fmtBaggage'),
+    ENVELOPE_C5:  t(T.fmtEnvC5),
+    ENVELOPE_DL:  t('templates.fmtEnvDL'),
+  };
+}
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibraryPageProps) {
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  const p = theme === 'dark' ? darkPalette : lightPalette;
+  const DOC_TYPE_LABELS = docTypeLabels(t);
+  const FORMAT_LABELS = formatLabels(t);
   const [systemTemplates, setSystemTemplates] = useState<DocTemplate[]>([]);
   const [tenantTemplates, setTenantTemplates] = useState<DocTemplate[]>([]);
   const [loading,         setLoading]         = useState(true);
@@ -80,7 +206,7 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
         fetch(`${apiBase}/tenants/${tenantId}/templates`, { credentials: 'include' }),
       ]);
 
-      if (!sysRes.ok || !tenantRes.ok) throw new Error('Erreur de chargement des templates');
+      if (!sysRes.ok || !tenantRes.ok) throw new Error(t('templates.errorLoadTpl'));
 
       setSystemTemplates(await sysRes.json());
       setTenantTemplates(await tenantRes.json());
@@ -97,8 +223,8 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
 
   const handleDuplicate = async (template: DocTemplate) => {
     const name = window.prompt(
-      `Nom pour votre copie de "${template.name}" :`,
-      `${template.name} — Personnalisé`,
+      `${t('templates.promptDupName')} "${template.name}" :`,
+      `${template.name} — ${t('templates.dupSuffix')}`,
     );
     if (!name) return;
 
@@ -119,18 +245,14 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
       // Ouvrir directement le designer sur la copie
       setEditingTemplate(copy);
     } catch (e: any) {
-      alert(`Erreur lors de la duplication : ${e.message}`);
+      alert(`${t('templates.errorDup')} : ${e.message}`);
     } finally {
       setDuplicating(null);
     }
   };
 
   const handleRestorePack = async () => {
-    if (!window.confirm(
-      'Restaurer le pack de démarrage ?\n\n' +
-      'Cette action crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) ' +
-      'qui ne sont pas encore présents dans vos templates personnalisés. Les templates existants ne sont pas modifiés.',
-    )) return;
+    if (!window.confirm(t('templates.confirmRestore'))) return;
 
     try {
       setRestoringPack(true);
@@ -147,19 +269,19 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
       const { created, skipped } = await res.json() as { created: string[]; skipped: string[] };
       await loadTemplates();
       alert(
-        `Pack restauré.\n` +
-        `• Créés : ${created.length}${created.length ? ` (${created.join(', ')})` : ''}\n` +
-        `• Déjà présents : ${skipped.length}`,
+        `${t('templates.packRestored')}\n` +
+        `• ${t('templates.packCreated')} : ${created.length}${created.length ? ` (${created.join(', ')})` : ''}\n` +
+        `• ${t('templates.packSkipped')} : ${skipped.length}`,
       );
     } catch (e: any) {
-      alert(`Erreur lors de la restauration : ${e.message}`);
+      alert(`${t('templates.errorRestore')} : ${e.message}`);
     } finally {
       setRestoringPack(false);
     }
   };
 
   const handleDelete = async (template: DocTemplate) => {
-    if (!window.confirm(`Supprimer le template "${template.name}" ?`)) return;
+    if (!window.confirm(`${t('templates.confirmDelete')} "${template.name}" ?`)) return;
 
     try {
       const res = await fetch(
@@ -169,7 +291,7 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadTemplates();
     } catch (e: any) {
-      alert(`Erreur lors de la suppression : ${e.message}`);
+      alert(`${t('templates.errorDelete')} : ${e.message}`);
     }
   };
 
@@ -194,10 +316,10 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
   // ─── Vue Bibliothèque ─────────────────────────────────────────────────────
 
   const filteredSystem = filterDocType
-    ? systemTemplates.filter(t => t.docType === filterDocType)
+    ? systemTemplates.filter(tpl => tpl.docType === filterDocType)
     : systemTemplates;
   const filteredTenant = filterDocType
-    ? tenantTemplates.filter(t => t.docType === filterDocType)
+    ? tenantTemplates.filter(tpl => tpl.docType === filterDocType)
     : tenantTemplates;
 
   return (
@@ -205,12 +327,11 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
 
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1a3a5c', margin: 0 }}>
-          Templates d'impression
+        <h1 style={{ fontSize: '22px', fontWeight: 700, color: p.textHeading, margin: 0 }}>
+          {t('templates.pageTitle')}
         </h1>
-        <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-          Personnalisez vos modèles de factures, billets et étiquettes.
-          Dupliquez un modèle de base puis modifiez les zones et variables selon vos besoins.
+        <p style={{ fontSize: '13px', color: p.textMuted, marginTop: '4px' }}>
+          {t('templates.pageDesc')}
         </p>
       </div>
 
@@ -223,61 +344,65 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
             style={{
               padding: '5px 12px',
               fontSize: '12px',
-              border: `1px solid ${filterDocType === dt ? '#1a3a5c' : '#d1d5db'}`,
+              border: `1px solid ${filterDocType === dt ? p.primary : p.borderStrong}`,
               borderRadius: '20px',
-              background: filterDocType === dt ? '#1a3a5c' : '#fff',
-              color: filterDocType === dt ? '#fff' : '#374151',
+              background: filterDocType === dt ? p.primary : p.surface,
+              color: filterDocType === dt ? p.primaryOnDark : p.textBody,
               cursor: 'pointer',
             }}
           >
-            {dt ? DOC_TYPE_LABELS[dt] : 'Tous'}
+            {dt ? DOC_TYPE_LABELS[dt] : t('templates.filterAll')}
           </button>
         ))}
 
         <button
           onClick={handleRestorePack}
           disabled={restoringPack}
-          title="Crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) manquants"
+          title={t('templates.restoreTitle')}
           style={{
             marginLeft: 'auto',
             padding: '6px 14px',
             fontSize: '12px',
             fontWeight: 600,
-            border: '1px solid #1a3a5c',
+            border: `1px solid ${p.primary}`,
             borderRadius: '20px',
-            background: restoringPack ? '#e5e7eb' : '#fff',
-            color: restoringPack ? '#9ca3af' : '#1a3a5c',
+            background: restoringPack ? p.disabledBg : p.surface,
+            color: restoringPack ? p.disabledText : p.primary,
             cursor: restoringPack ? 'not-allowed' : 'pointer',
           }}
         >
-          {restoringPack ? 'Restauration…' : '⟲ Restaurer le pack de démarrage'}
+          {restoringPack ? t('templates.restoring') : t('templates.restorePackBtn')}
         </button>
       </div>
 
       {error && (
-        <div style={{ padding: '12px', background: '#fef2f2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>
+        <div style={{ padding: '12px', background: p.surfaceDanger, color: p.textDanger, borderRadius: '6px', marginBottom: '16px', fontSize: '13px', border: `1px solid ${p.borderDanger}` }}>
           {error}
         </div>
       )}
 
       {loading ? (
-        <div style={{ color: '#9ca3af', fontSize: '14px' }}>Chargement…</div>
+        <div style={{ color: p.textFaint, fontSize: '14px' }}>{t('templates.loading')}</div>
       ) : (
         <>
           {/* Templates tenant (personnalisés) */}
           {filteredTenant.length > 0 && (
             <section style={{ marginBottom: '32px' }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px' }}>
-                Vos templates personnalisés
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: p.textHeading, marginBottom: '12px' }}>
+                {t('templates.yourTemplates')}
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                {filteredTenant.map(t => (
+                {filteredTenant.map(tpl => (
                   <TemplateCard
-                    key={t.id}
-                    template={t}
+                    key={tpl.id}
+                    template={tpl}
                     isOwned
-                    onEdit={() => setEditingTemplate(t)}
-                    onDelete={() => handleDelete(t)}
+                    palette={p}
+                    t={t}
+                    docTypeLabels={DOC_TYPE_LABELS}
+                    formatLabels={FORMAT_LABELS}
+                    onEdit={() => setEditingTemplate(tpl)}
+                    onDelete={() => handleDelete(tpl)}
                   />
                 ))}
               </div>
@@ -286,20 +411,24 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
 
           {/* Templates système */}
           <section>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#374151', marginBottom: '12px' }}>
-              Modèles de base (système)
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: p.textBody, marginBottom: '12px' }}>
+              {t('templates.systemModels')}
             </h2>
-            <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>
-              Ces modèles sont fournis par TranslogPro. Dupliquez-en un pour créer votre propre version personnalisable.
+            <p style={{ fontSize: '12px', color: p.textFaint, marginBottom: '12px' }}>
+              {t('templates.systemDesc')}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-              {filteredSystem.map(t => (
+              {filteredSystem.map(tpl => (
                 <TemplateCard
-                  key={t.id}
-                  template={t}
+                  key={tpl.id}
+                  template={tpl}
                   isOwned={false}
-                  onDuplicate={() => handleDuplicate(t)}
-                  duplicating={duplicating === t.id}
+                  palette={p}
+                  t={t}
+                  docTypeLabels={DOC_TYPE_LABELS}
+                  formatLabels={FORMAT_LABELS}
+                  onDuplicate={() => handleDuplicate(tpl)}
+                  duplicating={duplicating === tpl.id}
                 />
               ))}
             </div>
@@ -313,16 +442,20 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
 // ─── TemplateCard ─────────────────────────────────────────────────────────────
 
 interface TemplateCardProps {
-  template:    DocTemplate;
-  isOwned:     boolean;
-  onEdit?:     () => void;
-  onDelete?:   () => void;
-  onDuplicate?:() => void;
-  duplicating?:boolean;
+  template:       DocTemplate;
+  isOwned:        boolean;
+  palette:        typeof lightPalette;
+  t:              (m: Record<string, string | undefined>) => string;
+  docTypeLabels:  Record<string, string>;
+  formatLabels:   Record<string, string>;
+  onEdit?:        () => void;
+  onDelete?:      () => void;
+  onDuplicate?:   () => void;
+  duplicating?:   boolean;
 }
 
 function TemplateCard({
-  template, isOwned, onEdit, onDelete, onDuplicate, duplicating,
+  template, isOwned, palette: p, t, docTypeLabels: DOC_TYPE_LABELS, formatLabels: FORMAT_LABELS, onEdit, onDelete, onDuplicate, duplicating,
 }: TemplateCardProps) {
   const engineColor = template.engine === 'PDFME' ? '#7c3aed' : '#2563eb';
   const engineLabel = template.engine === 'PDFME' ? 'Designer' : template.engine;
@@ -330,9 +463,9 @@ function TemplateCard({
   return (
     <div
       style={{
-        border: `1px solid ${isOwned ? '#c7d2fe' : '#e5e7eb'}`,
+        border: `1px solid ${isOwned ? p.borderOwned : p.border}`,
         borderRadius: '8px',
-        background: isOwned ? '#f5f3ff' : '#fff',
+        background: isOwned ? p.surfaceOwned : p.surface,
         padding: '16px',
         display: 'flex',
         flexDirection: 'column',
@@ -345,7 +478,7 @@ function TemplateCard({
           style={{
             fontSize: '10px', fontWeight: 700,
             padding: '2px 7px', borderRadius: '3px',
-            background: '#dbeafe', color: '#1d4ed8',
+            background: p.surfaceBlue, color: p.badgeBlueText,
           }}
         >
           {DOC_TYPE_LABELS[template.docType] ?? template.docType}
@@ -354,7 +487,7 @@ function TemplateCard({
           style={{
             fontSize: '10px', fontWeight: 700,
             padding: '2px 7px', borderRadius: '3px',
-            background: '#f3f4f6', color: '#374151',
+            background: p.surfaceBadge, color: p.textBody,
           }}
         >
           {FORMAT_LABELS[template.format] ?? template.format}
@@ -363,7 +496,8 @@ function TemplateCard({
           style={{
             fontSize: '10px', fontWeight: 700,
             padding: '2px 7px', borderRadius: '3px',
-            background: `${engineColor}18`, color: engineColor,
+            background: `${engineColor}${typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? '40' : '18'}`,
+            color: engineColor,
           }}
         >
           {engineLabel}
@@ -372,11 +506,11 @@ function TemplateCard({
 
       {/* Title */}
       <div>
-        <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: p.textPrimary }}>
           {template.name}
         </div>
-        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
-          {template.slug}  {isOwned ? `• v${template.version}` : '• Système'}
+        <div style={{ fontSize: '11px', color: p.textFaint, marginTop: '2px' }}>
+          {template.slug}  {isOwned ? `• v${template.version}` : `• ${t('templates.system')}`}
         </div>
       </div>
 
@@ -389,15 +523,15 @@ function TemplateCard({
               flex: 1,
               padding: '6px',
               fontSize: '12px',
-              background: '#1a3a5c',
-              color: '#fff',
+              background: p.primary,
+              color: p.primaryOnDark,
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
               fontWeight: 600,
             }}
           >
-            ✏ Éditer
+            {t('templates.edit')}
           </button>
         )}
         {isOwned && onDelete && (
@@ -406,14 +540,14 @@ function TemplateCard({
             style={{
               padding: '6px 10px',
               fontSize: '12px',
-              background: '#fff',
-              color: '#dc2626',
-              border: '1px solid #fca5a5',
+              background: p.surface,
+              color: p.textDanger,
+              border: `1px solid ${p.borderDanger}`,
               borderRadius: '5px',
               cursor: 'pointer',
             }}
           >
-            Supprimer
+            {t('templates.delete')}
           </button>
         )}
         {!isOwned && onDuplicate && (
@@ -424,15 +558,15 @@ function TemplateCard({
               flex: 1,
               padding: '6px',
               fontSize: '12px',
-              background: duplicating ? '#e5e7eb' : '#f3f4f6',
-              color: duplicating ? '#9ca3af' : '#374151',
-              border: '1px solid #d1d5db',
+              background: duplicating ? p.disabledBg : p.surfaceBadge,
+              color: duplicating ? p.disabledText : p.textBody,
+              border: `1px solid ${p.borderStrong}`,
               borderRadius: '5px',
               cursor: duplicating ? 'not-allowed' : 'pointer',
               fontWeight: 600,
             }}
           >
-            {duplicating ? 'Copie en cours…' : '⊕ Dupliquer & personnaliser'}
+            {duplicating ? t('templates.duplicating') : t('templates.duplicateBtn')}
           </button>
         )}
       </div>

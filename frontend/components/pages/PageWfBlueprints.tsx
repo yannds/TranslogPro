@@ -27,6 +27,7 @@ import {
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost, apiPut, apiDelete } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -50,6 +51,8 @@ interface CreateBlueprintForm {
 
 const ENTITY_TYPES = ['Ticket', 'Trip', 'Parcel', 'Bus', 'Claim'];
 
+
+
 const EMPTY_GRAPH = (entityType: string) => JSON.stringify({
   entityType,
   nodes: [
@@ -66,10 +69,10 @@ const EMPTY_GRAPH = (entityType: string) => JSON.stringify({
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 
-function blueprintBadge(bp: BlueprintSummary) {
-  if (bp.isSystem) return { variant: 'warning' as const, label: 'Système', icon: Shield };
-  if (bp.isPublic) return { variant: 'info'    as const, label: 'Public',  icon: Globe   };
-  return               { variant: 'default' as const, label: 'Privé',   icon: Lock    };
+function blueprintBadge(bp: BlueprintSummary, t: (keyOrMap: string | Record<string, string | undefined>) => string) {
+  if (bp.isSystem) return { variant: 'warning' as const, label: t('wfBlueprints.system'), icon: Shield };
+  if (bp.isPublic) return { variant: 'info'    as const, label: t('wfBlueprints.public'),  icon: Globe   };
+  return               { variant: 'default' as const, label: t('wfBlueprints.private'),   icon: Lock    };
 }
 
 // ─── Blueprint Card ───────────────────────────────────────────────────────────
@@ -90,7 +93,8 @@ function BlueprintCard({
   tenantId:   string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const badge = blueprintBadge(bp);
+  const { t } = useI18n();
+  const badge = blueprintBadge(bp, t);
   const BadgeIcon = badge.icon;
 
   return (
@@ -135,7 +139,7 @@ function BlueprintCard({
               )}
               {bp.installs && bp.installs.length > 0 && (
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                  ✓ Installé {bp.installs[0]?.isDirty ? '(modifié)' : ''}
+                  ✓ {t('wfBlueprints.installed')} {bp.installs[0]?.isDirty ? `(${t('wfBlueprints.modified')})` : ''}
                 </span>
               )}
             </div>
@@ -148,10 +152,10 @@ function BlueprintCard({
               variant="outline"
               onClick={() => onInstall(bp.id)}
               disabled={installing === bp.id}
-              aria-label={`Installer ${bp.name}`}
+              aria-label={`${t('wfBlueprints.install')} ${bp.name}`}
             >
               <Download className="w-3.5 h-3.5 mr-1" aria-hidden />
-              {installing === bp.id ? 'Install…' : 'Installer'}
+              {installing === bp.id ? 'Install…' : t('wfBlueprints.install')}
             </Button>
             {!bp.isSystem && (
               <>
@@ -159,7 +163,7 @@ function BlueprintCard({
                   size="sm"
                   variant="ghost"
                   onClick={() => onEdit(bp)}
-                  aria-label={`Modifier ${bp.name}`}
+                  aria-label={`${t('common.edit')} ${bp.name}`}
                 >
                   <Pencil className="w-3.5 h-3.5" aria-hidden />
                 </Button>
@@ -167,7 +171,7 @@ function BlueprintCard({
                   size="sm"
                   variant="ghost"
                   onClick={() => onDelete(bp)}
-                  aria-label={`Supprimer ${bp.name}`}
+                  aria-label={`${t('common.delete')} ${bp.name}`}
                   className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden />
@@ -178,7 +182,7 @@ function BlueprintCard({
               type="button"
               onClick={() => setExpanded(p => !p)}
               aria-expanded={expanded}
-              aria-label="Voir le graphe"
+              aria-label={t('wfBlueprints.seeGraph')}
               className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded transition-colors"
             >
               {expanded
@@ -191,7 +195,7 @@ function BlueprintCard({
         {/* Détails expandables */}
         {expanded && (
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">Aperçu du graphe</p>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">{t('wfBlueprints.graphPreview')}</p>
             <GraphPreview tenantId={tenantId} bpId={bp.id} />
           </div>
         )}
@@ -203,6 +207,7 @@ function BlueprintCard({
 // ─── Aperçu graphe ────────────────────────────────────────────────────────────
 
 function GraphPreview({ tenantId, bpId }: { tenantId: string; bpId: string }) {
+  const { t } = useI18n();
   const { data, loading } = useFetch<{ graphJson: { nodes: unknown[]; edges: unknown[] } }>(
     tenantId ? `/api/tenants/${tenantId}/workflow-studio/blueprints/${bpId}` : null,
     [tenantId, bpId],
@@ -210,13 +215,13 @@ function GraphPreview({ tenantId, bpId }: { tenantId: string; bpId: string }) {
   if (loading || !data) return <Skeleton className="h-12 w-full" />;
   const g = data.graphJson;
   return (
-    <div className="grid grid-cols-2 gap-2 text-xs">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
-        <div className="text-slate-400 text-[10px] mb-0.5">États</div>
+        <div className="text-slate-400 text-[10px] mb-0.5">{t('wfBlueprints.states')}</div>
         <div className="font-semibold text-slate-900 dark:text-white">{g.nodes?.length ?? '—'}</div>
       </div>
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
-        <div className="text-slate-400 text-[10px] mb-0.5">Transitions</div>
+        <div className="text-slate-400 text-[10px] mb-0.5">{t('wfBlueprints.transitions')}</div>
         <div className="font-semibold text-slate-900 dark:text-white">{g.edges?.length ?? '—'}</div>
       </div>
     </div>
@@ -238,6 +243,7 @@ function BlueprintForm({
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState<CreateBlueprintForm>({
     name:        initial?.name        ?? '',
     slug:        initial?.slug        ?? '',
@@ -278,10 +284,10 @@ function BlueprintForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom <span aria-hidden className="text-red-500">*</span>
+            {t('common.name')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={form.name}
             onChange={e => handleName(e.target.value)}
@@ -297,7 +303,7 @@ function BlueprintForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Type d'entité <span aria-hidden className="text-red-500">*</span>
+            {t('wfBlueprints.entityType')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select value={form.entityType}
             onChange={e => handleEntityChange(e.target.value)}
@@ -305,38 +311,38 @@ function BlueprintForm({
             {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        <div className="col-span-2 space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+        <div className="sm:col-span-2 space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.description')}</label>
           <textarea value={form.description}
             onChange={e => setField('description', e.target.value)}
             rows={2} placeholder="Description du blueprint…" className={inputClass} disabled={busy} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Tags (virgule séparés)</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('wfBlueprints.tags')}</label>
           <input type="text" value={form.tags}
             onChange={e => setField('tags', e.target.value)}
             placeholder="transport, standard" className={inputClass} disabled={busy} />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Visibilité</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('wfBlueprints.visibility')}</label>
           <label className="flex items-center gap-2 cursor-pointer mt-2.5">
             <input type="checkbox" checked={form.isPublic}
               onChange={e => setField('isPublic', e.target.checked)}
               className="rounded border-slate-300 text-blue-600" disabled={busy} />
-            <span className="text-sm text-slate-700 dark:text-slate-300">Publier sur le Marketplace</span>
+            <span className="text-sm text-slate-700 dark:text-slate-300">{t('wfBlueprints.publishMarketplace')}</span>
           </label>
         </div>
         {!initial?.name && (
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Graphe JSON <span aria-hidden className="text-red-500">*</span>
+              {t('wfBlueprints.graphJson')} <span aria-hidden className="text-red-500">*</span>
             </label>
             <textarea value={form.graphJson}
               onChange={e => setField('graphJson', e.target.value)}
               rows={8} className={`${inputClass} font-mono text-xs`} disabled={busy}
               placeholder='{"entityType":"Ticket","nodes":[...],"edges":[...]}' />
             <p className="text-[11px] text-slate-400">
-              Collez un graphe exporté depuis le Workflow Studio ou modifiez le template.
+              {t('wfBlueprints.graphHint')}
             </p>
           </div>
         )}
@@ -344,11 +350,11 @@ function BlueprintForm({
 
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden /> Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden /> {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy}>
           <Check className="w-4 h-4 mr-1.5" aria-hidden />
-          {busy ? 'Enregistrement…' : initial?.name ? 'Mettre à jour' : 'Créer'}
+          {busy ? t('wfBlueprints.recording') : initial?.name ? t('wfBlueprints.updating') : t('common.create')}
         </Button>
       </div>
     </form>
@@ -359,6 +365,7 @@ function BlueprintForm({
 
 export function PageWfBlueprints() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/workflow-studio`;
 
@@ -388,7 +395,7 @@ export function PageWfBlueprints() {
     try {
       let graphJson: unknown;
       try { graphJson = JSON.parse(form.graphJson); }
-      catch { throw new Error('JSON du graphe invalide'); }
+      catch { throw new Error(t('wfBlueprints.jsonInvalid')); }
 
       await apiPost(`${base}/blueprints`, {
         name:        form.name,
@@ -466,15 +473,15 @@ export function PageWfBlueprints() {
             <GitFork className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Blueprints</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('wfBlueprints.blueprints')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {blueprints ? `${blueprints.length} blueprint(s) disponible(s)` : 'Modèles de workflows réutilisables'}
+              {blueprints ? `${blueprints.length} ${t('wfBlueprints.blueprintsAvail')}` : t('wfBlueprints.reusableModels')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          Nouveau Blueprint
+          {t('wfBlueprints.newBlueprint')}
         </Button>
       </div>
 
@@ -484,7 +491,7 @@ export function PageWfBlueprints() {
           type="search"
           value={filterSearch}
           onChange={e => setFilterSearch(e.target.value)}
-          placeholder="Rechercher…"
+          placeholder={t('wfBlueprints.searchPlaceholder')}
           className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-48"
         />
         <select
@@ -492,8 +499,8 @@ export function PageWfBlueprints() {
           onChange={e => setFilterEntity(e.target.value)}
           className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         >
-          <option value="">Tous les types</option>
-          {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          <option value="">{t('wfBlueprints.allTypes')}</option>
+          {ENTITY_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
         </select>
       </div>
 
@@ -519,8 +526,8 @@ export function PageWfBlueprints() {
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center text-slate-500 dark:text-slate-400">
           {blueprints?.length === 0
-            ? 'Aucun blueprint. Créez-en un ou installez des modèles depuis le Marketplace.'
-            : 'Aucun résultat pour ces filtres.'}
+            ? t('wfBlueprints.noBlueprint')
+            : t('wfBlueprints.noResult')}
         </div>
       ) : (
         <div className="space-y-3">
@@ -542,8 +549,8 @@ export function PageWfBlueprints() {
       <Dialog
         open={showCreate}
         onOpenChange={open => { if (!open) setShowCreate(false); }}
-        title="Nouveau Blueprint"
-        description="Définissez un modèle de workflow réutilisable."
+        title={t('wfBlueprints.createBpTitle')}
+        description={t('wfBlueprints.createBpDesc')}
         size="lg"
       >
         <BlueprintForm
@@ -558,8 +565,8 @@ export function PageWfBlueprints() {
       <Dialog
         open={!!editBp}
         onOpenChange={open => { if (!open) setEditBp(null); }}
-        title="Modifier le Blueprint"
-        description="Mettez à jour les métadonnées. Le graphe se modifie via le Studio."
+        title={t('wfBlueprints.editBpTitle')}
+        description={t('wfBlueprints.editBpDesc')}
         size="lg"
       >
         {editBp && (
@@ -584,15 +591,15 @@ export function PageWfBlueprints() {
       <Dialog
         open={!!deleteBp}
         onOpenChange={open => { if (!open) setDeleteBp(null); }}
-        title="Confirmer la suppression"
-        description={`Êtes-vous sûr de vouloir supprimer "${deleteBp?.name}" ? Cette action est irréversible.`}
+        title={t('wfBlueprints.confirmDelete')}
+        description={`${t('wfBlueprints.deleteConfirmMsg')} "${deleteBp?.name}" ? ${t('wfBlueprints.irreversible')}`}
         footer={
           <div className="flex items-center gap-3">
             {actionErr && (
               <span className="text-sm text-red-600 dark:text-red-400 mr-auto">{actionErr}</span>
             )}
             <Button variant="outline" onClick={() => setDeleteBp(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden /> Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden /> {t('common.cancel')}
             </Button>
             <Button
               onClick={handleDelete}
@@ -600,7 +607,7 @@ export function PageWfBlueprints() {
               className="bg-red-600 hover:bg-red-700 text-white border-red-600"
             >
               <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Suppression…' : 'Supprimer'}
+              {busy ? t('wfBlueprints.deleting') : t('common.delete')}
             </Button>
           </div>
         }

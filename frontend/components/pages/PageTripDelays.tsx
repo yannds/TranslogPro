@@ -17,6 +17,7 @@ import {
   AlertTriangle, Clock, MapPin, Bus, CheckCircle2, Timer,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
+import { useI18n }       from '../../lib/i18n/useI18n';
 import { useFetch }      from '../../lib/hooks/useFetch';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }         from '../ui/Badge';
@@ -29,6 +30,10 @@ import {
   isTripDelayed, delayMinutes,
 } from './trips/shared';
 
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+// T block removed — using string-key-based i18n with namespace 'tripDelays'
+
 type Severity = 'critical' | 'moderate' | 'light';
 
 function severityOf(mn: number): Severity {
@@ -36,12 +41,6 @@ function severityOf(mn: number): Severity {
   if (mn >= 15) return 'moderate';
   return 'light';
 }
-
-const SEVERITY_META: Record<Severity, { label: string; cls: string; badge: 'danger' | 'warning' | 'default' }> = {
-  critical: { label: 'Critique', cls: 'border-red-300 dark:border-red-800 bg-red-50/60 dark:bg-red-900/20', badge: 'danger'  },
-  moderate: { label: 'Modéré',   cls: 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/20', badge: 'warning' },
-  light:    { label: 'Léger',    cls: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900', badge: 'default' },
-};
 
 function formatDelayHuman(mn: number): string {
   if (mn < 60) return `${mn} min`;
@@ -52,6 +51,7 @@ function formatDelayHuman(mn: number): string {
 
 export function PageTripDelays() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const { data: trips, loading, error } = useFetch<TripRow[]>(
@@ -60,6 +60,12 @@ export function PageTripDelays() {
   );
 
   const now = new Date();
+
+  const SEVERITY_META: Record<Severity, { label: string; cls: string; badge: 'danger' | 'warning' | 'default' }> = {
+    critical: { label: t('tripDelays.criticalLabel'), cls: 'border-red-300 dark:border-red-800 bg-red-50/60 dark:bg-red-900/20', badge: 'danger'  },
+    moderate: { label: t('tripDelays.moderateLabel'), cls: 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/20', badge: 'warning' },
+    light:    { label: t('tripDelays.lightLabel'),    cls: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900', badge: 'default' },
+  };
 
   const delayed = useMemo(() => {
     return (trips ?? [])
@@ -80,16 +86,16 @@ export function PageTripDelays() {
   }, [delayed]);
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Retards et alertes trajets">
+    <main className="p-6 space-y-6" role="main" aria-label={t('tripDelays.pageTitle')}>
       {/* En-tête */}
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
           <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Retards &amp; Alertes</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('tripDelays.pageTitle')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Trajets dont le départ est dépassé ou dont le statut est « en retard ».
+            {t('tripDelays.pageDesc')}
           </p>
         </div>
       </div>
@@ -97,18 +103,18 @@ export function PageTripDelays() {
       <ErrorAlert error={error} icon />
 
       {/* KPIs */}
-      <section aria-label="Indicateurs retards" className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <SevKpi label="Total retards" value={kpi.total}    variant="total" />
-        <SevKpi label="Critiques (≥1h)" value={kpi.critical} variant="critical" />
-        <SevKpi label="Modérés (≥15m)"  value={kpi.moderate} variant="moderate" />
-        <SevKpi label="Légers (<15m)"   value={kpi.light}    variant="light" />
+      <section aria-label={t('tripDelays.pageTitle')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <SevKpi label={t('tripDelays.totalDelays')}  value={kpi.total}    variant="total" />
+        <SevKpi label={t('tripDelays.criticalKpi')}  value={kpi.critical} variant="critical" />
+        <SevKpi label={t('tripDelays.moderateKpi')}  value={kpi.moderate} variant="moderate" />
+        <SevKpi label={t('tripDelays.lightKpi')}     value={kpi.light}    variant="light" />
       </section>
 
       {/* Liste live */}
       <Card>
         <CardHeader
-          heading="Trajets en retard"
-          description="Tri décroissant par durée de retard — rafraîchir la page pour mise à jour"
+          heading={t('tripDelays.delayedTrips')}
+          description={t('tripDelays.sortDesc')}
         />
         <CardContent className="p-0">
           {loading ? (
@@ -118,8 +124,8 @@ export function PageTripDelays() {
           ) : delayed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status" aria-live="polite">
               <CheckCircle2 className="w-10 h-10 mb-3 text-emerald-500" aria-hidden />
-              <p className="font-medium">Aucun retard actif</p>
-              <p className="text-sm mt-1">Tous les trajets sont à l'heure.</p>
+              <p className="font-medium">{t('tripDelays.noDelay')}</p>
+              <p className="text-sm mt-1">{t('tripDelays.allOnTime')}</p>
             </div>
           ) : (
             <ul role="list" className="p-4 space-y-3" aria-live="polite">
@@ -144,7 +150,7 @@ export function PageTripDelays() {
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="w-3 h-3" aria-hidden />
-                            Départ prévu : {new Date(trip.departureScheduled).toLocaleString('fr-FR', {
+                            {t('tripDelays.scheduledDep')} {new Date(trip.departureScheduled).toLocaleString('fr-FR', {
                               weekday: 'short', day: '2-digit', month: 'short',
                               hour: '2-digit', minute: '2-digit',
                             })}
@@ -174,7 +180,7 @@ export function PageTripDelays() {
                           : sev === 'moderate' ? 'text-amber-600 dark:text-amber-400'
                           : 'text-slate-600 dark:text-slate-400',
                         )}
-                        aria-label={`Retard de ${formatDelayHuman(minutes)}`}
+                        aria-label={`${t('tripDelays.delayOf')} ${formatDelayHuman(minutes)}`}
                       >
                         +{formatDelayHuman(minutes)}
                       </span>

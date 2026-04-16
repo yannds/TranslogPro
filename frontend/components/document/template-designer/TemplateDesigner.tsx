@@ -20,6 +20,40 @@ import { text, image, barcodes, rectangle, line, ellipse, table } from '@pdfme/s
 import type { Template }    from '@pdfme/common';
 import { VariablesPanel }   from './VariablesPanel';
 import type { VariablesPanelProps } from './VariablesPanel';
+import { useTheme } from '../../theme/ThemeProvider';
+
+const lightPalette = {
+  surface:       '#fff',
+  surfaceMuted:  '#f9fafb',
+  surfaceDanger: '#fef2f2',
+  surfaceOk:     '#f0fdf4',
+  border:        '#e5e7eb',
+  borderStrong:  '#d1d5db',
+  textHeading:   '#1a3a5c',
+  textBody:      '#374151',
+  textMuted:     '#6b7280',
+  textDanger:    '#dc2626',
+  textOk:        '#16a34a',
+  primary:       '#1a3a5c',
+  primaryMuted:  '#93c5fd',
+  primaryOnDark: '#fff',
+};
+const darkPalette: typeof lightPalette = {
+  surface:       '#1e293b',
+  surfaceMuted:  '#0f172a',
+  surfaceDanger: '#450a0a',
+  surfaceOk:     '#052e16',
+  border:        '#334155',
+  borderStrong:  '#475569',
+  textHeading:   '#e2e8f0',
+  textBody:      '#cbd5e1',
+  textMuted:     '#94a3b8',
+  textDanger:    '#f87171',
+  textOk:        '#86efac',
+  primary:       '#3b82f6',
+  primaryMuted:  '#1e3a8a',
+  primaryOnDark: '#fff',
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +93,8 @@ export function TemplateDesigner({
   onClose,
   apiBase = '/api',
 }: TemplateDesignerProps) {
+  const { theme } = useTheme();
+  const p = theme === 'dark' ? darkPalette : lightPalette;
   const containerRef  = useRef<HTMLDivElement>(null);
   const designerRef   = useRef<Designer | null>(null);
 
@@ -176,22 +212,22 @@ export function TemplateDesigner({
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px' }}>
-        <span style={{ color: '#6b7280', fontSize: '14px' }}>Chargement du template…</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', background: p.surface }}>
+        <span style={{ color: p.textMuted, fontSize: '14px' }}>Chargement du template…</span>
       </div>
     );
   }
 
   if (error && !template) {
     return (
-      <div style={{ padding: '24px', color: '#dc2626', fontSize: '14px' }}>
+      <div style={{ padding: '24px', color: p.textDanger, fontSize: '14px', background: p.surface }}>
         Impossible de charger le template : {error}
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#fff' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: p.surface }}>
 
       {/* ── Barre d'outils ────────────────────────────────────────────────── */}
       <div
@@ -200,29 +236,29 @@ export function TemplateDesigner({
           alignItems: 'center',
           gap: '12px',
           padding: '10px 16px',
-          borderBottom: '1px solid #e5e7eb',
-          background: '#f9fafb',
+          borderBottom: `1px solid ${p.border}`,
+          background: p.surfaceMuted,
           flexShrink: 0,
         }}
       >
         {/* Titre */}
         <div style={{ flex: 1 }}>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: p.textHeading }}>
             Éditeur de template
           </span>
-          <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>
+          <span style={{ fontSize: '12px', color: p.textMuted, marginLeft: '8px' }}>
             {templateName}
           </span>
         </div>
 
         {/* Indicateurs */}
         {error && (
-          <span style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', padding: '3px 8px', borderRadius: '4px' }}>
+          <span style={{ fontSize: '12px', color: p.textDanger, background: p.surfaceDanger, padding: '3px 8px', borderRadius: '4px' }}>
             ⚠ {error}
           </span>
         )}
         {saved && (
-          <span style={{ fontSize: '12px', color: '#16a34a', background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px' }}>
+          <span style={{ fontSize: '12px', color: p.textOk, background: p.surfaceOk, padding: '3px 8px', borderRadius: '4px' }}>
             ✓ Sauvegardé
           </span>
         )}
@@ -234,11 +270,11 @@ export function TemplateDesigner({
             style={{
               padding: '6px 14px',
               fontSize: '12px',
-              border: '1px solid #d1d5db',
+              border: `1px solid ${p.borderStrong}`,
               borderRadius: '5px',
-              background: '#fff',
+              background: p.surface,
               cursor: 'pointer',
-              color: '#374151',
+              color: p.textBody,
             }}
           >
             Fermer
@@ -253,8 +289,8 @@ export function TemplateDesigner({
             fontSize: '12px',
             border: 'none',
             borderRadius: '5px',
-            background: saving ? '#93c5fd' : '#1a3a5c',
-            color: '#fff',
+            background: saving ? p.primaryMuted : p.primary,
+            color: p.primaryOnDark,
             cursor: saving ? 'not-allowed' : 'pointer',
             fontWeight: 600,
           }}

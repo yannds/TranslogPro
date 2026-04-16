@@ -4,7 +4,10 @@
  * Future intégration : GET /api/v1/tenants/:id/cashier/summary
  */
 import { cn }                                      from '../../lib/utils';
-import type { CashierTransaction, CashierSummaryLine } from './types';
+import { useI18n }                             from '../../lib/i18n/useI18n';
+import type { CashierTransaction } from './types';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
+
 
 // ─── Données mock ─────────────────────────────────────────────────────────────
 
@@ -16,19 +19,21 @@ const TRANSACTIONS: CashierTransaction[] = [
   { time: '13:45', op: 'Vente billet BZV→NKY — M. Kimbuta',   montant: '+4 000', ok: true  },
 ];
 
-const SUMMARY_LINES: CashierSummaryLine[] = [
-  { label: 'Ventes billets',  value: '1 324 000', color: 'text-emerald-400'       },
-  { label: 'Ventes colis',    value: '87 500',    color: 'text-emerald-400'       },
-  { label: 'Remboursements',  value: '-163 000',  color: 'text-red-400'           },
-  { label: 'Net',             value: '1 248 500', color: 'text-white font-bold'   },
+const SUMMARY_LINES_KEYS: { tKey: string; value: string; color: string }[] = [
+  { tKey: 'cashierDash.ticketSales', value: '1 324 000', color: 'text-emerald-400'       },
+  { tKey: 'cashierDash.parcelSales', value: '87 500',    color: 'text-emerald-400'       },
+  { tKey: 'cashierDash.refunds',     value: '-163 000',  color: 'text-red-400'           },
+  { tKey: 'cashierDash.net',         value: '1 248 500', color: 'text-white font-bold'   },
 ];
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function PageCashier() {
+  const { operational } = useTenantConfig();
+  const { t } = useI18n();
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-white">Caisse</h1>
+      <h1 className="text-2xl font-bold text-white">{t('cashierDash.title')}</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Transactions */}
@@ -37,11 +42,11 @@ export function PageCashier() {
             <div>
               <p className="text-slate-400 text-sm">Caisse #2 — ouverture 08:00</p>
               <p className="text-3xl font-black text-white tabular-nums mt-1">
-                1 248 500 <span className="text-sm font-normal text-slate-500">FCFA</span>
+                1 248 500 <span className="text-sm font-normal text-slate-500">{operational.currencySymbol}</span>
               </p>
             </div>
             <button className="bg-red-900/40 hover:bg-red-800/60 text-red-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-              Clôturer caisse
+              {t('cashierDash.closeCashier')}
             </button>
           </div>
 
@@ -64,12 +69,12 @@ export function PageCashier() {
         <div className="space-y-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-              Résumé du jour
+              {t('cashierDash.daySummary')}
             </p>
-            {SUMMARY_LINES.map((r, i) => (
+            {SUMMARY_LINES_KEYS.map((r, i) => (
               <div key={i} className="flex justify-between py-1.5 border-b border-slate-800 last:border-0 text-sm">
-                <span className="text-slate-400">{r.label}</span>
-                <span className={cn('tabular-nums', r.color)}>{r.value} FCFA</span>
+                <span className="text-slate-400">{t(r.tKey)}</span>
+                <span className={cn('tabular-nums', r.color)}>{r.value} {operational.currencySymbol}</span>
               </div>
             ))}
           </div>

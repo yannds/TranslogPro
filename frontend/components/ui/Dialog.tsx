@@ -5,8 +5,15 @@
  *   open / onOpenChange : contrôle externe
  *   trigger             : déclencheur (bouton)
  *   title, description  : textes accessibles (aria)
- *   size                : sm | md | lg | xl | full
+ *   size                : sm | md | lg | xl | 2xl | 3xl | full
  *   footer              : slot bas de modale (boutons confirm/cancel)
+ *
+ * Responsive :
+ *   - Mobile (< 640px) : toutes les modales occupent 95 % de la largeur
+ *   - Desktop (≥ 1024px) : les modales md/lg/xl s'élargissent pour
+ *     exploiter l'espace écran (fields en multi-colonnes lisibles)
+ *
+ * Layout : header + footer restent sticky, seul le body scroll
  *
  * WCAG : focus trap, aria-modal, role="dialog", Escape pour fermer
  */
@@ -25,14 +32,14 @@ const dialogContentVariants = cva(
    data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95
    data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]
    data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]
-   max-h-[90vh] overflow-y-auto`,
+   max-h-[90vh] flex flex-col`,
   {
     variants: {
       size: {
-        sm:    'w-full max-w-sm',
-        md:    'w-full max-w-md',
-        lg:    'w-full max-w-lg',
-        xl:    'w-full max-w-2xl',
+        sm:    'w-[95vw] max-w-sm',
+        md:    'w-[95vw] max-w-md   lg:max-w-lg',
+        lg:    'w-[95vw] max-w-lg   lg:max-w-2xl',
+        xl:    'w-[95vw] max-w-2xl  lg:max-w-3xl',
         '2xl': 'w-[95vw] max-w-5xl',
         '3xl': 'w-[95vw] max-w-6xl',
         full:  'w-[95vw] max-w-none',
@@ -76,15 +83,15 @@ export function Dialog({
         {/* Content — Radix gère aria-labelledby/aria-describedby automatiquement
             à partir des composants Title/Description présents en descendance. */}
         <DialogPrimitive.Content className={cn(dialogContentVariants({ size }))}>
-          {/* Header */}
-          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-            <div>
+          {/* Header — sticky */}
+          <div className="shrink-0 flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="min-w-0">
               <DialogPrimitive.Title className="text-base font-semibold text-slate-900 dark:text-slate-50">
                 {title}
               </DialogPrimitive.Title>
               {description
                 ? (
-                  <DialogPrimitive.Description className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  <DialogPrimitive.Description className="mt-1 text-sm text-slate-500 dark:text-slate-400 truncate">
                     {description}
                   </DialogPrimitive.Description>
                 )
@@ -108,14 +115,14 @@ export function Dialog({
             )}
           </div>
 
-          {/* Body */}
-          <div className="px-6 py-4">
+          {/* Body — scrollable */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
             {children}
           </div>
 
-          {/* Footer */}
+          {/* Footer — sticky */}
           {footer && (
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800">
               {footer}
             </div>
           )}

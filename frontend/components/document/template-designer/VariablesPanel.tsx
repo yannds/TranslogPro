@@ -14,6 +14,34 @@ import {
   type VariableCategory,
   type TemplateVariable,
 } from './variables';
+import { useTheme } from '../../theme/ThemeProvider';
+
+const lightPalette = {
+  surface:        '#fff',
+  surfaceMuted:   '#f9fafb',
+  surfaceCopied:  '#dcfce7',
+  border:         '#e5e7eb',
+  borderStrong:   '#d1d5db',
+  borderCopied:   '#86efac',
+  textPrimary:    '#111827',
+  textHeading:    '#1a3a5c',
+  textMuted:      '#6b7280',
+  textFaint:      '#9ca3af',
+  textOk:         '#16a34a',
+};
+const darkPalette: typeof lightPalette = {
+  surface:        '#1e293b',
+  surfaceMuted:   '#0f172a',
+  surfaceCopied:  '#052e16',
+  border:         '#334155',
+  borderStrong:   '#475569',
+  borderCopied:   '#166534',
+  textPrimary:    '#f1f5f9',
+  textHeading:    '#e2e8f0',
+  textMuted:      '#94a3b8',
+  textFaint:      '#64748b',
+  textOk:         '#86efac',
+};
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +65,9 @@ const DOC_TYPE_CATEGORIES: Record<string, VariableCategory[]> = {
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
+  const { theme } = useTheme();
+  const p = theme === 'dark' ? darkPalette : lightPalette;
+  const isDark = theme === 'dark';
   const [copied, setCopied] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -78,8 +109,8 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
         width: '260px',
         height: '100%',
         overflowY: 'auto',
-        borderLeft: '1px solid #e5e7eb',
-        background: '#f9fafb',
+        borderLeft: `1px solid ${p.border}`,
+        background: p.surfaceMuted,
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -88,14 +119,14 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
       <div
         style={{
           padding: '12px 14px 8px',
-          borderBottom: '1px solid #e5e7eb',
-          background: '#fff',
+          borderBottom: `1px solid ${p.border}`,
+          background: p.surface,
           position: 'sticky',
           top: 0,
           zIndex: 10,
         }}
       >
-        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: p.textHeading, marginBottom: '8px' }}>
           Variables disponibles
         </div>
         <input
@@ -107,13 +138,15 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
             width: '100%',
             padding: '5px 8px',
             fontSize: '12px',
-            border: '1px solid #d1d5db',
+            border: `1px solid ${p.borderStrong}`,
             borderRadius: '5px',
             outline: 'none',
             boxSizing: 'border-box',
+            background: p.surface,
+            color: p.textPrimary,
           }}
         />
-        <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '5px' }}>
+        <div style={{ fontSize: '10px', color: p.textFaint, marginTop: '5px' }}>
           Clic → copie <code>{'{{variable}}'}</code> dans le presse-papier
         </div>
       </div>
@@ -133,7 +166,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
                 padding: '4px 6px',
                 marginBottom: '4px',
                 borderRadius: '3px',
-                background: `${CATEGORY_COLORS[cat as VariableCategory]}14`,
+                background: `${CATEGORY_COLORS[cat as VariableCategory]}${isDark ? '33' : '14'}`,
               }}
             >
               {CATEGORY_LABELS[cat as VariableCategory]}
@@ -152,8 +185,8 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
                   width: '100%',
                   padding: '5px 8px',
                   marginBottom: '2px',
-                  background: copied === v.key ? '#dcfce7' : '#fff',
-                  border: `1px solid ${copied === v.key ? '#86efac' : '#e5e7eb'}`,
+                  background: copied === v.key ? p.surfaceCopied : p.surface,
+                  border: `1px solid ${copied === v.key ? p.borderCopied : p.border}`,
                   borderRadius: '4px',
                   cursor: 'pointer',
                   textAlign: 'left',
@@ -165,16 +198,16 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
                     style={{
                       fontSize: '11px',
                       fontWeight: 600,
-                      color: '#111827',
+                      color: p.textPrimary,
                       fontFamily: 'monospace',
                     }}
                   >
                     {v.placeholder}
                   </div>
-                  <div style={{ fontSize: '10px', color: '#6b7280' }}>{v.label}</div>
+                  <div style={{ fontSize: '10px', color: p.textMuted }}>{v.label}</div>
                 </div>
                 {copied === v.key && (
-                  <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>
+                  <span style={{ fontSize: '10px', color: p.textOk, fontWeight: 700 }}>
                     ✓ Copié
                   </span>
                 )}
@@ -184,7 +217,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
         ))}
 
         {Object.keys(grouped).length === 0 && (
-          <div style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '20px' }}>
+          <div style={{ fontSize: '12px', color: p.textFaint, textAlign: 'center', marginTop: '20px' }}>
             Aucune variable ne correspond à "{search}"
           </div>
         )}

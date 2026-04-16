@@ -43,6 +43,14 @@ export class CrewService {
     });
   }
 
+  async getMineUpcoming(tenantId: string, userId: string) {
+    return this.prisma.crewAssignment.findMany({
+      where: { tenantId, staffId: userId },
+      include: { trip: true, briefingRecord: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async getForTrip(tenantId: string, tripId: string, scope?: ScopeContext) {
     if (scope) await assertTripOwnership(this.prisma, tenantId, tripId, scope);
     return this.prisma.crewAssignment.findMany({

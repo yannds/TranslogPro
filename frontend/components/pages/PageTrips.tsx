@@ -17,6 +17,7 @@ import {
   Route as RouteIcon, Plus, Search, Bus, Clock, MapPin, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
+import { useI18n }        from '../../lib/i18n/useI18n';
 import { useFetch }      from '../../lib/hooks/useFetch';
 import { apiPost }       from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
@@ -28,11 +29,15 @@ import { ErrorAlert }    from '../ui/ErrorAlert';
 import { inputClass }    from '../ui/inputClass';
 import { cn }            from '../../lib/utils';
 import {
-  type TripRow, type BusLite, type StaffLite,
-  deriveRoutesFromTrips, tripStatusLabel, tripStatusBadgeVariant,
+  type TripRow, type BusLite, type StaffLite, type RouteLite,
+  tripStatusLabel, tripStatusBadgeVariant,
   routeLabelOf, startOfDay, formatYmd, formatHm, isTripDelayed, delayMinutes,
 } from './trips/shared';
 import { TripCreateForm, type TripCreatePayload } from './trips/TripCreateForm';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+// ─── i18n (string-key based — see locales/fr.ts → trips) ────────────────────
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +49,7 @@ function isToday(d: Date, ref = new Date()): boolean {
 
 export function PageTrips() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const [dayOffset,   setDayOffset]   = useState(0);   // 0 = aujourd'hui, -1 = hier, +1 = demain
@@ -66,6 +72,10 @@ export function PageTrips() {
   );
   const { data: staffList } = useFetch<StaffLite[]>(
     showCreate ? `${base}/staff?role=DRIVER` : null,
+    [tenantId, showCreate],
+  );
+  const { data: routesData } = useFetch<RouteLite[]>(
+    showCreate ? `${base}/routes` : null,
     [tenantId, showCreate],
   );
 
@@ -113,18 +123,18 @@ export function PageTrips() {
       setShowCreate(false);
       refetch();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Erreur lors de la création');
+      setActionError(e instanceof Error ? e.message : t('trips.createError'));
     } finally {
       setBusy(false);
     }
   };
 
-  const routes  = useMemo(() => deriveRoutesFromTrips(trips), [trips]);
+  const routes  = routesData ?? [];
   const drivers = staffList ?? [];
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Trajets du jour">
+    <main className="p-6 space-y-6" role="main" aria-label={t('trips.pageTitle')}>
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -132,34 +142,34 @@ export function PageTrips() {
             <RouteIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Trajets du jour</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('trips.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Vue opérationnelle de la flotte — statut live, départs, retards.
+              {t('trips.pageDesc')}
             </p>
           </div>
         </div>
         <Button
           onClick={() => { setShowCreate(true); setActionError(null); }}
-          aria-label="Créer un nouveau trajet"
+          aria-label={t('trips.createTrip')}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          Nouveau trajet
+          {t('trips.newTrip')}
         </Button>
       </div>
 
       <ErrorAlert error={error} icon />
 
       {/* KPIs */}
-      <section aria-label="Indicateurs trajets" className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Kpi label="Trajets"     value={kpi.total}      icon={<RouteIcon className="w-5 h-5" />} tone="neutral" />
-        <Kpi label="En cours"    value={kpi.inProgress} icon={<Bus className="w-5 h-5" />}       tone="info" />
-        <Kpi label="En retard"   value={kpi.delayed}    icon={<AlertTriangle className="w-5 h-5" />} tone={kpi.delayed > 0 ? 'danger' : 'success'} />
-        <Kpi label="Terminés"    value={kpi.completed}  icon={<CheckCircle2 className="w-5 h-5" />} tone="success" />
+      <section aria-label={t('trips.trips')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Kpi label={t('trips.trips')}      value={kpi.total}      icon={<RouteIcon className="w-5 h-5" />} tone="neutral" />
+        <Kpi label={t('trips.inProgress')} value={kpi.inProgress} icon={<Bus className="w-5 h-5" />}       tone="info" />
+        <Kpi label={t('trips.delayed')}    value={kpi.delayed}    icon={<AlertTriangle className="w-5 h-5" />} tone={kpi.delayed > 0 ? 'danger' : 'success'} />
+        <Kpi label={t('trips.completed')}  value={kpi.completed}  icon={<CheckCircle2 className="w-5 h-5" />} tone="success" />
       </section>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1" role="toolbar" aria-label="Navigation jour">
+        <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1" role="toolbar" aria-label={t('trips.dayNav')}>
           {[-1, 0, 1].map(off => (
             <button
               key={off}
@@ -173,7 +183,7 @@ export function PageTrips() {
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
               )}
             >
-              {off === -1 ? 'Hier' : off === 0 ? "Aujourd'hui" : 'Demain'}
+              {off === -1 ? t('trips.yesterday') : off === 0 ? t('trips.today') : t('trips.tomorrow')}
             </button>
           ))}
         </div>
@@ -190,18 +200,18 @@ export function PageTrips() {
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher itinéraire ou plaque"
+              placeholder={t('trips.searchTrip')}
               className={cn(inputClass, 'pl-9')}
-              aria-label="Rechercher un trajet"
+              aria-label={t('trips.searchLabel')}
             />
           </div>
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
             className={cn(inputClass, 'w-auto')}
-            aria-label="Filtrer par statut"
+            aria-label={t('trips.filterStatus')}
           >
-            <option value="">Tous statuts</option>
+            <option value="">{t('trips.allStatuses')}</option>
             {['PLANNED', 'OPEN', 'BOARDING', 'IN_PROGRESS', 'IN_PROGRESS_DELAYED', 'COMPLETED', 'CANCELLED'].map(s => (
               <option key={s} value={s}>{tripStatusLabel(s)}</option>
             ))}
@@ -212,8 +222,8 @@ export function PageTrips() {
       {/* Liste */}
       <Card>
         <CardHeader
-          heading={`${visible.length} trajet${visible.length > 1 ? 's' : ''}`}
-          description="Cliquer sur une ligne pour voir les détails (bientôt)"
+          heading={`${visible.length} ${t('trips.trips').toLowerCase()}`}
+          description={t('trips.clickDetails')}
         />
         <CardContent className="p-0">
           {loading ? (
@@ -223,29 +233,29 @@ export function PageTrips() {
           ) : visible.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
               <RouteIcon className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">Aucun trajet pour ce jour</p>
-              <p className="text-sm mt-1">Cliquez sur « Nouveau trajet » pour en planifier un.</p>
+              <p className="font-medium">{t('trips.noTripsDay')}</p>
+              <p className="text-sm mt-1">{t('trips.noTripsCta')}</p>
             </div>
           ) : (
-            <div role="table" aria-label="Liste des trajets">
+            <div role="table" aria-label={t('trips.trips')}>
               <div
                 role="row"
                 className="grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
               >
-                <div role="columnheader">Heure</div>
-                <div role="columnheader">Itinéraire</div>
-                <div role="columnheader">Véhicule</div>
-                <div role="columnheader">Statut</div>
-                <div role="columnheader" className="text-right">Retard</div>
+                <div role="columnheader">{t('trips.hour')}</div>
+                <div role="columnheader">{t('trips.route')}</div>
+                <div role="columnheader">{t('trips.vehicle')}</div>
+                <div role="columnheader">{t('trips.status')}</div>
+                <div role="columnheader" className="text-right">{t('trips.delay')}</div>
               </div>
               <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
-                {visible.map(t => {
-                  const d = new Date(t.departureScheduled);
-                  const delayed = isTripDelayed(t);
-                  const mn = delayMinutes(t);
+                {visible.map(t2 => {
+                  const d = new Date(t2.departureScheduled);
+                  const delayed = isTripDelayed(t2);
+                  const mn = delayMinutes(t2);
                   return (
                     <li
-                      key={t.id}
+                      key={t2.id}
                       role="row"
                       className={cn(
                         'grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-3 items-center',
@@ -258,14 +268,14 @@ export function PageTrips() {
                       </div>
                       <div role="cell" className="flex items-center gap-2 min-w-0">
                         <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
-                        <span className="text-sm text-slate-800 dark:text-slate-200 truncate">{routeLabelOf(t)}</span>
+                        <span className="text-sm text-slate-800 dark:text-slate-200 truncate">{routeLabelOf(t2)}</span>
                       </div>
                       <div role="cell" className="text-sm font-mono text-slate-600 dark:text-slate-400 truncate">
-                        {t.bus?.plateNumber ?? '—'}
+                        {t2.bus?.plateNumber ?? '—'}
                       </div>
                       <div role="cell">
-                        <Badge variant={tripStatusBadgeVariant(t.status)} size="sm">
-                          {tripStatusLabel(t.status)}
+                        <Badge variant={tripStatusBadgeVariant(t2.status)} size="sm">
+                          {tripStatusLabel(t2.status)}
                         </Badge>
                       </div>
                       <div role="cell" className="text-right">
@@ -287,8 +297,8 @@ export function PageTrips() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) { setShowCreate(false); setActionError(null); } }}
-        title="Nouveau trajet"
-        description="Planifier un trajet opérationnel avec véhicule et chauffeur. L'équipage supplémentaire s'affecte ensuite dans « Équipages ›  Planning »."
+        title={t('trips.dialogNewTitle')}
+        description={t('trips.dialogNewDesc')}
         size="lg"
       >
         {showCreate && (

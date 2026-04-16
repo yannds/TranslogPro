@@ -183,6 +183,37 @@ export class QhseService {
     });
   }
 
+  async updateSeverityType(tenantId: string, id: string, dto: {
+    name?: string; code?: string; color?: string;
+    requiresQhse?: boolean; requiresPolice?: boolean; requiresInsurer?: boolean;
+    sortOrder?: number; isActive?: boolean;
+  }) {
+    const found = await this.prisma.accidentSeverityType.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Type de sévérité ${id} introuvable`);
+    return this.prisma.accidentSeverityType.update({
+      where: { id },
+      data: {
+        ...(dto.name            !== undefined && { name: dto.name }),
+        ...(dto.code            !== undefined && { code: dto.code.toUpperCase() }),
+        ...(dto.color           !== undefined && { color: dto.color }),
+        ...(dto.requiresQhse    !== undefined && { requiresQhse: dto.requiresQhse }),
+        ...(dto.requiresPolice  !== undefined && { requiresPolice: dto.requiresPolice }),
+        ...(dto.requiresInsurer !== undefined && { requiresInsurer: dto.requiresInsurer }),
+        ...(dto.sortOrder       !== undefined && { sortOrder: dto.sortOrder }),
+        ...(dto.isActive        !== undefined && { isActive: dto.isActive }),
+      },
+    });
+  }
+
+  async deleteSeverityType(tenantId: string, id: string) {
+    const found = await this.prisma.accidentSeverityType.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Type de sévérité ${id} introuvable`);
+    return this.prisma.accidentSeverityType.update({
+      where: { id },
+      data:  { isActive: false },
+    });
+  }
+
   // ─── Accident Reports ─────────────────────────────────────────────────────
 
   async createAccidentReport(tenantId: string, dto: CreateAccidentReportDto) {
@@ -282,7 +313,11 @@ export class QhseService {
             }
           : {}),
       },
-      include: { severityType: true },
+      include: {
+        severityType:    true,
+        disputeTracking: { select: { id: true, status: true } },
+        _count:          { select: { injuries: true } },
+      },
       orderBy: { occurredAt: 'desc' },
     });
   }
@@ -402,6 +437,35 @@ export class QhseService {
     return this.prisma.hospital.findMany({
       where:   { tenantId, isActive: true },
       orderBy: { city: 'asc' },
+    });
+  }
+
+  async updateHospital(tenantId: string, id: string, dto: {
+    name?: string; city?: string; address?: string; phone?: string;
+    gpsLat?: number; gpsLng?: number; isActive?: boolean;
+  }) {
+    const found = await this.prisma.hospital.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Hôpital ${id} introuvable`);
+    return this.prisma.hospital.update({
+      where: { id },
+      data: {
+        ...(dto.name     !== undefined && { name: dto.name }),
+        ...(dto.city     !== undefined && { city: dto.city }),
+        ...(dto.address  !== undefined && { address: dto.address }),
+        ...(dto.phone    !== undefined && { phone: dto.phone }),
+        ...(dto.gpsLat   !== undefined && { gpsLat: dto.gpsLat }),
+        ...(dto.gpsLng   !== undefined && { gpsLng: dto.gpsLng }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+    });
+  }
+
+  async deleteHospital(tenantId: string, id: string) {
+    const found = await this.prisma.hospital.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Hôpital ${id} introuvable`);
+    return this.prisma.hospital.update({
+      where: { id },
+      data:  { isActive: false },
     });
   }
 
@@ -535,6 +599,31 @@ export class QhseService {
       where:   { tenantId, isActive: true },
       include: { steps: { orderBy: { order: 'asc' } } },
       orderBy: { triggerCode: 'asc' },
+    });
+  }
+
+  async updateProcedure(tenantId: string, id: string, dto: {
+    name?: string; description?: string; isActive?: boolean;
+  }) {
+    const found = await this.prisma.qhseProcedure.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Procédure ${id} introuvable`);
+    return this.prisma.qhseProcedure.update({
+      where: { id },
+      data: {
+        ...(dto.name        !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.isActive    !== undefined && { isActive: dto.isActive }),
+      },
+      include: { steps: { orderBy: { order: 'asc' } } },
+    });
+  }
+
+  async deleteProcedure(tenantId: string, id: string) {
+    const found = await this.prisma.qhseProcedure.findFirst({ where: { id, tenantId } });
+    if (!found) throw new NotFoundException(`Procédure ${id} introuvable`);
+    return this.prisma.qhseProcedure.update({
+      where: { id },
+      data:  { isActive: false },
     });
   }
 

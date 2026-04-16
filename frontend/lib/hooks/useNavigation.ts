@@ -17,6 +17,7 @@
  */
 
 import { useMemo, useState, useCallback } from 'react';
+import type { TranslationMap } from '../i18n/types';
 import type {
   PortalNavConfig,
   NavItem,
@@ -28,11 +29,20 @@ import type {
   ResolvedNavLeaf,
 } from '../navigation/nav.types';
 
+type TFn = (map: Record<string, string | undefined>) => string;
+
+/** Résout un label qui peut être string OU TranslationMap */
+function resolveLabel(label: string | TranslationMap, t: TFn): string {
+  return typeof label === 'string' ? label : t(label);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UseNavigationOptions {
   config:          PortalNavConfig;
   permissions:     string[];            // liste des permissions de l'utilisateur
+  /** Fonction de traduction (depuis useI18n().t) — accepte TranslationMap ou Record<string,string> */
+  t:               TFn;
   /** moduleKey SaaS actifs pour le tenant. `undefined` = pas de filtrage par module (back-compat). */
   enabledModules?: string[];
   currentHref?:    string;              // pour marquer l'item actif
@@ -64,12 +74,12 @@ function moduleVisible(moduleKey: string | undefined, modules: Set<string> | nul
   return modules.has(moduleKey);
 }
 
-function resolveLeaf(leaf: NavLeaf, perms: Set<string>, modules: Set<string> | null): ResolvedNavLeaf | null {
+function resolveLeaf(leaf: NavLeaf, perms: Set<string>, modules: Set<string> | null, t: TFn): ResolvedNavLeaf | null {
   if (!isVisible(leaf.anyOf, perms)) return null;
   if (!moduleVisible(leaf.moduleKey, modules)) return null;
   return {
     id:     leaf.id,
-    label:  leaf.label,
+    label:  resolveLabel(leaf.label, t),
     href:   leaf.href,
     icon:   leaf.icon,
     badge:  leaf.badge,
@@ -77,9 +87,9 @@ function resolveLeaf(leaf: NavLeaf, perms: Set<string>, modules: Set<string> | n
   };
 }
 
-function resolveItem(item: NavItem, perms: Set<string>, modules: Set<string> | null): ResolvedNavItem | null {
+function resolveItem(item: NavItem, perms: Set<string>, modules: Set<string> | null, t: TFn): ResolvedNavItem | null {
   if (item.kind === 'leaf') {
-    const leaf = resolveLeaf(item, perms, modules);
+    const leaf = resolveLeaf(item, perms, modules, t);
     if (!leaf) return null;
     return leaf;
   }
@@ -90,33 +100,33 @@ function resolveItem(item: NavItem, perms: Set<string>, modules: Set<string> | n
   if (!moduleVisible(group.moduleKey, modules)) return null;
 
   const children = group.children
-    .map(c => resolveLeaf(c, perms, modules))
+    .map(c => resolveLeaf(c, perms, modules, t))
     .filter((c): c is ResolvedNavLeaf => c !== null);
 
   if (children.length === 0) return null;
 
   return {
     id:       group.id,
-    label:    group.label,
-    href:     children[0]!.href,   // href par défaut = 1er enfant visible
+    label:    resolveLabel(group.label, t),
+    href:     children[0]!.href,
     icon:     group.icon,
     children,
   };
 }
 
-function resolveSection(section: NavSection, perms: Set<string>, modules: Set<string> | null): ResolvedNavSection | null {
+function resolveSection(section: NavSection, perms: Set<string>, modules: Set<string> | null, t: TFn): ResolvedNavSection | null {
   if (!isVisible(section.anyOf, perms)) return null;
   if (!moduleVisible(section.moduleKey, modules)) return null;
 
   const items = section.items
-    .map(item => resolveItem(item, perms, modules))
+    .map(item => resolveItem(item, perms, modules, t))
     .filter((i): i is ResolvedNavItem => i !== null);
 
   if (items.length === 0) return null;
 
   return {
     id:    section.id,
-    title: section.title,
+    title: section.title ? resolveLabel(section.title, t) : undefined,
     items,
   };
 }
@@ -165,6 +175,7 @@ function findActiveIdInConfig(config: PortalNavConfig, currentHref: string): str
 export function useNavigation({
   config,
   permissions,
+  t,
   enabledModules,
   currentHref,
 }: UseNavigationOptions): UseNavigationResult {
@@ -178,9 +189,10 @@ export function useNavigation({
 
   const sections = useMemo<ResolvedNavSection[]>(() =>
     config.sections
-      .map(s => resolveSection(s, perms, modules))
+      .map(s => resolveSection(s, perms, modules, t))
       .filter((s): s is ResolvedNavSection => s !== null),
-    [config, perms, modules],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config, perms, modules, t],
   );
 
   const inferredActiveId = useMemo<string | null>(() => {

@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, Query,
+  Controller, Get, Post, Patch, Delete, Param, Body, Query,
 } from '@nestjs/common';
 import {
   DriverProfileService,
@@ -13,12 +13,13 @@ import {
   CreateRemediationRuleDto,
 } from './driver-profile.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
-import { RequireModule }     from '../../common/decorators/require-module.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
-@RequireModule('DRIVER_PROFILE')
+// Module DRIVER_PROFILE rendu obligatoire (socle conformité — temps de repos,
+// licences, formations). Pas de @RequireModule : toutes les routes sont
+// toujours actives, la seule protection reste la permission.
 @Controller('tenants/:tenantId/driver-profile')
 export class DriverProfileController {
   constructor(private readonly svc: DriverProfileService) {}
@@ -26,7 +27,7 @@ export class DriverProfileController {
   // ── Rest Configuration ─────────────────────────────────────────────────────
 
   @Get('rest-config')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   getRestConfig(@TenantId() tenantId: string) {
     return this.svc.getRestConfig(tenantId);
   }
@@ -66,6 +67,15 @@ export class DriverProfileController {
     return this.svc.updateLicense(tenantId, id, dto);
   }
 
+  @Delete('licenses/:id')
+  @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  deleteLicense(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.svc.deleteLicense(tenantId, id);
+  }
+
   @Get('drivers/:staffId/licenses')
   @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
   getLicensesForDriver(
@@ -93,12 +103,15 @@ export class DriverProfileController {
   // ── Rest Periods ───────────────────────────────────────────────────────────
 
   @Get('drivers/:staffId/rest-compliance')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  // .agency en 1er (plus large — pour managers), .own en 2e (chauffeur lisant
+  // ses propres données). Le service rejette le cross-user quand scope=own.
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   checkRestCompliance(
     @TenantId() tenantId: string,
     @Param('staffId') staffId: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.checkRestCompliance(tenantId, staffId);
+    return this.svc.checkRestCompliance(tenantId, staffId, scope);
   }
 
   @Post('rest-periods')
@@ -123,13 +136,14 @@ export class DriverProfileController {
   }
 
   @Get('drivers/:staffId/rest-history')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   getRestHistory(
     @TenantId() tenantId: string,
     @Param('staffId') staffId: string,
     @Query('limit') limit?: string,
+    @ScopeCtx() scope?: ScopeContext,
   ) {
-    return this.svc.getRestHistory(tenantId, staffId, limit ? parseInt(limit, 10) : undefined);
+    return this.svc.getRestHistory(tenantId, staffId, limit ? parseInt(limit, 10) : undefined, scope);
   }
 
   // ── Training Types ─────────────────────────────────────────────────────────
@@ -168,6 +182,15 @@ export class DriverProfileController {
     @Body() dto: CompleteTrainingDto,
   ) {
     return this.svc.completeTraining(tenantId, id, dto);
+  }
+
+  @Delete('trainings/:id')
+  @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  deleteTraining(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.svc.deleteTraining(tenantId, id);
   }
 
   @Post('trainings/:id/upload-url')
@@ -209,6 +232,25 @@ export class DriverProfileController {
   @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
   listRemediationRules(@TenantId() tenantId: string) {
     return this.svc.listRemediationRules(tenantId);
+  }
+
+  @Patch('remediation-rules/:id')
+  @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  updateRemediationRule(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateRemediationRuleDto> & { isActive?: boolean },
+  ) {
+    return this.svc.updateRemediationRule(tenantId, id, dto);
+  }
+
+  @Delete('remediation-rules/:id')
+  @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  deleteRemediationRule(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.svc.deleteRemediationRule(tenantId, id);
   }
 
   @Post('drivers/:staffId/remediation/evaluate')

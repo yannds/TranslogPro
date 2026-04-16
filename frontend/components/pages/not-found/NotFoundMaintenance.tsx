@@ -5,6 +5,7 @@
  * Illustration : bus immobilisé, mécanicien en dessous, fumée.
  */
 import { cn } from '../../../lib/utils';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 interface Props {
   onNextBus?: () => void;
@@ -126,6 +127,7 @@ function BreakdownSvg({ className }: { className?: string }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function NotFoundMaintenance({ onNextBus, className }: Props) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -138,20 +140,18 @@ export function NotFoundMaintenance({ onNextBus, className }: Props) {
 
       <div className="text-center max-w-lg space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 text-xs font-mono font-semibold tracking-widest uppercase">
-          Erreur 404
+          {t('notFoundMaintenance.badge')}
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-          Panne sèche sur{' '}
+          {t('notFoundMaintenance.title1')}{' '}
           <span className="text-red-600 dark:text-red-400">
-            l&apos;autoroute du Web.
+            {t('notFoundMaintenance.title2')}
           </span>
         </h1>
 
         <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-          Le moteur a calé juste avant d&apos;afficher cette destination. Nos
-          mécaniciens sont déjà sous le capot pour vérifier le circuit. En
-          attendant, on vous propose de changer de véhicule.
+          {t('notFoundMaintenance.body')}
         </p>
       </div>
 
@@ -169,11 +169,11 @@ export function NotFoundMaintenance({ onNextBus, className }: Props) {
           <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
           <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1h3.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1v-4a1 1 0 00-.293-.707l-3-3A1 1 0 0016 5h-1V4a1 1 0 00-1-1H3zm11 4h-1V6h1l2 2h-2z" />
         </svg>
-        Prendre le prochain bus
+        {t('notFoundMaintenance.button')}
       </button>
 
       <p className="text-xs text-slate-400 dark:text-slate-600 font-mono">
-        404 · Panne détectée · TranslogPro
+        {t('notFoundMaintenance.footer')}
       </p>
     </div>
   );

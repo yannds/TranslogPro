@@ -9,10 +9,13 @@
  */
 
 import { useState, type FormEvent } from 'react';
-import { ErrorAlert }  from '../../ui/ErrorAlert';
-import { FormFooter }  from '../../ui/FormFooter';
-import { inputClass }  from '../../ui/inputClass';
+import { useI18n }        from '../../../lib/i18n/useI18n';
+import { ErrorAlert }     from '../../ui/ErrorAlert';
+import { FormFooter }     from '../../ui/FormFooter';
+import { inputClass }     from '../../ui/inputClass';
 import type { BusLite, RouteLite, StaffLite } from './shared';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
 
 export interface TripCreatePayload {
   routeId:              string;
@@ -42,9 +45,14 @@ function driverDisplayName(d: StaffLite): string {
   return d.user.displayName ?? d.user.name ?? d.user.email;
 }
 
+function isDriverAvailable(d: StaffLite): boolean {
+  return d.assignments?.some(a => a.role === 'DRIVER' && a.isAvailable) ?? false;
+}
+
 export function TripCreateForm({
   routes, buses, drivers, defaultDate, onSubmit, onCancel, busy, error,
 }: TripCreateFormProps) {
+  const { t } = useI18n();
   const [v, setV] = useState<Values>({
     routeId:       routes[0]?.id  ?? '',
     busId:         buses[0]?.id   ?? '',
@@ -73,10 +81,10 @@ export function TripCreateForm({
     <form className="space-y-4" onSubmit={submit}>
       <ErrorAlert error={error} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="tc-route" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Itinéraire <span aria-hidden className="text-red-500">*</span>
+            {t('tripForm.route')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select
             id="tc-route" required value={v.routeId}
@@ -84,19 +92,19 @@ export function TripCreateForm({
             className={inputClass}
             disabled={busy || routes.length === 0}
           >
-            {routes.length === 0 && <option value="">Aucun itinéraire disponible</option>}
+            {routes.length === 0 && <option value="">{t('tripForm.noRoute')}</option>}
             {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
           {routes.length === 0 && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Créez d'abord un itinéraire depuis « Lignes &amp; Routes ».
+              {t('tripForm.routeHint')}
             </p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <label htmlFor="tc-bus" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Véhicule <span aria-hidden className="text-red-500">*</span>
+            {t('tripForm.vehicle')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select
             id="tc-bus" required value={v.busId}
@@ -104,7 +112,7 @@ export function TripCreateForm({
             className={inputClass}
             disabled={busy || buses.length === 0}
           >
-            {buses.length === 0 && <option value="">Aucun véhicule</option>}
+            {buses.length === 0 && <option value="">{t('tripForm.noVehicle')}</option>}
             {buses.map(b => (
               <option key={b.id} value={b.id}>
                 {b.plateNumber}{b.model ? ` — ${b.model}` : ''}
@@ -115,7 +123,7 @@ export function TripCreateForm({
 
         <div className="space-y-1.5">
           <label htmlFor="tc-driver" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Chauffeur <span aria-hidden className="text-red-500">*</span>
+            {t('tripForm.driver')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select
             id="tc-driver" required value={v.driverStaffId}
@@ -123,10 +131,10 @@ export function TripCreateForm({
             className={inputClass}
             disabled={busy || drivers.length === 0}
           >
-            {drivers.length === 0 && <option value="">Aucun chauffeur</option>}
+            {drivers.length === 0 && <option value="">{t('tripForm.noDriver')}</option>}
             {drivers.map(d => (
-              <option key={d.id} value={d.id} disabled={!d.isAvailable}>
-                {driverDisplayName(d)}{!d.isAvailable ? ' (indisponible)' : ''}
+              <option key={d.id} value={d.id} disabled={!isDriverAvailable(d)}>
+                {driverDisplayName(d)}{!isDriverAvailable(d) ? ` (${t('tripForm.unavailable')})` : ''}
               </option>
             ))}
           </select>
@@ -134,7 +142,7 @@ export function TripCreateForm({
 
         <div className="space-y-1.5">
           <label htmlFor="tc-date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Date <span aria-hidden className="text-red-500">*</span>
+            {t('tripForm.date')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input
             id="tc-date" type="date" required value={v.date}
@@ -145,7 +153,7 @@ export function TripCreateForm({
 
         <div className="space-y-1.5">
           <label htmlFor="tc-time" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Départ <span aria-hidden className="text-red-500">*</span>
+            {t('tripForm.departure')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input
             id="tc-time" type="time" required value={v.time}
@@ -154,9 +162,9 @@ export function TripCreateForm({
           />
         </div>
 
-        <div className="col-span-2 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="tc-arr" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Arrivée estimée
+            {t('tripForm.estimatedArrival')}
           </label>
           <input
             id="tc-arr" type="time" value={v.arrivalTime}
@@ -169,8 +177,8 @@ export function TripCreateForm({
       <FormFooter
         onCancel={onCancel}
         busy={busy}
-        submitLabel="Créer le trajet"
-        pendingLabel="Création…"
+        submitLabel={t('tripForm.createTrip')}
+        pendingLabel={t('tripForm.creating')}
       />
     </form>
   );

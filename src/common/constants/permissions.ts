@@ -84,6 +84,10 @@ export const P_MANIFEST_GENERATE_AGENCY    = 'data.manifest.generate.agency';
 export const P_MANIFEST_SIGN_AGENCY        = 'data.manifest.sign.agency';
 export const P_NOTIFICATION_READ_OWN       = 'data.notification.read.own';
 
+// ─── Fleet Tracking (suivi kilométrique & carburant) ──────────────────────
+export const P_FLEET_TRACKING_MANAGE_TENANT = 'data.fleet.tracking.tenant';
+export const P_FLEET_TRACKING_CREATE_AGENCY = 'data.fleet.tracking_create.agency';
+
 // ─── Finance & Caisse ─────────────────────────────────────────────────────────
 export const P_PRICING_MANAGE_TENANT       = 'control.pricing.manage.tenant';
 export const P_PRICING_YIELD_TENANT        = 'control.pricing.yield.tenant';
@@ -244,6 +248,9 @@ export const Permission = {
   MANIFEST_GENERATE_AGENCY:   P_MANIFEST_GENERATE_AGENCY,
   MANIFEST_SIGN_AGENCY:       P_MANIFEST_SIGN_AGENCY,
   NOTIFICATION_READ_OWN:      P_NOTIFICATION_READ_OWN,
+  // Fleet Tracking
+  FLEET_TRACKING_MANAGE_TENANT: P_FLEET_TRACKING_MANAGE_TENANT,
+  FLEET_TRACKING_CREATE_AGENCY: P_FLEET_TRACKING_CREATE_AGENCY,
   // Finance
   PRICING_MANAGE_TENANT:      P_PRICING_MANAGE_TENANT,
   PRICING_YIELD_TENANT:       P_PRICING_YIELD_TENANT,

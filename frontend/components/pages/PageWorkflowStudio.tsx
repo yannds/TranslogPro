@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { GitFork, Ticket, Bus, Package, MapPin, AlertCircle, Plus, Wrench, ClipboardList, Users, FileText, AlertTriangle, X } from 'lucide-react';
 import { WorkflowDesigner } from '../workflow/WorkflowDesigner';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { Skeleton } from '../ui/Skeleton';
 import { Dialog } from '../ui/Dialog';
@@ -28,17 +29,22 @@ import { cn } from '../../lib/utils';
 
 // ─── Catalogue de tous les types d'entités supportés ─────────────────────────
 
-const ALL_ENTITY_TYPES: { id: string; label: string; description: string }[] = [
-  { id: 'Ticket',      label: 'Ticket',           description: 'Cycle de vie d\'un billet passager' },
-  { id: 'Trip',        label: 'Trajet',            description: 'Planification et exécution d\'un trajet' },
-  { id: 'Parcel',      label: 'Colis',             description: 'Traçabilité d\'un colis de A à Z' },
-  { id: 'Bus',         label: 'Bus / Véhicule',    description: 'Statut opérationnel et maintenance' },
-  { id: 'Maintenance', label: 'Fiche maintenance', description: 'Workflow garage et entretien préventif' },
-  { id: 'Manifest',    label: 'Manifeste',         description: 'Génération, signature et archivage' },
-  { id: 'Crew',        label: 'Équipage',          description: 'Affectation et repos des équipages' },
-  { id: 'Claim',       label: 'Réclamation SAV',   description: 'Traitement d\'une réclamation client' },
-  { id: 'Checklist',   label: 'Checklist départ',  description: 'Vérifications pré-départ obligatoires' },
-  { id: 'Driver',      label: 'Chauffeur',         description: 'Disponibilité et conformité RH' },
+const ENTITY_TYPE_I18N: Record<string, { label: string; desc: string }> = {
+  Ticket:      { label: 'workflowStudio.etTicket',      desc: 'workflowStudio.edTicket' },
+  Trip:        { label: 'workflowStudio.etTrip',        desc: 'workflowStudio.edTrip' },
+  Parcel:      { label: 'workflowStudio.etParcel',      desc: 'workflowStudio.edParcel' },
+  Bus:         { label: 'workflowStudio.etBus',         desc: 'workflowStudio.edBus' },
+  Maintenance: { label: 'workflowStudio.etMaintenance', desc: 'workflowStudio.edMaintenance' },
+  Manifest:    { label: 'workflowStudio.etManifest',    desc: 'workflowStudio.edManifest' },
+  Crew:        { label: 'workflowStudio.etCrew',        desc: 'workflowStudio.edCrew' },
+  Claim:       { label: 'workflowStudio.etClaim',       desc: 'workflowStudio.edClaim' },
+  Checklist:   { label: 'workflowStudio.etChecklist',   desc: 'workflowStudio.edChecklist' },
+  Driver:      { label: 'workflowStudio.etDriver',      desc: 'workflowStudio.edDriver' },
+};
+
+const ALL_ENTITY_TYPES = [
+  'Ticket', 'Trip', 'Parcel', 'Bus', 'Maintenance',
+  'Manifest', 'Crew', 'Claim', 'Checklist', 'Driver',
 ];
 
 // ─── Icônes par défaut pour les types connus ──────────────────────────────────
@@ -97,6 +103,7 @@ function EntityTypeTab({
 
 export function PageWorkflowStudio() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const [rev, setRev] = useState(0);
@@ -113,7 +120,7 @@ export function PageWorkflowStudio() {
   const active = activeEntityType ?? types[0] ?? null;
 
   // Types already configured — exclude them from the "new" dialog
-  const availableToCreate = ALL_ENTITY_TYPES.filter(e => !types.includes(e.id));
+  const availableToCreate = ALL_ENTITY_TYPES.filter(id => !types.includes(id));
 
   const handleSelectNewType = (id: string) => {
     setShowNewDialog(false);
@@ -132,15 +139,15 @@ export function PageWorkflowStudio() {
           <GitFork className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden />
         </div>
         <div className="flex-1">
-          <h1 className="text-lg font-semibold t-text leading-none">Workflow Studio</h1>
-          <p className="text-xs t-text-2 mt-0.5">Conception visuelle des processus métier</p>
+          <h1 className="text-lg font-semibold t-text leading-none">{t('workflowStudio.workflowStudio')}</h1>
+          <p className="text-xs t-text-2 mt-0.5">{t('workflowStudio.visualDesign')}</p>
         </div>
       </header>
 
       {/* ── Onglets sélecteur d'entité ── */}
       <div
         role="tablist"
-        aria-label="Type d'entité"
+        aria-label={t('workflowStudio.entityType')}
         className="flex items-end gap-1 px-6 t-card border-b t-border min-h-[44px] overflow-x-auto"
       >
         {loading ? (
@@ -150,7 +157,7 @@ export function PageWorkflowStudio() {
         ) : error ? (
           <div className="flex items-center gap-2 py-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4" aria-hidden />
-            Impossible de charger les types d'entités
+            {t('workflowStudio.cannotLoadTypes')}
           </div>
         ) : (
           <>
@@ -168,10 +175,10 @@ export function PageWorkflowStudio() {
                 type="button"
                 onClick={() => setShowNewDialog(true)}
                 className="flex items-center gap-1.5 px-3 py-2 mb-1 text-xs font-medium rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title="Créer un nouveau workflow"
+                title={t('workflowStudio.createNewWf')}
               >
                 <Plus className="w-3.5 h-3.5" aria-hidden />
-                Nouveau
+                {t('workflowStudio.new')}
               </button>
             )}
           </>
@@ -188,7 +195,7 @@ export function PageWorkflowStudio() {
           <p className="text-xs t-text-2">
             Workflow <span className="font-mono font-semibold t-text">{active}</span>
             {!types.includes(active) && (
-              <span className="ml-2 text-amber-600 dark:text-amber-400 text-[10px]">(nouveau — sauvegardez pour activer)</span>
+              <span className="ml-2 text-amber-600 dark:text-amber-400 text-[10px]">({t('workflowStudio.newSaveToActivate')})</span>
             )}
           </p>
         </div>
@@ -219,12 +226,12 @@ export function PageWorkflowStudio() {
                 <GitFork className="w-8 h-8 text-blue-600 dark:text-blue-400" aria-hidden />
               </div>
             </div>
-            <h2 className="text-lg font-semibold t-text">Aucun workflow configuré</h2>
+            <h2 className="text-lg font-semibold t-text">{t('workflowStudio.noWfConfigured')}</h2>
             <p className="text-sm t-text-2">
-              Installez un Blueprint depuis le Marketplace pour démarrer rapidement, ou créez un workflow personnalisé.
+              {t('workflowStudio.installBpHint')}
             </p>
             <Button onClick={() => setShowNewDialog(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Créer un workflow
+              <Plus className="w-4 h-4 mr-2" /> {t('workflowStudio.createWorkflow')}
             </Button>
           </div>
         </div>
@@ -234,38 +241,39 @@ export function PageWorkflowStudio() {
       <Dialog
         open={showNewDialog}
         onOpenChange={o => { if (!o) setShowNewDialog(false); }}
-        title="Créer un workflow"
-        description="Choisissez le module pour lequel créer un nouveau workflow. Un canvas vide sera créé — vous pourrez l'éditer et l'enregistrer."
+        title={t('workflowStudio.createWfDialog')}
+        description={t('workflowStudio.createWfDesc')}
         size="xl"
         footer={
           <Button variant="ghost" onClick={() => setShowNewDialog(false)}>
-            <X className="w-4 h-4 mr-1.5" /> Annuler
+            <X className="w-4 h-4 mr-1.5" /> {t('common.cancel')}
           </Button>
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {availableToCreate.map(et => {
-            const Icon = getEntityIcon(et.id);
+          {availableToCreate.map(etId => {
+            const Icon = getEntityIcon(etId);
+            const i18n = ENTITY_TYPE_I18N[etId];
             return (
               <button
-                key={et.id}
+                key={etId}
                 type="button"
-                onClick={() => handleSelectNewType(et.id)}
+                onClick={() => handleSelectNewType(etId)}
                 className="flex items-start gap-3 p-4 rounded-xl border t-border t-nav-hover transition-colors text-left group"
               >
                 <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 transition-colors">
                   <Icon className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" aria-hidden />
                 </div>
                 <div>
-                  <p className="font-medium text-sm t-text">{et.label}</p>
-                  <p className="text-xs t-text-2 mt-0.5 leading-snug">{et.description}</p>
+                  <p className="font-medium text-sm t-text">{i18n ? t(i18n.label) : etId}</p>
+                  <p className="text-xs t-text-2 mt-0.5 leading-snug">{i18n ? t(i18n.desc) : ''}</p>
                 </div>
               </button>
             );
           })}
           {availableToCreate.length === 0 && (
-            <p className="col-span-2 text-sm t-text-2 py-4 text-center">
-              Tous les types d'entités ont déjà un workflow configuré.
+            <p className="sm:col-span-2 text-sm t-text-2 py-4 text-center">
+              {t('workflowStudio.allTypesConfigured')}
             </p>
           )}
         </div>

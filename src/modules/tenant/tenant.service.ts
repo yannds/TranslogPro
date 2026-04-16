@@ -16,16 +16,31 @@ export interface CreateTenantDto {
  * Tous les champs sont optionnels (update partiel).
  * Les champs rccm et phoneNumber restent nullable en base.
  */
+export interface UpdateBusinessConfigDto {
+  daysPerYear?:            number;
+  defaultTripsPerMonth?:   number;
+  breakEvenThresholdPct?:  number;
+  agencyCommissionRate?:   number;
+  stationFeePerDeparture?: number;
+}
+
 export interface UpdateCompanyInfoDto {
   name?:        string;
+  country?:     string;  // ISO 3166-1 alpha-2
+  city?:        string;
   language?:    string;  // 'fr' | 'en' (étendu plus tard)
   timezone?:    string;  // IANA TZ
   currency?:    string;  // ISO 4217
+  dateFormat?:  string;  // DD/MM/YYYY | MM/DD/YYYY | YYYY-MM-DD
   rccm?:        string | null;
   phoneNumber?: string | null;
+  email?:       string | null;
+  website?:     string | null;
+  address?:     string | null;
+  taxId?:       string | null;
 }
 
-const SUPPORTED_LANGUAGES = ['fr', 'en'];
+const SUPPORTED_LANGUAGES = ['fr', 'en', 'ln', 'ktu', 'es', 'pt', 'ar', 'wo'];
 
 @Injectable()
 export class TenantService {
@@ -82,8 +97,9 @@ export class TenantService {
       where:  { id: tenantId },
       select: {
         id: true, name: true, slug: true,
-        language: true, timezone: true, currency: true,
-        rccm: true, phoneNumber: true,
+        country: true, city: true,
+        language: true, timezone: true, currency: true, dateFormat: true,
+        rccm: true, phoneNumber: true, email: true, website: true, address: true, taxId: true,
       },
     });
     if (!t) throw new NotFoundException(`Tenant ${tenantId} not found`);
@@ -97,20 +113,28 @@ export class TenantService {
       );
     }
 
+    const data: Record<string, unknown> = {};
+    // Champs non-nullable : null → valeur par défaut
+    const NON_NULLABLE_DEFAULTS: Record<string, string> = {
+      country: 'CG', city: '', dateFormat: 'DD/MM/YYYY',
+    };
+    for (const key of [
+      'name', 'country', 'city', 'language', 'timezone', 'currency', 'dateFormat',
+      'rccm', 'phoneNumber', 'email', 'website', 'address', 'taxId',
+    ] as const) {
+      if (dto[key] !== undefined) {
+        data[key] = dto[key] ?? NON_NULLABLE_DEFAULTS[key] ?? dto[key];
+      }
+    }
+
     const updated = await this.prisma.tenant.update({
       where: { id: tenantId },
-      data: {
-        ...(dto.name        !== undefined ? { name:        dto.name }        : {}),
-        ...(dto.language    !== undefined ? { language:    dto.language }    : {}),
-        ...(dto.timezone    !== undefined ? { timezone:    dto.timezone }    : {}),
-        ...(dto.currency    !== undefined ? { currency:    dto.currency }    : {}),
-        ...(dto.rccm        !== undefined ? { rccm:        dto.rccm }        : {}),
-        ...(dto.phoneNumber !== undefined ? { phoneNumber: dto.phoneNumber } : {}),
-      },
+      data,
       select: {
         id: true, name: true, slug: true,
-        language: true, timezone: true, currency: true,
-        rccm: true, phoneNumber: true,
+        country: true, city: true,
+        language: true, timezone: true, currency: true, dateFormat: true,
+        rccm: true, phoneNumber: true, email: true, website: true, address: true, taxId: true,
       },
     });
     return updated;
@@ -126,8 +150,9 @@ export class TenantService {
       where:  { id: tenantId },
       select: {
         id: true, name: true, slug: true,
-        language: true, timezone: true, currency: true,
-        rccm: true, phoneNumber: true,
+        country: true, city: true,
+        language: true, timezone: true, currency: true, dateFormat: true,
+        rccm: true, phoneNumber: true, email: true, website: true, address: true, taxId: true,
         brand: true,
       },
     });
@@ -136,10 +161,59 @@ export class TenantService {
     return {
       company: {
         id: tenant.id, name: tenant.name, slug: tenant.slug,
-        language: tenant.language, timezone: tenant.timezone, currency: tenant.currency,
+        country: tenant.country, city: tenant.city,
+        language: tenant.language, timezone: tenant.timezone,
+        currency: tenant.currency, dateFormat: tenant.dateFormat,
         rccm: tenant.rccm, phoneNumber: tenant.phoneNumber,
+        email: tenant.email, website: tenant.website,
+        address: tenant.address, taxId: tenant.taxId,
       },
       brand: tenant.brand,
     };
+  }
+
+  // ── Business config ─────────────────────────────────────────────────────────
+
+  async getBusinessConfig(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
+
+    // Upsert-on-read: guarantee a row always exists
+    return this.prisma.tenantBusinessConfig.upsert({
+      where:  { tenantId },
+      create: { tenantId },
+      update: {},
+      select: {
+        id: true, tenantId: true,
+        daysPerYear: true, defaultTripsPerMonth: true,
+        breakEvenThresholdPct: true, agencyCommissionRate: true,
+        stationFeePerDeparture: true,
+      },
+    });
+  }
+
+  async updateBusinessConfig(tenantId: string, dto: UpdateBusinessConfigDto) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
+
+    const data: Record<string, unknown> = {};
+    for (const key of [
+      'daysPerYear', 'defaultTripsPerMonth',
+      'breakEvenThresholdPct', 'agencyCommissionRate', 'stationFeePerDeparture',
+    ] as const) {
+      if (dto[key] !== undefined) data[key] = dto[key];
+    }
+
+    return this.prisma.tenantBusinessConfig.upsert({
+      where:  { tenantId },
+      create: { tenantId, ...data },
+      update: data,
+      select: {
+        id: true, tenantId: true,
+        daysPerYear: true, defaultTripsPerMonth: true,
+        breakEvenThresholdPct: true, agencyCommissionRate: true,
+        stationFeePerDeparture: true,
+      },
+    });
   }
 }

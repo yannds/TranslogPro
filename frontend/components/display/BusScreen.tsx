@@ -17,7 +17,7 @@ import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
 import { useNotifications }    from '../../lib/hooks/useNotifications';
 import { useTenantConfig }     from '../../providers/TenantConfigProvider';
-import type { Language }       from '../../lib/i18n/types';
+import type { Language, TranslationMap } from '../../lib/i18n/types';
 import { LANGUAGE_META }       from '../../lib/i18n/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ function WeatherWidget({
 }: {
   cityCode: string | undefined;
   lang?:    Language;
-  t:        (map: Record<Language, string>) => string;
+  t:        (map: string | TranslationMap) => string;
   dict:     ReturnType<typeof useI18n>['dict'];
 }) {
   const { weather, loading } = useWeather(cityCode);
@@ -152,7 +152,7 @@ function WeatherWidget({
   if (loading) return (
     <div className="flex items-center gap-2 text-slate-500 text-xs animate-pulse">
       <span>…</span>
-      <span>{t(dict.ui.loading)}</span>
+      <span>{t('ui.loading')}</span>
     </div>
   );
 
@@ -198,7 +198,7 @@ function Itinerary({
   stops,
 }: {
   stops: RouteStop[];
-  t?:    (map: Record<Language, string>) => string;
+  t?:    (map: string | TranslationMap) => string;
   dict?: ReturnType<typeof useI18n>['dict'];
 }) {
   return (
@@ -254,7 +254,7 @@ function BusTicker({
   notifications: ReturnType<typeof useNotifications>['notifications'];
   lang:          Language;
   dict:          ReturnType<typeof useI18n>['dict'];
-  t:             (map: Record<Language, string>) => string;
+  t:             (map: string | TranslationMap) => string;
 }) {
   const texts = notifications.map(n => n.message[lang] ?? n.message['fr'] ?? n.text ?? '');
   const text  = texts.join('   ·   ');
@@ -390,14 +390,14 @@ export function BusScreen({
           {/* Arrêt actuel */}
           {current && (
             <section
-              aria-label={t(dict.ui.current_stop)}
+              aria-label={t('ui.current_stop')}
               className={cn(
                 'rounded-2xl border p-4 xl:p-5',
                 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/40',
               )}
             >
               <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--color-accent)' }}>
-                {t(dict.ui.current_stop)}
+                {t('ui.current_stop')}
               </p>
               <p className="text-3xl xl:text-4xl font-black text-white">{current.cityName}</p>
               <div className="flex items-center gap-4 mt-2">
@@ -415,11 +415,11 @@ export function BusScreen({
           {/* Prochain arrêt */}
           {next && (
             <section
-              aria-label={t(dict.ui.next_stop)}
+              aria-label={t('ui.next_stop')}
               className="rounded-2xl border p-4 xl:p-5 bg-slate-900 dark:bg-slate-900 border-slate-800 dark:border-slate-800"
             >
               <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-1 text-[var(--color-primary)]">
-                {t(dict.ui.next_stop)}
+                {t('ui.next_stop')}
               </p>
               <div className="flex items-end justify-between">
                 <p className="text-2xl xl:text-3xl font-bold text-white">{next.cityName}</p>
@@ -445,23 +445,23 @@ export function BusScreen({
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <StatCard
               icon="👥"
-              label={t(dict.col.passengers)}
+              label={t('col.passengers')}
               value={String(passengersOnBoard)}
               sub={`/ ${capacity}`}
             />
             <StatCard
               icon="📦"
-              label={t(dict.col.parcels)}
+              label={t('col.parcels')}
               value={String(parcelsOnBoard)}
             />
             <StatCard
               icon="✅"
-              label={t(dict.ui.passed_stops)}
+              label={t('ui.passed_stops')}
               value={`${passed}/${stops.length}`}
             />
             <StatCard
               icon="⏱"
-              label={t(dict.col.eta)}
+              label={t('col.eta')}
               value={stops[stops.length - 1].scheduledAt}
               sub={stops[stops.length - 1].cityName}
             />
@@ -477,11 +477,11 @@ export function BusScreen({
             </p>
             <dl className="grid grid-cols-3 gap-3 text-sm">
               {[
-                { label: t(dict.col.driver),  value: driverName },
+                { label: t('col.driver'),  value: driverName },
                 { label: 'Modèle',             value: busModel },
-                { label: t(dict.col.bus),      value: busPlate },
-                { label: t(dict.col.agency),   value: agencyName },
-                { label: t(dict.col.passengers), value: `${capacity}` },
+                { label: t('col.bus'),      value: busPlate },
+                { label: t('col.agency'),   value: agencyName },
+                { label: t('col.passengers'), value: `${capacity}` },
                 { label: 'Réf',               value: tripRef },
               ].map(({ label, value }) => (
                 <div key={label}>

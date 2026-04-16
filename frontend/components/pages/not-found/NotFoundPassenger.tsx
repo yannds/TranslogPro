@@ -5,6 +5,7 @@
  * Illustration : bus qui s'éloigne, passager sur le quai.
  */
 import { cn } from '../../../lib/utils';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 interface Props {
   onHome?: () => void;
@@ -97,6 +98,7 @@ function BusMissedSvg({ className }: { className?: string }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function NotFoundPassenger({ onHome, className }: Props) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -110,20 +112,18 @@ export function NotFoundPassenger({ onHome, className }: Props) {
       <div className="text-center max-w-lg space-y-4">
         {/* Badge 404 */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-mono font-semibold tracking-widest uppercase">
-          Erreur 404
+          {t('notFoundPassenger.badge')}
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-          Terminus !{' '}
+          {t('notFoundPassenger.title1')}{' '}
           <span className="text-blue-600 dark:text-blue-400">
-            Tout le monde descend.
+            {t('notFoundPassenger.title2')}
           </span>
         </h1>
 
         <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-          Oups, il semblerait que vous ayez manqué votre arrêt. Cette page a
-          probablement sauté sa correspondance ou a pris un itinéraire de
-          déviation. Pas de panique, le prochain passage est pour bientôt&nbsp;!
+          {t('notFoundPassenger.body')}
         </p>
       </div>
 
@@ -139,12 +139,12 @@ export function NotFoundPassenger({ onHome, className }: Props) {
         <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
           <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h3a1 1 0 001-1v-3h2v3a1 1 0 001 1h3a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
         </svg>
-        Retourner à la gare
+        {t('notFoundPassenger.button')}
       </button>
 
       {/* Pied de page discret */}
       <p className="text-xs text-slate-400 dark:text-slate-600 font-mono">
-        404 · Page introuvable · TranslogPro
+        {t('notFoundPassenger.footer')}
       </p>
     </div>
   );

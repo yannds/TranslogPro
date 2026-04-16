@@ -72,7 +72,7 @@ export class OutboxService implements IEventBus {
         aggregateType: event.aggregateType,
         payload:       { ...payload, _sig: sig },
         status:        'PENDING',
-        occurredAt:    event.occurredAt ?? new Date(),
+        scheduledAt:   event.occurredAt ?? new Date(),
       },
     });
 

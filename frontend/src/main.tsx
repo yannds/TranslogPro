@@ -22,19 +22,32 @@ import { ProtectedRoute }       from '../components/auth/ProtectedRoute';
 import { LoginPage }            from '../components/auth/LoginPage';
 import { AdminDashboard }       from '../components/admin/AdminDashboard';
 import { CustomerDashboard }    from '../components/customer/CustomerDashboard';
+import { DriverDashboard }      from '../components/driver/DriverDashboard';
+import { StationAgentDashboard } from '../components/station-agent/StationAgentDashboard';
+import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
 import { useAuth }              from '../lib/auth/auth.context';
+import { resolvePortal }        from '../lib/navigation/resolvePortal';
+import type { PortalId }        from '../lib/navigation/resolvePortal';
 
 /**
- * Redirige vers le portail correspondant au userType :
- *   CUSTOMER → /customer
- *   STAFF / autres → /admin
- * Évite qu'un client connecté atterrisse sur l'admin (et inversement).
+ * Redirige vers le portail correspondant à (userType, permissions) via
+ * `resolvePortal` — seul endroit du frontend qui fait ce choix. Tout le reste
+ * doit rester additif et ne pas recalculer un portail autre part.
  */
+const PORTAL_TO_PATH: Record<PortalId, string> = {
+  admin:           '/admin',
+  customer:        '/customer',
+  driver:          '/driver',
+  'station-agent': '/agent',
+  'quai-agent':    '/quai',
+};
+
 function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  const target = user?.userType === 'CUSTOMER' ? '/customer' : '/admin';
-  return <Navigate to={target} replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  const portal = resolvePortal({ userType: user.userType, permissions: user.permissions });
+  return <Navigate to={PORTAL_TO_PATH[portal]} replace />;
 }
 
 import './index.css';
@@ -70,6 +83,36 @@ createRoot(root).render(
                 element={
                   <ProtectedRoute>
                     <CustomerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Portail chauffeur — protégé (STAFF avec perms trip.*.own) */}
+              <Route
+                path="/driver/*"
+                element={
+                  <ProtectedRoute>
+                    <DriverDashboard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Portail agent de gare — protégé */}
+              <Route
+                path="/agent/*"
+                element={
+                  <ProtectedRoute>
+                    <StationAgentDashboard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Portail agent de quai — protégé */}
+              <Route
+                path="/quai/*"
+                element={
+                  <ProtectedRoute>
+                    <QuaiAgentDashboard />
                   </ProtectedRoute>
                 }
               />

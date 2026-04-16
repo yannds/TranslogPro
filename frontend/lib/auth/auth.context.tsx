@@ -25,6 +25,8 @@ export interface AuthUser {
   roleId:         string | null;
   roleName:       string | null;
   userType:       string;
+  /** Id Staff lié — null pour CUSTOMER / SUPER_ADMIN. Requis pour les endpoints :staffId. */
+  staffId:        string | null;
   /** moduleKey SaaS actifs pour le tenant (ex: 'TICKETING', 'QHSE'). */
   enabledModules: string[];
   /**

@@ -20,6 +20,7 @@ import {
 import { useFetch }                        from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete }    from '../../lib/api';
 import { useAuth }                         from '../../lib/auth/auth.context';
+import { useI18n }                          from '../../lib/i18n/useI18n';
 import { Button }                          from '../ui/Button';
 import { Dialog }                          from '../ui/Dialog';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
@@ -32,16 +33,20 @@ interface AgencyRow {
   stationId:  string | null;
 }
 
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+// ─── i18n (string-key based — see locales/fr.ts → agencies) ─────────────────
+
 interface CreateForm { name: string }
 interface EditForm   { name: string }
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(): Column<AgencyRow>[] {
+function buildColumns(t: (key: string) => string): Column<AgencyRow>[] {
   return [
     {
       key: 'name',
-      header: 'Nom',
+      header: t('agencies.colName'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-3">
@@ -57,7 +62,7 @@ function buildColumns(): Column<AgencyRow>[] {
     },
     {
       key: 'stationId',
-      header: 'Station liée',
+      header: t('agencies.colStation'),
       sortable: false,
       cellRenderer: (v) => (
         <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
@@ -79,6 +84,7 @@ function CreateAgencyForm({ onSubmit, onCancel, busy, error }: {
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<CreateForm>({ name: '' });
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
@@ -89,7 +95,7 @@ function CreateAgencyForm({ onSubmit, onCancel, busy, error }: {
       )}
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Nom de l'agence <span aria-hidden className="text-red-500">*</span>
+          {t('agencies.agencyName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => setF({ name: e.target.value })}
@@ -97,10 +103,10 @@ function CreateAgencyForm({ onSubmit, onCancel, busy, error }: {
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Création…' : 'Créer'}
+          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? t('common.creating') : t('common.create')}
         </Button>
       </div>
     </form>
@@ -114,6 +120,7 @@ function EditAgencyForm({ agency, onSubmit, onCancel, busy, error }: {
   busy:     boolean;
   error:    string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<EditForm>({ name: agency.name });
   return (
     <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
@@ -124,7 +131,7 @@ function EditAgencyForm({ agency, onSubmit, onCancel, busy, error }: {
       )}
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Nom de l'agence <span aria-hidden className="text-red-500">*</span>
+          {t('agencies.agencyName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => setF({ name: e.target.value })}
@@ -132,10 +139,10 @@ function EditAgencyForm({ agency, onSubmit, onCancel, busy, error }: {
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy}>
-          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? 'Enregistrement…' : 'Enregistrer'}
+          <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? t('common.saving') : t('common.save')}
         </Button>
       </div>
     </form>
@@ -146,6 +153,7 @@ function EditAgencyForm({ agency, onSubmit, onCancel, busy, error }: {
 
 export function PageAgencies() {
   const { user: me } = useAuth();
+  const { t } = useI18n();
   const tenantId = me?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/agencies`;
 
@@ -191,15 +199,15 @@ export function PageAgencies() {
     finally { setBusy(false); }
   };
 
-  const columns = buildColumns();
+  const columns = buildColumns(t);
   const rowActions: RowAction<AgencyRow>[] = [
     {
-      label:   'Renommer',
+      label:   t('agencies.rename'),
       icon:    <Pencil size={13} />,
       onClick: (row) => { setEditTarget(row); setActionErr(null); },
     },
     {
-      label:    'Supprimer',
+      label:    t('common.delete'),
       icon:     <Trash2 size={13} />,
       danger:   true,
       disabled: () => isLast,
@@ -216,21 +224,20 @@ export function PageAgencies() {
             <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Agences</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('agencies.title')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {agencies ? `${agencies.length} agence(s)` : 'Gestion des agences du tenant'}
+              {agencies ? `${agencies.length} ${t('agencies.agencyCount')}` : t('agencies.agencyMgmt')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
-          <Plus className="w-4 h-4 mr-2" aria-hidden />Nouvelle agence
+          <Plus className="w-4 h-4 mr-2" aria-hidden />{t('agencies.newAgency')}
         </Button>
       </div>
 
       {/* Rappel invariant */}
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
-        Un tenant possède toujours au moins une agence — la dernière ne peut pas être supprimée.
-        Les utilisateurs rattachés à une agence supprimée sont détachés automatiquement et devront être réaffectés.
+        {t('agencies.invariantNote')}
       </div>
 
       {(error || actionErr) && (
@@ -247,8 +254,8 @@ export function PageAgencies() {
         rowActions={rowActions}
         defaultSort={{ key: 'name', dir: 'asc' }}
         defaultPageSize={25}
-        searchPlaceholder="Rechercher une agence…"
-        emptyMessage="Aucune agence."
+        searchPlaceholder={t('agencies.searchPlaceholder')}
+        emptyMessage={t('agencies.emptyMsg')}
         exportFormats={['csv', 'json', 'xls']}
         exportFilename="agences"
         onRowClick={(row) => { setEditTarget(row); setActionErr(null); }}
@@ -259,8 +266,8 @@ export function PageAgencies() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouvelle agence"
-        description="Créez une nouvelle agence pour votre tenant."
+        title={t('agencies.newAgency')}
+        description={t('agencies.createDesc')}
         size="md"
       >
         <CreateAgencyForm
@@ -275,7 +282,7 @@ export function PageAgencies() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title="Renommer l'agence"
+        title={t('agencies.renameAgency')}
         description={editTarget?.name}
         size="md"
       >
@@ -294,12 +301,12 @@ export function PageAgencies() {
       <Dialog
         open={!!deleteTarget}
         onOpenChange={o => { if (!o) setDeleteTarget(null); }}
-        title="Supprimer l'agence"
-        description={`Supprimer "${deleteTarget?.name}" ? Les utilisateurs rattachés seront détachés.`}
+        title={t('agencies.deleteAgency')}
+        description={`${t('common.delete')} "${deleteTarget?.name}" ? ${t('agencies.deleteDesc')}`}
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
             </Button>
             <Button
               onClick={handleDelete}
@@ -307,7 +314,7 @@ export function PageAgencies() {
               className="bg-red-600 hover:bg-red-700 text-white border-red-600"
             >
               <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Suppression…' : 'Supprimer'}
+              {busy ? t('agencies.deleting') : t('common.delete')}
             </Button>
           </div>
         }

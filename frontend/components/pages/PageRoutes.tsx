@@ -17,7 +17,9 @@ import {
   Route as RouteIcon, Plus, Pencil, Trash2, X, Check, MapPin, TrendingUp,
 } from 'lucide-react';
 import { useAuth }                          from '../../lib/auth/auth.context';
+import { useI18n }                      from '../../lib/i18n/useI18n';
 import { useFetch }                         from '../../lib/hooks/useFetch';
+import { useTenantConfig }                  from '../../providers/TenantConfigProvider';
 import { apiPost, apiPatch, apiDelete }     from '../../lib/api';
 import { Card, CardHeader, CardContent }    from '../ui/Card';
 import { Badge }                            from '../ui/Badge';
@@ -25,6 +27,51 @@ import { Skeleton }                         from '../ui/Skeleton';
 import { Button }                           from '../ui/Button';
 import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
+import { RouteDetailDialog }                from './RouteDetailDialog';
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+const T = {
+  pageTitle:          tm('Lignes & Routes', 'Routes & Lines'),
+  pageDesc:           tm('Catalogue des itinéraires exploités — création, édition, suppression.', 'Catalogue of operated routes — create, edit, delete.'),
+  newRoute:           tm('Nouvelle ligne', 'New Route'),
+  routeName:          tm('Nom de la ligne', 'Route Name'),
+  origin:             tm('Origine', 'Origin'),
+  destination:        tm('Destination', 'Destination'),
+  distanceKm:         tm('Distance (km)', 'Distance (km)'),
+  baseFare:           tm('Tarif de base', 'Base Fare'),
+  sameODError:        tm("L'origine et la destination doivent être différentes.", 'Origin and destination must be different.'),
+  editRoute:          tm('Modifier la ligne', 'Edit Route'),
+  deleteRoute:        tm('Supprimer la ligne', 'Delete Route'),
+  deleteConfirm:      tm('Supprimer', 'Delete'),
+  noStationsWarning:  tm(
+    "Aucune station n'est enregistrée pour ce tenant — impossible de créer une ligne. Ajoutez au moins deux stations (origine / destination) avant de configurer les lignes.",
+    'No stations registered for this tenant — cannot create a route. Add at least two stations (origin / destination) before configuring routes.',
+  ),
+  createStation:      tm('Créer une station', 'Create Station'),
+  noStationsBtn:      tm("Créez d'abord au moins deux stations", 'First create at least two stations'),
+  dialogNewDesc:      tm("Définissez l'itinéraire, la distance et le tarif de base.", 'Define the route, distance and base fare.'),
+  activeRoutes:       tm('Lignes actives', 'Active Routes'),
+  cumulativeTrips:    tm('Trajets cumulés', 'Cumulative Trips'),
+  cumulativeDistance: tm('Distance cumulée', 'Cumulative Distance'),
+  routeHeader:        tm('Ligne', 'Route'),
+  distanceHeader:     tm('Distance', 'Distance'),
+  baseFareHeader:     tm('Tarif base', 'Base Fare'),
+  tripsHeader:        tm('Trajets', 'Trips'),
+  actionsHeader:      tm('Actions', 'Actions'),
+  sortedByTrips:      tm('Triées par nombre de trajets décroissant', 'Sorted by trip count descending'),
+  noRoutes:           tm('Aucune ligne enregistrée', 'No routes registered'),
+  noRoutesCta:        tm('Cliquez sur « Nouvelle ligne » pour commencer.', 'Click "New Route" to get started.'),
+  deleteDesc:         tm('Cette action est irréversible.', 'This action is irreversible.'),
+  deleteWarning:      tm(
+    'La suppression sera refusée par le serveur tant qu\'ils n\'auront pas été réaffectés.',
+    'Deletion will be refused by the server until they are reassigned.',
+  ),
+  tripsBound:         tm('trajet(s) sont rattachés à cette ligne.', 'trip(s) are linked to this route.'),
+  placeholder:        tm('ex. Brazzaville → Pointe-Noire', 'e.g. Brazzaville → Pointe-Noire'),
+  placeholderDist:    tm('ex. 510', 'e.g. 510'),
+  placeholderPrice:   tm('ex. 12000', 'e.g. 12000'),
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,9 +109,9 @@ const EMPTY_FORM: RouteFormValues = {
 
 const inp = 'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50';
 
-function formatXof(n: number | null | undefined): string {
+function formatXof(n: number | null | undefined, currency = 'XAF'): string {
   if (n === null || n === undefined) return '—';
-  return new Intl.NumberFormat('fr-FR').format(n) + ' XOF';
+  return new Intl.NumberFormat('fr-FR').format(n) + ` ${currency}`;
 }
 
 function formatStation(s: { name: string; city: string } | null | undefined) {
@@ -85,6 +132,8 @@ function RouteForm({
   error:       string | null;
   submitLabel: string;
 }) {
+  const { operational } = useTenantConfig();
+  const { t } = useI18n();
   const [f, setF] = useState<RouteFormValues>(initial);
   const patch = (p: Partial<RouteFormValues>) => setF(prev => ({ ...prev, ...p }));
 
@@ -103,22 +152,22 @@ function RouteForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Nom de la ligne <span aria-hidden className="text-red-500">*</span>
+          {t('LRoutes.routeName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => patch({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder="ex. Brazzaville → Pointe-Noire" />
+          className={inp} disabled={busy} placeholder={t('LRoutes.placeholder')} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Origine <span aria-hidden className="text-red-500">*</span>
+            {t('LRoutes.origin')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.originId}
             onChange={e => patch({ originId: e.target.value })}
             className={inp} disabled={busy}>
-            <option value="">— Sélectionner —</option>
+            <option value="">{t('common.select')}</option>
             {stations.map(s => (
               <option key={s.id} value={s.id}>{formatStation(s)}</option>
             ))}
@@ -127,12 +176,12 @@ function RouteForm({
 
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Destination <span aria-hidden className="text-red-500">*</span>
+            {t('LRoutes.destination')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.destinationId}
             onChange={e => patch({ destinationId: e.target.value })}
             className={inp} disabled={busy}>
-            <option value="">— Sélectionner —</option>
+            <option value="">{t('common.select')}</option>
             {stations.map(s => (
               <option key={s.id} value={s.id}>{formatStation(s)}</option>
             ))}
@@ -142,36 +191,36 @@ function RouteForm({
 
       {sameOD && (
         <p className="text-xs text-red-600">
-          L'origine et la destination doivent être différentes.
+          {t('LRoutes.sameODError')}
         </p>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Distance (km) <span aria-hidden className="text-red-500">*</span>
+            {t('LRoutes.distanceKm')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="number" min={0} step="0.1" required value={f.distanceKm}
             onChange={e => patch({ distanceKm: e.target.value })}
-            className={inp} disabled={busy} placeholder="ex. 510" />
+            className={inp} disabled={busy} placeholder={t('LRoutes.placeholderDist')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Tarif de base (XOF) <span aria-hidden className="text-red-500">*</span>
+            {t('LRoutes.baseFare')} ({operational.currency}) <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="number" min={0} step="50" required value={f.basePrice}
             onChange={e => patch({ basePrice: e.target.value })}
-            className={inp} disabled={busy} placeholder="ex. 12000" />
+            className={inp} disabled={busy} placeholder={t('LRoutes.placeholderPrice')} />
         </div>
       </div>
 
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+          <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
         </Button>
         <Button type="submit" disabled={busy || !!sameOD}>
           <Check className="w-4 h-4 mr-1.5" aria-hidden />
-          {busy ? 'Enregistrement…' : submitLabel}
+          {busy ? t('common.saving') : submitLabel}
         </Button>
       </div>
     </form>
@@ -183,7 +232,9 @@ function RouteForm({
 export function PageRoutes() {
   const { user }  = useAuth();
   const navigate  = useNavigate();
+  const { t } = useI18n();
   const tenantId  = user?.tenantId ?? '';
+  const { operational } = useTenantConfig();
   const base      = `/api/tenants/${tenantId}/routes`;
 
   const { data: routes, loading, error, refetch } = useFetch<RouteRow[]>(
@@ -198,6 +249,7 @@ export function PageRoutes() {
   const [showCreate,   setShowCreate]   = useState(false);
   const [editTarget,   setEditTarget]   = useState<RouteRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RouteRow | null>(null);
+  const [detailRouteId, setDetailRouteId] = useState<string | null>(null);
   const [busy,         setBusy]         = useState(false);
   const [actionErr,    setActionErr]    = useState<string | null>(null);
 
@@ -255,7 +307,7 @@ export function PageRoutes() {
   const noStations = (stations?.length ?? 0) === 0;
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Lignes et routes">
+    <main className="p-6 space-y-6" role="main" aria-label={t('LRoutes.pageTitle')}>
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -263,19 +315,19 @@ export function PageRoutes() {
             <RouteIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Lignes &amp; Routes</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LRoutes.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Catalogue des itinéraires exploités — création, édition, suppression.
+              {t('LRoutes.pageDesc')}
             </p>
           </div>
         </div>
         <Button
           onClick={() => { setActionErr(null); setShowCreate(true); }}
           disabled={noStations}
-          title={noStations ? 'Créez d\'abord au moins deux stations' : undefined}
+          title={noStations ? t('LRoutes.noStationsBtn') : undefined}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          Nouvelle ligne
+          {t('LRoutes.newRoute')}
         </Button>
       </div>
 
@@ -284,28 +336,27 @@ export function PageRoutes() {
       {noStations && !loading && (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span>
-            Aucune station n'est enregistrée pour ce tenant — impossible de créer une ligne.
-            Ajoutez au moins deux stations (origine / destination) avant de configurer les lignes.
+            {t('LRoutes.noStationsWarning')}
           </span>
           <Button variant="outline" onClick={() => navigate('/admin/stations')}>
             <MapPin className="w-4 h-4 mr-1.5" aria-hidden />
-            Créer une station
+            {t('LRoutes.createStation')}
           </Button>
         </div>
       )}
 
       {/* KPIs */}
-      <section aria-label="Indicateurs lignes" className="grid grid-cols-3 gap-4">
-        <Kpi label="Lignes actives"   value={kpi.routes}        icon={<RouteIcon className="w-5 h-5" />} />
-        <Kpi label="Trajets cumulés"  value={kpi.totalTrips}    icon={<TrendingUp className="w-5 h-5" />} />
-        <Kpi label="Distance cumulée" value={kpi.totalDistance} icon={<MapPin className="w-5 h-5" />} suffix="km" />
+      <section aria-label={t('LRoutes.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Kpi label={t('LRoutes.activeRoutes')}       value={kpi.routes}        icon={<RouteIcon className="w-5 h-5" />} />
+        <Kpi label={t('LRoutes.cumulativeTrips')}    value={kpi.totalTrips}    icon={<TrendingUp className="w-5 h-5" />} />
+        <Kpi label={t('LRoutes.cumulativeDistance')} value={kpi.totalDistance} icon={<MapPin className="w-5 h-5" />} suffix="km" />
       </section>
 
       {/* Liste */}
       <Card>
         <CardHeader
-          heading={`${sortedRoutes.length} ligne${sortedRoutes.length > 1 ? 's' : ''}`}
-          description="Triées par nombre de trajets décroissant"
+          heading={`${sortedRoutes.length} ${sortedRoutes.length > 1 ? t('LRoutes.pageTitle') : t('LRoutes.routeHeader')}`}
+          description={t('LRoutes.sortedByTrips')}
         />
         <CardContent className="p-0">
           {loading ? (
@@ -315,27 +366,28 @@ export function PageRoutes() {
           ) : sortedRoutes.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
               <RouteIcon className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">Aucune ligne enregistrée</p>
-              <p className="text-sm mt-1">Cliquez sur « Nouvelle ligne » pour commencer.</p>
+              <p className="font-medium">{t('LRoutes.noRoutes')}</p>
+              <p className="text-sm mt-1">{t('LRoutes.noRoutesCta')}</p>
             </div>
           ) : (
-            <div role="table" aria-label="Liste des lignes">
+            <div role="table" aria-label={t('LRoutes.pageTitle')}>
               <div
                 role="row"
                 className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
               >
-                <div role="columnheader">Ligne</div>
-                <div role="columnheader" className="text-right">Distance</div>
-                <div role="columnheader" className="text-right">Tarif base</div>
-                <div role="columnheader" className="text-right">Trajets</div>
-                <div role="columnheader" className="text-right">Actions</div>
+                <div role="columnheader">{t('LRoutes.routeHeader')}</div>
+                <div role="columnheader" className="text-right">{t('LRoutes.distanceHeader')}</div>
+                <div role="columnheader" className="text-right">{t('LRoutes.baseFareHeader')}</div>
+                <div role="columnheader" className="text-right">{t('LRoutes.tripsHeader')}</div>
+                <div role="columnheader" className="text-right">{t('LRoutes.actionsHeader')}</div>
               </div>
               <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
                 {sortedRoutes.map(r => (
                   <li
                     key={r.id}
                     role="row"
-                    className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-3 items-center"
+                    onClick={() => setDetailRouteId(r.id)}
+                    className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-3 items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <div role="cell" className="flex items-center gap-2 min-w-0">
                       <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
@@ -350,7 +402,7 @@ export function PageRoutes() {
                       {r.distanceKm.toLocaleString('fr-FR')} km
                     </div>
                     <div role="cell" className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
-                      {formatXof(r.basePrice)}
+                      {formatXof(r.basePrice, operational.currency)}
                     </div>
                     <div role="cell" className="text-right">
                       <Badge variant="info" size="sm">{r._count?.trips ?? 0}</Badge>
@@ -358,19 +410,19 @@ export function PageRoutes() {
                     <div role="cell" className="flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => { setActionErr(null); setEditTarget(r); }}
+                        onClick={e => { e.stopPropagation(); setActionErr(null); setEditTarget(r); }}
                         className="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                        aria-label={`Modifier ${r.name}`}
-                        title="Modifier"
+                        aria-label={`${t('common.edit')} ${r.name}`}
+                        title={t('common.edit')}
                       >
                         <Pencil className="w-4 h-4" aria-hidden />
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setActionErr(null); setDeleteTarget(r); }}
+                        onClick={e => { e.stopPropagation(); setActionErr(null); setDeleteTarget(r); }}
                         className="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                        aria-label={`Supprimer ${r.name}`}
-                        title="Supprimer"
+                        aria-label={`${t('common.delete')} ${r.name}`}
+                        title={t('common.delete')}
                       >
                         <Trash2 className="w-4 h-4" aria-hidden />
                       </button>
@@ -387,8 +439,8 @@ export function PageRoutes() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouvelle ligne"
-        description="Définissez l'itinéraire, la distance et le tarif de base."
+        title={t('LRoutes.newRoute')}
+        description={t('LRoutes.dialogNewDesc')}
         size="lg"
       >
         <RouteForm
@@ -398,7 +450,7 @@ export function PageRoutes() {
           onCancel={() => setShowCreate(false)}
           busy={busy}
           error={actionErr}
-          submitLabel="Créer"
+          submitLabel={t('common.create')}
         />
       </Dialog>
 
@@ -406,7 +458,7 @@ export function PageRoutes() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title="Modifier la ligne"
+        title={t('LRoutes.editRoute')}
         description={editTarget?.name}
         size="lg"
       >
@@ -424,25 +476,39 @@ export function PageRoutes() {
             onCancel={() => setEditTarget(null)}
             busy={busy}
             error={actionErr}
-            submitLabel="Enregistrer"
+            submitLabel={t('common.save')}
           />
         )}
       </Dialog>
+
+      {/* Modal détail — escales & tarifs */}
+      <RouteDetailDialog
+        routeId={detailRouteId}
+        tenantId={tenantId}
+        stations={stations ?? []}
+        onClose={() => setDetailRouteId(null)}
+        onEditRoute={(id) => {
+          setDetailRouteId(null);
+          const target = routes?.find(r => r.id === id);
+          if (target) { setActionErr(null); setEditTarget(target); }
+        }}
+        onSaved={refetch}
+      />
 
       {/* Modal supprimer */}
       <Dialog
         open={!!deleteTarget}
         onOpenChange={o => { if (!o) setDeleteTarget(null); }}
-        title="Supprimer la ligne"
+        title={t('LRoutes.deleteRoute')}
         description={
           deleteTarget
-            ? `Supprimer « ${deleteTarget.name} » ? Cette action est irréversible.`
+            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('LRoutes.deleteDesc')}`
             : undefined
         }
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={busy}>
-              <X className="w-4 h-4 mr-1.5" aria-hidden />Annuler
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
             </Button>
             <Button
               onClick={handleDelete}
@@ -450,7 +516,7 @@ export function PageRoutes() {
               className="bg-red-600 hover:bg-red-700 text-white border-red-600"
             >
               <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? 'Suppression…' : 'Supprimer'}
+              {busy ? t('common.deleting') : t('common.delete')}
             </Button>
           </div>
         }
@@ -458,8 +524,7 @@ export function PageRoutes() {
         {actionErr && <p className="text-sm text-red-600 dark:text-red-400">{actionErr}</p>}
         {(deleteTarget?._count?.trips ?? 0) > 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
-            Attention : {deleteTarget?._count?.trips} trajet(s) sont rattachés à cette ligne.
-            La suppression sera refusée par le serveur tant qu'ils n'auront pas été réaffectés.
+            {deleteTarget?._count?.trips} {t('LRoutes.tripsBound')} {t('LRoutes.deleteWarning')}
           </p>
         )}
         <div />

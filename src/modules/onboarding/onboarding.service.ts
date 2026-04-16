@@ -20,12 +20,51 @@ export interface OnboardTenantDto {
   adminEmail: string;
   adminName:  string;
   plan?:      string;
-  /**
-   * Langue par défaut du tenant (pilote le nom de l'agence par défaut :
-   * "Agence principale" en fr, "Main Agency" en en). Défaut : 'fr'.
-   */
+  /** ISO 3166-1 alpha-2 — drive timezone, devise, villes par défaut. Défaut : 'CG'. */
+  country?:   string;
+  /** Langue par défaut du tenant. Défaut : 'fr'. */
   language?:  TenantLanguage;
 }
+
+/** Defaults régionaux par pays — utilisés à l'onboarding pour auto-configurer timezone + devise. */
+const COUNTRY_DEFAULTS: Record<string, { timezone: string; currency: string }> = {
+  CG: { timezone: 'Africa/Brazzaville',    currency: 'XAF' },
+  CD: { timezone: 'Africa/Kinshasa',       currency: 'CDF' },
+  CM: { timezone: 'Africa/Douala',         currency: 'XAF' },
+  GA: { timezone: 'Africa/Libreville',     currency: 'XAF' },
+  TD: { timezone: 'Africa/Ndjamena',       currency: 'XAF' },
+  CF: { timezone: 'Africa/Bangui',         currency: 'XAF' },
+  GQ: { timezone: 'Africa/Malabo',         currency: 'XAF' },
+  SN: { timezone: 'Africa/Dakar',          currency: 'XOF' },
+  CI: { timezone: 'Africa/Abidjan',        currency: 'XOF' },
+  ML: { timezone: 'Africa/Bamako',         currency: 'XOF' },
+  BF: { timezone: 'Africa/Ouagadougou',    currency: 'XOF' },
+  NE: { timezone: 'Africa/Niamey',         currency: 'XOF' },
+  TG: { timezone: 'Africa/Lome',           currency: 'XOF' },
+  BJ: { timezone: 'Africa/Porto-Novo',     currency: 'XOF' },
+  GW: { timezone: 'Africa/Bissau',         currency: 'XOF' },
+  GN: { timezone: 'Africa/Conakry',        currency: 'GNF' },
+  SL: { timezone: 'Africa/Freetown',       currency: 'SLL' },
+  LR: { timezone: 'Africa/Monrovia',       currency: 'LRD' },
+  NG: { timezone: 'Africa/Lagos',          currency: 'NGN' },
+  GH: { timezone: 'Africa/Accra',          currency: 'GHS' },
+  GM: { timezone: 'Africa/Banjul',         currency: 'GMD' },
+  CV: { timezone: 'Atlantic/Cape_Verde',   currency: 'CVE' },
+  AO: { timezone: 'Africa/Luanda',         currency: 'AOA' },
+  ST: { timezone: 'Africa/Sao_Tome',       currency: 'STN' },
+  RW: { timezone: 'Africa/Kigali',         currency: 'RWF' },
+  BI: { timezone: 'Africa/Bujumbura',      currency: 'BIF' },
+  KE: { timezone: 'Africa/Nairobi',        currency: 'KES' },
+  UG: { timezone: 'Africa/Kampala',        currency: 'UGX' },
+  ET: { timezone: 'Africa/Addis_Ababa',    currency: 'ETB' },
+  DJ: { timezone: 'Africa/Djibouti',       currency: 'DJF' },
+  MA: { timezone: 'Africa/Casablanca',     currency: 'MAD' },
+  TN: { timezone: 'Africa/Tunis',          currency: 'TND' },
+  DZ: { timezone: 'Africa/Algiers',        currency: 'DZD' },
+  CN: { timezone: 'Asia/Shanghai',         currency: 'CNY' },
+  FR: { timezone: 'Europe/Paris',          currency: 'EUR' },
+  BE: { timezone: 'Europe/Brussels',       currency: 'EUR' },
+};
 
 /**
  * PRD §IV.11 — Module O : Onboarding Orchestrator.
@@ -56,15 +95,20 @@ export class OnboardingService {
     this.logger.log(`Onboarding tenant "${dto.slug}" — début provisioning atomique`);
 
     const language: TenantLanguage = dto.language ?? 'fr';
+    const country = dto.country ?? 'CG';
+    const regional = COUNTRY_DEFAULTS[country] ?? COUNTRY_DEFAULTS['CG'];
 
     const result = await this.prisma.transact(async (tx) => {
-      // 1. Tenant — persiste la langue dès la création (drive l'i18n frontend)
+      // 1. Tenant — persiste la localisation dès la création
       const tenant = await tx.tenant.create({
         data: {
           name:            dto.name,
           slug:            dto.slug,
           provisionStatus: 'PROVISIONING',
           language,
+          country,
+          timezone: regional.timezone,
+          currency: regional.currency,
         },
       });
 

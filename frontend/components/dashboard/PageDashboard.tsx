@@ -9,6 +9,7 @@ import { KpiCard }             from './KpiCard';
 import { MiniBarChart }        from './MiniBarChart';
 import { useDashboardStats }   from '../../lib/hooks/useDashboardStats';
 import { useAuth }             from '../../lib/auth/auth.context';
+import { useI18n }             from '../../lib/i18n/useI18n';
 import type { ActivityEntry }  from './types';
 
 // ─── Activity Feed ────────────────────────────────────────────────────────────
@@ -23,15 +24,16 @@ const TYPE_DOT: Record<ActivityEntry['type'], string> = {
 
 export function PageDashboard() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const { kpisRow1, kpisRow2, hourlyChart, topLines, activity, showChart } = useDashboardStats(user?.roleName ?? undefined);
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold t-text">Tableau de bord</h1>
+        <h1 className="text-2xl font-bold t-text">{t('dashboard.title')}</h1>
         <p className="t-text-2 text-sm mt-1">
-          Aujourd&apos;hui — {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          {t('dashboard.today')} — {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </div>
 
@@ -54,14 +56,14 @@ export function PageDashboard() {
         {/* Graphique ventes */}
         {showChart && (
           <div className="lg:col-span-2 t-card-bordered rounded-2xl p-5">
-            <MiniBarChart label="Ventes par heure" data={hourlyChart} />
+            <MiniBarChart label={t('dashboard.salesPerHour')} data={hourlyChart} />
           </div>
         )}
 
         {/* Top lignes */}
         <div className="t-card-bordered rounded-2xl p-5 space-y-3">
           <p className="text-xs font-semibold t-text-2 uppercase tracking-wider">
-            Top lignes du jour
+            {t('dashboard.topLinesToday')}
           </p>
           {topLines.map(r => (
             <div key={r.route}>
@@ -83,7 +85,7 @@ export function PageDashboard() {
       {/* Activité récente */}
       <div className="t-card-bordered rounded-2xl p-5">
         <p className="text-xs font-semibold t-text-2 uppercase tracking-wider mb-3">
-          Activité récente
+          {t('dashboard.recentActivity')}
         </p>
         <div className="space-y-2">
           {activity.map((e, i) => (

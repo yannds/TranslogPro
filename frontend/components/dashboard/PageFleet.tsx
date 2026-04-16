@@ -6,7 +6,9 @@
  */
 import { cn }         from '../../lib/utils';
 import { NavIcon }    from './NavIcon';
+import { useI18n } from '../../lib/i18n/useI18n';
 import type { BusItem } from './types';
+
 
 // ─── Données mock ─────────────────────────────────────────────────────────────
 
@@ -21,12 +23,13 @@ const BUSES: BusItem[] = [
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function PageFleet() {
+  const { t } = useI18n();
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Flotte de véhicules</h1>
+        <h1 className="text-2xl font-bold text-white">{t('fleetDash.title')}</h1>
         <button className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <NavIcon name="Bus" /> Ajouter bus
+          <NavIcon name="Bus" /> {t('fleetDash.addBus')}
         </button>
       </div>
 
@@ -40,17 +43,17 @@ export function PageFleet() {
               </div>
               <span className={cn('text-xs font-semibold', v.color)}>{v.status}</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               <div>
-                <p className="text-slate-600 text-xs">Capacité</p>
-                <p className="text-slate-300">{v.capacity} sièges</p>
+                <p className="text-slate-600 text-xs">{t('fleetDash.capacity')}</p>
+                <p className="text-slate-300">{v.capacity} {t('fleetDash.seats')}</p>
               </div>
               <div>
-                <p className="text-slate-600 text-xs">Kilométrage</p>
+                <p className="text-slate-600 text-xs">{t('fleetDash.mileage')}</p>
                 <p className="text-slate-300 tabular-nums">{v.km} km</p>
               </div>
-              <div className="col-span-2">
-                <p className="text-slate-600 text-xs">Prochaine maintenance</p>
+              <div className="sm:col-span-2">
+                <p className="text-slate-600 text-xs">{t('fleetDash.nextMaint')}</p>
                 <p className={cn(
                   'text-sm font-medium',
                   v.nextMaint.includes('500') || v.nextMaint === 'En cours' ? 'text-red-400' : 'text-slate-300',

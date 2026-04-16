@@ -7,8 +7,12 @@
  *   - Éditer les permissions d'un rôle (checklist groupée par module)
  */
 import { useState, useCallback } from 'react';
-import { Shield, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import {
+  Shield, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check,
+  UserCircle, UserMinus, UserPlus, Mail, RefreshCw,
+} from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch }   from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiPut, apiDelete, ApiError } from '../../lib/api';
 import { Dialog }     from '../ui/Dialog';
@@ -16,8 +20,21 @@ import { Button }     from '../ui/Button';
 import { Input }      from '../ui/Input';
 import { Badge }      from '../ui/Badge';
 import { Skeleton }   from '../ui/Skeleton';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import DataTableMaster from '../DataTableMaster';
 import type { Column, RowAction } from '../DataTableMaster';
+
+// ─── i18n (string-key based — see locales/fr.ts → iamRoles) ─────────────────
+
+// ─── Types pour les membres du rôle ──────────────────────────────────────────
+
+interface RoleMemberRow {
+  id:        string;
+  email:     string;
+  name:      string | null;
+  roleId:    string | null;
+  role?:     { id: string; name: string } | null;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,9 +49,9 @@ interface Role {
 
 // ─── All permission strings grouped by module ─────────────────────────────────
 
-const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
+const PERMISSION_GROUPS: { i18nKey: string; perms: string[] }[] = [
   {
-    label: 'IAM & Accès',
+    i18nKey: 'iamRoles.iamAccess',
     perms: [
       'control.iam.manage.tenant',
       'control.iam.audit.tenant',
@@ -44,7 +61,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Billetterie',
+    i18nKey: 'iamRoles.ticketing',
     perms: [
       'data.ticket.create.agency',
       'data.ticket.cancel.agency',
@@ -57,7 +74,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Trajets & Routes',
+    i18nKey: 'iamRoles.tripsRoutes',
     perms: [
       'data.trip.create.tenant',
       'data.trip.read.own',
@@ -71,7 +88,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Colis & Expéditions',
+    i18nKey: 'iamRoles.parcelsShipments',
     perms: [
       'data.parcel.create.agency',
       'data.parcel.scan.agency',
@@ -83,7 +100,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Flotte & Maintenance',
+    i18nKey: 'iamRoles.fleetMaintenance',
     perms: [
       'control.fleet.manage.tenant',
       'control.fleet.layout.tenant',
@@ -94,7 +111,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Manifestes',
+    i18nKey: 'iamRoles.manifests',
     perms: [
       'data.manifest.read.own',
       'data.manifest.generate.agency',
@@ -103,7 +120,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Finance & Caisse',
+    i18nKey: 'iamRoles.financeCashier',
     perms: [
       'control.pricing.manage.tenant',
       'control.pricing.yield.tenant',
@@ -115,7 +132,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'SAV',
+    i18nKey: 'iamRoles.sav',
     perms: [
       'data.sav.report.own',
       'data.sav.report.agency',
@@ -124,7 +141,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Staff & RH',
+    i18nKey: 'iamRoles.staffHr',
     perms: [
       'control.staff.manage.tenant',
       'data.staff.read.agency',
@@ -134,7 +151,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'CRM & Campagnes',
+    i18nKey: 'iamRoles.crmCampaigns',
     perms: [
       'data.crm.read.tenant',
       'control.campaign.manage.tenant',
@@ -142,7 +159,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Crew & Sécurité',
+    i18nKey: 'iamRoles.crewSecurity',
     perms: [
       'data.crew.manage.tenant',
       'control.qhse.manage.tenant',
@@ -150,7 +167,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Analytique & Affichage',
+    i18nKey: 'iamRoles.analyticsDisplay',
     perms: [
       'control.stats.read.tenant',
       'data.display.update.agency',
@@ -158,7 +175,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Workflow Studio',
+    i18nKey: 'iamRoles.workflowStudio',
     perms: [
       'control.workflow.config.tenant',
       'control.workflow.studio.read.tenant',
@@ -169,7 +186,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Paramètres & Modules',
+    i18nKey: 'iamRoles.settingsModules',
     perms: [
       'control.settings.manage.tenant',
       'control.module.install.tenant',
@@ -177,7 +194,7 @@ const PERMISSION_GROUPS: { label: string; perms: string[] }[] = [
     ],
   },
   {
-    label: 'Documents & Templates',
+    i18nKey: 'iamRoles.docsTemplates',
     perms: [
       'data.template.read.agency',
       'data.template.write.agency',
@@ -202,6 +219,7 @@ function PermissionEditor({
   selected: Set<string>;
   onChange: (s: Set<string>) => void;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (g: string) => {
@@ -228,15 +246,16 @@ function PermissionEditor({
   return (
     <div className="space-y-1 max-h-[55vh] overflow-y-auto pr-1">
       {PERMISSION_GROUPS.map(group => {
+        const groupLabel    = t(group.i18nKey);
         const groupSelected = group.perms.filter(p => selected.has(p)).length;
         const allSelected   = groupSelected === group.perms.length;
-        const isOpen        = expanded.has(group.label);
+        const isOpen        = expanded.has(groupLabel);
 
         return (
-          <div key={group.label} className="rounded-lg t-border border overflow-hidden">
+          <div key={groupLabel} className="rounded-lg t-border border overflow-hidden">
             <button
               type="button"
-              onClick={() => toggle(group.label)}
+              onClick={() => toggle(groupLabel)}
               className="w-full flex items-center gap-2 px-3 py-2 t-surface t-nav-hover transition-colors"
             >
               <input
@@ -247,7 +266,7 @@ function PermissionEditor({
                 onClick={e => e.stopPropagation()}
                 className="rounded cursor-pointer"
               />
-              <span className="flex-1 text-left text-sm font-medium t-text">{group.label}</span>
+              <span className="flex-1 text-left text-sm font-medium t-text">{groupLabel}</span>
               <span className="text-xs t-text-2">{groupSelected}/{group.perms.length}</span>
               {isOpen
                 ? <ChevronDown size={14} className="t-text-3" />
@@ -280,6 +299,7 @@ function PermissionEditor({
 
 export function PageIamRoles() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/v1/tenants/${tenantId}/iam`;
 
@@ -306,6 +326,23 @@ export function PageIamRoles() {
   const [permSet, setPermSet]           = useState<Set<string>>(new Set());
   const [savingPerms, setSavingPerms]   = useState(false);
   const [permErr, setPermErr]           = useState('');
+  const [permTab, setPermTab]           = useState<'perms' | 'members'>('perms');
+
+  // Membres du rôle
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [membersRev, setMembersRev]       = useState(0);
+  const [memberBusy, setMemberBusy]       = useState<string | null>(null); // userId en cours
+  const [memberErr, setMemberErr]         = useState('');
+  const reloadMembers = useCallback(() => setMembersRev(r => r + 1), []);
+
+  // Tous les utilisateurs du tenant (chargés uniquement quand la modale est ouverte)
+  const { data: allUsers, loading: usersLoading } = useFetch<RoleMemberRow[]>(
+    permRole ? `${base}/users` : null,
+    [permRole?.id, membersRev],
+  );
+
+  const members    = (allUsers ?? []).filter(u => u.roleId === permRole?.id);
+  const nonMembers = (allUsers ?? []).filter(u => u.roleId !== permRole?.id);
 
   // Delete
   const [deleteRole, setDeleteRole]     = useState<Role | null>(null);
@@ -314,24 +351,24 @@ export function PageIamRoles() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   async function handleCreate() {
-    if (!createName.trim()) { setCreateErr('Nom requis'); return; }
+    if (!createName.trim()) { setCreateErr(t('iamRoles.nameRequired')); return; }
     setCreating(true); setCreateErr('');
     try {
       await apiPost(`${base}/roles`, { name: createName.trim() });
       setShowCreate(false); setCreateName(''); reload();
     } catch (e) {
-      setCreateErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
+      setCreateErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
     } finally { setCreating(false); }
   }
 
   async function handleRename() {
-    if (!editName.trim()) { setEditErr('Nom requis'); return; }
+    if (!editName.trim()) { setEditErr(t('iamRoles.nameRequired')); return; }
     setSaving(true); setEditErr('');
     try {
       await apiPatch(`${base}/roles/${editRole!.id}`, { name: editName.trim() });
       setEditRole(null); reload();
     } catch (e) {
-      setEditErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
+      setEditErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
     } finally { setSaving(false); }
   }
 
@@ -343,8 +380,30 @@ export function PageIamRoles() {
       });
       setPermRole(null); reload();
     } catch (e) {
-      setPermErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
+      setPermErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
     } finally { setSavingPerms(false); }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    if (!permRole) return;
+    setMemberBusy(userId); setMemberErr('');
+    try {
+      await apiPatch(`${base}/users/${userId}`, { roleId: null });
+      reloadMembers(); reload();
+    } catch (e) {
+      setMemberErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
+    } finally { setMemberBusy(null); }
+  }
+
+  async function handleAddMember(userId: string) {
+    if (!permRole) return;
+    setMemberBusy(userId); setMemberErr('');
+    try {
+      await apiPatch(`${base}/users/${userId}`, { roleId: permRole.id });
+      reloadMembers(); reload();
+    } catch (e) {
+      setMemberErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
+    } finally { setMemberBusy(null); }
   }
 
   async function handleDelete() {
@@ -354,7 +413,7 @@ export function PageIamRoles() {
       setDeleteRole(null); reload();
     } catch (e) {
       // eslint-disable-next-line no-alert
-      alert(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : 'Erreur');
+      alert(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamRoles.errorGeneric'));
     } finally { setDeleting(false); }
   }
 
@@ -363,20 +422,20 @@ export function PageIamRoles() {
   const COLUMNS: Column<Role>[] = [
     {
       key: 'name',
-      header: 'Nom',
+      header: t('common.name'),
       sortable: true,
       cellRenderer: (_, row) => (
         <div className="flex items-center gap-2">
           <span className="t-text font-medium">{row.name}</span>
           {row.isSystem && (
-            <Badge variant="outline" className="text-xs normal-case">système</Badge>
+            <Badge variant="outline" className="text-xs normal-case">{t('iamRoles.system')}</Badge>
           )}
         </div>
       ),
     },
     {
       key: 'permissions',
-      header: 'Permissions',
+      header: t('iamRoles.permissions'),
       sortable: false,
       cellRenderer: (_, row) => (
         <button
@@ -396,7 +455,7 @@ export function PageIamRoles() {
     },
     {
       key: '_count',
-      header: 'Utilisateurs',
+      header: t('iamRoles.colUsers'),
       sortable: true,
       align: 'right',
       cellRenderer: (_, row) => (
@@ -408,7 +467,7 @@ export function PageIamRoles() {
 
   const ROW_ACTIONS: RowAction<Role>[] = [
     {
-      label: 'Permissions',
+      label: t('iamRoles.permissions'),
       icon: <Check size={14} />,
       onClick: (row) => {
         setPermRole(row);
@@ -417,13 +476,13 @@ export function PageIamRoles() {
       },
     },
     {
-      label: 'Renommer',
+      label: t('iamRoles.rename'),
       icon: <Pencil size={14} />,
       hidden: (row) => row.isSystem,
       onClick: (row) => { setEditRole(row); setEditName(row.name); setEditErr(''); },
     },
     {
-      label: 'Supprimer',
+      label: t('common.delete'),
       icon: <Trash2 size={14} />,
       hidden: (row) => row.isSystem,
       onClick: (row) => setDeleteRole(row),
@@ -449,12 +508,12 @@ export function PageIamRoles() {
         <div>
           <h1 className="text-2xl font-bold t-text flex items-center gap-2">
             <Shield size={24} className="text-indigo-600 dark:text-indigo-400" />
-            Rôles & Permissions
+            {t('iamRoles.rolesAndPermissions')}
           </h1>
-          <p className="t-text-2 text-sm mt-1">Gérez les rôles et leurs permissions</p>
+          <p className="t-text-2 text-sm mt-1">{t('iamRoles.manageRolesDesc')}</p>
         </div>
         <Button size="sm" onClick={() => { setCreateName(''); setCreateErr(''); setShowCreate(true); }}>
-          <Plus size={15} className="mr-1" /> Nouveau rôle
+          <Plus size={15} className="mr-1" /> {t('iamRoles.newRole')}
         </Button>
       </div>
 
@@ -464,7 +523,7 @@ export function PageIamRoles() {
         data={roles}
         loading={false}
         rowActions={ROW_ACTIONS}
-        emptyMessage="Aucun rôle défini"
+        emptyMessage={t('iamRoles.noRoleDefined')}
         exportFormats={['csv', 'json']}
         exportFilename="roles"
         onRowClick={(row) => {
@@ -478,20 +537,20 @@ export function PageIamRoles() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title="Nouveau rôle"
-        description="Créez un rôle personnalisé — vous pourrez lui assigner des permissions ensuite."
+        title={t('iamRoles.newRole')}
+        description={t('iamRoles.createRoleDesc')}
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>Annuler</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>{t('common.cancel')}</Button>
             <Button size="sm" onClick={handleCreate} disabled={creating}>
-              {creating ? 'Création…' : 'Créer'}
+              {creating ? t('common.creating') : t('common.create')}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           <Input
-            placeholder="Ex. : Responsable Billetterie"
+            placeholder={t('iamRoles.placeholderRoleName')}
             value={createName}
             onChange={e => setCreateName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
@@ -505,12 +564,12 @@ export function PageIamRoles() {
       <Dialog
         open={!!editRole}
         onOpenChange={o => { if (!o) setEditRole(null); }}
-        title="Renommer le rôle"
+        title={t('iamRoles.renameRole')}
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setEditRole(null)}>Annuler</Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditRole(null)}>{t('common.cancel')}</Button>
             <Button size="sm" onClick={handleRename} disabled={saving}>
-              {saving ? 'Enregistrement…' : 'Enregistrer'}
+              {saving ? t('common.saving') : t('common.save')}
             </Button>
           </>
         }
@@ -526,26 +585,177 @@ export function PageIamRoles() {
         </div>
       </Dialog>
 
-      {/* Permissions dialog */}
+      {/* Permissions + Membres dialog */}
       <Dialog
         open={!!permRole}
-        onOpenChange={o => { if (!o) setPermRole(null); }}
-        title={`Permissions — ${permRole?.name ?? ''}`}
-        description="Cochez les permissions à accorder. Les modifications sont appliquées immédiatement."
+        onOpenChange={o => { if (!o) { setPermRole(null); setPermTab('perms'); } }}
+        title={`${t('iamRoles.rolePrefix')}${permRole?.name ?? ''}`}
+        description={t('iamRoles.permRoleDesc')}
+        size="2xl"
+        footer={
+          permTab === 'perms' ? (
+            <>
+              <span className="flex-1 text-xs t-text-2">{permSet.size} {t('iamRoles.permSelected')}</span>
+              <Button variant="ghost" size="sm" onClick={() => setPermRole(null)}>{t('common.cancel')}</Button>
+              <Button size="sm" onClick={handleSavePerms} disabled={savingPerms}>
+                {savingPerms ? t('common.saving') : t('common.save')}
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-xs t-text-2">{members.length} {t('iamRoles.usersAssigned')}</span>
+              <Button variant="ghost" size="sm" onClick={() => setPermRole(null)}>{t('common.close')}</Button>
+            </>
+          )
+        }
+      >
+        <Tabs value={permTab} onValueChange={v => setPermTab(v as 'perms' | 'members')}>
+          <TabsList>
+            <TabsTrigger value="perms">
+              <Check size={14} className="inline mr-1.5" />
+              {t('iamRoles.permissions')}
+              <Badge variant="outline" className="ml-2 text-[10px] normal-case">{permSet.size}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="members">
+              <UserCircle size={14} className="inline mr-1.5" />
+              {t('iamRoles.members')}
+              <Badge variant="outline" className="ml-2 text-[10px] normal-case">{members.length}</Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="perms">
+            <div className="space-y-3">
+              <PermissionEditor selected={permSet} onChange={setPermSet} />
+              {permErr && <p className="text-xs text-red-500 dark:text-red-400">{permErr}</p>}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="members">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium t-text">
+                    {t('iamRoles.membersOfRole').replace('{name}', permRole?.name ?? '')}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={reloadMembers}
+                    className="inline-flex items-center gap-1 text-xs t-text-2 hover:t-text"
+                    title={t('iamRoles.refresh')}
+                  >
+                    <RefreshCw size={12} /> {t('iamRoles.refresh')}
+                  </button>
+                </div>
+                <Button size="sm" onClick={() => setShowAddMember(true)}>
+                  <UserPlus size={14} className="mr-1.5" /> {t('iamRoles.addMember')}
+                </Button>
+              </div>
+
+              {memberErr && (
+                <p className="text-xs text-red-500 dark:text-red-400">{memberErr}</p>
+              )}
+
+              <DataTableMaster<RoleMemberRow>
+                loading={usersLoading}
+                data={members}
+                columns={[
+                  {
+                    key: 'name',
+                    header: t('iamRoles.colUser'),
+                    sortable: true,
+                    cellRenderer: (_, row) => (
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                          <UserCircle className="w-4 h-4 text-slate-400" aria-hidden />
+                        </div>
+                        <span className="text-sm t-text">{row.name ?? '—'}</span>
+                      </div>
+                    ),
+                    csvValue: (_, row) => row.name ?? '',
+                  },
+                  {
+                    key: 'email',
+                    header: t('common.email'),
+                    sortable: true,
+                    cellRenderer: (_, row) => (
+                      <span className="inline-flex items-center gap-1.5 text-xs t-text-2">
+                        <Mail size={12} /> {row.email}
+                      </span>
+                    ),
+                  },
+                ]}
+                rowActions={[{
+                  label: t('common.remove'),
+                  icon: <UserMinus size={13} />,
+                  danger: true,
+                  onClick: (row) => handleRemoveMember(row.id),
+                  disabled: (row) => memberBusy === row.id,
+                }]}
+                searchPlaceholder={t('iamRoles.searchMember')}
+                emptyMessage={t('iamRoles.noMemberAssigned')}
+                defaultPageSize={10}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </Dialog>
+
+      {/* Sous-modale : Ajouter des membres au rôle */}
+      <Dialog
+        open={showAddMember}
+        onOpenChange={o => { if (!o) setShowAddMember(false); }}
+        title={t('iamRoles.addMembers')}
+        description={permRole ? t('iamRoles.addMemberDesc').replace('{name}', permRole.name) : undefined}
         size="xl"
         footer={
-          <>
-            <span className="flex-1 text-xs t-text-2">{permSet.size} permission(s) sélectionnée(s)</span>
-            <Button variant="ghost" size="sm" onClick={() => setPermRole(null)}>Annuler</Button>
-            <Button size="sm" onClick={handleSavePerms} disabled={savingPerms}>
-              {savingPerms ? 'Enregistrement…' : 'Enregistrer'}
-            </Button>
-          </>
+          <Button variant="ghost" size="sm" onClick={() => setShowAddMember(false)}>{t('common.close')}</Button>
         }
       >
         <div className="space-y-3">
-          <PermissionEditor selected={permSet} onChange={setPermSet} />
-          {permErr && <p className="text-xs text-red-500 dark:text-red-400">{permErr}</p>}
+          {memberErr && (
+            <p className="text-xs text-red-500 dark:text-red-400">{memberErr}</p>
+          )}
+          <DataTableMaster<RoleMemberRow>
+            loading={usersLoading}
+            data={nonMembers}
+            columns={[
+              {
+                key: 'name',
+                header: t('iamRoles.colUser'),
+                sortable: true,
+                cellRenderer: (_, row) => (
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                      <UserCircle className="w-4 h-4 text-slate-400" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm t-text truncate">{row.name ?? '—'}</p>
+                      <p className="text-xs t-text-2 truncate">{row.email}</p>
+                    </div>
+                  </div>
+                ),
+                csvValue: (_, row) => `${row.name ?? ''} <${row.email}>`,
+              },
+              {
+                key: 'role',
+                header: t('iamRoles.colCurrentRole'),
+                sortable: true,
+                cellRenderer: (_, row) => row.role
+                  ? <Badge variant="outline" className="text-xs normal-case">{row.role.name}</Badge>
+                  : <span className="text-xs t-text-3">{t('iamRoles.noRoleLabel')}</span>,
+                csvValue: (_, row) => row.role?.name ?? '',
+              },
+            ]}
+            rowActions={[{
+              label: t('common.add'),
+              icon: <UserPlus size={13} />,
+              onClick: (row) => handleAddMember(row.id),
+              disabled: (row) => memberBusy === row.id,
+            }]}
+            searchPlaceholder={t('iamRoles.searchAllUsers')}
+            emptyMessage={t('iamRoles.allUsersHaveRole')}
+            defaultPageSize={10}
+          />
         </div>
       </Dialog>
 
@@ -553,25 +763,24 @@ export function PageIamRoles() {
       <Dialog
         open={!!deleteRole}
         onOpenChange={o => { if (!o) setDeleteRole(null); }}
-        title="Supprimer le rôle"
-        description={`Êtes-vous sûr de vouloir supprimer "${deleteRole?.name}" ? Cette action est irréversible.`}
+        title={t('iamRoles.deleteRole')}
+        description={t('iamRoles.deleteRoleDesc').replace('{name}', deleteRole?.name ?? '')}
         size="sm"
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteRole(null)}>Annuler</Button>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteRole(null)}>{t('common.cancel')}</Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Suppression…' : 'Supprimer'}
+              {deleting ? t('common.deleting') : t('common.delete')}
             </Button>
           </>
         }
       >
         {deleteRole?._count.users ? (
           <p className="text-sm text-amber-600 dark:text-amber-400">
-            Ce rôle est assigné à {deleteRole._count.users} utilisateur(s).
-            Réassignez-les d'abord.
+            {t('iamRoles.roleAssignedTo').replace('{count}', String(deleteRole._count.users))}
           </p>
         ) : (
-          <p className="text-sm t-text-2">Cette opération ne peut pas être annulée.</p>
+          <p className="text-sm t-text-2">{t('iamRoles.cannotUndo')}</p>
         )}
       </Dialog>
     </div>

@@ -21,6 +21,7 @@ import {
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
@@ -77,8 +78,8 @@ function buildScenarios(graph: WorkflowGraph | null): Scenario[] {
 
   // Ajouter aussi des scénarios partiels pertinents (ex: happy path + blocages)
   const scenarios: Scenario[] = paths.map((p, i) => ({
-    name:         i === 0 ? 'Chemin nominal' : `Chemin ${i + 1}`,
-    description:  `${initNode.id} → ${p.finalState} (${p.actions.length} étape${p.actions.length > 1 ? 's' : ''})`,
+    name:         i === 0 ? 'nominal' : `path-${i + 1}`,
+    description:  `${initNode.id} → ${p.finalState} (${p.actions.length})`,
     initialState: initNode.id,
     actions:      p.actions,
   }));
@@ -86,8 +87,8 @@ function buildScenarios(graph: WorkflowGraph | null): Scenario[] {
   // Ajouter un scénario "partiel" avec juste les 2 premières actions
   if (paths[0] && paths[0].actions.length > 2) {
     scenarios.push({
-      name:         'Test partiel',
-      description:  `Valider les 2 premières transitions`,
+      name:         'partial',
+      description:  'partial',
       initialState: initNode.id,
       actions:      paths[0].actions.slice(0, 2),
     });
@@ -96,9 +97,11 @@ function buildScenarios(graph: WorkflowGraph | null): Scenario[] {
   return scenarios;
 }
 
+
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function PageWfSimulate() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/workflow-studio`;
@@ -200,9 +203,9 @@ export function PageWfSimulate() {
           <FlaskConical className="w-5 h-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Simulateur</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('wfSimulate.simulator')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Testez des chemins de transitions sans modifier les données
+            {t('wfSimulate.subtitle')}
           </p>
         </div>
       </div>
@@ -214,7 +217,7 @@ export function PageWfSimulate() {
 
           {/* Step 1 : Sélection entité */}
           <Card>
-            <CardHeader heading="1. Type d'entité" />
+            <CardHeader heading={t('wfSimulate.entityType')} />
             <CardContent className="pt-3 space-y-3">
               {loadingTypes ? (
                 <Skeleton className="h-10 w-full" />
@@ -224,7 +227,7 @@ export function PageWfSimulate() {
                 </div>
               ) : !entityTypes || entityTypes.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Aucun workflow configuré. Installez un Blueprint d'abord.
+                  {t('wfSimulate.noWorkflow')}
                 </p>
               ) : (
                 <select
@@ -232,7 +235,7 @@ export function PageWfSimulate() {
                   onChange={e => setSelectedEntity(e.target.value || null)}
                   className={inputClass}
                 >
-                  <option value="">— Sélectionnez un type —</option>
+                  <option value="">{t('wfSimulate.selectType')}</option>
                   {entityTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               )}
@@ -240,7 +243,7 @@ export function PageWfSimulate() {
               {loadingGraph && (
                 <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-                  Chargement du graphe…
+                  {t('wfSimulate.loadingGraph')}
                 </div>
               )}
               {graphError && (
@@ -250,7 +253,7 @@ export function PageWfSimulate() {
               )}
               {graph && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                  ✓ Graphe chargé — {graph.nodes.length} états · {graph.edges.length} transitions
+                  ✓ {t('wfSimulate.graphLoaded')} — {graph.nodes.length} {t('wfSimulate.states')} · {graph.edges.length} {t('wfSimulate.transitions')}
                 </p>
               )}
             </CardContent>
@@ -258,12 +261,12 @@ export function PageWfSimulate() {
 
           {/* Step 2 : Configuration simulation */}
           <Card>
-            <CardHeader heading="2. Configuration" />
+            <CardHeader heading={t('wfSimulate.configuration')} />
             <CardContent className="pt-3 space-y-3">
               {/* État initial */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  État initial <span aria-hidden className="text-red-500">*</span>
+                  {t('wfSimulate.initialState')} <span aria-hidden className="text-red-500">*</span>
                 </label>
                 {graph ? (
                   <select
@@ -284,7 +287,7 @@ export function PageWfSimulate() {
                     type="text"
                     value={initialState}
                     onChange={e => setInitialState(e.target.value)}
-                    placeholder="Sélectionnez un type d'entité d'abord"
+                    placeholder={t('wfSimulate.selectEntityFirst')}
                     className={inputClass}
                     disabled
                   />
@@ -294,7 +297,7 @@ export function PageWfSimulate() {
               {/* Séquence d'actions */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Actions à simuler <span aria-hidden className="text-red-500">*</span>
+                  {t('wfSimulate.actionsToSim')} <span aria-hidden className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -304,11 +307,11 @@ export function PageWfSimulate() {
                   className={`${inputClass} font-mono`}
                   disabled={!graph || simLoading}
                 />
-                <p className="text-xs text-slate-400">Actions séparées par des virgules</p>
+                <p className="text-xs text-slate-400">{t('wfSimulate.commaSeparated')}</p>
                 {/* Actions disponibles */}
                 {graph && (
                   <div className="mt-1">
-                    <p className="text-[10px] text-slate-400 mb-1">Actions disponibles :</p>
+                    <p className="text-[10px] text-slate-400 mb-1">{t('wfSimulate.availableActions')}</p>
                     <div className="flex flex-wrap gap-1">
                       {[...new Set(graph.edges.map(e => e.label))].map(action => (
                         <button
@@ -330,7 +333,7 @@ export function PageWfSimulate() {
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-500" aria-hidden />
-                    Scénarios
+                    {t('wfSimulate.scenarios')}
                   </p>
                   <div className="space-y-1">
                     {scenarios.map((sc, i) => (
@@ -348,8 +351,12 @@ export function PageWfSimulate() {
                           {i + 1}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{sc.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{sc.description}</p>
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                            {sc.name === 'nominal' ? t('wfSimulate.nominalPath') : sc.name === 'partial' ? t('wfSimulate.partialTest') : `${t('wfSimulate.pathN')} ${sc.name.split('-')[1]}`}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {sc.name === 'partial' ? t('wfSimulate.partialDesc') : sc.description}
+                          </p>
                           <p className="text-[10px] font-mono text-blue-600 dark:text-blue-400 truncate mt-0.5">
                             {sc.actions.join(' → ')}
                           </p>
@@ -363,7 +370,7 @@ export function PageWfSimulate() {
               {/* Contexte guards */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Contexte guards (JSON)
+                  {t('wfSimulate.guardsContext')}
                 </label>
                 <textarea
                   value={contextText}
@@ -378,13 +385,13 @@ export function PageWfSimulate() {
               {/* Role simulé */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Role ID simulé (optionnel)
+                  {t('wfSimulate.simRoleId')}
                 </label>
                 <input
                   type="text"
                   value={roleId}
                   onChange={e => setRoleId(e.target.value)}
-                  placeholder="UUID du rôle à simuler…"
+                  placeholder={t('wfSimulate.rolePlaceholder')}
                   className={`${inputClass} font-mono`}
                   disabled={!graph || simLoading}
                 />
@@ -400,15 +407,15 @@ export function PageWfSimulate() {
               className="flex-1"
             >
               {simLoading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden />Simulation…</>
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden />{t('wfSimulate.simulating')}</>
               ) : (
-                <><Play className="w-4 h-4 mr-2" aria-hidden />Lancer la simulation</>
+                <><Play className="w-4 h-4 mr-2" aria-hidden />{t('wfSimulate.runSimulation')}</>
               )}
             </Button>
             {(result || simError) && (
               <Button variant="outline" onClick={handleReset} disabled={simLoading}>
                 <RotateCcw className="w-4 h-4 mr-2" aria-hidden />
-                Réinitialiser
+                {t('wfSimulate.reset')}
               </Button>
             )}
           </div>
@@ -417,20 +424,20 @@ export function PageWfSimulate() {
         {/* ── Panneau droit : résultats ── */}
         <div className="space-y-4">
           <Card className="h-full">
-            <CardHeader heading="3. Résultats" />
+            <CardHeader heading={t('wfSimulate.results')} />
             <CardContent className="pt-3">
 
               {!result && !simError && !simLoading && (
                 <div className="py-12 text-center text-slate-400 dark:text-slate-600">
                   <FlaskConical className="w-10 h-10 mx-auto mb-3 opacity-40" aria-hidden />
-                  <p className="text-sm">Configurez une simulation et cliquez sur "Lancer"</p>
+                  <p className="text-sm">{t('wfSimulate.configureAndRun')}</p>
                 </div>
               )}
 
               {simLoading && (
                 <div className="py-12 flex items-center justify-center gap-3 text-slate-500">
                   <Loader2 className="w-6 h-6 animate-spin" aria-hidden />
-                  <span>Simulation en cours…</span>
+                  <span>{t('wfSimulate.simInProgress')}</span>
                 </div>
               )}
 
@@ -442,7 +449,7 @@ export function PageWfSimulate() {
               )}
 
               {result && (
-                <div className="space-y-4" role="region" aria-label="Résultats de simulation">
+                <div className="space-y-4" role="region" aria-label={t('wfSimulate.results')}>
 
                   {/* Résumé */}
                   <div className={cn(
@@ -459,13 +466,13 @@ export function PageWfSimulate() {
                       <p className={cn('font-semibold text-sm',
                         allSuccess ? 'text-emerald-800 dark:text-emerald-200' : 'text-red-800 dark:text-red-200',
                       )}>
-                        {allSuccess ? 'Simulation réussie' : 'Simulation bloquée'}
+                        {allSuccess ? t('wfSimulate.simSuccess') : t('wfSimulate.simBlocked')}
                       </p>
                       <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                         {result.initialState}
                         <ChevronRight className="w-3 h-3 inline mx-0.5" aria-hidden />
                         {result.finalState}
-                        <span className="ml-2 text-slate-400">({result.steps.length} étape{result.steps.length > 1 ? 's' : ''})</span>
+                        <span className="ml-2 text-slate-400">({result.steps.length} {result.steps.length > 1 ? t('wfSimulate.steps') : t('wfSimulate.step')})</span>
                       </p>
                     </div>
                   </div>
@@ -473,7 +480,7 @@ export function PageWfSimulate() {
                   {/* Timeline des étapes */}
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Détail des transitions
+                      {t('wfSimulate.transitionDetail')}
                     </p>
                     {result.steps.map((step, i) => (
                       <div
@@ -502,7 +509,7 @@ export function PageWfSimulate() {
                           {!step.permGranted && (
                             <p className="text-red-500 text-[10px] flex items-center gap-1">
                               <XCircle className="w-3 h-3" aria-hidden />
-                              Permission insuffisante
+                              {t('wfSimulate.permInsufficient')}
                             </p>
                           )}
                           {Object.entries(step.guardResult).map(([g, v]) => (
@@ -512,7 +519,7 @@ export function PageWfSimulate() {
                             )}>
                               <span>{v === null ? '?' : v ? '✓' : '✗'}</span>
                               <span className="font-mono">{g}</span>
-                              <span className="text-slate-400">: {v === null ? 'indéterminé' : v ? 'ok' : 'bloqué'}</span>
+                              <span className="text-slate-400">: {v === null ? t('wfSimulate.indeterminate') : v ? t('wfSimulate.ok') : t('wfSimulate.blocked')}</span>
                             </p>
                           ))}
                         </div>
@@ -523,7 +530,7 @@ export function PageWfSimulate() {
                   {/* États atteints / non atteints */}
                   {result.reachedStates.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">États atteints</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('wfSimulate.reachedStates')}</p>
                       <div className="flex flex-wrap gap-1">
                         {result.reachedStates.map(s => (
                           <span key={s} className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
@@ -535,7 +542,7 @@ export function PageWfSimulate() {
                   )}
                   {result.unreachableStates.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-slate-400">États non atteints</p>
+                      <p className="text-xs font-medium text-slate-400">{t('wfSimulate.unreachedStates')}</p>
                       <div className="flex flex-wrap gap-1">
                         {result.unreachableStates.map(s => (
                           <span key={s} className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">

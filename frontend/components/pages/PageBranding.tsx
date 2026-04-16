@@ -17,10 +17,12 @@ import { Palette, Save, RotateCcw, Eye, Bus } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPut } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,11 +95,12 @@ function BrandPreview({ brand }: { brand: BrandConfig }) {
   const primary = brand.primaryColor ?? '#0d9488';
   const text    = brand.textColor    ?? '#f8fafc';
   const accent  = brand.accentColor  ?? '#f59e0b';
-  const name    = brand.brandName    || 'Mon entreprise';
+  const { t: tFn } = useI18n();
+  const name    = brand.brandName    || tFn('branding.myCompany');
 
   return (
     <div
-      aria-label="Aperçu de la marque"
+      aria-label={tFn('branding.brandPreview')}
       className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 select-none"
       style={{ fontFamily: brand.fontFamily ?? 'inherit' }}
     >
@@ -124,13 +127,13 @@ function BrandPreview({ brand }: { brand: BrandConfig }) {
             className="px-3 py-1.5 rounded-lg text-xs font-semibold"
             style={{ backgroundColor: primary, color: text }}
           >
-            Action primaire
+            {tFn('branding.primaryAction')}
           </div>
           <div
             className="px-3 py-1.5 rounded-lg text-xs font-semibold"
             style={{ backgroundColor: accent, color: '#000' }}
           >
-            Accent
+            {tFn('branding.accent')}
           </div>
         </div>
       </div>
@@ -142,6 +145,7 @@ function BrandPreview({ brand }: { brand: BrandConfig }) {
 
 export function PageBranding() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const brandUrl = tenantId ? `/api/v1/tenants/${tenantId}/brand` : null;
@@ -172,10 +176,10 @@ export function PageBranding() {
     setSaveMsg(null);
     try {
       await apiPut(`/api/v1/tenants/${tenantId}/brand`, form);
-      setSaveMsg('Marque enregistrée.');
+      setSaveMsg(t('branding.brandSaved'));
       refetch();
     } catch {
-      setSaveMsg('Erreur lors de la sauvegarde.');
+      setSaveMsg(t('branding.saveError'));
     } finally {
       setSaving(false);
     }
@@ -203,8 +207,8 @@ export function PageBranding() {
             <Palette className="w-5 h-5 text-purple-600 dark:text-purple-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">White-label & Marque</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Personnalisez l'apparence de votre portail</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('branding.title')}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('branding.subtitle')}</p>
           </div>
         </div>
         <Button
@@ -215,7 +219,7 @@ export function PageBranding() {
           aria-pressed={preview}
         >
           <Eye className="w-4 h-4 mr-2" aria-hidden />
-          {preview ? "Masquer l'aperçu" : 'Aperçu live'}
+          {preview ? t('branding.hidePreview') : t('branding.livePreview')}
         </Button>
       </div>
 
@@ -241,11 +245,11 @@ export function PageBranding() {
             <>
               {/* Identité */}
               <Card>
-                <CardHeader heading="Identité" />
+                <CardHeader heading={t('branding.identity')} />
                 <CardContent className="pt-4 space-y-4">
                   <div className="space-y-1.5">
                     <label htmlFor="brand-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Nom de marque <span aria-hidden className="text-red-500">*</span>
+                      {t('branding.brandName')} <span aria-hidden className="text-red-500">*</span>
                     </label>
                     <input
                       id="brand-name"
@@ -260,7 +264,7 @@ export function PageBranding() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label htmlFor="brand-logo" className="block text-sm font-medium text-slate-700 dark:text-slate-300">URL du logo</label>
+                    <label htmlFor="brand-logo" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('branding.logoUrl')}</label>
                     <input
                       id="brand-logo"
                       type="url"
@@ -271,9 +275,9 @@ export function PageBranding() {
                       disabled={saving}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label htmlFor="brand-support-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">E-mail support</label>
+                      <label htmlFor="brand-support-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('branding.supportEmail')}</label>
                       <input
                         id="brand-support-email"
                         type="email"
@@ -285,7 +289,7 @@ export function PageBranding() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label htmlFor="brand-support-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Téléphone support</label>
+                      <label htmlFor="brand-support-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('branding.supportPhone')}</label>
                       <input
                         id="brand-support-phone"
                         type="tel"
@@ -302,15 +306,15 @@ export function PageBranding() {
 
               {/* Couleurs */}
               <Card>
-                <CardHeader heading="Couleurs" />
-                <CardContent className="pt-4 grid grid-cols-2 gap-4">
-                  <ColorField label="Couleur primaire"    name="primaryColor"   value={form.primaryColor   ?? '#0d9488'} onChange={handleColor} />
-                  <ColorField label="Couleur secondaire"  name="secondaryColor" value={form.secondaryColor ?? '#0f766e'} onChange={handleColor} />
-                  <ColorField label="Couleur accent"      name="accentColor"    value={form.accentColor    ?? '#f59e0b'} onChange={handleColor} />
-                  <ColorField label="Couleur texte"       name="textColor"      value={form.textColor      ?? '#f8fafc'} onChange={handleColor} />
-                  <ColorField label="Couleur fond"        name="bgColor"        value={form.bgColor        ?? '#020617'} onChange={handleColor} />
+                <CardHeader heading={t('branding.colors')} />
+                <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <ColorField label={t('branding.primaryColor')}   name="primaryColor"   value={form.primaryColor   ?? '#0d9488'} onChange={handleColor} />
+                  <ColorField label={t('branding.secondaryColor')} name="secondaryColor" value={form.secondaryColor ?? '#0f766e'} onChange={handleColor} />
+                  <ColorField label={t('branding.accentColor')}    name="accentColor"    value={form.accentColor    ?? '#f59e0b'} onChange={handleColor} />
+                  <ColorField label={t('branding.textColor')}      name="textColor"      value={form.textColor      ?? '#f8fafc'} onChange={handleColor} />
+                  <ColorField label={t('branding.bgColor')}        name="bgColor"        value={form.bgColor        ?? '#020617'} onChange={handleColor} />
                   <div className="space-y-1.5">
-                    <label htmlFor="brand-font" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Police</label>
+                    <label htmlFor="brand-font" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('branding.font')}</label>
                     <input
                       id="brand-font"
                       type="text"
@@ -333,7 +337,7 @@ export function PageBranding() {
                 aria-live="polite"
                 className={cn(
                   'text-sm',
-                  saveMsg.startsWith('Erreur') ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400',
+                  saveMsg === t('branding.saveError') ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400',
                 )}
               >
                 {saveMsg}
@@ -348,7 +352,7 @@ export function PageBranding() {
                 disabled={saving || loading}
               >
                 <RotateCcw className="w-4 h-4 mr-2" aria-hidden />
-                Réinitialiser
+                {t('branding.reset')}
               </Button>
               <Button
                 type="submit"
@@ -356,7 +360,7 @@ export function PageBranding() {
                 disabled={saving || loading}
               >
                 <Save className="w-4 h-4 mr-2" aria-hidden />
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
+                {saving ? t('common.saving') : t('common.save')}
               </Button>
             </div>
           </div>
@@ -367,7 +371,7 @@ export function PageBranding() {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
               <Eye className="w-4 h-4" aria-hidden />
-              Aperçu en temps réel
+              {t('branding.previewLabel')}
             </p>
             <BrandPreview brand={form} />
           </div>

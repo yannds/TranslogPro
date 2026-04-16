@@ -14,6 +14,8 @@ import { Puzzle, Check, X, Info, AlertTriangle, Lock, Loader2 } from 'lucide-rea
 import { useAuth } from '../../lib/auth/auth.context';
 import { apiFetch } from '../../lib/api';
 import { cn }     from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
+import type { TranslationMap } from '../../lib/i18n/types';
 
 // ─── Catalogue statique des modules ──────────────────────────────────────────
 //
@@ -24,121 +26,154 @@ type ModuleStatus = 'active' | 'inactive';
 
 interface ModuleDef {
   id:          string;          // == moduleKey backend
-  name:        string;
-  description: string;
-  category:    string;
+  name:        TranslationMap;
+  description: TranslationMap;
+  category:    TranslationMap;
   icon:        string;
   core:        boolean;         // core = toujours actif, toggle désactivé
   requires?:   string[];        // dépendances (moduleKey)
   tags:        string[];
 }
 
+const CAT_CORE         = tm('Cœur', 'Core');
+const CAT_OPERATIONS   = tm('Opérations', 'Operations');
+const CAT_FINANCE      = tm('Finance', 'Finance');
+const CAT_QUALITY      = tm('Qualité', 'Quality');
+const CAT_INTELLIGENCE = tm('Intelligence', 'Intelligence');
+const CAT_PLATFORM     = tm('Plateforme', 'Platform');
+
 const MODULE_CATALOG: ModuleDef[] = [
   // ── Cœur (seed onboarding) ─────────────────────────────────────────────
   {
-    id: 'TICKETING',       name: 'Billetterie',
-    description: 'Vente, annulation, impression et scan de billets.',
-    category: 'Cœur', icon: '🎫', core: true, tags: ['tickets'],
+    id: 'TICKETING',       name: tm('Billetterie', 'Ticketing'),
+    description: tm('Vente, annulation, impression et scan de billets.', 'Sale, cancellation, printing and scanning of tickets.'),
+    category: CAT_CORE, icon: '🎫', core: true, tags: ['tickets'],
   },
   {
-    id: 'PARCEL',          name: 'Transport de colis',
-    description: 'Enregistrement, suivi et expédition groupée des colis.',
-    category: 'Cœur', icon: '📦', core: true, tags: ['parcels', 'logistics'],
+    id: 'PARCEL',          name: tm('Transport de colis', 'Parcel Transport'),
+    description: tm('Enregistrement, suivi et expédition groupée des colis.', 'Registration, tracking and bulk shipment of parcels.'),
+    category: CAT_CORE, icon: '📦', core: true, tags: ['parcels', 'logistics'],
   },
   {
-    id: 'FLEET',           name: 'Gestion de flotte',
-    description: 'Parc de véhicules, plans de sièges et alertes techniques.',
-    category: 'Cœur', icon: '🚌', core: true, tags: ['fleet', 'vehicles'],
+    id: 'FLEET',           name: tm('Gestion de flotte', 'Fleet Management'),
+    description: tm('Parc de véhicules, plans de sièges et alertes techniques.', 'Vehicle fleet, seat maps and technical alerts.'),
+    category: CAT_CORE, icon: '🚌', core: true, tags: ['fleet', 'vehicles'],
   },
   {
-    id: 'CASHIER',         name: 'Caisse & Finance',
-    description: 'Gestion des caisses, sessions, transactions et clôture.',
-    category: 'Cœur', icon: '💰', core: true, tags: ['cashier', 'finance'],
+    id: 'CASHIER',         name: tm('Caisse & Finance', 'Cashier & Finance'),
+    description: tm('Gestion des caisses, sessions, transactions et clôture.', 'Cash register management, sessions, transactions and closing.'),
+    category: CAT_CORE, icon: '💰', core: true, tags: ['cashier', 'finance'],
   },
   {
-    id: 'TRACKING',        name: 'Suivi temps réel',
-    description: 'Géolocalisation flotte, ETA, alertes position.',
-    category: 'Cœur', icon: '📍', core: true, tags: ['tracking'],
+    id: 'TRACKING',        name: tm('Suivi temps réel', 'Live Tracking'),
+    description: tm('Géolocalisation flotte, ETA, alertes position.', 'Fleet geolocation, ETA, position alerts.'),
+    category: CAT_CORE, icon: '📍', core: true, tags: ['tracking'],
   },
   {
-    id: 'NOTIFICATIONS',   name: 'Notifications',
-    description: 'SMS, WhatsApp, push, email aux voyageurs et au personnel.',
-    category: 'Cœur', icon: '🔔', core: true, tags: ['notifications'],
+    id: 'NOTIFICATIONS',   name: tm('Notifications', 'Notifications'),
+    description: tm('SMS, WhatsApp, push, email aux voyageurs et au personnel.', 'SMS, WhatsApp, push, email to passengers and staff.'),
+    category: CAT_CORE, icon: '🔔', core: true, tags: ['notifications'],
   },
 
   // ── Opérations ────────────────────────────────────────────────────────
   {
-    id: 'GARAGE_PRO',      name: 'Garage Pro',
-    description: 'Fiches de maintenance préventive, planning garage, alertes.',
-    category: 'Opérations', icon: '🔧', core: false, tags: ['maintenance', 'garage'],
+    id: 'GARAGE_PRO',      name: tm('Garage Pro', 'Garage Pro'),
+    description: tm('Fiches de maintenance préventive, planning garage, alertes.', 'Preventive maintenance sheets, garage planning, alerts.'),
+    category: CAT_OPERATIONS, icon: '🔧', core: false, tags: ['maintenance', 'garage'],
   },
   {
-    id: 'FLEET_DOCS',      name: 'Documents flotte',
-    description: 'Documents véhicules, consommables, échéances et alertes.',
-    category: 'Opérations', icon: '📄', core: false, tags: ['fleet', 'docs'],
+    id: 'FLEET_DOCS',      name: tm('Documents flotte', 'Fleet Documents'),
+    description: tm('Documents véhicules, consommables, échéances et alertes.', 'Vehicle documents, consumables, deadlines and alerts.'),
+    category: CAT_OPERATIONS, icon: '📄', core: false, tags: ['fleet', 'docs'],
   },
   {
-    id: 'DRIVER_PROFILE',  name: 'Profils Chauffeurs',
-    description: 'Permis, habilitations, formations, temps de repos.',
-    category: 'Opérations', icon: '👨‍✈️', core: false, tags: ['drivers'],
+    id: 'DRIVER_PROFILE',  name: tm('Profils Chauffeurs', 'Driver Profiles'),
+    description: tm('Permis, habilitations, formations, temps de repos.', 'Licenses, certifications, training, rest time.'),
+    category: CAT_OPERATIONS, icon: '👨‍✈️', core: false, tags: ['drivers'],
   },
   {
-    id: 'CREW_BRIEFING',   name: 'Briefings Équipage',
-    description: 'Planning équipages, briefings pré-départ, check-lists.',
-    category: 'Opérations', icon: '📋', core: false, tags: ['crew'],
+    id: 'CREW_BRIEFING',   name: tm('Briefings Équipage', 'Crew Briefings'),
+    description: tm('Planning équipages, briefings pré-départ, check-lists.', 'Crew planning, pre-departure briefings, checklists.'),
+    category: CAT_OPERATIONS, icon: '📋', core: false, tags: ['crew'],
   },
   {
-    id: 'SCHEDULING_GUARD', name: 'Scheduling Guard',
-    description: 'Garde-fou planning — détection des conflits et sur-booking.',
-    category: 'Opérations', icon: '🛡️', core: false, tags: ['scheduling'],
+    id: 'SCHEDULING_GUARD', name: tm('Scheduling Guard', 'Scheduling Guard'),
+    description: tm('Garde-fou planning — détection des conflits et sur-booking.', 'Schedule safeguard — conflict detection and overbooking.'),
+    category: CAT_OPERATIONS, icon: '🛡️', core: false, tags: ['scheduling'],
   },
 
   // ── Finance & Pricing ──────────────────────────────────────────────────
   {
-    id: 'YIELD_ENGINE',    name: 'Yield Management',
-    description: 'Tarifs dynamiques, optimisation du rendement, saisons.',
-    category: 'Finance', icon: '📈', core: false,
+    id: 'YIELD_ENGINE',    name: tm('Yield Management', 'Yield Management'),
+    description: tm('Tarifs dynamiques, optimisation du rendement, saisons.', 'Dynamic pricing, yield optimization, seasons.'),
+    category: CAT_FINANCE, icon: '📈', core: false,
     requires: ['CASHIER'], tags: ['pricing', 'yield'],
   },
   {
-    id: 'PROFITABILITY',   name: 'Rentabilité & BI',
-    description: 'Tableaux de bord avancés, KPIs, rentabilité par ligne.',
-    category: 'Finance', icon: '💹', core: false, tags: ['analytics', 'bi'],
+    id: 'PROFITABILITY',   name: tm('Rentabilité & BI', 'Profitability & BI'),
+    description: tm('Tableaux de bord avancés, KPIs, rentabilité par ligne.', 'Advanced dashboards, KPIs, profitability per route.'),
+    category: CAT_FINANCE, icon: '💹', core: false, tags: ['analytics', 'bi'],
   },
 
   // ── Qualité & SAV ─────────────────────────────────────────────────────
   {
-    id: 'SAV_MODULE',      name: 'SAV & Réclamations',
-    description: 'Gestion des réclamations passagers, remboursements et SAV.',
-    category: 'Qualité', icon: '🎗️', core: false, tags: ['sav', 'claims'],
+    id: 'SAV_MODULE',      name: tm('SAV & Réclamations', 'After-Sales & Claims'),
+    description: tm('Gestion des réclamations passagers, remboursements et SAV.', 'Passenger claims management, refunds and after-sales.'),
+    category: CAT_QUALITY, icon: '🎗️', core: false, tags: ['sav', 'claims'],
   },
   {
-    id: 'QHSE',            name: 'QHSE & Sécurité',
-    description: "Rapports d'accidents, procédures qualité, suivi incidents.",
-    category: 'Qualité', icon: '⛑️', core: false, tags: ['qhse', 'safety'],
+    id: 'QHSE',            name: tm('QHSE & Sécurité', 'QHSE & Safety'),
+    description: tm("Rapports d'accidents, procédures qualité, suivi incidents.", 'Accident reports, quality procedures, incident tracking.'),
+    category: CAT_QUALITY, icon: '⛑️', core: false, tags: ['qhse', 'safety'],
   },
 
   // ── Intelligence ──────────────────────────────────────────────────────
   {
-    id: 'CRM',             name: 'CRM & Clients',
-    description: 'Base clients, fidélisation, campagnes marketing.',
-    category: 'Intelligence', icon: '👥', core: false, tags: ['crm', 'loyalty'],
+    id: 'CRM',             name: tm('CRM & Clients', 'CRM & Customers'),
+    description: tm('Base clients, fidélisation, campagnes marketing.', 'Customer database, loyalty, marketing campaigns.'),
+    category: CAT_INTELLIGENCE, icon: '👥', core: false, tags: ['crm', 'loyalty'],
   },
 
   // ── Plateforme ────────────────────────────────────────────────────────
   {
-    id: 'WORKFLOW_STUDIO', name: 'Workflow Studio',
-    description: 'Éditeur visuel de workflows, marketplace de blueprints, simulation.',
-    category: 'Plateforme', icon: '⚙️', core: false, tags: ['workflow', 'automation'],
+    id: 'WORKFLOW_STUDIO', name: tm('Workflow Studio', 'Workflow Studio'),
+    description: tm('Éditeur visuel de workflows, marketplace de blueprints, simulation.', 'Visual workflow editor, blueprint marketplace, simulation.'),
+    category: CAT_PLATFORM, icon: '⚙️', core: false, tags: ['workflow', 'automation'],
   },
   {
-    id: 'WHITE_LABEL',     name: 'White-label & Thème',
-    description: 'Personnalisation de la marque, couleurs, logo et domaine.',
-    category: 'Plateforme', icon: '🎨', core: false, tags: ['branding', 'theme'],
+    id: 'WHITE_LABEL',     name: tm('White-label & Thème', 'White-label & Theme'),
+    description: tm('Personnalisation de la marque, couleurs, logo et domaine.', 'Brand customization, colors, logo and domain.'),
+    category: CAT_PLATFORM, icon: '🎨', core: false, tags: ['branding', 'theme'],
   },
 ];
 
-const CATEGORIES = [...new Set(MODULE_CATALOG.map(m => m.category))];
+// Deduplicate categories by fr key (stable identity)
+const CATEGORIES = MODULE_CATALOG.reduce<TranslationMap[]>((acc, m) => {
+  if (!acc.some(c => c.fr === m.category.fr)) acc.push(m.category);
+  return acc;
+}, []);
+
+// ─── UI translations ────────────────────────────────────────────────────────
+
+const T = {
+  pageTitle:       tm('Modules & Extensions', 'Modules & Extensions'),
+  coreBadge:       tm('CŒUR', 'CORE'),
+  activeBadge:     tm('ACTIF', 'ACTIVE'),
+  enable:          tm('Activer', 'Enable'),
+  disable:         tm('Désactiver', 'Disable'),
+  filterAll:       tm('Tous', 'All'),
+  filterActive:    tm('Actifs', 'Active'),
+  filterInactive:  tm('Inactifs', 'Inactive'),
+  requires:        tm('Requiert', 'Requires'),
+  coreNotice:      tm('Les modules cœur ne peuvent pas être désactivés', 'Core modules cannot be disabled'),
+  loadFailed:      tm('Impossible de charger les modules', 'Unable to load modules'),
+  loading:         tm('Chargement des modules…', 'Loading modules…'),
+  noMatch:         tm('Aucun module ne correspond aux filtres.', 'No modules match the filters.'),
+  toggleFail:      tm('Échec du changement sur', 'Failed to toggle'),
+  enabled:         tm('activé', 'enabled'),
+  disabled:        tm('désactivé', 'disabled'),
+  disableFirst:    tm("Désactivez d'abord", 'Disable first'),
+};
 
 // ─── DTO API ─────────────────────────────────────────────────────────────────
 
@@ -168,9 +203,11 @@ function ModuleCard({
   depsMissing: boolean;
   busy:        boolean;
 }) {
+  const { t } = useI18n();
   const isActive   = status === 'active';
   const isCore     = mod.core;
   const isDisabled = isCore || busy || (depsMissing && !isActive);
+  const name = t(mod.name);
 
   return (
     <div className={cn(
@@ -181,18 +218,18 @@ function ModuleCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-2xl" role="img" aria-label={mod.name}>{mod.icon}</span>
+          <span className="text-2xl" role="img" aria-label={name}>{mod.icon}</span>
           <div>
-            <p className="font-semibold text-sm t-text leading-tight">{mod.name}</p>
+            <p className="font-semibold text-sm t-text leading-tight">{name}</p>
             <div className="flex flex-wrap gap-1 mt-0.5">
               {isCore && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
-                  <Lock size={8} /> CŒUR
+                  <Lock size={8} /> {t('LModules.coreBadge')}
                 </span>
               )}
               {isActive && !isCore && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                  <Check size={8} /> ACTIF
+                  <Check size={8} /> {t('LModules.activeBadge')}
                 </span>
               )}
             </div>
@@ -206,8 +243,8 @@ function ModuleCard({
             onClick={() => !isDisabled && onToggle(mod.id)}
             disabled={isDisabled}
             aria-pressed={isActive}
-            aria-label={isActive ? `Désactiver ${mod.name}` : `Activer ${mod.name}`}
-            title={depsMissing && !isActive ? `Requiert : ${mod.requires?.join(', ')}` : undefined}
+            aria-label={isActive ? `${t('LModules.disable')} ${name}` : `${t('LModules.enable')} ${name}`}
+            title={depsMissing && !isActive ? `${t('LModules.requires')} : ${mod.requires?.join(', ')}` : undefined}
             className={cn(
               'relative shrink-0 w-11 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
               isActive ? 'bg-teal-500' : 'bg-gray-300 dark:bg-slate-600',
@@ -228,20 +265,20 @@ function ModuleCard({
       </div>
 
       {/* Description */}
-      <p className="text-xs t-text-2 leading-relaxed">{mod.description}</p>
+      <p className="text-xs t-text-2 leading-relaxed">{t(mod.description)}</p>
 
       {/* Deps warning */}
       {depsMissing && !isActive && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2.5 py-1.5">
           <AlertTriangle size={11} className="shrink-0" />
-          Requiert : {mod.requires?.join(', ')}
+          {t('LModules.requires')} : {mod.requires?.join(', ')}
         </div>
       )}
 
       {/* Tags */}
       <div className="flex flex-wrap gap-1 mt-auto pt-1">
-        {mod.tags.map(t => (
-          <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full t-surface t-text-3">{t}</span>
+        {mod.tags.map(tag => (
+          <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full t-surface t-text-3">{tag}</span>
         ))}
       </div>
     </div>
@@ -252,6 +289,7 @@ function ModuleCard({
 
 export function PageModules() {
   const { user, refresh } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId;
 
   const [active,     setActive]     = useState<Set<string>>(new Set());
@@ -273,7 +311,7 @@ export function PageModules() {
       })
       .catch(() => {
         if (cancelled) return;
-        setToast({ msg: 'Impossible de charger les modules', ok: false });
+        setToast({ msg: t('LModules.loadFailed'), ok: false });
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -282,8 +320,8 @@ export function PageModules() {
   // Toast auto-dismiss
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
   }, [toast]);
 
   const handleToggle = useCallback(async (id: string) => {
@@ -292,12 +330,13 @@ export function PageModules() {
     if (!mod) return;
 
     const willActivate = !active.has(id);
+    const name = t(mod.name);
 
     // Vérifier qu'aucun module actif ne dépend de celui-ci avant de désactiver
     if (!willActivate) {
       const blockers = MODULE_CATALOG.filter(m => active.has(m.id) && m.requires?.includes(id));
       if (blockers.length > 0) {
-        setToast({ msg: `Désactivez d'abord : ${blockers.map(b => b.name).join(', ')}`, ok: false });
+        setToast({ msg: `${t('LModules.disableFirst')} : ${blockers.map(b => t(b.name)).join(', ')}`, ok: false });
         return;
       }
     }
@@ -314,20 +353,20 @@ export function PageModules() {
         if (willActivate) next.add(id); else next.delete(id);
         return next;
       });
-      setToast({ msg: `${mod.name} ${willActivate ? 'activé' : 'désactivé'}`, ok: willActivate });
+      setToast({ msg: `${name} ${willActivate ? t('LModules.enabled') : t('LModules.disabled')}`, ok: willActivate });
 
       // Recharge le user pour mettre à jour enabledModules → nav filtrée
       refresh().catch(() => { /* silencieux */ });
     } catch {
-      setToast({ msg: `Échec du changement sur ${mod.name}`, ok: false });
+      setToast({ msg: `${t('LModules.toggleFail')} ${name}`, ok: false });
     } finally {
       setBusyKey(null);
     }
-  }, [tenantId, busyKey, active, refresh]);
+  }, [tenantId, busyKey, active, refresh, t]);
 
   // Filtered list
   const visible = MODULE_CATALOG.filter(m => {
-    if (filterCat && m.category !== filterCat) return false;
+    if (filterCat && m.category.fr !== filterCat) return false;
     const status = getStatus(m, active);
     if (showActive === 'active'   && status !== 'active')   return false;
     if (showActive === 'inactive' && status === 'active')   return false;
@@ -347,15 +386,15 @@ export function PageModules() {
             <Puzzle className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold t-text">Modules & Extensions</h1>
+            <h1 className="text-2xl font-bold t-text">{t('LModules.pageTitle')}</h1>
             <p className="t-text-2 text-sm mt-0.5">
-              {activeCount} actif{activeCount !== 1 ? 's' : ''} · {inactiveCount} inactif{inactiveCount !== 1 ? 's' : ''}
+              {activeCount} {t('LModules.filterActive').toLowerCase()} · {inactiveCount} {t('LModules.filterInactive').toLowerCase()}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-xs t-text-3">
           <Info size={13} />
-          Les modules cœur ne peuvent pas être désactivés
+          {t('LModules.coreNotice')}
         </div>
       </div>
 
@@ -381,16 +420,16 @@ export function PageModules() {
               'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               !filterCat ? 'bg-teal-500 text-white' : 't-surface t-text-2 t-nav-hover',
             )}
-          >Tous</button>
+          >{t('LModules.filterAll')}</button>
           {CATEGORIES.map(cat => (
             <button
-              key={cat}
-              onClick={() => setFilterCat(cat === filterCat ? '' : cat)}
+              key={cat.fr}
+              onClick={() => setFilterCat(cat.fr === filterCat ? '' : cat.fr)}
               className={cn(
                 'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                filterCat === cat ? 'bg-teal-500 text-white' : 't-surface t-text-2 t-nav-hover',
+                filterCat === cat.fr ? 'bg-teal-500 text-white' : 't-surface t-text-2 t-nav-hover',
               )}
-            >{cat}</button>
+            >{t(cat)}</button>
           ))}
         </div>
 
@@ -404,7 +443,7 @@ export function PageModules() {
                 showActive === v ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 't-surface t-text-2 t-nav-hover',
               )}
             >
-              {v === 'all' ? 'Tous' : v === 'active' ? 'Actifs' : 'Inactifs'}
+              {v === 'all' ? t('LModules.filterAll') : v === 'active' ? t('LModules.filterActive') : t('LModules.filterInactive')}
             </button>
           ))}
         </div>
@@ -414,10 +453,10 @@ export function PageModules() {
       {loading ? (
         <div className="py-16 flex items-center justify-center gap-2 t-text-2 text-sm">
           <Loader2 size={16} className="animate-spin" />
-          Chargement des modules…
+          {t('LModules.loading')}
         </div>
       ) : visible.length === 0 ? (
-        <div className="py-16 text-center t-text-2 text-sm">Aucun module ne correspond aux filtres.</div>
+        <div className="py-16 text-center t-text-2 text-sm">{t('LModules.noMatch')}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visible.map(mod => {

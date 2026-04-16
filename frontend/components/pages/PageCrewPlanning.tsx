@@ -22,6 +22,7 @@ import {
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
+import { useI18n }       from '../../lib/i18n/useI18n';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }         from '../ui/Badge';
 import { Skeleton }      from '../ui/Skeleton';
@@ -37,15 +38,13 @@ import { cn }            from '../../lib/utils';
 type CrewRole = 'CO_PILOT' | 'HOSTESS' | 'SECURITY' | 'MECHANIC_ON_BOARD';
 
 const CREW_ROLES: { value: CrewRole; label: string }[] = [
-  { value: 'CO_PILOT',          label: 'Co-pilote' },
-  { value: 'HOSTESS',           label: 'Hôtesse / Steward' },
-  { value: 'SECURITY',          label: 'Agent de sécurité' },
-  { value: 'MECHANIC_ON_BOARD', label: 'Mécanicien embarqué' },
+  { value: 'CO_PILOT',          label: 'crewPlanning.coPilot' },
+  { value: 'HOSTESS',           label: 'crewPlanning.hostess' },
+  { value: 'SECURITY',          label: 'crewPlanning.security' },
+  { value: 'MECHANIC_ON_BOARD', label: 'crewPlanning.mechanicOnBoard' },
 ];
 
-function roleLabel(v: string): string {
-  return CREW_ROLES.find(r => r.value === v)?.label ?? v;
-}
+// routeLabel is now resolved inside components using t()
 
 interface TripRow {
   id:                 string;
@@ -98,7 +97,8 @@ function addDays(d: Date, n: number): Date {
   return x;
 }
 
-const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
+const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
+const DAY_LABELS_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 function formatWeekRange(start: Date): string {
   const end = addDays(start, 6);
@@ -131,6 +131,7 @@ function AssignCrewForm({
   busy:  boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<AssignFormValues>({
     staffUserId: eligibleStaff[0]?.userId ?? '',
     crewRole:    'CO_PILOT',
@@ -145,7 +146,7 @@ function AssignCrewForm({
 
       <div className="space-y-1.5">
         <label htmlFor="assign-staff" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Membre du personnel <span aria-hidden className="text-red-500">*</span>
+          {t('crewPlanning.staffMember')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <select
           id="assign-staff"
@@ -155,10 +156,10 @@ function AssignCrewForm({
           className={inputClass}
           disabled={busy || eligibleStaff.length === 0}
         >
-          {eligibleStaff.length === 0 && <option value="">Aucun membre disponible</option>}
+          {eligibleStaff.length === 0 && <option value="">{t('crewPlanning.noMember')}</option>}
           {eligibleStaff.map(s => (
             <option key={s.id} value={s.userId}>
-              {staffDisplayName(s)} — {s.role}{!s.isAvailable ? ' (en repos)' : ''}
+              {staffDisplayName(s)} — {s.role}{!s.isAvailable ? ` ${t('crewPlanning.atRest')}` : ''}
             </option>
           ))}
         </select>
@@ -166,7 +167,7 @@ function AssignCrewForm({
 
       <div className="space-y-1.5">
         <label htmlFor="assign-role" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Rôle équipage <span aria-hidden className="text-red-500">*</span>
+          {t('crewPlanning.crewRole')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <select
           id="assign-role"
@@ -176,15 +177,15 @@ function AssignCrewForm({
           className={inputClass}
           disabled={busy}
         >
-          {CREW_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          {CREW_ROLES.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
         </select>
       </div>
 
       <FormFooter
         onCancel={onCancel}
         busy={busy}
-        submitLabel="Affecter"
-        pendingLabel="Affectation…"
+        submitLabel={t('crewPlanning.assign')}
+        pendingLabel={t('crewPlanning.assigning')}
       />
     </form>
   );
@@ -206,11 +207,16 @@ interface TripCardProps {
 function TripCard({
   trip, assignments, loadingCrew, onAssignClick, onMarkBriefed, onRemove, busyStaff, staffIndex,
 }: TripCardProps) {
+  const { t } = useI18n();
+  const roleLabel = (v: string): string => {
+    const found = CREW_ROLES.find(r => r.value === v);
+    return found ? t(found.label) : v;
+  };
   const dep  = new Date(trip.departureScheduled);
   const when = dep.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const routeLabel = trip.route?.label
     ?? [trip.route?.originName, trip.route?.destinationName].filter(Boolean).join(' → ')
-    ?? 'Itinéraire inconnu';
+    ?? t('crewPlanning.unknownRoute');
 
   const briefedCount = assignments?.filter(a => a.briefedAt).length ?? 0;
   const totalCount   = assignments?.length ?? 0;
@@ -245,7 +251,7 @@ function TripCard({
           onClick={onAssignClick}
           aria-label={`Affecter un membre d'équipage au trajet ${routeLabel} de ${when}`}
         >
-          <UserPlus className="w-4 h-4 mr-1.5" aria-hidden />Affecter
+          <UserPlus className="w-4 h-4 mr-1.5" aria-hidden />{t('crewPlanning.assign')}
         </Button>
       </header>
 
@@ -263,7 +269,7 @@ function TripCard({
           </div>
         ) : !assignments || assignments.length === 0 ? (
           <p className="px-3 py-4 text-xs text-slate-500 dark:text-slate-400 text-center">
-            Aucun membre d'équipage affecté
+            {t('crewPlanning.noCrew')}
           </p>
         ) : (
           <ul role="list" className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -287,7 +293,7 @@ function TripCard({
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {a.briefedAt ? (
-                      <Badge variant="success" size="sm">Briefé</Badge>
+                      <Badge variant="success" size="sm">{t('crewPlanning.briefed')}</Badge>
                     ) : (
                       <Button
                         size="sm"
@@ -296,7 +302,7 @@ function TripCard({
                         onClick={() => onMarkBriefed(a.staffId)}
                         aria-label={`Marquer ${name} comme briefé`}
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" aria-hidden />Briefer
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" aria-hidden />{t('crewPlanning.brief')}
                       </Button>
                     )}
                     <Button
@@ -318,7 +324,7 @@ function TripCard({
 
       {totalCount > 0 && (
         <p className="text-[11px] text-slate-500 dark:text-slate-400">
-          {briefedCount}/{totalCount} briefing(s) complété(s)
+          {briefedCount}/{totalCount} {t('crewPlanning.briefingsCompleted')}
         </p>
       )}
     </article>
@@ -388,6 +394,8 @@ function TripCardWithCrew(props: {
 
 export function PageCrewPlanning() {
   const { user } = useAuth();
+  const { t, lang } = useI18n();
+  const DAY_LABELS = lang === 'en' ? DAY_LABELS_EN : DAY_LABELS_FR;
   const tenantId = user?.tenantId ?? '';
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
@@ -475,17 +483,17 @@ export function PageCrewPlanning() {
 
   // ── Rendu ────────────────────────────────────────────────────────────────
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Planning hebdomadaire des équipages">
-      {/* En-tête */}
+    <main className="p-6 space-y-6" role="main" aria-label={t('crewPlanning.pageTitle')}>
+      {/* En-tete */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
             <CalendarRange className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Planning Équipages</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('crewPlanning.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Affectation du personnel sur les trajets existants. Création de trajets : module « Trajets &amp; Planning ».
+              {t('crewPlanning.pageDesc')}
             </p>
           </div>
         </div>
@@ -494,18 +502,18 @@ export function PageCrewPlanning() {
         <div
           className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1"
           role="toolbar"
-          aria-label="Navigation semaine"
+          aria-label={t('crewPlanning.weekNav')}
         >
-          <Button size="sm" variant="ghost" onClick={goPrev} aria-label="Semaine précédente">
+          <Button size="sm" variant="ghost" onClick={goPrev} aria-label={t('crewPlanning.prevWeek')}>
             <ChevronLeft className="w-4 h-4" aria-hidden />
           </Button>
-          <Button size="sm" variant="ghost" onClick={goToday} aria-label="Revenir à la semaine courante">
-            Aujourd'hui
+          <Button size="sm" variant="ghost" onClick={goToday} aria-label={t('crewPlanning.backToWeek')}>
+            {t('crewPlanning.today')}
           </Button>
           <span className="px-2 text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap" aria-live="polite">
             {formatWeekRange(weekStart)}
           </span>
-          <Button size="sm" variant="ghost" onClick={goNext} aria-label="Semaine suivante">
+          <Button size="sm" variant="ghost" onClick={goNext} aria-label={t('crewPlanning.nextWeek')}>
             <ChevronRight className="w-4 h-4" aria-hidden />
           </Button>
         </div>
@@ -514,8 +522,8 @@ export function PageCrewPlanning() {
       <ErrorAlert error={tripsError} icon />
 
       {/* KPI */}
-      <section aria-label="Indicateurs semaine">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <section aria-label={t('crewPlanning.weekIndicators')}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {DAY_LABELS.map((label, i) => {
             const d  = addDays(weekStart, i);
             const n  = tripsByDay[i].length;
@@ -527,7 +535,7 @@ export function PageCrewPlanning() {
                 key={label}
                 onClick={() => setActiveDay(i)}
                 aria-pressed={isActive}
-                aria-label={`${label} ${d.toLocaleDateString('fr-FR')} — ${n} trajet(s)`}
+                aria-label={`${label} ${d.toLocaleDateString('fr-FR')} — ${n} ${t('crewPlanning.trips')}`}
                 className={cn(
                   'text-left rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
                   isActive
@@ -542,7 +550,7 @@ export function PageCrewPlanning() {
                   {d.getDate().toString().padStart(2, '0')}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {n} trajet{n > 1 ? 's' : ''}
+                  {n} {t('crewPlanning.trips')}
                 </p>
               </button>
             );
@@ -553,8 +561,8 @@ export function PageCrewPlanning() {
       {/* Liste trajets du jour */}
       <Card>
         <CardHeader
-          heading={`Trajets du ${addDays(weekStart, activeDay).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}`}
-          description={`${visibleTrips.length} trajet(s) affiché(s) · ${totalWeekTrips} sur la semaine`}
+          heading={`${t('crewPlanning.tripsOfDay')} ${addDays(weekStart, activeDay).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+          description={`${visibleTrips.length} ${t('crewPlanning.displayedTrips')} · ${totalWeekTrips} ${t('crewPlanning.onWeek')}`}
         />
         <CardContent className="p-4">
           {loadingTrips ? (
@@ -564,8 +572,8 @@ export function PageCrewPlanning() {
           ) : visibleTrips.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
               <Users className="w-12 h-12 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">Aucun trajet programmé ce jour</p>
-              <p className="text-sm mt-1">Créez un trajet depuis le module Trajets pour planifier un équipage</p>
+              <p className="font-medium">{t('crewPlanning.noTrip')}</p>
+              <p className="text-sm mt-1">{t('crewPlanning.noTripHint')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -576,7 +584,7 @@ export function PageCrewPlanning() {
                   tenantId={tenantId}
                   staffIndex={staffIndex}
                   refreshKey={refreshKey}
-                  onAssignClick={t => { setAssignTarget(t); setAssignError(null); }}
+                  onAssignClick={tr => { setAssignTarget(tr); setAssignError(null); }}
                   onAction={() => setRefreshKey(k => k + 1)}
                 />
               ))}
@@ -589,7 +597,7 @@ export function PageCrewPlanning() {
       <Dialog
         open={!!assignTarget}
         onOpenChange={o => { if (!o) { setAssignTarget(null); setAssignError(null); } }}
-        title="Affecter un membre d'équipage"
+        title={t('crewPlanning.assignCrew')}
         description={
           assignTarget
             ? `Trajet ${new Date(assignTarget.departureScheduled).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`

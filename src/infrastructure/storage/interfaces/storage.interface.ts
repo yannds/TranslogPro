@@ -13,6 +13,7 @@ export enum DocumentType {
   TEMPLATE_SOURCE = 'TEMPLATE_SOURCE',  // Fichier source template (.hbs) — persistant
   EXCEL_EXPORT    = 'EXCEL_EXPORT',     // Export Excel généré côté serveur
   WORD_EXPORT     = 'WORD_EXPORT',      // Export Word généré côté serveur
+  BUS_PHOTO       = 'BUS_PHOTO',        // Photo véhicule (intérieur/extérieur, Portail Voyageur)
 }
 
 export const SIGNED_URL_TTL_SECONDS: Record<DocumentType, number> = {
@@ -28,6 +29,7 @@ export const SIGNED_URL_TTL_SECONDS: Record<DocumentType, number> = {
   [DocumentType.TEMPLATE_SOURCE]: 86400 * 365,      // 1 an (source persistante)
   [DocumentType.EXCEL_EXPORT]:    3600,             // 1h
   [DocumentType.WORD_EXPORT]:     3600,             // 1h
+  [DocumentType.BUS_PHOTO]:       86400,            // 24h (affichage Portail Voyageur)
 };
 
 export interface IStorageService {

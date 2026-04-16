@@ -58,6 +58,8 @@ export const EventTypes = {
 
   // Driver & HR
   DRIVER_REST_STARTED:            'driver.rest.started',
+  DRIVER_REST_ENDED:              'driver.rest.ended',
+  DRIVER_REST_COMPLETED:          'driver.rest.completed',
   DRIVER_REST_VIOLATION:          'driver.rest.violation',
   DRIVER_REMEDIATION_TRIGGERED:   'driver.remediation.triggered',
   DRIVER_TRAINING_DUE:            'driver.training.due',

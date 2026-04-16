@@ -20,6 +20,18 @@ const COOKIE_OPTS = {
   path:      '/',
 };
 
+/** Cookie pré-session MFA — TTL 5 min, distinct du cookie de session.
+ *  /auth/me NE LE LIT PAS, donc impossible d'accéder à l'API tant que le
+ *  challenge n'est pas finalisé via /auth/mfa/verify. */
+const MFA_COOKIE_NAME = 'translog_mfa_challenge';
+const MFA_COOKIE_OPTS = {
+  httpOnly:  true,
+  sameSite:  'strict' as const,
+  secure:    process.env.NODE_ENV === 'production',
+  maxAge:    5 * 60 * 1_000,
+  path:      '/',
+};
+
 /**
  * Extrait l'IP réelle depuis X-Forwarded-For (Kong/nginx) ou socket.
  * Ne fait confiance à X-Forwarded-For que si NODE_ENV=production
@@ -83,6 +95,49 @@ export class AuthController {
     // refresh sans attendre l'expiration d'un cache HTTP intermédiaire.
     res.setHeader('Cache-Control', 'no-store');
     return this.authService.me(token, extractIp(req));
+  }
+
+  /**
+   * POST /api/auth/mfa/verify
+   *
+   * Étape 2 du sign-in MFA. Lit le cookie `translog_mfa_challenge` posé par
+   * sign-in (côté serveur) lorsqu'un user MFA-enabled aura validé son
+   * password. **Endpoint NON activé tant que sign-in ne pose pas le cookie
+   * pré-session** — ce qui n'est pas le cas à ce stade.
+   *
+   * En l'état actuel : appeler cet endpoint sans cookie pré-session retourne
+   * 401 "Challenge MFA absent" → comportement bénin, aucun risque de
+   * régression sur le flow login standard.
+   *
+   * Rate-limit : 5 tentatives / 15 min par IP (même politique que sign-in).
+   */
+  @Post('mfa/verify')
+  @HttpCode(200)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 15 * 60_000, keyBy: 'ip', suffix: 'auth_mfa_verify' })
+  async verifyMfa(
+    @Body() body: { code: string },
+    @Req()  req:  Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthUserDto> {
+    const challengeToken = req.cookies?.[MFA_COOKIE_NAME];
+    if (typeof challengeToken !== 'string' || challengeToken.length === 0) {
+      throw new UnauthorizedException('Challenge MFA absent');
+    }
+    if (!body?.code || typeof body.code !== 'string') {
+      throw new UnauthorizedException('Code requis');
+    }
+
+    const { token, user } = await this.authService.verifyMfa(
+      challengeToken,
+      body.code,
+      extractIp(req),
+      req.headers['user-agent'] ?? '',
+    );
+
+    res.clearCookie(MFA_COOKIE_NAME, { path: '/', sameSite: 'strict' });
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+    return user;
   }
 
   /**
