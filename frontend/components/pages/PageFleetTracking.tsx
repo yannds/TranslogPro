@@ -73,9 +73,9 @@ interface OdometerRow {
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
 const FUEL_TYPE_LABEL: Record<FuelLogType, string> = {
-  DIESEL: 'LFleetTracking.fuelDiesel',
-  PETROL: 'LFleetTracking.fuelPetrol',
-  ADBLUE: 'LFleetTracking.fuelAdblue',
+  DIESEL: 'fleetTracking.fuelDiesel',
+  PETROL: 'fleetTracking.fuelPetrol',
+  ADBLUE: 'fleetTracking.fuelAdblue',
 };
 
 const FUEL_TYPE_VARIANT: Record<FuelLogType, 'default' | 'success' | 'warning'> = {
@@ -85,10 +85,10 @@ const FUEL_TYPE_VARIANT: Record<FuelLogType, 'default' | 'success' | 'warning'> 
 };
 
 const SOURCE_LABEL: Record<OdometerSource, string> = {
-  MANUAL:      'LFleetTracking.sourceManual',
-  TRIP:        'LFleetTracking.sourceTrip',
-  MAINTENANCE: 'LFleetTracking.sourceMaintenance',
-  GPS:         'LFleetTracking.sourceGps',
+  MANUAL:      'fleetTracking.sourceManual',
+  TRIP:        'fleetTracking.sourceTrip',
+  MAINTENANCE: 'fleetTracking.sourceMaintenance',
+  GPS:         'fleetTracking.sourceGps',
 };
 
 const SOURCE_VARIANT: Record<OdometerSource, 'default' | 'success' | 'warning' | 'danger'> = {
@@ -104,7 +104,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
   return [
     {
       key: 'logDate',
-      header: t('LFleetTracking.colDate'),
+      header: t('fleetTracking.colDate'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-700 dark:text-slate-300 tabular-nums">
@@ -115,7 +115,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'fuelType',
-      header: t('LFleetTracking.colType'),
+      header: t('fleetTracking.colType'),
       sortable: true,
       cellRenderer: (v) => (
         <Badge variant={FUEL_TYPE_VARIANT[v as FuelLogType]} size="sm">
@@ -126,7 +126,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'quantityL',
-      header: t('LFleetTracking.colQuantity'),
+      header: t('fleetTracking.colQuantity'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
@@ -138,7 +138,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'pricePerL',
-      header: t('LFleetTracking.colPricePerL'),
+      header: t('fleetTracking.colPricePerL'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
@@ -150,7 +150,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'totalCost',
-      header: t('LFleetTracking.colTotal'),
+      header: t('fleetTracking.colTotal'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
@@ -162,7 +162,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'odometerKm',
-      header: t('LFleetTracking.colKm'),
+      header: t('fleetTracking.colKm'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
@@ -174,7 +174,7 @@ function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefin
     },
     {
       key: 'stationName',
-      header: t('LFleetTracking.colStation'),
+      header: t('fleetTracking.colStation'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -192,7 +192,7 @@ function buildOdometerColumns(t: (keyOrMap: string | Record<string, string | und
   return [
     {
       key: 'readingDate',
-      header: t('LFleetTracking.colDate'),
+      header: t('fleetTracking.colDate'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-700 dark:text-slate-300 tabular-nums">
@@ -203,7 +203,7 @@ function buildOdometerColumns(t: (keyOrMap: string | Record<string, string | und
     },
     {
       key: 'readingKm',
-      header: t('LFleetTracking.colMileage'),
+      header: t('fleetTracking.colMileage'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
@@ -215,7 +215,7 @@ function buildOdometerColumns(t: (keyOrMap: string | Record<string, string | und
     },
     {
       key: 'source',
-      header: t('LFleetTracking.colSource'),
+      header: t('fleetTracking.colSource'),
       sortable: true,
       cellRenderer: (v) => {
         const s = v as OdometerSource | null;
@@ -230,7 +230,7 @@ function buildOdometerColumns(t: (keyOrMap: string | Record<string, string | und
     },
     {
       key: 'note',
-      header: t('LFleetTracking.colNote'),
+      header: t('fleetTracking.colNote'),
       cellRenderer: (v) => (
         <span className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-[200px] block">
           {(v as string | null) ?? '\u2014'}
@@ -401,7 +401,7 @@ export function PageFleetTracking() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LFleetTracking.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('fleetTracking.pageTitle')}>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -411,10 +411,10 @@ export function PageFleetTracking() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {t('LFleetTracking.pageTitle')}
+              {t('fleetTracking.pageTitle')}
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('LFleetTracking.pageSubtitle')}
+              {t('fleetTracking.pageSubtitle')}
             </p>
           </div>
         </div>
@@ -424,7 +424,7 @@ export function PageFleetTracking() {
       <div className="flex items-center gap-3">
         <label htmlFor="bus-select"
           className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
-          {t('LFleetTracking.vehicleLabel')}
+          {t('fleetTracking.vehicleLabel')}
         </label>
         <select
           id="bus-select"
@@ -432,7 +432,7 @@ export function PageFleetTracking() {
           onChange={e => setSelectedBusId(e.target.value)}
           className={`${inp} max-w-md`}
         >
-          <option value="">{t('LFleetTracking.selectVehicle')}</option>
+          <option value="">{t('fleetTracking.selectVehicle')}</option>
           {(buses ?? []).map(b => (
             <option key={b.id} value={b.id}>
               {b.plateNumber}{b.model ? ` — ${b.model}` : ''}
@@ -443,42 +443,42 @@ export function PageFleetTracking() {
 
       {!selectedBusId && (
         <p className="text-center text-slate-500 dark:text-slate-400 py-12 text-sm">
-          {t('LFleetTracking.selectPrompt')}
+          {t('fleetTracking.selectPrompt')}
         </p>
       )}
 
       {selectedBusId && (
         <>
           {/* ── Section A — Carburant ────────────────────────────────────── */}
-          <section className="space-y-4" aria-label={t('LFleetTracking.fuelSection')}>
+          <section className="space-y-4" aria-label={t('fleetTracking.fuelSection')}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Fuel className="w-5 h-5 text-amber-500" aria-hidden />
-                {t('LFleetTracking.fuelSection')}
+                {t('fleetTracking.fuelSection')}
               </h2>
               <Button onClick={() => { setFuelFormErr(null); setShowFuelDialog(true); }}>
                 <Plus className="w-4 h-4 mr-2" aria-hidden />
-                {t('LFleetTracking.addFillUp')}
+                {t('fleetTracking.addFillUp')}
               </Button>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" aria-label={t('LFleetTracking.fuelSection')}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" aria-label={t('fleetTracking.fuelSection')}>
               <Kpi
-                label={t('LFleetTracking.avgConsumption')}
+                label={t('fleetTracking.avgConsumption')}
                 value={avgConso != null ? avgConso.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : '\u2014'}
                 unit={avgConso != null ? 'L/100km' : undefined}
                 icon={<Activity className="w-5 h-5" />}
                 tone="warning"
               />
               <Kpi
-                label={t('LFleetTracking.totalLitres')}
+                label={t('fleetTracking.totalLitres')}
                 value={totalL.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
                 unit="L"
                 icon={<Fuel className="w-5 h-5" />}
               />
               <Kpi
-                label={t('LFleetTracking.totalCost')}
+                label={t('fleetTracking.totalCost')}
                 value={totalC.toLocaleString('fr-FR')}
                 unit="F"
                 icon={<Gauge className="w-5 h-5" />}
@@ -494,8 +494,8 @@ export function PageFleetTracking() {
               loading={fuelLoading}
               defaultSort={{ key: 'logDate', dir: 'desc' }}
               defaultPageSize={25}
-              searchPlaceholder={t('LFleetTracking.searchFuel')}
-              emptyMessage={t('LFleetTracking.noFuelLog')}
+              searchPlaceholder={t('fleetTracking.searchFuel')}
+              emptyMessage={t('fleetTracking.noFuelLog')}
               exportFormats={['csv', 'json', 'xls', 'pdf']}
               exportFilename={`carburant-${selectedBus?.plateNumber ?? 'bus'}`}
               stickyHeader
@@ -503,15 +503,15 @@ export function PageFleetTracking() {
           </section>
 
           {/* ── Section B — Kilométrage ──────────────────────────────────── */}
-          <section className="space-y-4" aria-label={t('LFleetTracking.odometerSection')}>
+          <section className="space-y-4" aria-label={t('fleetTracking.odometerSection')}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Gauge className="w-5 h-5 text-blue-500" aria-hidden />
-                {t('LFleetTracking.odometerSection')}
+                {t('fleetTracking.odometerSection')}
               </h2>
               <Button onClick={() => { setOdoFormErr(null); setShowOdoDialog(true); }}>
                 <Plus className="w-4 h-4 mr-2" aria-hidden />
-                {t('LFleetTracking.newReading')}
+                {t('fleetTracking.newReading')}
               </Button>
             </div>
 
@@ -523,8 +523,8 @@ export function PageFleetTracking() {
               loading={odoLoading}
               defaultSort={{ key: 'readingDate', dir: 'desc' }}
               defaultPageSize={25}
-              searchPlaceholder={t('LFleetTracking.searchOdometer')}
-              emptyMessage={t('LFleetTracking.noOdometerReading')}
+              searchPlaceholder={t('fleetTracking.searchOdometer')}
+              emptyMessage={t('fleetTracking.noOdometerReading')}
               exportFormats={['csv', 'json']}
               exportFilename={`odometer-${selectedBus?.plateNumber ?? 'bus'}`}
               stickyHeader
@@ -537,8 +537,8 @@ export function PageFleetTracking() {
       <Dialog
         open={showFuelDialog}
         onOpenChange={o => { if (!o) { setShowFuelDialog(false); resetFuelForm(); } }}
-        title={t('LFleetTracking.addFillUpTitle')}
-        description={selectedBus ? `${t('LFleetTracking.vehicleLabel')} ${selectedBus.plateNumber}` : ''}
+        title={t('fleetTracking.addFillUpTitle')}
+        description={selectedBus ? `${t('fleetTracking.vehicleLabel')} ${selectedBus.plateNumber}` : ''}
         size="md"
       >
         <form onSubmit={handleFuelSubmit} className="space-y-4">
@@ -548,7 +548,7 @@ export function PageFleetTracking() {
             {/* Fuel type */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.colType')} <span aria-hidden className="text-red-500">*</span>
+                {t('fleetTracking.colType')} <span aria-hidden className="text-red-500">*</span>
               </label>
               <select required value={fuelForm.fuelType}
                 onChange={e => setFuelForm(f => ({ ...f, fuelType: e.target.value as FuelLogType }))}
@@ -562,7 +562,7 @@ export function PageFleetTracking() {
             {/* Quantity */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.quantityL')} <span aria-hidden className="text-red-500">*</span>
+                {t('fleetTracking.quantityL')} <span aria-hidden className="text-red-500">*</span>
               </label>
               <input type="number" min={0.1} step="0.1" required
                 value={fuelForm.quantityL}
@@ -573,7 +573,7 @@ export function PageFleetTracking() {
             {/* Price per L */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.pricePerL')}
+                {t('fleetTracking.pricePerL')}
               </label>
               <input type="number" min={0} step="0.01"
                 value={fuelForm.pricePerL}
@@ -584,7 +584,7 @@ export function PageFleetTracking() {
             {/* Total cost */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.totalCostF')}
+                {t('fleetTracking.totalCostF')}
               </label>
               <input type="number" min={0} step="1"
                 value={fuelForm.totalCost}
@@ -595,7 +595,7 @@ export function PageFleetTracking() {
             {/* Odometer */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.mileageKm')}
+                {t('fleetTracking.mileageKm')}
               </label>
               <input type="number" min={0} step="1"
                 value={fuelForm.odometerKm}
@@ -606,7 +606,7 @@ export function PageFleetTracking() {
             {/* Station */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('LFleetTracking.station')}
+                {t('fleetTracking.station')}
               </label>
               <input type="text"
                 value={fuelForm.stationName}
@@ -622,18 +622,18 @@ export function PageFleetTracking() {
               onChange={e => setFuelForm(f => ({ ...f, fullTank: e.target.checked }))}
               disabled={fuelBusy}
               className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500" />
-            <span className="text-sm text-slate-700 dark:text-slate-300">{t('LFleetTracking.fullTank')}</span>
+            <span className="text-sm text-slate-700 dark:text-slate-300">{t('fleetTracking.fullTank')}</span>
           </label>
 
           {/* Note */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              {t('LFleetTracking.note')}
+              {t('fleetTracking.note')}
             </label>
             <input type="text"
               value={fuelForm.note}
               onChange={e => setFuelForm(f => ({ ...f, note: e.target.value }))}
-              className={inp} disabled={fuelBusy} placeholder={t('LFleetTracking.notePlaceholder')} />
+              className={inp} disabled={fuelBusy} placeholder={t('fleetTracking.notePlaceholder')} />
           </div>
 
           <FormFooter
@@ -649,8 +649,8 @@ export function PageFleetTracking() {
       <Dialog
         open={showOdoDialog}
         onOpenChange={o => { if (!o) { setShowOdoDialog(false); resetOdoForm(); } }}
-        title={t('LFleetTracking.newReadingTitle')}
-        description={selectedBus ? `${t('LFleetTracking.vehicleLabel')} ${selectedBus.plateNumber}` : ''}
+        title={t('fleetTracking.newReadingTitle')}
+        description={selectedBus ? `${t('fleetTracking.vehicleLabel')} ${selectedBus.plateNumber}` : ''}
         size="sm"
       >
         <form onSubmit={handleOdoSubmit} className="space-y-4">
@@ -658,7 +658,7 @@ export function PageFleetTracking() {
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              {t('LFleetTracking.readingKm')} <span aria-hidden className="text-red-500">*</span>
+              {t('fleetTracking.readingKm')} <span aria-hidden className="text-red-500">*</span>
             </label>
             <input type="number" min={0} step="1" required
               value={odoForm.readingKm}
@@ -668,7 +668,7 @@ export function PageFleetTracking() {
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              {t('LFleetTracking.source')}
+              {t('fleetTracking.source')}
             </label>
             <select value={odoForm.source}
               onChange={e => setOdoForm(f => ({ ...f, source: e.target.value as OdometerSource }))}
@@ -681,12 +681,12 @@ export function PageFleetTracking() {
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              {t('LFleetTracking.note')}
+              {t('fleetTracking.note')}
             </label>
             <input type="text"
               value={odoForm.note}
               onChange={e => setOdoForm(f => ({ ...f, note: e.target.value }))}
-              className={inp} disabled={odoBusy} placeholder={t('LFleetTracking.notePlaceholder')} />
+              className={inp} disabled={odoBusy} placeholder={t('fleetTracking.notePlaceholder')} />
           </div>
 
           <FormFooter

@@ -109,17 +109,17 @@ function RouteForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LRoutes.routeName')} <span aria-hidden className="text-red-500">*</span>
+          {t('routes.routeName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => patch({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder={t('LRoutes.placeholder')} />
+          className={inp} disabled={busy} placeholder={t('routes.placeholder')} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LRoutes.origin')} <span aria-hidden className="text-red-500">*</span>
+            {t('routes.origin')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.originId}
             onChange={e => patch({ originId: e.target.value })}
@@ -133,7 +133,7 @@ function RouteForm({
 
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LRoutes.destination')} <span aria-hidden className="text-red-500">*</span>
+            {t('routes.destination')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.destinationId}
             onChange={e => patch({ destinationId: e.target.value })}
@@ -148,26 +148,26 @@ function RouteForm({
 
       {sameOD && (
         <p className="text-xs text-red-600">
-          {t('LRoutes.sameODError')}
+          {t('routes.sameODError')}
         </p>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LRoutes.distanceKm')} <span aria-hidden className="text-red-500">*</span>
+            {t('routes.distanceKm')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="number" min={0} step="0.1" required value={f.distanceKm}
             onChange={e => patch({ distanceKm: e.target.value })}
-            className={inp} disabled={busy} placeholder={t('LRoutes.placeholderDist')} />
+            className={inp} disabled={busy} placeholder={t('routes.placeholderDist')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LRoutes.baseFare')} ({operational.currency}) <span aria-hidden className="text-red-500">*</span>
+            {t('routes.baseFare')} ({operational.currency}) <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="number" min={0} step="50" required value={f.basePrice}
             onChange={e => patch({ basePrice: e.target.value })}
-            className={inp} disabled={busy} placeholder={t('LRoutes.placeholderPrice')} />
+            className={inp} disabled={busy} placeholder={t('routes.placeholderPrice')} />
         </div>
       </div>
 
@@ -264,7 +264,7 @@ export function PageRoutes() {
   const noStations = (stations?.length ?? 0) === 0;
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LRoutes.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('routes.pageTitle')}>
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -272,19 +272,19 @@ export function PageRoutes() {
             <RouteIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LRoutes.pageTitle')}</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('routes.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('LRoutes.pageDesc')}
+              {t('routes.pageDesc')}
             </p>
           </div>
         </div>
         <Button
           onClick={() => { setActionErr(null); setShowCreate(true); }}
           disabled={noStations}
-          title={noStations ? t('LRoutes.noStationsBtn') : undefined}
+          title={noStations ? t('routes.noStationsBtn') : undefined}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          {t('LRoutes.newRoute')}
+          {t('routes.newRoute')}
         </Button>
       </div>
 
@@ -293,27 +293,27 @@ export function PageRoutes() {
       {noStations && !loading && (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span>
-            {t('LRoutes.noStationsWarning')}
+            {t('routes.noStationsWarning')}
           </span>
           <Button variant="outline" onClick={() => navigate('/admin/stations')}>
             <MapPin className="w-4 h-4 mr-1.5" aria-hidden />
-            {t('LRoutes.createStation')}
+            {t('routes.createStation')}
           </Button>
         </div>
       )}
 
       {/* KPIs */}
-      <section aria-label={t('LRoutes.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Kpi label={t('LRoutes.activeRoutes')}       value={kpi.routes}        icon={<RouteIcon className="w-5 h-5" />} />
-        <Kpi label={t('LRoutes.cumulativeTrips')}    value={kpi.totalTrips}    icon={<TrendingUp className="w-5 h-5" />} />
-        <Kpi label={t('LRoutes.cumulativeDistance')} value={kpi.totalDistance} icon={<MapPin className="w-5 h-5" />} suffix="km" />
+      <section aria-label={t('routes.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Kpi label={t('routes.activeRoutes')}       value={kpi.routes}        icon={<RouteIcon className="w-5 h-5" />} />
+        <Kpi label={t('routes.cumulativeTrips')}    value={kpi.totalTrips}    icon={<TrendingUp className="w-5 h-5" />} />
+        <Kpi label={t('routes.cumulativeDistance')} value={kpi.totalDistance} icon={<MapPin className="w-5 h-5" />} suffix="km" />
       </section>
 
       {/* Liste */}
       <Card>
         <CardHeader
-          heading={`${sortedRoutes.length} ${sortedRoutes.length > 1 ? t('LRoutes.pageTitle') : t('LRoutes.routeHeader')}`}
-          description={t('LRoutes.sortedByTrips')}
+          heading={`${sortedRoutes.length} ${sortedRoutes.length > 1 ? t('routes.pageTitle') : t('routes.routeHeader')}`}
+          description={t('routes.sortedByTrips')}
         />
         <CardContent className="p-0">
           {loading ? (
@@ -323,20 +323,20 @@ export function PageRoutes() {
           ) : sortedRoutes.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
               <RouteIcon className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">{t('LRoutes.noRoutes')}</p>
-              <p className="text-sm mt-1">{t('LRoutes.noRoutesCta')}</p>
+              <p className="font-medium">{t('routes.noRoutes')}</p>
+              <p className="text-sm mt-1">{t('routes.noRoutesCta')}</p>
             </div>
           ) : (
-            <div role="table" aria-label={t('LRoutes.pageTitle')}>
+            <div role="table" aria-label={t('routes.pageTitle')}>
               <div
                 role="row"
                 className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
               >
-                <div role="columnheader">{t('LRoutes.routeHeader')}</div>
-                <div role="columnheader" className="text-right">{t('LRoutes.distanceHeader')}</div>
-                <div role="columnheader" className="text-right">{t('LRoutes.baseFareHeader')}</div>
-                <div role="columnheader" className="text-right">{t('LRoutes.tripsHeader')}</div>
-                <div role="columnheader" className="text-right">{t('LRoutes.actionsHeader')}</div>
+                <div role="columnheader">{t('routes.routeHeader')}</div>
+                <div role="columnheader" className="text-right">{t('routes.distanceHeader')}</div>
+                <div role="columnheader" className="text-right">{t('routes.baseFareHeader')}</div>
+                <div role="columnheader" className="text-right">{t('routes.tripsHeader')}</div>
+                <div role="columnheader" className="text-right">{t('routes.actionsHeader')}</div>
               </div>
               <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
                 {sortedRoutes.map(r => (
@@ -396,8 +396,8 @@ export function PageRoutes() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title={t('LRoutes.newRoute')}
-        description={t('LRoutes.dialogNewDesc')}
+        title={t('routes.newRoute')}
+        description={t('routes.dialogNewDesc')}
         size="lg"
       >
         <RouteForm
@@ -415,7 +415,7 @@ export function PageRoutes() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title={t('LRoutes.editRoute')}
+        title={t('routes.editRoute')}
         description={editTarget?.name}
         size="lg"
       >
@@ -456,10 +456,10 @@ export function PageRoutes() {
       <Dialog
         open={!!deleteTarget}
         onOpenChange={o => { if (!o) setDeleteTarget(null); }}
-        title={t('LRoutes.deleteRoute')}
+        title={t('routes.deleteRoute')}
         description={
           deleteTarget
-            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('LRoutes.deleteDesc')}`
+            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('routes.deleteDesc')}`
             : undefined
         }
         footer={
@@ -481,7 +481,7 @@ export function PageRoutes() {
         {actionErr && <p className="text-sm text-red-600 dark:text-red-400">{actionErr}</p>}
         {(deleteTarget?._count?.trips ?? 0) > 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
-            {deleteTarget?._count?.trips} {t('LRoutes.tripsBound')} {t('LRoutes.deleteWarning')}
+            {deleteTarget?._count?.trips} {t('routes.tripsBound')} {t('routes.deleteWarning')}
           </p>
         )}
         <div />

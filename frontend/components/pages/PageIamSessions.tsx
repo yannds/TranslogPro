@@ -56,7 +56,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
   return [
     {
       key: 'user',
-      header: t('LIamSessions.colUser'),
+      header: t('iamSessions.colUser'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div>
@@ -64,7 +64,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
             {row.user.name}
             {row.user.id === currentUserId && (
               <span className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
-                {t('LIamSessions.you')}
+                {t('iamSessions.you')}
               </span>
             )}
           </p>
@@ -75,7 +75,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
     },
     {
       key: 'userAgent',
-      header: t('LIamSessions.colDeviceBrowser'),
+      header: t('iamSessions.colDeviceBrowser'),
       cellRenderer: (v) => (
         <div className="flex items-center gap-1.5">
           {isMobile(String(v))
@@ -90,7 +90,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
     },
     {
       key: 'ipAddress',
-      header: t('LIamSessions.ip'),
+      header: t('iamSessions.ip'),
       sortable: true,
       width: '130px',
       cellRenderer: (v) => (
@@ -99,7 +99,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
     },
     {
       key: 'createdAt',
-      header: t('LIamSessions.colCreatedAt'),
+      header: t('iamSessions.colCreatedAt'),
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
@@ -109,7 +109,7 @@ function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<strin
     },
     {
       key: 'expiresAt',
-      header: t('LIamSessions.colExpiresAt'),
+      header: t('iamSessions.colExpiresAt'),
       sortable: true,
       width: '140px',
       cellRenderer: (v) => (
@@ -144,47 +144,47 @@ function SessionDetailDialog({
     <Dialog
       open={!!session}
       onOpenChange={o => { if (!o) onClose(); }}
-      title={t('LIamSessions.sessionDetail')}
+      title={t('iamSessions.sessionDetail')}
       size="lg"
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>{t('common.close')}</Button>
           <Button variant="destructive" size="sm" onClick={onRevoke} disabled={revoking}>
             <Trash2 size={13} />
-            {revoking ? t('LIamSessions.revoking') : t('LIamSessions.revoke')}
+            {revoking ? t('iamSessions.revoking') : t('iamSessions.revoke')}
           </Button>
         </>
       }
     >
       <dl className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
         <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colUser')}</dt>
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('iamSessions.colUser')}</dt>
           <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100">
             <span className="font-medium">{session.user.name}</span>
             {isOwn && (
               <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded px-1.5 py-0.5">
-                {t('LIamSessions.you')}
+                {t('iamSessions.you')}
               </span>
             )}
             <p className="text-xs text-slate-500 mt-0.5">{session.user.email}</p>
           </dd>
         </div>
         <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.ip')}</dt>
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('iamSessions.ip')}</dt>
           <dd className="sm:col-span-2 font-mono text-slate-900 dark:text-slate-100">{session.ipAddress ?? '—'}</dd>
         </div>
         <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colDevice')}</dt>
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('iamSessions.colDevice')}</dt>
           <dd className="sm:col-span-2 text-xs text-slate-700 dark:text-slate-300 break-all">
             {uaShort(session.userAgent)}
           </dd>
         </div>
         <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colCreatedAt')}</dt>
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('iamSessions.colCreatedAt')}</dt>
           <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.createdAt)}</dd>
         </div>
         <div className="py-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('LIamSessions.colExpiresAt')}</dt>
+          <dt className="font-medium text-slate-500 dark:text-slate-400">{t('iamSessions.colExpiresAt')}</dt>
           <dd className="sm:col-span-2 text-slate-900 dark:text-slate-100 font-mono text-xs">{formatDate(session.expiresAt)}</dd>
         </div>
       </dl>
@@ -218,14 +218,14 @@ export function PageIamSessions() {
       setTarget(null);
       reload();
     } catch (e) {
-      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('LIamSessions.errorGeneric'));
+      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : t('iamSessions.errorGeneric'));
     } finally { setRevoking(false); }
   }
 
   const columns    = buildColumns(user?.id ?? '', t);
   const rowActions: RowAction<Session>[] = [
     {
-      label:   t('LIamSessions.revoke'),
+      label:   t('iamSessions.revoke'),
       icon:    <Trash2 size={13} />,
       danger:  true,
       onClick: (row) => { setTarget(row); setErr(''); },
@@ -239,15 +239,15 @@ export function PageIamSessions() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <KeyRound size={24} className="text-indigo-500 dark:text-indigo-400" />
-            {t('LIamSessions.activeSessions')}
+            {t('iamSessions.activeSessions')}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            {loading ? t('LIamSessions.loading') : `${sessions.length} ${t('LIamSessions.sessionCount')}`}
+            {loading ? t('iamSessions.loading') : `${sessions.length} ${t('iamSessions.sessionCount')}`}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={reload} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span className="ml-1">{t('LIamSessions.refresh')}</span>
+          <span className="ml-1">{t('iamSessions.refresh')}</span>
         </Button>
       </div>
 
@@ -259,8 +259,8 @@ export function PageIamSessions() {
         rowActions={rowActions}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
-        searchPlaceholder={t('LIamSessions.searchPlaceholder')}
-        emptyMessage={t('LIamSessions.emptyMessage')}
+        searchPlaceholder={t('iamSessions.searchPlaceholder')}
+        emptyMessage={t('iamSessions.emptyMessage')}
         exportFormats={['csv', 'json']}
         exportFilename="sessions"
         onRowClick={(row) => { setTarget(row); setErr(''); }}

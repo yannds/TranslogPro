@@ -106,15 +106,15 @@ export function PageFleetSeats() {
   const seatCount = computeSeatCount(layout);
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LFleetSeats.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('fleetSeats.pageTitle')}>
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
           <Grid3x3 className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LFleetSeats.pageTitle')}</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('fleetSeats.pageTitle')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('LFleetSeats.pageSubtitle')}
+            {t('fleetSeats.pageSubtitle')}
           </p>
         </div>
       </div>
@@ -124,14 +124,14 @@ export function PageFleetSeats() {
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
         {/* Sélecteur de bus */}
         <Card>
-          <CardHeader heading={t('LFleetSeats.vehicles')} description={t('LFleetSeats.selectBus')} />
+          <CardHeader heading={t('fleetSeats.vehicles')} description={t('fleetSeats.selectBus')} />
           <CardContent className="p-0">
             {loading ? (
               <div className="p-4 space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : !buses || buses.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-slate-500">{t('LFleetSeats.noVehicle')}</p>
+              <p className="px-4 py-6 text-sm text-slate-500">{t('fleetSeats.noVehicle')}</p>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {buses.map(b => (
@@ -147,11 +147,11 @@ export function PageFleetSeats() {
                           <Bus className="w-4 h-4 text-teal-500" aria-hidden />
                           {b.plateNumber}
                         </p>
-                        <p className="text-xs text-slate-500 truncate">{b.model || '—'} · {b.capacity} {t('LFleetSeats.seats')}</p>
+                        <p className="text-xs text-slate-500 truncate">{b.model || '—'} · {b.capacity} {t('fleetSeats.seats')}</p>
                       </div>
                       {b.seatLayout
-                        ? <Badge variant="success" size="sm">{t('LFleetSeats.seatOk')}</Badge>
-                        : <Badge variant="warning" size="sm">{t('LFleetSeats.seatTodo')}</Badge>}
+                        ? <Badge variant="success" size="sm">{t('fleetSeats.seatOk')}</Badge>
+                        : <Badge variant="warning" size="sm">{t('fleetSeats.seatTodo')}</Badge>}
                     </button>
                   </li>
                 ))}
@@ -163,40 +163,40 @@ export function PageFleetSeats() {
         {/* Éditeur */}
         <Card>
           <CardHeader
-            heading={selected ? `Plan — ${selected.plateNumber}` : t('LFleetSeats.selectABus')}
+            heading={selected ? `Plan — ${selected.plateNumber}` : t('fleetSeats.selectABus')}
             description={
               selected
-                ? `${seatCount} ${t('LFleetSeats.seats')} ${t('LFleetSeats.activeSeats')} / ${t('LFleetSeats.declaredCapacity')} ${selected.capacity}`
+                ? `${seatCount} ${t('fleetSeats.seats')} ${t('fleetSeats.activeSeats')} / ${t('fleetSeats.declaredCapacity')} ${selected.capacity}`
                 : undefined
             }
           />
           <CardContent>
             {!selected ? (
-              <p className="text-sm text-slate-500">{t('LFleetSeats.noVehicleSelected')}</p>
+              <p className="text-sm text-slate-500">{t('fleetSeats.noVehicleSelected')}</p>
             ) : (
               <div className="space-y-4">
                 <ErrorAlert error={saveErr} />
                 {saved && (
                   <div className="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
-                    {t('LFleetSeats.planSaved')}
+                    {t('fleetSeats.planSaved')}
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('LFleetSeats.rows')}</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('fleetSeats.rows')}</label>
                     <input type="number" min={1} max={30} value={layout.rows}
                       onChange={e => setLayout({ ...layout, rows: Math.max(1, Number(e.target.value)) })}
                       className={inp} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('LFleetSeats.columns')}</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('fleetSeats.columns')}</label>
                     <input type="number" min={1} max={8} value={layout.cols}
                       onChange={e => setLayout({ ...layout, cols: Math.max(1, Number(e.target.value)) })}
                       className={inp} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('LFleetSeats.aisleAfterCol')}</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">{t('fleetSeats.aisleAfterCol')}</label>
                     <input type="number" min={0} max={layout.cols} value={layout.aisleAfter ?? 0}
                       onChange={e => setLayout({ ...layout, aisleAfter: Number(e.target.value) || undefined })}
                       className={inp} />
@@ -205,14 +205,14 @@ export function PageFleetSeats() {
 
                 <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <LayoutGrid className="w-3.5 h-3.5" aria-hidden />
-                  {t('LFleetSeats.clickHint')}
+                  {t('fleetSeats.clickHint')}
                 </p>
 
                 {/* Grille */}
                 <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg p-4 overflow-x-auto">
                   <div className="inline-block">
                     <div className="flex justify-center mb-3 text-xs text-slate-500">
-                      ← {t('LFleetSeats.frontOfVehicle')}
+                      ← {t('fleetSeats.frontOfVehicle')}
                     </div>
                     <div className="space-y-1.5">
                       {Array.from({ length: layout.rows }).map((_, rIdx) => {
@@ -229,7 +229,7 @@ export function PageFleetSeats() {
                                   <button
                                     type="button"
                                     onClick={() => toggleCell(r, c)}
-                                    aria-label={`${t('LFleetSeats.seats')} ${id} ${disabled ? t('LFleetSeats.seatDisabled') : t('LFleetSeats.seatActive')}`}
+                                    aria-label={`${t('fleetSeats.seats')} ${id} ${disabled ? t('fleetSeats.seatDisabled') : t('fleetSeats.seatActive')}`}
                                     className={`w-8 h-8 text-[10px] rounded border transition-colors
                                       ${disabled
                                         ? 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
@@ -253,7 +253,7 @@ export function PageFleetSeats() {
                 <div className="flex items-center justify-end gap-2">
                   <Button onClick={handleSave} disabled={busy} loading={busy}>
                     <Save className="w-4 h-4 mr-1.5" aria-hidden />
-                    {busy ? t('common.saving') : t('LFleetSeats.savePlan')}
+                    {busy ? t('common.saving') : t('fleetSeats.savePlan')}
                   </Button>
                 </div>
               </div>

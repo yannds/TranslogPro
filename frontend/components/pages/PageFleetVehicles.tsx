@@ -97,10 +97,10 @@ const EMPTY_FORM: BusFormValues = {
 };
 
 const STATUS_LABEL: Record<BusStatus, string> = {
-  AVAILABLE:   'LFleetVehicles.statusAvailable',
-  IN_SERVICE:  'LFleetVehicles.statusInService',
-  MAINTENANCE: 'LFleetVehicles.statusMaintenance',
-  OFFLINE:     'LFleetVehicles.statusOffline',
+  AVAILABLE:   'fleetVehicles.statusAvailable',
+  IN_SERVICE:  'fleetVehicles.statusInService',
+  MAINTENANCE: 'fleetVehicles.statusMaintenance',
+  OFFLINE:     'fleetVehicles.statusOffline',
 };
 
 const STATUS_VARIANT: Record<BusStatus, 'success' | 'warning' | 'danger' | 'default'> = {
@@ -111,25 +111,25 @@ const STATUS_VARIANT: Record<BusStatus, 'success' | 'warning' | 'danger' | 'defa
 };
 
 const TYPE_LABEL: Record<BusType, string> = {
-  STANDARD: 'LFleetVehicles.typeStandard',
-  CONFORT:  'LFleetVehicles.typeConfort',
-  VIP:      'LFleetVehicles.typeVip',
-  MINIBUS:  'LFleetVehicles.typeMinibus',
+  STANDARD: 'fleetVehicles.typeStandard',
+  CONFORT:  'fleetVehicles.typeConfort',
+  VIP:      'fleetVehicles.typeVip',
+  MINIBUS:  'fleetVehicles.typeMinibus',
 };
 
 const FUEL_TYPE_LABEL: Record<FuelType, string> = {
-  DIESEL:     'LFleetVehicles.fuelDiesel',
-  PETROL:     'LFleetVehicles.fuelPetrol',
-  BIO_DIESEL: 'LFleetVehicles.fuelBiodiesel',
-  HYBRID:     'LFleetVehicles.fuelHybrid',
-  ELECTRIC:   'LFleetVehicles.fuelElectric',
+  DIESEL:     'fleetVehicles.fuelDiesel',
+  PETROL:     'fleetVehicles.fuelPetrol',
+  BIO_DIESEL: 'fleetVehicles.fuelBiodiesel',
+  HYBRID:     'fleetVehicles.fuelHybrid',
+  ELECTRIC:   'fleetVehicles.fuelElectric',
 };
 
 const ENGINE_TYPE_LABEL: Record<EngineType, string> = {
-  EURO_3: 'LFleetVehicles.engineEuro3',
-  EURO_4: 'LFleetVehicles.engineEuro4',
-  EURO_5: 'LFleetVehicles.engineEuro5',
-  EURO_6: 'LFleetVehicles.engineEuro6',
+  EURO_3: 'fleetVehicles.engineEuro3',
+  EURO_4: 'fleetVehicles.engineEuro4',
+  EURO_5: 'fleetVehicles.engineEuro5',
+  EURO_6: 'fleetVehicles.engineEuro6',
 };
 
 // ─── Formulaire ───────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ function BusForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="space-y-1.5 lg:col-span-2">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.registration')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetVehicles.registration')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.plateNumber}
             onChange={e => patch({ plateNumber: e.target.value.toUpperCase() })}
@@ -179,7 +179,7 @@ function BusForm({
         </div>
         <div className="space-y-1.5 lg:col-span-3">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.model')}
+            {t('fleetVehicles.model')}
           </label>
           <input type="text" value={f.model}
             onChange={e => patch({ model: e.target.value })}
@@ -187,7 +187,7 @@ function BusForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.type')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetVehicles.type')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.type}
             onChange={e => patch({ type: e.target.value as BusType })}
@@ -199,7 +199,7 @@ function BusForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.capacity')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetVehicles.capacity')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="number" min={1} required value={f.capacity}
             onChange={e => patch({ capacity: e.target.value })}
@@ -207,7 +207,7 @@ function BusForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.year')}
+            {t('fleetVehicles.year')}
           </label>
           <input type="number" min={1980} max={2100} value={f.year}
             onChange={e => patch({ year: e.target.value })}
@@ -215,12 +215,12 @@ function BusForm({
         </div>
         <div className="space-y-1.5 lg:col-span-2">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetVehicles.homeAgency')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetVehicles.homeAgency')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.agencyId}
             onChange={e => patch({ agencyId: e.target.value })}
             className={inp} disabled={busy}>
-            <option value="">{t('LFleetVehicles.selectPlaceholder')}</option>
+            <option value="">{t('fleetVehicles.selectPlaceholder')}</option>
             {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
@@ -233,7 +233,7 @@ function BusForm({
           className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800">
           <span className="flex items-center gap-2">
             <Wrench className="w-4 h-4 text-slate-400" aria-hidden />
-            {t('LFleetVehicles.technicalDetails')}
+            {t('fleetVehicles.technicalDetails')}
           </span>
           {showTech
             ? <ChevronUp className="w-4 h-4 text-slate-400" aria-hidden />
@@ -245,7 +245,7 @@ function BusForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.chassisVin')}
+                  {t('fleetVehicles.chassisVin')}
                 </label>
                 <input type="text" value={f.vin}
                   onChange={e => patch({ vin: e.target.value.toUpperCase() })}
@@ -253,12 +253,12 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.fuel')}
+                  {t('fleetVehicles.fuel')}
                 </label>
                 <select value={f.fuelType}
                   onChange={e => patch({ fuelType: e.target.value })}
                   className={inp} disabled={busy}>
-                  <option value="">{t('LFleetVehicles.notSpecified')}</option>
+                  <option value="">{t('fleetVehicles.notSpecified')}</option>
                   {(Object.keys(FUEL_TYPE_LABEL) as FuelType[]).map(k => (
                     <option key={k} value={k}>{t(FUEL_TYPE_LABEL[k])}</option>
                   ))}
@@ -267,12 +267,12 @@ function BusForm({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.engineStandard')}
+                  {t('fleetVehicles.engineStandard')}
                 </label>
                 <select value={f.engineType}
                   onChange={e => patch({ engineType: e.target.value })}
                   className={inp} disabled={busy}>
-                  <option value="">{t('LFleetVehicles.notSpecified')}</option>
+                  <option value="">{t('fleetVehicles.notSpecified')}</option>
                   {(Object.keys(ENGINE_TYPE_LABEL) as EngineType[]).map(k => (
                     <option key={k} value={k}>{t(ENGINE_TYPE_LABEL[k])}</option>
                   ))}
@@ -280,7 +280,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.fuelTank')}
+                  {t('fleetVehicles.fuelTank')}
                 </label>
                 <input type="number" min={0} step="0.1" value={f.fuelTankCapacityL}
                   onChange={e => patch({ fuelTankCapacityL: e.target.value })}
@@ -288,7 +288,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.adBlueTank')}
+                  {t('fleetVehicles.adBlueTank')}
                 </label>
                 <input type="number" min={0} step="0.1" value={f.adBlueTankCapacityL}
                   onChange={e => patch({ adBlueTankCapacityL: e.target.value })}
@@ -297,7 +297,7 @@ function BusForm({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.luggageKg')}
+                  {t('fleetVehicles.luggageKg')}
                 </label>
                 <input type="number" min={0} step="0.1" value={f.luggageCapacityKg}
                   onChange={e => patch({ luggageCapacityKg: e.target.value })}
@@ -313,7 +313,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.firstRegistrationDate')}
+                  {t('fleetVehicles.firstRegistrationDate')}
                 </label>
                 <input type="date" value={f.registrationDate}
                   onChange={e => patch({ registrationDate: e.target.value })}
@@ -322,7 +322,7 @@ function BusForm({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.purchaseDate')}
+                  {t('fleetVehicles.purchaseDate')}
                 </label>
                 <input type="date" value={f.purchaseDate}
                   onChange={e => patch({ purchaseDate: e.target.value })}
@@ -330,7 +330,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.purchasePrice')} ({currencyCode})
+                  {t('fleetVehicles.purchasePrice')} ({currencyCode})
                 </label>
                 <input type="number" min={0} value={f.purchasePrice}
                   onChange={e => patch({ purchasePrice: e.target.value })}
@@ -338,7 +338,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.initialMileage')}
+                  {t('fleetVehicles.initialMileage')}
                 </label>
                 <input type="number" min={0} value={f.initialOdometerKm}
                   onChange={e => patch({ initialOdometerKm: e.target.value })}
@@ -349,7 +349,7 @@ function BusForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.fuelConsumption')}
+                  {t('fleetVehicles.fuelConsumption')}
                 </label>
                 <input type="number" min={0} step="0.1" value={f.fuelConsumptionPer100Km}
                   onChange={e => patch({ fuelConsumptionPer100Km: e.target.value })}
@@ -357,7 +357,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t('LFleetVehicles.adBlueConsumption')}
+                  {t('fleetVehicles.adBlueConsumption')}
                 </label>
                 <input type="number" min={0} step="0.01" value={f.adBlueConsumptionPer100Km}
                   onChange={e => patch({ adBlueConsumptionPer100Km: e.target.value })}
@@ -428,13 +428,13 @@ function BusPhotoManager({ tenantId, busId }: { tenantId: string; busId: string 
         <div className="flex items-center gap-2">
           <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" aria-hidden />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            {t('LFleetVehicles.vehiclePhotos')}
+            {t('fleetVehicles.vehiclePhotos')}
           </h3>
           <span className="text-xs text-slate-500">({photos.length})</span>
         </div>
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/50 cursor-pointer">
           <Upload className="w-3.5 h-3.5" aria-hidden />
-          {uploading ? t('LFleetVehicles.uploading') : t('LFleetVehicles.addPhoto')}
+          {uploading ? t('fleetVehicles.uploading') : t('fleetVehicles.addPhoto')}
           <input type="file" accept="image/jpeg,image/png,image/webp"
             className="hidden" disabled={uploading}
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
@@ -444,22 +444,22 @@ function BusPhotoManager({ tenantId, busId }: { tenantId: string; busId: string 
       {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
 
       {loading ? (
-        <p className="text-xs text-slate-500">{t('LFleetVehicles.loadingPhotos')}</p>
+        <p className="text-xs text-slate-500">{t('fleetVehicles.loadingPhotos')}</p>
       ) : photos.length === 0 ? (
         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-3">
           <ImageOff className="w-4 h-4" aria-hidden />
-          {t('LFleetVehicles.noPhotos')}
+          {t('fleetVehicles.noPhotos')}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {photos.map(p => (
             <div key={p.fileKey}
               className="relative group aspect-video rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-              <img src={p.url} alt={t('LFleetVehicles.photoAlt')}
+              <img src={p.url} alt={t('fleetVehicles.photoAlt')}
                 className="w-full h-full object-cover" loading="lazy" />
               <button type="button"
                 onClick={() => handleDelete(p.fileKey)}
-                aria-label={t('LFleetVehicles.deletePhoto')}
+                aria-label={t('fleetVehicles.deletePhoto')}
                 className="absolute top-1 right-1 p-1 rounded-md bg-red-600/90 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700">
                 <Trash2 className="w-3 h-3" aria-hidden />
               </button>
@@ -589,17 +589,17 @@ function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: s
         <div className="flex items-center gap-2">
           <Coins className="w-4 h-4 text-teal-600 dark:text-teal-400" aria-hidden />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            {t('LFleetVehicles.costProfile')}
+            {t('fleetVehicles.costProfile')}
           </h3>
           {loading ? (
             <span className="text-xs text-slate-500">…</span>
           ) : configured ? (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-              {t('LFleetVehicles.configured')}
+              {t('fleetVehicles.configured')}
             </span>
           ) : (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-              {t('LFleetVehicles.notConfigured')}
+              {t('fleetVehicles.notConfigured')}
             </span>
           )}
         </div>
@@ -615,62 +615,62 @@ function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: s
           {/* Groupe 1 — Consommation */}
           <fieldset className="space-y-3">
             <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t('LFleetVehicles.consumption')}
+              {t('fleetVehicles.consumption')}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {numField('fuelConsumptionPer100Km', t('LFleetVehicles.fuelConsumptionLabel'), true)}
-              {numField('fuelPricePerLiter', t('LFleetVehicles.fuelPriceLabel'), true)}
-              {numField('adBlueCostPerLiter', t('LFleetVehicles.adBlueCostLabel'))}
-              {numField('adBlueRatioFuel', t('LFleetVehicles.adBlueRatioLabel'))}
+              {numField('fuelConsumptionPer100Km', t('fleetVehicles.fuelConsumptionLabel'), true)}
+              {numField('fuelPricePerLiter', t('fleetVehicles.fuelPriceLabel'), true)}
+              {numField('adBlueCostPerLiter', t('fleetVehicles.adBlueCostLabel'))}
+              {numField('adBlueRatioFuel', t('fleetVehicles.adBlueRatioLabel'))}
             </div>
           </fieldset>
 
           {/* Groupe 2 — Coûts par trajet */}
           <fieldset className="space-y-3">
             <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t('LFleetVehicles.costPerTrip')}
+              {t('fleetVehicles.costPerTrip')}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {numField('maintenanceCostPerKm', t('LFleetVehicles.maintenancePerKm'))}
-              {numField('stationFeePerDeparture', t('LFleetVehicles.stationFee'))}
-              {numField('driverAllowancePerTrip', t('LFleetVehicles.driverAllowance'))}
-              {numField('tollFeesPerTrip', t('LFleetVehicles.tollFees'))}
+              {numField('maintenanceCostPerKm', t('fleetVehicles.maintenancePerKm'))}
+              {numField('stationFeePerDeparture', t('fleetVehicles.stationFee'))}
+              {numField('driverAllowancePerTrip', t('fleetVehicles.driverAllowance'))}
+              {numField('tollFeesPerTrip', t('fleetVehicles.tollFees'))}
             </div>
           </fieldset>
 
           {/* Groupe 3 — Charges fixes */}
           <fieldset className="space-y-3">
             <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t('LFleetVehicles.fixedCharges')}
+              {t('fleetVehicles.fixedCharges')}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {numField('driverMonthlySalary', t('LFleetVehicles.driverSalary'), true)}
-              {numField('annualInsuranceCost', t('LFleetVehicles.annualInsurance'), true)}
-              {numField('monthlyAgencyFees', t('LFleetVehicles.agencyFees'), true)}
+              {numField('driverMonthlySalary', t('fleetVehicles.driverSalary'), true)}
+              {numField('annualInsuranceCost', t('fleetVehicles.annualInsurance'), true)}
+              {numField('monthlyAgencyFees', t('fleetVehicles.agencyFees'), true)}
             </div>
           </fieldset>
 
           {/* Groupe 4 — Amortissement */}
           <fieldset className="space-y-3">
             <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t('LFleetVehicles.depreciation')}
+              {t('fleetVehicles.depreciation')}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {numField('purchasePrice', t('LFleetVehicles.purchasePriceCost'), true)}
-              {numField('depreciationYears', t('LFleetVehicles.depreciationYears'))}
-              {numField('residualValue', t('LFleetVehicles.residualValue'))}
-              {numField('avgTripsPerMonth', t('LFleetVehicles.avgTripsPerMonth'))}
+              {numField('purchasePrice', t('fleetVehicles.purchasePriceCost'), true)}
+              {numField('depreciationYears', t('fleetVehicles.depreciationYears'))}
+              {numField('residualValue', t('fleetVehicles.residualValue'))}
+              {numField('avgTripsPerMonth', t('fleetVehicles.avgTripsPerMonth'))}
             </div>
           </fieldset>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={saving}>
-              {saving ? t('common.saving') : t('LFleetVehicles.saveCostProfile')}
+              {saving ? t('common.saving') : t('fleetVehicles.saveCostProfile')}
             </Button>
             {success && (
               <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                {t('LFleetVehicles.costProfileSaved')} ✓
+                {t('fleetVehicles.costProfileSaved')} ✓
               </span>
             )}
           </div>
@@ -689,7 +689,7 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
   return [
     {
       key: 'plateNumber',
-      header: t('LFleetVehicles.registration'),
+      header: t('fleetVehicles.registration'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-2 min-w-0">
@@ -702,7 +702,7 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'model',
-      header: t('LFleetVehicles.model'),
+      header: t('fleetVehicles.model'),
       sortable: true,
       cellRenderer: (_v, row) => (
         <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -712,7 +712,7 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'type',
-      header: t('LFleetVehicles.type'),
+      header: t('fleetVehicles.type'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -723,12 +723,12 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'capacity',
-      header: t('LFleetVehicles.capacity'),
+      header: t('fleetVehicles.capacity'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (
         <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
-          {v as number} {t('LFleetVehicles.seats')}
+          {v as number} {t('fleetVehicles.seats')}
         </span>
       ),
       csvValue: (v) => String(v),
@@ -747,7 +747,7 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'agencyId',
-      header: t('LFleetVehicles.agency'),
+      header: t('fleetVehicles.agency'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -758,16 +758,16 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'seatLayout',
-      header: t('LFleetVehicles.plan'),
+      header: t('fleetVehicles.plan'),
       cellRenderer: (v) =>
         v
-          ? <Badge variant="success" size="sm">{t('LFleetVehicles.planConfigured')}</Badge>
-          : <Badge variant="warning" size="sm">{t('LFleetVehicles.planMissing')}</Badge>,
-      csvValue: (v) => (v ? t('LFleetVehicles.planConfigured') : t('LFleetVehicles.planMissing')),
+          ? <Badge variant="success" size="sm">{t('fleetVehicles.planConfigured')}</Badge>
+          : <Badge variant="warning" size="sm">{t('fleetVehicles.planMissing')}</Badge>,
+      csvValue: (v) => (v ? t('fleetVehicles.planConfigured') : t('fleetVehicles.planMissing')),
     },
     {
       key: 'status',
-      header: t('LFleetVehicles.status'),
+      header: t('fleetVehicles.status'),
       sortable: true,
       cellRenderer: (v) => (
         <Badge variant={STATUS_VARIANT[v as BusStatus]} size="sm">
@@ -913,22 +913,22 @@ export function PageFleetVehicles() {
       onClick: (row) => { setActionErr(null); setEditBus(row); },
     },
     {
-      label:   t('LFleetVehicles.tracking'),
+      label:   t('fleetVehicles.tracking'),
       icon:    <Gauge size={13} />,
       onClick: (row) => navigate(`/admin/fleet/tracking?busId=${row.id}`),
     },
     {
-      label:   t('LFleetVehicles.changeStatus'),
+      label:   t('fleetVehicles.changeStatus'),
       icon:    <Power size={13} />,
       onClick: (row) => { setActionErr(null); setStatusBus(row); },
     },
     {
-      label:   t('LFleetVehicles.seatPlan'),
+      label:   t('fleetVehicles.seatPlan'),
       icon:    <LayoutGrid size={13} />,
       onClick: (row) => navigate(`/admin/fleet/seats?busId=${row.id}`),
     },
     {
-      label:   t('LFleetVehicles.papers'),
+      label:   t('fleetVehicles.papers'),
       icon:    <FileText size={13} />,
       onClick: (row) => navigate(`/admin/fleet-docs?busId=${row.id}`),
     },
@@ -941,32 +941,32 @@ export function PageFleetVehicles() {
   ];
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LFleetVehicles.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('fleetVehicles.pageTitle')}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
             <Bus className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LFleetVehicles.pageTitle')}</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('fleetVehicles.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('LFleetVehicles.pageSubtitle')}
+              {t('fleetVehicles.pageSubtitle')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setActionErr(null); setShowCreate(true); }}>
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          {t('LFleetVehicles.addVehicle')}
+          {t('fleetVehicles.addVehicle')}
         </Button>
       </div>
 
       <ErrorAlert error={error || actionErr} icon />
 
-      <section aria-label={t('LFleetVehicles.fleetIndicators')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Kpi label={t('LFleetVehicles.kpiVehicles')}    value={kpi.total}       icon={<Bus className="w-5 h-5" />} />
-        <Kpi label={t('LFleetVehicles.kpiAvailable')}   value={kpi.available}   icon={<CheckCircle2 className="w-5 h-5" />} tone="success" />
-        <Kpi label={t('LFleetVehicles.kpiInService')}   value={kpi.inService}   icon={<Bus className="w-5 h-5" />} tone="warning" />
-        <Kpi label={t('LFleetVehicles.kpiMaintenance')} value={kpi.maintenance} icon={<Wrench className="w-5 h-5" />} tone="danger" />
+      <section aria-label={t('fleetVehicles.fleetIndicators')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Kpi label={t('fleetVehicles.kpiVehicles')}    value={kpi.total}       icon={<Bus className="w-5 h-5" />} />
+        <Kpi label={t('fleetVehicles.kpiAvailable')}   value={kpi.available}   icon={<CheckCircle2 className="w-5 h-5" />} tone="success" />
+        <Kpi label={t('fleetVehicles.kpiInService')}   value={kpi.inService}   icon={<Bus className="w-5 h-5" />} tone="warning" />
+        <Kpi label={t('fleetVehicles.kpiMaintenance')} value={kpi.maintenance} icon={<Wrench className="w-5 h-5" />} tone="danger" />
       </section>
 
       <DataTableMaster<BusRow>
@@ -976,8 +976,8 @@ export function PageFleetVehicles() {
         rowActions={rowActions}
         defaultSort={{ key: 'plateNumber', dir: 'asc' }}
         defaultPageSize={25}
-        searchPlaceholder={t('LFleetVehicles.searchPlaceholder')}
-        emptyMessage={t('LFleetVehicles.emptyMessage')}
+        searchPlaceholder={t('fleetVehicles.searchPlaceholder')}
+        emptyMessage={t('fleetVehicles.emptyMessage')}
         exportFormats={['csv', 'json', 'xls', 'pdf']}
         exportFilename="vehicules"
         onRowClick={(row) => { setActionErr(null); setEditBus(row); }}
@@ -988,7 +988,7 @@ export function PageFleetVehicles() {
       <Dialog
         open={!!editBus}
         onOpenChange={o => { if (!o) setEditBus(null); }}
-        title={t('LFleetVehicles.editVehicle')}
+        title={t('fleetVehicles.editVehicle')}
         description={editBus?.plateNumber}
         size="xl"
       >
@@ -1015,8 +1015,8 @@ export function PageFleetVehicles() {
       <Dialog
         open={!!deleteBus}
         onOpenChange={o => { if (!o) setDeleteBus(null); }}
-        title={t('LFleetVehicles.deleteVehicle')}
-        description={`${t('common.delete')} "${deleteBus?.plateNumber}" ? ${t('LFleetVehicles.deleteConfirm')}`}
+        title={t('fleetVehicles.deleteVehicle')}
+        description={`${t('common.delete')} "${deleteBus?.plateNumber}" ? ${t('fleetVehicles.deleteConfirm')}`}
         footer={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setDeleteBus(null)} disabled={busy}>
@@ -1040,8 +1040,8 @@ export function PageFleetVehicles() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title={t('LFleetVehicles.createTitle')}
-        description={t('LFleetVehicles.createDescription')}
+        title={t('fleetVehicles.createTitle')}
+        description={t('fleetVehicles.createDescription')}
         size="xl"
       >
         <BusForm
@@ -1061,7 +1061,7 @@ export function PageFleetVehicles() {
       <Dialog
         open={!!statusBus}
         onOpenChange={o => { if (!o) setStatusBus(null); }}
-        title={t('LFleetVehicles.changeStatus')}
+        title={t('fleetVehicles.changeStatus')}
         description={statusBus?.plateNumber}
         size="sm"
       >
@@ -1076,7 +1076,7 @@ export function PageFleetVehicles() {
                 className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 disabled:opacity-50 disabled:cursor-not-allowed text-left">
                 <span className="text-sm text-slate-800 dark:text-slate-200">{t(STATUS_LABEL[s])}</span>
                 {s === statusBus.status
-                  ? <Badge variant="default" size="sm">{t('LFleetVehicles.current')}</Badge>
+                  ? <Badge variant="default" size="sm">{t('fleetVehicles.current')}</Badge>
                   : <Badge variant={STATUS_VARIANT[s]} size="sm">{t(STATUS_LABEL[s])}</Badge>}
               </button>
             ))}

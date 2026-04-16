@@ -270,7 +270,9 @@ const fr: Record<string, Record<string, string>> = {
     "searchLabel": "Rechercher un trajet",
     "filterStatus": "Filtrer par statut",
     "createTrip": "Créer un nouveau trajet",
-    "today": "Aujourd'hui"
+    "today": "Aujourd'hui",
+    "pageTitle": "Trajets du jour",
+    "dialogNewDesc": "Planifier un trajet opérationnel."
   },
   "tripPlanning": {
     "pageTitle": "Planning hebdomadaire",
@@ -1587,7 +1589,9 @@ const fr: Record<string, Record<string, string>> = {
     "emptyMsg": "Aucune agence.",
     "deleting": "Suppression\\u2026",
     "renameAgency": "Renommer l'agence",
-    "deleteAgency": "Supprimer l'agence"
+    "deleteAgency": "Supprimer l'agence",
+    "agencyName": "Nom de l'agence",
+    "invariantNote": "Un tenant possède toujours au moins une agence."
   },
   "tripForm": {
     "route": "Itinéraire",
@@ -1609,28 +1613,32 @@ const fr: Record<string, Record<string, string>> = {
     "title1": "Terminus !",
     "title2": "Tout le monde descend.",
     "button": "Retourner à la gare",
-    "footer": "404 · Page introuvable · TranslogPro"
+    "footer": "404 · Page introuvable · TranslogPro",
+    "body": "La page que vous cherchez semble avoir pris un autre bus."
   },
   "notFoundParcel": {
     "badge": "Erreur 404",
     "title1": "Avis de passage :",
     "title2": "Page introuvable.",
     "button": "Suivre un autre colis",
-    "footer": "404 · Colis égaré · TranslogPro"
+    "footer": "404 · Colis égaré · TranslogPro",
+    "body": "Ce colis semble égaré dans notre réseau."
   },
   "notFoundMaintenance": {
     "badge": "Erreur 404",
     "title1": "Panne sèche sur",
     "button": "Prendre le prochain bus",
     "footer": "404 · Panne détectée · TranslogPro",
-    "title2": "l'autoroute du Web."
+    "title2": "l'autoroute du Web.",
+    "body": "Ce véhicule est actuellement en maintenance."
   },
   "notFoundDriver": {
     "badge": "Erreur 404",
     "title1": "Faites demi-tour",
     "title2": "dès que possible\\u00a0!",
     "footer": "404 · Route inconnue · TranslogPro",
-    "button": "Recalculer l'itinéraire"
+    "button": "Recalculer l'itinéraire",
+    "body": "Cette route ne figure pas sur notre carte."
   },
   "driverSpace": {
     "tabMyTrips": "Mes Trajets",
@@ -1715,10 +1723,15 @@ const fr: Record<string, Record<string, string>> = {
     "edit": "✏ Éditer",
     "delete": "Supprimer",
     "duplicateBtn": "⊕ Dupliquer & personnaliser",
-    "duplicating": "Copie en cours…"
+    "duplicating": "Copie en cours…",
+    "confirmRestore": "Restaurer le pack de démarrage ?",
+    "pageDesc": "Modèles de documents imprimables.",
+    "restoreTitle": "Restaurer",
+    "systemDesc": "Templates système non modifiables."
   },
   "wip": {
-    "badge": "En développement"
+    "badge": "En développement",
+    "description": "Cette page est en cours de développement."
   },
   "router": {
     "sellTicket": "Vendre un billet",
@@ -2210,6 +2223,22 @@ const fr: Record<string, Record<string, string>> = {
     "delay": "RETARD",
     "alert": "ALERTE",
     "news": "ACTUALITÉ"
+  },
+  "routeDetail": {
+    "quickAddPlaceholder": "— Ajouter une escale —",
+    "distanceOrigin": "Distance depuis origine (km)",
+    "tollCost": "Péage (XAF)",
+    "waitTime": "Attente (min)",
+    "mandatoryStop": "Arrêt obligatoire",
+    "checkpoints": "Points de contrôle",
+    "addCheckpoint": "Ajouter",
+    "checkpointName": "Nom du point",
+    "remove": "Retirer",
+    "cpPeage": "Péage",
+    "cpDouane": "Douane",
+    "cpEauxForets": "Eaux & Forêts",
+    "cpFrontiere": "Frontière",
+    "cpAutre": "Autre"
   }
 };
 

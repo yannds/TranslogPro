@@ -202,12 +202,12 @@ function ModuleCard({
             <div className="flex flex-wrap gap-1 mt-0.5">
               {isCore && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
-                  <Lock size={8} /> {t('LModules.coreBadge')}
+                  <Lock size={8} /> {t('modules.coreBadge')}
                 </span>
               )}
               {isActive && !isCore && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                  <Check size={8} /> {t('LModules.activeBadge')}
+                  <Check size={8} /> {t('modules.activeBadge')}
                 </span>
               )}
             </div>
@@ -221,8 +221,8 @@ function ModuleCard({
             onClick={() => !isDisabled && onToggle(mod.id)}
             disabled={isDisabled}
             aria-pressed={isActive}
-            aria-label={isActive ? `${t('LModules.disable')} ${name}` : `${t('LModules.enable')} ${name}`}
-            title={depsMissing && !isActive ? `${t('LModules.requires')} : ${mod.requires?.join(', ')}` : undefined}
+            aria-label={isActive ? `${t('modules.disable')} ${name}` : `${t('modules.enable')} ${name}`}
+            title={depsMissing && !isActive ? `${t('modules.requires')} : ${mod.requires?.join(', ')}` : undefined}
             className={cn(
               'relative shrink-0 w-11 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
               isActive ? 'bg-teal-500' : 'bg-gray-300 dark:bg-slate-600',
@@ -249,7 +249,7 @@ function ModuleCard({
       {depsMissing && !isActive && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2.5 py-1.5">
           <AlertTriangle size={11} className="shrink-0" />
-          {t('LModules.requires')} : {mod.requires?.join(', ')}
+          {t('modules.requires')} : {mod.requires?.join(', ')}
         </div>
       )}
 
@@ -289,7 +289,7 @@ export function PageModules() {
       })
       .catch(() => {
         if (cancelled) return;
-        setToast({ msg: t('LModules.loadFailed'), ok: false });
+        setToast({ msg: t('modules.loadFailed'), ok: false });
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -314,7 +314,7 @@ export function PageModules() {
     if (!willActivate) {
       const blockers = MODULE_CATALOG.filter(m => active.has(m.id) && m.requires?.includes(id));
       if (blockers.length > 0) {
-        setToast({ msg: `${t('LModules.disableFirst')} : ${blockers.map(b => t(b.name)).join(', ')}`, ok: false });
+        setToast({ msg: `${t('modules.disableFirst')} : ${blockers.map(b => t(b.name)).join(', ')}`, ok: false });
         return;
       }
     }
@@ -331,12 +331,12 @@ export function PageModules() {
         if (willActivate) next.add(id); else next.delete(id);
         return next;
       });
-      setToast({ msg: `${name} ${willActivate ? t('LModules.enabled') : t('LModules.disabled')}`, ok: willActivate });
+      setToast({ msg: `${name} ${willActivate ? t('modules.enabled') : t('modules.disabled')}`, ok: willActivate });
 
       // Recharge le user pour mettre à jour enabledModules → nav filtrée
       refresh().catch(() => { /* silencieux */ });
     } catch {
-      setToast({ msg: `${t('LModules.toggleFail')} ${name}`, ok: false });
+      setToast({ msg: `${t('modules.toggleFail')} ${name}`, ok: false });
     } finally {
       setBusyKey(null);
     }
@@ -364,15 +364,15 @@ export function PageModules() {
             <Puzzle className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold t-text">{t('LModules.pageTitle')}</h1>
+            <h1 className="text-2xl font-bold t-text">{t('modules.pageTitle')}</h1>
             <p className="t-text-2 text-sm mt-0.5">
-              {activeCount} {t('LModules.filterActive').toLowerCase()} · {inactiveCount} {t('LModules.filterInactive').toLowerCase()}
+              {activeCount} {t('modules.filterActive').toLowerCase()} · {inactiveCount} {t('modules.filterInactive').toLowerCase()}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-xs t-text-3">
           <Info size={13} />
-          {t('LModules.coreNotice')}
+          {t('modules.coreNotice')}
         </div>
       </div>
 
@@ -398,7 +398,7 @@ export function PageModules() {
               'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               !filterCat ? 'bg-teal-500 text-white' : 't-surface t-text-2 t-nav-hover',
             )}
-          >{t('LModules.filterAll')}</button>
+          >{t('modules.filterAll')}</button>
           {CATEGORIES.map(cat => (
             <button
               key={cat.fr}
@@ -421,7 +421,7 @@ export function PageModules() {
                 showActive === v ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 't-surface t-text-2 t-nav-hover',
               )}
             >
-              {v === 'all' ? t('LModules.filterAll') : v === 'active' ? t('LModules.filterActive') : t('LModules.filterInactive')}
+              {v === 'all' ? t('modules.filterAll') : v === 'active' ? t('modules.filterActive') : t('modules.filterInactive')}
             </button>
           ))}
         </div>
@@ -431,10 +431,10 @@ export function PageModules() {
       {loading ? (
         <div className="py-16 flex items-center justify-center gap-2 t-text-2 text-sm">
           <Loader2 size={16} className="animate-spin" />
-          {t('LModules.loading')}
+          {t('modules.loading')}
         </div>
       ) : visible.length === 0 ? (
-        <div className="py-16 text-center t-text-2 text-sm">{t('LModules.noMatch')}</div>
+        <div className="py-16 text-center t-text-2 text-sm">{t('modules.noMatch')}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visible.map(mod => {

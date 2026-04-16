@@ -188,12 +188,12 @@ function AccidentForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.severity')} <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.severity')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.severityTypeId}
             onChange={e => patch({ severityTypeId: e.target.value })}
             className={inp} disabled={busy}>
-            <option value="">{t('LQhse.selectOption')}</option>
+            <option value="">{t('qhse.selectOption')}</option>
             {severities.map(s => (
               <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
             ))}
@@ -201,7 +201,7 @@ function AccidentForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.reporterRole')} <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.reporterRole')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.reportedByRole}
             onChange={e => patch({ reportedByRole: e.target.value })}
@@ -214,18 +214,18 @@ function AccidentForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.busInvolved')}
+            {t('qhse.busInvolved')}
           </label>
           <select value={f.busId}
             onChange={e => patch({ busId: e.target.value })}
             className={inp} disabled={busy}>
-            <option value="">{t('LQhse.noneOption')}</option>
+            <option value="">{t('qhse.noneOption')}</option>
             {buses.map(b => <option key={b.id} value={b.id}>{b.plateNumber}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.dateTime')} <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.dateTime')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="datetime-local" required value={f.occurredAt}
             onChange={e => patch({ occurredAt: e.target.value })}
@@ -235,7 +235,7 @@ function AccidentForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LQhse.location')}
+          {t('qhse.location')}
         </label>
         <input type="text" value={f.locationDesc}
           onChange={e => patch({ locationDesc: e.target.value })}
@@ -253,15 +253,15 @@ function AccidentForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LQhse.circumstances')}
+          {t('qhse.circumstances')}
         </label>
         <textarea rows={2} value={f.circumstance}
           onChange={e => patch({ circumstance: e.target.value })}
-          className={inp} disabled={busy} placeholder={t('LQhse.circPlaceholder')} />
+          className={inp} disabled={busy} placeholder={t('qhse.circPlaceholder')} />
       </div>
 
       <FormFooter onCancel={onCancel} busy={busy}
-        submitLabel={t('LQhse.declare')} pendingLabel={t('LQhse.declaring')} />
+        submitLabel={t('qhse.declare')} pendingLabel={t('qhse.declaring')} />
     </form>
   );
 }
@@ -316,7 +316,7 @@ function SeverityForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.color')}
+            {t('qhse.color')}
           </label>
           <div className="flex items-center gap-2">
             <input type="color" value={f.color}
@@ -330,7 +330,7 @@ function SeverityForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.displayOrder')}
+            {t('qhse.displayOrder')}
           </label>
           <input type="number" min={0} value={f.sortOrder}
             onChange={e => patch({ sortOrder: e.target.value })}
@@ -340,7 +340,7 @@ function SeverityForm({
 
       <fieldset className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
         <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {t('LQhse.autoTriggers')}
+          {t('qhse.autoTriggers')}
         </legend>
         {([
           ['requiresQhse',    'qhse.triggerQhse'],
@@ -399,7 +399,7 @@ function HospitalForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.city')} <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.city')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.city}
             onChange={e => patch({ city: e.target.value })}
@@ -469,10 +469,10 @@ function ProcedureEditForm({
         <input type="checkbox" checked={f.isActive}
           onChange={e => setF(p => ({ ...p, isActive: e.target.checked }))}
           disabled={busy} className="w-4 h-4 rounded border-slate-300" />
-        {t('LQhse.activeProcedure')}
+        {t('qhse.activeProcedure')}
       </label>
       <p className="text-xs text-slate-500">
-        {t('LQhse.editStepsHint')}
+        {t('qhse.editStepsHint')}
       </p>
       <FormFooter onCancel={onCancel} busy={busy}
         submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
@@ -541,7 +541,7 @@ function ProcedureForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.triggerCode')} <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.triggerCode')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.triggerCode}
             onChange={e => setF(p => ({ ...p, triggerCode: e.target.value.toUpperCase() }))}
@@ -561,16 +561,16 @@ function ProcedureForm({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            {t('LQhse.steps')} <span className="text-xs font-normal text-slate-500">({f.steps.length})</span>
+            {t('qhse.steps')} <span className="text-xs font-normal text-slate-500">({f.steps.length})</span>
           </h3>
           <Button type="button" variant="outline" size="sm" onClick={addStep} disabled={busy}>
-            <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('LQhse.step')}
+            <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('qhse.step')}
           </Button>
         </div>
 
         {f.steps.length === 0 && (
           <p className="text-xs text-slate-500 italic py-2">
-            {t('LQhse.noSteps')}
+            {t('qhse.noSteps')}
           </p>
         )}
 
@@ -582,7 +582,7 @@ function ProcedureForm({
                   {s.order}
                 </span>
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input type="text" required value={s.description} placeholder={t('LQhse.stepDescPlaceholder')}
+                  <input type="text" required value={s.description} placeholder={t('qhse.stepDescPlaceholder')}
                     onChange={e => updateStep(idx, { description: e.target.value })}
                     className={cn(inp, 'sm:col-span-2')} disabled={busy} />
                   <select value={s.responsible}
@@ -603,13 +603,13 @@ function ProcedureForm({
                   <input type="checkbox" checked={!!s.isVerification}
                     onChange={e => updateStep(idx, { isVerification: e.target.checked })}
                     disabled={busy} />
-                  {t('LQhse.verification')}
+                  {t('qhse.verification')}
                 </label>
                 <label className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
                   <input type="checkbox" checked={!!s.isPhotoRequired}
                     onChange={e => updateStep(idx, { isPhotoRequired: e.target.checked })}
                     disabled={busy} />
-                  {t('LQhse.photoRequired')}
+                  {t('qhse.photoRequired')}
                 </label>
               </div>
             </li>
@@ -649,7 +649,7 @@ function DisputeForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LQhse.mode')} <span aria-hidden className="text-red-500">*</span>
+          {t('qhse.mode')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <select required value={f.mode}
           onChange={e => patch({ mode: e.target.value })}
@@ -661,7 +661,7 @@ function DisputeForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.insurerRef')}
+            {t('qhse.insurerRef')}
           </label>
           <input type="text" value={f.insurerRef}
             onChange={e => patch({ insurerRef: e.target.value })}
@@ -669,7 +669,7 @@ function DisputeForm({
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LQhse.insurerName')}
+            {t('qhse.insurerName')}
           </label>
           <input type="text" value={f.insurerName}
             onChange={e => patch({ insurerName: e.target.value })}
@@ -679,7 +679,7 @@ function DisputeForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LQhse.estimatedTotal')}
+          {t('qhse.estimatedTotal')}
         </label>
         <input type="number" min={0} value={f.estimatedTotal}
           onChange={e => patch({ estimatedTotal: e.target.value })}
@@ -687,7 +687,7 @@ function DisputeForm({
       </div>
 
       <FormFooter onCancel={onCancel} busy={busy}
-        submitLabel={t('LQhse.openDispute')} pendingLabel={t('LQhse.opening')} />
+        submitLabel={t('qhse.openDispute')} pendingLabel={t('qhse.opening')} />
     </form>
   );
 }
@@ -804,42 +804,42 @@ function AccidentDetailDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={detail ? `${t('LQhse.accidentLabel')} ${detail.severityType.name}` : t('LQhse.detailAccident')}
+      title={detail ? `${t('qhse.accidentLabel')} ${detail.severityType.name}` : t('qhse.detailAccident')}
       description={detail ? new Date(detail.occurredAt).toLocaleString('fr-FR') : undefined}
       size="3xl"
     >
-      {loading && <p className="text-sm text-slate-500">{t('LQhse.loading')}</p>}
+      {loading && <p className="text-sm text-slate-500">{t('qhse.loading')}</p>}
       <ErrorAlert error={err} />
 
       {detail && (
         <div className="space-y-6">
           {/* En-tête */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <Field label={t('LQhse.status')}>
+            <Field label={t('qhse.status')}>
               <Badge variant={STATUS_VARIANT[detail.status]} size="sm">{t(STATUS_LABEL[detail.status])}</Badge>
             </Field>
-            <Field label={t('LQhse.severity')}>
+            <Field label={t('qhse.severity')}>
               <span className="inline-flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: detail.severityType.color }} aria-hidden />
                 {detail.severityType.name} ({detail.severityType.code})
               </span>
             </Field>
-            <Field label={t('LQhse.location')}>{detail.locationDesc || '—'}</Field>
-            <Field label={t('LQhse.reporterRoleLabel')}>{detail.reportedByRole}</Field>
+            <Field label={t('qhse.location')}>{detail.locationDesc || '—'}</Field>
+            <Field label={t('qhse.reporterRoleLabel')}>{detail.reportedByRole}</Field>
             <Field label={t('common.description')} className="sm:col-span-2">
               <p className="whitespace-pre-wrap">{detail.description}</p>
             </Field>
             {detail.circumstance && (
-              <Field label={t('LQhse.circumstances')} className="sm:col-span-2">
+              <Field label={t('qhse.circumstances')} className="sm:col-span-2">
                 <p className="whitespace-pre-wrap">{detail.circumstance}</p>
               </Field>
             )}
           </section>
 
           {/* Tiers impliqués */}
-          <SubSection title={t('LQhse.thirdParties')} count={detail.thirdParties.length}>
+          <SubSection title={t('qhse.thirdParties')} count={detail.thirdParties.length}>
             {detail.thirdParties.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">{t('LQhse.noThirdParty')}</p>
+              <p className="text-xs text-slate-500 italic">{t('qhse.noThirdParty')}</p>
             ) : (
               <ul className="space-y-2">
                 {detail.thirdParties.map(t => (
@@ -877,15 +877,15 @@ function AccidentDetailDialog({
               <input value={tp.notes} onChange={e => setTp({ ...tp, notes: e.target.value })}
                 className={cn(inp, 'sm:col-span-2')} disabled={busy} placeholder="Notes" />
               <Button type="submit" size="sm" disabled={busy} loading={busy}>
-                <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('LQhse.addThirdParty')}
+                <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('qhse.addThirdParty')}
               </Button>
             </form>
           </SubSection>
 
           {/* Blessés */}
-          <SubSection title={t('LQhse.injuries')} count={detail.injuries.length}>
+          <SubSection title={t('qhse.injuries')} count={detail.injuries.length}>
             {detail.injuries.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">{t('LQhse.noInjury')}</p>
+              <p className="text-xs text-slate-500 italic">{t('qhse.noInjury')}</p>
             ) : (
               <ul className="space-y-2">
                 {detail.injuries.map(i => (
@@ -899,14 +899,14 @@ function AccidentDetailDialog({
                     </div>
                     {(i.hospital || i.hospitalName) && (
                       <p className="text-xs text-slate-500 mt-1">
-                        {t('LQhse.hospital')} : {i.hospital?.name || i.hospitalName}
-                        {i.admittedAt && ` — ${t('LQhse.admitted')} ${new Date(i.admittedAt).toLocaleString('fr-FR')}`}
+                        {t('qhse.hospital')} : {i.hospital?.name || i.hospitalName}
+                        {i.admittedAt && ` — ${t('qhse.admitted')} ${new Date(i.admittedAt).toLocaleString('fr-FR')}`}
                       </p>
                     )}
                     {i.medicalNotes && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{i.medicalNotes}</p>}
                     {i.followUps.length > 0 && (
                       <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">
-                        {i.followUps.length} {t('LQhse.medicalFollowups')}
+                        {i.followUps.length} {t('qhse.medicalFollowups')}
                       </p>
                     )}
                   </li>
@@ -926,26 +926,26 @@ function AccidentDetailDialog({
               </select>
               <select value={inj.hospitalId} onChange={e => setInj({ ...inj, hospitalId: e.target.value })}
                 className={inp} disabled={busy}>
-                <option value="">{t('LQhse.noThirdPartyOption')}</option>
+                <option value="">{t('qhse.noThirdPartyOption')}</option>
                 {hospitals.map(h => <option key={h.id} value={h.id}>{h.name} ({h.city})</option>)}
               </select>
               <input value={inj.hospitalName} onChange={e => setInj({ ...inj, hospitalName: e.target.value })}
-                className={inp} disabled={busy} placeholder={t('LQhse.freeNameLabel')} />
+                className={inp} disabled={busy} placeholder={t('qhse.freeNameLabel')} />
               <input type="datetime-local" value={inj.admittedAt}
                 onChange={e => setInj({ ...inj, admittedAt: e.target.value })}
                 className={inp} disabled={busy} />
               <input value={inj.medicalNotes} onChange={e => setInj({ ...inj, medicalNotes: e.target.value })}
-                className={cn(inp, 'sm:col-span-2')} disabled={busy} placeholder={t('LQhse.medicalNotes')} />
+                className={cn(inp, 'sm:col-span-2')} disabled={busy} placeholder={t('qhse.medicalNotes')} />
               <Button type="submit" size="sm" disabled={busy} loading={busy}>
-                <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('LQhse.addInjury')}
+                <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('qhse.addInjury')}
               </Button>
             </form>
           </SubSection>
 
           {/* Procédures QHSE */}
-          <SubSection title={t('LQhse.qhseProcedures')} count={detail.procedureExecs.length}>
+          <SubSection title={t('qhse.qhseProcedures')} count={detail.procedureExecs.length}>
             {detail.procedureExecs.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">{t('LQhse.noProcedure')}</p>
+              <p className="text-xs text-slate-500 italic">{t('qhse.noProcedure')}</p>
             ) : (
               <ul className="space-y-3">
                 {detail.procedureExecs.map(exec => {
@@ -1016,7 +1016,7 @@ function AccidentDetailDialog({
             <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <select value={procId} onChange={e => setProcId(e.target.value)}
                 className={cn(inp, 'flex-1')} disabled={busy}>
-                <option value="">{t('LQhse.startProcedure')}</option>
+                <option value="">{t('qhse.startProcedure')}</option>
                 {procedures.filter(p =>
                   !detail.procedureExecs.some(ex => ex.procedureId === p.id),
                 ).map(p => (
@@ -1025,7 +1025,7 @@ function AccidentDetailDialog({
               </select>
               <Button type="button" size="sm" onClick={startExecution}
                 disabled={!procId || busy} loading={busy}>
-                <PlayCircle className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('LQhse.launch')}
+                <PlayCircle className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('qhse.launch')}
               </Button>
             </div>
           </SubSection>
@@ -1114,10 +1114,10 @@ export function PageQhse() {
   const disputeCount = accidents?.filter(a => a.disputeTracking).length ?? 0;
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'accidents',  label: t('LQhse.tabAccidents') },
-    { id: 'disputes',   label: t('LQhse.tabDisputes') },
-    { id: 'procedures', label: t('LQhse.tabProcedures') },
-    { id: 'config',     label: t('LQhse.tabConfig') },
+    { id: 'accidents',  label: t('qhse.tabAccidents') },
+    { id: 'disputes',   label: t('qhse.tabDisputes') },
+    { id: 'procedures', label: t('qhse.tabProcedures') },
+    { id: 'config',     label: t('qhse.tabConfig') },
   ];
 
   const busPlate = (id: string | null) =>
@@ -1281,7 +1281,7 @@ export function PageQhse() {
       csvValue: (v) => busPlate(v as string | null),
     },
     {
-      key: 'severityType', header: t('LQhse.severity'), sortable: true,
+      key: 'severityType', header: t('qhse.severity'), sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: row.severityType.color }} aria-hidden />
@@ -1291,13 +1291,13 @@ export function PageQhse() {
       csvValue: (_v, row) => row.severityType.name,
     },
     {
-      key: 'locationDesc', header: t('LQhse.location'),
+      key: 'locationDesc', header: t('qhse.location'),
       cellRenderer: (v) => (
         <span className="text-sm text-slate-600 dark:text-slate-400">{(v as string) || '—'}</span>
       ),
     },
     {
-      key: '_count', header: t('LQhse.injuries'), align: 'right',
+      key: '_count', header: t('qhse.injuries'), align: 'right',
       cellRenderer: (_v, row) => {
         const n = row._count?.injuries ?? 0;
         return n === 0
@@ -1307,15 +1307,15 @@ export function PageQhse() {
       csvValue: (_v, row) => String(row._count?.injuries ?? 0),
     },
     {
-      key: 'disputeTracking', header: t('LQhse.tabDisputes'),
+      key: 'disputeTracking', header: t('qhse.tabDisputes'),
       cellRenderer: (v) =>
         v
-          ? <Badge variant="info" size="sm">{t('LQhse.opened')}</Badge>
+          ? <Badge variant="info" size="sm">{t('qhse.opened')}</Badge>
           : <span className="text-sm text-slate-400">—</span>,
-      csvValue: (v) => (v ? t('LQhse.opened') : ''),
+      csvValue: (v) => (v ? t('qhse.opened') : ''),
     },
     {
-      key: 'status', header: t('LQhse.status'), sortable: true,
+      key: 'status', header: t('qhse.status'), sortable: true,
       cellRenderer: (v) => (
         <Badge variant={STATUS_VARIANT[v as AccidentStatus]} size="sm">
           {t(STATUS_LABEL[v as AccidentStatus])}
@@ -1327,12 +1327,12 @@ export function PageQhse() {
 
   const accidentRowActions: RowAction<AccidentRow>[] = [
     {
-      label: t('LQhse.detail'),
+      label: t('qhse.detail'),
       icon:  <FileText size={13} />,
       onClick: (row) => { setActionErr(null); setDetailAccId(row.id); },
     },
     {
-      label: t('LQhse.openDisputeAction'),
+      label: t('qhse.openDisputeAction'),
       icon:  <Gavel size={13} />,
       onClick: (row) => { setActionErr(null); setDisputeFor(row); },
       hidden: (row) => !!row.disputeTracking,
@@ -1341,7 +1341,7 @@ export function PageQhse() {
 
   const severityRowActions: RowAction<SeverityType>[] = [
     {
-      label: t('LQhse.modify'),
+      label: t('qhse.modify'),
       icon:  <Pencil size={13} />,
       onClick: (row) => { setActionErr(null); setEditSeverity(row); },
     },
@@ -1355,7 +1355,7 @@ export function PageQhse() {
 
   const hospitalRowActions: RowAction<Hospital>[] = [
     {
-      label: t('LQhse.modify'),
+      label: t('qhse.modify'),
       icon:  <Pencil size={13} />,
       onClick: (row) => { setActionErr(null); setEditHospital(row); },
     },
@@ -1378,18 +1378,18 @@ export function PageQhse() {
 
   const procedureRowActions: RowAction<ProcedureRow>[] = [
     {
-      label: t('LQhse.modify'),
+      label: t('qhse.modify'),
       icon:  <Pencil size={13} />,
       onClick: (row) => { setActionErr(null); setEditProcedure(row); },
     },
     {
-      label: t('LQhse.deactivate'),
+      label: t('qhse.deactivate'),
       icon:  <Power size={13} />,
       onClick: toggleProcedureActive,
       hidden: (row) => !row.isActive,
     },
     {
-      label: t('LQhse.activate'),
+      label: t('qhse.activate'),
       icon:  <Power size={13} />,
       onClick: toggleProcedureActive,
       hidden: (row) => row.isActive,
@@ -1416,18 +1416,18 @@ export function PageQhse() {
       cellRenderer: (v) => <span className="text-sm">{busPlate(v as string | null)}</span>,
     },
     {
-      key: 'severityType', header: t('LQhse.severity'),
+      key: 'severityType', header: t('qhse.severity'),
       cellRenderer: (_v, row) => <span className="text-sm">{row.severityType.name}</span>,
     },
     {
-      key: 'disputeTracking', header: t('LQhse.disputeState'),
+      key: 'disputeTracking', header: t('qhse.disputeState'),
       cellRenderer: (v) => {
         const d = v as { status: string } | null;
         return d ? <Badge variant="info" size="sm">{d.status}</Badge> : <span>—</span>;
       },
     },
     {
-      key: 'status', header: t('LQhse.accidentLabel'),
+      key: 'status', header: t('qhse.accidentLabel'),
       cellRenderer: (v) => (
         <Badge variant={STATUS_VARIANT[v as AccidentStatus]} size="sm">
           {t(STATUS_LABEL[v as AccidentStatus])}
@@ -1444,34 +1444,34 @@ export function PageQhse() {
       ),
     },
     {
-      key: 'triggerCode', header: t('LQhse.trigger'), sortable: true,
+      key: 'triggerCode', header: t('qhse.trigger'), sortable: true,
       cellRenderer: (v) => (
         <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{v as string}</span>
       ),
     },
     {
-      key: 'steps', header: t('LQhse.steps'), align: 'right',
+      key: 'steps', header: t('qhse.steps'), align: 'right',
       cellRenderer: (_v, row) => (
         <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">{row.steps.length}</span>
       ),
       csvValue: (_v, row) => String(row.steps.length),
     },
     {
-      key: 'version', header: t('LQhse.version'), align: 'right',
+      key: 'version', header: t('qhse.version'), align: 'right',
       cellRenderer: (v) => <span className="text-sm tabular-nums">v{v as number}</span>,
     },
     {
-      key: 'isActive', header: t('LQhse.stateLabel'),
+      key: 'isActive', header: t('qhse.stateLabel'),
       cellRenderer: (v) => v
-        ? <Badge variant="success" size="sm">{t('LQhse.active')}</Badge>
-        : <Badge variant="default" size="sm">{t('LQhse.inactive')}</Badge>,
-      csvValue: (v) => (v ? t('LQhse.active') : t('LQhse.inactive')),
+        ? <Badge variant="success" size="sm">{t('qhse.active')}</Badge>
+        : <Badge variant="default" size="sm">{t('qhse.inactive')}</Badge>,
+      csvValue: (v) => (v ? t('qhse.active') : t('qhse.inactive')),
     },
   ];
 
   const severityColumns: Column<SeverityType>[] = [
     {
-      key: 'sortOrder', header: t('LQhse.order'), sortable: true, align: 'right',
+      key: 'sortOrder', header: t('qhse.order'), sortable: true, align: 'right',
       cellRenderer: (v) => <span className="text-sm tabular-nums">{v as number}</span>,
     },
     {
@@ -1501,7 +1501,7 @@ export function PageQhse() {
       csvValue: (v) => (v ? 'oui' : ''),
     },
     {
-      key: 'requiresInsurer', header: t('LQhse.insurance'),
+      key: 'requiresInsurer', header: t('qhse.insurance'),
       cellRenderer: (v) => v ? <Badge variant="info" size="sm">Assureur</Badge> : <span className="text-slate-300">—</span>,
       csvValue: (v) => (v ? 'oui' : ''),
     },
@@ -1515,7 +1515,7 @@ export function PageQhse() {
       ),
     },
     {
-      key: 'city', header: t('LQhse.city'), sortable: true,
+      key: 'city', header: t('qhse.city'), sortable: true,
       cellRenderer: (v) => <span className="text-sm text-slate-600 dark:text-slate-400">{v as string}</span>,
     },
     {
@@ -1549,7 +1549,7 @@ export function PageQhse() {
   };
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LQhse.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('qhse.pageTitle')}>
       {/* ── En-tête ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1557,32 +1557,32 @@ export function PageQhse() {
             <AlertOctagon className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LQhse.pageTitle')}</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('qhse.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('LQhse.pageDesc')}
+              {t('qhse.pageDesc')}
             </p>
           </div>
         </div>
         <Button
           variant="destructive"
-          aria-label={t('LQhse.declareAccident')}
+          aria-label={t('qhse.declareAccident')}
           onClick={() => { setActionErr(null); setShowAccident(true); }}
           disabled={!severities?.length}
-          title={!severities?.length ? t('LQhse.configSeverityFirst') : undefined}
+          title={!severities?.length ? t('qhse.configSeverityFirst') : undefined}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          {t('LQhse.declareAccident')}
+          {t('qhse.declareAccident')}
         </Button>
       </div>
 
       <ErrorAlert error={actionErr} icon />
 
       {/* ── KPIs ── */}
-      <section aria-label={t('LQhse.indicatorsQhse')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label={t('LQhse.openAccidents')}   value={openCount}             icon={<AlertOctagon className="w-5 h-5" />} tone={openCount > 0 ? 'danger' : 'success'} />
-        <Kpi label={t('LQhse.injuredTotal')}     value={injuredTotal}          icon={<Users className="w-5 h-5" />}        tone={injuredTotal > 0 ? 'warning' : 'success'} />
-        <Kpi label={t('LQhse.ongoingDisputes')}  value={disputeCount}          icon={<Gavel className="w-5 h-5" />}        tone={disputeCount > 0 ? 'warning' : 'success'} />
-        <Kpi label={t('LQhse.configProcedures')} value={procedures?.length ?? 0} icon={<ClipboardCheck className="w-5 h-5" />} tone="default" />
+      <section aria-label={t('qhse.indicatorsQhse')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi label={t('qhse.openAccidents')}   value={openCount}             icon={<AlertOctagon className="w-5 h-5" />} tone={openCount > 0 ? 'danger' : 'success'} />
+        <Kpi label={t('qhse.injuredTotal')}     value={injuredTotal}          icon={<Users className="w-5 h-5" />}        tone={injuredTotal > 0 ? 'warning' : 'success'} />
+        <Kpi label={t('qhse.ongoingDisputes')}  value={disputeCount}          icon={<Gavel className="w-5 h-5" />}        tone={disputeCount > 0 ? 'warning' : 'success'} />
+        <Kpi label={t('qhse.configProcedures')} value={procedures?.length ?? 0} icon={<ClipboardCheck className="w-5 h-5" />} tone="default" />
       </section>
 
       {/* ── Tabs ── */}
@@ -1608,7 +1608,7 @@ export function PageQhse() {
               {tb.id === 'accidents' && openCount > 0 && (
                 <span
                   className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold"
-                  aria-label={`${openCount} ${t('LQhse.openAccLabel')}`}
+                  aria-label={`${openCount} ${t('qhse.openAccLabel')}`}
                 >
                   {openCount}
                 </span>
@@ -1622,11 +1622,11 @@ export function PageQhse() {
       {tab === 'accidents' && (
         <section id="tabpanel-qhse-accidents" role="tabpanel" aria-labelledby="tab-qhse-accidents" aria-live="polite" className="space-y-3">
           <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-600 dark:text-slate-400">{t('LQhse.statusFilter')}</label>
+            <label className="text-sm text-slate-600 dark:text-slate-400">{t('qhse.statusFilter')}</label>
             <select value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as '' | AccidentStatus)}
               className={cn(inp, 'w-auto')}>
-              <option value="">{t('LQhse.all')}</option>
+              <option value="">{t('qhse.all')}</option>
               {(['OPEN','UNDER_INVESTIGATION','LEGAL','SETTLED','CLOSED'] as AccidentStatus[]).map(s => (
                 <option key={s} value={s}>{t(STATUS_LABEL[s])}</option>
               ))}
@@ -1641,8 +1641,8 @@ export function PageQhse() {
             onRowClick={(row) => { setActionErr(null); setDetailAccId(row.id); }}
             defaultSort={{ key: 'occurredAt', dir: 'desc' }}
             defaultPageSize={25}
-            searchPlaceholder={t('LQhse.searchAccident')}
-            emptyMessage={t('LQhse.noAccident')}
+            searchPlaceholder={t('qhse.searchAccident')}
+            emptyMessage={t('qhse.noAccident')}
             exportFormats={['csv', 'json', 'xls', 'pdf']}
             exportFilename="accidents"
             stickyHeader
@@ -1660,8 +1660,8 @@ export function PageQhse() {
             onRowClick={(row) => { setActionErr(null); setDetailAccId(row.id); }}
             defaultSort={{ key: 'occurredAt', dir: 'desc' }}
             defaultPageSize={25}
-            searchPlaceholder={t('LQhse.searchDispute')}
-            emptyMessage={t('LQhse.noDispute')}
+            searchPlaceholder={t('qhse.searchDispute')}
+            emptyMessage={t('qhse.noDispute')}
             exportFormats={['csv', 'json']}
             exportFilename="litiges"
             stickyHeader
@@ -1676,7 +1676,7 @@ export function PageQhse() {
             <Button size="sm"
               onClick={() => { setActionErr(null); setShowProcedure(true); }}
               aria-label="Créer une nouvelle procédure QHSE">
-              <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('LQhse.procedure')}
+              <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('qhse.procedure')}
             </Button>
           </div>
           <DataTableMaster<ProcedureRow>
@@ -1687,8 +1687,8 @@ export function PageQhse() {
             onRowClick={(row) => { setActionErr(null); setEditProcedure(row); }}
             defaultSort={{ key: 'name', dir: 'asc' }}
             defaultPageSize={25}
-            searchPlaceholder={t('LQhse.searchProcedure')}
-            emptyMessage={t('LQhse.noProcedureConfig')}
+            searchPlaceholder={t('qhse.searchProcedure')}
+            emptyMessage={t('qhse.noProcedureConfig')}
             exportFormats={['csv', 'json']}
             exportFilename="procedures-qhse"
             stickyHeader
@@ -1703,7 +1703,7 @@ export function PageQhse() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Palette className="w-4 h-4 text-teal-500" aria-hidden />
-                {t('LQhse.severityTypes')}
+                {t('qhse.severityTypes')}
               </h2>
               <Button size="sm" onClick={() => { setActionErr(null); setShowSeverity(true); }}
                 aria-label="Ajouter un type de sévérité">
@@ -1718,8 +1718,8 @@ export function PageQhse() {
               onRowClick={(row) => { setActionErr(null); setEditSeverity(row); }}
               defaultSort={{ key: 'sortOrder', dir: 'asc' }}
               defaultPageSize={25}
-              searchPlaceholder={t('LQhse.searchType')}
-              emptyMessage={t('LQhse.noType')}
+              searchPlaceholder={t('qhse.searchType')}
+              emptyMessage={t('qhse.noType')}
               exportFormats={['csv', 'json']}
               exportFilename="severites-qhse"
             />
@@ -1729,7 +1729,7 @@ export function PageQhse() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-teal-500" aria-hidden />
-                {t('LQhse.referencedHospitals')}
+                {t('qhse.referencedHospitals')}
               </h2>
               <Button size="sm" onClick={() => { setActionErr(null); setShowHospital(true); }}
                 aria-label="Ajouter un hôpital">
@@ -1744,8 +1744,8 @@ export function PageQhse() {
               onRowClick={(row) => { setActionErr(null); setEditHospital(row); }}
               defaultSort={{ key: 'city', dir: 'asc' }}
               defaultPageSize={25}
-              searchPlaceholder={t('LQhse.searchHospital')}
-              emptyMessage={t('LQhse.noHospital')}
+              searchPlaceholder={t('qhse.searchHospital')}
+              emptyMessage={t('qhse.noHospital')}
               exportFormats={['csv', 'json']}
               exportFilename="hopitaux"
             />
@@ -1755,8 +1755,8 @@ export function PageQhse() {
 
       {/* ── Dialogues ── */}
       <Dialog open={showAccident} onOpenChange={o => { if (!o) setShowAccident(false); }}
-        title={t('LQhse.declareAccTitle')}
-        description={t('LQhse.declareAccDesc')}
+        title={t('qhse.declareAccTitle')}
+        description={t('qhse.declareAccDesc')}
         size="xl">
         <AccidentForm
           buses={buses ?? []}
@@ -1770,8 +1770,8 @@ export function PageQhse() {
       </Dialog>
 
       <Dialog open={showSeverity} onOpenChange={o => { if (!o) setShowSeverity(false); }}
-        title={t('LQhse.addSeverityTitle')}
-        description={t('LQhse.addSeverityDesc')}
+        title={t('qhse.addSeverityTitle')}
+        description={t('qhse.addSeverityDesc')}
         size="xl">
         <SeverityForm
           initial={initialSeverity}
@@ -1783,8 +1783,8 @@ export function PageQhse() {
       </Dialog>
 
       <Dialog open={showHospital} onOpenChange={o => { if (!o) setShowHospital(false); }}
-        title={t('LQhse.addHospitalTitle')}
-        description={t('LQhse.addHospitalDesc')}
+        title={t('qhse.addHospitalTitle')}
+        description={t('qhse.addHospitalDesc')}
         size="lg">
         <HospitalForm
           initial={initialHospital}
@@ -1796,8 +1796,8 @@ export function PageQhse() {
       </Dialog>
 
       <Dialog open={showProcedure} onOpenChange={o => { if (!o) setShowProcedure(false); }}
-        title={t('LQhse.createProcTitle')}
-        description={t('LQhse.createProcDesc')}
+        title={t('qhse.createProcTitle')}
+        description={t('qhse.createProcDesc')}
         size="2xl">
         <ProcedureForm
           initial={initialProcedure}
@@ -1809,8 +1809,8 @@ export function PageQhse() {
       </Dialog>
 
       <Dialog open={!!disputeFor} onOpenChange={o => { if (!o) setDisputeFor(null); }}
-        title={t('LQhse.openDisputeTitle')}
-        description={disputeFor ? `${t('LQhse.accidentOf')} ${new Date(disputeFor.occurredAt).toLocaleString('fr-FR')}` : undefined}
+        title={t('qhse.openDisputeTitle')}
+        description={disputeFor ? `${t('qhse.accidentOf')} ${new Date(disputeFor.occurredAt).toLocaleString('fr-FR')}` : undefined}
         size="lg">
         {disputeFor && (
           <DisputeForm
@@ -1824,7 +1824,7 @@ export function PageQhse() {
 
       {/* Édition sévérité */}
       <Dialog open={!!editSeverity} onOpenChange={o => { if (!o) setEditSeverity(null); }}
-        title={t('LQhse.editSeverityTitle')}
+        title={t('qhse.editSeverityTitle')}
         description={editSeverity?.name}
         size="xl">
         {editSeverity && (
@@ -1848,7 +1848,7 @@ export function PageQhse() {
 
       {/* Édition hôpital */}
       <Dialog open={!!editHospital} onOpenChange={o => { if (!o) setEditHospital(null); }}
-        title={t('LQhse.editHospitalTitle')}
+        title={t('qhse.editHospitalTitle')}
         description={editHospital?.name}
         size="lg">
         {editHospital && (
@@ -1869,7 +1869,7 @@ export function PageQhse() {
 
       {/* Édition procédure */}
       <Dialog open={!!editProcedure} onOpenChange={o => { if (!o) setEditProcedure(null); }}
-        title={t('LQhse.editProcTitle')}
+        title={t('qhse.editProcTitle')}
         description={editProcedure?.name}
         size="lg">
         {editProcedure && (
@@ -1889,14 +1889,14 @@ export function PageQhse() {
 
       {/* Confirmation suppression */}
       <Dialog open={!!confirmDelete} onOpenChange={o => { if (!o) setConfirmDelete(null); }}
-        title={t('LQhse.confirmDelete')}
+        title={t('qhse.confirmDelete')}
         description={
           confirmDelete
             ? `${t('common.delete')} "${
                 confirmDelete.kind === 'severity'  ? confirmDelete.item.name :
                 confirmDelete.kind === 'hospital'  ? confirmDelete.item.name :
                 confirmDelete.item.name
-              }" ${t('LQhse.deleteDesc')}`
+              }" ${t('qhse.deleteDesc')}`
             : undefined
         }
         size="sm"

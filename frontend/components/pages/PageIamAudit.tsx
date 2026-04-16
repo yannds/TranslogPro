@@ -146,14 +146,14 @@ function deriveDescription(entry: AuditEntry, t: (k: string | Record<string, str
 
   if (at.includes('LOGIN')) {
     return outcome === 'FAILURE'
-      ? `${t('LIamAudit.loginFailed')}${email ? ' : ' + email : ''}`
-      : `${t('LIamAudit.loginSuccess')}${email ? ' : ' + email : ''}`;
+      ? `${t('iamAudit.loginFailed')}${email ? ' : ' + email : ''}`
+      : `${t('iamAudit.loginSuccess')}${email ? ' : ' + email : ''}`;
   }
   if (at.includes('DELETE'))
-    return `${t('LIamAudit.deletionOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
+    return `${t('iamAudit.deletionOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
   if (at.includes('WRITE') || at.includes('CREATE'))
-    return `${t('LIamAudit.creationOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
-  return `${at} ${t('LIamAudit.onLabel')} ${module}`;
+    return `${t('iamAudit.creationOn')} ${module}${entry.resource ? ' — ' + entry.resource : ''}`;
+  return `${at} ${t('iamAudit.onLabel')} ${module}`;
 }
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
@@ -162,7 +162,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
   return [
     {
       key: 'createdAt',
-      header: t('LIamAudit.colDate'),
+      header: t('iamAudit.colDate'),
       sortable: true,
       width: '150px',
       cellRenderer: (v) => (
@@ -174,14 +174,14 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
     },
     {
       key: 'level',
-      header: t('LIamAudit.colLevel'),
+      header: t('iamAudit.colLevel'),
       sortable: true,
       width: '90px',
       cellRenderer: (v) => <LevelBadge level={String(v)} />,
     },
     {
       key: 'action',
-      header: t('LIamAudit.colAction'),
+      header: t('iamAudit.colAction'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="font-mono text-xs text-slate-800 dark:text-slate-200 max-w-[260px] truncate block">
@@ -191,7 +191,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
     },
     {
       key: 'resource',
-      header: t('LIamAudit.colResource'),
+      header: t('iamAudit.colResource'),
       sortable: true,
       cellRenderer: (v) => (
         <span className="text-xs text-slate-500 dark:text-slate-400 max-w-[180px] truncate block">{String(v)}</span>
@@ -199,7 +199,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
     },
     {
       key: 'user',
-      header: t('LIamAudit.colUser'),
+      header: t('iamAudit.colUser'),
       cellRenderer: (_v, row) => row.user ? (
         <div>
           <p className="text-xs text-slate-800 dark:text-slate-200">{row.user.name}</p>
@@ -210,7 +210,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
     },
     {
       key: 'ipAddress',
-      header: t('LIamAudit.colIp'),
+      header: t('iamAudit.colIp'),
       width: '120px',
       cellRenderer: (v) => (
         <span className="text-xs text-slate-500 font-mono">{v ? String(v) : '—'}</span>
@@ -251,8 +251,8 @@ function AuditDetailDialog({
     <Dialog
       open={!!entry}
       onOpenChange={o => { if (!o) onClose(); }}
-      title={t('LIamAudit.logDetailTitle')}
-      description={t('LIamAudit.logDetailDesc')}
+      title={t('iamAudit.logDetailTitle')}
+      description={t('iamAudit.logDetailDesc')}
       size="xl"
       footer={<Button variant="outline" size="sm" onClick={onClose}>{t('common.close')}</Button>}
     >
@@ -261,18 +261,18 @@ function AuditDetailDialog({
         {/* Bloc 1 — Identité */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.eventId')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('iamAudit.eventId')}</p>
             <p className="font-mono text-xs text-slate-800 dark:text-slate-200 break-all">{entry.id}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.timestamp')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('iamAudit.timestamp')}</p>
             <p className="font-mono text-xs text-slate-800 dark:text-slate-200">{formatDate(entry.createdAt)}</p>
           </div>
         </div>
 
         {/* Bloc 2 — Source */}
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('LIamAudit.eventSource')}</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{t('iamAudit.eventSource')}</p>
           <p className="text-xs text-slate-800 dark:text-slate-200 uppercase font-mono">{entry.plane}</p>
         </div>
 
@@ -281,15 +281,15 @@ function AuditDetailDialog({
         {/* Bloc 3 — Classification */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.eventType')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.eventType')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{eventType}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.category')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.category')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{category}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.colAction')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.colAction')}</p>
             <p className="text-xs font-mono text-slate-800 dark:text-slate-200">{actionLabel}</p>
           </div>
         </div>
@@ -297,11 +297,11 @@ function AuditDetailDialog({
         {/* Bloc 4 — Sévérité + Niveau sécurité */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.severity')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.severity')}</p>
             <LevelBadge level={entry.level} />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.securityLevel')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.securityLevel')}</p>
             <SecLevelBadge level={secLevel} />
           </div>
         </div>
@@ -310,7 +310,7 @@ function AuditDetailDialog({
 
         {/* Bloc 5 — Description */}
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('LIamAudit.descriptionLabel')}</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('iamAudit.descriptionLabel')}</p>
           <p className="text-sm text-slate-800 dark:text-slate-200 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600">
             {description}
           </p>
@@ -321,7 +321,7 @@ function AuditDetailDialog({
         {/* Bloc 6 — Utilisateur + Contexte */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('LIamAudit.user')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('iamAudit.user')}</p>
             <div className="space-y-0.5">
               {entry.user ? (
                 <>
@@ -333,7 +333,7 @@ function AuditDetailDialog({
                   </p>
                 </>
               ) : (
-                <p className="text-xs italic text-slate-400">{t('LIamAudit.systemAnonymous')}</p>
+                <p className="text-xs italic text-slate-400">{t('iamAudit.systemAnonymous')}</p>
               )}
               {roleName !== '—' && (
                 <p className="text-xs text-slate-800 dark:text-slate-200">
@@ -341,24 +341,24 @@ function AuditDetailDialog({
                 </p>
               )}
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500 not-italic">{t('LIamAudit.colIp')} :</span> {entry.ipAddress ?? '—'}
+                <span className="text-slate-500 not-italic">{t('iamAudit.colIp')} :</span> {entry.ipAddress ?? '—'}
               </p>
             </div>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('LIamAudit.context')}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{t('iamAudit.context')}</p>
             <div className="space-y-0.5">
               <p className="text-xs text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500">{t('LIamAudit.module')} :</span> {module}
+                <span className="text-slate-500">{t('iamAudit.module')} :</span> {module}
               </p>
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200 break-all">
-                <span className="text-slate-500 not-italic">{t('LIamAudit.endpoint')} :</span> {endpoint}
+                <span className="text-slate-500 not-italic">{t('iamAudit.endpoint')} :</span> {endpoint}
               </p>
               <p className="text-xs font-mono text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500 not-italic">{t('LIamAudit.method')} :</span> {method}
+                <span className="text-slate-500 not-italic">{t('iamAudit.method')} :</span> {method}
               </p>
               <p className="text-xs text-slate-800 dark:text-slate-200">
-                <span className="text-slate-500">{t('LIamAudit.result')} :</span>{' '}
+                <span className="text-slate-500">{t('iamAudit.result')} :</span>{' '}
                 <span className={outcome === 'SUCCESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                   {outcome}
                 </span>
@@ -377,7 +377,7 @@ function AuditDetailDialog({
                 className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                 onClick={() => setRawOpen(o => !o)}
               >
-                {rawOpen ? '▾' : '▸'} {t('LIamAudit.rawRequest')}
+                {rawOpen ? '▾' : '▸'} {t('iamAudit.rawRequest')}
               </button>
               {rawOpen && (
                 <pre className="mt-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap break-all">
@@ -436,24 +436,24 @@ export function PageIamAudit() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <ScrollText size={24} className="text-indigo-500 dark:text-indigo-400" />
-          {t('LIamAudit.accessLog')}
+          {t('iamAudit.accessLog')}
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           {data
-            ? `${data.total} ${t('LIamAudit.totalEntries').replace('{count}', String(items.length))}`
-            : t('LIamAudit.loading')}
+            ? `${data.total} ${t('iamAudit.totalEntries').replace('{count}', String(items.length))}`
+            : t('iamAudit.loading')}
         </p>
       </div>
 
       {/* Filtres serveur */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">
-          <Filter size={14} /> {t('LIamAudit.serverFilters')}
+          <Filter size={14} /> {t('iamAudit.serverFilters')}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <Select
             options={[
-              { value: '', label: t('LIamAudit.allLevels') },
+              { value: '', label: t('iamAudit.allLevels') },
               { value: 'info', label: 'info' },
               { value: 'warn', label: 'warn' },
               { value: 'critical', label: 'critical' },
@@ -462,7 +462,7 @@ export function PageIamAudit() {
             onChange={e => setDraft(d => ({ ...d, level: e.target.value }))}
           />
           <Input
-            placeholder={t('LIamAudit.searchAction')}
+            placeholder={t('iamAudit.searchAction')}
             value={draft.action}
             onChange={e => setDraft(d => ({ ...d, action: e.target.value }))}
           />
@@ -475,19 +475,19 @@ export function PageIamAudit() {
             type="date"
             value={draft.from}
             onChange={e => setDraft(d => ({ ...d, from: e.target.value }))}
-            title={t('LIamAudit.since')}
+            title={t('iamAudit.since')}
           />
           <Input
             type="date"
             value={draft.to}
             onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
-            title={t('LIamAudit.until')}
+            title={t('iamAudit.until')}
           />
         </div>
         <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" onClick={resetFilters}>{t('LIamAudit.reset')}</Button>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>{t('iamAudit.reset')}</Button>
           <Button size="sm" onClick={applyFilters}>
-            <Search size={13} className="mr-1" /> {t('LIamAudit.apply')}
+            <Search size={13} className="mr-1" /> {t('iamAudit.apply')}
           </Button>
         </div>
       </div>
@@ -499,8 +499,8 @@ export function PageIamAudit() {
         loading={loading}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
-        searchPlaceholder={t('LIamAudit.searchPlaceholder')}
-        emptyMessage={t('LIamAudit.emptyMessage')}
+        searchPlaceholder={t('iamAudit.searchPlaceholder')}
+        emptyMessage={t('iamAudit.emptyMessage')}
         exportFormats={['csv', 'json', 'pdf']}
         exportFilename="audit-log"
         onRowClick={setDetail}

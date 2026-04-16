@@ -389,7 +389,9 @@ const en: Record<string, Record<string, string>> = {
     "searchLabel": "Search a trip",
     "filterStatus": "Filter by status",
     "createTrip": "Create a new trip",
-    "today": "Today"
+    "today": "Today",
+    "pageTitle": "Today's Trips",
+    "dialogNewDesc": "Schedule an operational trip."
   },
   "tripPlanning": {
     "pageTitle": "Weekly Planning",
@@ -1706,7 +1708,9 @@ const en: Record<string, Record<string, string>> = {
     "emptyMsg": "No agencies.",
     "deleting": "Deleting\\u2026",
     "renameAgency": "Rename Agency",
-    "deleteAgency": "Delete Agency"
+    "deleteAgency": "Delete Agency",
+    "agencyName": "Agency name",
+    "invariantNote": "A tenant always has at least one agency."
   },
   "tripForm": {
     "route": "Route",
@@ -1728,28 +1732,32 @@ const en: Record<string, Record<string, string>> = {
     "title1": "Last stop!",
     "title2": "Everybody off.",
     "button": "Go back to the station",
-    "footer": "404 · Page Not Found · TranslogPro"
+    "footer": "404 · Page Not Found · TranslogPro",
+    "body": "The page you are looking for seems to have taken another bus."
   },
   "notFoundParcel": {
     "badge": "Error 404",
     "title1": "Delivery notice:",
     "title2": "Page Not Found.",
     "button": "Track another parcel",
-    "footer": "404 · Parcel Lost · TranslogPro"
+    "footer": "404 · Parcel Lost · TranslogPro",
+    "body": "This parcel seems lost in our network."
   },
   "notFoundMaintenance": {
     "badge": "Error 404",
     "title1": "Breakdown on",
     "button": "Catch the next bus",
     "footer": "404 · Breakdown Detected · TranslogPro",
-    "title2": "the Web highway."
+    "title2": "the Web highway.",
+    "body": "This vehicle is currently under maintenance."
   },
   "notFoundDriver": {
     "badge": "Error 404",
     "title1": "Make a U-turn",
     "title2": "as soon as possible!",
     "footer": "404 · Unknown Route · TranslogPro",
-    "button": "Recalculate route"
+    "button": "Recalculate route",
+    "body": "This route is not on our map."
   },
   "driverSpace": {
     "tabMyTrips": "My Trips",
@@ -1834,10 +1842,15 @@ const en: Record<string, Record<string, string>> = {
     "edit": "✏ Edit",
     "delete": "Delete",
     "duplicateBtn": "⊕ Duplicate & Customize",
-    "duplicating": "Copying…"
+    "duplicating": "Copying…",
+    "confirmRestore": "Restore starter pack?",
+    "pageDesc": "Printable document templates.",
+    "restoreTitle": "Restore",
+    "systemDesc": "Non-editable system templates."
   },
   "wip": {
-    "badge": "Under development"
+    "badge": "Under development",
+    "description": "This page is under development."
   },
   "router": {
     "sellTicket": "Sell Ticket",
@@ -2207,6 +2220,22 @@ const en: Record<string, Record<string, string>> = {
     "leave_a_review": "Leave a Review",
     "today_s_trips": "Today's Trips",
     "overview": "Overview"
+  },
+  "routeDetail": {
+    "quickAddPlaceholder": "— Add a waypoint —",
+    "distanceOrigin": "Distance from origin (km)",
+    "tollCost": "Toll (XAF)",
+    "waitTime": "Wait time (min)",
+    "mandatoryStop": "Mandatory stop",
+    "checkpoints": "Checkpoints",
+    "addCheckpoint": "Add",
+    "checkpointName": "Checkpoint name",
+    "remove": "Remove",
+    "cpPeage": "Toll",
+    "cpDouane": "Customs",
+    "cpEauxForets": "Forestry",
+    "cpFrontiere": "Border",
+    "cpAutre": "Other"
   }
 };
 

@@ -73,9 +73,9 @@ function docStatusVariant(s: string): 'danger' | 'warning' | 'default' {
 }
 
 function docStatusLabel(s: string, t: (keyOrMap: string | Record<string, string | undefined>) => string): string {
-  if (s === 'EXPIRED')  return t('LFleetDocs.statusExpired');
-  if (s === 'EXPIRING') return t('LFleetDocs.statusExpiring');
-  if (s === 'MISSING')  return t('LFleetDocs.statusMissing');
+  if (s === 'EXPIRED')  return t('fleetDocs.statusExpired');
+  if (s === 'EXPIRING') return t('fleetDocs.statusExpiring');
+  if (s === 'MISSING')  return t('fleetDocs.statusMissing');
   return s;
 }
 
@@ -86,8 +86,8 @@ function consumableVariant(s: string): 'danger' | 'warning' | 'success' {
 }
 
 function consumableLabel(s: string, t: (keyOrMap: string | Record<string, string | undefined>) => string): string {
-  if (s === 'OVERDUE') return t('LFleetDocs.statusOverdue');
-  if (s === 'ALERT')   return t('LFleetDocs.statusAlert');
+  if (s === 'OVERDUE') return t('fleetDocs.statusOverdue');
+  if (s === 'ALERT')   return t('fleetDocs.statusAlert');
   return 'OK';
 }
 
@@ -152,7 +152,7 @@ function DocumentTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="dt-code" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.code')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.code')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="dt-code" type="text" required value={f.code}
             onChange={e => setF(p => ({ ...p, code: e.target.value.toUpperCase() }))}
@@ -160,7 +160,7 @@ function DocumentTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="dt-alert" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.alertDaysBefore')}
+            {t('fleetDocs.alertDaysBefore')}
           </label>
           <input id="dt-alert" type="number" min={1} value={f.alertDaysBeforeExpiry}
             onChange={e => setF(p => ({ ...p, alertDaysBeforeExpiry: Math.max(1, Number(e.target.value)) }))}
@@ -169,7 +169,7 @@ function DocumentTypeForm({ onSubmit, onCancel, busy, error }: {
         <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
           <input type="checkbox" checked={f.isMandatory} onChange={e => setF(p => ({ ...p, isMandatory: e.target.checked }))}
             className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" disabled={busy} />
-          {t('LFleetDocs.mandatoryDoc')}
+          {t('fleetDocs.mandatoryDoc')}
         </label>
       </div>
       <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.create')} pendingLabel={t('common.creating')} />
@@ -197,7 +197,7 @@ function ConsumableTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="ct-code" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.code')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.code')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="ct-code" type="text" required value={f.code}
             onChange={e => setF(p => ({ ...p, code: e.target.value.toUpperCase() }))}
@@ -205,7 +205,7 @@ function ConsumableTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="ct-life" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.nominalLifetimeKm')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.nominalLifetimeKm')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="ct-life" type="number" min={1} required value={f.nominalLifetimeKm}
             onChange={e => setF(p => ({ ...p, nominalLifetimeKm: Math.max(1, Number(e.target.value)) }))}
@@ -213,7 +213,7 @@ function ConsumableTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="ct-alert" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.alertKmBefore')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.alertKmBefore')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="ct-alert" type="number" min={0} required value={f.alertKmBefore}
             onChange={e => setF(p => ({ ...p, alertKmBefore: Math.max(0, Number(e.target.value)) }))}
@@ -241,11 +241,11 @@ function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <label htmlFor="doc-bus" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.vehicle')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.vehicle')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="doc-bus" required value={f.busId} onChange={e => setF(p => ({ ...p, busId: e.target.value }))}
             className={inputClass} disabled={busy || buses.length === 0}>
-            {buses.length === 0 && <option value="">{t('LFleetDocs.noVehicle')}</option>}
+            {buses.length === 0 && <option value="">{t('fleetDocs.noVehicle')}</option>}
             {buses.map(b => <option key={b.id} value={b.id}>{b.plateNumber}{b.model ? ` — ${b.model}` : ''}</option>)}
           </select>
         </div>
@@ -255,21 +255,21 @@ function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error 
           </label>
           <select id="doc-type" required value={f.typeId} onChange={e => setF(p => ({ ...p, typeId: e.target.value }))}
             className={inputClass} disabled={busy || docTypes.length === 0}>
-            {docTypes.length === 0 && <option value="">{t('LFleetDocs.noType')}</option>}
+            {docTypes.length === 0 && <option value="">{t('fleetDocs.noType')}</option>}
             {docTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
           </select>
         </div>
         <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="doc-ref" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.reference')}
+            {t('fleetDocs.reference')}
           </label>
           <input id="doc-ref" type="text" value={f.referenceNo}
             onChange={e => setF(p => ({ ...p, referenceNo: e.target.value }))}
-            className={cn(inputClass, 'font-mono')} disabled={busy} placeholder={t('LFleetDocs.refPlaceholder')} />
+            className={cn(inputClass, 'font-mono')} disabled={busy} placeholder={t('fleetDocs.refPlaceholder')} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="doc-issued" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.issuedAt')}
+            {t('fleetDocs.issuedAt')}
           </label>
           <input id="doc-issued" type="date" value={f.issuedAt}
             onChange={e => setF(p => ({ ...p, issuedAt: e.target.value }))}
@@ -277,7 +277,7 @@ function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error 
         </div>
         <div className="space-y-1.5">
           <label htmlFor="doc-expires" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.expiresAt')}
+            {t('fleetDocs.expiresAt')}
           </label>
           <input id="doc-expires" type="date" value={f.expiresAt}
             onChange={e => setF(p => ({ ...p, expiresAt: e.target.value }))}
@@ -285,7 +285,7 @@ function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error 
         </div>
         <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="doc-notes" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.notes')}
+            {t('fleetDocs.notes')}
           </label>
           <textarea id="doc-notes" rows={2} value={f.notes}
             onChange={e => setF(p => ({ ...p, notes: e.target.value }))}
@@ -312,27 +312,27 @@ function ReplacementForm({ buses, consTypes, onSubmit, onCancel, busy, error }: 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <label htmlFor="rep-bus" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.vehicle')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.vehicle')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="rep-bus" required value={f.busId} onChange={e => setF(p => ({ ...p, busId: e.target.value }))}
             className={inputClass} disabled={busy || buses.length === 0}>
-            {buses.length === 0 && <option value="">{t('LFleetDocs.noVehicle')}</option>}
+            {buses.length === 0 && <option value="">{t('fleetDocs.noVehicle')}</option>}
             {buses.map(b => <option key={b.id} value={b.id}>{b.plateNumber}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
           <label htmlFor="rep-type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.consumable')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.consumable')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="rep-type" required value={f.typeId} onChange={e => setF(p => ({ ...p, typeId: e.target.value }))}
             className={inputClass} disabled={busy || consTypes.length === 0}>
-            {consTypes.length === 0 && <option value="">{t('LFleetDocs.noConsumable')}</option>}
+            {consTypes.length === 0 && <option value="">{t('fleetDocs.noConsumable')}</option>}
             {consTypes.map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
           </select>
         </div>
         <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="rep-km" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LFleetDocs.mileageAtReplacement')} <span aria-hidden className="text-red-500">*</span>
+            {t('fleetDocs.mileageAtReplacement')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="rep-km" type="number" min={0} required value={f.replacedAtKm}
             onChange={e => setF(p => ({ ...p, replacedAtKm: Math.max(0, Number(e.target.value)) }))}
@@ -414,44 +414,44 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
   const overdueCount  = consumables?.filter(c => c.status === 'OVERDUE').length ?? 0;
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'alerts',      label: t('LFleetDocs.tabAlerts') },
-    { id: 'consumables', label: t('LFleetDocs.tabConsumables') },
-    { id: 'types',       label: t('LFleetDocs.tabConfig') },
+    { id: 'alerts',      label: t('fleetDocs.tabAlerts') },
+    { id: 'consumables', label: t('fleetDocs.tabConsumables') },
+    { id: 'types',       label: t('fleetDocs.tabConfig') },
   ];
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LFleetDocs.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('fleetDocs.pageTitle')}>
       {/* ── En-tête ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            {t('LFleetDocs.pageTitle')}
+            {t('fleetDocs.pageTitle')}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('LFleetDocs.pageSubtitle')}
+            {t('fleetDocs.pageSubtitle')}
           </p>
         </div>
         <Button
           onClick={() => { setShowDocForm(true); setActionError(null); }}
-          aria-label={t('LFleetDocs.newDocument')}
+          aria-label={t('fleetDocs.newDocument')}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          {t('LFleetDocs.newDocument')}
+          {t('fleetDocs.newDocument')}
         </Button>
       </div>
 
       {/* ── KPIs ── */}
-      <section aria-label={t('LFleetDocs.pageTitle')}>
+      <section aria-label={t('fleetDocs.pageTitle')}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label={t('LFleetDocs.expired')}              value={expiredCount}  icon={<AlertTriangle className="w-5 h-5" />} highlight="danger"                                   loading={loadingAlerts} />
-          <StatCard label={t('LFleetDocs.expiringSoon')}         value={expiringCount} icon={<Clock className="w-5 h-5" />}        highlight="warning"                                  loading={loadingAlerts} />
-          <StatCard label={t('LFleetDocs.missing')}              value={missingCount}  icon={<FileText className="w-5 h-5" />}     highlight="danger"                                   loading={loadingAlerts} />
-          <StatCard label={t('LFleetDocs.consumablesOverdue')}   value={overdueCount}  icon={<Wrench className="w-5 h-5" />}      highlight={overdueCount > 0 ? 'danger' : 'success'}  loading={loadingConsumables} />
+          <StatCard label={t('fleetDocs.expired')}              value={expiredCount}  icon={<AlertTriangle className="w-5 h-5" />} highlight="danger"                                   loading={loadingAlerts} />
+          <StatCard label={t('fleetDocs.expiringSoon')}         value={expiringCount} icon={<Clock className="w-5 h-5" />}        highlight="warning"                                  loading={loadingAlerts} />
+          <StatCard label={t('fleetDocs.missing')}              value={missingCount}  icon={<FileText className="w-5 h-5" />}     highlight="danger"                                   loading={loadingAlerts} />
+          <StatCard label={t('fleetDocs.consumablesOverdue')}   value={overdueCount}  icon={<Wrench className="w-5 h-5" />}      highlight={overdueCount > 0 ? 'danger' : 'success'}  loading={loadingConsumables} />
         </div>
       </section>
 
       {/* ── Tabs ── */}
-      <nav aria-label={t('LFleetDocs.pageTitle')} role="tablist">
+      <nav aria-label={t('fleetDocs.pageTitle')} role="tablist">
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
           {tabs.map(tb => (
             <button
@@ -479,37 +479,37 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
         <section id="tabpanel-alerts" role="tabpanel" aria-labelledby="tab-alerts" aria-live="polite">
           <Card>
             <CardHeader
-              heading={t('LFleetDocs.alertsHeading')}
-              description={t('LFleetDocs.alertsDescription')}
+              heading={t('fleetDocs.alertsHeading')}
+              description={t('fleetDocs.alertsDescription')}
               action={
-                <Button variant="ghost" size="sm" aria-label={t('LFleetDocs.exportLabel')}>
-                  {t('LFleetDocs.exportLabel')}
+                <Button variant="ghost" size="sm" aria-label={t('fleetDocs.exportLabel')}>
+                  {t('fleetDocs.exportLabel')}
                 </Button>
               }
             />
             <CardContent className="p-0">
               {loadingAlerts ? (
-                <div className="p-6 space-y-3" aria-busy="true" aria-label={t('LFleetDocs.loading')}>
+                <div className="p-6 space-y-3" aria-busy="true" aria-label={t('fleetDocs.loading')}>
                   {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
               ) : !docAlerts || docAlerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
-                  <p className="font-medium">{t('LFleetDocs.allUpToDate')}</p>
-                  <p className="text-sm mt-1">{t('LFleetDocs.noActiveAlert')}</p>
+                  <p className="font-medium">{t('fleetDocs.allUpToDate')}</p>
+                  <p className="text-sm mt-1">{t('fleetDocs.noActiveAlert')}</p>
                 </div>
               ) : (
-                <div role="table" aria-label={t('LFleetDocs.alertsHeading')}>
+                <div role="table" aria-label={t('fleetDocs.alertsHeading')}>
                   <div role="rowgroup">
                     <div
                       role="row"
                       className="grid grid-cols-5 px-6 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
                     >
-                      <div role="columnheader">{t('LFleetDocs.colBus')}</div>
-                      <div role="columnheader">{t('LFleetDocs.colDocType')}</div>
-                      <div role="columnheader">{t('LFleetDocs.colReference')}</div>
-                      <div role="columnheader">{t('LFleetDocs.colExpiration')}</div>
-                      <div role="columnheader">{t('LFleetDocs.colStatus')}</div>
+                      <div role="columnheader">{t('fleetDocs.colBus')}</div>
+                      <div role="columnheader">{t('fleetDocs.colDocType')}</div>
+                      <div role="columnheader">{t('fleetDocs.colReference')}</div>
+                      <div role="columnheader">{t('fleetDocs.colExpiration')}</div>
+                      <div role="columnheader">{t('fleetDocs.colStatus')}</div>
                     </div>
                   </div>
                   <div role="rowgroup">
@@ -546,16 +546,16 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
         <section id="tabpanel-consumables" role="tabpanel" aria-labelledby="tab-consumables" aria-live="polite">
           <Card>
             <CardHeader
-              heading={t('LFleetDocs.consumablesHeading')}
-              description={t('LFleetDocs.consumablesDescription')}
+              heading={t('fleetDocs.consumablesHeading')}
+              description={t('fleetDocs.consumablesDescription')}
               action={
                 <Button
                   size="sm"
                   onClick={() => { setShowReplaceForm(true); setActionError(null); }}
-                  aria-label={t('LFleetDocs.replacement')}
+                  aria-label={t('fleetDocs.replacement')}
                 >
                   <Plus className="w-4 h-4 mr-1" aria-hidden />
-                  {t('LFleetDocs.replacement')}
+                  {t('fleetDocs.replacement')}
                 </Button>
               }
             />
@@ -567,10 +567,10 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
               ) : !consumables || consumables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
-                  <p className="font-medium">{t('LFleetDocs.noConsumableAlert')}</p>
+                  <p className="font-medium">{t('fleetDocs.noConsumableAlert')}</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list" aria-label={t('LFleetDocs.tabConsumables')}>
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list" aria-label={t('fleetDocs.tabConsumables')}>
                   {consumables.map(c => {
                     const progress = c.lastReplacedKm !== null && c.nextDueKm
                       ? Math.min(100, Math.round(((c.currentKm - c.lastReplacedKm) / (c.nextDueKm - c.lastReplacedKm)) * 100))
@@ -624,13 +624,13 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader
-                heading={t('LFleetDocs.docTypesHeading')}
-                description={t('LFleetDocs.docTypesDescription')}
+                heading={t('fleetDocs.docTypesHeading')}
+                description={t('fleetDocs.docTypesDescription')}
                 action={
                   <Button
                     size="sm"
                     onClick={() => { setShowDocTypeForm(true); setActionError(null); }}
-                    aria-label={t('LFleetDocs.newDocTypeTitle')}
+                    aria-label={t('fleetDocs.newDocTypeTitle')}
                   >
                     <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('common.add')}
                   </Button>
@@ -643,7 +643,7 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                   </div>
                 ) : !documentTypes || documentTypes.length === 0 ? (
                   <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
-                    {t('LFleetDocs.noDocType')}
+                    {t('fleetDocs.noDocType')}
                   </p>
                 ) : (
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -658,7 +658,7 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                             <span className="text-xs text-slate-400">{dt.validityDays}j</span>
                           )}
                           <Badge variant={dt.isMandatory ? 'warning' : 'default'} size="sm">
-                            {dt.isMandatory ? t('LFleetDocs.mandatory') : t('LFleetDocs.optional')}
+                            {dt.isMandatory ? t('fleetDocs.mandatory') : t('fleetDocs.optional')}
                           </Badge>
                         </div>
                       </li>
@@ -670,13 +670,13 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
 
             <Card>
               <CardHeader
-                heading={t('LFleetDocs.consTypesHeading')}
-                description={t('LFleetDocs.consTypesDescription')}
+                heading={t('fleetDocs.consTypesHeading')}
+                description={t('fleetDocs.consTypesDescription')}
                 action={
                   <Button
                     size="sm"
                     onClick={() => { setShowConsTypeForm(true); setActionError(null); }}
-                    aria-label={t('LFleetDocs.newConsTypeTitle')}
+                    aria-label={t('fleetDocs.newConsTypeTitle')}
                   >
                     <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('common.add')}
                   </Button>
@@ -689,7 +689,7 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                   </div>
                 ) : !consumableTypes || consumableTypes.length === 0 ? (
                   <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
-                    {t('LFleetDocs.noConsType')}
+                    {t('fleetDocs.noConsType')}
                   </p>
                 ) : (
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -714,8 +714,8 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
       <Dialog
         open={showDocTypeForm}
         onOpenChange={o => { if (!o) setShowDocTypeForm(false); }}
-        title={t('LFleetDocs.newDocTypeTitle')}
-        description={t('LFleetDocs.newDocTypeDesc')}
+        title={t('fleetDocs.newDocTypeTitle')}
+        description={t('fleetDocs.newDocTypeDesc')}
         size="lg"
       >
         {showDocTypeForm && (
@@ -726,8 +726,8 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
       <Dialog
         open={showConsTypeForm}
         onOpenChange={o => { if (!o) setShowConsTypeForm(false); }}
-        title={t('LFleetDocs.newConsTypeTitle')}
-        description={t('LFleetDocs.newConsTypeDesc')}
+        title={t('fleetDocs.newConsTypeTitle')}
+        description={t('fleetDocs.newConsTypeDesc')}
         size="lg"
       >
         {showConsTypeForm && (
@@ -738,8 +738,8 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
       <Dialog
         open={showDocForm}
         onOpenChange={o => { if (!o) setShowDocForm(false); }}
-        title={t('LFleetDocs.newDocTitle')}
-        description={t('LFleetDocs.newDocDesc')}
+        title={t('fleetDocs.newDocTitle')}
+        description={t('fleetDocs.newDocDesc')}
         size="lg"
       >
         {showDocForm && (
@@ -757,8 +757,8 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
       <Dialog
         open={showReplaceForm}
         onOpenChange={o => { if (!o) setShowReplaceForm(false); }}
-        title={t('LFleetDocs.newReplacementTitle')}
-        description={t('LFleetDocs.newReplacementDesc')}
+        title={t('fleetDocs.newReplacementTitle')}
+        description={t('fleetDocs.newReplacementDesc')}
         size="md"
       >
         {showReplaceForm && (

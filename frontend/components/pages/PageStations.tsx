@@ -94,21 +94,21 @@ function StationForm({
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('LStations.stationName')} <span aria-hidden className="text-red-500">*</span>
+          {t('stations.stationName')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <input type="text" required value={f.name}
           onChange={e => patch({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder={t('LStations.placeholderName')} />
+          className={inp} disabled={busy} placeholder={t('stations.placeholderName')} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('LStations.city')} <span aria-hidden className="text-red-500">*</span>
+            {t('stations.city')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.city}
             onChange={e => patch({ city: e.target.value })}
-            className={inp} disabled={busy} placeholder={t('LStations.placeholderCity')} />
+            className={inp} disabled={busy} placeholder={t('stations.placeholderCity')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -117,8 +117,8 @@ function StationForm({
           <select required value={f.type}
             onChange={e => patch({ type: e.target.value as StationType })}
             className={inp} disabled={busy}>
-            <option value="PRINCIPALE">{t('LStations.typePrincipale')}</option>
-            <option value="RELAIS">{t('LStations.typeRelais')}</option>
+            <option value="PRINCIPALE">{t('stations.typePrincipale')}</option>
+            <option value="RELAIS">{t('stations.typeRelais')}</option>
           </select>
         </div>
       </div>
@@ -206,7 +206,7 @@ export function PageStations() {
 
   const stationColumns: Column<StationRow>[] = useMemo(() => [
     {
-      key: 'name', header: t('LStations.stations'), sortable: true,
+      key: 'name', header: t('stations.stations'), sortable: true,
       cellRenderer: (_v, row) => (
         <div className="flex items-center gap-2 min-w-0">
           <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
@@ -219,17 +219,17 @@ export function PageStations() {
         </div>
       ),
     },
-    { key: 'city', header: t('LStations.city'), sortable: true },
+    { key: 'city', header: t('stations.city'), sortable: true },
     {
       key: 'type', header: t('common.type'), sortable: true, width: '120px',
       cellRenderer: (v) => (
         <Badge variant={v === 'PRINCIPALE' ? 'success' : 'info'} size="sm">
-          {v === 'PRINCIPALE' ? t('LStations.typePrincipale') : t('LStations.typeRelais')}
+          {v === 'PRINCIPALE' ? t('stations.typePrincipale') : t('stations.typeRelais')}
         </Badge>
       ),
     },
     {
-      key: 'id', header: t('LStations.references'), align: 'right' as const, width: '120px',
+      key: 'id', header: t('stations.references'), align: 'right' as const, width: '120px',
       cellRenderer: (_v, row) => {
         const refs = refsCount(row._count);
         return <Badge variant={refs > 0 ? 'warning' : 'default'} size="sm">{refs}</Badge>;
@@ -252,7 +252,7 @@ export function PageStations() {
   ], [t]);
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('LStations.pageTitle')}>
+    <main className="p-6 space-y-6" role="main" aria-label={t('stations.pageTitle')}>
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -260,25 +260,25 @@ export function PageStations() {
             <MapPin className="w-5 h-5 text-teal-600 dark:text-teal-400" aria-hidden />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('LStations.pageTitle')}</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('stations.pageTitle')}</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('LStations.pageDesc')}
+              {t('stations.pageDesc')}
             </p>
           </div>
         </div>
         <Button onClick={() => { setActionErr(null); setShowCreate(true); }}>
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          {t('LStations.newStation')}
+          {t('stations.newStation')}
         </Button>
       </div>
 
       <ErrorAlert error={error || actionErr} icon />
 
       {/* KPIs */}
-      <section aria-label={t('LStations.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Kpi label={t('LStations.stations')}      value={kpi.total}     icon={<MapPin     className="w-5 h-5" />} />
-        <Kpi label={t('LStations.principales')}   value={kpi.principal} icon={<Building2  className="w-5 h-5" />} />
-        <Kpi label={t('LStations.citiesCovered')} value={kpi.cities}    icon={<LinkIcon   className="w-5 h-5" />} />
+      <section aria-label={t('stations.pageTitle')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Kpi label={t('stations.stations')}      value={kpi.total}     icon={<MapPin     className="w-5 h-5" />} />
+        <Kpi label={t('stations.principales')}   value={kpi.principal} icon={<Building2  className="w-5 h-5" />} />
+        <Kpi label={t('stations.citiesCovered')} value={kpi.cities}    icon={<LinkIcon   className="w-5 h-5" />} />
       </section>
 
       {/* Liste — DataTableMaster (tri, recherche, pagination, export) */}
@@ -287,8 +287,8 @@ export function PageStations() {
         data={stations ?? []}
         loading={loading}
         defaultSort={{ key: 'city', dir: 'asc' }}
-        searchPlaceholder={t('LStations.searchStation')}
-        emptyMessage={t('LStations.noStations')}
+        searchPlaceholder={t('stations.searchStation')}
+        emptyMessage={t('stations.noStations')}
         rowActions={stationRowActions}
         onRowClick={row => { setActionErr(null); setEditTarget(row); }}
         exportFormats={['csv', 'json']}
@@ -299,8 +299,8 @@ export function PageStations() {
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title={t('LStations.newStation')}
-        description={t('LStations.dialogNewDesc')}
+        title={t('stations.newStation')}
+        description={t('stations.dialogNewDesc')}
         size="lg"
       >
         <StationForm
@@ -319,7 +319,7 @@ export function PageStations() {
       <Dialog
         open={!!editTarget}
         onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title={t('LStations.editStation')}
+        title={t('stations.editStation')}
         description={editTarget?.name}
         size="lg"
       >
@@ -347,10 +347,10 @@ export function PageStations() {
       <Dialog
         open={!!deleteTarget}
         onOpenChange={o => { if (!o) setDeleteTarget(null); }}
-        title={t('LStations.deleteStation')}
+        title={t('stations.deleteStation')}
         description={
           deleteTarget
-            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('LStations.deleteDesc')}`
+            ? `${t('common.delete')} « ${deleteTarget.name} » ? ${t('stations.deleteDesc')}`
             : undefined
         }
         footer={
@@ -372,7 +372,7 @@ export function PageStations() {
         <ErrorAlert error={actionErr} />
         {deleteTarget && refsCount(deleteTarget._count) > 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
-            {refsCount(deleteTarget._count)} {t('LStations.refsWarning')} {t('LStations.deleteWarning')}
+            {refsCount(deleteTarget._count)} {t('stations.refsWarning')} {t('stations.deleteWarning')}
           </p>
         )}
         <div />
