@@ -90,72 +90,9 @@ interface TemplateLibraryPageProps {
   apiBase?: string;
 }
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
-
-const T = {
-  // Doc type labels
-  dtTicket:       tm('Billet de voyage', 'Travel Ticket'),
-  dtInvoice:      tm('Facture', 'Invoice'),
-  dtLabel:        tm('Étiquette / Talon', 'Label / Stub'),
-  dtManifest:     tm('Manifeste', 'Manifest'),
-  dtPackingList:  tm('Bordereau', 'Packing List'),
-
-  // Format labels
-  fmtA4:          tm('A4', 'A4'),
-  fmtA5:          tm('A5', 'A5'),
-  fmtThermal:     tm('Thermique 80mm', 'Thermal 80mm'),
-  fmtLabel62:     tm('Label 62mm / A6', 'Label 62mm / A6'),
-  fmtBaggage:     tm('99×210mm (Bagage)', '99×210mm (Baggage)'),
-  fmtEnvC5:       tm('Enveloppe C5', 'Envelope C5'),
-  fmtEnvDL:       tm('Enveloppe DL', 'Envelope DL'),
-
-  // Page text
-  pageTitle:      tm('Templates d\'impression', 'Print Templates'),
-  pageDesc:       tm(
-    'Personnalisez vos modèles de factures, billets et étiquettes. Dupliquez un modèle de base puis modifiez les zones et variables selon vos besoins.',
-    'Customize your invoice, ticket and label templates. Duplicate a base template then modify zones and variables to fit your needs.',
-  ),
-  filterAll:      tm('Tous', 'All'),
-  restorePackBtn: tm('⟲ Restaurer le pack de démarrage', '⟲ Restore Starter Pack'),
-  restoring:      tm('Restauration…', 'Restoring…'),
-  restoreTitle:   tm(
-    'Crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) manquants',
-    'Creates editable copies of missing base templates (ticket, invoice, receipt, manifest, label)',
-  ),
-  loading:        tm('Chargement…', 'Loading…'),
-  yourTemplates:  tm('Vos templates personnalisés', 'Your Custom Templates'),
-  systemModels:   tm('Modèles de base (système)', 'Base Templates (System)'),
-  systemDesc:     tm(
-    'Ces modèles sont fournis par TranslogPro. Dupliquez-en un pour créer votre propre version personnalisable.',
-    'These templates are provided by TranslogPro. Duplicate one to create your own customizable version.',
-  ),
-  errorLoadTpl:   tm('Erreur de chargement des templates', 'Failed to load templates'),
-
-  // Dialog/prompt text
-  promptDupName:  tm('Nom pour votre copie de', 'Name for your copy of'),
-  dupSuffix:      tm('Personnalisé', 'Custom'),
-  errorDup:       tm('Erreur lors de la duplication', 'Duplication error'),
-  confirmRestore: tm(
-    'Restaurer le pack de démarrage ?\n\nCette action crée des copies éditables des templates de base (billet, facture, reçu, manifeste, étiquette) qui ne sont pas encore présents dans vos templates personnalisés. Les templates existants ne sont pas modifiés.',
-    'Restore the starter pack?\n\nThis creates editable copies of base templates (ticket, invoice, receipt, manifest, label) not yet present in your custom templates. Existing templates are not modified.',
-  ),
-  packRestored:   tm('Pack restauré.', 'Pack restored.'),
-  packCreated:    tm('Créés', 'Created'),
-  packSkipped:    tm('Déjà présents', 'Already present'),
-  errorRestore:   tm('Erreur lors de la restauration', 'Restoration error'),
-  confirmDelete:  tm('Supprimer le template', 'Delete template'),
-  errorDelete:    tm('Erreur lors de la suppression', 'Deletion error'),
-
-  // Card actions
-  system:         tm('Système', 'System'),
-  edit:           tm('✏ Éditer', '✏ Edit'),
-  delete:         tm('Supprimer', 'Delete'),
-  duplicateBtn:   tm('⊕ Dupliquer & personnaliser', '⊕ Duplicate & Customize'),
-  duplicating:    tm('Copie en cours…', 'Copying…'),
-};
 
 // Derived lookup maps — call inside component to get translated values
-function docTypeLabels(t: (m: Record<string, string | undefined>) => string): Record<string, string> {
+function docTypeLabels(t: (k: string | Record<string, string | undefined>) => string): Record<string, string> {
   return {
     TICKET:       t('templates.dtTicket'),
     INVOICE:      t('templates.dtInvoice'),
@@ -165,14 +102,14 @@ function docTypeLabels(t: (m: Record<string, string | undefined>) => string): Re
   };
 }
 
-function formatLabels(t: (m: Record<string, string | undefined>) => string): Record<string, string> {
+function formatLabels(t: (k: string | Record<string, string | undefined>) => string): Record<string, string> {
   return {
-    A4:           t(T.fmtA4),
-    A5:           t(T.fmtA5),
+    A4:           t('templates.fmtA4'),
+    A5:           t('templates.fmtA5'),
     THERMAL_80MM: t('templates.fmtThermal'),
-    LABEL_62MM:   t(T.fmtLabel62),
+    LABEL_62MM:   t('templates.fmtLabel62'),
     BAGGAGE_TAG:  t('templates.fmtBaggage'),
-    ENVELOPE_C5:  t(T.fmtEnvC5),
+    ENVELOPE_C5:  t('templates.fmtEnvC5'),
     ENVELOPE_DL:  t('templates.fmtEnvDL'),
   };
 }
@@ -445,7 +382,7 @@ interface TemplateCardProps {
   template:       DocTemplate;
   isOwned:        boolean;
   palette:        typeof lightPalette;
-  t:              (m: Record<string, string | undefined>) => string;
+  t:              (k: string | Record<string, string | undefined>) => string;
   docTypeLabels:  Record<string, string>;
   formatLabels:   Record<string, string>;
   onEdit?:        () => void;

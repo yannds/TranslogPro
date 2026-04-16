@@ -14,6 +14,7 @@ import {
   XCircle, ChevronDown, ChevronRight, PackagePlus, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
@@ -65,6 +66,7 @@ function EquipmentTypeForm({ onSubmit, onCancel, busy, error }: {
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<EquipmentFormValues>({
     name: '', code: '', requiredQty: 1, isMandatory: true,
   });
@@ -74,10 +76,10 @@ function EquipmentTypeForm({ onSubmit, onCancel, busy, error }: {
       onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}
     >
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="eq-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom <span aria-hidden className="text-red-500">*</span>
+            {t('common.name')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="eq-name" type="text" required value={f.name}
             onChange={e => setF(p => ({ ...p, name: e.target.value }))}
@@ -93,21 +95,21 @@ function EquipmentTypeForm({ onSubmit, onCancel, busy, error }: {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="eq-qty" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Quantité requise
+            {t('crewBriefing.qty')}
           </label>
           <input id="eq-qty" type="number" min={1} value={f.requiredQty}
             onChange={e => setF(p => ({ ...p, requiredQty: Math.max(1, Number(e.target.value)) }))}
             className={inputClass} disabled={busy} />
         </div>
-        <label className="col-span-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
           <input type="checkbox" checked={f.isMandatory}
             onChange={e => setF(p => ({ ...p, isMandatory: e.target.checked }))}
             className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
             disabled={busy} />
-          Équipement obligatoire (bloque le départ si manquant)
+          {t('crewBriefing.mandatoryCheck')}
         </label>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Créer" pendingLabel="Création…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.create')} pendingLabel={t('common.creating')} />
     </form>
   );
 }
@@ -137,6 +139,7 @@ function BriefingForm({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<BriefingFormValues>(() => ({
     assignmentId: assignments[0]?.id ?? '',
     checkedItems: Object.fromEntries(
@@ -172,12 +175,12 @@ function BriefingForm({
 
       <div className="space-y-1.5">
         <label htmlFor="br-assignment" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Affectation équipage <span aria-hidden className="text-red-500">*</span>
+          {t('crewBriefing.crewAssignment')} <span aria-hidden className="text-red-500">*</span>
         </label>
         <select id="br-assignment" required value={values.assignmentId}
           onChange={e => setValues(p => ({ ...p, assignmentId: e.target.value }))}
           className={inputClass} disabled={busy || assignments.length === 0}>
-          {assignments.length === 0 && <option value="">Aucune affectation disponible</option>}
+          {assignments.length === 0 && <option value="">{t('crewBriefing.noAssignment')}</option>}
           {assignments.map(a => (
             <option key={a.id} value={a.id}>
               Trajet {a.tripId.slice(0, 8)} · Staff {a.staffId.slice(0, 8)}
@@ -187,9 +190,9 @@ function BriefingForm({
       </div>
 
       <fieldset className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
-        <legend className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Checklist équipements</legend>
+        <legend className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('crewBriefing.equipChecklist')}</legend>
         {equipment.length === 0 ? (
-          <p className="text-sm text-slate-500">Aucun équipement configuré — importez le catalogue UE ou créez-en un.</p>
+          <p className="text-sm text-slate-500">{t('crewBriefing.noEquipHint')}</p>
         ) : (() => {
           // Groupement par catégorie inférée depuis le code.
           const grouped = new Map<BusEquipmentCategory, EquipmentType[]>();
@@ -223,19 +226,19 @@ function BriefingForm({
                                 onChange={e => updateItem(eq.id, { ok: e.target.checked })}
                                 className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 shrink-0"
                                 disabled={busy}
-                                aria-label={`Conformité ${eq.name}`}
+                                aria-label={`${t('crewBriefing.conformity')} ${eq.name}`}
                               />
                               <span className="font-medium truncate">{eq.name}</span>
-                              {eq.isMandatory && <Badge variant="warning" size="sm">Obligatoire</Badge>}
+                              {eq.isMandatory && <Badge variant="warning" size="sm">{t('crewBriefing.mandatory')}</Badge>}
                             </label>
                             <label className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
-                              <span>Qté</span>
+                              <span>{t('crewBriefing.qty')}</span>
                               <input
                                 type="number" min={0} value={item.qty}
                                 onChange={e => updateItem(eq.id, { qty: Math.max(0, Number(e.target.value)) })}
                                 className="w-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
                                 disabled={busy}
-                                aria-label={`Quantité contrôlée de ${eq.name}`}
+                                aria-label={`${t('crewBriefing.controlledQty')} ${eq.name}`}
                               />
                               <span className="text-slate-400">/ {eq.requiredQty}</span>
                             </label>
@@ -258,10 +261,10 @@ function BriefingForm({
         <textarea id="br-notes" rows={2} value={values.notes}
           onChange={e => setValues(p => ({ ...p, notes: e.target.value }))}
           className={inputClass} disabled={busy}
-          placeholder="Observations (optionnel)" />
+          placeholder={t('crewBriefing.observations')} />
       </div>
 
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer le briefing" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('crewBriefing.saveBriefing')} pendingLabel={t('crewBriefing.savingBriefing')} />
     </form>
   );
 }
@@ -269,15 +272,16 @@ function BriefingForm({
 // ─── Indicateur de conformité ─────────────────────────────────────────────────
 
 function ConformityIndicator({ ok }: { ok: boolean }) {
+  const { t } = useI18n();
   return ok ? (
     <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
       <CheckCircle2 className="w-4 h-4" aria-hidden />
-      Conforme
+      {t('crewBriefing.compliant')}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400 text-xs font-medium">
       <XCircle className="w-4 h-4" aria-hidden />
-      Non conforme
+      {t('crewBriefing.nonCompliantShort')}
     </span>
   );
 }
@@ -286,6 +290,7 @@ function ConformityIndicator({ ok }: { ok: boolean }) {
 
 export function PageCrewBriefing() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
   const myUserId = user?.id ?? '';
 
@@ -331,7 +336,7 @@ export function PageCrewBriefing() {
     const existingCodes = new Set(equipment.map(e => e.code));
     const toCreate = BUS_EQUIPMENT_CATALOG.filter(i => !existingCodes.has(i.code));
     if (toCreate.length === 0) {
-      setActionError('Catalogue déjà à jour — aucun équipement manquant.');
+      setActionError(t('crewBriefing.catalogUpToDate'));
       return;
     }
     setBusy(true); setActionError(null);
@@ -400,44 +405,44 @@ export function PageCrewBriefing() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'incomplete', label: 'Non conformes' },
-    { id: 'history',    label: 'Historique' },
-    { id: 'equipment',  label: 'Équipements' },
+    { id: 'incomplete', label: t('crewBriefing.nonCompliant') },
+    { id: 'history',    label: t('crewBriefing.history') },
+    { id: 'equipment',  label: t('crewBriefing.equipment') },
   ];
 
   const incompleteCount = incomplete?.length ?? 0;
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Briefings équipages pré-départ">
+    <main className="p-6 space-y-6" role="main" aria-label={t('crewBriefing.pageTitle')}>
       {/* ── En-tête ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Briefings Équipages</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('crewBriefing.pageTitle')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Checklist sécurité pré-départ — gilets, lampes, trousse, cales, sangles, triangles, cric
+            {t('crewBriefing.pageDesc')}
           </p>
         </div>
         <Button
           onClick={() => { setShowBriefing(true); setActionError(null); }}
-          aria-label="Créer un nouveau briefing pré-départ"
+          aria-label={t('crewBriefing.newBriefing')}
         >
           <Plus className="w-4 h-4 mr-2" aria-hidden />
-          Nouveau briefing
+          {t('crewBriefing.newBriefing')}
         </Button>
       </div>
 
       {/* ── KPIs ── */}
-      <section aria-label="Indicateurs briefings">
+      <section aria-label={t('crewBriefing.briefingIndicators')}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Briefings non conformes: ${incompleteCount}`}
+            aria-label={`${t('crewBriefing.nonCompliant')}: ${incompleteCount}`}
           >
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 shrink-0" aria-hidden>
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Non conformes</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('crewBriefing.nonCompliant')}</p>
               {loadingIncomplete ? <Skeleton className="h-7 w-8 mt-1" /> : (
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{incompleteCount}</p>
               )}
@@ -446,13 +451,13 @@ export function PageCrewBriefing() {
 
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Briefings historique: chargement`}
+            aria-label={`${t('crewBriefing.history')}: chargement`}
           >
             <div className="p-3 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-500 shrink-0" aria-hidden>
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Historique</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('crewBriefing.history')}</p>
               {loadingHistory ? <Skeleton className="h-7 w-8 mt-1" /> : (
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{history?.length ?? '—'}</p>
               )}
@@ -461,13 +466,13 @@ export function PageCrewBriefing() {
 
           <article
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-            aria-label={`Équipements configurés: ${equipment?.length ?? '—'}`}
+            aria-label={`${t('crewBriefing.equipmentTypes')}: ${equipment?.length ?? '—'}`}
           >
             <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0" aria-hidden>
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Types équipements</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('crewBriefing.equipmentTypes')}</p>
               {loadingEquipment ? <Skeleton className="h-7 w-8 mt-1" /> : (
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 tabular-nums">{equipment?.length ?? '—'}</p>
               )}
@@ -477,29 +482,29 @@ export function PageCrewBriefing() {
       </section>
 
       {/* ── Tabs ── */}
-      <nav aria-label="Sections briefings" role="tablist">
+      <nav aria-label={t('crewBriefing.briefingIndicators')} role="tablist">
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
-          {tabs.map(t => (
+          {tabs.map(tb => (
             <button
-              key={t.id}
+              key={tb.id}
               role="tab"
-              aria-selected={tab === t.id}
-              aria-controls={`tabpanel-briefing-${t.id}`}
-              id={`tab-briefing-${t.id}`}
-              onClick={() => setTab(t.id)}
+              aria-selected={tab === tb.id}
+              aria-controls={`tabpanel-briefing-${tb.id}`}
+              id={`tab-briefing-${tb.id}`}
+              onClick={() => setTab(tb.id)}
               className={cn(
                 'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
-                tab === t.id
+                tab === tb.id
                   ? 'border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
               )}
             >
-              {t.label}
-              {t.id === 'incomplete' && incompleteCount > 0 && (
+              {tb.label}
+              {tb.id === 'incomplete' && incompleteCount > 0 && (
                 <span
                   className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold"
-                  aria-label={`${incompleteCount} non conformes`}
+                  aria-label={`${incompleteCount} ${t('crewBriefing.nonCompliant')}`}
                 >
                   {incompleteCount}
                 </span>
@@ -519,8 +524,8 @@ export function PageCrewBriefing() {
         >
           <Card>
             <CardHeader
-              heading="Briefings non conformes"
-              description="Trajets dont au moins un équipement obligatoire est manquant"
+              heading={t('crewBriefing.nonCompliantTitle')}
+              description={t('crewBriefing.nonCompliantDesc')}
             />
             <CardContent className="p-0">
               {loadingIncomplete ? (
@@ -530,7 +535,7 @@ export function PageCrewBriefing() {
               ) : !incomplete || incomplete.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
-                  <p className="font-medium">Tous les briefings sont conformes</p>
+                  <p className="font-medium">{t('crewBriefing.allCompliant')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -545,10 +550,10 @@ export function PageCrewBriefing() {
                         <div className="flex items-center justify-between gap-4">
                           <div>
                             <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{b.tripRef}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Par {b.conductedBy} — {new Date(b.completedAt).toLocaleString('fr-FR')}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{b.conductedBy} — {new Date(b.completedAt).toLocaleString('fr-FR')}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
-                            <Badge variant="danger" size="sm">{b.missingCodes.length} manquant(s)</Badge>
+                            <Badge variant="danger" size="sm">{b.missingCodes.length} {t('crewBriefing.missing')}</Badge>
                             {expanded === b.id
                               ? <ChevronDown className="w-4 h-4 text-slate-400" aria-hidden />
                               : <ChevronRight className="w-4 h-4 text-slate-400" aria-hidden />
@@ -562,9 +567,9 @@ export function PageCrewBriefing() {
                           className="px-6 pb-4 bg-red-50/50 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/30"
                         >
                           <p className="text-xs font-semibold text-red-700 dark:text-red-400 mt-3 mb-2 uppercase tracking-wide">
-                            Équipements manquants :
+                            {t('crewBriefing.missingEquipment')}
                           </p>
-                          <ul className="flex flex-wrap gap-2" aria-label="Équipements manquants">
+                          <ul className="flex flex-wrap gap-2" aria-label={t('crewBriefing.missingEquipment')}>
                             {b.missingCodes.map(code => (
                               <li key={code}>
                                 <Badge variant="danger" size="sm">{code}</Badge>
@@ -586,7 +591,7 @@ export function PageCrewBriefing() {
       {tab === 'history' && (
         <section id="tabpanel-briefing-history" role="tabpanel" aria-labelledby="tab-briefing-history">
           <Card>
-            <CardHeader heading="Historique des briefings" description="50 derniers briefings enregistrés" />
+            <CardHeader heading={t('crewBriefing.historyTitle')} description={t('crewBriefing.historyDesc')} />
             <CardContent className="p-0">
               {loadingHistory ? (
                 <div className="p-6 space-y-3" aria-busy="true">
@@ -594,7 +599,7 @@ export function PageCrewBriefing() {
                 </div>
               ) : !history || history.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-12 text-center">
-                  Aucun briefing dans l'historique
+                  {t('crewBriefing.noHistory')}
                 </p>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -603,7 +608,7 @@ export function PageCrewBriefing() {
                       <div>
                         <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{b.tripRef}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Par {b.conductedBy} — {new Date(b.completedAt).toLocaleString('fr-FR')}
+                          {b.conductedBy} — {new Date(b.completedAt).toLocaleString('fr-FR')}
                         </p>
                       </div>
                       <ConformityIndicator ok={b.allEquipmentOk} />
@@ -621,8 +626,8 @@ export function PageCrewBriefing() {
         <section id="tabpanel-briefing-equipment" role="tabpanel" aria-labelledby="tab-briefing-equipment" className="space-y-4">
           <Card>
             <CardHeader
-              heading="Catalogue des équipements"
-              description={`${equipment?.length ?? 0} équipements configurés — référence UNECE R107 / UE 2019/2144`}
+              heading={t('crewBriefing.catalogTitle')}
+              description={`${equipment?.length ?? 0} ${t('crewBriefing.configured')} — UNECE R107 / UE 2019/2144`}
               action={
                 <div className="flex items-center gap-2">
                   <Button
@@ -631,19 +636,19 @@ export function PageCrewBriefing() {
                     onClick={handleSeedCatalog}
                     disabled={busy || loadingEquipment}
                     loading={busy && !!seedProgress}
-                    aria-label="Importer le catalogue de référence européen"
+                    aria-label={t('crewBriefing.importCatalog')}
                   >
                     <Sparkles className="w-4 h-4 mr-1" aria-hidden />
                     {seedProgress
-                      ? `Import ${seedProgress.done}/${seedProgress.total}`
-                      : 'Importer le catalogue UE'}
+                      ? `${t('crewBriefing.importProgress')} ${seedProgress.done}/${seedProgress.total}`
+                      : t('crewBriefing.importCatalog')}
                   </Button>
                   <Button
                     size="sm"
                     onClick={() => { setShowEquipmentForm(true); setActionError(null); }}
-                    aria-label="Ajouter un type d'équipement personnalisé"
+                    aria-label={t('crewBriefing.equipment')}
                   >
-                    <Plus className="w-4 h-4 mr-1" aria-hidden /> Équipement
+                    <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('crewBriefing.equipment')}
                   </Button>
                 </div>
               }
@@ -658,11 +663,10 @@ export function PageCrewBriefing() {
                 <div className="px-6 py-12 text-center" role="status">
                   <PackagePlus className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    Aucun équipement configuré
+                    {t('crewBriefing.noEquipment')}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Utilisez « Importer le catalogue UE » pour seeder {BUS_EQUIPMENT_CATALOG.length} équipements standards
-                    ou créez un équipement personnalisé.
+                    {t('crewBriefing.useImport')} {BUS_EQUIPMENT_CATALOG.length} {t('crewBriefing.standardEquip')} {t('crewBriefing.orCreateCustom')}
                   </p>
                 </div>
               ) : (
@@ -690,11 +694,11 @@ export function PageCrewBriefing() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-xs text-slate-500 tabular-nums">
-                                  Qté : {eq.requiredQty}
+                                  {t('crewBriefing.qty')} : {eq.requiredQty}
                                 </span>
                                 {eq.isMandatory
-                                  ? <Badge variant="warning" size="sm">Obligatoire</Badge>
-                                  : <Badge variant="default" size="sm">Optionnel</Badge>
+                                  ? <Badge variant="warning" size="sm">{t('crewBriefing.mandatory')}</Badge>
+                                  : <Badge variant="default" size="sm">{t('crewBriefing.optional')}</Badge>
                                 }
                               </div>
                             </li>
@@ -711,8 +715,8 @@ export function PageCrewBriefing() {
           {/* Catégories non-présentes : informations catalogue référentiel */}
           <Card>
             <CardHeader
-              heading="Catégories de référence UE"
-              description="Vue d'ensemble des familles d'équipements couverts par le catalogue standard"
+              heading={t('crewBriefing.euCategories')}
+              description={t('crewBriefing.euCatDesc')}
             />
             <CardContent>
               <ul role="list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -731,7 +735,7 @@ export function PageCrewBriefing() {
                           'font-semibold',
                           doneInCat > 0 ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400',
                         )}>{doneInCat}</span>
-                        <span className="text-slate-400"> / {totalInCat} configurés</span>
+                        <span className="text-slate-400"> / {totalInCat} {t('crewBriefing.configured')}</span>
                       </p>
                     </li>
                   );
@@ -746,9 +750,9 @@ export function PageCrewBriefing() {
       <Dialog
         open={showEquipmentForm}
         onOpenChange={o => { if (!o) setShowEquipmentForm(false); }}
-        title="Nouveau type d'équipement"
-        description="Définissez un équipement de sécurité obligatoire pour les briefings pré-départ."
-        size="md"
+        title={t('crewBriefing.newEquipType')}
+        description={t('crewBriefing.newEquipDesc')}
+        size="lg"
       >
         {showEquipmentForm && (
           <EquipmentTypeForm
@@ -764,8 +768,8 @@ export function PageCrewBriefing() {
       <Dialog
         open={showBriefing}
         onOpenChange={o => { if (!o) setShowBriefing(false); }}
-        title="Nouveau briefing pré-départ"
-        description="Checklist des équipements obligatoires pour un membre d'équipage affecté."
+        title={t('crewBriefing.newBriefTitle')}
+        description={t('crewBriefing.newEquipDesc')}
         size="xl"
       >
         {showBriefing && (

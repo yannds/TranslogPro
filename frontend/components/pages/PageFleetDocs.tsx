@@ -64,83 +64,6 @@ interface ConsumableType {
   alertThresholdKm:  number;
 }
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
-
-const T = {
-  // Page
-  pageTitle:              tm('Documents & Consommables', 'Documents & Consumables'),
-  pageSubtitle:           tm('Suivi réglementaire et maintenance prédictive de la flotte', 'Regulatory tracking and predictive fleet maintenance'),
-  newDocument:            tm('Nouveau document', 'New Document'),
-  // KPIs
-  expired:                tm('Expirés', 'Expired'),
-  expiringSoon:           tm('Expirent bientôt', 'Expiring Soon'),
-  missing:                tm('Manquants', 'Missing'),
-  consumablesOverdue:     tm('Consommables dépassés', 'Consumables Overdue'),
-  // Tabs
-  tabAlerts:              tm('Documents en alerte', 'Document Alerts'),
-  tabConsumables:         tm('Consommables', 'Consumables'),
-  tabConfig:              tm('Configuration', 'Configuration'),
-  // Doc status
-  statusExpired:          tm('Expiré', 'Expired'),
-  statusExpiring:         tm('Expire bientôt', 'Expiring Soon'),
-  statusMissing:          tm('Manquant', 'Missing'),
-  // Consumable status
-  statusOverdue:          tm('Dépassé', 'Overdue'),
-  statusAlert:            tm('Alerte', 'Alert'),
-  // Alerts section
-  alertsHeading:          tm('Documents en alerte', 'Document Alerts'),
-  alertsDescription:      tm('Documents expirés, expirant sous 30 jours ou manquants', 'Documents expired, expiring within 30 days, or missing'),
-  exportLabel:            tm('Exporter', 'Export'),
-  allUpToDate:            tm('Tous les documents sont à jour', 'All documents are up to date'),
-  noActiveAlert:          tm('Aucune alerte documentaire active', 'No active document alerts'),
-  colBus:                 tm('Bus', 'Bus'),
-  colDocType:             tm('Type de document', 'Document Type'),
-  colReference:           tm('Référence', 'Reference'),
-  colExpiration:          tm('Expiration', 'Expiration'),
-  colStatus:              tm('Statut', 'Status'),
-  // Consumables section
-  consumablesHeading:     tm('Suivi consommables', 'Consumable Tracking'),
-  consumablesDescription: tm('Pneus, vidange, filtres — alertes basées sur le kilométrage réel', 'Tires, oil change, filters — alerts based on actual mileage'),
-  replacement:            tm('Remplacement', 'Replacement'),
-  noConsumableAlert:      tm('Aucun consommable en alerte', 'No consumable alerts'),
-  // Config section
-  docTypesHeading:        tm('Types de documents', 'Document Types'),
-  docTypesDescription:    tm('Catalogue réglementaire configuré pour ce tenant', 'Regulatory catalog configured for this tenant'),
-  consTypesHeading:       tm('Types de consommables', 'Consumable Types'),
-  consTypesDescription:   tm('Pneus, vidange, filtres avec seuils kilométriques', 'Tires, oil change, filters with mileage thresholds'),
-  noDocType:              tm('Aucun type de document configuré', 'No document type configured'),
-  noConsType:             tm('Aucun type de consommable configuré', 'No consumable type configured'),
-  mandatory:              tm('Obligatoire', 'Mandatory'),
-  optional:               tm('Optionnel', 'Optional'),
-  mandatoryDoc:           tm('Document obligatoire', 'Mandatory document'),
-  // Forms
-  code:                   tm('Code', 'Code'),
-  alertDaysBefore:        tm('Alerte (j avant expiration)', 'Alert (days before expiry)'),
-  nominalLifetimeKm:      tm('Durée nominale (km)', 'Nominal Lifetime (km)'),
-  alertKmBefore:          tm('Alerte (km avant expiration)', 'Alert (km before expiry)'),
-  vehicle:                tm('Véhicule', 'Vehicle'),
-  noVehicle:              tm('Aucun véhicule', 'No vehicle'),
-  consumable:             tm('Consommable', 'Consumable'),
-  noConsumable:           tm('Aucun consommable', 'No consumable'),
-  reference:              tm('Référence', 'Reference'),
-  refPlaceholder:         tm("N° d'immatriculation du document", 'Document registration number'),
-  issuedAt:               tm('Émis le', 'Issued On'),
-  expiresAt:              tm('Expire le', 'Expires On'),
-  notes:                  tm('Notes', 'Notes'),
-  mileageAtReplacement:   tm('Kilométrage au remplacement', 'Mileage at Replacement'),
-  // Dialogs
-  newDocTypeTitle:        tm('Nouveau type de document', 'New Document Type'),
-  newDocTypeDesc:         tm('Configurer un document véhicule réglementaire pour ce tenant.', 'Configure a regulatory vehicle document for this tenant.'),
-  newConsTypeTitle:       tm('Nouveau type de consommable', 'New Consumable Type'),
-  newConsTypeDesc:        tm('Seuils kilométriques pour la maintenance prédictive.', 'Mileage thresholds for predictive maintenance.'),
-  newDocTitle:            tm('Nouveau document véhicule', 'New Vehicle Document'),
-  newDocDesc:             tm('Associer un document (assurance, CT, carte grise…) à un véhicule.', 'Associate a document (insurance, MOT, registration...) with a vehicle.'),
-  newReplacementTitle:    tm('Enregistrer un remplacement', 'Record a Replacement'),
-  newReplacementDesc:     tm('Pneus, vidange ou filtres — le prochain seuil d\'alerte est recalculé automatiquement.', 'Tires, oil change, or filters — the next alert threshold is recalculated automatically.'),
-  noType:                 tm('Aucun type', 'No type'),
-  loading:                tm('chargement', 'loading'),
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function docStatusVariant(s: string): 'danger' | 'warning' | 'default' {
@@ -149,7 +72,7 @@ function docStatusVariant(s: string): 'danger' | 'warning' | 'default' {
   return 'default';
 }
 
-function docStatusLabel(s: string, t: (m: Record<string, string>) => string): string {
+function docStatusLabel(s: string, t: (keyOrMap: string | Record<string, string | undefined>) => string): string {
   if (s === 'EXPIRED')  return t('LFleetDocs.statusExpired');
   if (s === 'EXPIRING') return t('LFleetDocs.statusExpiring');
   if (s === 'MISSING')  return t('LFleetDocs.statusMissing');
@@ -162,7 +85,7 @@ function consumableVariant(s: string): 'danger' | 'warning' | 'success' {
   return 'success';
 }
 
-function consumableLabel(s: string, t: (m: Record<string, string>) => string): string {
+function consumableLabel(s: string, t: (keyOrMap: string | Record<string, string | undefined>) => string): string {
   if (s === 'OVERDUE') return t('LFleetDocs.statusOverdue');
   if (s === 'ALERT')   return t('LFleetDocs.statusAlert');
   return 'OK';
@@ -186,7 +109,7 @@ function StatCard({ label, value, icon, highlight = 'neutral', loading }: StatCa
   return (
     <article
       className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex items-center gap-4"
-      aria-label={`${label}: ${loading ? T.loading.fr : value}`}
+      aria-label={`${label}: ${loading ? '…' : value}`}
     >
       <div className={cn('p-3 rounded-lg shrink-0', colorMap[highlight])} aria-hidden>
         {icon}

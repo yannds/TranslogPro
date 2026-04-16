@@ -17,37 +17,6 @@ import { Button }     from '../ui/Button';
 import { Dialog }     from '../ui/Dialog';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  // titles
-  activeSessions:     tm('Sessions actives', 'Active Sessions'),
-  sessionDetail:      tm('Détail de la session', 'Session Detail'),
-
-  // columns
-  colUser:            tm('Utilisateur', 'User'),
-  colDeviceBrowser:   tm('Appareil / Navigateur', 'Device / Browser'),
-  colCreatedAt:       tm('Créée le', 'Created'),
-  colExpiresAt:       tm('Expire le', 'Expires'),
-  colDevice:          tm('Appareil', 'Device'),
-
-  // labels
-  you:                tm('vous', 'you'),
-  ip:                 tm('IP', 'IP'),
-
-  // buttons
-  revoke:             tm('Révoquer', 'Revoke'),
-  revoking:           tm('Révocation\u2026', 'Revoking\u2026'),
-  refresh:            tm('Actualiser', 'Refresh'),
-
-  // messages
-  loading:            tm('Chargement\u2026', 'Loading\u2026'),
-  sessionCount:       tm('session(s) ouverte(s)', 'open session(s)'),
-  searchPlaceholder:  tm('Rechercher (utilisateur, IP, appareil\u2026)', 'Search (user, IP, device\u2026)'),
-  emptyMessage:       tm('Aucune session active', 'No active sessions'),
-  errorGeneric:       tm('Erreur', 'Error'),
-};
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SessionUser { id: string; email: string; name: string }
@@ -83,7 +52,7 @@ function uaShort(ua?: string) {
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(currentUserId: string, t: (map: Record<string, string>) => string): Column<Session>[] {
+function buildColumns(currentUserId: string, t: (keyOrMap: string | Record<string, string>) => string): Column<Session>[] {
   return [
     {
       key: 'user',

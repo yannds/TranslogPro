@@ -50,67 +50,7 @@ interface TabDef {
   anyOf: string[];
 }
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
-
-const T = {
-  // Tabs
-  tabSale:          tm('Vente', 'Sale'),
-  tabCheckin:       tm('Check-in', 'Check-in'),
-  tabParcels:       tm('Colis', 'Parcels'),
-  tabCashier:       tm('Caisse', 'Cashier'),
-  // Vente
-  upcomingDepartures:  tm('Prochains départs', 'Upcoming Departures'),
-  full:                tm('Complet', 'Full'),
-  seats:               tm('places', 'seats'),
-  platform:            tm('Quai', 'Platform'),
-  ticketIssued:        tm('Billet émis !', 'Ticket Issued!'),
-  printOrSms:          tm('Imprimez le billet ou envoyez par SMS.', 'Print the ticket or send by SMS.'),
-  ticketCode:          tm('Code billet', 'Ticket Code'),
-  passenger:           tm('Passager', 'Passenger'),
-  trip:                tm('Trajet', 'Trip'),
-  departure:           tm('Départ', 'Departure'),
-  price:               tm('Prix', 'Price'),
-  print:               tm('Imprimer', 'Print'),
-  newTicket:           tm('Nouveau billet', 'New Ticket'),
-  firstName:           tm('Prénom', 'First Name'),
-  lastName:            tm('Nom', 'Last Name'),
-  phoneLabel:          tm('Téléphone', 'Phone'),
-  back:                tm('Retour', 'Back'),
-  issueTicket:         tm('Émettre le billet', 'Issue Ticket'),
-  // Check-in
-  scanTicket:          tm('Scanner un billet', 'Scan a Ticket'),
-  verify:              tm('Vérifier', 'Verify'),
-  statusValid:         tm('VALIDE — Accès autorisé', 'VALID — Access Granted'),
-  statusAlreadyBoarded:tm('DÉJÀ EMBARQUÉ — Doublon possible', 'ALREADY BOARDED — Possible Duplicate'),
-  statusCancelled:     tm('ANNULÉ — Accès refusé', 'CANCELLED — Access Denied'),
-  statusNotFound:      tm('CODE INCONNU — Vérifier le billet', 'UNKNOWN CODE — Check Ticket'),
-  confirmBoarding:     tm('Confirmer l\'embarquement', 'Confirm Boarding'),
-  seat:                tm('Siège', 'Seat'),
-  code:                tm('Code', 'Code'),
-  // Colis
-  parcelRegistration:  tm('Enregistrement colis', 'Parcel Registration'),
-  sender:              tm('Expéditeur', 'Sender'),
-  senderPlaceholder:   tm('Nom de l\'expéditeur', 'Sender name'),
-  recipient:           tm('Destinataire', 'Recipient'),
-  recipientPlaceholder:tm('Nom du destinataire', 'Recipient name'),
-  recipientPhone:      tm('Téléphone destinataire', 'Recipient Phone'),
-  destination:         tm('Destination', 'Destination'),
-  weightKg:            tm('Poids (kg)', 'Weight (kg)'),
-  descriptionLabel:    tm('Description', 'Description'),
-  registerParcel:      tm('Enregistrer le colis', 'Register Parcel'),
-  parcelRegistered:    tm('Colis enregistré !', 'Parcel Registered!'),
-  trackingCode:        tm('Code de suivi', 'Tracking Code'),
-  newParcel:           tm('Nouveau colis', 'New Parcel'),
-  // Caisse
-  dayTotal:            tm('Total journée', 'Day Total'),
-  ticketsSold:         tm('Billets vendus', 'Tickets Sold'),
-  parcels:             tm('Colis', 'Parcels'),
-  byPaymentMode:       tm('Par mode de paiement', 'By Payment Mode'),
-  recentTransactions:  tm('Transactions récentes', 'Recent Transactions'),
-  // Main
-  onDuty:              tm('En service', 'On Duty'),
-  noPermission:        tm('Aucune permission configurée', 'No Permissions Configured'),
-};
+// ─── i18n keys ──────────────────────────────────────────────────────────────
 
 const ALL_TABS: TabDef[] = [
   { id: 'vente',   label: 'Vente',    icon: '🎫', anyOf: [P_TICKET_CREATE] },
@@ -119,11 +59,11 @@ const ALL_TABS: TabDef[] = [
   { id: 'caisse',  label: 'Caisse',   icon: '💰', anyOf: [P_CASHIER_OPEN, P_CASHIER_TX] },
 ];
 
-const TAB_LABELS: Record<Tab, ReturnType<typeof tm>> = {
-  vente:   T.tabSale,
-  checkin: T.tabCheckin,
-  colis:   T.tabParcels,
-  caisse:  T.tabCashier,
+const TAB_LABELS: Record<Tab, string> = {
+  vente:   'stationAgent.tabSale',
+  checkin: 'stationAgent.tabCheckin',
+  colis:   'stationAgent.tabParcels',
+  caisse:  'stationAgent.tabCashier',
 };
 
 function filterTabs(permissions: string[]): TabDef[] {
@@ -181,29 +121,29 @@ function TabVente() {
       <div className="p-5 flex flex-col items-center gap-5">
         <div className="w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-2xl text-white">✓</div>
         <div className="text-center">
-          <p className="text-xl font-bold text-white">{t('stationAgent.ticketIssued')}</p>
-          <p className="text-slate-400 text-sm mt-1">{t('stationAgent.printOrSms')}</p>
+          <p className="text-xl font-bold text-white">{'stationAgent.ticketIssued'}</p>
+          <p className="text-slate-400 text-sm mt-1">{'stationAgent.printOrSms'}</p>
         </div>
         <div className="bg-slate-900 rounded-xl border border-slate-700 p-5 w-full max-w-sm">
-          <p className="text-xs text-slate-400 uppercase tracking-widest mb-1 text-center">{t('stationAgent.ticketCode')}</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest mb-1 text-center">{'stationAgent.ticketCode'}</p>
           <p className="text-3xl font-mono font-black text-teal-300 text-center tracking-widest">{ticketCode}</p>
           <div className="mt-4 space-y-2 text-sm">
-            <InfoRow label={t('stationAgent.passenger')} value={`${passenger.prenom} ${passenger.nom}`} />
-            <InfoRow label={t('stationAgent.trip')} value={`Dakar → ${selectedTrip.destination}`} />
-            <InfoRow label={t('stationAgent.departure')} value={selectedTrip.heureDepart} />
-            <InfoRow label={t('stationAgent.platform')} value={selectedTrip.quai} />
-            <InfoRow label={t('stationAgent.price')} value={formatXAF(selectedTrip.prix)} />
+            <InfoRow label={'stationAgent.passenger'} value={`${passenger.prenom} ${passenger.nom}`} />
+            <InfoRow label={'stationAgent.trip'} value={`Dakar → ${selectedTrip.destination}`} />
+            <InfoRow label={'stationAgent.departure'} value={selectedTrip.heureDepart} />
+            <InfoRow label={'stationAgent.platform'} value={selectedTrip.quai} />
+            <InfoRow label={'stationAgent.price'} value={formatXAF(selectedTrip.prix)} />
           </div>
         </div>
         <div className="flex gap-3 w-full max-w-sm">
           <button className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-semibold text-sm hover:bg-teal-700">
-            {t('stationAgent.print')}
+            {'stationAgent.print'}
           </button>
           <button
             onClick={() => { setSelectedTrip(null); setTicketIssued(false); }}
             className="flex-1 py-2.5 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600"
           >
-            {t('stationAgent.newTicket')}
+            {'stationAgent.newTicket'}
           </button>
         </div>
       </div>
@@ -218,7 +158,7 @@ function TabVente() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-bold text-white">Dakar → {selectedTrip.destination}</p>
-              <p className="text-sm text-teal-300">{selectedTrip.heureDepart} · {t('stationAgent.platform')} {selectedTrip.quai} · {selectedTrip.agence}</p>
+              <p className="text-sm text-teal-300">{selectedTrip.heureDepart} · {'stationAgent.platform'} {selectedTrip.quai} · {selectedTrip.agence}</p>
             </div>
             <p className="text-xl font-bold text-teal-300">{formatXAF(selectedTrip.prix)}</p>
           </div>
@@ -228,7 +168,7 @@ function TabVente() {
         <div className="space-y-3 mb-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.firstName')}</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.firstName'}</label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 value={passenger.prenom}
@@ -237,7 +177,7 @@ function TabVente() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.lastName')}</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.lastName'}</label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 value={passenger.nom}
@@ -247,7 +187,7 @@ function TabVente() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.phoneLabel')}</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.phoneLabel'}</label>
             <input
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               value={passenger.telephone}
@@ -262,14 +202,14 @@ function TabVente() {
             onClick={() => setSelectedTrip(null)}
             className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-600"
           >
-            {t('stationAgent.back')}
+            {'stationAgent.back'}
           </button>
           <button
             onClick={() => setTicketIssued(true)}
             disabled={!passenger.prenom || !passenger.nom || !passenger.telephone}
             className="flex-1 py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 disabled:opacity-40"
           >
-            {t('stationAgent.issueTicket')} · {formatXAF(selectedTrip.prix)}
+            {'stationAgent.issueTicket'} · {formatXAF(selectedTrip.prix)}
           </button>
         </div>
       </div>
@@ -278,7 +218,7 @@ function TabVente() {
 
   return (
     <div className="p-5 space-y-4">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.upcomingDepartures')}</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{'stationAgent.upcomingDepartures'}</p>
       {UPCOMING_TRIPS.map(trip => (
         <button
           key={trip.id}
@@ -297,15 +237,15 @@ function TabVente() {
             </div>
             <div>
               <p className="font-semibold text-white">{trip.destination}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{t('stationAgent.platform')} {trip.quai} · {trip.agence}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{'stationAgent.platform'} {trip.quai} · {trip.agence}</p>
             </div>
           </div>
           <div className="text-right">
             <p className="font-bold text-teal-300">{formatXAF(trip.prix)}</p>
             {trip.placesLibres === 0 ? (
-              <p className="text-xs text-red-400 mt-0.5">{t('stationAgent.full')}</p>
+              <p className="text-xs text-red-400 mt-0.5">{'stationAgent.full'}</p>
             ) : (
-              <p className="text-xs text-slate-400 mt-0.5">{trip.placesLibres} {t('stationAgent.seats')}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{trip.placesLibres} {'stationAgent.seats'}</p>
             )}
           </div>
         </button>
@@ -328,15 +268,15 @@ function TabCheckin() {
   }
 
   const statusConfig = {
-    OK:              { cls: 'bg-emerald-900/60 border-emerald-700 text-emerald-300', icon: '✓', label: t('stationAgent.statusValid') },
-    ALREADY_BOARDED: { cls: 'bg-orange-900/60 border-orange-700 text-orange-300',   icon: '⚠', label: t('stationAgent.statusAlreadyBoarded') },
-    CANCELLED:       { cls: 'bg-red-900/60 border-red-700 text-red-300',            icon: '✕', label: t('stationAgent.statusCancelled') },
-    NOT_FOUND:       { cls: 'bg-slate-800 border-slate-700 text-slate-400',         icon: '?', label: t('stationAgent.statusNotFound') },
+    OK:              { cls: 'bg-emerald-900/60 border-emerald-700 text-emerald-300', icon: '✓', label: 'stationAgent.statusValid' },
+    ALREADY_BOARDED: { cls: 'bg-orange-900/60 border-orange-700 text-orange-300',   icon: '⚠', label: 'stationAgent.statusAlreadyBoarded' },
+    CANCELLED:       { cls: 'bg-red-900/60 border-red-700 text-red-300',            icon: '✕', label: 'stationAgent.statusCancelled' },
+    NOT_FOUND:       { cls: 'bg-slate-800 border-slate-700 text-slate-400',         icon: '?', label: 'stationAgent.statusNotFound' },
   };
 
   return (
     <div className="p-5 space-y-5">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.scanTicket')}</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{'stationAgent.scanTicket'}</p>
 
       <form onSubmit={handleScan} className="flex gap-3">
         <input
@@ -350,7 +290,7 @@ function TabCheckin() {
           type="submit"
           className="px-5 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700"
         >
-          {t('stationAgent.verify')}
+          {'stationAgent.verify'}
         </button>
       </form>
 
@@ -365,15 +305,15 @@ function TabCheckin() {
           </div>
           {result.status !== 'NOT_FOUND' && (
             <div className="space-y-2 text-sm">
-              <InfoRow label={t('stationAgent.passenger')} value={result.passenger} />
-              <InfoRow label={t('stationAgent.trip')}      value={result.trip} />
-              <InfoRow label={t('stationAgent.seat')}      value={result.seat} />
-              <InfoRow label={t('stationAgent.code')}      value={result.code} />
+              <InfoRow label={'stationAgent.passenger'} value={result.passenger} />
+              <InfoRow label={'stationAgent.trip'}      value={result.trip} />
+              <InfoRow label={'stationAgent.seat'}      value={result.seat} />
+              <InfoRow label={'stationAgent.code'}      value={result.code} />
             </div>
           )}
           {result.status === 'OK' && (
             <button className="mt-4 w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700">
-              {t('stationAgent.confirmBoarding')}
+              {'stationAgent.confirmBoarding'}
             </button>
           )}
         </div>
@@ -396,23 +336,23 @@ function TabColis() {
     return (
       <div className="p-5 flex flex-col items-center gap-4">
         <div className="w-14 h-14 bg-purple-500 rounded-full flex items-center justify-center text-2xl text-white">📦</div>
-        <p className="text-xl font-bold text-white">{t('stationAgent.parcelRegistered')}</p>
+        <p className="text-xl font-bold text-white">{'stationAgent.parcelRegistered'}</p>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-sm">
-          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">{t('stationAgent.trackingCode')}</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest text-center mb-1">{'stationAgent.trackingCode'}</p>
           <p className="text-3xl font-mono font-black text-purple-300 text-center tracking-widest">{trackCode}</p>
           <div className="mt-4 space-y-2 text-sm">
-            <InfoRow label={t('stationAgent.sender')}      value={form.expediteur} />
-            <InfoRow label={t('stationAgent.recipient')}   value={form.destinataire} />
-            <InfoRow label={t('stationAgent.destination')} value={form.destination} />
-            <InfoRow label={t('stationAgent.descriptionLabel')} value={form.description} />
-            <InfoRow label={t('stationAgent.weightKg')}    value={`${form.poids} kg`} />
+            <InfoRow label={'stationAgent.sender'}      value={form.expediteur} />
+            <InfoRow label={'stationAgent.recipient'}   value={form.destinataire} />
+            <InfoRow label={'stationAgent.destination'} value={form.destination} />
+            <InfoRow label={'stationAgent.descriptionLabel'} value={form.description} />
+            <InfoRow label={'stationAgent.weightKg'}    value={`${form.poids} kg`} />
           </div>
         </div>
         <button
           onClick={() => { setSubmitted(false); setForm({ expediteur: '', destinataire: '', telephone: '', destination: 'Ziguinchor', description: '', poids: '' }); }}
           className="py-2.5 px-8 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600"
         >
-          {t('stationAgent.newParcel')}
+          {'stationAgent.newParcel'}
         </button>
       </div>
     );
@@ -420,11 +360,11 @@ function TabColis() {
 
   return (
     <div className="p-5 space-y-3">
-      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('stationAgent.parcelRegistration')}</p>
+      <p className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{'stationAgent.parcelRegistration'}</p>
       {[
-        { label: t('stationAgent.sender'), key: 'expediteur', placeholder: t('stationAgent.senderPlaceholder') },
-        { label: t('stationAgent.recipient'), key: 'destinataire', placeholder: t('stationAgent.recipientPlaceholder') },
-        { label: t('stationAgent.recipientPhone'), key: 'telephone', placeholder: '+221 77 000 00 00' },
+        { label: 'stationAgent.sender', key: 'expediteur', placeholder: 'stationAgent.senderPlaceholder' },
+        { label: 'stationAgent.recipient', key: 'destinataire', placeholder: 'stationAgent.recipientPlaceholder' },
+        { label: 'stationAgent.recipientPhone', key: 'telephone', placeholder: '+221 77 000 00 00' },
       ].map(({ label, key, placeholder }) => (
         <div key={key}>
           <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{label}</label>
@@ -438,7 +378,7 @@ function TabColis() {
       ))}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.destination')}</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.destination'}</label>
           <select
             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             value={form.destination}
@@ -450,7 +390,7 @@ function TabColis() {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.weightKg')}</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.weightKg'}</label>
           <input
             type="number"
             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -461,7 +401,7 @@ function TabColis() {
         </div>
       </div>
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('stationAgent.descriptionLabel')}</label>
+        <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">{'stationAgent.descriptionLabel'}</label>
         <input
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           placeholder="Vêtements, alimentation, fragile..."
@@ -474,7 +414,7 @@ function TabColis() {
         disabled={!form.expediteur || !form.destinataire || !form.poids}
         className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 disabled:opacity-40 mt-2"
       >
-        {t('stationAgent.registerParcel')}
+        {'stationAgent.registerParcel'}
       </button>
     </div>
   );
@@ -501,22 +441,22 @@ function TabCaisse() {
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="bg-teal-900/40 border border-teal-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-teal-400 uppercase tracking-wider font-semibold">{t('stationAgent.dayTotal')}</p>
+          <p className="text-xs text-teal-400 uppercase tracking-wider font-semibold">{'stationAgent.dayTotal'}</p>
           <p className="text-2xl font-black text-white mt-1">{formatXAF(total)}</p>
         </div>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t('stationAgent.ticketsSold')}</p>
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{'stationAgent.ticketsSold'}</p>
           <p className="text-2xl font-black text-white mt-1">{sales.length}</p>
         </div>
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-center">
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t('stationAgent.parcels')}</p>
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{'stationAgent.parcels'}</p>
           <p className="text-2xl font-black text-white mt-1">3</p>
         </div>
       </div>
 
       {/* By mode */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('stationAgent.byPaymentMode')}</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{'stationAgent.byPaymentMode'}</p>
         <div className="flex gap-2 flex-wrap">
           {Object.entries(byMode).map(([mode, amt]) => (
             <span key={mode} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
@@ -529,7 +469,7 @@ function TabCaisse() {
 
       {/* Transaction list */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('stationAgent.recentTransactions')}</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{'stationAgent.recentTransactions'}</p>
         <div className="space-y-2">
           {sales.map((s, i) => (
             <div key={i} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
@@ -602,7 +542,7 @@ export function StationAgentApp() {
             {DEMO_ROLES.map((r, i) => <option key={r} value={i}>{r}</option>)}
           </select>
           <span className="text-xs bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-2 py-1 rounded-lg font-semibold">
-            {t('stationAgent.onDuty')}
+            {'stationAgent.onDuty'}
           </span>
           <span className="text-sm font-mono text-slate-400">
             {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -629,7 +569,7 @@ export function StationAgentApp() {
         ))}
         {TABS.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-3 text-xs text-slate-600">
-            {t('stationAgent.noPermission')}
+            {'stationAgent.noPermission'}
           </div>
         )}
       </div>

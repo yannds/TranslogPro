@@ -16,62 +16,6 @@ import { cn } from '../../lib/utils';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
-
-const T = {
-  // Hero
-  heroTitle:           tm('Voyagez partout au Sénégal', 'Travel Anywhere in Senegal'),
-  heroSubtitle:        tm('Comparez et réservez vos billets de bus en quelques secondes.', 'Compare and book your bus tickets in seconds.'),
-  departure:           tm('Départ', 'Departure'),
-  arrival:             tm('Arrivée', 'Arrival'),
-  dateLabel:           tm('Date', 'Date'),
-  search:              tm('Rechercher', 'Search'),
-  // Results
-  popularTrips:        tm('Trajets populaires', 'Popular Trips'),
-  from:                tm('dès', 'from'),
-  perPassenger:        tm('par passager', 'per passenger'),
-  full:                tm('Complet', 'Full'),
-  unavailable:         tm('Indisponible', 'Unavailable'),
-  book:                tm('Réserver', 'Book'),
-  onlySeatsLeft:       tm('Plus que', 'Only'),
-  seatsLeftSuffix:     tm('places !', 'seats left!'),
-  availableSeats:      tm('places disponibles', 'available seats'),
-  tripsAvailable:      tm('trajet(s) disponible(s)', 'trip(s) available'),
-  sortBy:              tm('Trier par :', 'Sort by:'),
-  sortDeparture:       tm('Heure de départ', 'Departure Time'),
-  sortPrice:           tm('Prix', 'Price'),
-  // Booking
-  passengerInfo:       tm('Informations passager', 'Passenger Information'),
-  firstName:           tm('Prénom', 'First Name'),
-  lastName:            tm('Nom', 'Last Name'),
-  phoneLabel:          tm('Téléphone', 'Phone'),
-  emailOptional:       tm('Email (optionnel)', 'Email (optional)'),
-  seatType:            tm('Type de place', 'Seat Type'),
-  continueToPayment:   tm('Continuer vers le paiement', 'Continue to Payment'),
-  payment:             tm('Paiement', 'Payment'),
-  passenger:           tm('Passager', 'Passenger'),
-  confirmation:        tm('Confirmation', 'Confirmation'),
-  ticket:              tm('Billet', 'Ticket'),
-  serviceFee:          tm('Frais de service', 'Service Fee'),
-  total:               tm('Total', 'Total'),
-  paymentMethod:       tm('Mode de paiement', 'Payment Method'),
-  back:                tm('Retour', 'Back'),
-  pay:                 tm('Payer', 'Pay'),
-  bookingConfirmed:    tm('Réservation confirmée !', 'Booking Confirmed!'),
-  ticketSentSms:       tm('Votre billet a été envoyé par SMS et email.', 'Your ticket has been sent by SMS and email.'),
-  ticketCodeLabel:     tm('Code de billet', 'Ticket Code'),
-  trip:                tm('Trajet', 'Trip'),
-  agencyLabel:         tm('Agence', 'Agency'),
-  closeLabel:          tm('Fermer', 'Close'),
-  // Navbar
-  myBookings:          tm('Mes réservations', 'My Bookings'),
-  login:               tm('Connexion', 'Login'),
-  // Footer
-  copyright:           tm('© 2026 TranslogPro — Tous droits réservés', '© 2026 TranslogPro — All rights reserved'),
-  privacy:             tm('Confidentialité', 'Privacy'),
-  contact:             tm('Contact', 'Contact'),
-};
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TripResult {

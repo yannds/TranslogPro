@@ -14,6 +14,7 @@ import {
   ChevronRight, Shield, Coffee, GraduationCap, Mail,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
@@ -99,6 +100,7 @@ function LicenseForm({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<LicenseValues>({
     staffId: initial?.staffId     ?? drivers[0]?.id ?? '',
     category: initial?.category   ?? 'D',
@@ -110,14 +112,14 @@ function LicenseForm({
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="lic-staff" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Chauffeur <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.driver')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="lic-staff" required value={f.staffId} onChange={e => setF(p => ({ ...p, staffId: e.target.value }))}
             className={inputClass} disabled={busy || drivers.length === 0}>
-            {drivers.length === 0 && <option value="">Aucun chauffeur</option>}
+            {drivers.length === 0 && <option value="">{t('driverProfile.noDriver')}</option>}
             {drivers.map(d => (
               <option key={d.id} value={d.id}>
                 {d.user.displayName ?? d.user.email}
@@ -127,7 +129,7 @@ function LicenseForm({
         </div>
         <div className="space-y-1.5">
           <label htmlFor="lic-cat" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Catégorie <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.category')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="lic-cat" type="text" required value={f.category}
             onChange={e => setF(p => ({ ...p, category: e.target.value.toUpperCase() }))}
@@ -135,7 +137,7 @@ function LicenseForm({
         </div>
         <div className="space-y-1.5">
           <label htmlFor="lic-no" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            N° de permis <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.licenseNo')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="lic-no" type="text" required value={f.licenseNo}
             onChange={e => setF(p => ({ ...p, licenseNo: e.target.value }))}
@@ -143,7 +145,7 @@ function LicenseForm({
         </div>
         <div className="space-y-1.5">
           <label htmlFor="lic-issued" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Émis le <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.issuedAt')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="lic-issued" type="date" required value={f.issuedAt}
             onChange={e => setF(p => ({ ...p, issuedAt: e.target.value }))}
@@ -151,22 +153,22 @@ function LicenseForm({
         </div>
         <div className="space-y-1.5">
           <label htmlFor="lic-expires" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Expire le <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.expiresAt')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="lic-expires" type="date" required value={f.expiresAt}
             onChange={e => setF(p => ({ ...p, expiresAt: e.target.value }))}
             className={inputClass} disabled={busy} />
         </div>
-        <div className="col-span-2 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="lic-state" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Pays / État émetteur
+            {t('driverProfile.issuingState')}
           </label>
           <input id="lic-state" type="text" value={f.issuingState}
             onChange={e => setF(p => ({ ...p, issuingState: e.target.value }))}
             className={inputClass} disabled={busy} placeholder="CG" />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
     </form>
   );
 }
@@ -188,6 +190,7 @@ function TrainingForm({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<TrainingValues>({
     staffId: drivers[0]?.id ?? '', typeId: types[0]?.id ?? '',
     scheduledAt: '', trainerName: '', locationName: '',
@@ -195,52 +198,52 @@ function TrainingForm({
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="tr-staff" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Chauffeur <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.driver')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="tr-staff" required value={f.staffId} onChange={e => setF(p => ({ ...p, staffId: e.target.value }))}
             className={inputClass} disabled={busy || drivers.length === 0}>
-            {drivers.length === 0 && <option value="">Aucun chauffeur</option>}
+            {drivers.length === 0 && <option value="">{t('driverProfile.noDriver')}</option>}
             {drivers.map(d => (
               <option key={d.id} value={d.id}>{d.user.displayName ?? d.user.email}</option>
             ))}
           </select>
         </div>
-        <div className="col-span-2 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="tr-type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Type de formation <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.trainingType')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="tr-type" required value={f.typeId} onChange={e => setF(p => ({ ...p, typeId: e.target.value }))}
             className={inputClass} disabled={busy || types.length === 0}>
-            {types.length === 0 && <option value="">Aucun type — à créer côté admin</option>}
-            {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {types.length === 0 && <option value="">{t('driverProfile.noTrainingType')}</option>}
+            {types.map(tb => <option key={tb.id} value={tb.id}>{tb.name}</option>)}
           </select>
         </div>
-        <div className="col-span-2 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="tr-date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Date prévue <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.scheduledDate')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="tr-date" type="date" required value={f.scheduledAt}
             onChange={e => setF(p => ({ ...p, scheduledAt: e.target.value }))} className={inputClass} disabled={busy} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="tr-trainer" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Formateur
+            {t('driverProfile.trainer')}
           </label>
           <input id="tr-trainer" type="text" value={f.trainerName}
             onChange={e => setF(p => ({ ...p, trainerName: e.target.value }))} className={inputClass} disabled={busy} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="tr-loc" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Lieu
+            {t('driverProfile.location')}
           </label>
           <input id="tr-loc" type="text" value={f.locationName}
             onChange={e => setF(p => ({ ...p, locationName: e.target.value }))} className={inputClass} disabled={busy} />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Planifier" pendingLabel="Planification…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('driverProfile.planFooter')} pendingLabel={t('driverProfile.planningFooter')} />
     </form>
   );
 }

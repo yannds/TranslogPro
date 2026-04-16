@@ -23,7 +23,6 @@ import { useAuth }                         from '../../lib/auth/auth.context';
 import { useFetch }                        from '../../lib/hooks/useFetch';
 import { apiPost }                         from '../../lib/api';
 import { useI18n }                     from '../../lib/i18n/useI18n';
-import type { TranslationMap }             from '../../lib/i18n/types';
 import { Badge }                           from '../ui/Badge';
 import { Button }                          from '../ui/Button';
 import { Dialog }                          from '../ui/Dialog';
@@ -73,10 +72,10 @@ interface OdometerRow {
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
-const FUEL_TYPE_LABEL: Record<FuelLogType, TranslationMap> = {
-  DIESEL: tm('Diesel', 'Diesel'),
-  PETROL: tm('Essence', 'Petrol'),
-  ADBLUE: tm('AdBlue', 'AdBlue'),
+const FUEL_TYPE_LABEL: Record<FuelLogType, string> = {
+  DIESEL: 'LFleetTracking.fuelDiesel',
+  PETROL: 'LFleetTracking.fuelPetrol',
+  ADBLUE: 'LFleetTracking.fuelAdblue',
 };
 
 const FUEL_TYPE_VARIANT: Record<FuelLogType, 'default' | 'success' | 'warning'> = {
@@ -85,11 +84,11 @@ const FUEL_TYPE_VARIANT: Record<FuelLogType, 'default' | 'success' | 'warning'> 
   ADBLUE: 'success',
 };
 
-const SOURCE_LABEL: Record<OdometerSource, TranslationMap> = {
-  MANUAL:      tm('Manuel', 'Manual'),
-  TRIP:        tm('Voyage', 'Trip'),
-  MAINTENANCE: tm('Maintenance', 'Maintenance'),
-  GPS:         tm('GPS', 'GPS'),
+const SOURCE_LABEL: Record<OdometerSource, string> = {
+  MANUAL:      'LFleetTracking.sourceManual',
+  TRIP:        'LFleetTracking.sourceTrip',
+  MAINTENANCE: 'LFleetTracking.sourceMaintenance',
+  GPS:         'LFleetTracking.sourceGps',
 };
 
 const SOURCE_VARIANT: Record<OdometerSource, 'default' | 'success' | 'warning' | 'danger'> = {
@@ -99,55 +98,9 @@ const SOURCE_VARIANT: Record<OdometerSource, 'default' | 'success' | 'warning' |
   GPS:         'success',
 };
 
-const T = {
-  // Page
-  pageTitle:           tm('Suivi Carburant & Kilométrage', 'Fuel & Mileage Tracking'),
-  pageSubtitle:        tm('Historique des pleins et relevés kilométriques par véhicule.', 'Fuel fill-ups and mileage readings history per vehicle.'),
-  vehicleLabel:        tm('Véhicule :', 'Vehicle:'),
-  selectVehicle:       tm('— Sélectionner un véhicule —', '— Select a vehicle —'),
-  selectPrompt:        tm('Sélectionnez un véhicule pour afficher le suivi.', 'Select a vehicle to display tracking.'),
-  // Fuel section
-  fuelSection:         tm('Carburant', 'Fuel'),
-  addFillUp:           tm('Ajouter plein', 'Add Fill-Up'),
-  avgConsumption:      tm('Conso. moyenne', 'Avg. Consumption'),
-  totalLitres:         tm('Total litres', 'Total Litres'),
-  totalCost:           tm('Total coût', 'Total Cost'),
-  searchFuel:          tm('Rechercher un plein…', 'Search for a fill-up…'),
-  noFuelLog:           tm('Aucun plein enregistré.', 'No fill-up recorded.'),
-  // Fuel form
-  addFillUpTitle:      tm('Ajouter un plein', 'Add a Fill-Up'),
-  quantityL:           tm('Quantité (L)', 'Quantity (L)'),
-  pricePerL:           tm('Prix/L (F)', 'Price/L (F)'),
-  totalCostF:          tm('Coût total (F)', 'Total Cost (F)'),
-  mileageKm:           tm('Kilométrage (km)', 'Mileage (km)'),
-  station:             tm('Station-service', 'Gas Station'),
-  fullTank:            tm('Plein complet', 'Full Tank'),
-  note:                tm('Note', 'Note'),
-  notePlaceholder:     tm('Remarque optionnelle…', 'Optional remark…'),
-  // Odometer section
-  odometerSection:     tm('Kilométrage', 'Mileage'),
-  newReading:          tm('Nouveau relevé', 'New Reading'),
-  searchOdometer:      tm('Rechercher un relevé…', 'Search for a reading…'),
-  noOdometerReading:   tm('Aucun relevé kilométrique.', 'No mileage reading.'),
-  newReadingTitle:     tm('Nouveau relevé kilométrique', 'New Mileage Reading'),
-  readingKm:           tm('Kilométrage (km)', 'Mileage (km)'),
-  source:              tm('Source', 'Source'),
-  // Columns
-  colDate:             tm('Date', 'Date'),
-  colType:             tm('Type', 'Type'),
-  colQuantity:         tm('Quantité (L)', 'Quantity (L)'),
-  colPricePerL:        tm('Prix/L', 'Price/L'),
-  colTotal:            tm('Total', 'Total'),
-  colKm:               tm('Km', 'Km'),
-  colStation:          tm('Station', 'Station'),
-  colMileage:          tm('Kilométrage', 'Mileage'),
-  colSource:           tm('Source', 'Source'),
-  colNote:             tm('Note', 'Note'),
-};
-
 // ─── Fuel columns ─────────────────────────────────────────────────────────────
 
-function buildFuelColumns(t: (m: Record<string, string>) => string): Column<FuelLogRow>[] {
+function buildFuelColumns(t: (keyOrMap: string | Record<string, string | undefined>) => string): Column<FuelLogRow>[] {
   return [
     {
       key: 'logDate',
@@ -235,7 +188,7 @@ function buildFuelColumns(t: (m: Record<string, string>) => string): Column<Fuel
 
 // ─── Odometer columns ─────────────────────────────────────────────────────────
 
-function buildOdometerColumns(t: (m: Record<string, string>) => string): Column<OdometerRow>[] {
+function buildOdometerColumns(t: (keyOrMap: string | Record<string, string | undefined>) => string): Column<OdometerRow>[] {
   return [
     {
       key: 'readingDate',

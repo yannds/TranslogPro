@@ -27,36 +27,6 @@ import { inputClass as inp }                from '../ui/inputClass';
 import { LocationPicker }                   from '../ui/LocationPicker';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  pageTitle:        tm('Gares & Stations', 'Stations'),
-  pageDesc:         tm("Points d'origine et de destination pour lignes, colis et voyageurs.", 'Origin and destination points for routes, parcels and travelers.'),
-  newStation:       tm('Nouvelle station', 'New Station'),
-  stationName:      tm('Nom de la station', 'Station Name'),
-  city:             tm('Ville', 'City'),
-  stationType:      tm('Type', 'Type'),
-  typePrincipale:   tm('Principale', 'Main'),
-  typeRelais:       tm('Relais', 'Relay'),
-  editStation:      tm('Modifier la station', 'Edit Station'),
-  deleteStation:    tm('Supprimer la station', 'Delete Station'),
-  dialogNewDesc:    tm('Ajoutez une gare ou un relais au tenant.', 'Add a station or relay to the tenant.'),
-  stations:         tm('Stations', 'Stations'),
-  principales:      tm('Principales', 'Main Stations'),
-  citiesCovered:    tm('Villes couvertes', 'Cities Covered'),
-  references:       tm('Références', 'References'),
-  searchStation:    tm('Rechercher une station…', 'Search for a station…'),
-  noStations:       tm('Aucune station enregistrée', 'No stations registered'),
-  deleteDesc:       tm('Cette action est irréversible.', 'This action is irreversible.'),
-  deleteWarning:    tm(
-    'La suppression sera refusée par le serveur tant qu\'ils n\'auront pas été réaffectés.',
-    'Deletion will be refused by the server until they are reassigned.',
-  ),
-  refsWarning:      tm('objet(s) référencent cette station.', 'object(s) reference this station.'),
-  placeholderName:  tm('ex. Gare centrale', 'e.g. Central Station'),
-  placeholderCity:  tm('ex. Brazzaville', 'e.g. Brazzaville'),
-};
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StationType = 'PRINCIPALE' | 'RELAIS';
@@ -265,7 +235,7 @@ export function PageStations() {
         return <Badge variant={refs > 0 ? 'warning' : 'default'} size="sm">{refs}</Badge>;
       },
     },
-  ], [t, dict]);
+  ], [t]);
 
   const stationRowActions: RowAction<StationRow>[] = useMemo(() => [
     {
@@ -279,7 +249,7 @@ export function PageStations() {
       onClick: row => { setActionErr(null); setDeleteTarget(row); },
       danger: true,
     },
-  ], [t, dict]);
+  ], [t]);
 
   return (
     <main className="p-6 space-y-6" role="main" aria-label={t('LStations.pageTitle')}>

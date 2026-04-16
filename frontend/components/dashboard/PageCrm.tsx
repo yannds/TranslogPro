@@ -75,7 +75,7 @@ function getPhone(prefs: Record<string, unknown> | null): string {
 
 // ─── Colonnes ─────────────────────────────────────────────────────────────────
 
-function buildColumns(t: (m: Record<string, string>) => string): Column<CustomerRow>[] {
+function buildColumns(t: (k: string | Record<string, string | undefined>) => string): Column<CustomerRow>[] {
   return [
     {
       key: 'name',
@@ -256,7 +256,7 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
 
 // ─── KPIs (calculés depuis la liste) ──────────────────────────────────────────
 
-function CrmKpis({ customers, t }: { customers: CustomerRow[]; t: (m: Record<string, string>) => string }) {
+function CrmKpis({ customers, t }: { customers: CustomerRow[]; t: (k: string | Record<string, string | undefined>) => string }) {
   const total      = customers.length;
   const newMonth   = customers.filter(c => {
     const d = new Date(c.createdAt);

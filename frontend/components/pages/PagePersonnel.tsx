@@ -125,101 +125,20 @@ interface EditForm {
   agencyId: string;   // home administrative — rôle/dispo gérés via AssignmentsManager
 }
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  pageTitle:              tm('Personnel', 'Staff'),
-  staffCount:             tm('membre(s) du personnel', 'staff member(s)'),
-  staffManagement:        tm('Gestion du personnel', 'Staff Management'),
-  newMember:              tm('Nouveau membre', 'New Member'),
-  editMember:             tm('Modifier le membre', 'Edit Member'),
-  fromIam:                tm('Depuis IAM', 'From IAM'),
-  assignments:            tm('Affectations', 'Assignments'),
-  newAssignment:          tm('Nouvelle affectation', 'New Assignment'),
-  addAssignment:          tm('Ajouter une affectation', 'Add an assignment'),
-  promote:                tm('Promouvoir', 'Promote'),
-  archiveAction:          tm('Archiver', 'Archive'),
-  suspendAction:          tm('Suspendre', 'Suspend'),
-  reactivateAction:       tm('Réactiver', 'Reactivate'),
-  coverage:               tm('Couverture', 'Coverage'),
-  monoAgency:             tm('Une seule agence', 'Single Agency'),
-  tenantWide:             tm('Toutes les agences du tenant', 'All Tenant Agencies'),
-  multiAgency:            tm('Plusieurs agences à choisir', 'Select Multiple Agencies'),
-  coveredAgencies:        tm('Agences couvertes', 'Covered Agencies'),
-  initialRole:            tm('Rôle métier initial', 'Initial Role'),
-  attachments:            tm('Pièces jointes', 'Attachments'),
-  function_:              tm('Fonction', 'Function'),
-  statusActive:           tm('Actif', 'Active'),
-  statusSuspended:        tm('Suspendu', 'Suspended'),
-  statusArchived:         tm('Archivé', 'Archived'),
-  closeAssignment:        tm('Clôturer', 'Close'),
-  available:              tm('Dispo', 'Available'),
-  hired:                  tm('Embauché', 'Hired'),
-  member:                 tm('Membre', 'Member'),
-  noActiveAssignment:     tm('Aucune affectation active', 'No active assignment'),
-  fullName:               tm('Nom complet', 'Full Name'),
-  homeAgency:             tm('Agence de rattachement', 'Home Agency'),
-  noAgency:               tm('— Aucune agence —', '— No Agency —'),
-  noAgencyShort:          tm('— Aucune —', '— None —'),
-  selectAgency:           tm('— Sélectionner —', '— Select —'),
-  allFunctions:           tm('Toutes fonctions', 'All Functions'),
-  allStatuses:            tm('Tous statuts', 'All Statuses'),
-  filterByFunction:       tm('Filtrer par fonction', 'Filter by Function'),
-  filterByStatus:         tm('Filtrer par statut', 'Filter by Status'),
-  searchPlaceholder:      tm('Rechercher (nom, email, fonction…)', 'Search (name, email, function...)'),
-  emptyFirst:             tm('Aucun membre. Cliquez sur « Nouveau membre » pour commencer.', 'No members. Click "New Member" to start.'),
-  emptySearch:            tm('Aucun résultat.', 'No results.'),
-  createDialogTitle:      tm('Nouveau membre du personnel', 'New Staff Member'),
-  createDialogDesc:       tm('Le membre recevra un mot de passe temporaire par email.', 'The member will receive a temporary password by email.'),
-  archiveDialogTitle:     tm('Archiver le membre', 'Archive Member'),
-  archiveBusy:            tm('Archivage…', 'Archiving...'),
-  archiveConfirmPre:      tm('Archiver «\u00a0', 'Archive "'),
-  archiveConfirmPost:     tm('\u00a0» ? Le membre ne sera plus visible mais ses données restent conservées.', '"? The member will no longer be visible but data will be preserved.'),
-  promoteDialogTitle:     tm('Promouvoir un utilisateur IAM en personnel', 'Promote an IAM User to Staff'),
-  promoteDialogDesc:      tm("Sélectionnez un user existant qui n'a pas encore de profil personnel.", 'Select an existing user without a staff profile.'),
-  assignDialogDesc:       tm('Un staff peut occuper plusieurs postes (rôle × agence). Couverture mono / tenant-wide / multi-spécifique.', 'A staff can hold multiple positions (role x agency). Mono / tenant-wide / multi-specific coverage.'),
-  loadingIamUsers:        tm('Chargement des utilisateurs IAM…', 'Loading IAM users...'),
-  noEligibleUsers:        tm("Aucun user IAM éligible. Un user est éligible s'il est de type STAFF (pas un client) et n'a pas encore de profil personnel.", 'No eligible IAM users. A user is eligible if they are of type STAFF (not a customer) and do not yet have a staff profile.'),
-  eligibleCount:          tm('user(s) éligible(s) — non listés : déjà personnel, ou clients du tenant.', 'eligible user(s) — unlisted: already staff, or tenant customers.'),
-  iamUser:                tm('Utilisateur IAM', 'IAM User'),
-  selectError:            tm('Sélectionnez une agence', 'Select an agency'),
-  selectMultiError:       tm('Sélectionnez au moins une agence', 'Select at least one agency'),
-  noAssignment:           tm('Aucune affectation. Ajoutez-en une ci-dessous.', 'No assignments. Add one below.'),
-  allTenant:              tm('Tout le tenant', 'Entire Tenant'),
-  sinceDate:              tm('Depuis le', 'Since'),
-  closedDate:             tm('clôturée le', 'closed on'),
-  suspendedBadge:         tm('Suspendue', 'Suspended'),
-  closedBadge:            tm('Clôturée', 'Closed'),
-  unavailableBadge:       tm('Indispo', 'Unavailable'),
-  editHint:               tm('Pour gérer les rôles métier et la disponibilité, ouvrez « Affectations » depuis la liste.', 'To manage job roles and availability, open "Assignments" from the list.'),
-  emailLabel:             tm('Email', 'Email'),
-  statusLabel:            tm('Statut', 'Status'),
-  roleDriver:             tm('Chauffeur', 'Driver'),
-  roleHostess:            tm('Hôtesse / Steward', 'Hostess / Steward'),
-  roleMechanic:           tm('Mécanicien', 'Mechanic'),
-  roleAgent:              tm('Agent de gare', 'Station Agent'),
-  roleController:         tm('Contrôleur', 'Controller'),
-  roleSupervisor:         tm('Superviseur', 'Supervisor'),
-  addFooter:              tm('Ajouter', 'Add'),
-  addingFooter:           tm('Ajout…', 'Adding...'),
-  createFooter:           tm('Créer', 'Create'),
-  creatingFooter:         tm('Création…', 'Creating...'),
-};
-
-const ROLE_OPTIONS: { value: StaffRole; label: Record<string, string> }[] = [
-  { value: 'DRIVER',     label: T.roleDriver },
-  { value: 'HOSTESS',    label: T.roleHostess },
-  { value: 'MECHANIC',   label: T.roleMechanic },
-  { value: 'AGENT',      label: T.roleAgent },
-  { value: 'CONTROLLER', label: T.roleController },
-  { value: 'SUPERVISOR', label: T.roleSupervisor },
+const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
+  { value: 'DRIVER',     label: 'personnel.roleDriver' },
+  { value: 'HOSTESS',    label: 'personnel.roleHostess' },
+  { value: 'MECHANIC',   label: 'personnel.roleMechanic' },
+  { value: 'AGENT',      label: 'personnel.roleAgent' },
+  { value: 'CONTROLLER', label: 'personnel.roleController' },
+  { value: 'SUPERVISOR', label: 'personnel.roleSupervisor' },
 ];
 
 // ─── Colonnes ─────────────────────────────────────────────────────────────────
 
-function buildColumns(t: (map: Record<string, string>) => string, dict: typeof import('../../lib/i18n/translations').TRANSLATIONS): Column<StaffRow>[] {
+function buildColumns(t: (k: string | Record<string, string | undefined>) => string): Column<StaffRow>[] {
   const roleLabel = (value: string): string =>
-    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? tm(value, value));
+    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? value);
 
   return [
     {
@@ -455,7 +374,7 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
 }) {
   const { t } = useI18n();
   const roleLabel = (value: string): string =>
-    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? tm(value, value));
+    t(ROLE_OPTIONS.find(r => r.value === value)?.label ?? value);
 
   const url = `/api/tenants/${tenantId}/staff/${staff.userId}/assignments`;
   const { data: list, refetch } = useFetch<AssignmentDetail[]>(url, [staff.userId]);
@@ -790,7 +709,7 @@ export function PagePersonnel() {
     finally { setBusy(false); }
   };
 
-  const columns = buildColumns(t, dict);
+  const columns = buildColumns(t);
   const rowActions: RowAction<StaffRow>[] = [
     {
       label:   t('LPersonnel.assignments'),

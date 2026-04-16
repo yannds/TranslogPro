@@ -48,53 +48,22 @@ type DemoRoleKeyQ = keyof typeof ROLE_PERMISSIONS;
 
 const DEMO_ROLES_Q: DemoRoleKeyQ[] = ['QUAI_AGENT', 'SUPERVISOR', 'STATION_AGENT'];
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
-
-const TQ = {
-  // Tabs
-  tabManifest:       tm('Manifeste', 'Manifest'),
-  tabLoading:        tm('Chargement', 'Loading'),
-  tabScanner:        tm('Scanner', 'Scanner'),
-  // Manifeste
-  free:              tm('Libre', 'Free'),
-  confirmed:         tm('Confirmé', 'Confirmed'),
-  onBoard:           tm('À bord', 'On Board'),
-  absent:            tm('Absent', 'Absent'),
-  blocked:           tm('Bloqué', 'Blocked'),
-  seatLabel:         tm('Siège', 'Seat'),
-  // Chargement
-  loadingProgress:   tm('Progression chargement', 'Loading Progress'),
-  loaded:            tm('Chargé', 'Loaded'),
-  waiting:           tm('En attente', 'Waiting'),
-  missing:           tm('Manquant', 'Missing'),
-  load:              tm('Charger', 'Load'),
-  // Scanner
-  scanTicketOrParcel:tm('Scanner billet ou colis', 'Scan Ticket or Parcel'),
-  scan:              tm('Scan', 'Scan'),
-  scanValid:         tm('Scan validé', 'Scan Valid'),
-  invalidCode:       tm('Code invalide', 'Invalid Code'),
-  passengerRegistered:tm('Passager/colis enregistré', 'Passenger/parcel registered'),
-  formatNotRecognized:tm('Format non reconnu — TLP-XXXXXX ou COL-XXXXXX', 'Format not recognized — TLP-XXXXXX or COL-XXXXXX'),
-  history:           tm('Historique', 'History'),
-  // Main
-  boarding:          tm('Embarquement', 'Boarding'),
-  onBoardCount:      tm('à bord', 'on board'),
-};
+// ─── i18n keys ──────────────────────────────────────────────────────────────
 
 function filterTabsQ(permissions: string[], badges: Record<TabQ, number | undefined>): TabQDef[] {
   const perms = new Set(permissions);
   const all: TabQDef[] = [
     { id: 'manifeste',  label: 'Manifeste',  icon: '💺', badge: badges.manifeste,  anyOf: [P_MANIFEST_SIGN, P_MANIFEST_GENERATE, P_TRIP_UPDATE] },
     { id: 'chargement', label: 'Chargement', icon: '📦', badge: badges.chargement, anyOf: [P_PARCEL_SCAN] },
-    { id: 'scanner',    label: 'Scanner',    icon: '📷', anyOf: [P_TICKET_SCAN, P_PARCEL_SCAN] },
+    { id: 'scanner',    label: 'Scanner',    icon: '📷',                            anyOf: [P_TICKET_SCAN, P_PARCEL_SCAN] },
   ];
   return all.filter(t => t.anyOf.some(p => perms.has(p)));
 }
 
-const TAB_LABELS_Q: Record<TabQ, ReturnType<typeof tm>> = {
-  manifeste:  TQ.tabManifest,
-  chargement: TQ.tabLoading,
-  scanner:    TQ.tabScanner,
+const TAB_LABELS_Q: Record<TabQ, string> = {
+  manifeste:  'quaiAgent.tabManifest',
+  chargement: 'quaiAgent.tabLoading',
+  scanner:    'quaiAgent.tabScanner',
 };
 
 type SeatStatus = 'LIBRE' | 'CONFIRME' | 'BORDE' | 'ABSENT' | 'BLOQUE';
@@ -153,18 +122,18 @@ const COLIS_LIST: Colis[] = [
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SEAT_CONFIG: Record<SeatStatus, { bg: string; text: string; labelKey: ReturnType<typeof tm> }> = {
-  LIBRE:    { bg: 'bg-slate-800 border-slate-700',           text: 'text-slate-500', labelKey: TQ.free },
-  CONFIRME: { bg: 'bg-teal-700 border-teal-600',             text: 'text-white',     labelKey: TQ.confirmed },
-  BORDE:    { bg: 'bg-emerald-600 border-emerald-500',       text: 'text-white',     labelKey: TQ.onBoard },
-  ABSENT:   { bg: 'bg-amber-700/60 border-amber-600',        text: 'text-amber-200', labelKey: TQ.absent },
-  BLOQUE:   { bg: 'bg-slate-900 border-slate-800',           text: 'text-slate-700', labelKey: TQ.blocked },
+const SEAT_CONFIG: Record<SeatStatus, { bg: string; text: string; labelKey: string }> = {
+  LIBRE:    { bg: 'bg-slate-800 border-slate-700',           text: 'text-slate-500', labelKey: 'quaiAgent.free' },
+  CONFIRME: { bg: 'bg-teal-700 border-teal-600',             text: 'text-white',     labelKey: 'quaiAgent.confirmed' },
+  BORDE:    { bg: 'bg-emerald-600 border-emerald-500',       text: 'text-white',     labelKey: 'quaiAgent.onBoard' },
+  ABSENT:   { bg: 'bg-amber-700/60 border-amber-600',        text: 'text-amber-200', labelKey: 'quaiAgent.absent' },
+  BLOQUE:   { bg: 'bg-slate-900 border-slate-800',           text: 'text-slate-700', labelKey: 'quaiAgent.blocked' },
 };
 
 const COLIS_STATUS_CONFIG = {
-  CHARGE:     { cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-700', labelKey: TQ.loaded },
-  EN_ATTENTE: { cls: 'bg-amber-900/40 text-amber-300 border-amber-700',       labelKey: TQ.waiting },
-  MANQUANT:   { cls: 'bg-red-900/40 text-red-300 border-red-700',             labelKey: TQ.missing },
+  CHARGE:     { cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-700', labelKey: 'quaiAgent.loaded' },
+  EN_ATTENTE: { cls: 'bg-amber-900/40 text-amber-300 border-amber-700',       labelKey: 'quaiAgent.waiting' },
+  MANQUANT:   { cls: 'bg-red-900/40 text-red-300 border-red-700',             labelKey: 'quaiAgent.missing' },
 };
 
 // ─── Manifeste ────────────────────────────────────────────────────────────────
@@ -194,7 +163,7 @@ function TabManifeste() {
       {/* Hover info */}
       {hoveredSeat && hoveredSeat.passager && (
         <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm">
-          <span className="text-slate-400">{t(TQ.seatLabel)} {hoveredSeat.numero} :</span>{' '}
+          <span className="text-slate-400">{t('quaiAgent.seatLabel')} {hoveredSeat.numero} :</span>{' '}
           <span className="text-white font-medium">{hoveredSeat.passager}</span>
         </div>
       )}
@@ -264,7 +233,7 @@ function TabChargement() {
       {/* Progress */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-slate-400 font-medium">{t(TQ.loadingProgress)}</span>
+          <span className="text-slate-400 font-medium">{t('quaiAgent.loadingProgress')}</span>
           <span className="text-white font-bold">{charged} / {colis.length}</span>
         </div>
         <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
@@ -304,7 +273,7 @@ function TabChargement() {
                     onClick={() => markLoaded(c.id)}
                     className="shrink-0 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
                   >
-                    {t(TQ.load)}
+                    {t('quaiAgent.load')}
                   </button>
                 )}
               </div>
@@ -336,7 +305,7 @@ function TabScanner() {
     <div className="p-4 space-y-4">
       {/* Input */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t(TQ.scanTicketOrParcel)}</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('quaiAgent.scanTicketOrParcel')}</p>
         <div className="flex gap-2">
           <input
             value={code}
@@ -350,7 +319,7 @@ function TabScanner() {
             onClick={handleScan}
             className="px-4 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 text-sm"
           >
-            {t(TQ.scan)}
+            {t('quaiAgent.scan')}
           </button>
         </div>
       </div>
@@ -365,9 +334,9 @@ function TabScanner() {
         )}>
           <span className="text-3xl">{lastResult === 'OK' ? '✓' : '✕'}</span>
           <div>
-            <p className="font-bold">{lastResult === 'OK' ? t(TQ.scanValid) : t(TQ.invalidCode)}</p>
+            <p className="font-bold">{lastResult === 'OK' ? t('quaiAgent.scanValid') : t('quaiAgent.invalidCode')}</p>
             <p className="text-xs opacity-70 mt-0.5">
-              {lastResult === 'OK' ? t(TQ.passengerRegistered) : t(TQ.formatNotRecognized)}
+              {lastResult === 'OK' ? t('quaiAgent.passengerRegistered') : t('quaiAgent.formatNotRecognized')}
             </p>
           </div>
         </div>
@@ -377,7 +346,7 @@ function TabScanner() {
       {scanned.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            {t(TQ.history)} ({scanned.length})
+            {t('quaiAgent.history')} ({scanned.length})
           </p>
           <div className="space-y-1.5 max-h-60 overflow-y-auto">
             {scanned.map((s, i) => (
@@ -446,7 +415,7 @@ export function QuaiAgentApp() {
               {DEMO_ROLES_Q.map((r, i) => <option key={r} value={i}>{r}</option>)}
             </select>
             <span className="inline-flex items-center gap-1.5 bg-amber-900/60 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg text-xs font-bold uppercase animate-pulse">
-              {t(TQ.boarding)}
+              {t('quaiAgent.boarding')}
             </span>
           </div>
         </div>
@@ -459,7 +428,7 @@ export function QuaiAgentApp() {
             />
           </div>
           <span className="text-xs text-slate-400 tabular-nums shrink-0">
-            {boarded}/{capacity} {t(TQ.onBoardCount)}
+            {boarded}/{capacity} {t('quaiAgent.onBoardCount')}
           </span>
         </div>
       </header>

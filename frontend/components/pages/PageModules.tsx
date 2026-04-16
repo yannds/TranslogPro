@@ -14,7 +14,7 @@ import { Puzzle, Check, X, Info, AlertTriangle, Lock, Loader2 } from 'lucide-rea
 import { useAuth } from '../../lib/auth/auth.context';
 import { apiFetch } from '../../lib/api';
 import { cn }     from '../../lib/utils';
-import { useI18n } from '../../lib/i18n/useI18n';
+import { useI18n, tm } from '../../lib/i18n/useI18n';
 import type { TranslationMap } from '../../lib/i18n/types';
 
 // ─── Catalogue statique des modules ──────────────────────────────────────────
@@ -152,28 +152,6 @@ const CATEGORIES = MODULE_CATALOG.reduce<TranslationMap[]>((acc, m) => {
   if (!acc.some(c => c.fr === m.category.fr)) acc.push(m.category);
   return acc;
 }, []);
-
-// ─── UI translations ────────────────────────────────────────────────────────
-
-const T = {
-  pageTitle:       tm('Modules & Extensions', 'Modules & Extensions'),
-  coreBadge:       tm('CŒUR', 'CORE'),
-  activeBadge:     tm('ACTIF', 'ACTIVE'),
-  enable:          tm('Activer', 'Enable'),
-  disable:         tm('Désactiver', 'Disable'),
-  filterAll:       tm('Tous', 'All'),
-  filterActive:    tm('Actifs', 'Active'),
-  filterInactive:  tm('Inactifs', 'Inactive'),
-  requires:        tm('Requiert', 'Requires'),
-  coreNotice:      tm('Les modules cœur ne peuvent pas être désactivés', 'Core modules cannot be disabled'),
-  loadFailed:      tm('Impossible de charger les modules', 'Unable to load modules'),
-  loading:         tm('Chargement des modules…', 'Loading modules…'),
-  noMatch:         tm('Aucun module ne correspond aux filtres.', 'No modules match the filters.'),
-  toggleFail:      tm('Échec du changement sur', 'Failed to toggle'),
-  enabled:         tm('activé', 'enabled'),
-  disabled:        tm('désactivé', 'disabled'),
-  disableFirst:    tm("Désactivez d'abord", 'Disable first'),
-};
 
 // ─── DTO API ─────────────────────────────────────────────────────────────────
 

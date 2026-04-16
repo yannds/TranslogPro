@@ -168,7 +168,10 @@
       "Bash(sed -i '' \"s/{T\\\\.\\\\\\([a-zA-Z_]*\\\\\\)}/{t\\('companySetup.\\\\1'\\)}/g\" frontend/components/pages/PageCompanySetup.tsx)",
       "Bash(sed -i '' \"s/t\\('lWfSimulate\\\\./t\\('wfSimulate./g\" frontend/components/pages/PageWfSimulate.tsx)",
       "Bash(sed -i '' \"s/t\\('lCrewPlanning\\\\./t\\('crewPlanning./g\" frontend/components/pages/PageCrewPlanning.tsx)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(node)",
+      "Bash(node -e 'const fs=require\\(\"fs\"\\);let c=fs.readFileSync\\(\"frontend/components/workflow/SimulationPanel.tsx\",\"utf8\"\\);c=c.replace\\(/SIM_t\\\\.\\(\\\\w+\\)/g,\"t\\(\\\\\"simulation.\\\\$1\\\\\"\\)\"\\);c=c.replace\\(/SIM_T\\\\.\\(\\\\w+\\)/g,\"t\\(\\\\\"simulation.\\\\$1\\\\\"\\)\"\\);c=c.replace\\(/GUARD_LABEL_MAPS\\\\[\\(\\\\w+\\)\\\\]/g,\"\\\\\"simulation.\\\\$1\\\\\"\"\\);fs.writeFileSync\\(\"frontend/components/workflow/SimulationPanel.tsx\",c\\);console.log\\(\"Remaining SIM_t:\",\\(c.match\\(/SIM_t/g\\)||[]\\).length\\);console.log\\(\"Remaining GUARD:\",\\(c.match\\(/GUARD_LABEL/g\\)||[]\\).length\\)')",
+      "Bash(node -e 'const fs=require\\(\"fs\"\\);let c=fs.readFileSync\\(\"frontend/components/workflow/SimulationPanel.tsx\",\"utf8\"\\);c=c.replace\\(/t\\\\\\(SIM_t\\\\\\(/g,\"t\\(\"\\);c=c.replace\\(/SIM_t\\\\\\(/g,\"t\\(\"\\);fs.writeFileSync\\(\"frontend/components/workflow/SimulationPanel.tsx\",c\\);console.log\\(\"SIM_t remaining:\",\\(c.match\\(/SIM_t/g\\)||[]\\).length\\)')"
     ],
     "additionalDirectories": [
       "/tmp"

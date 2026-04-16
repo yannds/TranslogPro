@@ -48,32 +48,6 @@ function computeSeatCount(l: SeatLayout): number {
   return (l.rows * l.cols) - (l.disabled?.length ?? 0);
 }
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  pageTitle:         tm('Plans de sièges', 'Seat Plans'),
-  pageSubtitle:      tm('Plan de salle — prérequis à la vente de billets numérotés.', 'Seating plan — prerequisite for numbered ticket sales.'),
-  vehicles:          tm('Véhicules', 'Vehicles'),
-  selectBus:         tm('Sélectionnez un bus', 'Select a bus'),
-  noVehicle:         tm('Aucun véhicule.', 'No vehicle.'),
-  seats:             tm('sièges', 'seats'),
-  seatOk:            tm('OK', 'OK'),
-  seatTodo:          tm('À faire', 'To do'),
-  selectABus:        tm('Sélectionnez un bus', 'Select a bus'),
-  noVehicleSelected: tm('Aucun véhicule sélectionné.', 'No vehicle selected.'),
-  planSaved:         tm('Plan enregistré.', 'Plan saved.'),
-  rows:              tm('Rangées', 'Rows'),
-  columns:           tm('Colonnes', 'Columns'),
-  aisleAfterCol:     tm('Allée après colonne', 'Aisle After Column'),
-  clickHint:         tm('Cliquez sur une case pour l\'activer/désactiver (moteur, roue, porte…).', 'Click a cell to enable/disable it (engine, wheel, door...).'),
-  frontOfVehicle:    tm('Avant du véhicule', 'Front of Vehicle'),
-  seatDisabled:      tm('désactivé', 'disabled'),
-  seatActive:        tm('actif', 'active'),
-  savePlan:          tm('Enregistrer le plan', 'Save Plan'),
-  activeSeats:       tm('actifs', 'active'),
-  declaredCapacity:  tm('capacité déclarée', 'declared capacity'),
-};
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function PageFleetSeats() {

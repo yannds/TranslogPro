@@ -29,49 +29,6 @@ import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
 import { RouteDetailDialog }                from './RouteDetailDialog';
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  pageTitle:          tm('Lignes & Routes', 'Routes & Lines'),
-  pageDesc:           tm('Catalogue des itinéraires exploités — création, édition, suppression.', 'Catalogue of operated routes — create, edit, delete.'),
-  newRoute:           tm('Nouvelle ligne', 'New Route'),
-  routeName:          tm('Nom de la ligne', 'Route Name'),
-  origin:             tm('Origine', 'Origin'),
-  destination:        tm('Destination', 'Destination'),
-  distanceKm:         tm('Distance (km)', 'Distance (km)'),
-  baseFare:           tm('Tarif de base', 'Base Fare'),
-  sameODError:        tm("L'origine et la destination doivent être différentes.", 'Origin and destination must be different.'),
-  editRoute:          tm('Modifier la ligne', 'Edit Route'),
-  deleteRoute:        tm('Supprimer la ligne', 'Delete Route'),
-  deleteConfirm:      tm('Supprimer', 'Delete'),
-  noStationsWarning:  tm(
-    "Aucune station n'est enregistrée pour ce tenant — impossible de créer une ligne. Ajoutez au moins deux stations (origine / destination) avant de configurer les lignes.",
-    'No stations registered for this tenant — cannot create a route. Add at least two stations (origin / destination) before configuring routes.',
-  ),
-  createStation:      tm('Créer une station', 'Create Station'),
-  noStationsBtn:      tm("Créez d'abord au moins deux stations", 'First create at least two stations'),
-  dialogNewDesc:      tm("Définissez l'itinéraire, la distance et le tarif de base.", 'Define the route, distance and base fare.'),
-  activeRoutes:       tm('Lignes actives', 'Active Routes'),
-  cumulativeTrips:    tm('Trajets cumulés', 'Cumulative Trips'),
-  cumulativeDistance: tm('Distance cumulée', 'Cumulative Distance'),
-  routeHeader:        tm('Ligne', 'Route'),
-  distanceHeader:     tm('Distance', 'Distance'),
-  baseFareHeader:     tm('Tarif base', 'Base Fare'),
-  tripsHeader:        tm('Trajets', 'Trips'),
-  actionsHeader:      tm('Actions', 'Actions'),
-  sortedByTrips:      tm('Triées par nombre de trajets décroissant', 'Sorted by trip count descending'),
-  noRoutes:           tm('Aucune ligne enregistrée', 'No routes registered'),
-  noRoutesCta:        tm('Cliquez sur « Nouvelle ligne » pour commencer.', 'Click "New Route" to get started.'),
-  deleteDesc:         tm('Cette action est irréversible.', 'This action is irreversible.'),
-  deleteWarning:      tm(
-    'La suppression sera refusée par le serveur tant qu\'ils n\'auront pas été réaffectés.',
-    'Deletion will be refused by the server until they are reassigned.',
-  ),
-  tripsBound:         tm('trajet(s) sont rattachés à cette ligne.', 'trip(s) are linked to this route.'),
-  placeholder:        tm('ex. Brazzaville → Pointe-Noire', 'e.g. Brazzaville → Pointe-Noire'),
-  placeholderDist:    tm('ex. 510', 'e.g. 510'),
-  placeholderPrice:   tm('ex. 12000', 'e.g. 12000'),
-};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

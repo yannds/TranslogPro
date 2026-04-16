@@ -34,30 +34,9 @@ export interface Attachment {
   createdAt:  string;
 }
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
+// ─── i18n keys are in locales/fr.ts + en.ts under 'documents' namespace ─────
 
-const T = {
-  kindContract:    tm('Contrat', 'Contract'),
-  kindIdCard:      tm('Pièce d\u2019identité', 'ID Card'),
-  kindLicense:     tm('Permis', 'License'),
-  kindCertificate: tm('Certificat', 'Certificate'),
-  kindPhoto:       tm('Photo', 'Photo'),
-  kindOther:       tm('Autre', 'Other'),
-
-  docType:         tm('Type de document', 'Document type'),
-  uploading:       tm('Envoi en cours\u2026', 'Uploading\u2026'),
-  dropOrBrowse:    tm('Déposer un fichier ou cliquez pour parcourir', 'Drop a file or click to browse'),
-  fileTooLarge:    tm('Fichier trop lourd', 'File too large'),
-  loading:         tm('Chargement\u2026', 'Loading\u2026'),
-  noAttachments:   tm('Aucune pièce jointe.', 'No attachments.'),
-  confirmDelete:   tm('Supprimer', 'Delete'),
-  clickToShow:     tm('Cliquer pour afficher', 'Click to show'),
-  clickToHide:     tm('Cliquer pour masquer', 'Click to hide'),
-  previewUnavail:  tm('Aperçu non disponible pour ce type de fichier.', 'Preview not available for this file type.'),
-  open:            tm('Ouvrir', 'Open'),
-};
-
-function kindLabels(t: (m: Record<string, string | undefined>) => string): Record<AttachmentKind, string> {
+function kindLabels(t: (keyOrMap: string | Record<string, string | undefined>) => string): Record<AttachmentKind, string> {
   return {
     CONTRACT:    t('documents.kindContract'),
     ID_CARD:     t('documents.kindIdCard'),

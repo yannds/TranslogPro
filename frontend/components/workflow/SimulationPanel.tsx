@@ -20,7 +20,7 @@ import type { WorkflowNode, WorkflowGraph, SimResult, SimOverlay, StructuredStep
 import { ReactFlowAdapter } from './ReactFlowAdapter';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import { useI18n, translate } from '../../lib/i18n/useI18n';
+import { useI18n, translate, tm } from '../../lib/i18n/useI18n';
 import type { Language } from '../../lib/i18n/types';
 import { WORKFLOW_I18N, translateVerb, interpolate, subject } from './workflowI18n';
 

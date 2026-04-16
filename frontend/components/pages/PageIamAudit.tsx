@@ -20,71 +20,6 @@ import { Select }   from '../ui/Select';
 import { Dialog }   from '../ui/Dialog';
 import DataTableMaster, { type Column } from '../DataTableMaster';
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-
-const T = {
-  // titles
-  accessLog:          tm("Journal d'acc\u00e8s", 'Access Log'),
-  logDetailTitle:     tm('Détails du Log — Format ISO 27001', 'Log Details — ISO 27001 Format'),
-  logDetailDesc:      tm('Informations détaillées du log de sécurité', 'Detailed security log information'),
-
-  // columns
-  colDate:            tm('Date', 'Date'),
-  colLevel:           tm('Niveau', 'Level'),
-  colAction:          tm('Action', 'Action'),
-  colResource:        tm('Ressource', 'Resource'),
-  colUser:            tm('Utilisateur', 'User'),
-  colIp:              tm('IP', 'IP'),
-
-  // labels
-  eventId:            tm("ID de l'\u00e9v\u00e9nement", 'Event ID'),
-  timestamp:          tm('Horodatage', 'Timestamp'),
-  eventSource:        tm("Source de l'\u00e9v\u00e9nement", 'Event Source'),
-  eventType:          tm("Type d'\u00e9v\u00e9nement", 'Event Type'),
-  category:           tm('Catégorie', 'Category'),
-  severity:           tm('Sévérité', 'Severity'),
-  securityLevel:      tm('Niveau de sécurité', 'Security Level'),
-  descriptionLabel:   tm('Description', 'Description'),
-  user:               tm('Utilisateur', 'User'),
-  context:            tm('Contexte', 'Context'),
-  module:             tm('Module', 'Module'),
-  endpoint:           tm('Endpoint', 'Endpoint'),
-  method:             tm('Méthode', 'Method'),
-  result:             tm('Résultat', 'Result'),
-  rawRequest:         tm('Requête brute (newValue)', 'Raw request (newValue)'),
-  systemAnonymous:    tm('Système / anonyme', 'System / anonymous'),
-
-  // filters
-  serverFilters:      tm('Filtres serveur', 'Server Filters'),
-  allLevels:          tm('Tous niveaux', 'All levels'),
-  searchAction:       tm('Rechercher action\u2026', 'Search action\u2026'),
-  since:              tm('Depuis', 'Since'),
-  until:              tm("Jusqu'au", 'Until'),
-  reset:              tm('Réinitialiser', 'Reset'),
-  apply:              tm('Appliquer', 'Apply'),
-
-  // messages
-  loading:            tm('Chargement\u2026', 'Loading\u2026'),
-  totalEntries:       tm('entrée(s) au total — affichage des {count} plus récentes', 'total entries — showing {count} most recent'),
-  searchPlaceholder:  tm('Recherche locale (action, ressource, IP\u2026)', 'Local search (action, resource, IP\u2026)'),
-  emptyMessage:       tm('Aucune entrée pour ces critères', 'No entries for these criteria'),
-
-  // derive labels
-  connection:         tm('CONNEXION', 'LOGIN'),
-  deletion:           tm('SUPPRESSION', 'DELETION'),
-  creation:           tm('CRÉATION', 'CREATION'),
-  modification:       tm('MODIFICATION', 'MODIFICATION'),
-  consultation:       tm('CONSULTATION', 'CONSULTATION'),
-  revocation:         tm('RÉVOCATION', 'REVOCATION'),
-  exportLabel:        tm('EXPORT', 'EXPORT'),
-
-  // derive descriptions
-  loginFailed:        tm('Tentative de connexion échouée', 'Failed login attempt'),
-  loginSuccess:       tm('Connexion réussie', 'Successful login'),
-  deletionOn:         tm('Suppression sur', 'Deletion on'),
-  creationOn:         tm('Création/modification sur', 'Creation/modification on'),
-  onLabel:            tm('sur', 'on'),
-};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,23 +122,22 @@ function deriveCategory(action: string, module?: string): string {
 /**
  * Dérive l'Action lisible depuis actionType ou la string action.
  */
-function deriveActionLabel(action: string, actionType?: string, t?: (map: Record<string, string>) => string): string {
-  const tr = t ?? ((m: Record<string, string>) => m.fr ?? '');
+function deriveActionLabel(action: string, actionType: string | undefined, t: (k: string | Record<string, string | undefined>) => string): string {
   const src = (actionType ?? action).toUpperCase();
-  if (src.includes('LOGIN') || src.includes('SIGN_IN')) return tr(T.connection);
-  if (src.includes('DELETE') || src.includes('SUPPRESSION')) return tr(T.deletion);
-  if (src === 'EXPORT') return tr(T.exportLabel);
-  if (src.includes('WRITE') || src.includes('POST') || src.includes('CREATE')) return tr(T.creation);
-  if (src.includes('WRITE') || src.includes('PATCH') || src.includes('PUT') || src.includes('UPDATE')) return tr(T.modification);
-  if (src.includes('READ') || src.includes('GET')) return tr(T.consultation);
-  if (src.includes('REVOKE')) return tr(T.revocation);
+  if (src.includes('LOGIN') || src.includes('SIGN_IN')) return t('iamAudit.connection');
+  if (src.includes('DELETE') || src.includes('SUPPRESSION')) return t('iamAudit.deletion');
+  if (src === 'EXPORT') return t('iamAudit.exportLabel');
+  if (src.includes('WRITE') || src.includes('POST') || src.includes('CREATE')) return t('iamAudit.creation');
+  if (src.includes('WRITE') || src.includes('PATCH') || src.includes('PUT') || src.includes('UPDATE')) return t('iamAudit.modification');
+  if (src.includes('READ') || src.includes('GET')) return t('iamAudit.consultation');
+  if (src.includes('REVOKE')) return t('iamAudit.revocation');
   return src;
 }
 
 /**
  * Construit une description lisible depuis les données disponibles.
  */
-function deriveDescription(entry: AuditEntry, t: (map: Record<string, string>) => string): string {
+function deriveDescription(entry: AuditEntry, t: (k: string | Record<string, string | undefined>) => string): string {
   const nv = entry.newValue ?? {};
   const outcome = String(nv['outcome'] ?? '');
   const email   = entry.user?.email ?? String(nv['userId'] ?? '');
@@ -224,7 +158,7 @@ function deriveDescription(entry: AuditEntry, t: (map: Record<string, string>) =
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(t: (map: Record<string, string>) => string): Column<AuditEntry>[] {
+function buildColumns(t: (k: string | Record<string, string | undefined>) => string): Column<AuditEntry>[] {
   return [
     {
       key: 'createdAt',

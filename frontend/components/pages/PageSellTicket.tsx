@@ -77,66 +77,12 @@ interface PricingResult {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
 
-const T = {
-  pageTitle:        tm('Vendre un billet', 'Sell a Ticket'),
-  pageDesc:         tm('Saisie rapide et calcul tarifaire', 'Quick entry and fare calculation'),
-  fareStandard:     tm('Standard', 'Standard'),
-  fareConfort:      tm('Confort', 'Comfort'),
-  fareVip:          tm('VIP', 'VIP'),
-  fareStanding:     tm('Debout', 'Standing'),
-  tripSection:      tm('Trajet', 'Trip'),
-  selectTrip:       tm('Sélectionner un trajet', 'Select a trip'),
-  loadingTrips:     tm('Chargement\u2026', 'Loading\u2026'),
-  chooseTrip:       tm('\u2014 Choisir un trajet \u2014', '\u2014 Choose a trip \u2014'),
-  loadingRoute:     tm('Chargement de la route\u2026', 'Loading route\u2026'),
-  errorLoadRoute:   tm('Impossible de charger la route', 'Failed to load route'),
-  passengerSection: tm('Passager & Options', 'Passenger & Options'),
-  passengerName:    tm('Nom du passager *', 'Passenger name *'),
-  namePlaceholder:  tm('Nom complet', 'Full name'),
-  phone:            tm('Téléphone *', 'Phone *'),
-  fareClass:        tm('Classe tarifaire *', 'Fare class *'),
-  boardingStation:  tm('Gare d\u2019embarquement', 'Boarding station'),
-  alightingStation: tm('Gare de descente *', 'Alighting station *'),
-  selectStation:    tm('\u2014 Sélectionner \u2014', '\u2014 Select \u2014'),
-  seatNumber:       tm('N\u00b0 de siège', 'Seat no.'),
-  luggageKg:        tm('Bagages (kg)', 'Luggage (kg)'),
-  promoCode:        tm('Code promo', 'Promo code'),
-  paymentMethod:    tm('Mode de paiement', 'Payment method'),
-  payDefault:       tm('\u2014 Par défaut \u2014', '\u2014 Default \u2014'),
-  payCash:          tm('Espèces', 'Cash'),
-  payMobile:        tm('Mobile Money', 'Mobile Money'),
-  payCard:          tm('Carte bancaire', 'Bank Card'),
-  calculatePrice:   tm('Calculer le prix', 'Calculate Price'),
-  fillFormHint:     tm('Remplissez le formulaire puis cliquez sur', 'Fill the form then click'),
-  calculating:      tm('Calcul en cours\u2026', 'Calculating\u2026'),
-  ticketConfirmed:  tm('Billet confirmé !', 'Ticket Confirmed!'),
-  print:            tm('Imprimer', 'Print'),
-  newTicket:        tm('Nouveau billet', 'New Ticket'),
-  autoPrice:        tm('Ce prix est calculé automatiquement', 'This price is auto-calculated'),
-  correctedPrice:   tm('Prix corrigé', 'Corrected price'),
-  validateFare:     tm('Valider ce tarif', 'Validate this fare'),
-  priceSummary:     tm('Récapitulatif tarifaire', 'Pricing Summary'),
-  basePrice:        tm('Tarif de base', 'Base fare'),
-  taxes:            tm('Taxes', 'Taxes'),
-  tolls:            tm('Péages', 'Tolls'),
-  luggageSurcharge: tm('Supplément bagages', 'Luggage surcharge'),
-  yieldSurplus:     tm('Surplus yield', 'Yield surplus'),
-  discount:         tm('Remise', 'Discount'),
-  total:            tm('Total', 'Total'),
-  classLabel:       tm('Classe', 'Class'),
-  confirmAndPrint:  tm('Confirmer et imprimer', 'Confirm & Print'),
-  errorCalc:        tm('Erreur lors du calcul du prix', 'Error calculating price'),
-  errorSaveFare:    tm('Erreur lors de la sauvegarde du tarif', 'Error saving fare'),
-  errorConfirm:     tm('Erreur lors de la confirmation', 'Confirmation error'),
-};
-
-const FARE_OPTIONS: { value: FareClass; labelKey: keyof typeof T }[] = [
-  { value: 'STANDARD', labelKey: 'fareStandard' },
-  { value: 'CONFORT',  labelKey: 'fareConfort' },
-  { value: 'VIP',      labelKey: 'fareVip' },
-  { value: 'STANDING', labelKey: 'fareStanding' },
+const FARE_OPTIONS: { value: FareClass; labelKey: string }[] = [
+  { value: 'STANDARD', labelKey: 'sellTicket.fareStandard' },
+  { value: 'CONFORT',  labelKey: 'sellTicket.fareConfort' },
+  { value: 'VIP',      labelKey: 'sellTicket.fareVip' },
+  { value: 'STANDING', labelKey: 'sellTicket.fareStanding' },
 ];
 
 function formatTime(iso: string): string {
@@ -450,7 +396,7 @@ export function PageSellTicket() {
                       onChange={e => setFareClass(e.target.value as FareClass)}
                     >
                       {FARE_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{t(T[o.labelKey])}</option>
+                        <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
                       ))}
                     </select>
                   </div>

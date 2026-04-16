@@ -20,7 +20,6 @@ import { useAuth }                         from '../../lib/auth/auth.context';
 import { useFetch }                        from '../../lib/hooks/useFetch';
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiFetch } from '../../lib/api';
 import { useI18n }                     from '../../lib/i18n/useI18n';
-import type { TranslationMap }             from '../../lib/i18n/types';
 import { Badge }                           from '../ui/Badge';
 import { Button }                          from '../ui/Button';
 import { Dialog }                          from '../ui/Dialog';
@@ -97,11 +96,11 @@ const EMPTY_FORM: BusFormValues = {
   fuelConsumptionPer100Km: '', adBlueConsumptionPer100Km: '',
 };
 
-const STATUS_LABEL: Record<BusStatus, TranslationMap> = {
-  AVAILABLE:   tm('Disponible', 'Available'),
-  IN_SERVICE:  tm('En service', 'In Service'),
-  MAINTENANCE: tm('Maintenance', 'Maintenance'),
-  OFFLINE:     tm('Hors service', 'Offline'),
+const STATUS_LABEL: Record<BusStatus, string> = {
+  AVAILABLE:   'LFleetVehicles.statusAvailable',
+  IN_SERVICE:  'LFleetVehicles.statusInService',
+  MAINTENANCE: 'LFleetVehicles.statusMaintenance',
+  OFFLINE:     'LFleetVehicles.statusOffline',
 };
 
 const STATUS_VARIANT: Record<BusStatus, 'success' | 'warning' | 'danger' | 'default'> = {
@@ -111,117 +110,26 @@ const STATUS_VARIANT: Record<BusStatus, 'success' | 'warning' | 'danger' | 'defa
   OFFLINE:     'default',
 };
 
-const TYPE_LABEL: Record<BusType, TranslationMap> = {
-  STANDARD: tm('Standard', 'Standard'),
-  CONFORT:  tm('Confort', 'Comfort'),
-  VIP:      tm('VIP', 'VIP'),
-  MINIBUS:  tm('Minibus', 'Minibus'),
+const TYPE_LABEL: Record<BusType, string> = {
+  STANDARD: 'LFleetVehicles.typeStandard',
+  CONFORT:  'LFleetVehicles.typeConfort',
+  VIP:      'LFleetVehicles.typeVip',
+  MINIBUS:  'LFleetVehicles.typeMinibus',
 };
 
-const FUEL_TYPE_LABEL: Record<FuelType, TranslationMap> = {
-  DIESEL:     tm('Diesel', 'Diesel'),
-  PETROL:     tm('Essence', 'Petrol'),
-  BIO_DIESEL: tm('Biodiesel', 'Biodiesel'),
-  HYBRID:     tm('Hybride', 'Hybrid'),
-  ELECTRIC:   tm('Électrique', 'Electric'),
+const FUEL_TYPE_LABEL: Record<FuelType, string> = {
+  DIESEL:     'LFleetVehicles.fuelDiesel',
+  PETROL:     'LFleetVehicles.fuelPetrol',
+  BIO_DIESEL: 'LFleetVehicles.fuelBiodiesel',
+  HYBRID:     'LFleetVehicles.fuelHybrid',
+  ELECTRIC:   'LFleetVehicles.fuelElectric',
 };
 
-const ENGINE_TYPE_LABEL: Record<EngineType, TranslationMap> = {
-  EURO_3: tm('Euro 3', 'Euro 3'),
-  EURO_4: tm('Euro 4', 'Euro 4'),
-  EURO_5: tm('Euro 5', 'Euro 5'),
-  EURO_6: tm('Euro 6', 'Euro 6'),
-};
-
-const T = {
-  // Page
-  pageTitle:              tm('Véhicules', 'Vehicles'),
-  pageSubtitle:           tm('Flotte du tenant — profil, capacité, statut opérationnel.', 'Tenant fleet — profile, capacity, operational status.'),
-  addVehicle:             tm('Ajouter un véhicule', 'Add Vehicle'),
-  editVehicle:            tm('Modifier le véhicule', 'Edit Vehicle'),
-  deleteVehicle:          tm('Supprimer le véhicule', 'Delete Vehicle'),
-  changeStatus:           tm('Changer le statut', 'Change Status'),
-  seatPlan:               tm('Plan de sièges', 'Seat Plan'),
-  // KPIs
-  kpiVehicles:            tm('Véhicules', 'Vehicles'),
-  kpiAvailable:           tm('Disponibles', 'Available'),
-  kpiInService:           tm('En service', 'In Service'),
-  kpiMaintenance:         tm('Maintenance', 'Maintenance'),
-  // Form labels
-  registration:           tm('Immatriculation', 'Registration'),
-  model:                  tm('Modèle', 'Model'),
-  type:                   tm('Type', 'Type'),
-  capacity:               tm('Capacité', 'Capacity'),
-  year:                   tm('Année', 'Year'),
-  homeAgency:             tm('Agence de rattachement', 'Home Agency'),
-  selectPlaceholder:      tm('— Sélectionner —', '— Select —'),
-  // Technical details
-  technicalDetails:       tm('Détails techniques', 'Technical Details'),
-  chassisVin:             tm('N° de châssis (VIN)', 'Chassis No. (VIN)'),
-  fuel:                   tm('Carburant', 'Fuel'),
-  engineStandard:         tm('Norme moteur', 'Engine Standard'),
-  fuelTank:               tm('Réservoir carburant (L)', 'Fuel Tank (L)'),
-  adBlueTank:             tm('Réservoir AdBlue (L)', 'AdBlue Tank (L)'),
-  luggageKg:              tm('Capacité soute (kg)', 'Luggage Capacity (kg)'),
-  luggageM3:              tm('Capacité soute (m³)', 'Luggage Capacity (m³)'),
-  firstRegistrationDate:  tm('Date de 1ère immatriculation', 'First Registration Date'),
-  purchaseDate:           tm('Date d\'acquisition', 'Purchase Date'),
-  purchasePrice:          tm('Prix d\'achat', 'Purchase Price'),
-  initialMileage:         tm('Kilométrage initial (km)', 'Initial Mileage (km)'),
-  fuelConsumption:        tm('Conso. carburant déclarée (L/100km)', 'Declared Fuel Consumption (L/100km)'),
-  adBlueConsumption:      tm('Conso. AdBlue déclarée (L/100km)', 'Declared AdBlue Consumption (L/100km)'),
-  notSpecified:           tm('— Non renseigné —', '— Not specified —'),
-  // Photos
-  vehiclePhotos:          tm('Photos du véhicule', 'Vehicle Photos'),
-  addPhoto:               tm('Ajouter', 'Add'),
-  uploading:              tm('Upload…', 'Uploading…'),
-  loadingPhotos:          tm('Chargement…', 'Loading…'),
-  noPhotos:               tm('Aucune photo. Recommandé : 1 extérieur + 2 intérieur (Portail Voyageur).', 'No photos. Recommended: 1 exterior + 2 interior (Traveler Portal).'),
-  deletePhoto:            tm('Supprimer la photo', 'Delete photo'),
-  photoAlt:               tm('Photo véhicule', 'Vehicle photo'),
-  // Cost profile
-  costProfile:            tm('Profil de coûts', 'Cost Profile'),
-  configured:             tm('Configuré', 'Configured'),
-  notConfigured:          tm('Non configuré', 'Not configured'),
-  consumption:            tm('Consommation', 'Consumption'),
-  fuelConsumptionLabel:   tm('Conso. carburant (L/100km)', 'Fuel Consumption (L/100km)'),
-  fuelPriceLabel:         tm('Prix carburant (XAF/L)', 'Fuel Price (XAF/L)'),
-  adBlueCostLabel:        tm('Coût AdBlue (€/L)', 'AdBlue Cost (€/L)'),
-  adBlueRatioLabel:       tm('Ratio AdBlue/carburant', 'AdBlue/Fuel Ratio'),
-  costPerTrip:            tm('Coûts par trajet', 'Cost Per Trip'),
-  maintenancePerKm:       tm('Maintenance (XAF/km)', 'Maintenance (XAF/km)'),
-  stationFee:             tm('Redevance gare (XAF)', 'Station Fee (XAF)'),
-  driverAllowance:        tm('Indemnité chauffeur (XAF)', 'Driver Allowance (XAF)'),
-  tollFees:               tm('Péages forfait (XAF)', 'Toll Fees (XAF)'),
-  fixedCharges:           tm('Charges fixes', 'Fixed Charges'),
-  driverSalary:           tm('Salaire mensuel chauffeur (XAF)', 'Monthly Driver Salary (XAF)'),
-  annualInsurance:        tm('Assurance annuelle (XAF)', 'Annual Insurance (XAF)'),
-  agencyFees:             tm('Frais agence/mois (XAF)', 'Agency Fees/Month (XAF)'),
-  depreciation:           tm('Amortissement', 'Depreciation'),
-  purchasePriceCost:      tm("Prix d'achat (XAF)", "Purchase Price (XAF)"),
-  depreciationYears:      tm('Durée amortissement (années)', 'Depreciation Period (years)'),
-  residualValue:          tm('Valeur résiduelle (XAF)', 'Residual Value (XAF)'),
-  avgTripsPerMonth:       tm('Trajets moyens/mois', 'Avg Trips/Month'),
-  saveCostProfile:        tm('Enregistrer le profil de coûts', 'Save Cost Profile'),
-  costProfileSaved:       tm('Profil enregistré', 'Profile saved'),
-  // DataTable
-  seats:                  tm('sièges', 'seats'),
-  plan:                   tm('Plan', 'Plan'),
-  planConfigured:         tm('Configuré', 'Configured'),
-  planMissing:            tm('Absent', 'Missing'),
-  agency:                 tm('Agence', 'Agency'),
-  status:                 tm('Statut', 'Status'),
-  searchPlaceholder:      tm('Rechercher un véhicule…', 'Search for a vehicle…'),
-  emptyMessage:           tm('Aucun véhicule enregistré.', 'No vehicles registered.'),
-  // Row actions
-  tracking:               tm('Suivi km / Carburant', 'Mileage / Fuel Tracking'),
-  papers:                 tm('Papiers', 'Papers'),
-  // Dialogs
-  createTitle:            tm('Ajouter un véhicule', 'Add Vehicle'),
-  createDescription:      tm('Immatriculation unique par tenant.', 'Unique registration per tenant.'),
-  deleteConfirm:          tm('Action irréversible — refusée si des voyages actifs le référencent.', 'Irreversible action — denied if active trips reference it.'),
-  current:                tm('Actuel', 'Current'),
-  fleetIndicators:        tm('Indicateurs flotte', 'Fleet Indicators'),
+const ENGINE_TYPE_LABEL: Record<EngineType, string> = {
+  EURO_3: 'LFleetVehicles.engineEuro3',
+  EURO_4: 'LFleetVehicles.engineEuro4',
+  EURO_5: 'LFleetVehicles.engineEuro5',
+  EURO_6: 'LFleetVehicles.engineEuro6',
 };
 
 // ─── Formulaire ───────────────────────────────────────────────────────────────
@@ -397,7 +305,7 @@ function BusForm({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {t(T.luggageM3)}
+                  {t('fleetVehicles.luggageM3')}
                 </label>
                 <input type="number" min={0} step="0.1" value={f.luggageCapacityM3}
                   onChange={e => patch({ luggageCapacityM3: e.target.value })}
@@ -774,7 +682,7 @@ function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: s
 
 // ─── Colonnes DataTableMaster ─────────────────────────────────────────────────
 
-function buildColumns(agencies: AgencyRow[], t: (m: Record<string, string>) => string): Column<BusRow>[] {
+function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, string | undefined>) => string): Column<BusRow>[] {
   const agencyName = (id?: string | null) =>
     id ? (agencies.find(a => a.id === id)?.name ?? '—') : '—';
 
