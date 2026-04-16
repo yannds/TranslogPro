@@ -10,6 +10,7 @@ import {
   DEFAULT_AGENCY_NAME,
   DEFAULT_WORKFLOW_CONFIGS,
   installSystemBlueprintsForTenant,
+  seedDefaultVehicleDocumentTypes,
   type TenantLanguage,
 } from '../../../prisma/seeds/iam.seed';
 import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
@@ -144,6 +145,9 @@ export class OnboardingService {
       // (UI marketplace + scénarios PageWfSimulate). N'écrit PAS les configs —
       // purement déclaratif via BlueprintInstall. Idempotent.
       await installSystemBlueprintsForTenant(tx as unknown as PrismaClient, tenant.id);
+
+      // 5.ter. Types de documents véhicule par défaut (Assurance, Carte grise…)
+      await seedDefaultVehicleDocumentTypes(tx, tenant.id);
 
       // 6. Modules de base activés
       await this.seedInstalledModules(tx as unknown as PrismaService, tenant.id);

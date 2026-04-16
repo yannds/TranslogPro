@@ -722,6 +722,57 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Driver', fromState: 'SUSPENDED',     action: 'reinstate',     toState: 'AVAILABLE',     requiredPerm: 'control.driver.manage.tenant' },
 ];
 
+// ─── Types de documents véhicule par défaut ──────────────────────────────────
+// Seedés à l'onboarding (étape 5.ter) et backfillables pour les tenants existants.
+// code = clé technique libre, name = label affiché, alertDaysBeforeExpiry = alerte J-N.
+export const DEFAULT_VEHICLE_DOCUMENT_TYPES = [
+  { code: 'INSURANCE',          name: 'Assurance RC',            alertDaysBeforeExpiry: 30,  isMandatory: true  },
+  { code: 'REGISTRATION',       name: 'Carte grise',             alertDaysBeforeExpiry: 60,  isMandatory: true  },
+  { code: 'TECHNICAL_CONTROL',  name: 'Contrôle technique',      alertDaysBeforeExpiry: 30,  isMandatory: true  },
+  { code: 'ROAD_TAX',           name: 'Vignette / Taxe routière',alertDaysBeforeExpiry: 30,  isMandatory: true  },
+  { code: 'TRANSPORT_LICENSE',  name: 'Licence de transport',    alertDaysBeforeExpiry: 60,  isMandatory: true  },
+  { code: 'FIRE_EXTINGUISHER',  name: 'Extincteur',              alertDaysBeforeExpiry: 30,  isMandatory: false },
+  { code: 'FIRST_AID_KIT',     name: 'Trousse de secours',      alertDaysBeforeExpiry: 90,  isMandatory: false },
+];
+
+/**
+ * Seed les types de documents véhicule par défaut pour un tenant.
+ * Idempotent via skipDuplicates sur la contrainte unique (tenantId, code).
+ */
+export async function seedDefaultVehicleDocumentTypes(
+  tx: PrismaClient | any,
+  tenantId: string,
+): Promise<number> {
+  const res = await tx.vehicleDocumentType.createMany({
+    data: DEFAULT_VEHICLE_DOCUMENT_TYPES.map(dt => ({
+      ...dt, tenantId, isActive: true,
+    })),
+    skipDuplicates: true,
+  });
+  return res.count;
+}
+
+/**
+ * Backfill : ajoute les types de documents véhicule pour tous les tenants existants.
+ */
+export async function backfillVehicleDocumentTypes(
+  prismaClient: PrismaClient,
+): Promise<{ scanned: number; rowsCreated: number }> {
+  const tenants = await prismaClient.tenant.findMany({ select: { id: true, slug: true } });
+  let rowsCreated = 0;
+
+  for (const tenant of tenants) {
+    if (tenant.id === PLATFORM_TENANT_ID) continue;
+    const count = await seedDefaultVehicleDocumentTypes(prismaClient, tenant.id);
+    if (count > 0) {
+      console.log(`[IAM Seed] Backfill vehicleDocumentTypes tenant=${tenant.slug} — ${count} type(s) créé(s)`);
+    }
+    rowsCreated += count;
+  }
+
+  return { scanned: tenants.length, rowsCreated };
+}
+
 export async function backfillDefaultWorkflows(
   prismaClient: PrismaClient,
 ): Promise<{ scanned: number; rowsCreated: number }> {

@@ -9,6 +9,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { seedSystemTemplates } from '../../server/seed/templates/templates.seeder';
+import { backfillVehicleDocumentTypes } from '../seeds/iam.seed';
 
 const prisma = new PrismaClient();
 
@@ -451,6 +452,12 @@ async function main() {
 
   // ── Templates de documents système (factures, billets, talons, manifestes…) ──
   await seedSystemTemplates(prisma);
+
+  // ── Types de documents véhicule par défaut (backfill tenants existants) ─────
+  const docTypeReport = await backfillVehicleDocumentTypes(prisma);
+  if (docTypeReport.rowsCreated > 0) {
+    console.log(`✅ VehicleDocumentTypes — ${docTypeReport.rowsCreated} type(s) créé(s) sur ${docTypeReport.scanned} tenant(s)`);
+  }
 }
 
 main()

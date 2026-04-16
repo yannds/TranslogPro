@@ -24,6 +24,7 @@ import {
   ensureDefaultAgency,
   DEFAULT_AGENCY_NAME,
   backfillDriverUserTypeZombie,
+  seedDefaultVehicleDocumentTypes,
 } from './iam.seed';
 
 const prisma = new PrismaClient();
@@ -446,6 +447,12 @@ async function main() {
 
   // ── 4. Activation de tous les modules pour tenant1 ───────────────────────────
   await activateAllModules(TENANT1_ID);
+
+  // ── 4b. Types de documents véhicule par défaut ─────────────────────────────
+  for (const tid of [TENANT1_ID, TENANT2_ID]) {
+    const dtCount = await seedDefaultVehicleDocumentTypes(prisma, tid);
+    if (dtCount > 0) console.log(`[Dev Seed] ✅ ${dtCount} types documents véhicule pour tenant ${tid}`);
+  }
 
   // ── 5b. Blueprints (workflows seedés par iam.seed.ts → DEFAULT_WORKFLOW_CONFIGS) ──
   const categoryIds = await seedBlueprintCategories();
