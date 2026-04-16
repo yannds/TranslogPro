@@ -83,7 +83,7 @@ function EquipmentTypeForm({ onSubmit, onCancel, busy, error }: {
           </label>
           <input id="eq-name" type="text" required value={f.name}
             onChange={e => setF(p => ({ ...p, name: e.target.value }))}
-            className={inputClass} disabled={busy} placeholder="Gilet de sécurité" />
+            className={inputClass} disabled={busy} placeholder={t('crewBriefing.placeholderName')} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="eq-code" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -183,7 +183,7 @@ function BriefingForm({
           {assignments.length === 0 && <option value="">{t('crewBriefing.noAssignment')}</option>}
           {assignments.map(a => (
             <option key={a.id} value={a.id}>
-              Trajet {a.tripId.slice(0, 8)} · Staff {a.staffId.slice(0, 8)}
+              {t('crewBriefing.tripStaffOption').replace('{tripId}', a.tripId.slice(0, 8)).replace('{staffId}', a.staffId.slice(0, 8))}
             </option>
           ))}
         </select>
@@ -256,7 +256,7 @@ function BriefingForm({
 
       <div className="space-y-1.5">
         <label htmlFor="br-notes" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Notes
+          {t('crewBriefing.notes')}
         </label>
         <textarea id="br-notes" rows={2} value={values.notes}
           onChange={e => setValues(p => ({ ...p, notes: e.target.value }))}
@@ -354,7 +354,7 @@ export function PageCrewBriefing() {
       }
       refetchEquipment();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Erreur pendant le seed');
+      setActionError(e instanceof Error ? e.message : t('crewBriefing.errorSeed'));
     } finally {
       setBusy(false);
       setSeedProgress(null);
@@ -380,7 +380,7 @@ export function PageCrewBriefing() {
       setShowEquipmentForm(false);
       refetchEquipment();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Erreur lors de la création');
+      setActionError(e instanceof Error ? e.message : t('crewBriefing.errorCreate'));
     } finally {
       setBusy(false);
     }
@@ -398,7 +398,7 @@ export function PageCrewBriefing() {
       refetchIncomplete();
       refetchHistory();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Erreur lors de l\'enregistrement');
+      setActionError(e instanceof Error ? e.message : t('crewBriefing.errorSave'));
     } finally {
       setBusy(false);
     }

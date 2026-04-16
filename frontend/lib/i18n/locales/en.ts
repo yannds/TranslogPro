@@ -169,7 +169,21 @@ const en: Record<string, Record<string, string>> = {
     "guardOk": "✓ ok",
     "guardBlocked": "✗ blocked",
     "wouldTrigger": "Would have triggered",
-    "sandboxEntity": "Final sandbox entity state"
+    "sandboxEntity": "Final sandbox entity state",
+    "guardCheckSoldeAgent": "Sufficient agent balance",
+    "guardCheckTicketNotScanned": "Ticket not yet scanned",
+    "guardCheckParcelNotDelivered": "Parcel not yet delivered",
+    "guardCheckTripNotDeparted": "Trip not yet departed",
+    "guardCheckTripDeparted": "Trip already departed",
+    "guardCheckCapacityAvailable": "Seats available",
+    "guardCheckRefundWindow": "Within refund window",
+    "guardCheckClaimDeadline": "Claim deadline not exceeded",
+    "guardCheckBusOperational": "Bus operational",
+    "guardCheckDriverAssigned": "Driver assigned",
+    "guardCheckPaymentConfirmed": "Payment confirmed",
+    "guardCheckManifestSigned": "Manifest signed",
+    "guardCheckWeightLimit": "Weight limit respected",
+    "guardCheckSenderVerified": "Sender verified"
   },
   "portal": {
     "logout": "Log Out",
@@ -1618,7 +1632,13 @@ const en: Record<string, Record<string, string>> = {
     "nonCompliantDesc": "Trips with at least one required equipment missing",
     "noHistory": "No briefings in history",
     "euCatDesc": "Overview of equipment families covered by the standard catalog",
-    "newEquipType": "New Equipment Type"
+    "newEquipType": "New Equipment Type",
+    "placeholderName": "Safety vest",
+    "notes": "Notes",
+    "tripStaffOption": "Trip {tripId} · Staff {staffId}",
+    "errorSeed": "Error during seed",
+    "errorCreate": "Error during creation",
+    "errorSave": "Error during save"
   },
   "companySetup": {
     "title": "Company Settings",

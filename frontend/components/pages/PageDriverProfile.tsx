@@ -264,6 +264,7 @@ function RemediationRuleForm({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<RuleValues>({
     name:                initial?.name                ?? '',
     scoreBelowThreshold: initial?.scoreBelowThreshold ?? 50,
@@ -274,17 +275,17 @@ function RemediationRuleForm({
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
           <label htmlFor="r-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Nom <span aria-hidden className="text-red-500">*</span>
+            {t('common.name')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="r-name" type="text" required value={f.name}
             onChange={e => setF(p => ({ ...p, name: e.target.value }))} className={inputClass} disabled={busy} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="r-score" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Seuil CRM (en dessous de) <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.crmThreshold')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input id="r-score" type="number" min={0} max={100} required value={f.scoreBelowThreshold}
             onChange={e => setF(p => ({ ...p, scoreBelowThreshold: parseInt(e.target.value || '0', 10) }))}
@@ -292,20 +293,20 @@ function RemediationRuleForm({
         </div>
         <div className="space-y-1.5">
           <label htmlFor="r-action" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Action <span aria-hidden className="text-red-500">*</span>
+            {t('driverProfile.action')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select id="r-action" required value={f.actionType}
             onChange={e => setF(p => ({ ...p, actionType: e.target.value }))}
             className={inputClass} disabled={busy}>
-            <option value="WARNING">Avertissement</option>
-            <option value="TRAINING">Formation</option>
-            <option value="SUSPENSION">Suspension</option>
+            <option value="WARNING">{t('driverProfile.actionWarning')}</option>
+            <option value="TRAINING">{t('driverProfile.actionTraining')}</option>
+            <option value="SUSPENSION">{t('driverProfile.actionSuspension')}</option>
           </select>
         </div>
         {f.actionType === 'SUSPENSION' && (
           <div className="space-y-1.5">
             <label htmlFor="r-susp" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Suspension (jours)
+              {t('driverProfile.suspensionDays')}
             </label>
             <input id="r-susp" type="number" min={1} value={f.suspensionDays ?? ''}
               onChange={e => setF(p => ({ ...p, suspensionDays: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
@@ -314,14 +315,14 @@ function RemediationRuleForm({
         )}
         <div className="space-y-1.5">
           <label htmlFor="r-prio" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Priorité
+            {t('driverProfile.priority')}
           </label>
           <input id="r-prio" type="number" min={0} value={f.priority ?? 0}
             onChange={e => setF(p => ({ ...p, priority: parseInt(e.target.value || '0', 10) }))}
             className={inputClass} disabled={busy} />
         </div>
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
     </form>
   );
 }
@@ -337,16 +338,17 @@ function RestConfigForm({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [f, setF] = useState<RestConfig>(initial);
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {[
-          { k: 'minRestMinutes',           label: 'Repos minimum (min)' },
-          { k: 'maxDrivingMinutesPerDay',  label: 'Conduite max/jour (min)' },
-          { k: 'maxDrivingMinutesPerWeek', label: 'Conduite max/semaine (min)' },
-          { k: 'alertBeforeEndRestMin',    label: 'Alerte avant fin repos (min)' },
+          { k: 'minRestMinutes',           label: t('driverProfile.restConfigMin') },
+          { k: 'maxDrivingMinutesPerDay',  label: t('driverProfile.maxDrivingDayMin') },
+          { k: 'maxDrivingMinutesPerWeek', label: t('driverProfile.maxDrivingWeekMin') },
+          { k: 'alertBeforeEndRestMin',    label: t('driverProfile.alertBeforeRestMin') },
         ].map(({ k, label }) => (
           <div key={k} className="space-y-1.5">
             <label htmlFor={`rc-${k}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -359,7 +361,7 @@ function RestConfigForm({
           </div>
         ))}
       </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel="Enregistrer" pendingLabel="Enregistrement…" />
+      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
     </form>
   );
 }
@@ -403,9 +405,10 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
   licAlerts:        LicenseAlert[]   | null;
   overdueTrainings: OverdueTraining[] | null;
 }) {
+  const { t } = useI18n();
   const name = driver.user.displayName ?? driver.user.email;
   const myLicenses         = (licAlerts ?? []).filter(a => a.staffId === driver.id);
-  const myOverdueTrainings = (overdueTrainings ?? []).filter(t => t.staffId === driver.id);
+  const myOverdueTrainings = (overdueTrainings ?? []).filter(tb => tb.staffId === driver.id);
 
   return (
     <div className="space-y-5">
@@ -421,13 +424,13 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
           </p>
           <div className="flex gap-2 mt-1">
             {driver.isAvailable
-              ? <Badge variant="success" size="sm">Disponible</Badge>
-              : <Badge variant="warning" size="sm">En repos</Badge>}
+              ? <Badge variant="success" size="sm">{t('driverProfile.available')}</Badge>
+              : <Badge variant="warning" size="sm">{t('driverProfile.resting')}</Badge>}
             {myLicenses.length > 0 && (
-              <Badge variant="danger" size="sm">{myLicenses.length} permis expiré(s)</Badge>
+              <Badge variant="danger" size="sm">{myLicenses.length} {t('driverProfile.licensesExpired')}</Badge>
             )}
             {myOverdueTrainings.length > 0 && (
-              <Badge variant="warning" size="sm">{myOverdueTrainings.length} formation(s) en retard</Badge>
+              <Badge variant="warning" size="sm">{myOverdueTrainings.length} {t('driverProfile.trainingOverdue')}</Badge>
             )}
           </div>
         </div>
@@ -437,14 +440,14 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
       {myLicenses.length > 0 && (
         <section className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20 p-3">
           <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center gap-1.5">
-            <Shield className="w-4 h-4" aria-hidden /> Permis en alerte
+            <Shield className="w-4 h-4" aria-hidden /> {t('driverProfile.licenseAlertSection')}
           </h3>
           <ul className="space-y-1 text-xs text-red-800 dark:text-red-200">
             {myLicenses.map(l => (
               <li key={l.id}>
-                {l.category} n°{l.licenseNo} — expire {l.daysUntilExpiry < 0
-                  ? `il y a ${-l.daysUntilExpiry}j`
-                  : `dans ${l.daysUntilExpiry}j`}
+                {l.category} n°{l.licenseNo} — {l.daysUntilExpiry < 0
+                  ? `${t('driverProfile.expiredAgo')} ${-l.daysUntilExpiry}${t('driverProfile.days')}`
+                  : `${t('driverProfile.expiresIn')} ${l.daysUntilExpiry}${t('driverProfile.days')}`}
               </li>
             ))}
           </ul>
@@ -454,11 +457,11 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
       {myOverdueTrainings.length > 0 && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
           <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-1.5">
-            <GraduationCap className="w-4 h-4" aria-hidden /> Formations en retard
+            <GraduationCap className="w-4 h-4" aria-hidden /> {t('driverProfile.overdueTrainingSection')}
           </h3>
           <ul className="space-y-1 text-xs text-amber-800 dark:text-amber-200">
-            {myOverdueTrainings.map(t => (
-              <li key={t.id}>{t.typeName} — prévue le {new Date(t.scheduledAt).toLocaleDateString('fr-FR')}</li>
+            {myOverdueTrainings.map(tb => (
+              <li key={tb.id}>{tb.typeName} — {t('driverProfile.scheduledFor')} {new Date(tb.scheduledAt).toLocaleDateString('fr-FR')}</li>
             ))}
           </ul>
         </section>
@@ -466,7 +469,7 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
 
       {/* Documents */}
       <section className="pt-4 border-t border-slate-100 dark:border-slate-800">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Pièces jointes</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">{t('driverProfile.attachments')}</h3>
         <DocumentAttachments
           tenantId={tenantId}
           entityType="STAFF"
@@ -482,6 +485,7 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
 
 export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfileProps = {}) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
 
   const [tab, setTab]         = useState<Tab>(initialTab);
@@ -500,24 +504,24 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
     if (!window.confirm(message)) return;
     setActionError(null);
     try { await fn(); refetch(); }
-    catch (e) { setActionError(e instanceof Error ? e.message : 'Erreur inconnue'); }
+    catch (e) { setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError')); }
   }
 
   const handleDeleteLicense = (id: string) =>
-    confirmAndRun('Supprimer ce permis ?', () => apiDelete(`${base}/driver-profile/licenses/${id}`), refetchLic);
+    confirmAndRun(t('driverProfile.confirmDeleteLicense'), () => apiDelete(`${base}/driver-profile/licenses/${id}`), refetchLic);
 
   const handleDeleteTraining = (id: string) =>
-    confirmAndRun('Supprimer cette formation planifiée ?', () => apiDelete(`${base}/driver-profile/trainings/${id}`), refetchTrainings);
+    confirmAndRun(t('driverProfile.confirmDeleteTraining'), () => apiDelete(`${base}/driver-profile/trainings/${id}`), refetchTrainings);
 
   const handleCompleteTraining = (id: string) =>
     confirmAndRun(
-      'Marquer cette formation comme complétée aujourd\'hui ?',
+      t('driverProfile.confirmCompleteTraining'),
       () => apiPatch(`${base}/driver-profile/trainings/${id}/complete`, { completedAt: new Date().toISOString().slice(0, 10) }),
       refetchTrainings,
     );
 
   const handleDeleteRule = (id: string) =>
-    confirmAndRun('Désactiver cette règle de remédiation ?', () => apiDelete(`${base}/driver-profile/remediation-rules/${id}`), refetchRemediations);
+    confirmAndRun(t('driverProfile.confirmDeleteRule'), () => apiDelete(`${base}/driver-profile/remediation-rules/${id}`), refetchRemediations);
 
   const navigate = useNavigate();
   const base = `/api/tenants/${tenantId}`;
@@ -540,21 +544,21 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
   const restBlockedCount     = 0; // requires per-driver rest-compliance calls
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview',    label: "Vue d'ensemble" },
-    { id: 'licenses',    label: 'Permis' },
-    { id: 'rest',        label: 'Temps de repos' },
-    { id: 'trainings',   label: 'Formations' },
-    { id: 'remediation', label: 'Remédiation' },
+    { id: 'overview',    label: t('driverProfile.tabOverview') },
+    { id: 'licenses',    label: t('driverProfile.tabLicenses') },
+    { id: 'rest',        label: t('driverProfile.tabRest') },
+    { id: 'trainings',   label: t('driverProfile.tabTrainings') },
+    { id: 'remediation', label: t('driverProfile.tabRemediation') },
   ];
 
   return (
-    <main className="p-6 space-y-6" role="main" aria-label="Dossiers chauffeurs">
+    <main className="p-6 space-y-6" role="main" aria-label={t('driverProfile.pageTitle')}>
       {/* ── En-tête ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dossiers Chauffeurs</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('driverProfile.pageTitle')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Permis, repos réglementaires, formations et remédiation CRM
+            {t('driverProfile.pageSubtitle')}
           </p>
         </div>
         {tab === 'overview' && (
@@ -562,74 +566,74 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
             onClick={() => navigate('/admin/staff')}
             aria-label="Gérer les chauffeurs dans le module Personnel"
           >
-            <Plus className="w-4 h-4 mr-2" aria-hidden /> Nouveau chauffeur
+            <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newDriver')}
           </Button>
         )}
         {tab === 'licenses' && (
           <Button
             onClick={() => { setShowLicenseForm(true); setActionError(null); }}
-            aria-label="Enregistrer un nouveau permis"
+            aria-label={t('driverProfile.newLicense')}
           >
-            <Plus className="w-4 h-4 mr-2" aria-hidden /> Nouveau permis
+            <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newLicense')}
           </Button>
         )}
         {tab === 'rest' && (
           <Button
             onClick={() => { setShowRestConfigForm(true); setActionError(null); }}
-            aria-label="Modifier la configuration des temps de repos"
+            aria-label={t('driverProfile.configureRest')}
             disabled={!restConfig}
           >
-            <Settings className="w-4 h-4 mr-2" aria-hidden /> Configurer repos
+            <Settings className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.configureRest')}
           </Button>
         )}
         {tab === 'trainings' && (
           <Button
             onClick={() => { setShowTrainingForm(true); setActionError(null); }}
-            aria-label="Planifier une formation"
+            aria-label={t('driverProfile.planTraining')}
           >
-            <Plus className="w-4 h-4 mr-2" aria-hidden /> Planifier formation
+            <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.planTraining')}
           </Button>
         )}
         {tab === 'remediation' && (
           <Button
             onClick={() => { setShowRuleForm(true); setActionError(null); }}
-            aria-label="Créer une règle de remédiation"
+            aria-label={t('driverProfile.newRule')}
           >
-            <Plus className="w-4 h-4 mr-2" aria-hidden /> Nouvelle règle
+            <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newRule')}
           </Button>
         )}
       </div>
 
       {/* ── KPIs ── */}
       <section aria-label="Indicateurs chauffeurs">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Permis en alerte"      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loadingLic} />
-          <KpiCard label="Chauffeurs bloqués"    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={false} />
-          <KpiCard label="Actions remédiation"   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loadingRemediation} />
-          <KpiCard label="Formations en retard"  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loadingTrainings} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard label={t('driverProfile.licenseAlerts')}      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loadingLic} />
+          <KpiCard label={t('driverProfile.driversBlocked')}    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={false} />
+          <KpiCard label={t('driverProfile.remediationActions')}   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loadingRemediation} />
+          <KpiCard label={t('driverProfile.overdueTrainings')}  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loadingTrainings} />
         </div>
       </section>
 
       {/* ── Tabs ── */}
       <nav aria-label="Sections dossiers chauffeurs" role="tablist">
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
-          {tabs.map(t => (
+          {tabs.map(tb => (
             <button
-              key={t.id}
+              key={tb.id}
               role="tab"
-              aria-selected={tab === t.id}
-              aria-controls={`tabpanel-driver-${t.id}`}
-              id={`tab-driver-${t.id}`}
-              onClick={() => setTab(t.id)}
+              aria-selected={tab === tb.id}
+              aria-controls={`tabpanel-driver-${tb.id}`}
+              id={`tab-driver-${tb.id}`}
+              onClick={() => setTab(tb.id)}
               className={cn(
                 'px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
-                tab === t.id
+                tab === tb.id
                   ? 'border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
               )}
             >
-              {t.label}
+              {tb.label}
             </button>
           ))}
         </div>
@@ -640,8 +644,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         <section id="tabpanel-driver-overview" role="tabpanel" aria-labelledby="tab-driver-overview">
           <Card>
             <CardHeader
-              heading="Liste des chauffeurs"
-              description="Statut global par chauffeur — cliquer pour accéder au dossier complet"
+              heading={t('driverProfile.driverList')}
+              description={t('driverProfile.driverListDesc')}
             />
             <CardContent className="p-0">
               {loading ? (
@@ -651,8 +655,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
               ) : !drivers || drivers.length === 0 ? (
                 <div className="py-16 text-center text-slate-500 dark:text-slate-400" role="status">
                   <UserCheck className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-                  <p className="font-medium">Aucun chauffeur enregistré</p>
-                  <p className="text-sm mt-1">Ajoutez des chauffeurs via le module Personnel</p>
+                  <p className="font-medium">{t('driverProfile.noDriverRegistered')}</p>
+                  <p className="text-sm mt-1">{t('driverProfile.addDriverViaStaff')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -676,10 +680,10 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                             <div>
                               <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{name}</p>
                               <div className="flex gap-2 mt-0.5">
-                                {hasLicAlert && <Badge variant="danger" size="sm">Permis expiré</Badge>}
-                                {!d.isAvailable && <Badge variant="warning" size="sm">En repos</Badge>}
+                                {hasLicAlert && <Badge variant="danger" size="sm">{t('driverProfile.licenseExpired')}</Badge>}
+                                {!d.isAvailable && <Badge variant="warning" size="sm">{t('driverProfile.resting')}</Badge>}
                                 {!hasLicAlert && d.isAvailable && (
-                                  <Badge variant="success" size="sm">Conforme</Badge>
+                                  <Badge variant="success" size="sm">{t('driverProfile.compliant')}</Badge>
                                 )}
                               </div>
                             </div>
@@ -701,15 +705,15 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses">
           <Card>
             <CardHeader
-              heading="Alertes permis"
-              description="Permis expirant dans les 30 prochains jours ou déjà expirés"
+              heading={t('driverProfile.alertLicenses')}
+              description={t('driverProfile.alertLicensesDesc')}
               action={
                 <Button
                   size="sm"
                   onClick={() => { setShowLicenseForm(true); setActionError(null); }}
-                  aria-label="Enregistrer un permis de conduire"
+                  aria-label={t('driverProfile.driverLicense')}
                 >
-                  <Plus className="w-4 h-4 mr-1" aria-hidden /> Permis
+                  <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('driverProfile.license')}
                 </Button>
               }
             />
@@ -721,7 +725,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
               ) : !licAlerts || licAlerts.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
                   <Shield className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden />
-                  <p className="font-medium">Aucune alerte permis active</p>
+                  <p className="font-medium">{t('driverProfile.noLicenseAlert')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -736,7 +740,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           {a.expiresAt ? new Date(a.expiresAt).toLocaleDateString('fr-FR') : '—'}
                         </span>
                         <Badge variant={a.daysUntilExpiry <= 0 ? 'danger' : 'warning'} size="sm">
-                          {a.daysUntilExpiry <= 0 ? 'Expiré' : `J-${a.daysUntilExpiry}`}
+                          {a.daysUntilExpiry <= 0 ? t('driverProfile.expired') : `J-${a.daysUntilExpiry}`}
                         </Badge>
                         <button
                           type="button"
@@ -772,17 +776,17 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader
-                heading="Configuration repos"
-                description="Seuils minimaux par tenant (11h défaut, configurable)"
+                heading={t('driverProfile.restConfigHeading')}
+                description={t('driverProfile.restConfigDesc')}
                 action={
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={() => { setShowRestConfigForm(true); setActionError(null); }}
-                    aria-label="Modifier la configuration repos"
+                    aria-label={t('driverProfile.restConfigHeading')}
                     disabled={!restConfig}
                   >
-                    <Settings className="w-4 h-4 mr-1" aria-hidden /> Modifier
+                    <Settings className="w-4 h-4 mr-1" aria-hidden /> {t('common.edit')}
                   </Button>
                 }
               />
@@ -794,10 +798,10 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 ) : restConfig ? (
                   <dl className="space-y-3 text-sm">
                     {[
-                      { label: 'Repos minimum',         value: `${restConfig.minRestMinutes} min` },
-                      { label: 'Conduite max/jour',      value: `${restConfig.maxDrivingMinutesPerDay} min` },
-                      { label: 'Conduite max/sem.',      value: `${restConfig.maxDrivingMinutesPerWeek} min` },
-                      { label: 'Alerte avant fin repos', value: `${restConfig.alertBeforeEndRestMin} min` },
+                      { label: t('driverProfile.minRest'),         value: `${restConfig.minRestMinutes} min` },
+                      { label: t('driverProfile.maxDrivingDay'),      value: `${restConfig.maxDrivingMinutesPerDay} min` },
+                      { label: t('driverProfile.maxDrivingWeek'),      value: `${restConfig.maxDrivingMinutesPerWeek} min` },
+                      { label: t('driverProfile.alertBeforeRestEnd'), value: `${restConfig.alertBeforeEndRestMin} min` },
                     ].map(item => (
                       <div key={item.label} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                         <dt className="text-slate-600 dark:text-slate-400">{item.label}</dt>
@@ -807,7 +811,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                   </dl>
                 ) : (
                   <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
-                    Aucune configuration de repos définie
+                    {t('driverProfile.noRestConfig')}
                   </p>
                 )}
               </CardContent>
@@ -815,8 +819,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
 
             <Card>
               <CardHeader
-                heading="Chauffeurs disponibles"
-                description="Statut de disponibilité actuel"
+                heading={t('driverProfile.driversAvailable')}
+                description={t('driverProfile.driversAvailableDesc')}
               />
               <CardContent className="p-0">
                 {loadingDrivers ? (
@@ -824,7 +828,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                     {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                   </div>
                 ) : !drivers || drivers.length === 0 ? (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">Aucun chauffeur</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">{t('driverProfile.noDriver')}</p>
                 ) : (
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
                     {drivers.map(d => (
@@ -833,7 +837,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           {d.user.displayName ?? d.user.email}
                         </span>
                         <Badge variant={d.isAvailable ? 'success' : 'warning'} size="sm">
-                          {d.isAvailable ? 'Disponible' : 'En repos'}
+                          {d.isAvailable ? t('driverProfile.available') : t('driverProfile.resting')}
                         </Badge>
                       </li>
                     ))}
@@ -850,15 +854,15 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         <section id="tabpanel-driver-trainings" role="tabpanel" aria-labelledby="tab-driver-trainings">
           <Card>
             <CardHeader
-              heading="Formations en retard"
-              description="Formations planifiées dont la date est dépassée"
+              heading={t('driverProfile.overdueTrainingsHeading')}
+              description={t('driverProfile.overdueTrainingsDesc')}
               action={
                 <Button
                   size="sm"
                   onClick={() => { setShowTrainingForm(true); setActionError(null); }}
-                  aria-label="Planifier une formation"
+                  aria-label={t('driverProfile.planTraining')}
                 >
-                  <Plus className="w-4 h-4 mr-1" aria-hidden /> Planifier
+                  <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('driverProfile.planTrainingAction')}
                 </Button>
               }
             />
@@ -870,7 +874,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
               ) : !overdueTrainings || overdueTrainings.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
                   <GraduationCap className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden />
-                  <p className="font-medium">Toutes les formations sont à jour</p>
+                  <p className="font-medium">{t('driverProfile.allTrainingsUpToDate')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">

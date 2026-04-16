@@ -50,7 +50,21 @@ const fr: Record<string, Record<string, string>> = {
     "guardOk": "✓ ok",
     "guardBlocked": "✗ bloqué",
     "wouldTrigger": "Aurait déclenché",
-    "sandboxEntity": "État final de l'entité sandbox"
+    "sandboxEntity": "État final de l'entité sandbox",
+    "guardCheckSoldeAgent": "Solde agent suffisant",
+    "guardCheckTicketNotScanned": "Ticket non encore scanné",
+    "guardCheckParcelNotDelivered": "Colis non encore livré",
+    "guardCheckTripNotDeparted": "Trajet non encore parti",
+    "guardCheckTripDeparted": "Trajet déjà parti",
+    "guardCheckCapacityAvailable": "Places disponibles",
+    "guardCheckRefundWindow": "Dans la fenêtre de remboursement",
+    "guardCheckClaimDeadline": "Délai réclamation non dépassé",
+    "guardCheckBusOperational": "Bus opérationnel",
+    "guardCheckDriverAssigned": "Chauffeur affecté",
+    "guardCheckPaymentConfirmed": "Paiement confirmé",
+    "guardCheckManifestSigned": "Manifeste signé",
+    "guardCheckWeightLimit": "Poids limite respecté",
+    "guardCheckSenderVerified": "Expéditeur vérifié"
   },
   "portal": {
     "logout": "Déconnexion",
@@ -1499,7 +1513,13 @@ const fr: Record<string, Record<string, string>> = {
     "nonCompliantDesc": "Trajets dont au moins un équipement obligatoire est manquant",
     "noHistory": "Aucun briefing dans l'historique",
     "euCatDesc": "Vue d'ensemble des familles d'équipements couverts par le catalogue standard",
-    "newEquipType": "Nouveau type d'équipement"
+    "newEquipType": "Nouveau type d'équipement",
+    "placeholderName": "Gilet de sécurité",
+    "notes": "Notes",
+    "tripStaffOption": "Trajet {tripId} · Staff {staffId}",
+    "errorSeed": "Erreur pendant le seed",
+    "errorCreate": "Erreur lors de la création",
+    "errorSave": "Erreur lors de l'enregistrement"
   },
   "companySetup": {
     "title": "Paramètres société",
