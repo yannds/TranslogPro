@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { apiGet, apiPost } from '../../lib/api';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
@@ -121,6 +122,7 @@ export function UserDetailDialog({
   const [err,      setErr]      = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [tab,      setTab]      = useState('info');
+  const { t } = useI18n();
 
   const base = `/api/v1/tenants/${tenantId}/iam/users/${userId}`;
 
@@ -146,7 +148,7 @@ export function UserDetailDialog({
 
   const handleRevokeAll = async () => {
     if (!userId) return;
-    if (!confirm('Révoquer toutes les sessions actives de cet utilisateur ?')) return;
+    if (!confirm(t('userDetail.confirmRevokeAll'))) return;
     setRevoking(true);
     try {
       await apiPost(`${base}/revoke-sessions`);
@@ -183,15 +185,15 @@ export function UserDetailDialog({
                 <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
               </svg>
               <DialogPrimitive.Title className="text-base font-semibold text-slate-900 dark:text-slate-50">
-                Détails de l&apos;utilisateur
+                {t('userDetail.title')}
               </DialogPrimitive.Title>
             </div>
             <DialogPrimitive.Description className="sr-only">
-              Informations détaillées, sessions et historique de connexion
+              {t('userDetail.description')}
             </DialogPrimitive.Description>
             <DialogPrimitive.Close
               className="shrink-0 rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 transition-colors"
-              aria-label="Fermer"
+              aria-label={t('userDetail.close')}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
                 <path d="M12 4 4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -201,7 +203,7 @@ export function UserDetailDialog({
 
           {/* Body */}
           <div className="px-6 py-5">
-            {loading && <p className="text-sm text-slate-500">Chargement…</p>}
+            {loading && <p className="text-sm text-slate-500">{t('userDetail.loading')}</p>}
             {err && (
               <div role="alert" className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
                 {err}
@@ -210,9 +212,9 @@ export function UserDetailDialog({
             {!loading && user && (
               <Tabs value={tab} onValueChange={setTab}>
                 <TabsList>
-                  <TabsTrigger value="info">Informations</TabsTrigger>
-                  <TabsTrigger value="sec">Sécurité</TabsTrigger>
-                  <TabsTrigger value="hist">Historique</TabsTrigger>
+                  <TabsTrigger value="info">{t('userDetail.tabInfo')}</TabsTrigger>
+                  <TabsTrigger value="sec">{t('userDetail.tabSecurity')}</TabsTrigger>
+                  <TabsTrigger value="hist">{t('userDetail.tabHistory')}</TabsTrigger>
                 </TabsList>
 
                 {/* ─── Onglet Informations ───────────────────────────────── */}
@@ -235,19 +237,19 @@ export function UserDetailDialog({
 
                   {/* Grille infos */}
                   <dl className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
-                    <Field label="Nom complet"  value={user.name ?? '—'} />
-                    <Field label="Email"        value={user.email} />
-                    <Field label="Entité"       value={user.agency?.name ?? '—'} />
-                    <Field label="Rôle"         value={user.role?.name ?? '—'} />
-                    <Field label="Type"         value={user.userType} />
-                    <Field label="Statut"       value={<Badge variant="success">Actif</Badge>} />
+                    <Field label={t('userDetail.fullName')}  value={user.name ?? '—'} />
+                    <Field label={t('userDetail.email')}        value={user.email} />
+                    <Field label={t('userDetail.entity')}       value={user.agency?.name ?? '—'} />
+                    <Field label={t('userDetail.role')}         value={user.role?.name ?? '—'} />
+                    <Field label={t('userDetail.type')}         value={user.userType} />
+                    <Field label={t('userDetail.status')}       value={<Badge variant="success">{t('userDetail.active')}</Badge>} />
                     <Field
-                      label="Date d'enregistrement"
+                      label={t('userDetail.registrationDate')}
                       icon={<Calendar size={14} className="text-slate-400" />}
                       value={formatDate(user.createdAt)}
                     />
                     <Field
-                      label="Dernière connexion"
+                      label={t('userDetail.lastLogin')}
                       icon={<Calendar size={14} className="text-slate-400" />}
                       value={formatDate(user.lastLoginAt)}
                     />
@@ -261,7 +263,7 @@ export function UserDetailDialog({
                     <div className="flex items-center gap-2">
                       <Monitor size={16} className="text-slate-500" />
                       <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                        Sessions actives
+                        {t('userDetail.activeSessions')}
                       </h3>
                     </div>
                     {sessions && sessions.length > 0 && (
@@ -272,7 +274,7 @@ export function UserDetailDialog({
                         className="text-red-600 border-red-200 hover:bg-red-50"
                       >
                         <LogOut size={14} className="mr-1.5" />
-                        {revoking ? 'Révocation…' : 'Tout déconnecter'}
+                        {revoking ? t('userDetail.revoking') : t('userDetail.disconnectAll')}
                       </Button>
                     )}
                   </div>
@@ -280,9 +282,9 @@ export function UserDetailDialog({
                   {sessions && sessions.length === 0 && (
                     <div className="mt-4 py-10 text-center">
                       <Monitor size={32} className="mx-auto text-slate-300" />
-                      <p className="mt-2 text-sm font-medium text-slate-500">Aucune session active</p>
+                      <p className="mt-2 text-sm font-medium text-slate-500">{t('userDetail.noActiveSessions')}</p>
                       <p className="mt-1 text-xs text-slate-400">
-                        Toutes les sessions ont expiré ou l&apos;utilisateur n&apos;est pas connecté
+                        {t('userDetail.allSessionsExpired')}
                       </p>
                     </div>
                   )}
@@ -301,7 +303,7 @@ export function UserDetailDialog({
                                 {s.ipAddress ?? '—'} · depuis le {formatDateTime(s.createdAt)}
                               </p>
                             </div>
-                            <Badge variant="success">Active</Badge>
+                            <Badge variant="success">{t('userDetail.active')}</Badge>
                           </li>
                         );
                       })}
@@ -316,17 +318,17 @@ export function UserDetailDialog({
                           ? <ShieldCheck size={16} className="text-emerald-500" />
                           : <ShieldOff   size={16} className="text-slate-400" />}
                         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                          Authentification multi-facteurs (MFA)
+                          {t('userDetail.mfaTitle')}
                         </h3>
                       </div>
                       <Badge variant={user.mfaEnabled ? 'success' : 'default'}>
-                        {user.mfaEnabled ? 'Activé' : 'Non activé'}
+                        {user.mfaEnabled ? t('userDetail.mfaEnabled') : t('userDetail.mfaDisabled')}
                       </Badge>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
                       {user.mfaEnabled
-                        ? `Activé le ${formatDateTime(user.mfaVerifiedAt)}`
-                        : 'Configuration disponible prochainement dans le menu "Mon compte" de l\'utilisateur.'}
+                        ? `${t('userDetail.mfaEnabledOn')} ${formatDateTime(user.mfaVerifiedAt)}`
+                        : t('userDetail.mfaComingSoon')}
                     </p>
                   </div>
 
@@ -334,7 +336,7 @@ export function UserDetailDialog({
                   <div className="mt-4">
                     <Button variant="outline" disabled>
                       <KeyRound size={14} className="mr-1.5" />
-                      Réinitialiser le mot de passe
+                      {t('userDetail.resetPassword')}
                     </Button>
                   </div>
                 </TabsContent>
@@ -342,21 +344,21 @@ export function UserDetailDialog({
                 {/* ─── Onglet Historique ─────────────────────────────────── */}
                 <TabsContent value="hist">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
-                    Historique des connexions
+                    {t('userDetail.loginHistory')}
                   </h3>
                   {history && history.length === 0 && (
-                    <p className="text-sm text-slate-500 py-6 text-center">Aucune connexion enregistrée.</p>
+                    <p className="text-sm text-slate-500 py-6 text-center">{t('userDetail.noLoginHistory')}</p>
                   )}
                   {history && history.length > 0 && (
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr className="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
-                            <th className="py-2 pr-3 font-medium">Date & heure</th>
-                            <th className="py-2 pr-3 font-medium">IP</th>
-                            <th className="py-2 pr-3 font-medium">Navigateur</th>
-                            <th className="py-2 pr-3 font-medium">Système</th>
-                            <th className="py-2 pr-3 font-medium">Statut</th>
+                            <th className="py-2 pr-3 font-medium">{t('userDetail.dateTime')}</th>
+                            <th className="py-2 pr-3 font-medium">{t('userDetail.ip')}</th>
+                            <th className="py-2 pr-3 font-medium">{t('userDetail.browser')}</th>
+                            <th className="py-2 pr-3 font-medium">{t('userDetail.system')}</th>
+                            <th className="py-2 pr-3 font-medium">{t('userDetail.status')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -372,8 +374,8 @@ export function UserDetailDialog({
                                 <td className="py-2 pr-3 text-slate-500">{ua.os}</td>
                                 <td className="py-2 pr-3">
                                   {h.success
-                                    ? <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 size={12} />Succès</span>
-                                    : <span className="inline-flex items-center gap-1 text-red-600"><XCircle size={12} />Échec</span>}
+                                    ? <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 size={12} />{t('userDetail.success')}</span>
+                                    : <span className="inline-flex items-center gap-1 text-red-600"><XCircle size={12} />{t('userDetail.failure')}</span>}
                                 </td>
                               </tr>
                             );

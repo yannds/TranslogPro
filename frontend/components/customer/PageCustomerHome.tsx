@@ -8,6 +8,7 @@
 import { Ticket, Package, MessageSquareWarning } from 'lucide-react';
 import { useFetch }  from '../../lib/hooks/useFetch';
 import { useAuth }   from '../../lib/auth/auth.context';
+import { useI18n }   from '../../lib/i18n/useI18n';
 
 interface CountResult { length: number }
 

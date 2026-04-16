@@ -10,6 +10,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { WorkflowGraph, BlueprintSummary } from './types';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 interface BlueprintPanelProps {
   tenantId:      string;

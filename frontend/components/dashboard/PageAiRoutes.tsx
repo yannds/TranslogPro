@@ -4,6 +4,7 @@
  * Future intégration : GET /api/v1/tenants/:id/analytics/ai-routes
  */
 import { cn }           from '../../lib/utils';
+import { useI18n }      from '../../lib/i18n/useI18n';
 import type { AiRoute } from './types';
 
 // ─── Données mock ─────────────────────────────────────────────────────────────
@@ -19,9 +20,11 @@ const AI_ROUTES: AiRoute[] = [
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function PageAiRoutes() {
+  const { t } = useI18n();
+
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Lignes rentables — Recommandations IA</h1>
+      <h1 className="text-2xl font-bold text-white">{t('aiRoutes.title')}</h1>
       <div className="grid gap-4">
         {AI_ROUTES.map((r, i) => (
           <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
@@ -33,7 +36,7 @@ export function PageAiRoutes() {
                     'text-xs font-semibold px-2 py-0.5 rounded-full',
                     r.marge.startsWith('+') ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400',
                   )}>
-                    {r.marge} marge
+                    {r.marge} {t('aiRoutes.margin')}
                   </span>
                   <span className="text-xs text-slate-500">{r.freq}</span>
                 </div>
@@ -46,7 +49,7 @@ export function PageAiRoutes() {
                 )}>
                   {r.score}
                 </div>
-                <div className="text-xs text-slate-600">score</div>
+                <div className="text-xs text-slate-600">{t('aiRoutes.score')}</div>
               </div>
             </div>
           </div>

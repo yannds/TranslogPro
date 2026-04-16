@@ -27,6 +27,7 @@ import { type ZodType } from 'zod';
 import { FormFieldAuto, type FieldType } from './FormField';
 import { Button } from '../ui/Button';
 import { cn }    from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
 import type { SelectOption } from '../ui/Select';
 
 export interface FieldDef<TSchema extends FieldValues> {
@@ -63,13 +64,18 @@ export function FormBuilder<TSchema extends FieldValues>({
   fields,
   defaultValues,
   onSubmit,
-  submitLabel = 'Enregistrer',
-  cancelLabel = 'Annuler',
+  submitLabel,
+  cancelLabel,
   onCancel,
   columns = 1,
   extra,
   className,
 }: FormBuilderProps<TSchema>) {
+  const { t } = useI18n();
+
+  const resolvedSubmitLabel = submitLabel ?? t('formBuilder.save');
+  const resolvedCancelLabel = cancelLabel ?? t('formBuilder.cancel');
+
   const form = useForm<TSchema>({
     resolver:      zodResolver(schema),
     defaultValues,
@@ -120,7 +126,7 @@ export function FormBuilder<TSchema extends FieldValues>({
       {/* Erreur globale */}
       {hasErrors && (
         <p role="alert" className="text-sm text-red-500 dark:text-red-400">
-          Veuillez corriger les erreurs ci-dessus.
+          {t('formBuilder.fixErrors')}
         </p>
       )}
 
@@ -133,11 +139,11 @@ export function FormBuilder<TSchema extends FieldValues>({
             onClick={onCancel}
             disabled={isSubmitting}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
         )}
         <Button type="submit" loading={isSubmitting}>
-          {submitLabel}
+          {resolvedSubmitLabel}
         </Button>
       </div>
     </form>

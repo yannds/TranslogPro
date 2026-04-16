@@ -38,6 +38,7 @@ import { layoutGraph } from './layoutGraph';
 import type { WorkflowGraph, SimResult, SimOverlay } from './types';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Métadonnées contextuelles ────────────────────────────────────────────────
 

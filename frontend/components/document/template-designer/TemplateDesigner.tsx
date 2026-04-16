@@ -21,6 +21,7 @@ import type { Template }    from '@pdfme/common';
 import { VariablesPanel }   from './VariablesPanel';
 import type { VariablesPanelProps } from './VariablesPanel';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 const lightPalette = {
   surface:       '#fff',

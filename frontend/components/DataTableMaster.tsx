@@ -40,6 +40,7 @@
 import {
   useState, useMemo, useCallback, useEffect, useRef, ChangeEvent, KeyboardEvent,
 } from 'react';
+import { useI18n } from '../lib/i18n/useI18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

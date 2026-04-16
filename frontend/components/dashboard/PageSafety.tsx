@@ -4,13 +4,16 @@
  * Future intégration : GET /api/v1/tenants/:id/safety/incidents?status=active
  */
 import { NavIcon } from './NavIcon';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function PageSafety() {
+  const { t } = useI18n();
+
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-white">Sécurité &amp; Incidents</h1>
+      <h1 className="text-2xl font-bold text-white">{t('safety.title')}</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Alerte critique */}
@@ -20,13 +23,12 @@ export function PageSafety() {
               <NavIcon name="Siren" className="text-red-400" />
             </div>
             <div>
-              <p className="font-semibold text-white text-sm">Alerte active — RN1 km 145</p>
-              <p className="text-xs text-red-400">Il y a 18 minutes</p>
+              <p className="font-semibold text-white text-sm">{t('safety.activeAlert')} — RN1 km 145</p>
+              <p className="text-xs text-red-400">{t('safety.ago18min')}</p>
             </div>
           </div>
           <p className="text-sm text-slate-300">
-            Ralentissement important dû à des travaux. 3 bus TranslogPro actuellement
-            sur ce tronçon. Délai estimé : +30 min.
+            {t('safety.alertDesc1')}
           </p>
         </div>
 
@@ -37,13 +39,12 @@ export function PageSafety() {
               <NavIcon name="AlertTriangle" className="text-amber-400" />
             </div>
             <div>
-              <p className="font-semibold text-white text-sm">Signalement — Bus KA-4421-B</p>
-              <p className="text-xs text-amber-400">Il y a 1h 42min</p>
+              <p className="font-semibold text-white text-sm">{t('safety.report')} — Bus KA-4421-B</p>
+              <p className="text-xs text-amber-400">{t('safety.ago1h42')}</p>
             </div>
           </div>
           <p className="text-sm text-slate-300">
-            Chauffeur Mabou signale une vibration anormale. Bus redirigé vers
-            Dolisie pour inspection technique.
+            {t('safety.reportDesc1')}
           </p>
         </div>
       </div>

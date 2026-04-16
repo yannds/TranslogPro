@@ -20,6 +20,7 @@
  */
 import { useState, useRef, useCallback, type CSSProperties } from 'react';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 export type DocMimeType = 'text/html' | 'application/pdf' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -45,6 +46,7 @@ export function DocumentPreview({
   className,
   height = '70vh',
 }: DocumentPreviewProps) {
+  const { t } = useI18n();
   const [fullscreen, setFullscreen] = useState(false);
   const [loading,    setLoading]    = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -74,9 +76,9 @@ export function DocumentPreview({
         {/* Méta-données */}
         <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
           {generatedAt && (
-            <div>Généré le {new Date(generatedAt).toLocaleString('fr-FR')}</div>
+            <div>{t('docPreview.generatedAt')} {new Date(generatedAt).toLocaleString('fr-FR')}</div>
           )}
-          {actorId && <div>Par : <span className="font-mono">{actorId}</span></div>}
+          {actorId && <div>{t('docPreview.by')} <span className="font-mono">{actorId}</span></div>}
           {fingerprint && (
             <div className="flex items-center gap-1">
               <span className="text-green-600 dark:text-green-400">✓</span>
@@ -96,9 +98,9 @@ export function DocumentPreview({
                 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
                 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700
                 transition-colors`}
-              aria-label="Imprimer"
+              aria-label={t('docPreview.print')}
             >
-              🖨 Imprimer
+              🖨 {t('docPreview.print')}
             </button>
           )}
 
@@ -108,9 +110,9 @@ export function DocumentPreview({
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
               bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900
               hover:bg-slate-700 dark:hover:bg-slate-200 transition-colors`}
-            aria-label="Télécharger"
+            aria-label={t('docPreview.download')}
           >
-            ↓ Télécharger
+            ↓ {t('docPreview.download')}
           </a>
 
           {canPreview && (
@@ -120,10 +122,10 @@ export function DocumentPreview({
                 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
                 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700
                 transition-colors`}
-              aria-label={fullscreen ? 'Réduire' : 'Plein écran'}
+              aria-label={fullscreen ? t('docPreview.reduce') : t('docPreview.fullscreen')}
               aria-pressed={fullscreen}
             >
-              {fullscreen ? '⊡ Réduire' : '⊞ Plein écran'}
+              {fullscreen ? `⊡ ${t('docPreview.reduce')}` : `⊞ ${t('docPreview.fullscreen')}`}
             </button>
           )}
         </div>
@@ -143,7 +145,7 @@ export function DocumentPreview({
                  style={{ height: typeof height === 'number' ? `${height}px` : height }}>
               <div className="flex flex-col items-center gap-3 text-slate-400">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
-                <span className="text-sm">Chargement du document…</span>
+                <span className="text-sm">{t('docPreview.loading')}</span>
               </div>
             </div>
           )}
@@ -152,11 +154,11 @@ export function DocumentPreview({
           <iframe
             ref={iframeRef}
             src={isPdf ? `${downloadUrl}#toolbar=0&navpanes=0` : downloadUrl}
-            title={`Aperçu : ${fileName}`}
+            title={`${t('docPreview.preview')} : ${fileName}`}
             sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
             style={iframeStyle}
             onLoad={handleLoad}
-            aria-label={`Aperçu du document ${fileName}`}
+            aria-label={`${t('docPreview.previewOf')} ${fileName}`}
           />
 
           {/* Bouton fermer plein écran */}
@@ -164,7 +166,7 @@ export function DocumentPreview({
             <button
               onClick={() => setFullscreen(false)}
               className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white dark:bg-slate-800 shadow-lg text-slate-700 dark:text-slate-200"
-              aria-label="Fermer le plein écran"
+              aria-label={t('docPreview.closeFullscreen')}
             >
               ✕
             </button>
@@ -177,14 +179,14 @@ export function DocumentPreview({
             {mimeType.includes('spreadsheet') ? '📊' : '📄'}
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Aperçu non disponible pour ce format
+            {t('docPreview.noPreview')}
           </p>
           <a
             href={downloadUrl}
             download={fileName}
             className="px-4 py-2 rounded-md bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 text-sm font-medium hover:bg-slate-700 transition-colors"
           >
-            ↓ Télécharger {fileName}
+            ↓ {t('docPreview.download')} {fileName}
           </a>
         </div>
       )}
@@ -228,7 +230,7 @@ export function usePrintDocument(
       const data = await fetchFn(apiUrl);
       setResult(data);
     } catch (e) {
-      setError((e as Error).message ?? 'Erreur de génération');
+      setError((e as Error).message ?? 'Generation error');
     } finally {
       setLoading(false);
     }

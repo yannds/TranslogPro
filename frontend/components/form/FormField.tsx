@@ -28,6 +28,7 @@ import { Input }    from '../ui/Input';
 import { Select, type SelectOption }  from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 import { Checkbox } from '../ui/Checkbox';
+import { useI18n } from '../../lib/i18n/useI18n';
 
 // ─── FormField générique ──────────────────────────────────────────────────────
 
@@ -90,6 +91,8 @@ export function FormFieldAuto<
   control, name, label, hint, placeholder, type = 'text',
   required, disabled, options, rows, showCount, maxLength,
 }: FormFieldAutoProps<TFieldValues, TName>) {
+  const { t } = useI18n();
+
   return (
     <Controller
       control={control}
@@ -120,7 +123,7 @@ export function FormFieldAuto<
               hint={hint}
               error={error}
               options={options ?? []}
-              placeholder={placeholder ?? '— Choisir —'}
+              placeholder={placeholder ?? t('formField.selectPlaceholder')}
               required={required}
               disabled={disabled}
             />

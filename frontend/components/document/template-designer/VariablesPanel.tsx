@@ -15,6 +15,7 @@ import {
   type TemplateVariable,
 } from './variables';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useI18n } from '../../../lib/i18n/useI18n';
 
 const lightPalette = {
   surface:        '#fff',
