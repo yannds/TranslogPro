@@ -49,3 +49,6 @@ Thumbs.db
 # Test
 junit.xml
 test-results/
+
+# Security audit reports
+Result_Secu_test.md

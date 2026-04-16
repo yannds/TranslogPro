@@ -23,7 +23,8 @@
     "db:seed": "ts-node prisma/seed/seed.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
-    "test:e2e": "jest --config jest.e2e.config.ts --forceExit --runInBand"
+    "test:e2e": "jest --config jest.e2e.config.ts --forceExit --runInBand",
+    "test:security": "jest --config jest.security.config.ts --forceExit --runInBand"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
