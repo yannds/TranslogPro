@@ -20,7 +20,7 @@ import type { WorkflowNode, WorkflowGraph, SimResult, SimOverlay, StructuredStep
 import { ReactFlowAdapter } from './ReactFlowAdapter';
 import { apiFetch } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import { useI18n, translate, tm } from '../../lib/i18n/useI18n';
+import { useI18n, translate } from '../../lib/i18n/useI18n';
 import type { Language } from '../../lib/i18n/types';
 import { WORKFLOW_I18N, translateVerb, interpolate, subject } from './workflowI18n';
 
@@ -46,73 +46,22 @@ interface SessionSnapshot {
   nextAction?:   string;
 }
 
-// Labels humains pour les guards connus
-const GUARD_LABEL_MAPS: Record<string, Record<string, string>> = {
-  checkSoldeAgent:         tm('Solde agent suffisant', 'Sufficient agent balance'),
-  checkTicketNotScanned:   tm('Ticket non encore scanné', 'Ticket not yet scanned'),
-  checkParcelNotDelivered: tm('Colis non encore livré', 'Parcel not yet delivered'),
-  checkTripNotDeparted:    tm('Trajet non encore parti', 'Trip not yet departed'),
-  checkTripDeparted:       tm('Trajet déjà parti', 'Trip already departed'),
-  checkCapacityAvailable:  tm('Places disponibles', 'Seats available'),
-  checkRefundWindow:       tm('Dans la fenêtre de remboursement', 'Within refund window'),
-  checkClaimDeadline:      tm('Délai réclamation non dépassé', 'Claim deadline not exceeded'),
-  checkBusOperational:     tm('Bus opérationnel', 'Bus operational'),
-  checkDriverAssigned:     tm('Chauffeur affecté', 'Driver assigned'),
-  checkPaymentConfirmed:   tm('Paiement confirmé', 'Payment confirmed'),
-  checkManifestSigned:     tm('Manifeste signé', 'Manifest signed'),
-  checkWeightLimit:        tm('Poids limite respecté', 'Weight limit respected'),
-  checkSenderVerified:     tm('Expéditeur vérifié', 'Sender verified'),
-};
-
-// ─── i18n keys for SimulationPanel UI ────────────────────────────────────────
-
-const SIM_T = {
-  simTitle:         tm('▶ Simulation Live-Path', '▶ Live-Path Simulation'),
-  success:          tm('✓ Succès', '✓ Success'),
-  blocked:          tm('⛔ Bloqué', '⛔ Blocked'),
-  startState:       tm('État de départ', 'Starting state'),
-  simProfile:       tm('Profil simulé', 'Simulated profile'),
-  profileOptional:  tm('(optionnel — teste les permissions)', '(optional — tests permissions)'),
-  loadingProfiles:  tm('Chargement des profils…', 'Loading profiles…'),
-  noProfiles:       tm('Aucun profil IAM disponible — la simulation ignorera les permissions.', 'No IAM profiles available — simulation will ignore permissions.'),
-  noProfile:        tm('— Aucun (permissions ignorées) —', '— None (permissions ignored) —'),
-  actionSequence:   tm('Séquence d\'actions', 'Action sequence'),
-  clear:            tm('✕ Vider', '✕ Clear'),
-  removeBp:         tm('Retirer le breakpoint', 'Remove breakpoint'),
-  addBpAfter:       tm('Pauser après cette étape', 'Pause after this step'),
-  addActionTitle:   tm('Ajouter l\'action', 'Add action'),
-  toSequence:       tm('à la séquence', 'to sequence'),
-  noActions:        tm('Aucune action disponible — chargez d\'abord un graphe.', 'No actions available — load a graph first.'),
-  testConditions:   tm('Conditions de test', 'Test conditions'),
-  conditionsHint:   tm('(activez celles qui s\'appliquent)', '(enable applicable ones)'),
-  simMode:          tm('Mode de simulation', 'Simulation mode'),
-  modeAuto:         tm('Auto', 'Auto'),
-  modeManual:       tm('Manuel', 'Manual'),
-  modeBreakpoint:   tm('Pas-à-pas', 'Step-by-step'),
-  hintAuto:         tm('Explore tout depuis l\'état initial', 'Explores everything from the initial state'),
-  hintManual:       tm('Construire une séquence d\'actions', 'Build an action sequence'),
-  hintBreakpoint:   tm('Pauser après chaque ●', 'Pause after each ●'),
-  autoDesc:         tm('Cliquez sur Simuler — le moteur essaie chaque transition possible avec ce profil.', 'Click Simulate — the engine tries every possible transition with this profile.'),
-  bpDesc:           tm('Cliquez sur ● à côté d\'une action pour pauser après elle.', 'Click ● next to an action to pause after it.'),
-  simulating:       tm('Simulation…', 'Simulating…'),
-  startSession:     tm('▶ Démarrer la session', '▶ Start Session'),
-  explore:          tm('▶ Explorer', '▶ Explore'),
-  simulate:         tm('▶ Simuler', '▶ Simulate'),
-  reset:            tm('✕ Réinitialiser', '✕ Reset'),
-  step:             tm('étape', 'step'),
-  stepPlural:       tm('étapes', 'steps'),
-  stepBtn:          tm('→ Step', '→ Step'),
-  stepTitle:        tm('Exécuter la prochaine étape seulement', 'Execute next step only'),
-  continueTitle:    tm('Continuer jusqu\'au prochain breakpoint ou à la fin', 'Continue to next breakpoint or end'),
-  stop:             tm('✕ Stop', '✕ Stop'),
-  techDetail:       tm('Détail technique étape par étape', 'Technical detail step by step'),
-  notReached:       tm('États non atteints', 'Unreached states'),
-  permDenied:       tm('Permission refusée pour ce profil', 'Permission denied for this profile'),
-  notEvaluated:     tm('non évalué', 'not evaluated'),
-  guardOk:          tm('✓ ok', '✓ ok'),
-  guardBlocked:     tm('✗ bloqué', '✗ blocked'),
-  wouldTrigger:     tm('Aurait déclenché', 'Would have triggered'),
-  sandboxEntity:    tm('État final de l\'entité sandbox', 'Final sandbox entity state'),
+// Guard name → i18n string key mapping
+const GUARD_I18N_KEYS: Record<string, string> = {
+  checkSoldeAgent:         'simulation.guardCheckSoldeAgent',
+  checkTicketNotScanned:   'simulation.guardCheckTicketNotScanned',
+  checkParcelNotDelivered: 'simulation.guardCheckParcelNotDelivered',
+  checkTripNotDeparted:    'simulation.guardCheckTripNotDeparted',
+  checkTripDeparted:       'simulation.guardCheckTripDeparted',
+  checkCapacityAvailable:  'simulation.guardCheckCapacityAvailable',
+  checkRefundWindow:       'simulation.guardCheckRefundWindow',
+  checkClaimDeadline:      'simulation.guardCheckClaimDeadline',
+  checkBusOperational:     'simulation.guardCheckBusOperational',
+  checkDriverAssigned:     'simulation.guardCheckDriverAssigned',
+  checkPaymentConfirmed:   'simulation.guardCheckPaymentConfirmed',
+  checkManifestSigned:     'simulation.guardCheckManifestSigned',
+  checkWeightLimit:        'simulation.guardCheckWeightLimit',
+  checkSenderVerified:     'simulation.guardCheckSenderVerified',
 };
 
 // ─── Assemblage des phrases humaines via i18n ─────────────────────────────────
@@ -451,7 +400,7 @@ export function SimulationPanel({
 
       {/* Titre + badge résultat */}
       <div className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-        <span>{t(SIM_T.simTitle)}</span>
+        <span>{t('simulation.simTitle')}</span>
         {result && (
           <span className={cn(
             'text-xs rounded-full px-2 py-0.5 font-bold',
@@ -459,14 +408,14 @@ export function SimulationPanel({
               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
               : 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-200',
           )}>
-            {result.steps.every(s => s.reachable) ? t(SIM_T.success) : t(SIM_T.blocked)}
+            {result.steps.every(s => s.reachable) ? t('simulation.success') : t('simulation.blocked')}
           </span>
         )}
       </div>
 
       {/* ── État initial ── */}
       <div>
-        <label className="block text-xs text-slate-500 mb-0.5">{t(SIM_T.startState)}</label>
+        <label className="block text-xs text-slate-500 mb-0.5">{t('simulation.startState')}</label>
         <select
           value={initialState}
           onChange={e => setInitialState(e.target.value)}
@@ -481,14 +430,14 @@ export function SimulationPanel({
       {/* ── Profil simulé ── */}
       <div>
         <label className="block text-xs text-slate-500 mb-0.5">
-          {t(SIM_T.simProfile)}
-          <span className="ml-1 text-slate-400">{t(SIM_T.profileOptional)}</span>
+          {t('simulation.simProfile')}
+          <span className="ml-1 text-slate-400">{t('simulation.profileOptional')}</span>
         </label>
         {!rolesLoaded ? (
-          <div className="text-xs text-slate-400 italic py-1">{t(SIM_T.loadingProfiles)}</div>
+          <div className="text-xs text-slate-400 italic py-1">{t('simulation.loadingProfiles')}</div>
         ) : roles.length === 0 ? (
           <div className="text-xs text-amber-500 italic py-1">
-            {t(SIM_T.noProfiles)}
+            {t('simulation.noProfiles')}
           </div>
         ) : (
           <select
@@ -496,7 +445,7 @@ export function SimulationPanel({
             onChange={e => setRoleId(e.target.value)}
             className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
           >
-            <option value="">{t(SIM_T.noProfile)}</option>
+            <option value="">{t('simulation.noProfile')}</option>
             {roles.map(r => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
@@ -509,7 +458,7 @@ export function SimulationPanel({
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs text-slate-500">
-            {t(SIM_T.actionSequence)}
+            {t('simulation.actionSequence')}
             {actionQueue.length > 0 && (
               <span className="ml-1 text-blue-500">({actionQueue.length})</span>
             )}
@@ -519,7 +468,7 @@ export function SimulationPanel({
               onClick={clearQueue}
               className="text-[10px] text-slate-400 hover:text-red-500 transition-colors"
             >
-              {t(SIM_T.clear)}
+              {t('simulation.clear')}
             </button>
           )}
         </div>
@@ -550,7 +499,7 @@ export function SimulationPanel({
                         'ml-0.5 text-[10px] transition-colors',
                         hasBp ? 'text-red-500' : 'text-slate-400 hover:text-red-400',
                       )}
-                      title={hasBp ? t(SIM_T.removeBp) : t(SIM_T.addBpAfter)}
+                      title={hasBp ? t('simulation.removeBp') : t('simulation.addBpAfter')}
                       aria-label={hasBp ? `Retirer breakpoint après ${a}` : `Ajouter breakpoint après ${a}`}
                     >
                       ●
@@ -577,7 +526,7 @@ export function SimulationPanel({
                 key={a}
                 onClick={() => addAction(a)}
                 className="rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-300 text-[10px] font-mono px-2 py-0.5 transition-colors"
-                title={`${t(SIM_T.addActionTitle)} "${a}" ${t(SIM_T.toSequence)}`}
+                title={`${t('simulation.addActionTitle')} "${a}" ${t('simulation.toSequence')}`}
               >
                 + {a}
               </button>
@@ -585,7 +534,7 @@ export function SimulationPanel({
           </div>
         ) : (
           <div className="text-[10px] text-slate-400 italic">
-            {t(SIM_T.noActions)}
+            {t('simulation.noActions')}
           </div>
         )}
       </div>
@@ -595,8 +544,8 @@ export function SimulationPanel({
       {availableGuards.length > 0 && (
         <div>
           <label className="block text-xs text-slate-500 mb-1">
-            {t(SIM_T.testConditions)}
-            <span className="ml-1 text-slate-400">{t(SIM_T.conditionsHint)}</span>
+            {t('simulation.testConditions')}
+            <span className="ml-1 text-slate-400">{t('simulation.conditionsHint')}</span>
           </label>
           <div className="space-y-1">
             {availableGuards.map(g => {
@@ -624,7 +573,7 @@ export function SimulationPanel({
                     }}
                     className="accent-emerald-600"
                   />
-                  <span className="text-xs">{GUARD_LABEL_MAPS[g] ? t(GUARD_LABEL_MAPS[g]) : g}</span>
+                  <span className="text-xs">{GUARD_I18N_KEYS[g] ? t(GUARD_I18N_KEYS[g]) : g}</span>
                 </label>
               );
             })}
@@ -634,12 +583,12 @@ export function SimulationPanel({
 
       {/* ── Sélecteur de mode ── */}
       <div>
-        <label className="block text-xs text-slate-500 mb-1">{t(SIM_T.simMode)}</label>
+        <label className="block text-xs text-slate-500 mb-1">{t('simulation.simMode')}</label>
         <div className="flex gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
           {([
-            { id: 'auto',       labelKey: 'modeAuto',       hintKey: 'hintAuto' },
-            { id: 'manual',     labelKey: 'modeManual',     hintKey: 'hintManual' },
-            { id: 'breakpoint', labelKey: 'modeBreakpoint', hintKey: 'hintBreakpoint' },
+            { id: 'auto',       labelKey: 'simulation.modeAuto',       hintKey: 'simulation.hintAuto' },
+            { id: 'manual',     labelKey: 'simulation.modeManual',     hintKey: 'simulation.hintManual' },
+            { id: 'breakpoint', labelKey: 'simulation.modeBreakpoint', hintKey: 'simulation.hintBreakpoint' },
           ] as const).map(m => (
             <button
               key={m.id}
@@ -651,7 +600,7 @@ export function SimulationPanel({
                 if (m.id === 'auto') setActionQueue([]);
               }}
               disabled={!!session}
-              title={t(SIM_T[m.hintKey])}
+              title={t(m.hintKey)}
               className={cn(
                 'flex-1 rounded-md py-1 text-[10px] font-medium transition-colors disabled:opacity-50',
                 mode === m.id
@@ -659,18 +608,18 @@ export function SimulationPanel({
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
               )}
             >
-              {t(SIM_T[m.labelKey])}
+              {t(m.labelKey)}
             </button>
           ))}
         </div>
         {mode === 'auto' && (
           <p className="text-[9px] text-slate-400 italic mt-1">
-            {t(SIM_T.autoDesc)}
+            {t('simulation.autoDesc')}
           </p>
         )}
         {mode === 'breakpoint' && (
           <p className="text-[9px] text-amber-500 italic mt-1">
-            {t(SIM_T.bpDesc)}
+            {t('simulation.bpDesc')}
           </p>
         )}
       </div>
@@ -683,17 +632,17 @@ export function SimulationPanel({
             disabled={loading || !initialState || (mode !== 'auto' && actionQueue.length === 0)}
             className="flex-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 disabled:opacity-50 transition-colors"
           >
-            {loading ? t(SIM_T.simulating)
-              : mode === 'breakpoint' ? t(SIM_T.startSession)
-              : mode === 'auto'       ? t(SIM_T.explore)
-              : t(SIM_T.simulate)}
+            {loading ? t('simulation.simulating')
+              : mode === 'breakpoint' ? t('simulation.startSession')
+              : mode === 'auto'       ? t('simulation.explore')
+              : t('simulation.simulate')}
           </button>
           {(result || actionQueue.length > 0) && (
             <button
               onClick={handleClear}
               className="rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium px-3 py-1.5 transition-colors"
             >
-              {t(SIM_T.reset)}
+              {t('simulation.reset')}
             </button>
           )}
         </div>
@@ -706,22 +655,22 @@ export function SimulationPanel({
             : session.status === 'paused'    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200'
             : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
           )}>
-            {session.status} · {t(SIM_T.step)} {session.cursor}/{session.actions.length}
+            {session.status} · {t('simulation.step')} {session.cursor}/{session.actions.length}
           </span>
 
           <button
             onClick={handleStep}
             disabled={loading || session.status === 'completed' || session.status === 'blocked'}
             className="rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50 transition-colors"
-            title={t(SIM_T.stepTitle)}
+            title={t('simulation.stepTitle')}
           >
-            {t(SIM_T.stepBtn)}
+            {t('simulation.stepBtn')}
           </button>
           <button
             onClick={handleContinue}
             disabled={loading || session.status === 'completed' || session.status === 'blocked'}
             className="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50 transition-colors"
-            title={t(SIM_T.continueTitle)}
+            title={t('simulation.continueTitle')}
           >
             ▶▶ Continue
           </button>
@@ -729,7 +678,7 @@ export function SimulationPanel({
             onClick={handleClear}
             className="rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium px-3 py-1.5 transition-colors"
           >
-            {t(SIM_T.stop)}
+            {t('simulation.stop')}
           </button>
         </div>
       )}
@@ -746,7 +695,7 @@ export function SimulationPanel({
         <div className="space-y-1.5 pt-1 border-t border-slate-200 dark:border-slate-700">
           <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
             {result.initialState} → {result.finalState}
-            <span className="ml-2 text-slate-400">({result.steps.length} {result.steps.length > 1 ? t(SIM_T.stepPlural) : t(SIM_T.step)})</span>
+            <span className="ml-2 text-slate-400">({result.steps.length} {result.steps.length > 1 ? t('simulation.stepPlural') : t('simulation.step')})</span>
           </div>
 
           {/* ── Interprétation lisible (i18n tenant) ── */}
@@ -811,7 +760,7 @@ export function SimulationPanel({
           {/* Détail technique repliable (pour les utilisateurs avancés) */}
           <details className="text-[10px]">
             <summary className="cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-              {t(SIM_T.techDetail)}
+              {t('simulation.techDetail')}
             </summary>
           </details>
 
@@ -838,7 +787,7 @@ export function SimulationPanel({
                 )}
 
                 {!step.permGranted && (
-                  <div className="text-red-500 text-[10px]">{t(SIM_T.permDenied)}</div>
+                  <div className="text-red-500 text-[10px]">{t('simulation.permDenied')}</div>
                 )}
 
                 {step.errorMessage && !step.permGranted === false && (
@@ -849,14 +798,14 @@ export function SimulationPanel({
 
                 {Object.entries(step.guardResult).map(([g, v]) => (
                   <div key={g} className={cn('text-[10px]', v === false ? 'text-red-500' : v === true ? 'text-emerald-600' : 'text-slate-400')}>
-                    {GUARD_LABEL_MAPS[g] ? t(GUARD_LABEL_MAPS[g]) : g} : {v === null ? t(SIM_T.notEvaluated) : v ? t(SIM_T.guardOk) : t(SIM_T.guardBlocked)}
+                    {GUARD_I18N_KEYS[g] ? t(GUARD_I18N_KEYS[g]) : g} : {v === null ? t('simulation.notEvaluated') : v ? t('simulation.guardOk') : t('simulation.guardBlocked')}
                   </div>
                 ))}
 
                 {/* Side-effects capturés (jamais exécutés) */}
                 {step.capturedSideEffects && step.capturedSideEffects.length > 0 && (
                   <div className="mt-1 pt-1 border-t border-emerald-200 dark:border-emerald-800">
-                    <div className="text-[9px] text-slate-400">{t(SIM_T.wouldTrigger)} :</div>
+                    <div className="text-[9px] text-slate-400">{t('simulation.wouldTrigger')} :</div>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {step.capturedSideEffects.map((se, idx) => (
                         <span
@@ -876,7 +825,7 @@ export function SimulationPanel({
 
           {result.unreachableStates.length > 0 && (
             <div className="text-[10px] text-slate-400">
-              {t(SIM_T.notReached)} : {result.unreachableStates.join(', ')}
+              {t('simulation.notReached')} : {result.unreachableStates.join(', ')}
             </div>
           )}
 
@@ -884,7 +833,7 @@ export function SimulationPanel({
           {result.finalEntity && (
             <details className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
               <summary className="text-[10px] font-medium text-slate-600 dark:text-slate-300 px-2 py-1 cursor-pointer">
-                {t(SIM_T.sandboxEntity)}
+                {t('simulation.sandboxEntity')}
               </summary>
               <pre className="text-[9px] font-mono text-slate-600 dark:text-slate-400 px-2 pb-2 overflow-x-auto">
                 {JSON.stringify(result.finalEntity, null, 2)}

@@ -564,7 +564,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         {tab === 'overview' && (
           <Button
             onClick={() => navigate('/admin/staff')}
-            aria-label="Gérer les chauffeurs dans le module Personnel"
+            aria-label={t('driverProfile.newDriver')}
           >
             <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newDriver')}
           </Button>
@@ -668,7 +668,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                         <button
                           className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
                           onClick={() => setSelectedDriverId(d.id)}
-                          aria-label={`Ouvrir le dossier de ${name}`}
+                          aria-label={`${t('driverProfile.driverProfile')} — ${name}`}
                         >
                           <div className="flex items-center gap-4">
                             <div
@@ -746,8 +746,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           type="button"
                           onClick={() => { setEditingLicense(a); setActionError(null); }}
                           className="p-1.5 rounded text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                          aria-label={`Modifier le permis de ${a.staffName}`}
-                          title="Modifier"
+                          aria-label={`${t('common.edit')} — ${a.staffName}`}
+                          title={t('common.edit')}
                         >
                           <Pencil className="w-4 h-4" aria-hidden />
                         </button>
@@ -755,8 +755,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           type="button"
                           onClick={() => handleDeleteLicense(a.id)}
                           className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          aria-label={`Supprimer le permis de ${a.staffName}`}
-                          title="Supprimer"
+                          aria-label={`${t('common.delete')} — ${a.staffName}`}
+                          title={t('common.delete')}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden />
                         </button>
@@ -878,31 +878,31 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
-                  {overdueTrainings.map(t => (
-                    <li key={t.id} className="flex items-center justify-between px-6 py-3">
+                  {overdueTrainings.map(tb => (
+                    <li key={tb.id} className="flex items-center justify-between px-6 py-3">
                       <div>
-                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{t.staffName}</p>
-                        <p className="text-xs text-slate-500">{t.typeName}</p>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{tb.staffName}</p>
+                        <p className="text-xs text-slate-500">{tb.typeName}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant="warning" size="sm">
-                          {new Date(t.scheduledAt).toLocaleDateString('fr-FR')}
+                          {new Date(tb.scheduledAt).toLocaleDateString('fr-FR')}
                         </Badge>
                         <button
                           type="button"
-                          onClick={() => handleCompleteTraining(t.id)}
+                          onClick={() => handleCompleteTraining(tb.id)}
                           className="p-1.5 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                          aria-label={`Marquer la formation de ${t.staffName} comme complétée`}
-                          title="Marquer complétée"
+                          aria-label={`${t('driverProfile.markComplete')} — ${tb.staffName}`}
+                          title={t('driverProfile.markComplete')}
                         >
                           <CheckCircle2 className="w-4 h-4" aria-hidden />
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteTraining(t.id)}
+                          onClick={() => handleDeleteTraining(tb.id)}
                           className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          aria-label={`Supprimer la formation de ${t.staffName}`}
-                          title="Supprimer"
+                          aria-label={`${t('common.delete')} — ${tb.staffName}`}
+                          title={t('common.delete')}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden />
                         </button>
@@ -920,9 +920,9 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       <Dialog
         open={showLicenseForm || !!editingLicense}
         onOpenChange={o => { if (!o) { setShowLicenseForm(false); setEditingLicense(null); } }}
-        title={editingLicense ? 'Modifier le permis' : 'Nouveau permis de conduire'}
-        description="Les alertes se déclenchent 30 jours avant l'expiration."
-        size="lg"
+        title={editingLicense ? t('driverProfile.editLicense') : t('driverProfile.newLicenseDialog')}
+        description={t('driverProfile.licenseAlertDesc')}
+        size="xl"
       >
         {(showLicenseForm || editingLicense) && (
           <LicenseForm
@@ -960,7 +960,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 setEditingLicense(null);
                 refetchLic();
               } catch (e) {
-                setActionError(e instanceof Error ? e.message : 'Erreur inconnue');
+                setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
               } finally { setBusy(false); }
             }}
           />
@@ -971,9 +971,9 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       <Dialog
         open={showTrainingForm}
         onOpenChange={o => { if (!o) setShowTrainingForm(false); }}
-        title="Planifier une formation"
-        description="Sélectionnez un chauffeur, un type de formation et une date."
-        size="lg"
+        title={t('driverProfile.planTrainingDialogTitle')}
+        description={t('driverProfile.planTrainingDialogDesc')}
+        size="xl"
       >
         {showTrainingForm && (
           <TrainingForm
@@ -995,7 +995,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 setShowTrainingForm(false);
                 refetchTrainings();
               } catch (e) {
-                setActionError(e instanceof Error ? e.message : 'Erreur inconnue');
+                setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
               } finally { setBusy(false); }
             }}
           />
@@ -1006,9 +1006,9 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       <Dialog
         open={showRuleForm || !!editingRule}
         onOpenChange={o => { if (!o) { setShowRuleForm(false); setEditingRule(null); } }}
-        title={editingRule ? 'Modifier la règle' : 'Nouvelle règle de remédiation'}
-        description="Les règles se déclenchent lorsque le score CRM passe sous le seuil."
-        size="lg"
+        title={editingRule ? t('driverProfile.editRule') : t('driverProfile.newRuleDialog')}
+        description={t('driverProfile.ruleDialogDesc')}
+        size="xl"
       >
         {(showRuleForm || editingRule) && (
           <RemediationRuleForm
@@ -1044,7 +1044,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 setEditingRule(null);
                 refetchRemediations();
               } catch (e) {
-                setActionError(e instanceof Error ? e.message : 'Erreur inconnue');
+                setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
               } finally { setBusy(false); }
             }}
           />
@@ -1055,8 +1055,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       <Dialog
         open={showRestConfigForm}
         onOpenChange={o => { if (!o) setShowRestConfigForm(false); }}
-        title="Configuration des temps de repos"
-        description="Seuils réglementaires appliqués à l'ensemble des chauffeurs du tenant."
+        title={t('driverProfile.restConfigDialogTitle')}
+        description={t('driverProfile.restConfigDialogDesc')}
         size="lg"
       >
         {showRestConfigForm && restConfig && (
@@ -1072,7 +1072,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 setShowRestConfigForm(false);
                 refetchRest();
               } catch (e) {
-                setActionError(e instanceof Error ? e.message : 'Erreur inconnue');
+                setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
               } finally { setBusy(false); }
             }}
           />
@@ -1084,15 +1084,15 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         <section id="tabpanel-driver-remediation" role="tabpanel" aria-labelledby="tab-driver-remediation">
           <Card>
             <CardHeader
-              heading="Règles de remédiation"
-              description="Seuils CRM → actions configurées pour ce tenant"
+              heading={t('driverProfile.remediationRules')}
+              description={t('driverProfile.remediationRulesDesc')}
               action={
                 <Button
                   size="sm"
                   onClick={() => { setShowRuleForm(true); setActionError(null); }}
-                  aria-label="Créer une règle de remédiation"
+                  aria-label={t('driverProfile.newRule')}
                 >
-                  <Plus className="w-4 h-4 mr-1" aria-hidden /> Règle
+                  <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('driverProfile.rule')}
                 </Button>
               }
             />
@@ -1103,7 +1103,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 </div>
               ) : !remediations || remediations.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
-                  Aucune règle de remédiation configurée
+                  {t('driverProfile.noRemediationRule')}
                 </p>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
@@ -1114,19 +1114,19 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           {r.name ?? r.actionType}
                         </p>
                         <p className="text-xs text-slate-500 font-mono">
-                          {r.actionType} · Seuil CRM: {r.scoreBelowThreshold}
+                          {r.actionType} · {t('driverProfile.crmScore')}: {r.scoreBelowThreshold}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant={r.isActive ? 'success' : 'default'} size="sm">
-                          {r.isActive ? 'Actif' : 'Inactif'}
+                          {r.isActive ? t('driverProfile.active') : t('driverProfile.inactive')}
                         </Badge>
                         <button
                           type="button"
                           onClick={() => { setEditingRule(r); setActionError(null); }}
                           className="p-1.5 rounded text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                          aria-label={`Modifier la règle ${r.name ?? r.actionType}`}
-                          title="Modifier"
+                          aria-label={`${t('common.edit')} — ${r.name ?? r.actionType}`}
+                          title={t('common.edit')}
                         >
                           <Pencil className="w-4 h-4" aria-hidden />
                         </button>
@@ -1134,8 +1134,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                           type="button"
                           onClick={() => handleDeleteRule(r.id)}
                           className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          aria-label={`Désactiver la règle ${r.name ?? r.actionType}`}
-                          title="Désactiver"
+                          aria-label={`${t('driverProfile.deactivate')} — ${r.name ?? r.actionType}`}
+                          title={t('driverProfile.deactivate')}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden />
                         </button>
@@ -1152,8 +1152,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       <Dialog
         open={!!selectedDriverId}
         onOpenChange={o => { if (!o) setSelectedDriverId(null); }}
-        title="Fiche chauffeur"
-        description="Synthèse des alertes en cours et pièces jointes."
+        title={t('driverProfile.driverProfile')}
+        description={t('driverProfile.driverProfileDesc')}
         size="lg"
       >
         {selectedDriverId && (() => {

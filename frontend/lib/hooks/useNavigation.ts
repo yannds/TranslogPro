@@ -29,11 +29,11 @@ import type {
   ResolvedNavLeaf,
 } from '../navigation/nav.types';
 
-type TFn = (map: Record<string, string | undefined>) => string;
+type TFn = (keyOrMap: string | Record<string, string | undefined>) => string;
 
-/** Résout un label qui peut être string OU TranslationMap */
+/** Résout un label : string key → t('nav.xxx'), TranslationMap → t(map) */
 function resolveLabel(label: string | TranslationMap, t: TFn): string {
-  return typeof label === 'string' ? label : t(label);
+  return t(label);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
