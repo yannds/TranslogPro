@@ -186,7 +186,7 @@ function exportToPdf<T>(columns: Column<T>[], data: T[], title: string) {
     </style></head><body>
     <h2>${escHtml(title)}</h2>
     <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-    <br><button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+    <br><button onclick="window.print()">Print / Save as PDF</button>
     <script>setTimeout(function(){ window.print(); }, 400);</script>
     </body></html>`;
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -229,8 +229,8 @@ function DataTableMaster<T extends { id: string }>({
   keyField = 'id',
   defaultSort,
   defaultPageSize = 25,
-  searchPlaceholder = 'Rechercher…',
-  emptyMessage = 'Aucun résultat',
+  searchPlaceholder,
+  emptyMessage,
   exportFormats,
   exportFilename,
   onExportCsv,
@@ -238,6 +238,10 @@ function DataTableMaster<T extends { id: string }>({
   className = '',
   stickyHeader = false,
 }: DataTableMasterProps<T>) {
+  const { t } = useI18n();
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t('dataTable.search');
+  const resolvedEmptyMessage = emptyMessage ?? t('dataTable.noResults');
+
   const [search,     setSearch]     = useState('');
   const [sortKey,    setSortKey]    = useState<string | null>(defaultSort?.key ?? null);
   const [sortDir,    setSortDir]    = useState<SortDir>(defaultSort?.dir ?? 'asc');
@@ -354,24 +358,24 @@ function DataTableMaster<T extends { id: string }>({
   const hasExport      = activeFormats.length > 0;
 
   return (
-    <div className={`dtm-root ${className}`} role="region" aria-label="Tableau de données">
+    <div className={`dtm-root ${className}`} role="region" aria-label={t('dataTable.regionLabel')}>
 
       {/* ── Barre d'outils ─────────────────────────────────────────────────── */}
       <div className="dtm-toolbar">
         <input
           type="search"
           className="dtm-search"
-          placeholder={searchPlaceholder}
+          placeholder={resolvedSearchPlaceholder}
           value={search}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          aria-label={searchPlaceholder}
+          aria-label={resolvedSearchPlaceholder}
         />
 
         <div className="dtm-toolbar-right">
           {/* Actions groupées — uniquement si > 1 élément sélectionné */}
           {showBulkPanel && (
-            <div className="dtm-bulk-actions" role="group" aria-label="Actions groupées">
-              <span className="dtm-sel-count">{selected.size} sélectionné(s)</span>
+            <div className="dtm-bulk-actions" role="group" aria-label={t('dataTable.bulkActions')}>
+              <span className="dtm-sel-count">{selected.size} {t('dataTable.selected')}</span>
               {bulkActions!.map((action, i) => (
                 <button
                   key={i}
@@ -383,7 +387,7 @@ function DataTableMaster<T extends { id: string }>({
                 </button>
               ))}
               <button className="dtm-btn dtm-btn-ghost" onClick={clearSelected}>
-                Désélectionner
+                {t('dataTable.deselect')}
               </button>
             </div>
           )}
@@ -398,10 +402,10 @@ function DataTableMaster<T extends { id: string }>({
                 aria-expanded={exportOpen}
                 disabled={sorted.length === 0}
               >
-                ↓ Exporter {activeFormats.length > 1 ? '▾' : `(${FORMAT_LABELS[activeFormats[0]]})`}
+                ↓ {t('dataTable.export')} {activeFormats.length > 1 ? '▾' : `(${FORMAT_LABELS[activeFormats[0]]})`}
               </button>
               {exportOpen && (
-                <ul className="dtm-export-menu" role="listbox" aria-label="Format d'export">
+                <ul className="dtm-export-menu" role="listbox" aria-label={t('dataTable.exportFormat')}>
                   {activeFormats.map(fmt => (
                     <li key={fmt}>
                       <button
@@ -426,10 +430,10 @@ function DataTableMaster<T extends { id: string }>({
               setPageSize(Number(e.target.value));
               setPage(1);
             }}
-            aria-label="Lignes par page"
+            aria-label={t('dataTable.rowsPerPage')}
           >
             {[10, 25, 50, 100].map(n => (
-              <option key={n} value={n}>{n} / page</option>
+              <option key={n} value={n}>{n} / {t('dataTable.page')}</option>
             ))}
           </select>
         </div>
@@ -446,13 +450,13 @@ function DataTableMaster<T extends { id: string }>({
           <thead>
             <tr>
               {hasBulkAct && (
-                <th className="dtm-th dtm-th-check" aria-label="Tout sélectionner">
+                <th className="dtm-th dtm-th-check" aria-label={t('dataTable.selectAll')}>
                   <input
                     type="checkbox"
                     checked={allPageSel}
                     ref={el => { if (el) el.indeterminate = someSel && !allPageSel; }}
                     onChange={toggleAll}
-                    aria-label={allPageSel ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    aria-label={allPageSel ? t('dataTable.deselectAll') : t('dataTable.selectAll')}
                   />
                 </th>
               )}
@@ -482,7 +486,7 @@ function DataTableMaster<T extends { id: string }>({
                 </th>
               ))}
               {hasRowActions && (
-                <th className="dtm-th dtm-th-actions" aria-label="Actions">Actions</th>
+                <th className="dtm-th dtm-th-actions" aria-label={t('dataTable.actions')}>{t('dataTable.actions')}</th>
               )}
             </tr>
           </thead>
@@ -503,9 +507,9 @@ function DataTableMaster<T extends { id: string }>({
                 <td
                   colSpan={columns.length + (hasRowActions ? 1 : 0) + (hasBulkAct ? 1 : 0)}
                   className="dtm-empty"
-                  aria-label={emptyMessage}
+                  aria-label={resolvedEmptyMessage}
                 >
-                  {emptyMessage}
+                  {resolvedEmptyMessage}
                 </td>
               </tr>
             ) : (
@@ -537,7 +541,7 @@ function DataTableMaster<T extends { id: string }>({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleRow(rowKey)}
-                          aria-label={`Sélectionner la ligne ${rowIdx + 1}`}
+                          aria-label={`${t('dataTable.selectRow')} ${rowIdx + 1}`}
                         />
                       </td>
                     )}
@@ -589,8 +593,8 @@ function DataTableMaster<T extends { id: string }>({
       <div className="dtm-footer" aria-label="Pagination">
         <span className="dtm-summary">
           {loading ? '…'
-           : sorted.length === 0 ? '0 résultat'
-           : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sorted.length)} sur ${sorted.length}`}
+           : sorted.length === 0 ? t('dataTable.zeroResults')
+           : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sorted.length)} ${t('dataTable.of')} ${sorted.length}`}
         </span>
 
         <div className="dtm-pagination" role="navigation" aria-label="Pages">
@@ -598,30 +602,30 @@ function DataTableMaster<T extends { id: string }>({
             className="dtm-page-btn"
             onClick={() => setPage(1)}
             disabled={safePage <= 1}
-            aria-label="Première page"
+            aria-label={t('dataTable.firstPage')}
           >«</button>
           <button
             className="dtm-page-btn"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={safePage <= 1}
-            aria-label="Page précédente"
+            aria-label={t('dataTable.previousPage')}
           >‹</button>
 
           <span className="dtm-page-info" aria-live="polite">
-            Page {safePage} / {totalPages}
+            {t('dataTable.page')} {safePage} / {totalPages}
           </span>
 
           <button
             className="dtm-page-btn"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={safePage >= totalPages}
-            aria-label="Page suivante"
+            aria-label={t('dataTable.nextPage')}
           >›</button>
           <button
             className="dtm-page-btn"
             onClick={() => setPage(totalPages)}
             disabled={safePage >= totalPages}
-            aria-label="Dernière page"
+            aria-label={t('dataTable.lastPage')}
           >»</button>
         </div>
       </div>

@@ -67,6 +67,7 @@ const DOC_TYPE_CATEGORIES: Record<string, VariableCategory[]> = {
 
 export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const p = theme === 'dark' ? darkPalette : lightPalette;
   const isDark = theme === 'dark';
   const [copied, setCopied] = useState<string | null>(null);
@@ -128,11 +129,11 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
         }}
       >
         <div style={{ fontSize: '13px', fontWeight: 700, color: p.textHeading, marginBottom: '8px' }}>
-          Variables disponibles
+          {t('variablesPanel.title')}
         </div>
         <input
           type="search"
-          placeholder="Rechercher une variable…"
+          placeholder={t('variablesPanel.searchPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
@@ -148,7 +149,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
           }}
         />
         <div style={{ fontSize: '10px', color: p.textFaint, marginTop: '5px' }}>
-          Clic → copie <code>{'{{variable}}'}</code> dans le presse-papier
+          {t('variablesPanel.clickToCopy')} <code>{'{{variable}}'}</code>
         </div>
       </div>
 
@@ -178,7 +179,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
               <button
                 key={v.key}
                 onClick={() => handleCopy(v)}
-                title={`Copier ${v.placeholder}\nEx: ${v.example}`}
+                title={`${t('variablesPanel.copy')} ${v.placeholder}\n${t('variablesPanel.example')} ${v.example}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -209,7 +210,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
                 </div>
                 {copied === v.key && (
                   <span style={{ fontSize: '10px', color: p.textOk, fontWeight: 700 }}>
-                    ✓ Copié
+                    {t('variablesPanel.copied')}
                   </span>
                 )}
               </button>
@@ -219,7 +220,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
 
         {Object.keys(grouped).length === 0 && (
           <div style={{ fontSize: '12px', color: p.textFaint, textAlign: 'center', marginTop: '20px' }}>
-            Aucune variable ne correspond à "{search}"
+            {t('variablesPanel.noMatch')} "{search}"
           </div>
         )}
       </div>

@@ -6,16 +6,18 @@
  */
 import { FileText } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
+import { useI18n } from '../../lib/i18n/useI18n';
 import { TemplateLibraryPage } from '../document/template-designer/TemplateLibraryPage';
 
 export function PageTemplateStudio() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const tenantId = user?.tenantId;
 
   if (!tenantId) {
     return (
       <div className="p-8 text-center t-text-2 text-sm">
-        Session non initialisée — reconnectez-vous pour accéder au studio de documents.
+        {t('templateStudio.noSession')}
       </div>
     );
   }
@@ -28,9 +30,9 @@ export function PageTemplateStudio() {
           <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold t-text">Studio de documents</h1>
+          <h1 className="text-2xl font-bold t-text">{t('templateStudio.title')}</h1>
           <p className="t-text-2 text-sm mt-0.5">
-            Modèles de factures, billets, talons, manifestes et étiquettes — dupliquez et personnalisez.
+            {t('templateStudio.subtitle')}
           </p>
         </div>
       </header>

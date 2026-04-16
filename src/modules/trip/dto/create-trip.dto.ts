@@ -1,13 +1,16 @@
-import { IsString, IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsDateString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateTripDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   routeId: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   busId: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   driverId: string;
 
   @IsDateString()
@@ -17,7 +20,7 @@ export class CreateTripDto {
   @IsOptional()
   estimatedArrivalTime?: string;
 
-  @IsUUID()
+  @IsString()
   @IsOptional()
   agencyId?: string;
 }

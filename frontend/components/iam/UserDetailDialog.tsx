@@ -300,7 +300,7 @@ export function UserDetailDialog({
                                 {ua.browser} · {ua.os}
                               </p>
                               <p className="text-slate-500">
-                                {s.ipAddress ?? '—'} · depuis le {formatDateTime(s.createdAt)}
+                                {s.ipAddress ?? '—'} · {t('userDetail.since')} {formatDateTime(s.createdAt)}
                               </p>
                             </div>
                             <Badge variant="success">{t('userDetail.active')}</Badge>

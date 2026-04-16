@@ -1926,7 +1926,9 @@ const fr: Record<string, Record<string, string>> = {
     "serverError": "Erreur serveur",
     "serverRetry": "Réessayez dans un instant.",
     "networkError": "Impossible de contacter le serveur. Vérifiez votre connexion.",
-    "copyright": "TranslogPro \\u00a9 2026 \\u2014 Tous droits réservés"
+    "copyright": "TranslogPro \\u00a9 2026 \\u2014 Tous droits réservés",
+    "sessionCheck": "Vérification de la session…",
+    "loading": "Chargement…"
   },
   "stationAgent": {
     "tabSale": "Vente",
@@ -2276,6 +2278,75 @@ const fr: Record<string, Record<string, string>> = {
     "cpEauxForets": "Eaux & Forêts",
     "cpFrontiere": "Frontière",
     "cpAutre": "Autre"
+  },
+  "formBuilder": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "fixErrors": "Veuillez corriger les erreurs ci-dessus."
+  },
+  "formField": {
+    "selectPlaceholder": "— Sélectionner —"
+  },
+  "docPreview": {
+    "generatedAt": "Généré le",
+    "by": "Par",
+    "print": "Imprimer",
+    "download": "Télécharger",
+    "reduce": "Réduire",
+    "fullscreen": "Plein écran",
+    "closeFullscreen": "Fermer le plein écran",
+    "loading": "Chargement de l'aperçu…",
+    "preview": "Aperçu",
+    "previewOf": "Aperçu de",
+    "noPreview": "L'aperçu n'est pas disponible pour ce format. Téléchargez le fichier."
+  },
+  "aiRoutes": {
+    "title": "Recommandations IA — Lignes",
+    "margin": "marge",
+    "score": "score IA"
+  },
+  "safety": {
+    "title": "Sécurité & Incidents",
+    "activeAlert": "Alerte active",
+    "ago18min": "Il y a 18 min",
+    "alertDesc1": "Freinage d'urgence détecté par le boîtier GPS. Chauffeur contacté, aucun blessé signalé. Rapport automatique en cours.",
+    "report": "Signalement",
+    "ago1h42": "Il y a 1h42",
+    "reportDesc1": "Passager signale comportement agressif d'un autre voyageur. Agent de gare prévenu, situation désamorcée."
+  },
+  "screensDemo": {
+    "toolbarTitle": "TranslogPro — Démonstration interfaces",
+    "close": "Fermer",
+    "screens": "Écrans",
+    "portail": "Portail Client",
+    "portailDesc": "Site public de réservation",
+    "departureBoard": "Tableau Départs",
+    "departureBoardDesc": "Écran TV gare routière",
+    "busScreen": "Écran Bus",
+    "busScreenDesc": "Affichage à bord du véhicule",
+    "quaiScreen": "Écran Quai",
+    "quaiScreenDesc": "Panneau informatif au quai",
+    "stationAgent": "Agent de Gare",
+    "stationAgentDesc": "App vente & check-in (tablette)",
+    "quaiAgent": "Agent de Quai",
+    "quaiAgentDesc": "App manifeste & scanner (mobile)",
+    "driver": "Espace Chauffeur",
+    "driverDesc": "App chauffeur avec SOS (mobile)",
+    "admin": "Admin Panel",
+    "adminDesc": "Dashboard administrateur",
+    "deviceWeb": "Web (responsive)",
+    "deviceTv": "TV / Kiosque",
+    "deviceOnboard": "Écran embarqué",
+    "deviceLed": "TV / LED Quai",
+    "deviceTablet": "Tablette",
+    "deviceMobileTablet": "Mobile / Tablette",
+    "deviceMobile": "Mobile",
+    "deviceDesktop": "Desktop"
+  },
+  "templateStudio": {
+    "title": "Studio de documents",
+    "subtitle": "Modèles de factures, billets, talons, manifestes et étiquettes — dupliquez et personnalisez.",
+    "noSession": "Session non initialisée — reconnectez-vous pour accéder au studio de documents."
   }
 };
 

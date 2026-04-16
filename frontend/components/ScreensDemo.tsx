@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { cn } from '../lib/utils';
+import { useI18n } from '../lib/i18n/useI18n';
 
 import { PortailVoyageur }  from './portail-voyageur';
 import { DepartureBoard, BusScreen, QuaiScreen } from './display';
@@ -24,20 +25,23 @@ type ScreenId =
   | 'driver'
   | 'admin';
 
-const SCREENS: { id: ScreenId; label: string; icon: string; desc: string; device: string }[] = [
-  { id: 'portail',        label: 'Portail Client',      icon: '🌐', desc: 'Site public de réservation',         device: 'Web (responsive)' },
-  { id: 'departure-board',label: 'Tableau Départs',     icon: '📺', desc: 'Écran TV gare routière',             device: 'TV / Kiosque' },
-  { id: 'bus-screen',     label: 'Écran Bus',           icon: '🚌', desc: 'Affichage à bord du véhicule',       device: 'Écran embarqué' },
-  { id: 'quai-screen',    label: 'Écran Quai',          icon: '🚏', desc: 'Panneau informatif au quai',         device: 'TV / LED Quai' },
-  { id: 'station-agent',  label: 'Agent de Gare',       icon: '🎫', desc: 'App vente & check-in (tablette)',    device: 'Tablette' },
-  { id: 'quai-agent',     label: 'Agent de Quai',       icon: '📋', desc: 'App manifeste & scanner (mobile)',   device: 'Mobile / Tablette' },
-  { id: 'driver',         label: 'Espace Chauffeur',    icon: '🧑‍✈️', desc: 'App chauffeur avec SOS (mobile)', device: 'Mobile' },
-  { id: 'admin',          label: 'Admin Panel',         icon: '⚙️', desc: 'Dashboard administrateur',          device: 'Desktop' },
-];
+/* Labels/desc are i18n keys resolved at render time — see screensDemo namespace */
 
 export function ScreensDemo() {
+  const { t } = useI18n();
   const [active, setActive] = useState<ScreenId>('portail');
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const SCREENS: { id: ScreenId; label: string; icon: string; desc: string; device: string }[] = [
+    { id: 'portail',        label: t('screensDemo.portail'),        icon: '🌐', desc: t('screensDemo.portailDesc'),        device: t('screensDemo.deviceWeb') },
+    { id: 'departure-board',label: t('screensDemo.departureBoard'), icon: '📺', desc: t('screensDemo.departureBoardDesc'), device: t('screensDemo.deviceTv') },
+    { id: 'bus-screen',     label: t('screensDemo.busScreen'),      icon: '🚌', desc: t('screensDemo.busScreenDesc'),      device: t('screensDemo.deviceOnboard') },
+    { id: 'quai-screen',    label: t('screensDemo.quaiScreen'),     icon: '🚏', desc: t('screensDemo.quaiScreenDesc'),     device: t('screensDemo.deviceLed') },
+    { id: 'station-agent',  label: t('screensDemo.stationAgent'),   icon: '🎫', desc: t('screensDemo.stationAgentDesc'),   device: t('screensDemo.deviceTablet') },
+    { id: 'quai-agent',     label: t('screensDemo.quaiAgent'),      icon: '📋', desc: t('screensDemo.quaiAgentDesc'),      device: t('screensDemo.deviceMobileTablet') },
+    { id: 'driver',         label: t('screensDemo.driver'),         icon: '🧑‍✈️', desc: t('screensDemo.driverDesc'),      device: t('screensDemo.deviceMobile') },
+    { id: 'admin',          label: t('screensDemo.admin'),          icon: '⚙️', desc: t('screensDemo.adminDesc'),          device: t('screensDemo.deviceDesktop') },
+  ];
 
   const current = SCREENS.find(s => s.id === active)!;
 
@@ -54,14 +58,14 @@ export function ScreensDemo() {
           </div>
           <div className="flex-1 text-center">
             <span className="text-xs text-slate-500 font-medium">
-              TranslogPro — Démonstration interfaces
+              {t('screensDemo.toolbarTitle')}
             </span>
           </div>
           <button
             onClick={() => setMenuOpen(v => !v)}
             className="text-xs text-slate-400 hover:text-teal-400 transition-colors lg:hidden"
           >
-            {menuOpen ? '✕ Fermer' : '≡ Écrans'}
+            {menuOpen ? `✕ ${t('screensDemo.close')}` : `≡ ${t('screensDemo.screens')}`}
           </button>
         </div>
 

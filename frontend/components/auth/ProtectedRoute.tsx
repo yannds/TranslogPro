@@ -19,17 +19,19 @@ import { useI18n } from '../../lib/i18n/useI18n';
 // ─── Spinner de chargement ────────────────────────────────────────────────────
 
 function LoadingScreen() {
+  const { t } = useI18n();
+
   return (
     <div
       role="status"
-      aria-label="Vérification de la session…"
+      aria-label={t('auth.sessionCheck')}
       aria-live="polite"
       className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-950"
     >
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-600 animate-pulse">
         <Bus className="w-8 h-8 text-white" aria-hidden />
       </div>
-      <p className="text-slate-400 text-sm">Chargement…</p>
+      <p className="text-slate-400 text-sm">{t('auth.loading')}</p>
     </div>
   );
 }

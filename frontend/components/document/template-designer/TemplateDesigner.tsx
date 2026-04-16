@@ -95,6 +95,7 @@ export function TemplateDesigner({
   apiBase = '/api',
 }: TemplateDesignerProps) {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const p = theme === 'dark' ? darkPalette : lightPalette;
   const containerRef  = useRef<HTMLDivElement>(null);
   const designerRef   = useRef<Designer | null>(null);
@@ -203,7 +204,7 @@ export function TemplateDesigner({
       setTimeout(() => setSaved(false), 3000);
       onSaved?.(saved.id);
     } catch (e: any) {
-      setError(`Erreur de sauvegarde : ${e.message}`);
+      setError(`${t('templateDesigner.saveError')} ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -214,7 +215,7 @@ export function TemplateDesigner({
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', background: p.surface }}>
-        <span style={{ color: p.textMuted, fontSize: '14px' }}>Chargement du template…</span>
+        <span style={{ color: p.textMuted, fontSize: '14px' }}>{t('templateDesigner.loading')}</span>
       </div>
     );
   }
@@ -222,7 +223,7 @@ export function TemplateDesigner({
   if (error && !template) {
     return (
       <div style={{ padding: '24px', color: p.textDanger, fontSize: '14px', background: p.surface }}>
-        Impossible de charger le template : {error}
+        {t('templateDesigner.loadError')} {error}
       </div>
     );
   }
@@ -245,7 +246,7 @@ export function TemplateDesigner({
         {/* Titre */}
         <div style={{ flex: 1 }}>
           <span style={{ fontSize: '14px', fontWeight: 700, color: p.textHeading }}>
-            Éditeur de template
+            {t('templateDesigner.editorTitle')}
           </span>
           <span style={{ fontSize: '12px', color: p.textMuted, marginLeft: '8px' }}>
             {templateName}
@@ -260,7 +261,7 @@ export function TemplateDesigner({
         )}
         {saved && (
           <span style={{ fontSize: '12px', color: p.textOk, background: p.surfaceOk, padding: '3px 8px', borderRadius: '4px' }}>
-            ✓ Sauvegardé
+            {t('templateDesigner.saved')}
           </span>
         )}
 
@@ -278,7 +279,7 @@ export function TemplateDesigner({
               color: p.textBody,
             }}
           >
-            Fermer
+            {t('templateDesigner.close')}
           </button>
         )}
 
@@ -296,7 +297,7 @@ export function TemplateDesigner({
             fontWeight: 600,
           }}
         >
-          {saving ? 'Enregistrement…' : 'Enregistrer le template'}
+          {saving ? t('templateDesigner.saving') : t('templateDesigner.saveTemplate')}
         </button>
       </div>
 

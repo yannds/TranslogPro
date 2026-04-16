@@ -73,11 +73,11 @@ export function PageTripPlanning() {
     tenantId ? `${base}/fleet/buses` : null,
     [tenantId],
   );
-  const { data: drivers } = useFetch<StaffLite[]>(
+  const { data: drivers, loading: loadingDrivers } = useFetch<StaffLite[]>(
     showCreate ? `${base}/staff?role=DRIVER` : null,
     [tenantId, showCreate],
   );
-  const { data: routesData } = useFetch<RouteLite[]>(
+  const { data: routesData, loading: loadingRoutes } = useFetch<RouteLite[]>(
     showCreate ? `${base}/routes` : null,
     [tenantId, showCreate],
   );
@@ -344,7 +344,11 @@ export function PageTripPlanning() {
         description={t('tripPlanning.dialogNewDesc')}
         size="lg"
       >
-        {showCreate && (
+        {showCreate && (loadingDrivers || loadingRoutes ? (
+          <div className="flex items-center justify-center py-8">
+            <Skeleton className="h-10 w-48" />
+          </div>
+        ) : (
           <TripCreateForm
             routes={routes}
             buses={busesForForm}
@@ -355,7 +359,7 @@ export function PageTripPlanning() {
             busy={busy}
             error={actionError}
           />
-        )}
+        ))}
       </Dialog>
     </main>
   );

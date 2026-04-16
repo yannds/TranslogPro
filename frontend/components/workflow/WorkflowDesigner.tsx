@@ -94,6 +94,7 @@ export function WorkflowDesigner({
   initialGraph,
   onSaved,
 }: WorkflowDesignerProps) {
+  const { t } = useI18n();
   const [graph,        setGraph]        = useState<WorkflowGraph | null>(initialGraph ?? null);
   const [metadata,     setMetadata]     = useState<WorkflowMetadata | null>(null);
   const [nodes,        setNodes,  onNodesChange]  = useNodesState<RFNodeData>([]);
@@ -215,7 +216,7 @@ export function WorkflowDesigner({
       setGraph(saved);
       syncGraphToRF(saved);
       setIsDirty(false);
-      setSaveMsg('Graphe sauvegardé avec succès');
+      setSaveMsg(t('workflowDesigner.saveSuccess'));
       onSaved?.(saved);
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (e) {
@@ -235,7 +236,7 @@ export function WorkflowDesigner({
     setGraph(installed);
     syncGraphToRF(installed);
     setIsDirty(false);
-    setSaveMsg(`Blueprint installé — graphe rechargé`);
+    setSaveMsg(t('workflowDesigner.blueprintInstalled'));
     setTimeout(() => setSaveMsg(null), 3000);
   }, [tenantId, syncGraphToRF]);
 
@@ -306,7 +307,7 @@ export function WorkflowDesigner({
     return (
       <div className="flex h-full items-center justify-center text-slate-400 text-sm">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 mr-2" />
-        Chargement du graphe…
+        {t('workflowDesigner.loadingGraph')}
       </div>
     );
   }
@@ -323,23 +324,23 @@ export function WorkflowDesigner({
             disabled={saving || !isDirty}
             className="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50 shadow transition-colors"
           >
-            {saving ? 'Sauvegarde…' : isDirty ? '● Sauvegarder' : '✓ Sauvegardé'}
+            {saving ? t('workflowDesigner.saving') : isDirty ? t('workflowDesigner.saveDirty') : t('workflowDesigner.saved')}
           </button>
 
           <button
             onClick={handleAddState}
             className="rounded-md bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 shadow transition-colors"
-            title="Ajouter un nouvel état au canvas"
+            title={t('workflowDesigner.addStateTitle')}
           >
-            + État
+            {t('workflowDesigner.addState')}
           </button>
 
           <button
             onClick={handleAutoLayout}
             className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-medium px-3 py-1.5 shadow transition-colors"
-            title="Réorganiser automatiquement le graphe (BFS gauche → droite)"
+            title={t('workflowDesigner.autoLayoutTitle')}
           >
-            ⇆ Réorganiser
+            {t('workflowDesigner.autoLayout')}
           </button>
 
           <button
@@ -347,7 +348,7 @@ export function WorkflowDesigner({
             disabled={!isDirty}
             className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium px-3 py-1.5 disabled:opacity-50 shadow transition-colors"
           >
-            ↺ Annuler
+            {t('workflowDesigner.undo')}
           </button>
 
           <button
@@ -359,7 +360,7 @@ export function WorkflowDesigner({
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300',
             )}
           >
-            ▶ Simulation
+            {t('workflowDesigner.simulation')}
           </button>
 
           <button
@@ -371,7 +372,7 @@ export function WorkflowDesigner({
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300',
             )}
           >
-            📋 Blueprints
+            {t('workflowDesigner.blueprints')}
           </button>
 
           {saveMsg && (
@@ -417,7 +418,7 @@ export function WorkflowDesigner({
           <div className="absolute bottom-4 right-4 z-20 w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 text-xs space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-slate-700 dark:text-slate-200">
-                {editPanel.type === 'node' ? '◉ État' : '→ Transition'}
+                {editPanel.type === 'node' ? t('workflowDesigner.stateLabel') : t('workflowDesigner.transitionLabel')}
               </span>
               <button onClick={() => setEditPanel(null)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
@@ -557,10 +558,12 @@ function EdgePropsEditor({
 
   const applyPermission = (p: string) => onChange({ ...data, permission: p });
 
+  const { t } = useI18n();
+
   const sourceLabel = (src: 'graph' | 'convention' | 'system'): string =>
-    src === 'graph'     ? 'déjà utilisée'
-    : src === 'system'  ? 'blueprint'
-    : 'convention';
+    src === 'graph'     ? t('workflowDesigner.srcGraph')
+    : src === 'system'  ? t('workflowDesigner.srcSystem')
+    : t('workflowDesigner.srcConvention');
 
   const actionListId    = 'wf-actions-list';
   const permListId      = 'wf-perms-list';
@@ -569,7 +572,7 @@ function EdgePropsEditor({
     <div className="space-y-3">
       {/* Action */}
       <div>
-        <label className="block text-[10px] text-slate-500 mb-0.5">Action / Verbe</label>
+        <label className="block text-[10px] text-slate-500 mb-0.5">{t('workflowDesigner.actionVerb')}</label>
         <input
           list={actionListId}
           type="text"
@@ -587,7 +590,7 @@ function EdgePropsEditor({
 
       {/* Permission + suggestions contextuelles */}
       <div>
-        <label className="block text-[10px] text-slate-500 mb-0.5">Permission requise</label>
+        <label className="block text-[10px] text-slate-500 mb-0.5">{t('workflowDesigner.permissionRequired')}</label>
         <input
           list={permListId}
           type="text"
@@ -605,7 +608,7 @@ function EdgePropsEditor({
         {/* Chips de suggestions — clic = remplissage immédiat */}
         {suggestions && suggestions.suggestedPermissions.length > 0 && (
           <div className="mt-1.5 space-y-1">
-            <div className="text-[9px] text-slate-400">Suggestions pour "{data.action}" :</div>
+            <div className="text-[9px] text-slate-400">{t('workflowDesigner.suggestionsFor')} "{data.action}" :</div>
             <div className="flex flex-wrap gap-1">
               {suggestions.suggestedPermissions.slice(0, 6).map(s => {
                 const selected = s.value === data.permission;
@@ -614,7 +617,7 @@ function EdgePropsEditor({
                     key={s.value}
                     type="button"
                     onClick={() => applyPermission(s.value)}
-                    title={`${sourceLabel(s.source)}${s.usedBy ? ` · utilisée ${s.usedBy}×` : ''}`}
+                    title={`${sourceLabel(s.source)}${s.usedBy ? ` · ${t('workflowDesigner.usedTimes')} ${s.usedBy}×` : ''}`}
                     className={cn(
                       'rounded-full text-[9px] font-mono px-1.5 py-0.5 border transition-colors',
                       selected

@@ -172,7 +172,7 @@ export function PageParcelNew() {
                   <input type="text" value={f.address}
                     onChange={e => patch({ address: e.target.value })}
                     className={inp} disabled={busy}
-                    placeholder="Quartier, rue, point de repère…" />
+                    placeholder={t('parcelNew.addressPlaceholder')} />
                 </div>
               </fieldset>
 
@@ -182,12 +182,12 @@ export function PageParcelNew() {
                 </legend>
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Gare de destination <span aria-hidden className="text-red-500">*</span>
+                    {t('parcelNew.destinationStation')} <span aria-hidden className="text-red-500">*</span>
                   </label>
                   <select required value={f.destinationId}
                     onChange={e => patch({ destinationId: e.target.value })}
                     className={inp} disabled={busy}>
-                    <option value="">— Sélectionner —</option>
+                    <option value="">{t('parcelNew.selectStation')}</option>
                     {(stations ?? []).map(s => (
                       <option key={s.id} value={s.id}>{s.name} — {s.city}</option>
                     ))}
@@ -196,7 +196,7 @@ export function PageParcelNew() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Poids (kg) <span aria-hidden className="text-red-500">*</span>
+                      {t('parcelNew.weight')} <span aria-hidden className="text-red-500">*</span>
                     </label>
                     <input type="number" step="0.01" min={0} required value={f.weightKg}
                       onChange={e => patch({ weightKg: e.target.value })}
@@ -204,18 +204,18 @@ export function PageParcelNew() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Valeur déclarée (XAF)
+                      {t('parcelNew.declaredValue')}
                     </label>
                     <input type="number" min={0} value={f.declaredValue}
                       onChange={e => patch({ declaredValue: e.target.value })}
-                      className={inp} disabled={busy} placeholder="Optionnel" />
+                      className={inp} disabled={busy} placeholder={t('parcelNew.optional')} />
                   </div>
                 </div>
               </fieldset>
 
               <FormFooter onCancel={() => setF(EMPTY_FORM)} busy={busy}
-                submitLabel="Enregistrer le colis" pendingLabel="Enregistrement…"
-                cancelLabel="Vider" />
+                submitLabel={t('parcelNew.registerParcel')} pendingLabel={t('parcelNew.registering')}
+                cancelLabel={t('parcelNew.clear')} />
             </form>
           </CardContent>
         </Card>

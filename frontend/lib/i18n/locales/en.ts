@@ -2045,7 +2045,9 @@ const en: Record<string, Record<string, string>> = {
     "serverError": "Server error",
     "serverRetry": "Please try again shortly.",
     "networkError": "Unable to reach the server. Check your connection.",
-    "copyright": "TranslogPro \\u00a9 2026 \\u2014 All rights reserved"
+    "copyright": "TranslogPro \\u00a9 2026 \\u2014 All rights reserved",
+    "sessionCheck": "Checking session…",
+    "loading": "Loading…"
   },
   "stationAgent": {
     "tabSale": "Sale",
@@ -2273,6 +2275,75 @@ const en: Record<string, Record<string, string>> = {
     "cpEauxForets": "Forestry",
     "cpFrontiere": "Border",
     "cpAutre": "Other"
+  },
+  "formBuilder": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "fixErrors": "Please fix the errors above."
+  },
+  "formField": {
+    "selectPlaceholder": "— Select —"
+  },
+  "docPreview": {
+    "generatedAt": "Generated on",
+    "by": "By",
+    "print": "Print",
+    "download": "Download",
+    "reduce": "Reduce",
+    "fullscreen": "Full screen",
+    "closeFullscreen": "Close full screen",
+    "loading": "Loading preview…",
+    "preview": "Preview",
+    "previewOf": "Preview of",
+    "noPreview": "Preview is not available for this format. Download the file."
+  },
+  "aiRoutes": {
+    "title": "AI Recommendations — Routes",
+    "margin": "margin",
+    "score": "AI score"
+  },
+  "safety": {
+    "title": "Safety & Incidents",
+    "activeAlert": "Active alert",
+    "ago18min": "18 min ago",
+    "alertDesc1": "Emergency braking detected by GPS unit. Driver contacted, no injuries reported. Automatic report in progress.",
+    "report": "Report",
+    "ago1h42": "1h42 ago",
+    "reportDesc1": "Passenger reports aggressive behavior from another traveler. Station agent notified, situation defused."
+  },
+  "screensDemo": {
+    "toolbarTitle": "TranslogPro — Interface Demo",
+    "close": "Close",
+    "screens": "Screens",
+    "portail": "Customer Portal",
+    "portailDesc": "Public booking website",
+    "departureBoard": "Departure Board",
+    "departureBoardDesc": "Bus station TV screen",
+    "busScreen": "Bus Screen",
+    "busScreenDesc": "On-board vehicle display",
+    "quaiScreen": "Platform Screen",
+    "quaiScreenDesc": "Platform information panel",
+    "stationAgent": "Station Agent",
+    "stationAgentDesc": "Sales & check-in app (tablet)",
+    "quaiAgent": "Platform Agent",
+    "quaiAgentDesc": "Manifest & scanner app (mobile)",
+    "driver": "Driver Space",
+    "driverDesc": "Driver app with SOS (mobile)",
+    "admin": "Admin Panel",
+    "adminDesc": "Administrator dashboard",
+    "deviceWeb": "Web (responsive)",
+    "deviceTv": "TV / Kiosk",
+    "deviceOnboard": "On-board screen",
+    "deviceLed": "TV / LED Platform",
+    "deviceTablet": "Tablet",
+    "deviceMobileTablet": "Mobile / Tablet",
+    "deviceMobile": "Mobile",
+    "deviceDesktop": "Desktop"
+  },
+  "templateStudio": {
+    "title": "Document Studio",
+    "subtitle": "Invoice, ticket, stub, manifest and label templates — duplicate and customize.",
+    "noSession": "Session not initialized — sign in again to access the document studio."
   }
 };
 
