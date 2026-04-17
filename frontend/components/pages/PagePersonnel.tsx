@@ -36,6 +36,7 @@ import { FormFooter }              from '../ui/FormFooter';
 import { inputClass as inp }       from '../ui/inputClass';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import { DocumentAttachments } from '../document/DocumentAttachments';
+import { DriverLicensePanel } from '../drivers/DriverLicensePanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -345,14 +346,23 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
           <p>{t('personnel.statusLabel')} : {staff.status}</p>
         </div>
 
-        {/* Pièces jointes (contrat, permis, certifications) */}
+        {/* Permis de conduire (source unique) */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+          <DriverLicensePanel
+            tenantId={tenantId}
+            staffId={staff.id}
+            staffLabel={staff.user?.name ?? staff.user?.email}
+          />
+        </div>
+
+        {/* Pièces jointes (contrat, certifications — hors permis) */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">{t('personnel.attachments')}</h3>
           <DocumentAttachments
             tenantId={tenantId}
             entityType="STAFF"
             entityId={staff.userId}
-            allowedKinds={['CONTRACT', 'ID_CARD', 'LICENSE', 'CERTIFICATE', 'PHOTO', 'OTHER']}
+            allowedKinds={['CONTRACT', 'ID_CARD', 'CERTIFICATE', 'PHOTO', 'OTHER']}
             onPreviewChange={onPreviewChange}
           />
         </div>
@@ -914,6 +924,7 @@ export function PagePersonnel() {
         {actionErr && <p className="text-sm text-red-600 dark:text-red-400">{actionErr}</p>}
         <div />
       </Dialog>
+
     </div>
   );
 }

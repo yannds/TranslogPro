@@ -37,6 +37,7 @@ interface PortalConfig {
   showFleet: boolean;
   showNews: boolean;
   showContact: boolean;
+  newsCmsEnabled: boolean;
   heroImageUrl?: string;
   heroOverlay: number;
   slogans: Record<string, string>;
@@ -84,6 +85,7 @@ export function PagePortalAdmin() {
   const [config, setConfig] = useState<Partial<PortalConfig>>({
     themeId: 'amber-luxury',
     showAbout: true, showFleet: true, showNews: true, showContact: true,
+    newsCmsEnabled: false,
     heroOverlay: 0.4, slogans: {}, socialLinks: {},
   });
   const [saving, setSaving] = useState(false);
@@ -110,16 +112,17 @@ export function PagePortalAdmin() {
     try {
       // Only send DTO-valid fields — strip id, tenantId, updatedAt etc.
       const payload = {
-        themeId:      config.themeId,
-        showAbout:    config.showAbout,
-        showFleet:    config.showFleet,
-        showNews:     config.showNews,
-        showContact:  config.showContact,
-        heroImageUrl: config.heroImageUrl || undefined,
-        heroOverlay:  config.heroOverlay,
-        slogans:      config.slogans,
-        socialLinks:  config.socialLinks,
-        ogImageUrl:   config.ogImageUrl || undefined,
+        themeId:        config.themeId,
+        showAbout:      config.showAbout,
+        showFleet:      config.showFleet,
+        showNews:       config.showNews,
+        showContact:    config.showContact,
+        newsCmsEnabled: config.newsCmsEnabled,
+        heroImageUrl:   config.heroImageUrl || undefined,
+        heroOverlay:    config.heroOverlay,
+        slogans:        config.slogans,
+        socialLinks:    config.socialLinks,
+        ogImageUrl:     config.ogImageUrl || undefined,
       };
       await apiPut(`/api/v1/tenants/${tenantId}/portal/config`, payload);
       setSaved(true);
@@ -319,6 +322,7 @@ export function PagePortalAdmin() {
               { key: 'showFleet' as const, label: t('portalAdmin.sectionFleet'), desc: t('portalAdmin.sectionFleetDesc') },
               { key: 'showNews' as const, label: t('portalAdmin.sectionNews'), desc: t('portalAdmin.sectionNewsDesc') },
               { key: 'showContact' as const, label: t('portalAdmin.sectionContact'), desc: t('portalAdmin.sectionContactDesc') },
+              { key: 'newsCmsEnabled' as const, label: t('cms.newsCmsToggle'), desc: t('cms.newsCmsToggleDesc') },
             ]).map(s => (
               <label key={s.key} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
                 <div>

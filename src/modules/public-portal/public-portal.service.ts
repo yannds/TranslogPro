@@ -5,12 +5,15 @@
  * Aucune donnée sensible n'est exposée (pas d'IDs internes, pas de
  * données financières, pas de données personnelles d'autres utilisateurs).
  */
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Inject, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { PrismaService }   from '../../infrastructure/database/prisma.service';
 import { WhiteLabelService } from '../white-label/white-label.service';
 import { QrService }        from '../../core/security/qr/qr.service';
 import { DocumentsService } from '../documents/documents.service';
+import { CancellationPolicyService } from '../sav/cancellation-policy.service';
+import { RefundService }    from '../sav/refund.service';
+import { RefundReason }     from '../../common/constants/workflow-states';
 import { REDIS_CLIENT }     from '../../infrastructure/eventbus/redis-publisher.service';
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -28,6 +31,8 @@ export class PublicPortalService {
     private readonly brandService: WhiteLabelService,
     private readonly qrService: QrService,
     private readonly documentsService: DocumentsService,
+    private readonly policyService: CancellationPolicyService,
+    private readonly refundService: RefundService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
@@ -111,16 +116,17 @@ export class PublicPortalService {
       },
       brand: resolvedBrand,
       portal: portalConfig ? {
-        themeId:      portalConfig.themeId,
-        showAbout:    portalConfig.showAbout,
-        showFleet:    portalConfig.showFleet,
-        showNews:     portalConfig.showNews,
-        showContact:  portalConfig.showContact,
-        heroImageUrl: portalConfig.heroImageUrl,
-        heroOverlay:  portalConfig.heroOverlay,
-        slogans:      portalConfig.slogans,
-        socialLinks:  portalConfig.socialLinks,
-        ogImageUrl:   portalConfig.ogImageUrl,
+        themeId:        portalConfig.themeId,
+        showAbout:      portalConfig.showAbout,
+        showFleet:      portalConfig.showFleet,
+        showNews:       portalConfig.showNews,
+        showContact:    portalConfig.showContact,
+        newsCmsEnabled: portalConfig.newsCmsEnabled,
+        heroImageUrl:   portalConfig.heroImageUrl,
+        heroOverlay:    portalConfig.heroOverlay,
+        slogans:        portalConfig.slogans,
+        socialLinks:    portalConfig.socialLinks,
+        ogImageUrl:     portalConfig.ogImageUrl,
       } : null,
       paymentMethods,
     };
@@ -210,7 +216,7 @@ export class PublicPortalService {
         bus: {
           select: {
             model: true, type: true, capacity: true,
-            seatLayout: true, photos: true,
+            seatLayout: true, photos: true, amenities: true,
           },
         },
       },
@@ -218,10 +224,30 @@ export class PublicPortalService {
       take: 20,
     });
 
+    // Load seatSelectionFee from business config
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId: tenant.id },
+      select: { seatSelectionFee: true },
+    });
+    const seatSelectionFee = bizConfig?.seatSelectionFee ?? 0;
+
+    // Count occupied seats per trip
+    const tripIds = trips.map(t => t.id);
+    const ticketCounts = await this.prisma.ticket.groupBy({
+      by: ['tripId'],
+      where: { tenantId: tenant.id, tripId: { in: tripIds }, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+      _count: true,
+    });
+    const countByTrip = new Map(ticketCounts.map(c => [c.tripId, c._count]));
+
     // Map to safe public DTOs (no internal IDs exposed beyond trip ID)
     return trips.map(trip => {
-      const occupiedSeats = 0; // TODO: count from tickets
-      const availableSeats = (trip.bus?.capacity ?? 0) - occupiedSeats;
+      const seatLayout = trip.bus?.seatLayout as { rows: number; cols: number; aisleAfter?: number; disabled?: string[] } | null;
+      const totalSeats = seatLayout
+        ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
+        : (trip.bus?.capacity ?? 0);
+      const occupiedSeats = countByTrip.get(trip.id) ?? 0;
+      const availableSeats = totalSeats - occupiedSeats;
 
       // Build stops list from waypoints
       const stops = trip.route.waypoints.map(wp => ({
@@ -241,11 +267,60 @@ export class PublicPortalService {
         availableSeats: Math.max(0, availableSeats),
         busType:       trip.bus?.type ?? 'STANDARD',
         busModel:      trip.bus?.model ?? '',
-        amenities:     [], // TODO: derive from bus type
+        amenities:     trip.bus?.amenities ?? [],
         canBook:       availableSeats >= pax,
         stops,
+        seatingMode:      (trip as any).seatingMode ?? 'FREE',
+        seatLayout:       seatLayout ?? null,
+        seatSelectionFee,
+        isFullVip:        (trip.bus as any)?.isFullVip ?? false,
+        vipSeats:         (trip.bus as any)?.vipSeats ?? [],
       };
     });
+  }
+
+  // ─── Trip seats (public — real-time availability for seatmap) ─────────────
+
+  async getTripSeats(tenantSlug: string, tripId: string) {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: tripId, tenantId: tenant.id, status: { in: ['PLANNED', 'OPEN', 'BOARDING'] } },
+      include: { bus: { select: { capacity: true, seatLayout: true, isFullVip: true, vipSeats: true } } },
+    });
+    if (!trip) throw new NotFoundException('Trip not found');
+
+    const seatLayout = trip.bus?.seatLayout as { rows: number; cols: number; aisleAfter?: number; disabled?: string[] } | null;
+
+    const activeTickets = await this.prisma.ticket.findMany({
+      where: { tenantId: tenant.id, tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+      select: { seatNumber: true },
+    });
+
+    const occupiedSeats = activeTickets
+      .map(t => t.seatNumber)
+      .filter((s): s is string => s !== null && s !== '');
+
+    let totalSeats = trip.bus?.capacity ?? 0;
+    if (seatLayout) {
+      totalSeats = seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0);
+    }
+
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId: tenant.id },
+      select: { seatSelectionFee: true },
+    });
+
+    return {
+      seatingMode:      (trip as any).seatingMode ?? 'FREE',
+      seatLayout,
+      occupiedSeats,
+      availableCount:   Math.max(0, totalSeats - occupiedSeats.length),
+      totalCount:       totalSeats,
+      seatSelectionFee: (bizConfig as any)?.seatSelectionFee ?? 0,
+      isFullVip:        (trip.bus as any)?.isFullVip ?? false,
+      vipSeats:         (trip.bus as any)?.vipSeats ?? [],
+    };
   }
 
   // ─── Fleet (public) ───────────────────────────────────────────────────────
@@ -257,7 +332,7 @@ export class PublicPortalService {
       where: { tenantId: tenant.id, status: { not: 'CLOSED' } },
       select: {
         model: true, type: true, capacity: true,
-        photos: true, seatLayout: true, year: true,
+        photos: true, seatLayout: true, year: true, amenities: true,
       },
       orderBy: { type: 'asc' },
     });
@@ -280,6 +355,7 @@ export class PublicPortalService {
       year:       bus.year,
       photos:     photoUrls.filter(Boolean) as string[],
       seatLayout: bus.seatLayout,
+      amenities:  bus.amenities ?? [],
       };
     }));
   }
@@ -321,18 +397,80 @@ export class PublicPortalService {
   async getPosts(tenantSlug: string, locale?: string) {
     const tenant = await this.resolveTenant(tenantSlug);
 
-    return this.prisma.tenantPost.findMany({
+    const posts = await this.prisma.tenantPost.findMany({
       where: {
         tenantId:  tenant.id,
         published: true,
         ...(locale ? { locale } : {}),
       },
       select: {
-        id: true, title: true, excerpt: true, coverImage: true,
-        publishedAt: true, authorName: true, locale: true,
+        id: true, title: true, slug: true, excerpt: true, coverImage: true,
+        publishedAt: true, authorName: true, locale: true, tags: true,
+        media: { select: { url: true, type: true, caption: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
       },
       orderBy: { publishedAt: 'desc' },
       take: 20,
+    });
+
+    return Promise.all(posts.map(async (post) => {
+      let coverImageUrl: string | null = null;
+      if (post.coverImage) {
+        try {
+          const signed = await this.storage.getDownloadUrl(tenant.id, post.coverImage, DocumentType.CMS_MEDIA);
+          coverImageUrl = signed.url;
+        } catch { /* ignore */ }
+      }
+      return { ...post, coverImageUrl };
+    }));
+  }
+
+  async getPostBySlug(tenantSlug: string, postSlug: string) {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const post = await this.prisma.tenantPost.findFirst({
+      where: { tenantId: tenant.id, slug: postSlug, published: true },
+      select: {
+        id: true, title: true, slug: true, excerpt: true, content: true,
+        coverImage: true, publishedAt: true, authorName: true, locale: true, tags: true,
+        media: { select: { id: true, url: true, type: true, caption: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    if (!post) throw new NotFoundException('Post not found');
+
+    const mediaWithUrls = await Promise.all(
+      post.media.map(async (m) => {
+        try {
+          const signed = await this.storage.getDownloadUrl(tenant.id, m.url, DocumentType.CMS_MEDIA);
+          return { ...m, signedUrl: signed.url };
+        } catch {
+          return { ...m, signedUrl: null };
+        }
+      }),
+    );
+
+    let coverImageUrl: string | null = null;
+    if (post.coverImage) {
+      try {
+        const signed = await this.storage.getDownloadUrl(tenant.id, post.coverImage, DocumentType.CMS_MEDIA);
+        coverImageUrl = signed.url;
+      } catch { /* ignore */ }
+    }
+
+    return { ...post, media: mediaWithUrls, coverImageUrl };
+  }
+
+  async getFooterPages(tenantSlug: string, locale?: string) {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    return this.prisma.tenantPage.findMany({
+      where: {
+        tenantId:     tenant.id,
+        published:    true,
+        showInFooter: true,
+        ...(locale ? { locale } : {}),
+      },
+      select: { slug: true, title: true },
+      orderBy: { sortOrder: 'asc' },
     });
   }
 
@@ -357,6 +495,7 @@ export class PublicPortalService {
     passengers: Array<{
       firstName: string; lastName: string;
       phone: string; email?: string; seatType: string;
+      wantsSeatSelection?: boolean; seatNumber?: string;
     }>;
     paymentMethod: string;
   }) {
@@ -372,10 +511,13 @@ export class PublicPortalService {
             destination: { select: { id: true, name: true, city: true } },
           },
         },
-        bus: { select: { capacity: true, seatLayout: true } },
+        bus: { select: { capacity: true, seatLayout: true, isFullVip: true, vipSeats: true } },
       },
     });
     if (!trip) throw new NotFoundException('Trip not found or no longer available');
+
+    const busVipSeats = new Set((trip.bus as any)?.vipSeats ?? []);
+    const busIsFullVip = (trip.bus as any)?.isFullVip ?? false;
 
     // Resolve default agency for the tenant (every tenant has at least one)
     const defaultAgency = await this.prisma.agency.findFirst({
@@ -391,6 +533,14 @@ export class PublicPortalService {
       ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
       : (trip.bus?.capacity ?? 0);
 
+    // Load seatSelectionFee from business config
+    const isNumbered = (trip as any).seatingMode === 'NUMBERED' && !!seatLayout;
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId: tenant.id },
+      select: { seatSelectionFee: true },
+    });
+    const seatFee = (bizConfig as any)?.seatSelectionFee ?? 0;
+
     // 1. Create all tickets in PENDING_PAYMENT (single transaction for atomicity)
     const tickets = await this.prisma.transact(async (tx) => {
       // ── Garde capacité globale (pour tous les passagers demandés) ────────
@@ -405,7 +555,7 @@ export class PublicPortalService {
 
       // ── Charger les sièges occupés une seule fois (NUMBERED) ────────────
       const occupiedSeats = new Set<string>();
-      if ((trip as any).seatingMode === 'NUMBERED' && seatLayout) {
+      if (isNumbered) {
         const occupiedRows = await tx.ticket.findMany({
           where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] }, seatNumber: { not: null } },
           select: { seatNumber: true },
@@ -420,12 +570,14 @@ export class PublicPortalService {
       });
       const bookedNames = new Set((existingNames as Array<{ passengerName: string }>).map(r => r.passengerName.toLowerCase()));
 
-      const created: Array<{ id: string; seatNumber: string | null; fareClass: string; passengerIdx: number }> = [];
+      const created: Array<{ id: string; seatNumber: string | null; fareClass: string; pricePaid: number; wantsSeatSelection: boolean; passengerIdx: number }> = [];
 
       for (let i = 0; i < dto.passengers.length; i++) {
         const pax = dto.passengers[i];
         const passengerName = `${pax.firstName} ${pax.lastName}`.trim();
-        const fareClass = pax.seatType === 'VIP' ? 'VIP' : 'STANDARD';
+        // fareClass = VIP si : bus tout VIP, OU siège choisi est VIP, OU passager a choisi seatType VIP
+        const seatIsVip = busIsFullVip || (pax.seatNumber ? busVipSeats.has(pax.seatNumber) : false);
+        const fareClass = (seatIsVip || pax.seatType === 'VIP') ? 'VIP' : 'STANDARD';
 
         // ── Garde doublon passager ──────────────────────────────────────
         if (bookedNames.has(passengerName.toLowerCase())) {
@@ -435,24 +587,46 @@ export class PublicPortalService {
         }
         bookedNames.add(passengerName.toLowerCase());
 
-        // ── Attribution automatique du siège (NUMBERED) ─────────────────
+        // ── Attribution du siège (NUMBERED) ─────────────────────────────
         let seatNumber: string | null = null;
-        if ((trip as any).seatingMode === 'NUMBERED' && seatLayout) {
-          for (let r = 1; r <= seatLayout.rows; r++) {
-            for (let c = 1; c <= seatLayout.cols; c++) {
-              const id = `${r}-${c}`;
-              if (seatLayout.disabled?.includes(id)) continue;
-              if (occupiedSeats.has(id)) continue;
-              seatNumber = id;
-              break;
+        const wantsSeat = !!pax.wantsSeatSelection;
+
+        if (isNumbered && seatLayout) {
+          if (wantsSeat && pax.seatNumber) {
+            // Validate chosen seat
+            const parts = pax.seatNumber.split('-');
+            if (parts.length !== 2) throw new BadRequestException(`Invalid seat format: ${pax.seatNumber}`);
+            const [r, c] = parts.map(Number);
+            if (isNaN(r) || isNaN(c) || r < 1 || r > seatLayout.rows || c < 1 || c > seatLayout.cols) {
+              throw new BadRequestException(`Seat ${pax.seatNumber} is out of range`);
             }
-            if (seatNumber) break;
-          }
-          if (!seatNumber) {
-            throw new BadRequestException('No seats available for this trip');
+            if (seatLayout.disabled?.includes(pax.seatNumber)) {
+              throw new BadRequestException(`Seat ${pax.seatNumber} is disabled`);
+            }
+            if (occupiedSeats.has(pax.seatNumber)) {
+              throw new ConflictException(`Seat ${pax.seatNumber} is already taken`);
+            }
+            seatNumber = pax.seatNumber;
+          } else {
+            // Auto-assign next free seat
+            for (let r = 1; r <= seatLayout.rows; r++) {
+              for (let c = 1; c <= seatLayout.cols; c++) {
+                const id = `${r}-${c}`;
+                if (seatLayout.disabled?.includes(id)) continue;
+                if (occupiedSeats.has(id)) continue;
+                seatNumber = id;
+                break;
+              }
+              if (seatNumber) break;
+            }
+            if (!seatNumber) throw new BadRequestException('No seats available for this trip');
           }
           occupiedSeats.add(seatNumber);
         }
+
+        // ── Prix = base + supplément choix de siège si applicable ───────
+        const seatSurcharge = (wantsSeat && isNumbered && seatFee > 0) ? seatFee : 0;
+        const pricePaid = trip.route.basePrice + seatSurcharge;
 
         const ticketId = uuidv4();
         const t = await tx.ticket.create({
@@ -466,7 +640,7 @@ export class PublicPortalService {
             boardingStationId:  trip.route.origin.id,
             alightingStationId: trip.route.destination.id,
             fareClass,
-            pricePaid:          trip.route.basePrice,
+            pricePaid,
             agencyId,
             status:             'PENDING_PAYMENT',
             qrCode:             `pending-${ticketId}`,
@@ -481,19 +655,26 @@ export class PublicPortalService {
           tenantId:      tenant.id,
           aggregateId:   t.id,
           aggregateType: 'Ticket',
-          payload:       { ticketId: t.id, tripId: dto.tripId, price: trip.route.basePrice, source: 'portal' },
+          payload:       { ticketId: t.id, tripId: dto.tripId, price: pricePaid, source: 'portal' },
           occurredAt:    new Date(),
         };
         await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
 
-        created.push({ id: t.id, seatNumber, fareClass, passengerIdx: i });
+        created.push({ id: t.id, seatNumber, fareClass, pricePaid, wantsSeatSelection: wantsSeat, passengerIdx: i });
       }
 
       return created;
     });
 
     // 2. Confirm all tickets (payment not yet implemented — simulate success)
-    const systemActor = { id: 'portal-system', tenantId: tenant.id, agencyId, role: 'SYSTEM' } as any;
+    const systemActor = {
+      id:       'portal-system',
+      tenantId: tenant.id,
+      roleId:   'portal-system',
+      roleName: 'SYSTEM',
+      agencyId,
+      userType: 'ANONYMOUS',
+    } as any;
     const confirmedTickets = await Promise.all(
       tickets.map(async (tk) => {
         const qrToken = await this.qrService.sign({
@@ -512,6 +693,7 @@ export class PublicPortalService {
         // Generate documents — fire-and-forget on error
         let ticketDocUrl: string | null = null;
         let invoiceDocUrl: string | null = null;
+        let documentsWarning: string | null = null;
         try {
           const [ticketDoc, invoiceDoc] = await Promise.all([
             this.documentsService.printTicketStub(tenant.id, tk.id, systemActor, undefined),
@@ -520,7 +702,8 @@ export class PublicPortalService {
           ticketDocUrl  = (ticketDoc  as any)?.downloadUrl ?? null;
           invoiceDocUrl = (invoiceDoc as any)?.downloadUrl ?? null;
         } catch (err) {
-          this.logger.warn(`Document generation failed for portal ticket ${tk.id}: ${err}`);
+          this.logger.error(`[Portal] Document generation FAILED for ticket ${tk.id}: ${(err as Error)?.stack ?? err}`);
+          documentsWarning = `Documents temporairement indisponibles : ${(err as Error)?.message ?? 'erreur interne'}`;
         }
 
         const pax = dto.passengers[tk.passengerIdx];
@@ -531,11 +714,15 @@ export class PublicPortalService {
           qrCode:     qrToken,
           fareClass:  tk.fareClass,
           seatNumber: tk.seatNumber,
+          pricePaid:  tk.pricePaid,
+          wantsSeatSelection: tk.wantsSeatSelection,
           passenger:  { firstName: pax.firstName, lastName: pax.lastName },
-          documents:  { ticketStubUrl: ticketDocUrl, invoiceUrl: invoiceDocUrl },
+          documents:  { ticketStubUrl: ticketDocUrl, invoiceUrl: invoiceDocUrl, warning: documentsWarning },
         };
       }),
     );
+
+    const totalPrice = tickets.reduce((sum, tk) => sum + tk.pricePaid, 0);
 
     return {
       tickets: confirmedTickets,
@@ -547,8 +734,100 @@ export class PublicPortalService {
         routeName:     trip.route.name,
         price:         trip.route.basePrice,
       },
-      totalPrice:    trip.route.basePrice * dto.passengers.length,
+      totalPrice,
+      seatSelectionFee: seatFee,
       paymentMethod: dto.paymentMethod,
     };
+  }
+
+  // ── Self-service annulation / remboursement ─────────────────────────────
+
+  /**
+   * Aperçu du montant remboursable — aucune mutation.
+   * Vérification identité par nom complet du passager (passengerName sur le Ticket).
+   */
+  async previewRefund(tenantSlug: string, ticketRef: string, phone: string) {
+    if (!phone) throw new BadRequestException('Passenger name required for identity verification');
+
+    const tenant = await this.resolveTenant(tenantSlug);
+    const ticket = await this.resolveTicketByRef(tenant.id, ticketRef, phone);
+
+    const calc = await this.policyService.calculateRefundAmount(tenant.id, ticket.id);
+
+    return {
+      ticketRef,
+      originalAmount: calc.originalAmount,
+      refundPercent:  calc.refundPercent,
+      refundAmount:   calc.refundAmount,
+      currency:       calc.currency,
+      departureAt:    calc.departureAt.toISOString(),
+      refundable:     calc.refundPercent > 0,
+    };
+  }
+
+  /**
+   * Demande d'annulation self-service par le voyageur.
+   * Vérifie l'identité par nom du passager, crée le remboursement
+   * basé sur la politique d'annulation du tenant.
+   */
+  async requestCancellation(
+    tenantSlug: string,
+    ticketRef:  string,
+    dto: { phone: string; reason?: string },
+  ) {
+    if (!dto.phone) throw new BadRequestException('Passenger name required for identity verification');
+
+    const tenant = await this.resolveTenant(tenantSlug);
+    const ticket = await this.resolveTicketByRef(tenant.id, ticketRef, dto.phone);
+
+    if (ticket.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        `Ticket cannot be cancelled (current status: ${ticket.status})`,
+      );
+    }
+
+    // Créer le remboursement via la politique tarifaire
+    const refund = await this.refundService.createPolicyBasedRefund({
+      tenantId:       tenant.id,
+      ticketId:       ticket.id,
+      reason:         RefundReason.CUSTOMER_SELF_SERVICE,
+      requestedBy:    'CUSTOMER',
+      requestChannel: 'PORTAL',
+    });
+
+    return {
+      ticketRef,
+      status:        'CANCELLATION_REQUESTED',
+      refundId:      (refund as any).id,
+      refundAmount:  (refund as any).amount,
+      refundPercent: (refund as any).policyPercent,
+      currency:      (refund as any).currency,
+    };
+  }
+
+  // ── Private helpers ─────────────────────────────────────────────────────
+
+  /**
+   * Résout un billet par QR code ou booking ref + vérification par nom du passager.
+   * Utilisé pour les endpoints self-service (pas d'auth, identité par passengerName).
+   */
+  private async resolveTicketByRef(tenantId: string, ticketRef: string, passengerName: string) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { qrCode: ticketRef },
+          { id: ticketRef },
+        ],
+      },
+    });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+
+    // Vérifier que le nom correspond au passager du billet
+    if (ticket.passengerName.toLowerCase() !== passengerName.toLowerCase()) {
+      throw new ForbiddenException('Passenger name does not match ticket holder');
+    }
+
+    return ticket;
   }
 }

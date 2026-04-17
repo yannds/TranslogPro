@@ -45,9 +45,9 @@ export class FleetController {
   setSeatLayout(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body('seatLayout') seatLayout: Record<string, unknown>,
+    @Body() body: { seatLayout?: Record<string, unknown>; isFullVip?: boolean; vipSeats?: string[] },
   ) {
-    return this.fleetService.setSeatLayout(tenantId, id, seatLayout);
+    return this.fleetService.setSeatLayout(tenantId, id, body);
   }
 
   /** Modifier statut bus — scope agency (un agent ne touche que son agence) */

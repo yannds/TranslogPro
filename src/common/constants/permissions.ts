@@ -106,8 +106,11 @@ export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
 
 // ─── Refunds ─────────────────────────────────────────────────────────────────
 export const P_REFUND_READ_TENANT      = 'data.refund.read.tenant';
+export const P_REFUND_READ_AGENCY      = 'data.refund.read.agency';
 export const P_REFUND_APPROVE_TENANT   = 'data.refund.approve.tenant';
+export const P_REFUND_APPROVE_AGENCY   = 'data.refund.approve.agency';
 export const P_REFUND_PROCESS_TENANT   = 'data.refund.process.tenant';
+export const P_REFUND_REQUEST_OWN      = 'data.refund.request.own';
 
 // ─── Staff & Tenant ───────────────────────────────────────────────────────────
 export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
@@ -292,8 +295,11 @@ export const Permission = {
   SAV_CLAIM_TENANT:           P_SAV_CLAIM_TENANT,
   // Refunds
   REFUND_READ_TENANT:     P_REFUND_READ_TENANT,
+  REFUND_READ_AGENCY:     P_REFUND_READ_AGENCY,
   REFUND_APPROVE_TENANT:  P_REFUND_APPROVE_TENANT,
+  REFUND_APPROVE_AGENCY:  P_REFUND_APPROVE_AGENCY,
   REFUND_PROCESS_TENANT:  P_REFUND_PROCESS_TENANT,
+  REFUND_REQUEST_OWN:     P_REFUND_REQUEST_OWN,
   // Staff & Tenant
   STAFF_MANAGE:               P_STAFF_MANAGE_TENANT,
   STAFF_READ:                 P_STAFF_READ_AGENCY,

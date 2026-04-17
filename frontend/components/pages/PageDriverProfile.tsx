@@ -27,6 +27,7 @@ import { FormFooter } from '../ui/FormFooter';
 import { inputClass } from '../ui/inputClass';
 import { cn } from '../../lib/utils';
 import { DocumentAttachments } from '../document/DocumentAttachments';
+import { DriverLicensePanel } from '../drivers/DriverLicensePanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,18 +39,6 @@ interface LicenseAlert {
   category:    string;
   expiresAt:   string;
   daysUntilExpiry: number;
-}
-
-interface LicenseRow {
-  id:           string;
-  staffId:      string;
-  category:     string;
-  licenseNo:    string;
-  issuedAt:     string;
-  expiresAt:    string;
-  issuingState?: string | null;
-  status:       string;
-  staff:        { user: { email: string; name?: string | null } };
 }
 
 interface DriverSummary {
@@ -93,96 +82,6 @@ type Tab = 'overview' | 'licenses' | 'rest' | 'trainings' | 'remediation';
 export interface PageDriverProfileProps {
   /** Onglet initial piloté par la navigation (drivers-list → 'overview', driver-licenses → 'licenses', etc.) */
   initialTab?: Tab;
-}
-
-// ─── Formulaire : créer un permis ────────────────────────────────────────────
-
-interface LicenseValues {
-  staffId: string; category: string; licenseNo: string;
-  issuedAt: string; expiresAt: string; issuingState: string;
-}
-
-function LicenseForm({
-  drivers, initial, onSubmit, onCancel, busy, error,
-}: {
-  drivers: DriverSummary[];
-  initial?: Partial<LicenseValues>;
-  onSubmit: (v: LicenseValues) => void;
-  onCancel: () => void;
-  busy: boolean;
-  error: string | null;
-}) {
-  const { t } = useI18n();
-  const [f, setF] = useState<LicenseValues>({
-    staffId: initial?.staffId     ?? drivers[0]?.id ?? '',
-    category: initial?.category   ?? 'D',
-    licenseNo: initial?.licenseNo ?? '',
-    issuedAt: initial?.issuedAt   ?? '',
-    expiresAt: initial?.expiresAt ?? '',
-    issuingState: initial?.issuingState ?? '',
-  });
-  return (
-    <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
-      <ErrorAlert error={error} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="sm:col-span-2 space-y-1.5">
-          <label htmlFor="lic-staff" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.driver')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <select id="lic-staff" required value={f.staffId} onChange={e => setF(p => ({ ...p, staffId: e.target.value }))}
-            className={inputClass} disabled={busy || drivers.length === 0}>
-            {drivers.length === 0 && <option value="">{t('driverProfile.noDriver')}</option>}
-            {drivers.map(d => (
-              <option key={d.id} value={d.id}>
-                {d.user.displayName ?? d.user.email}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="lic-cat" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.category')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input id="lic-cat" type="text" required value={f.category}
-            onChange={e => setF(p => ({ ...p, category: e.target.value.toUpperCase() }))}
-            className={inputClass} disabled={busy} placeholder="D" maxLength={8} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="lic-no" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.licenseNo')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input id="lic-no" type="text" required value={f.licenseNo}
-            onChange={e => setF(p => ({ ...p, licenseNo: e.target.value }))}
-            className={cn(inputClass, 'font-mono')} disabled={busy} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="lic-issued" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.issuedAt')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input id="lic-issued" type="date" required value={f.issuedAt}
-            onChange={e => setF(p => ({ ...p, issuedAt: e.target.value }))}
-            className={inputClass} disabled={busy} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="lic-expires" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.expiresAt')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input id="lic-expires" type="date" required value={f.expiresAt}
-            onChange={e => setF(p => ({ ...p, expiresAt: e.target.value }))}
-            className={inputClass} disabled={busy} />
-        </div>
-        <div className="sm:col-span-2 space-y-1.5">
-          <label htmlFor="lic-state" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('driverProfile.issuingState')}
-          </label>
-          <input id="lic-state" type="text" value={f.issuingState}
-            onChange={e => setF(p => ({ ...p, issuingState: e.target.value }))}
-            className={inputClass} disabled={busy} placeholder="CG" />
-        </div>
-      </div>
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('common.save')} pendingLabel={t('common.saving')} />
-    </form>
-  );
 }
 
 // ─── Formulaire : planifier une formation ────────────────────────────────────
@@ -503,8 +402,6 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
   const [tab, setTab]         = useState<Tab>(initialTab);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
 
-  const [showLicenseForm, setShowLicenseForm]     = useState(false);
-  const [editingLicense, setEditingLicense]       = useState<LicenseAlert | null>(null);
   const [showTrainingForm, setShowTrainingForm]   = useState(false);
   const [showRuleForm, setShowRuleForm]           = useState(false);
   const [editingRule, setEditingRule]             = useState<RemediationRule | null>(null);
@@ -518,9 +415,6 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
     try { await fn(); refetch(); }
     catch (e) { setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError')); }
   }
-
-  const handleDeleteLicense = (id: string) =>
-    confirmAndRun(t('driverProfile.confirmDeleteLicense'), () => apiDelete(`${base}/driver-profile/licenses/${id}`), () => { refetchLic(); refetchAllLic(); });
 
   const handleDeleteTraining = (id: string) =>
     confirmAndRun(t('driverProfile.confirmDeleteTraining'), () => apiDelete(`${base}/driver-profile/trainings/${id}`), refetchTrainings);
@@ -539,11 +433,8 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
   const base = `/api/tenants/${tenantId}`;
 
   const { data: drivers,     loading: loadingDrivers }    = useFetch<DriverSummary[]>(`${base}/staff?role=DRIVER`, [tenantId]);
-  const { data: allLicenses, loading: loadingAllLic, refetch: refetchAllLic } = useFetch<LicenseRow[]>(
-    tab === 'licenses' ? `${base}/driver-profile/licenses` : null,
-    [tenantId, tab],
-  );
-  const { data: licAlerts,   loading: loadingLic, refetch: refetchLic } = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
+  const { data: stats,       loading: loadingStats }      = useFetch<{ licenseAlerts: number; driversBlocked: number; remediationRules: number; overdueTrainings: number }>(`${base}/driver-profile/stats`, [tenantId]);
+  const { data: licAlerts } = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
   const { data: overdueTrainings, loading: loadingTrainings, refetch: refetchTrainings } = useFetch<OverdueTraining[]>(`${base}/driver-profile/trainings/overdue`, [tenantId]);
   const { data: trainingTypes } = useFetch<TrainingType[]>(`${base}/driver-profile/training-types`, [tenantId]);
   const { data: restConfig,  loading: loadingRest, refetch: refetchRest } = useFetch<RestConfig>(`${base}/driver-profile/rest-config`, [tenantId]);
@@ -552,12 +443,12 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
     [tenantId, tab],
   );
 
-  const loading = loadingDrivers || loadingLic;
+  const loading = loadingDrivers || loadingStats;
 
-  const licenseAlertCount    = licAlerts?.length    ?? 0;
-  const overdueTrainingCount = overdueTrainings?.length ?? 0;
-  const remediationCount     = remediations?.length ?? 0;
-  const restBlockedCount     = 0; // requires per-driver rest-compliance calls
+  const licenseAlertCount    = stats?.licenseAlerts    ?? 0;
+  const overdueTrainingCount = stats?.overdueTrainings ?? 0;
+  const remediationCount     = stats?.remediationRules ?? 0;
+  const restBlockedCount     = stats?.driversBlocked   ?? 0;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview',    label: t('driverProfile.tabOverview') },
@@ -583,14 +474,6 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
             aria-label={t('driverProfile.newDriver')}
           >
             <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newDriver')}
-          </Button>
-        )}
-        {tab === 'licenses' && (
-          <Button
-            onClick={() => { setShowLicenseForm(true); setActionError(null); }}
-            aria-label={t('driverProfile.newLicense')}
-          >
-            <Plus className="w-4 h-4 mr-2" aria-hidden /> {t('driverProfile.newLicense')}
           </Button>
         )}
         {tab === 'rest' && (
@@ -623,10 +506,10 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
       {/* ── KPIs ── */}
       <section aria-label="Indicateurs chauffeurs">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label={t('driverProfile.licenseAlerts')}      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loadingLic} />
-          <KpiCard label={t('driverProfile.driversBlocked')}    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={false} />
-          <KpiCard label={t('driverProfile.remediationActions')}   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loadingRemediation} />
-          <KpiCard label={t('driverProfile.overdueTrainings')}  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loadingTrainings} />
+          <KpiCard label={t('driverProfile.licenseAlerts')}      value={licenseAlertCount}    icon={<Shield className="w-5 h-5" />}         highlight={licenseAlertCount > 0 ? 'danger' : 'success'} loading={loadingStats} />
+          <KpiCard label={t('driverProfile.driversBlocked')}    value={restBlockedCount}     icon={<Coffee className="w-5 h-5" />}         highlight={restBlockedCount > 0 ? 'warning' : 'success'} loading={loadingStats} />
+          <KpiCard label={t('driverProfile.remediationActions')}   value={remediationCount}     icon={<AlertTriangle className="w-5 h-5" />}  highlight={remediationCount > 0 ? 'danger' : 'success'} loading={loadingStats} />
+          <KpiCard label={t('driverProfile.overdueTrainings')}  value={overdueTrainingCount} icon={<GraduationCap className="w-5 h-5" />} highlight={overdueTrainingCount > 0 ? 'warning' : 'success'} loading={loadingStats} />
         </div>
       </section>
 
@@ -716,95 +599,16 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
         </section>
       )}
 
-      {/* ── Permis ── */}
+      {/* ── Permis (DriverLicensePanel — source unique d'affichage) ── */}
       {tab === 'licenses' && (
-        <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses" className="space-y-6">
-          {/* Alertes (expirant / expirés) */}
-          {licAlerts && licAlerts.length > 0 && (
-            <Card>
-              <CardHeader
-                heading={t('driverProfile.alertLicenses')}
-                description={t('driverProfile.alertLicensesDesc')}
-              />
-              <CardContent className="p-0">
-                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
-                  {licAlerts.map(a => (
-                    <li key={a.id} className="flex items-center justify-between px-6 py-3">
-                      <div>
-                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{a.staffName}</p>
-                        <p className="text-xs text-slate-500 font-mono">{a.licenseNo} · Cat. {a.category}</p>
-                      </div>
-                      <Badge variant={a.daysUntilExpiry <= 0 ? 'danger' : 'warning'} size="sm">
-                        {a.daysUntilExpiry <= 0 ? t('driverProfile.expired') : `J-${a.daysUntilExpiry}`}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Liste complète des permis */}
+        <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses">
           <Card>
             <CardHeader
               heading={t('driverProfile.allLicenses')}
-              action={
-                <Button
-                  size="sm"
-                  onClick={() => { setShowLicenseForm(true); setActionError(null); }}
-                  aria-label={t('driverProfile.driverLicense')}
-                >
-                  <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('driverProfile.license')}
-                </Button>
-              }
+              description={t('driverProfile.alertLicensesDesc')}
             />
-            <CardContent className="p-0">
-              {loadingAllLic ? (
-                <div className="p-6 space-y-3" aria-busy="true">
-                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                </div>
-              ) : !allLicenses || allLicenses.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
-                  <Shield className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" aria-hidden />
-                  <p className="font-medium">{t('driverProfile.noLicense')}</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
-                  {allLicenses.map(lic => (
-                    <li key={lic.id} className="flex items-center justify-between px-6 py-3">
-                      <div>
-                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                          {lic.staff.user.name ?? lic.staff.user.email}
-                        </p>
-                        <p className="text-xs text-slate-500 font-mono">
-                          {lic.licenseNo} · Cat. {lic.category}
-                          {lic.issuingState ? ` · ${lic.issuingState}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs tabular-nums text-slate-500">
-                          {lic.expiresAt ? new Date(lic.expiresAt).toLocaleDateString('fr-FR') : '—'}
-                        </span>
-                        <Badge
-                          variant={lic.status === 'EXPIRED' ? 'danger' : lic.status === 'EXPIRING' ? 'warning' : 'success'}
-                          size="sm"
-                        >
-                          {lic.status}
-                        </Badge>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLicense(lic.id)}
-                          className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          aria-label={`${t('common.delete')} — ${lic.staff.user.name ?? lic.staff.user.email}`}
-                          title={t('common.delete')}
-                        >
-                          <Trash2 className="w-4 h-4" aria-hidden />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <CardContent>
+              <DriverLicensePanel tenantId={tenantId} />
             </CardContent>
           </Card>
         </section>
@@ -955,58 +759,6 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
           </Card>
         </section>
       )}
-
-      {/* ── Modal : Nouveau / Édition permis ── */}
-      <Dialog
-        open={showLicenseForm || !!editingLicense}
-        onOpenChange={o => { if (!o) { setShowLicenseForm(false); setEditingLicense(null); } }}
-        title={editingLicense ? t('driverProfile.editLicense') : t('driverProfile.newLicenseDialog')}
-        description={t('driverProfile.licenseAlertDesc')}
-        size="xl"
-      >
-        {(showLicenseForm || editingLicense) && (
-          <LicenseForm
-            drivers={drivers ?? []}
-            initial={editingLicense ? {
-              staffId:   editingLicense.staffId,
-              category:  editingLicense.category,
-              licenseNo: editingLicense.licenseNo,
-              expiresAt: editingLicense.expiresAt ? editingLicense.expiresAt.slice(0, 10) : '',
-            } : undefined}
-            busy={busy}
-            error={actionError}
-            onCancel={() => { setShowLicenseForm(false); setEditingLicense(null); }}
-            onSubmit={async (v: LicenseValues) => {
-              setBusy(true); setActionError(null);
-              try {
-                if (editingLicense) {
-                  await apiPatch(`${base}/driver-profile/licenses/${editingLicense.id}`, {
-                    licenseNo:    v.licenseNo,
-                    issuedAt:     v.issuedAt  || undefined,
-                    expiresAt:    v.expiresAt || undefined,
-                    issuingState: v.issuingState || undefined,
-                  });
-                } else {
-                  await apiPost(`${base}/driver-profile/licenses`, {
-                    staffId:      v.staffId,
-                    category:     v.category,
-                    licenseNo:    v.licenseNo,
-                    issuedAt:     v.issuedAt,
-                    expiresAt:    v.expiresAt,
-                    issuingState: v.issuingState || undefined,
-                  });
-                }
-                setShowLicenseForm(false);
-                setEditingLicense(null);
-                refetchLic();
-                refetchAllLic();
-              } catch (e) {
-                setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
-              } finally { setBusy(false); }
-            }}
-          />
-        )}
-      </Dialog>
 
       {/* ── Modal : Planifier formation ── */}
       <Dialog

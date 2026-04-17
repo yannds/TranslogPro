@@ -207,8 +207,9 @@ export class DocumentsService {
       qrCodeValue:   ticket.qrCode ?? ticket.id,
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
+    const ticketSlug = await this.templates.resolveDefaultSlug(tenantId, 'TICKET', 'ticket-a5');
     return this.storeWithPdfmeFallback(
-      tenantId, 'ticket-a5', pdfmeData,
+      tenantId, ticketSlug, pdfmeData,
       async () => html,
       `tickets/${ticketId}`, DocumentType.TICKET_PDF, actor, 'A5',
     );
@@ -360,8 +361,9 @@ export class DocumentsService {
       generatedAt:    new Date().toLocaleString('fr-FR'),
     };
 
+    const manifestSlug = await this.templates.resolveDefaultSlug(tenantId, 'MANIFEST', 'manifest-a4');
     return this.storeWithPdfmeFallback(
-      tenantId, 'manifest-a4', pdfmeData,
+      tenantId, manifestSlug, pdfmeData,
       async () => html,
       `manifests/${tripId}`, DocumentType.MANIFEST_HTML, actor, 'A4',
     );
@@ -442,8 +444,9 @@ export class DocumentsService {
       qrCodeValue:      `${trackingBase}/${parcel.trackingCode}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
+    const labelSlug = await this.templates.resolveDefaultSlug(tenantId, 'LABEL', 'parcel-label');
     return this.storeWithPdfmeFallback(
-      tenantId, 'parcel-label', pdfmeData,
+      tenantId, labelSlug, pdfmeData,
       async () => html,
       `labels/${parcelId}`, DocumentType.PARCEL_LABEL, actor, 'LABEL_62MM',
     );
@@ -570,8 +573,9 @@ export class DocumentsService {
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
 
+    const packingSlug = await this.templates.resolveDefaultSlug(tenantId, 'PACKING_LIST', 'packing-list-a4');
     return this.storeWithPdfmeFallback(
-      tenantId, 'packing-list-a4', pdfmeData,
+      tenantId, packingSlug, pdfmeData,
       async () => html,
       `packing-lists/${shipmentId}`, DocumentType.PARCEL_LABEL, actor, 'A4',
     );
@@ -862,8 +866,9 @@ export class DocumentsService {
       qrCode:        ticket.qrCode ?? ticket.id,
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
+    const invoiceSlug = await this.templates.resolveDefaultSlug(tenantId, 'INVOICE', 'invoice-a4');
     return this.storeWithPdfmeFallback(
-      tenantId, 'invoice-a4', pdfmeData,
+      tenantId, invoiceSlug, pdfmeData,
       async () => html,
       `poc/invoice-pro/${ticketId}`, DocumentType.INVOICE_HTML, actor, 'A4',
     );
@@ -992,8 +997,9 @@ export class DocumentsService {
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
     // Utilise directement le renderer HTML (pas le template pdfme boarding-pass-a6)
+    const stubSlug = await this.templates.resolveDefaultSlug(tenantId, 'TICKET', 'ticket-stub-html');
     return this.storeWithPdfmeFallback(
-      tenantId, 'ticket-stub-html', pdfmeData,
+      tenantId, stubSlug, pdfmeData,
       async () => html,
       `poc/ticket-stub/${ticketId}`, DocumentType.TICKET_PDF, actor, 'A5',
     );
@@ -1061,8 +1067,9 @@ export class DocumentsService {
       pdfmeData[`label_${idx}_qr`]          = it ? `${trackingBase}/${it.trackingCode}` : '';
     }
 
+    const multiLabelSlug = await this.templates.resolveDefaultSlug(tenantId, 'LABEL', 'parcel-label-multi');
     return this.storeWithPdfmeFallback(
-      tenantId, 'parcel-label-multi', pdfmeData,
+      tenantId, multiLabelSlug, pdfmeData,
       async () => html,
       `poc/multi-label/${Date.now()}`,
       DocumentType.PARCEL_LABEL, actor, 'A4',
@@ -1108,7 +1115,9 @@ export class DocumentsService {
     });
 
     const printFmt = format === 'C5' ? 'ENVELOPE_C5' as PrintFormat : 'ENVELOPE_C5' as PrintFormat;
-    const slug = format === 'DL' ? 'envelope-dl' : 'envelope-c5';
+    const slug = await this.templates.resolveDefaultSlug(
+      tenantId, 'ENVELOPE', format === 'DL' ? 'envelope-dl' : 'envelope-c5',
+    );
     const pdfmeData: Record<string, string> = {
       // ── Tenant ──
       tenantName:       tenant.name,
@@ -1253,8 +1262,9 @@ export class DocumentsService {
       qrCodeValue:    trackingCode,
       generatedAt:    new Date().toLocaleString('fr-FR'),
     };
+    const baggageSlug = await this.templates.resolveDefaultSlug(tenantId, 'LABEL', 'baggage-tag');
     return this.storeWithPdfmeFallback(
-      tenantId, 'baggage-tag', pdfmeData,
+      tenantId, baggageSlug, pdfmeData,
       async () => html,
       `poc/baggage-tag/${ticketId}-${bagIndex}`,
       DocumentType.TICKET_PDF, actor, 'BAGGAGE_TAG',

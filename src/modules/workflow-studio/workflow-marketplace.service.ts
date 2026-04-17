@@ -264,7 +264,10 @@ export class WorkflowMarketplaceService {
 
         this.logger.log(`Blueprint "${slug}" auto-installé pour nouveau tenant=${tenantId}`);
       } catch (err) {
-        this.logger.error(`Échec auto-install blueprint "${slug}" pour tenant=${tenantId}: ${(err as Error).message}`);
+        this.logger.error(
+          `[MARKETPLACE] Échec auto-install blueprint "${slug}" pour tenant=${tenantId}: ${(err as Error).message}`,
+          (err as Error).stack,
+        );
       }
     }
   }

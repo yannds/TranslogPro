@@ -29,6 +29,8 @@ interface SeatMapPickerProps {
   seatSelectionFee?: number;
   currency?:         string;
   disabled?:         boolean;
+  isFullVip?:        boolean;
+  vipSeats?:         string[];
 }
 
 type SeatState = 'available' | 'occupied' | 'selected' | 'disabled';
@@ -36,6 +38,17 @@ type SeatState = 'available' | 'occupied' | 'selected' | 'disabled';
 const SEAT_STYLES: Record<SeatState, string> = {
   available:
     'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-800 cursor-pointer border-teal-300 dark:border-teal-700',
+  occupied:
+    'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed border-slate-300 dark:border-slate-600 line-through',
+  selected:
+    'bg-green-500 dark:bg-green-600 text-white cursor-pointer border-green-600 dark:border-green-500 ring-2 ring-green-400',
+  disabled:
+    'invisible',
+};
+
+const VIP_SEAT_STYLES: Record<SeatState, string> = {
+  available:
+    'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800 cursor-pointer border-amber-300 dark:border-amber-700',
   occupied:
     'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed border-slate-300 dark:border-slate-600 line-through',
   selected:
@@ -60,10 +73,13 @@ export function SeatMapPicker({
   seatSelectionFee = 0,
   currency = 'XAF',
   disabled = false,
+  isFullVip = false,
+  vipSeats = [],
 }: SeatMapPickerProps) {
   const { t } = useI18n();
 
   const occupiedSet = useMemo(() => new Set(occupiedSeats), [occupiedSeats]);
+  const vipSet = useMemo(() => new Set(vipSeats), [vipSeats]);
   const disabledSet = useMemo(() => new Set(seatLayout.disabled ?? []), [seatLayout.disabled]);
 
   const totalActive = seatLayout.rows * seatLayout.cols - disabledSet.size;
@@ -119,6 +135,8 @@ export function SeatMapPicker({
                 const seatId = `${row}-${col}`;
                 const state = getSeatState(seatId);
                 const showAisle = seatLayout.aisleAfter !== undefined && col === seatLayout.aisleAfter;
+                const isSeatVip = isFullVip || vipSet.has(seatId);
+                const styles = isSeatVip ? VIP_SEAT_STYLES : SEAT_STYLES;
 
                 return (
                   <span key={col} className="contents">
@@ -126,7 +144,7 @@ export function SeatMapPicker({
                       type="button"
                       className={`
                         w-8 h-8 rounded text-xs font-medium border transition-colors
-                        ${SEAT_STYLES[state]}
+                        ${styles[state]}
                         ${disabled ? 'opacity-60 pointer-events-none' : ''}
                       `}
                       onClick={() => handleClick(seatId)}
@@ -152,11 +170,17 @@ export function SeatMapPicker({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
+      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded bg-teal-100 dark:bg-teal-900/50 border border-teal-300 dark:border-teal-700" />
           {t('sellTicket.legendAvailable')}
         </span>
+        {(isFullVip || vipSeats.length > 0) && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700" />
+            VIP
+          </span>
+        )}
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600" />
           {t('sellTicket.legendOccupied')}

@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertPostDto {
   @IsString()
@@ -11,11 +11,11 @@ export class UpsertPostDto {
   excerpt?: string;
 
   @IsString()
-  @MaxLength(100_000)
+  @MaxLength(200_000)
   content!: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   coverImage?: string;
 
   @IsOptional()
@@ -35,4 +35,13 @@ export class UpsertPostDto {
   @IsString()
   @MaxLength(100)
   authorName?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  media?: Array<{ url: string; type: 'IMAGE' | 'VIDEO'; caption?: string; sortOrder?: number }>;
 }

@@ -33,6 +33,7 @@ interface UserDetail {
   email:         string;
   name:          string | null;
   userType:      string;
+  isActive:      boolean;
   roleId:        string | null;
   agencyId:      string | null;
   createdAt:     string;
@@ -242,7 +243,7 @@ export function UserDetailDialog({
                     <Field label={t('userDetail.entity')}       value={user.agency?.name ?? '—'} />
                     <Field label={t('userDetail.role')}         value={user.role?.name ?? '—'} />
                     <Field label={t('userDetail.type')}         value={user.userType} />
-                    <Field label={t('userDetail.status')}       value={<Badge variant="success">{t('userDetail.active')}</Badge>} />
+                    <Field label={t('userDetail.status')}       value={user.isActive ? <Badge variant="success">{t('iamUsers.active')}</Badge> : <Badge variant="danger">{t('iamUsers.inactive')}</Badge>} />
                     <Field
                       label={t('userDetail.registrationDate')}
                       icon={<Calendar size={14} className="text-slate-400" />}

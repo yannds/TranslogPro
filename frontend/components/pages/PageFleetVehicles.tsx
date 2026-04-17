@@ -14,7 +14,7 @@ import { useMemo, useState, useEffect, type FormEvent } from 'react';
 import { useNavigate }                     from 'react-router-dom';
 import {
   Bus, Plus, Wrench, CheckCircle2, LayoutGrid, Power, Pencil, Trash2, FileText, X,
-  Camera, Upload, ImageOff, ChevronDown, ChevronUp, Gauge, Coins,
+  Camera, Upload, ImageOff, ChevronDown, ChevronUp, Gauge, Coins, Sparkles,
 } from 'lucide-react';
 import { useAuth }                         from '../../lib/auth/auth.context';
 import { useFetch }                        from '../../lib/hooks/useFetch';
@@ -35,6 +35,24 @@ type BusType   = 'STANDARD' | 'CONFORT' | 'VIP' | 'MINIBUS';
 type BusStatus = 'AVAILABLE' | 'IN_SERVICE' | 'MAINTENANCE' | 'OFFLINE';
 type FuelType  = 'DIESEL' | 'PETROL' | 'BIO_DIESEL' | 'HYBRID' | 'ELECTRIC';
 type EngineType = 'EURO_3' | 'EURO_4' | 'EURO_5' | 'EURO_6';
+type BusAmenity = 'WIFI' | 'AC' | 'TOILETS' | 'USB_CHARGING' | 'RECLINING_SEATS' | 'TV' | 'SNACK_BAR' | 'BLANKETS' | 'LUGGAGE_TRACKING';
+
+const ALL_AMENITIES: BusAmenity[] = [
+  'WIFI', 'AC', 'TOILETS', 'USB_CHARGING', 'RECLINING_SEATS',
+  'TV', 'SNACK_BAR', 'BLANKETS', 'LUGGAGE_TRACKING',
+];
+
+const AMENITY_LABEL: Record<BusAmenity, string> = {
+  WIFI:             'fleetVehicles.amenityWIFI',
+  AC:               'fleetVehicles.amenityAC',
+  TOILETS:          'fleetVehicles.amenityTOILETS',
+  USB_CHARGING:     'fleetVehicles.amenityUSB_CHARGING',
+  RECLINING_SEATS:  'fleetVehicles.amenityRECLINING_SEATS',
+  TV:               'fleetVehicles.amenityTV',
+  SNACK_BAR:        'fleetVehicles.amenitySNACK_BAR',
+  BLANKETS:         'fleetVehicles.amenityBLANKETS',
+  LUGGAGE_TRACKING: 'fleetVehicles.amenityLUGGAGE_TRACKING',
+};
 
 interface BusRow {
   id:                  string;
@@ -61,6 +79,7 @@ interface BusRow {
   currentOdometerKm?:  number | null;
   fuelConsumptionPer100Km?:  number | null;
   adBlueConsumptionPer100Km?: number | null;
+  amenities?:                BusAmenity[] | null;
 }
 
 interface AgencyRow { id: string; name: string; }
@@ -86,6 +105,7 @@ interface BusFormValues {
   initialOdometerKm:          string;
   fuelConsumptionPer100Km:    string;
   adBlueConsumptionPer100Km:  string;
+  amenities:                  BusAmenity[];
 }
 
 const EMPTY_FORM: BusFormValues = {
@@ -94,6 +114,7 @@ const EMPTY_FORM: BusFormValues = {
   luggageCapacityKg: '', luggageCapacityM3: '', registrationDate: '', purchaseDate: '',
   purchasePrice: '', initialOdometerKm: '',
   fuelConsumptionPer100Km: '', adBlueConsumptionPer100Km: '',
+  amenities: [],
 };
 
 const STATUS_LABEL: Record<BusStatus, string> = {
@@ -368,6 +389,38 @@ function BusForm({
         )}
       </div>
 
+      {/* ── Commodités (checkboxes) ──────────────────────���───────────── */}
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50">
+          <span className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-slate-400" aria-hidden />
+            {t('fleetVehicles.amenities')}
+          </span>
+          {f.amenities.length > 0 && (
+            <span className="text-xs text-teal-600 dark:text-teal-400 font-semibold">{f.amenities.length}</span>
+          )}
+        </div>
+        <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-slate-200 dark:border-slate-700">
+          {ALL_AMENITIES.map(a => (
+            <label key={a} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={f.amenities.includes(a)}
+                onChange={e => {
+                  const next = e.target.checked
+                    ? [...f.amenities, a]
+                    : f.amenities.filter(x => x !== a);
+                  patch({ amenities: next });
+                }}
+                disabled={busy}
+                className="rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500"
+              />
+              {t(AMENITY_LABEL[a])}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <FormFooter onCancel={onCancel} busy={busy}
         submitLabel={submitLabel} pendingLabel={pendingLabel} />
     </form>
@@ -509,7 +562,12 @@ const COST_DEFAULTS: BusCostProfile = {
   avgTripsPerMonth: 30,
 };
 
-function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: string }) {
+function BusCostProfileSection({ tenantId, busId, busHints }: {
+  tenantId: string;
+  busId: string;
+  /** Valeurs du formulaire véhicule — pré-remplissage automatique si le profil n'a pas encore ces champs. */
+  busHints?: { fuelConsumptionPer100Km?: number; purchasePrice?: number };
+}) {
   const { t } = useI18n();
   const base = `/api/v1/tenants/${tenantId}/buses/${busId}/cost-profile`;
   const [form, setForm] = useState<BusCostProfile>({ ...COST_DEFAULTS });
@@ -527,8 +585,26 @@ function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: s
       try {
         const data = await apiGet<BusCostProfile | null>(base);
         if (!cancelled) {
-          if (data) { setForm(data); setConfigured(true); }
-          else { setForm({ ...COST_DEFAULTS }); setConfigured(false); }
+          if (data) {
+            // Sync depuis les données véhicule si le profil a des valeurs à 0
+            const synced = { ...data };
+            if (busHints?.fuelConsumptionPer100Km && !synced.fuelConsumptionPer100Km) {
+              synced.fuelConsumptionPer100Km = busHints.fuelConsumptionPer100Km;
+            }
+            if (busHints?.purchasePrice && !synced.purchasePrice) {
+              synced.purchasePrice = busHints.purchasePrice;
+            }
+            setForm(synced);
+            setConfigured(true);
+          } else {
+            // Profil non configuré — pré-remplir depuis la fiche véhicule
+            setForm({
+              ...COST_DEFAULTS,
+              fuelConsumptionPer100Km: busHints?.fuelConsumptionPer100Km ?? 0,
+              purchasePrice:           busHints?.purchasePrice ?? 0,
+            });
+            setConfigured(false);
+          }
         }
       } catch (e: unknown) {
         if (!cancelled) setErr((e as Error).message);
@@ -721,6 +797,27 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
       csvValue: (v) => (v ? t(TYPE_LABEL[v as BusType]) : ''),
     },
     {
+      key: 'amenities',
+      header: t('fleetVehicles.amenities'),
+      cellRenderer: (_v, row) => {
+        const items = (row.amenities ?? []) as BusAmenity[];
+        if (!items.length) return <span className="text-xs text-slate-400">—</span>;
+        return (
+          <div className="flex gap-1 flex-wrap">
+            {items.slice(0, 3).map(a => (
+              <span key={a} className="inline-flex items-center rounded-md bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300">
+                {t(AMENITY_LABEL[a])}
+              </span>
+            ))}
+            {items.length > 3 && (
+              <span className="text-[10px] text-slate-400">+{items.length - 3}</span>
+            )}
+          </div>
+        );
+      },
+      csvValue: (_v, row) => ((row?.amenities ?? []) as BusAmenity[]).map(a => t(AMENITY_LABEL[a])).join(', '),
+    },
+    {
       key: 'capacity',
       header: t('fleetVehicles.capacity'),
       sortable: true,
@@ -802,6 +899,7 @@ function toFormValues(bus: BusRow): BusFormValues {
     initialOdometerKm:          bus.initialOdometerKm != null ? String(bus.initialOdometerKm) : '',
     fuelConsumptionPer100Km:    bus.fuelConsumptionPer100Km != null ? String(bus.fuelConsumptionPer100Km) : '',
     adBlueConsumptionPer100Km:  bus.adBlueConsumptionPer100Km != null ? String(bus.adBlueConsumptionPer100Km) : '',
+    amenities:                  (bus.amenities ?? []) as BusAmenity[],
   };
 }
 
@@ -828,6 +926,7 @@ function formToPayload(f: BusFormValues) {
     initialOdometerKm:          numOrUndef(f.initialOdometerKm),
     fuelConsumptionPer100Km:    numOrUndef(f.fuelConsumptionPer100Km),
     adBlueConsumptionPer100Km:  numOrUndef(f.adBlueConsumptionPer100Km),
+    amenities:                  f.amenities,
   };
 }
 
@@ -1005,7 +1104,14 @@ export function PageFleetVehicles() {
               currencyCode={operational.currency}
             />
             <BusPhotoManager tenantId={tenantId} busId={editBus.id} />
-            <BusCostProfileSection tenantId={tenantId} busId={editBus.id} />
+            <BusCostProfileSection
+              tenantId={tenantId}
+              busId={editBus.id}
+              busHints={{
+                fuelConsumptionPer100Km: editBus.fuelConsumptionPer100Km ?? undefined,
+                purchasePrice:           editBus.purchasePrice ?? undefined,
+              }}
+            />
           </>
         )}
       </Dialog>

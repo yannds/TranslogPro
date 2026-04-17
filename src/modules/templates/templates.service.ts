@@ -358,9 +358,189 @@ export class TemplatesService {
       created.push(sys.slug);
     }
 
+    // Marquer un défaut par docType si aucun n'existe encore
+    const DEFAULT_SLUGS: Record<string, string> = {
+      TICKET: 'ticket-a5', MANIFEST: 'manifest-a4', INVOICE: 'invoice-a4',
+      LABEL: 'parcel-label', PACKING_LIST: 'packing-list-a4', ENVELOPE: 'envelope-c5',
+    };
+    for (const [docType, slug] of Object.entries(DEFAULT_SLUGS)) {
+      const hasDefault = await this.prisma.documentTemplate.findFirst({
+        where: { tenantId, docType, isDefault: true, isActive: true },
+      });
+      if (hasDefault) continue;
+      const target = await this.prisma.documentTemplate.findFirst({
+        where: { tenantId, slug, isActive: true },
+      });
+      if (target) {
+        await this.prisma.documentTemplate.update({ where: { id: target.id }, data: { isDefault: true } });
+      }
+    }
+
     this.logger.log(
       `Pack de démarrage restauré pour tenant ${tenantId} : ${created.length} créés, ${skipped.length} ignorés`,
     );
     return { created, skipped };
+  }
+
+  // ─── Preview avec données fictives ─────────────────────────────────────────
+
+  /**
+   * Génère un aperçu HTML du template avec des données fictives.
+   * Pour les templates PUPPETEER, appelle le renderer correspondant avec du mock data.
+   * Pour les templates HBS avec body, substitue les variables par des valeurs exemples.
+   */
+  async preview(tenantId: string, id: string): Promise<string> {
+    const template = await this.prisma.documentTemplate.findFirst({
+      where: { OR: [{ id, tenantId }, { id, tenantId: null }] },
+    });
+    if (!template) throw new NotFoundException(`Template ${id} introuvable`);
+
+    // Récupérer le nom du tenant pour le mock
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true, slug: true },
+    });
+    const tenantName = tenant?.name ?? 'Ma Compagnie';
+
+    // Données fictives selon le type de document
+    const now = new Date();
+    const dep = new Date(now.getTime() + 3 * 3600_000);  // +3h
+    const arr = new Date(now.getTime() + 8 * 3600_000);  // +8h
+
+    if (template.slug === 'ticket-2026' || template.slug === 'ticket-stub-html') {
+      const { renderTicket2026 } = await import('../documents/renderers/ticket-2026.renderer');
+      return renderTicket2026({
+        ticket: {
+          id: 'TKT-PREVIEW-001',
+          passengerName: 'Jean Dupont',
+          seatNumber: '12A',
+          pricePaid: 15000,
+          status: 'CONFIRMED',
+          qrToken: 'PREVIEW-QR-TOKEN-12345',
+          createdAt: now,
+          class: 'ECONOMY',
+          boardingStationName: 'Gare Centrale',
+          alightingStationName: 'Gare du Sud',
+        },
+        trip: {
+          id: 'TRIP-PREVIEW-001',
+          departureScheduled: dep,
+          arrivalScheduled: arr,
+          route: { name: 'Brazzaville — Pointe-Noire', originCity: 'Brazzaville', destinationCity: 'Pointe-Noire' },
+          bus: { plateNumber: 'BZV-1234-CG', model: 'Mercedes Tourismo' },
+        },
+        tenantName,
+        tenantSlug: tenant?.slug ?? 'preview',
+        primaryColor: '#0f172a',
+        secondaryColor: '#f59e0b',
+        actorId: '00000000-0000-0000-0000-000000000000',
+      });
+    }
+
+    if (template.slug === 'boarding-pass-2026') {
+      const { renderBoardingPass2026 } = await import('../documents/renderers/boarding-pass-2026.renderer');
+      return renderBoardingPass2026({
+        ticket: {
+          id: 'TKT-PREVIEW-001',
+          passengerName: 'Jean Dupont',
+          seatNumber: '12A',
+          qrToken: 'PREVIEW-QR-TOKEN-12345',
+          boardingStationName: 'Gare Centrale',
+          alightingStationName: 'Gare du Sud',
+        },
+        trip: {
+          departureScheduled: dep,
+          route: { originCity: 'Brazzaville', destinationCity: 'Pointe-Noire' },
+          bus: { plateNumber: 'BZV-1234-CG' },
+        },
+        tenantName,
+        actorId: '00000000-0000-0000-0000-000000000000',
+      });
+    }
+
+    // Template HBS/Puppeteer avec body inline — substitution basique des variables
+    if (template.body) {
+      return template.body
+        .replace(/\{\{tenantName\}\}/g, tenantName)
+        .replace(/\{\{passengerName\}\}/g, 'Jean Dupont')
+        .replace(/\{\{seatNumber\}\}/g, '12A')
+        .replace(/\{\{origin\}\}/g, 'Brazzaville')
+        .replace(/\{\{destination\}\}/g, 'Pointe-Noire')
+        .replace(/\{\{date\}\}/g, now.toLocaleDateString('fr-FR'))
+        .replace(/\{\{[^}]+\}\}/g, '—');  // fallback pour les variables inconnues
+    }
+
+    // Template PDFME — retourner un placeholder
+    if (template.engine === 'PDFME') {
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body { font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; }
+        .msg { text-align: center; color: #64748b; }
+        .msg h2 { color: #1e293b; margin-bottom: 8px; }
+      </style></head><body><div class="msg"><h2>${template.name}</h2><p>Ce template utilise le designer visuel PDFME.</p><p>Cliquez sur « Éditer » pour ouvrir le designer interactif.</p></div></body></html>`;
+    }
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body { font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; }
+      .msg { text-align: center; color: #64748b; }
+    </style></head><body><div class="msg"><h2>${template.name}</h2><p>Aucun aperçu disponible pour ce template.</p></div></body></html>`;
+  }
+
+  // ─── Default template management ────────────────────────────────────────────
+
+  /**
+   * Marque un template comme défaut pour son docType (un seul par docType par tenant).
+   * Swap transactionnel : désactive l'ancien défaut, active le nouveau.
+   */
+  async setAsDefault(tenantId: string, id: string) {
+    const template = await this.prisma.documentTemplate.findFirst({
+      where: { id, tenantId, isActive: true },
+    });
+    if (!template) throw new NotFoundException('Template not found');
+
+    await this.prisma.$transaction([
+      // Retirer l'ancien défaut pour ce docType
+      this.prisma.documentTemplate.updateMany({
+        where: { tenantId, docType: template.docType, isDefault: true },
+        data:  { isDefault: false },
+      }),
+      // Marquer le nouveau
+      this.prisma.documentTemplate.update({
+        where: { id },
+        data:  { isDefault: true },
+      }),
+    ]);
+
+    this.logger.log(`Template ${template.slug} set as default for ${template.docType} (tenant=${tenantId})`);
+    return this.findOne(tenantId, id);
+  }
+
+  /**
+   * Retire le statut défaut d'un template.
+   */
+  async unsetDefault(tenantId: string, id: string) {
+    const template = await this.prisma.documentTemplate.findFirst({
+      where: { id, tenantId, isActive: true },
+    });
+    if (!template) throw new NotFoundException('Template not found');
+
+    await this.prisma.documentTemplate.update({
+      where: { id },
+      data:  { isDefault: false },
+    });
+    return this.findOne(tenantId, id);
+  }
+
+  /**
+   * Résout le slug du template par défaut pour un docType donné.
+   * Ordre de résolution :
+   *   1. Template tenant marqué isDefault=true pour ce docType
+   *   2. Fallback vers le slug hardcodé fourni (rétro-compatible)
+   */
+  async resolveDefaultSlug(tenantId: string, docType: string, fallbackSlug: string): Promise<string> {
+    const defaultTpl = await this.prisma.documentTemplate.findFirst({
+      where:  { tenantId, docType, isDefault: true, isActive: true },
+      select: { slug: true },
+    });
+    return defaultTpl?.slug ?? fallbackSlug;
   }
 }

@@ -57,6 +57,14 @@ export const TRANSLATIONS: TranslogTranslations = {
       fr: 'Agence',       en: 'Agency',      ln: 'Eteyelo',      ktu: 'Kompani',
       es: 'Agencia',      pt: 'Agência',     ar: 'وكالة',        wo: 'Agence bi',
     },
+    agencyDeparture: {
+      fr: 'Gare départ',  en: 'Departure station', ln: 'Gare ya bokei', ktu: 'Gare ya bokati',
+      es: 'Estación salida', pt: 'Estação partida', ar: 'محطة المغادرة', wo: 'Gaar dem',
+    },
+    agencyArrival: {
+      fr: 'Gare arrivée', en: 'Arrival station', ln: 'Gare ya bokomi', ktu: 'Gare ya bokomi',
+      es: 'Estación llegada', pt: 'Estação chegada', ar: 'محطة الوصول', wo: 'Gaar agsi',
+    },
     platform: {
       fr: 'Quai',         en: 'Platform',    ln: 'Libanda',      ktu: 'Libanda',
       es: 'Andén',        pt: 'Plataforma',  ar: 'الرصيف',       wo: 'Kër bi',
@@ -349,6 +357,10 @@ export const TRANSLATIONS: TranslogTranslations = {
     alert: {
       fr: 'ALERTE',          en: 'ALERT',          ln: 'LIKEBI',        ktu: 'LIKEBI',
       es: 'ALERTA',          pt: 'ALERTA',         ar: 'تنبيه',         wo: 'TÉGGIN',
+    },
+    safety: {
+      fr: 'SÉCURITÉ',        en: 'SAFETY',         ln: 'BOBATELI',      ktu: 'BOBATELI',
+      es: 'SEGURIDAD',       pt: 'SEGURANÇA',      ar: 'السلامة',       wo: 'KAARANGE',
     },
     news: {
       fr: 'ACTUALITÉ',       en: 'NEWS',           ln: 'SANGO',         ktu: 'SANGO YANGO',

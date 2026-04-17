@@ -98,6 +98,19 @@ export class AuthService {
 
     const { user } = account;
 
+    // 1b. Vérifier que le compte est actif
+    if (!user.isActive) {
+      await this.auditSignIn({
+        userId:   user.id,
+        tenantId: user.tenantId,
+        success:  false,
+        ipAddress,
+        userAgent,
+        email,
+      });
+      throw new UnauthorizedException('Compte désactivé');
+    }
+
     // 2. Invalidation préventive des sessions expirées du même user (housekeeping)
     await this.prisma.session.deleteMany({
       where: { userId: user.id, expiresAt: { lt: new Date() } },
@@ -149,6 +162,12 @@ export class AuthService {
 
     if (!session || session.expiresAt < new Date()) {
       throw new UnauthorizedException('Session expirée ou invalide');
+    }
+
+    // Compte désactivé → révoquer la session immédiatement
+    if (!session.user.isActive) {
+      await this.prisma.session.delete({ where: { token } });
+      throw new UnauthorizedException('Compte désactivé');
     }
 
     // IP binding : si l'IP change, on invalide la session (session hijacking)

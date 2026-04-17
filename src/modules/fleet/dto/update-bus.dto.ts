@@ -1,7 +1,7 @@
 import {
-  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString,
+  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray,
 } from 'class-validator';
-import { BusType, FuelType, EngineType } from './create-bus.dto';
+import { BusType, FuelType, EngineType, BusAmenity } from './create-bus.dto';
 
 export class UpdateBusDto {
   @IsString() @IsOptional()
@@ -62,4 +62,7 @@ export class UpdateBusDto {
 
   @IsNumber() @Min(0) @IsOptional()
   adBlueConsumptionPer100Km?: number;
+
+  @IsArray() @IsEnum(BusAmenity, { each: true }) @IsOptional()
+  amenities?: BusAmenity[];
 }

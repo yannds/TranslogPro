@@ -82,6 +82,7 @@ interface DocTemplate {
   version:    number;
   isSystem:   boolean;
   isActive:   boolean;
+  isDefault:  boolean;
   createdAt:  string;
 }
 
@@ -126,8 +127,9 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
   const [tenantTemplates, setTenantTemplates] = useState<DocTemplate[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState<string | null>(null);
-  const [editingTemplate, setEditingTemplate] = useState<DocTemplate | null>(null);
-  const [duplicating,     setDuplicating]     = useState<string | null>(null);
+  const [editingTemplate,    setEditingTemplate]    = useState<DocTemplate | null>(null);
+  const [previewingTemplate, setPreviewingTemplate] = useState<DocTemplate | null>(null);
+  const [duplicating,        setDuplicating]        = useState<string | null>(null);
   const [restoringPack,   setRestoringPack]   = useState(false);
   const [filterDocType,   setFilterDocType]   = useState<string>('');
 
@@ -232,21 +234,66 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
     }
   };
 
-  // ─── Vue Designer ─────────────────────────────────────────────────────────
+  const handleToggleDefault = async (template: DocTemplate) => {
+    const endpoint = template.isDefault ? 'unset-default' : 'set-default';
+    try {
+      const res = await fetch(
+        `${apiBase}/tenants/${tenantId}/templates/${template.id}/${endpoint}`,
+        { method: 'PATCH', credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadTemplates();
+    } catch (e: any) {
+      alert(`${t('templates.errorDefault')} : ${e.message}`);
+    }
+  };
+
+  // ─── Vue Preview (tous templates) ──────────────────────────────────────────
+
+  if (previewingTemplate) {
+    return (
+      <HtmlTemplateEditor
+        tenantId={tenantId}
+        template={previewingTemplate}
+        apiBase={apiBase}
+        palette={p}
+        t={t}
+        onClose={() => { setPreviewingTemplate(null); }}
+      />
+    );
+  }
+
+  // ─── Vue Designer / Éditeur ────────────────────────────────────────────────
 
   if (editingTemplate) {
+    const closeEditor = () => { setEditingTemplate(null); loadTemplates(); };
+
+    if (editingTemplate.engine === 'PDFME') {
+      return (
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <TemplateDesigner
+            tenantId={tenantId}
+            templateId={editingTemplate.id}
+            templateName={editingTemplate.name}
+            docType={editingTemplate.docType as any}
+            apiBase={apiBase}
+            onClose={closeEditor}
+            onSaved={() => loadTemplates()}
+          />
+        </div>
+      );
+    }
+
+    // PUPPETEER / HBS → aperçu du rendu réel avec données fictives
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <TemplateDesigner
-          tenantId={tenantId}
-          templateId={editingTemplate.id}
-          templateName={editingTemplate.name}
-          docType={editingTemplate.docType as any}
-          apiBase={apiBase}
-          onClose={() => { setEditingTemplate(null); loadTemplates(); }}
-          onSaved={() => loadTemplates()}
-        />
-      </div>
+      <HtmlTemplateEditor
+        tenantId={tenantId}
+        template={editingTemplate}
+        apiBase={apiBase}
+        palette={p}
+        t={t}
+        onClose={closeEditor}
+      />
     );
   }
 
@@ -338,8 +385,10 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
                     t={t}
                     docTypeLabels={DOC_TYPE_LABELS}
                     formatLabels={FORMAT_LABELS}
+                    onPreview={() => setPreviewingTemplate(tpl)}
                     onEdit={() => setEditingTemplate(tpl)}
                     onDelete={() => handleDelete(tpl)}
+                    onToggleDefault={() => handleToggleDefault(tpl)}
                   />
                 ))}
               </div>
@@ -364,6 +413,7 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
                   t={t}
                   docTypeLabels={DOC_TYPE_LABELS}
                   formatLabels={FORMAT_LABELS}
+                  onPreview={() => setPreviewingTemplate(tpl)}
                   onDuplicate={() => handleDuplicate(tpl)}
                   duplicating={duplicating === tpl.id}
                 />
@@ -372,6 +422,86 @@ export function TemplateLibraryPage({ tenantId, apiBase = '/api' }: TemplateLibr
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── HtmlTemplateEditor — Aperçu + infos pour templates PUPPETEER/HBS ────────
+
+interface HtmlTemplateEditorProps {
+  tenantId:  string;
+  template:  DocTemplate;
+  apiBase?:  string;
+  palette:   typeof lightPalette;
+  t:         (k: string | Record<string, string | undefined>) => string;
+  onClose:   () => void;
+}
+
+function HtmlTemplateEditor({ tenantId, template, apiBase = '/api', palette: p, t, onClose }: HtmlTemplateEditorProps) {
+  const previewUrl = `${apiBase}/tenants/${tenantId}/templates/${template.id}/preview`;
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <button
+          onClick={onClose}
+          style={{
+            padding: '8px', borderRadius: '8px', border: `1px solid ${p.border}`,
+            background: p.surface, cursor: 'pointer', color: p.textBody,
+            display: 'flex', alignItems: 'center',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: p.textPrimary, margin: 0 }}>
+            {template.name}
+          </h1>
+          <p style={{ fontSize: '12px', color: p.textMuted, margin: '2px 0 0' }}>
+            {template.slug} &middot; v{template.version} &middot; {template.engine}
+          </p>
+        </div>
+        <span style={{
+          fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px',
+          background: `${template.engine === 'PUPPETEER' ? '#2563eb' : '#7c3aed'}20`,
+          color: template.engine === 'PUPPETEER' ? '#2563eb' : '#7c3aed',
+        }}>
+          {template.engine}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div style={{
+        padding: '12px 16px', borderRadius: '8px', marginBottom: '16px',
+        background: '#dbeafe', border: '1px solid #93c5fd', fontSize: '13px', color: '#1e40af',
+      }}>
+        {t('templates.puppeteerInfo')}
+      </div>
+
+      {/* Preview iframe */}
+      <div style={{
+        border: `1px solid ${p.border}`, borderRadius: '10px', overflow: 'hidden',
+        background: '#fff',
+      }}>
+        <div style={{
+          padding: '8px 16px', borderBottom: `1px solid ${p.border}`,
+          background: p.surfaceMuted, fontSize: '12px', fontWeight: 600, color: p.textMuted,
+          display: 'flex', alignItems: 'center', gap: '6px',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+          {t('templates.preview')}
+        </div>
+        <iframe
+          src={previewUrl}
+          title={`${t('templates.preview')} — ${template.name}`}
+          style={{
+            width: '100%', height: '600px', border: 'none',
+            background: '#fff',
+          }}
+          sandbox="allow-same-origin allow-scripts"
+        />
+      </div>
     </div>
   );
 }
@@ -388,11 +518,13 @@ interface TemplateCardProps {
   onEdit?:        () => void;
   onDelete?:      () => void;
   onDuplicate?:   () => void;
+  onPreview?:     () => void;
+  onToggleDefault?: () => void;
   duplicating?:   boolean;
 }
 
 function TemplateCard({
-  template, isOwned, palette: p, t, docTypeLabels: DOC_TYPE_LABELS, formatLabels: FORMAT_LABELS, onEdit, onDelete, onDuplicate, duplicating,
+  template, isOwned, palette: p, t, docTypeLabels: DOC_TYPE_LABELS, formatLabels: FORMAT_LABELS, onEdit, onDelete, onDuplicate, onPreview, onToggleDefault, duplicating,
 }: TemplateCardProps) {
   const engineColor = template.engine === 'PDFME' ? '#7c3aed' : '#2563eb';
   const engineLabel = template.engine === 'PDFME' ? 'Designer' : template.engine;
@@ -439,6 +571,17 @@ function TemplateCard({
         >
           {engineLabel}
         </span>
+        {template.isDefault && (
+          <span
+            style={{
+              fontSize: '10px', fontWeight: 700,
+              padding: '2px 7px', borderRadius: '3px',
+              background: '#fef3c7', color: '#92400e',
+            }}
+          >
+            ⭐ {t('templates.default')}
+          </span>
+        )}
       </div>
 
       {/* Title */}
@@ -452,8 +595,49 @@ function TemplateCard({
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-        {isOwned && template.engine === 'PDFME' && onEdit && (
+      <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+        {isOwned && onToggleDefault && (
+          <button
+            onClick={onToggleDefault}
+            title={template.isDefault ? t('templates.unsetDefault') : t('templates.setDefault')}
+            aria-label={template.isDefault ? t('templates.unsetDefault') : t('templates.setDefault')}
+            aria-pressed={template.isDefault}
+            style={{
+              padding: '6px 10px',
+              fontSize: '12px',
+              background: template.isDefault ? '#fef3c7' : p.surfaceBadge,
+              color: template.isDefault ? '#92400e' : p.textMuted,
+              border: `1px solid ${template.isDefault ? '#fbbf24' : p.borderStrong}`,
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '4px',
+            }}
+          >
+            {template.isDefault ? '⭐' : '☆'}
+            {template.isDefault ? t('templates.default') : t('templates.setDefault')}
+          </button>
+        )}
+        {onPreview && (
+          <button
+            onClick={onPreview}
+            style={{
+              padding: '6px 10px',
+              fontSize: '12px',
+              background: p.surfaceBadge,
+              color: p.textBody,
+              border: `1px solid ${p.borderStrong}`,
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '4px',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            {t('templates.preview')}
+          </button>
+        )}
+        {isOwned && onEdit && (
           <button
             onClick={onEdit}
             style={{

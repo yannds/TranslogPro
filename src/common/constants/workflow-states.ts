@@ -171,9 +171,18 @@ export const RefundState = {
 } as const;
 export type RefundState = typeof RefundState[keyof typeof RefundState];
 
+export const RefundAction = {
+  APPROVE:      'approve',
+  REJECT:       'reject',
+  PROCESS:      'process',
+  AUTO_APPROVE: 'auto_approve',
+} as const;
+export type RefundAction = typeof RefundAction[keyof typeof RefundAction];
+
 export const RefundReason = {
-  CLIENT_CANCEL:  'CLIENT_CANCEL',
-  TRIP_CANCELLED: 'TRIP_CANCELLED',
+  CLIENT_CANCEL:          'CLIENT_CANCEL',
+  TRIP_CANCELLED:         'TRIP_CANCELLED',
+  CUSTOMER_SELF_SERVICE:  'CUSTOMER_SELF_SERVICE',
 } as const;
 export type RefundReason = typeof RefundReason[keyof typeof RefundReason];
 

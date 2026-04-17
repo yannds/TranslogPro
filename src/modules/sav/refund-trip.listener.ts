@@ -26,7 +26,10 @@ export class RefundTripListener implements OnModuleInit {
       const refunds = await this.refundService.createBulkForTrip(tenantId, tripId as string);
       this.logger.log(`Created ${refunds.length} refund(s) for cancelled trip ${tripId}`);
     } catch (err) {
-      this.logger.error(`Failed to create refunds for trip ${tripId}`, (err as Error).stack);
+      this.logger.error(
+        `[REFUND] FAILED to create refunds for trip ${tripId} (tenant ${tenantId}): ${(err as Error).message}`,
+        (err as Error).stack,
+      );
     }
   }
 }

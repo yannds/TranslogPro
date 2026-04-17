@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Delete, Param, Body, Query, Headers, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Headers, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { TripService } from './trip.service';
 import { CreateTripDto } from './dto/create-trip.dto';
+import { UpdateTripDto } from './dto/update-trip.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
@@ -40,6 +41,16 @@ export class TripController {
     @ScopeCtx() scope: ScopeContext,
   ) {
     return this.tripService.findOne(tenantId, id, scope);
+  }
+
+  @Patch(':id')
+  @RequirePermission(Permission.TRIP_CREATE_TENANT)
+  update(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateTripDto,
+  ) {
+    return this.tripService.update(tenantId, id, dto);
   }
 
   @Get(':id/seats')

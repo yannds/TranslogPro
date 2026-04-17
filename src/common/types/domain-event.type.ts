@@ -37,6 +37,7 @@ export const EventTypes = {
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',
+  REFUND_AUTO_APPROVED:   'refund.auto_approved',
   REFUND_PROCESSED:       'refund.processed',
   REFUND_REJECTED:        'refund.rejected',
 

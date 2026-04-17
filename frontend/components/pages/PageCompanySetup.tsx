@@ -100,6 +100,7 @@ interface BusinessConfig {
   breakEvenThresholdPct:  number;
   agencyCommissionRate:   number;
   stationFeePerDeparture: number;
+  seatSelectionFee:       number;
 }
 
 // ─── Sous-composants ─────────────────────────────────────────────────────────
@@ -236,6 +237,7 @@ export function PageCompanySetup() {
         breakEvenThresholdPct:  bizForm.breakEvenThresholdPct,
         agencyCommissionRate:   bizForm.agencyCommissionRate,
         stationFeePerDeparture: bizForm.stationFeePerDeparture,
+        seatSelectionFee:       bizForm.seatSelectionFee,
       });
       setBizSaved(true);
       bizRefetch();
@@ -492,6 +494,14 @@ export function PageCompanySetup() {
                 <input id="stationFeePerDeparture" type="number" step="1" min="0"
                   value={bizForm.stationFeePerDeparture}
                   onChange={e => setBizForm(prev => prev ? { ...prev, stationFeePerDeparture: parseFloat(e.target.value || '0') } : prev)}
+                  className={INPUT_CLS} />
+              </Field>
+
+              <Field icon={Settings2} label={t('companySetup.seatSelectionFee')} htmlFor="seatSelectionFee"
+                     hint={t('companySetup.seatSelectionFeeHint')}>
+                <input id="seatSelectionFee" type="number" step="100" min="0"
+                  value={bizForm.seatSelectionFee}
+                  onChange={e => setBizForm(prev => prev ? { ...prev, seatSelectionFee: parseFloat(e.target.value || '0') } : prev)}
                   className={INPUT_CLS} />
               </Field>
 

@@ -1,0 +1,274 @@
+{
+  "_meta": {
+    "slug": "boarding-pass-2026",
+    "name": "Carte d'embarquement 2026",
+    "docType": "BOARDING_PASS",
+    "format": "A5",
+    "engine": "PDFME",
+    "description": "Coupon d'embarquement standalone — header ambre, QR code, visa contrôleur",
+    "variables": [
+      "tenantName", "ticketRef", "passengerName", "seatNumber",
+      "origin", "destination", "tripDate",
+      "busPlate", "qrCodeValue"
+    ]
+  },
+  "basePdf": {
+    "width": 148,
+    "height": 80,
+    "padding": [0, 0, 0, 0]
+  },
+  "schemas": [
+    [
+      {
+        "name": "stubBorder",
+        "type": "rectangle",
+        "position": { "x": 2, "y": 2 },
+        "width": 144,
+        "height": 76,
+        "color": "",
+        "borderColor": "#1e3a5f",
+        "borderWidth": 1
+      },
+      {
+        "name": "headerBg",
+        "type": "rectangle",
+        "position": { "x": 2, "y": 2 },
+        "width": 144,
+        "height": 12,
+        "color": "#f59e0b"
+      },
+      {
+        "name": "headerTitle",
+        "type": "text",
+        "position": { "x": 8, "y": 4 },
+        "width": 70,
+        "height": 7,
+        "content": "COUPON D'EMBARQUEMENT",
+        "fontSize": 8,
+        "fontColor": "#ffffff",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "headerNote",
+        "type": "text",
+        "position": { "x": 80, "y": 5 },
+        "width": 62,
+        "height": 5,
+        "content": "Ne pas séparer avant le contrôle",
+        "fontSize": 5.5,
+        "fontColor": "#ffffffcc",
+        "alignment": "right"
+      },
+      {
+        "name": "passengerLabel",
+        "type": "text",
+        "position": { "x": 8, "y": 18 },
+        "width": 35,
+        "height": 4,
+        "content": "PASSAGER",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "passengerName",
+        "type": "text",
+        "position": { "x": 8, "y": 22 },
+        "width": 55,
+        "height": 8,
+        "content": "{{passengerName}}",
+        "fontSize": 11,
+        "fontColor": "#1e3a5f",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "seatLabel",
+        "type": "text",
+        "position": { "x": 65, "y": 18 },
+        "width": 20,
+        "height": 4,
+        "content": "SIÈGE",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "seatNumber",
+        "type": "text",
+        "position": { "x": 65, "y": 22 },
+        "width": 20,
+        "height": 8,
+        "content": "{{seatNumber}}",
+        "fontSize": 11,
+        "fontColor": "#1e3a5f",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "fromLabel",
+        "type": "text",
+        "position": { "x": 8, "y": 34 },
+        "width": 30,
+        "height": 4,
+        "content": "DE",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "origin",
+        "type": "text",
+        "position": { "x": 8, "y": 38 },
+        "width": 35,
+        "height": 7,
+        "content": "{{origin}}",
+        "fontSize": 9,
+        "fontColor": "#0f172a",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "toLabel",
+        "type": "text",
+        "position": { "x": 45, "y": 34 },
+        "width": 30,
+        "height": 4,
+        "content": "À",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "destination",
+        "type": "text",
+        "position": { "x": 45, "y": 38 },
+        "width": 35,
+        "height": 7,
+        "content": "{{destination}}",
+        "fontSize": 9,
+        "fontColor": "#0f172a",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "depLabel",
+        "type": "text",
+        "position": { "x": 82, "y": 34 },
+        "width": 30,
+        "height": 4,
+        "content": "DÉPART",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "tripDate",
+        "type": "text",
+        "position": { "x": 82, "y": 38 },
+        "width": 30,
+        "height": 7,
+        "content": "{{tripDate}}",
+        "fontSize": 8,
+        "fontColor": "#0f172a",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "ticketLabel",
+        "type": "text",
+        "position": { "x": 8, "y": 50 },
+        "width": 35,
+        "height": 4,
+        "content": "N° BILLET",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "ticketRef",
+        "type": "text",
+        "position": { "x": 8, "y": 54 },
+        "width": 40,
+        "height": 6,
+        "content": "{{ticketRef}}",
+        "fontSize": 7,
+        "fontColor": "#374151"
+      },
+      {
+        "name": "busLabel",
+        "type": "text",
+        "position": { "x": 50, "y": 50 },
+        "width": 35,
+        "height": 4,
+        "content": "VÉHICULE",
+        "fontSize": 5.5,
+        "fontColor": "#94a3b8",
+        "fontName": "NotoSans-Bold"
+      },
+      {
+        "name": "busPlate",
+        "type": "text",
+        "position": { "x": 50, "y": 54 },
+        "width": 35,
+        "height": 6,
+        "content": "{{busPlate}}",
+        "fontSize": 7,
+        "fontColor": "#374151"
+      },
+      {
+        "name": "qrCode",
+        "type": "qrcode",
+        "position": { "x": 116, "y": 18 },
+        "width": 26,
+        "height": 26,
+        "content": "{{qrCodeValue}}"
+      },
+      {
+        "name": "qrRef",
+        "type": "text",
+        "position": { "x": 116, "y": 44 },
+        "width": 26,
+        "height": 4,
+        "content": "{{ticketRef}}",
+        "fontSize": 4.5,
+        "fontColor": "#94a3b8",
+        "alignment": "center"
+      },
+      {
+        "name": "separatorLine",
+        "type": "line",
+        "position": { "x": 8, "y": 62 },
+        "width": 132,
+        "height": 0.3,
+        "color": "#94a3b8"
+      },
+      {
+        "name": "validLabel",
+        "type": "text",
+        "position": { "x": 8, "y": 65 },
+        "width": 80,
+        "height": 4,
+        "content": "✓ Billet valide pour ce voyage uniquement — Non remboursable",
+        "fontSize": 5,
+        "fontColor": "#94a3b8"
+      },
+      {
+        "name": "visaBox",
+        "type": "rectangle",
+        "position": { "x": 110, "y": 63 },
+        "width": 30,
+        "height": 10,
+        "color": "#f8fafc",
+        "borderColor": "#94a3b8",
+        "borderWidth": 0.5
+      },
+      {
+        "name": "visaLabel",
+        "type": "text",
+        "position": { "x": 112, "y": 66 },
+        "width": 26,
+        "height": 4,
+        "content": "Visa contrôleur",
+        "fontSize": 5,
+        "fontColor": "#94a3b8",
+        "alignment": "center"
+      }
+    ]
+  ]
+}

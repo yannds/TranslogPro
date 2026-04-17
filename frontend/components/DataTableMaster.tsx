@@ -60,8 +60,8 @@ export interface Column<T> {
 }
 
 export interface RowAction<T> {
-  label:     string;
-  icon?:     React.ReactNode;
+  label:     string | ((row: T) => string);
+  icon?:     React.ReactNode | ((row: T) => React.ReactNode);
   onClick:   (row: T) => void;
   hidden?:   (row: T) => boolean;
   disabled?: (row: T) => boolean;
@@ -571,10 +571,10 @@ function DataTableMaster<T extends { id: string }>({
                                 className={`dtm-action-btn ${action.danger ? 'dtm-action-danger' : ''}`}
                                 onClick={() => action.onClick(row)}
                                 disabled={action.disabled?.(row) ?? false}
-                                aria-label={action.label}
-                                title={action.label}
+                                aria-label={typeof action.label === 'function' ? action.label(row) : action.label}
+                                title={typeof action.label === 'function' ? action.label(row) : action.label}
                               >
-                                {action.icon ?? action.label}
+                                {(typeof action.icon === 'function' ? action.icon(row) : action.icon) ?? (typeof action.label === 'function' ? action.label(row) : action.label)}
                               </button>
                             ))
                           }

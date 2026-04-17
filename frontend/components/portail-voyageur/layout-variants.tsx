@@ -97,6 +97,7 @@ export interface VariantFooterProps {
   accent: string;
   accentDark: string;
   t: (k: string) => string;
+  newsCmsEnabled?: boolean;
 }
 
 export interface VariantSectionTitleProps {
@@ -285,7 +286,7 @@ export function HorizonSectionTitle({ title }: VariantSectionTitleProps) {
   );
 }
 
-export function HorizonFooter({ brandName, nav, onSection, t }: VariantFooterProps) {
+export function HorizonFooter({ brandName, nav, onSection, t, newsCmsEnabled }: VariantFooterProps) {
   return (
     <footer className="border-t border-slate-100 dark:border-slate-800 mt-auto shrink-0" role="contentinfo">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -294,6 +295,7 @@ export function HorizonFooter({ brandName, nav, onSection, t }: VariantFooterPro
           {nav.slice(0, 4).map(n => (
             <button key={n.key} onClick={() => onSection(n.key)} className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 uppercase tracking-wider font-medium transition-colors">{n.label}</button>
           ))}
+          {newsCmsEnabled && <button onClick={() => onSection('news')} className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 uppercase tracking-wider font-medium transition-colors">{t('portail.newsTitle')}</button>}
         </div>
         <p className="text-[10px] text-slate-300 dark:text-slate-600">{t('portail.poweredBy')} TranslogPro</p>
       </div>
@@ -489,7 +491,7 @@ export function VividSectionTitle({ title, accent }: VariantSectionTitleProps) {
   );
 }
 
-export function VividFooter({ brandName, brandLogo, nav, onSection, accent, t }: VariantFooterProps) {
+export function VividFooter({ brandName, brandLogo, nav, onSection, accent, t, newsCmsEnabled }: VariantFooterProps) {
   return (
     <footer className="mt-auto shrink-0 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800" role="contentinfo">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
@@ -505,7 +507,10 @@ export function VividFooter({ brandName, brandLogo, nav, onSection, accent, t }:
           {/* Nav links */}
           <div>
             <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: accent }}>{t('portail.footerLinks')}</p>
-            <div className="space-y-2">{nav.map(n => <button key={n.key} onClick={() => onSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-colors">{n.label}</button>)}</div>
+            <div className="space-y-2">
+              {nav.map(n => <button key={n.key} onClick={() => onSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-colors">{n.label}</button>)}
+              {newsCmsEnabled && <button onClick={() => onSection('news')} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-colors">{t('portail.newsTitle')}</button>}
+            </div>
           </div>
           {/* Legal */}
           <div>
@@ -714,7 +719,7 @@ export function PrestigeSectionTitle({ title, accent }: VariantSectionTitleProps
   );
 }
 
-export function PrestigeFooter({ brandName, brandLogo, nav, onSection, accent, t }: VariantFooterProps) {
+export function PrestigeFooter({ brandName, brandLogo, nav, onSection, accent, t, newsCmsEnabled }: VariantFooterProps) {
   return (
     <footer className="bg-slate-950 text-white mt-auto shrink-0" role="contentinfo">
       <div className="h-[1px] w-full" style={{ background: `linear-gradient(90deg, transparent, ${accent}40, transparent)` }} />
@@ -729,7 +734,10 @@ export function PrestigeFooter({ brandName, brandLogo, nav, onSection, accent, t
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] mb-3" style={{ color: accent }}>{t('portail.footerLinks')}</p>
-            <div className="space-y-2">{nav.map(n => <button key={n.key} onClick={() => onSection(n.key)} className="block text-sm text-slate-400 hover:text-white transition-colors">{n.label}</button>)}</div>
+            <div className="space-y-2">
+              {nav.map(n => <button key={n.key} onClick={() => onSection(n.key)} className="block text-sm text-slate-400 hover:text-white transition-colors">{n.label}</button>)}
+              {newsCmsEnabled && <button onClick={() => onSection('news')} className="block text-sm text-slate-400 hover:text-white transition-colors">{t('portail.newsTitle')}</button>}
+            </div>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] mb-3" style={{ color: accent }}>{t('portail.footerLegal')}</p>

@@ -81,19 +81,24 @@ export class SavController {
   // ── Refunds ───────────────────────────────────────────────────────────────
 
   @Get('refunds')
-  @RequirePermission(Permission.REFUND_READ_TENANT)
+  @RequirePermission(Permission.REFUND_READ_AGENCY)
   findAllRefunds(@TenantId() tenantId: string, @Query('status') status?: string) {
     return this.refundService.findAll(tenantId, status);
   }
 
   @Get('refunds/:id')
-  @RequirePermission(Permission.REFUND_READ_TENANT)
+  @RequirePermission(Permission.REFUND_READ_AGENCY)
   findOneRefund(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.refundService.findOne(tenantId, id);
   }
 
+  /**
+   * Approbation remboursement — dual scope.
+   * Permission minimum : data.refund.approve.agency (le service vérifie le seuil
+   * et refuse si le montant dépasse le plafond agence pour les non-admin).
+   */
   @Post('refunds/:id/approve')
-  @RequirePermission(Permission.REFUND_APPROVE_TENANT)
+  @RequirePermission(Permission.REFUND_APPROVE_AGENCY)
   approveRefund(
     @TenantId() tenantId: string,
     @Param('id') id: string,
@@ -113,7 +118,7 @@ export class SavController {
   }
 
   @Post('refunds/:id/reject')
-  @RequirePermission(Permission.REFUND_APPROVE_TENANT)
+  @RequirePermission(Permission.REFUND_APPROVE_AGENCY)
   rejectRefund(
     @TenantId() tenantId: string,
     @Param('id') id: string,

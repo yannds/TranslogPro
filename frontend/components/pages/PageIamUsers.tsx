@@ -15,6 +15,7 @@ import { useState, type FormEvent } from 'react';
 import {
   Users, Plus, Pencil, Trash2, X, Check,
   AlertTriangle, UserCircle, LogOut, Eye,
+  UserX, UserCheck,
 } from 'lucide-react';
 import { UserDetailDialog } from '../iam/UserDetailDialog';
 import { useFetch }            from '../../lib/hooks/useFetch';
@@ -39,6 +40,7 @@ interface UserRow {
   name:      string | null;
   roleId:    string | null;
   agencyId:  string | null;
+  isActive:  boolean;
   createdAt: string;
   role?:     RoleSummary | null;
   agency?:   AgencySummary | null;
@@ -103,6 +105,18 @@ function buildColumns(currentUserId: string, t: (key: string) => string): Column
         </span>
       ),
       csvValue: (_v, row) => row.agency?.name ?? '',
+    },
+    {
+      key: 'isActive',
+      header: t('iamUsers.colStatus'),
+      sortable: true,
+      width: '100px',
+      cellRenderer: (v) => (
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${v ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+          {v ? t('iamUsers.active') : t('iamUsers.inactive')}
+        </span>
+      ),
+      csvValue: (v) => v ? 'Active' : 'Inactive',
     },
     {
       key: 'createdAt',
@@ -324,6 +338,15 @@ export function PageIamUsers() {
     finally { setBusy(false); }
   };
 
+  const handleToggleActive = async (row: UserRow) => {
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`${base}/users/${row.id}/toggle-active`);
+      refetch();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   const columns    = buildColumns(me?.id ?? '', t);
   const rowActions: RowAction<UserRow>[] = [
     {
@@ -335,6 +358,12 @@ export function PageIamUsers() {
       label:    t('common.edit'),
       icon:     <Pencil size={13} />,
       onClick:  (row) => { setEditUser(row); setActionErr(null); },
+    },
+    {
+      label:    (row) => row.isActive ? t('iamUsers.deactivate') : t('iamUsers.activate'),
+      icon:     (row) => row.isActive ? <UserX size={13} /> : <UserCheck size={13} />,
+      hidden:   (row) => row.id === (me?.id ?? ''),
+      onClick:  handleToggleActive,
     },
     {
       label:    t('iamUsers.forceReconnect'),

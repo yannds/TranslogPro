@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Upload, Trash2, Download, FileText, Image as ImgIcon, Loader2, AlertTriangle, Eye, X, ExternalLink } from 'lucide-react';
+import { Upload, Trash2, Download, FileText, Image as ImgIcon, Loader2, AlertTriangle, Eye, X, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useFetch }    from '../../lib/hooks/useFetch';
 import { apiFetch, apiDelete, ApiError } from '../../lib/api';
 import { Badge }       from '../ui/Badge';
@@ -73,10 +73,17 @@ export interface DocumentAttachmentsProps {
   readOnly?: boolean;
   /** Notifie le parent quand l'aperçu s'ouvre/ferme (pour élargir la modale). */
   onPreviewChange?: (open: boolean) => void;
+  /**
+   * Single Entry Point : si fourni, lorsque kind=LICENSE est sélectionné,
+   * la zone d'upload est remplacée par un bouton qui appelle ce callback
+   * (ouvre la modale permis centralisée). Le scan sera attaché via le
+   * workflow DriverLicense, pas via Attachment générique.
+   */
+  onLicenseRedirect?: () => void;
 }
 
 export function DocumentAttachments({
-  tenantId, entityType, entityId, allowedKinds, readOnly = false, onPreviewChange,
+  tenantId, entityType, entityId, allowedKinds, readOnly = false, onPreviewChange, onLicenseRedirect,
 }: DocumentAttachmentsProps) {
   const { t } = useI18n();
   const KIND_LABELS = kindLabels(t);
@@ -167,6 +174,26 @@ export function DocumentAttachments({
             </select>
           </div>
 
+          {/* Single Entry Point : redirect vers la modale permis centralisée */}
+          {kind === 'LICENSE' && onLicenseRedirect ? (
+            <button
+              type="button"
+              onClick={onLicenseRedirect}
+              className={
+                'flex items-center justify-center gap-2 rounded-lg border-2 border-dashed ' +
+                'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 ' +
+                'px-4 py-6 text-sm text-amber-700 dark:text-amber-300 cursor-pointer w-full ' +
+                'hover:border-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 ' +
+                'focus:outline-none focus:ring-2 focus:ring-amber-500/40 transition-colors'
+              }
+            >
+              <ShieldCheck className="w-5 h-5 flex-shrink-0" aria-hidden />
+              <span className="text-left">
+                <span className="font-medium block">{t('documents.licenseRedirectTitle')}</span>
+                <span className="text-xs text-amber-600 dark:text-amber-400">{t('documents.licenseRedirectDesc')}</span>
+              </span>
+            </button>
+          ) : (
           <label
             htmlFor="att-file"
             onDragOver={e => e.preventDefault()}
@@ -195,6 +222,7 @@ export function DocumentAttachments({
               className="sr-only"
             />
           </label>
+          )}
 
           {progress > 0 && (
             <div

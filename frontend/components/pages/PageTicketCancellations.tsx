@@ -45,8 +45,8 @@ function buildColumns(t: (k: string) => string): Column<CancelledTicketRow>[] {
     { key: 'passengerName',  header: t('ticketCancellations.passenger'), sortable: true },
     {
       key: 'totalAmount', header: t('ticketCancellations.price'), sortable: true,
-      cellRenderer: (_v, row) => `${row.totalAmount.toLocaleString()} ${row.currency}`,
-      csvValue: (_v, row) => String(row.totalAmount),
+      cellRenderer: (_v, row) => `${(row.totalAmount ?? 0).toLocaleString()} ${row.currency ?? ''}`,
+      csvValue: (_v, row) => String(row.totalAmount ?? 0),
     },
     { key: 'cancellationReason', header: t('ticketCancellations.reason') },
     {

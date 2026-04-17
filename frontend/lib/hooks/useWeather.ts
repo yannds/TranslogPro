@@ -91,3 +91,25 @@ export function useWeather(cityCode: string | undefined): {
 
   return { weather, loading, error };
 }
+
+// ─── Multi-city hook (pour ticker météo) ────────────────────────────────────
+
+/**
+ * Retourne la météo pour plusieurs villes en une seule passe.
+ * Les cityCodes sont dédupliqués automatiquement.
+ */
+export function useWeatherMulti(cityCodes: string[]): WeatherData[] {
+  const [data, setData] = useState<WeatherData[]>([]);
+
+  useEffect(() => {
+    const unique = [...new Set(cityCodes.map(c => c.toUpperCase()))];
+    const results: WeatherData[] = [];
+    for (const code of unique) {
+      const w = MOCK_WEATHER[code];
+      if (w) results.push(w);
+    }
+    setData(results);
+  }, [cityCodes.join(',')]);
+
+  return data;
+}

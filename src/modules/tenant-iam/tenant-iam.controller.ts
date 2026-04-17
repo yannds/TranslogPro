@@ -96,6 +96,16 @@ export class TenantIamController {
     return this.iam.deleteUser(tenantId, userId, actor.id);
   }
 
+  @Patch('users/:userId/toggle-active')
+  @RequirePermission(Permission.IAM_MANAGE_TENANT)
+  toggleUserActive(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.toggleUserActive(tenantId, userId, actor.id);
+  }
+
   // ─── Rôles ────────────────────────────────────────────────────────────────
 
   @Get('roles')

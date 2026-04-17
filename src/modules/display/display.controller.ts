@@ -26,6 +26,22 @@ export class DisplayController {
     private readonly display:  DisplayService,
   ) {}
 
+  // ─── Affichage toutes gares (scope tenant) ────────────────────────────────────
+
+  /**
+   * GET /tenants/:tenantId/display
+   *
+   * Retourne tous les prochains trajets du tenant (pas de filtre gare).
+   * Endpoint public pour les écrans d'affichage en mode "toutes les gares".
+   */
+  @Get('display')
+  async tenantDisplay(
+    @Param('tenantId') tenantId: string,
+    @Query()           query:    DisplayQueryDto,
+  ) {
+    return this.display.getTenantDisplay(tenantId, query);
+  }
+
   // ─── Affichage gare ───────────────────────────────────────────────────────────
 
   /**

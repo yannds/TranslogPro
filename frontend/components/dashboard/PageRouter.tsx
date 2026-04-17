@@ -18,7 +18,6 @@ import { PageAiRoutes }  from './PageAiRoutes';
 import { PageCashier }   from './PageCashier';
 import { PageCrm }       from './PageCrm';
 import { PageSafety }    from './PageSafety';
-import { PageDisplay }   from './PageDisplay';
 import { PageWip }       from './PageWip';
 
 // ── Pages réelles lourdes (lazy — code-split) ─────────────────────────────────
@@ -49,6 +48,10 @@ const LazyBranding       = lazy(() => import('../pages/PageBranding').then(m => 
 const LazyPortalAdmin    = lazy(() => import('../pages/PagePortalAdmin').then(m => ({ default: m.PagePortalAdmin })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPortalMarket   = lazy(() => import('../pages/PagePortalMarketplace').then(m => ({ default: m.PagePortalMarketplace })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCmsPages       = lazy(() => import('../pages/PageCmsPages').then(m => ({ default: m.PageCmsPages })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCmsPosts       = lazy(() => import('../pages/PageCmsPosts').then(m => ({ default: m.PageCmsPosts })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m => ({ default: m.PageCompanySetup })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -135,6 +138,12 @@ const LazyTariffGrid          = lazy(() => import('../pages/PageTariffGrid').the
 const LazyInvoices            = lazy(() => import('../pages/PageInvoices').then(m => ({ default: m.PageInvoices })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPromotions          = lazy(() => import('../pages/PagePromotions').then(m => ({ default: m.PagePromotions })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDisplayGare         = lazy(() => import('../pages/PageDisplayGare').then(m => ({ default: m.PageDisplayGare })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDisplayQuai         = lazy(() => import('../pages/PageDisplayQuai').then(m => ({ default: m.PageDisplayQuai })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDisplayBus          = lazy(() => import('../pages/PageDisplayBus').then(m => ({ default: m.PageDisplayBus })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -227,7 +236,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'sa-manifest':         return <PageWip title={t('router.saManifest')} />;
     case 'sa-cashier':          return <PageCashier />;
     case 'sa-receipts':         return <PageWip title={t('router.saReceipts')} />;
-    case 'sa-display':          return <PageWip title={t('router.saDisplay')} />;
+    case 'sa-display':          return <LazyDisplayGare />;
     case 'sa-sav':              return <PageWip title={t('router.saIncident')} />;
 
     // ── Portail Agent de Quai (items QUAI_AGENT_NAV) ───────────────────────
@@ -237,7 +246,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'qa-manifest':         return <PageWip title={t('router.qaManifest')} />;
     case 'qa-luggage':          return <PageWip title={t('router.qaLuggage')} />;
     case 'qa-delay':            return <PageWip title={t('router.qaDelay')} />;
-    case 'qa-display':          return <PageWip title={t('router.qaDisplay')} />;
+    case 'qa-display':          return <LazyDisplayQuai />;
     case 'qa-sav':              return <PageWip title={t('router.qaIncident')} />;
     case 'staff-list':
     case 'personnel':           return <LazyPersonnel />;
@@ -253,8 +262,9 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'crm-feedback':        return <PageWip title={t('router.feedback')} />;
 
     // ── Affichage & Sécurité ───────────────────────────────────────────────
-    case 'display-screens':     return <PageDisplay />;
-    case 'display-quais':       return <PageWip title={t('router.platformMgmt')} />;
+    case 'display-screens':     return <LazyDisplayGare />;
+    case 'display-quais':       return <LazyDisplayQuai />;
+    case 'display-bus':         return <LazyDisplayBus />;
     case 'display-announcements': return <PageWip title={t('router.stationAnnounce')} />;
     case 'safety-incidents':    return <PageSafety />;
     case 'safety-monitor':      return <PageWip title={t('router.liveMonitor')} />;
@@ -274,6 +284,8 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'white-label':         return <LazyBranding />;
     case 'portal-admin':        return <LazyPortalAdmin />;
     case 'portal-marketplace':  return <LazyPortalMarket />;
+    case 'cms-pages':           return <LazyCmsPages />;
+    case 'cms-posts':           return <LazyCmsPosts />;
     case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <PageWip title={t('router.apiIntegrations')} />;
     case 'documents-templates': return <LazyTemplateStudio />;

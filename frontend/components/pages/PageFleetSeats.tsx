@@ -31,6 +31,8 @@ interface BusRow {
   model?:      string | null;
   capacity:    number;
   seatLayout?: SeatLayout | null;
+  isFullVip?:  boolean;
+  vipSeats?:   string[];
 }
 
 interface SeatLayout {
@@ -62,6 +64,9 @@ export function PageFleetSeats() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layout,     setLayout]     = useState<SeatLayout>(DEFAULT_LAYOUT);
+  const [isFullVip,  setIsFullVip]  = useState(false);
+  const [vipSeats,   setVipSeats]   = useState<Set<string>>(new Set());
+  const [editMode,   setEditMode]   = useState<'disable' | 'vip'>('disable');
   const [busy,       setBusy]       = useState(false);
   const [saveErr,    setSaveErr]    = useState<string | null>(null);
   const [saved,      setSaved]      = useState(false);
@@ -79,6 +84,8 @@ export function PageFleetSeats() {
         ? (selected.seatLayout as SeatLayout)
         : { ...DEFAULT_LAYOUT, rows: Math.max(5, Math.ceil(selected.capacity / 4)) },
     );
+    setIsFullVip(selected.isFullVip ?? false);
+    setVipSeats(new Set(selected.vipSeats ?? []));
   }, [selected]);
 
   useEffect(() => {
@@ -87,9 +94,23 @@ export function PageFleetSeats() {
 
   const toggleCell = (r: number, c: number) => {
     const id = cellId(r, c);
-    const current = new Set(layout.disabled ?? []);
-    if (current.has(id)) current.delete(id); else current.add(id);
-    setLayout({ ...layout, disabled: Array.from(current) });
+    if (editMode === 'disable') {
+      const current = new Set(layout.disabled ?? []);
+      if (current.has(id)) current.delete(id); else current.add(id);
+      setLayout({ ...layout, disabled: Array.from(current) });
+      // Remove from VIP if disabled
+      if (current.has(id)) {
+        setVipSeats(prev => { const n = new Set(prev); n.delete(id); return n; });
+      }
+    } else {
+      // VIP toggle — only on active (non-disabled) seats
+      if ((layout.disabled ?? []).includes(id)) return;
+      setVipSeats(prev => {
+        const n = new Set(prev);
+        if (n.has(id)) n.delete(id); else n.add(id);
+        return n;
+      });
+    }
     setSaved(false);
   };
 
@@ -97,7 +118,11 @@ export function PageFleetSeats() {
     if (!selected) return;
     setBusy(true); setSaveErr(null); setSaved(false);
     try {
-      await apiPatch(`${base}/${selected.id}/seat-layout`, { seatLayout: layout });
+      await apiPatch(`${base}/${selected.id}/seat-layout`, {
+        seatLayout: layout,
+        isFullVip,
+        vipSeats: Array.from(vipSeats),
+      });
       setSaved(true); refetch();
     } catch (e) { setSaveErr((e as Error).message); }
     finally { setBusy(false); }
@@ -149,9 +174,13 @@ export function PageFleetSeats() {
                         </p>
                         <p className="text-xs text-slate-500 truncate">{b.model || '—'} · {b.capacity} {t('fleetSeats.seats')}</p>
                       </div>
-                      {b.seatLayout
-                        ? <Badge variant="success" size="sm">{t('fleetSeats.seatOk')}</Badge>
-                        : <Badge variant="warning" size="sm">{t('fleetSeats.seatTodo')}</Badge>}
+                      <div className="flex items-center gap-1">
+                        {b.isFullVip && <Badge variant="info" size="sm">VIP</Badge>}
+                        {!b.isFullVip && (b.vipSeats?.length ?? 0) > 0 && <Badge variant="info" size="sm">{b.vipSeats!.length} VIP</Badge>}
+                        {b.seatLayout
+                          ? <Badge variant="success" size="sm">{t('fleetSeats.seatOk')}</Badge>
+                          : <Badge variant="warning" size="sm">{t('fleetSeats.seatTodo')}</Badge>}
+                      </div>
                     </button>
                   </li>
                 ))}
@@ -203,9 +232,44 @@ export function PageFleetSeats() {
                   </div>
                 </div>
 
+                {/* ── VIP configuration ── */}
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-lg p-4 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox" checked={isFullVip}
+                      onChange={e => { setIsFullVip(e.target.checked); setSaved(false); }}
+                      className="w-4 h-4 rounded border-amber-400 text-amber-500 focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">{t('fleetSeats.fullVipLabel')}</span>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">{t('fleetSeats.fullVipHint')}</p>
+                    </div>
+                  </label>
+                  {!isFullVip && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{t('fleetSeats.editModeLabel')}:</span>
+                      <div className="inline-flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5">
+                        <button type="button" onClick={() => setEditMode('disable')}
+                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${editMode === 'disable' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                          {t('fleetSeats.modeDisable')}
+                        </button>
+                        <button type="button" onClick={() => setEditMode('vip')}
+                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${editMode === 'vip' ? 'bg-amber-500 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+                          {t('fleetSeats.modeVip')}
+                        </button>
+                      </div>
+                      {vipSeats.size > 0 && (
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                          {vipSeats.size} VIP
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <LayoutGrid className="w-3.5 h-3.5" aria-hidden />
-                  {t('fleetSeats.clickHint')}
+                  {editMode === 'vip' && !isFullVip ? t('fleetSeats.clickHintVip') : t('fleetSeats.clickHint')}
                 </p>
 
                 {/* Grille */}
@@ -226,17 +290,24 @@ export function PageFleetSeats() {
                               const disabled = (layout.disabled ?? []).includes(id);
                               return (
                                 <div key={c} className="flex items-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleCell(r, c)}
-                                    aria-label={`${t('fleetSeats.seats')} ${id} ${disabled ? t('fleetSeats.seatDisabled') : t('fleetSeats.seatActive')}`}
-                                    className={`w-8 h-8 text-[10px] rounded border transition-colors
-                                      ${disabled
-                                        ? 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
-                                        : 'bg-teal-500 hover:bg-teal-400 border-teal-600 text-white font-semibold'}`}
-                                  >
-                                    {disabled ? '×' : id}
-                                  </button>
+                                  {(() => {
+                                    const isVip = isFullVip || vipSeats.has(id);
+                                    const cls = disabled
+                                      ? 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
+                                      : isVip
+                                        ? 'bg-amber-500 hover:bg-amber-400 border-amber-600 text-white font-semibold'
+                                        : 'bg-teal-500 hover:bg-teal-400 border-teal-600 text-white font-semibold';
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleCell(r, c)}
+                                        aria-label={`${t('fleetSeats.seats')} ${id} ${disabled ? t('fleetSeats.seatDisabled') : isVip ? 'VIP' : t('fleetSeats.seatActive')}`}
+                                        className={`w-8 h-8 text-[10px] rounded border transition-colors ${cls}`}
+                                      >
+                                        {disabled ? '×' : isVip ? '★' : id}
+                                      </button>
+                                    );
+                                  })()}
                                   {layout.aisleAfter === c && c < layout.cols && (
                                     <div className="w-3" aria-hidden />
                                   )}

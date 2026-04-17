@@ -69,6 +69,8 @@ interface SeatInfo {
   totalCount:       number;
   soldCount:        number;
   seatSelectionFee: number;
+  isFullVip?:       boolean;
+  vipSeats?:        string[];
 }
 
 type FareClass = 'STANDARD' | 'CONFORT' | 'VIP' | 'STANDING';
@@ -485,6 +487,8 @@ export function PageSellTicket() {
                     onSelect={() => {}}
                     seatSelectionFee={seatInfo.seatSelectionFee}
                     currency={batchResult?.pricingSummary?.currency}
+                    isFullVip={seatInfo.isFullVip}
+                    vipSeats={seatInfo.vipSeats}
                     disabled
                   />
                 </CardContent>
@@ -630,6 +634,8 @@ export function PageSellTicket() {
                                   })}
                                   seatSelectionFee={seatInfo.seatSelectionFee}
                                   currency={batchResult?.pricingSummary?.currency}
+                                  isFullVip={seatInfo.isFullVip}
+                                  vipSeats={seatInfo.vipSeats}
                                 />
                               </div>
                             )}

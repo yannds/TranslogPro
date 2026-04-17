@@ -1,6 +1,8 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
+  UseInterceptors, UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   DriverProfileService,
   CreateDriverLicenseDto,
@@ -14,6 +16,14 @@ import {
 } from './driver-profile.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
+
+interface MulterFile {
+  fieldname:    string;
+  originalname: string;
+  mimetype:     string;
+  size:         number;
+  buffer:       Buffer;
+}
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { Permission }        from '../../common/constants/permissions';
 
@@ -23,6 +33,14 @@ import { Permission }        from '../../common/constants/permissions';
 @Controller('tenants/:tenantId/driver-profile')
 export class DriverProfileController {
   constructor(private readonly svc: DriverProfileService) {}
+
+  // ── Stats (KPIs) ───────────────────────────────────────────────────────────
+
+  @Get('stats')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getStats(@TenantId() tenantId: string) {
+    return this.svc.getStats(tenantId);
+  }
 
   // ── Rest Configuration ─────────────────────────────────────────────────────
 
@@ -50,20 +68,26 @@ export class DriverProfileController {
 
   @Post('licenses')
   @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
   createLicense(
     @TenantId() tenantId: string,
     @Body() dto: CreateDriverLicenseDto,
+    @UploadedFile() file?: MulterFile,
   ) {
+    if (file) dto.file = file;
     return this.svc.createLicense(tenantId, dto);
   }
 
   @Patch('licenses/:id')
   @RequirePermission(Permission.DRIVER_MANAGE_TENANT)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
   updateLicense(
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() dto: UpdateDriverLicenseDto,
+    @UploadedFile() file?: MulterFile,
   ) {
+    if (file) dto.file = file;
     return this.svc.updateLicense(tenantId, id, dto);
   }
 
@@ -98,6 +122,15 @@ export class DriverProfileController {
   @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
   getAllLicenses(@TenantId() tenantId: string) {
     return this.svc.getAllLicenses(tenantId);
+  }
+
+  @Get('licenses/:id/scan')
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
+  getLicenseScanUrl(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.svc.getLicenseScanUrl(tenantId, id);
   }
 
   @Get('licenses/alerts')

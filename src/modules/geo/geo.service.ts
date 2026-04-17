@@ -13,6 +13,7 @@ export interface GeoSearchResult {
   displayName: string;
   lat:         number;
   lng:         number;
+  countryCode: string;
 }
 
 const NOMINATIM_URL   = 'https://nominatim.openstreetmap.org/search';
@@ -46,7 +47,7 @@ export class GeoService {
     url.searchParams.set('q', q);
     url.searchParams.set('format', 'jsonv2');
     url.searchParams.set('limit', String(MAX_RESULTS));
-    url.searchParams.set('addressdetails', '0');
+    url.searchParams.set('addressdetails', '1');
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -69,8 +70,9 @@ export class GeoService {
       raw = await res.json();
     } catch (e) {
       if (e instanceof ServiceUnavailableException) throw e;
-      this.log.warn(`Nominatim error: ${(e as Error).message}`);
-      throw new ServiceUnavailableException('Geocoding upstream unavailable');
+      const msg = (e as Error).message ?? String(e);
+      this.log.warn(`Nominatim error: ${msg}`);
+      throw new ServiceUnavailableException(`Geocoding indisponible : ${msg}`);
     } finally {
       clearTimeout(timer);
     }
@@ -102,12 +104,14 @@ export class GeoService {
       const lat = Number(r.lat);
       const lng = Number(r.lon);
       const displayName = typeof r.display_name === 'string' ? r.display_name : '';
+      const address = r.address as Record<string, unknown> | undefined;
+      const countryCode = (typeof address?.country_code === 'string' ? address.country_code : '').toUpperCase();
       if (
         !displayName ||
         !Number.isFinite(lat) || !Number.isFinite(lng) ||
         lat < -90 || lat > 90 || lng < -180 || lng > 180
       ) continue;
-      out.push({ displayName: displayName.slice(0, 240), lat, lng });
+      out.push({ displayName: displayName.slice(0, 240), lat, lng, countryCode });
       if (out.length >= MAX_RESULTS) break;
     }
     return out;

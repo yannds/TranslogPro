@@ -1,5 +1,5 @@
 import {
-  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString,
+  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray,
 } from 'class-validator';
 
 export enum BusType {
@@ -7,6 +7,18 @@ export enum BusType {
   CONFORT   = 'CONFORT',
   VIP       = 'VIP',
   MINIBUS   = 'MINIBUS',
+}
+
+export enum BusAmenity {
+  WIFI              = 'WIFI',
+  AC                = 'AC',
+  TOILETS           = 'TOILETS',
+  USB_CHARGING      = 'USB_CHARGING',
+  RECLINING_SEATS   = 'RECLINING_SEATS',
+  TV                = 'TV',
+  SNACK_BAR         = 'SNACK_BAR',
+  BLANKETS          = 'BLANKETS',
+  LUGGAGE_TRACKING  = 'LUGGAGE_TRACKING',
 }
 
 export enum FuelType {
@@ -96,4 +108,8 @@ export class CreateBusDto {
   /** Consommation AdBlue déclarée (L/100km) — moteurs Euro 6 */
   @IsNumber() @Min(0) @IsOptional()
   adBlueConsumptionPer100Km?: number;
+
+  /** Commodités du véhicule */
+  @IsArray() @IsEnum(BusAmenity, { each: true }) @IsOptional()
+  amenities?: BusAmenity[];
 }

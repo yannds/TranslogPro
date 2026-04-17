@@ -130,6 +130,61 @@ export class TripService {
     return trip;
   }
 
+  async update(tenantId: string, tripId: string, dto: {
+    busId?: string; driverId?: string;
+    departureTime?: string; estimatedArrivalTime?: string;
+    seatingMode?: 'FREE' | 'NUMBERED';
+  }) {
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: tripId, tenantId },
+    });
+    if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
+
+    // Only PLANNED or OPEN trips can be edited
+    if (!['PLANNED', 'OPEN'].includes(trip.status)) {
+      throw new ConflictException(
+        `Impossible de modifier un trajet en statut « ${trip.status} ». Seuls les trajets PLANIFIÉS ou OUVERTS peuvent être modifiés.`,
+      );
+    }
+
+    const data: Record<string, unknown> = {};
+
+    if (dto.departureTime) data.departureScheduled = new Date(dto.departureTime);
+    if (dto.estimatedArrivalTime) data.arrivalScheduled = new Date(dto.estimatedArrivalTime);
+    if (dto.busId) data.busId = dto.busId;
+    if (dto.driverId) data.driverId = dto.driverId;
+
+    // Seating mode validation
+    if (dto.seatingMode) {
+      if (dto.seatingMode === 'NUMBERED') {
+        const busId = dto.busId ?? trip.busId;
+        const bus = await this.prisma.bus.findUniqueOrThrow({ where: { id: busId } });
+        if (!bus.seatLayout) {
+          throw new BadRequestException(
+            'Le bus sélectionné n\'a pas de plan de sièges configuré. Configurez-le avant de passer en mode NUMBERED.',
+          );
+        }
+        // If tickets already sold with seat numbers, disallow switching back to FREE
+      }
+      if (dto.seatingMode === 'FREE' && trip.seatingMode === 'NUMBERED') {
+        const ticketsWithSeats = await this.prisma.ticket.count({
+          where: { tripId, tenantId, status: { notIn: ['CANCELLED', 'EXPIRED'] }, seatNumber: { not: null } },
+        });
+        if (ticketsWithSeats > 0) {
+          throw new ConflictException(
+            `Impossible de repasser en placement libre : ${ticketsWithSeats} billet(s) ont d��jà un siège attribué.`,
+          );
+        }
+      }
+      data.seatingMode = dto.seatingMode;
+    }
+
+    return this.prisma.trip.update({
+      where: { id: tripId },
+      data,
+    });
+  }
+
   async remove(tenantId: string, tripId: string) {
     const trip = await this.prisma.trip.findFirst({
       where: { id: tripId, tenantId },
@@ -159,7 +214,7 @@ export class TripService {
   async getSeats(tenantId: string, tripId: string) {
     const trip = await this.prisma.trip.findFirst({
       where: { id: tripId, tenantId },
-      include: { bus: { select: { id: true, capacity: true, seatLayout: true } } },
+      include: { bus: { select: { id: true, capacity: true, seatLayout: true, isFullVip: true, vipSeats: true } } },
     });
     if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
 
@@ -200,6 +255,8 @@ export class TripService {
       totalCount:       totalSeats,
       soldCount:        activeTickets.length,
       seatSelectionFee: bizConfig?.seatSelectionFee ?? 0,
+      isFullVip:        (trip.bus as any).isFullVip ?? false,
+      vipSeats:         (trip.bus as any).vipSeats ?? [],
     };
   }
 

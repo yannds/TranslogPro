@@ -1,7 +1,8 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, Query,
+  Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, Res,
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { TemplatesService }                from './templates.service';
 import { CreateTemplateDto, UpdateTemplateDto, DuplicateTemplateDto } from './dto/create-template.dto';
 import { PermissionGuard }                 from '../../core/iam/guards/permission.guard';
@@ -41,6 +42,45 @@ export class TemplatesController {
     @Query('docType') docType?: string,
   ) {
     return this.templates.findSystemTemplates(docType);
+  }
+
+  /**
+   * Génère un aperçu HTML du template avec des données fictives.
+   * GET /tenants/:tenantId/templates/:id/preview
+   * IMPORTANT : déclaré AVANT @Get(':id') pour éviter que ":id" capture "preview".
+   */
+  @Get(':id/preview')
+  @RequirePermission(Permission.TEMPLATE_READ_AGENCY)
+  async preview(
+    @Param('tenantId') tenantId: string,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const html = await this.templates.preview(tenantId, id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  }
+
+  // ─── Default template ───────────────────────────────────────────────────────
+
+  /**
+   * Marque un template comme défaut pour son docType.
+   * PATCH /tenants/:tenantId/templates/:id/set-default
+   */
+  @Patch(':id/set-default')
+  @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
+  setAsDefault(@Param('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.templates.setAsDefault(tenantId, id);
+  }
+
+  /**
+   * Retire le statut défaut d'un template.
+   * PATCH /tenants/:tenantId/templates/:id/unset-default
+   */
+  @Patch(':id/unset-default')
+  @RequirePermission(Permission.TEMPLATE_WRITE_AGENCY)
+  unsetDefault(@Param('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.templates.unsetDefault(tenantId, id);
   }
 
   @Get(':id')

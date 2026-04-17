@@ -241,6 +241,8 @@ const TENANT_ROLES: Array<{
       'data.sav.deliver.agency',
       'data.sav.claim.tenant',
       'data.refund.read.tenant',
+      'data.refund.read.agency',
+      'data.refund.approve.agency',
       'data.staff.read.agency',
       'data.user.read.agency',
       'data.display.update.agency',
@@ -358,6 +360,8 @@ const TENANT_ROLES: Array<{
       'data.parcel.read.own',
       'data.parcel.track.own',
       'data.shipment.read.own',
+      // Remboursement : demande d'annulation self-service (portail voyageur)
+      'data.refund.request.own',
     ],
   },
   {
@@ -734,10 +738,15 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Claim', fromState: 'ESCALATED',     action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
 
   // Refund — remboursement billet (blueprint refund-standard)
-  { entityType: 'Refund', fromState: 'PENDING',  action: 'approve', toState: 'APPROVED',  requiredPerm: 'data.refund.approve.tenant' },
-  { entityType: 'Refund', fromState: 'PENDING',  action: 'reject',  toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
-  { entityType: 'Refund', fromState: 'APPROVED', action: 'process', toState: 'PROCESSED', requiredPerm: 'data.refund.process.tenant' },
-  { entityType: 'Refund', fromState: 'APPROVED', action: 'reject',  toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
+  // Approbation tenant-admin (sans seuil)
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'approve',      toState: 'APPROVED',  requiredPerm: 'data.refund.approve.tenant' },
+  // Approbation agency-manager (seuil vérifié dans RefundService)
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'approve',      toState: 'APPROVED',  requiredPerm: 'data.refund.approve.agency' },
+  // Auto-approbation système (politique tarifaire ou TRIP_CANCELLED)
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'auto_approve', toState: 'APPROVED',  requiredPerm: 'data.refund.approve.tenant' },
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'reject',       toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
+  { entityType: 'Refund', fromState: 'APPROVED', action: 'process',      toState: 'PROCESSED', requiredPerm: 'data.refund.process.tenant' },
+  { entityType: 'Refund', fromState: 'APPROVED', action: 'reject',       toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
 
   // Manifest — signature & archivage (blueprint manifest-standard)
   { entityType: 'Manifest', fromState: 'DRAFT',     action: 'submit',   toState: 'SUBMITTED', requiredPerm: 'data.manifest.generate.agency' },

@@ -70,8 +70,16 @@ function refsCount(c: StationRow['_count']): number {
 
 // ─── Formulaire ───────────────────────────────────────────────────────────────
 
-interface GeoResult { displayName: string; lat: number; lng: number }
+interface GeoResult { displayName: string; lat: number; lng: number; countryCode: string }
 interface GeoResponse { results: GeoResult[] }
+
+/** Convertit un code pays ISO alpha-2 en emoji drapeau (ex. "CG" → 🇨🇬) */
+function countryFlag(code: string): string {
+  if (code.length !== 2) return '';
+  return String.fromCodePoint(
+    ...code.toUpperCase().split('').map(c => 0x1F1E6 + c.charCodeAt(0) - 65),
+  );
+}
 
 function StationForm({
   tenantId, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel,
@@ -89,7 +97,7 @@ function StationForm({
   const [f, setF] = useState<StationFormValues>(initial);
   const patch = (p: Partial<StationFormValues>) => setF(prev => ({ ...prev, ...p }));
 
-  // Recherche Nominatim pour le champ Ville
+  // Recherche Nominatim pour le champ Ville — chaque résultat avec drapeau pays
   const searchCity = useCallback(async (q: string): Promise<ComboboxOption[]> => {
     const data = await apiGet<GeoResponse>(
       `/api/tenants/${tenantId}/geo/search?q=${encodeURIComponent(q)}`,
@@ -98,6 +106,7 @@ function StationForm({
       value: r.displayName.split(',')[0].trim(),
       label: r.displayName.split(',')[0].trim(),
       hint:  r.displayName.split(',').slice(1).join(',').trim(),
+      flag:  countryFlag(r.countryCode),
     }));
   }, [tenantId]);
 

@@ -48,6 +48,7 @@ export class FleetService {
         currentOdometerKm:         dto.initialOdometerKm,
         fuelConsumptionPer100Km:   dto.fuelConsumptionPer100Km,
         adBlueConsumptionPer100Km: dto.adBlueConsumptionPer100Km,
+        amenities:               dto.amenities ?? [],
       },
     });
   }
@@ -76,6 +77,7 @@ export class FleetService {
         initialOdometerKm:         dto.initialOdometerKm,
         fuelConsumptionPer100Km:   dto.fuelConsumptionPer100Km,
         adBlueConsumptionPer100Km: dto.adBlueConsumptionPer100Km,
+        ...(dto.amenities !== undefined ? { amenities: dto.amenities } : {}),
       },
     });
   }
@@ -101,13 +103,17 @@ export class FleetService {
   /**
    * PRD §IV.3 — seatLayout obligatoire avant toute vente numérotée.
    */
-  async setSeatLayout(tenantId: string, id: string, seatLayout: Record<string, unknown>) {
+  async setSeatLayout(tenantId: string, id: string, body: {
+    seatLayout?: Record<string, unknown>;
+    isFullVip?: boolean;
+    vipSeats?: string[];
+  }) {
     await this.findOne(tenantId, id);
-    return this.prisma.bus.update({
-      where: { id },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data:  { seatLayout: seatLayout as any },
-    });
+    const data: Record<string, unknown> = {};
+    if (body.seatLayout !== undefined) data.seatLayout = body.seatLayout as any;
+    if (body.isFullVip !== undefined)  data.isFullVip = body.isFullVip;
+    if (body.vipSeats !== undefined)   data.vipSeats = body.vipSeats;
+    return this.prisma.bus.update({ where: { id }, data });
   }
 
   async findAll(tenantId: string, _scope: ScopeContext) {

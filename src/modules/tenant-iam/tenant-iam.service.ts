@@ -86,7 +86,7 @@ export class TenantIamService {
         } : {}),
       },
       select: {
-        id: true, email: true, name: true, userType: true,
+        id: true, email: true, name: true, userType: true, isActive: true,
         roleId: true, agencyId: true, createdAt: true,
         role:   { select: { id: true, name: true } },
         agency: { select: { id: true, name: true } },
@@ -115,7 +115,7 @@ export class TenantIamService {
         userType: 'STAFF',
       },
       select: {
-        id: true, email: true, name: true, userType: true,
+        id: true, email: true, name: true, userType: true, isActive: true,
         roleId: true, agencyId: true, createdAt: true,
         role:   { select: { id: true, name: true } },
         agency: { select: { id: true, name: true } },
@@ -145,7 +145,7 @@ export class TenantIamService {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId },
       select: {
-        id: true, email: true, name: true, userType: true,
+        id: true, email: true, name: true, userType: true, isActive: true,
         roleId: true, agencyId: true, createdAt: true, updatedAt: true,
         mfaEnabled: true, mfaVerifiedAt: true,
         role:         { select: { id: true, name: true } },
@@ -189,7 +189,7 @@ export class TenantIamService {
         ...(dto.agencyId !== undefined ? { agencyId: dto.agencyId } : {}),
       },
       select: {
-        id: true, email: true, name: true, userType: true,
+        id: true, email: true, name: true, userType: true, isActive: true,
         roleId: true, agencyId: true, createdAt: true,
         role:   { select: { id: true, name: true } },
         agency: { select: { id: true, name: true } },
@@ -221,6 +221,33 @@ export class TenantIamService {
       level:    'warn',
       oldValue: { email: user.email },
     });
+  }
+
+  async toggleUserActive(tenantId: string, userId: string, actorId: string) {
+    if (userId === actorId) {
+      throw new ForbiddenException('Vous ne pouvez pas désactiver votre propre compte');
+    }
+    const user = await this.findUser(tenantId, userId);
+    const newActive = !(user as any).isActive;
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data:  { isActive: newActive },
+      select: {
+        id: true, email: true, name: true, isActive: true,
+        role:   { select: { id: true, name: true } },
+        agency: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.log({
+      tenantId, actorId,
+      action:   newActive ? 'control.iam.user.activate.tenant' : 'control.iam.user.deactivate.tenant',
+      resource: `User:${userId}`,
+      newValue: { isActive: newActive },
+    });
+
+    return updated;
   }
 
   // ─── Rôles ────────────────────────────────────────────────────────────────

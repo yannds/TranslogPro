@@ -1,6 +1,6 @@
 import {
-  IsArray, IsEmail, IsEnum, IsOptional, IsString,
-  MaxLength, ValidateNested, ArrayMinSize, ArrayMaxSize,
+  IsArray, IsBoolean, IsEmail, IsEnum, IsOptional, IsString,
+  MaxLength, ValidateIf, ValidateNested, ArrayMinSize, ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -18,11 +18,23 @@ class PassengerDto {
   phone!: string;
 
   @IsOptional()
+  @ValidateIf((_o, v) => v !== '')
   @IsEmail()
   email?: string;
 
   @IsEnum(['STANDARD', 'VIP'])
   seatType!: 'STANDARD' | 'VIP';
+
+  /** true = le passager souhaite choisir son siège (option payante si seatSelectionFee > 0) */
+  @IsOptional()
+  @IsBoolean()
+  wantsSeatSelection?: boolean;
+
+  /** Siège choisi (ex: "3-2") — requis si wantsSeatSelection=true et seatingMode=NUMBERED */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  seatNumber?: string;
 }
 
 export class CreateBookingDto {

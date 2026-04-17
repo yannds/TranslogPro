@@ -28,6 +28,13 @@ export class DisplayService {
   // ─── API publique ─────────────────────────────────────────────────────────────
 
   /**
+   * Retourne TOUS les trajets du tenant (mode "Toutes les gares").
+   */
+  async getTenantDisplay(tenantId: string, query: DisplayQueryDto) {
+    return this.getStationDisplay(tenantId, '__tenant__', { ...query, scope: 'tenant' });
+  }
+
+  /**
    * Retourne les trajets à afficher pour un écran de gare.
    *
    * @param tenantId  — isolation racine (toujours vérifié en premier)
@@ -42,34 +49,59 @@ export class DisplayService {
     const config  = await this.configs.getConfig(tenantId);
     const scope   = (query.scope ?? config.displayScopeDefault) as Scope;
     const view    = (query.view  ?? 'both') as View;
-    const horizon = new Date(Date.now() + config.displayHorizonHours * 3_600_000);
-
     // Résoudre les stationIds selon le scope
-    // SÉCURITÉ : chaque résolution valide que stationId ∈ tenant avant toute expansion
     const stationIds = await this.resolveStationIds(tenantId, stationId, scope);
-
-    // Construire le filtre de route selon le sens demandé
     const routeWhere = this.buildRouteFilter(stationIds, view);
 
-    return this.prisma.trip.findMany({
-      where: {
-        tenantId,   // Condition racine anti-leak (toujours présente)
-        status:     { in: ['PLANNED', 'BOARDING', 'IN_PROGRESS'] },
-        departureScheduled: { gte: new Date(), lte: horizon },
-        ...routeWhere,
-      },
-      include: {
-        route: {
-          include: {
-            origin:      { select: { id: true, name: true, city: true } },
-            destination: { select: { id: true, name: true, city: true } },
+    // Lookback = début de la journée courante
+    const lookback = new Date();
+    lookback.setHours(0, 0, 0, 0);
+
+    // Horizon configurable depuis la config tenant
+    const horizon = new Date(Date.now() + config.displayHorizonHours * 3_600_000);
+
+    const baseWhere = {
+      tenantId,
+      status: { in: ['PLANNED', 'OPEN', 'BOARDING', 'IN_PROGRESS', 'IN_PROGRESS_DELAYED'] },
+      ...routeWhere,
+    };
+    const selectClause = {
+      id: true, status: true, departureScheduled: true, arrivalScheduled: true,
+      displayNote: true, displayColor: true,
+      route: {
+        select: {
+          name: true,
+          origin:      { select: { id: true, name: true, city: true } },
+          destination: { select: { id: true, name: true, city: true } },
+          waypoints: {
+            select: { station: { select: { name: true, city: true } }, order: true },
+            orderBy: { order: 'asc' as const },
           },
         },
-        bus: { select: { id: true, plateNumber: true, capacity: true } },
       },
+      bus: { select: { id: true, plateNumber: true, capacity: true, agencyId: true } },
+    };
+
+    // 1. Chercher les trajets dans la fenêtre [début de journée … horizon]
+    let trips = await this.prisma.trip.findMany({
+      where:   { ...baseWhere, departureScheduled: { gte: lookback, lte: horizon } },
+      select:  selectClause,
       orderBy: { departureScheduled: 'asc' },
       take:    config.displayTakeLimit,
     });
+
+    // 2. Si aucun trajet trouvé → chercher les prochains disponibles (7 jours max)
+    if (trips.length === 0) {
+      const extendedHorizon = new Date(Date.now() + 7 * 24 * 3_600_000);
+      trips = await this.prisma.trip.findMany({
+        where:   { ...baseWhere, departureScheduled: { gte: new Date(), lte: extendedHorizon } },
+        select:  selectClause,
+        orderBy: { departureScheduled: 'asc' },
+        take:    config.displayTakeLimit,
+      });
+    }
+
+    return trips;
   }
 
   // ─── Résolution de scope ─────────────────────────────────────────────────────

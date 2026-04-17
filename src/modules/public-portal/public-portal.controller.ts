@@ -73,6 +73,20 @@ export class PublicPortalController {
     return this.service.searchTrips(slug, dto);
   }
 
+  /** Sièges disponibles pour un trajet (seatmap temps réel) */
+  @Get('trips/:tripId/seats')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_trip_seats',
+    message: 'Too many requests.',
+  })
+  getTripSeats(
+    @Param('tenantSlug') slug: string,
+    @Param('tripId') tripId: string,
+  ) {
+    return this.service.getTripSeats(slug, tripId);
+  }
+
   /** Flotte (photos, seatmaps) */
   @Get('fleet')
   @UseGuards(RedisRateLimitGuard)
@@ -112,7 +126,7 @@ export class PublicPortalController {
     return this.service.getPage(slug, pageSlug, locale);
   }
 
-  /** Actualités */
+  /** Actualités (liste) */
   @Get('posts')
   @UseGuards(RedisRateLimitGuard)
   @RateLimit({
@@ -124,6 +138,72 @@ export class PublicPortalController {
     @Query('locale') locale?: string,
   ) {
     return this.service.getPosts(slug, locale);
+  }
+
+  /** Actualité détail (par slug) */
+  @Get('posts/:postSlug')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_post_detail',
+    message: 'Too many requests.',
+  })
+  getPost(
+    @Param('tenantSlug') slug: string,
+    @Param('postSlug') postSlug: string,
+  ) {
+    return this.service.getPostBySlug(slug, postSlug);
+  }
+
+  /** Pages footer (about, mentions, etc.) */
+  @Get('footer-pages')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_footer_pages',
+    message: 'Too many requests.',
+  })
+  getFooterPages(
+    @Param('tenantSlug') slug: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.service.getFooterPages(slug, locale);
+  }
+
+  // ── Self-service annulation / remboursement ────────────────��────────────
+
+  /**
+   * Aperçu du montant remboursable avant annulation.
+   * Le voyageur fournit son numéro de téléphone pour vérifier son identité.
+   */
+  @Get('tickets/:ticketRef/refund-preview')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 10, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_refund_preview',
+    message: 'Too many requests. Please try again later.',
+  })
+  previewRefund(
+    @Param('tenantSlug') slug: string,
+    @Param('ticketRef') ticketRef: string,
+    @Query('phone') phone: string,
+  ) {
+    return this.service.previewRefund(slug, ticketRef, phone);
+  }
+
+  /**
+   * Demande d'annulation self-service par le voyageur.
+   * Crée le remboursement basé sur la politique d'annulation du tenant.
+   */
+  @Post('tickets/:ticketRef/cancel')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 5, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_cancel',
+    message: 'Cancellation limit reached (5/hour). Please try again later.',
+  })
+  requestCancellation(
+    @Param('tenantSlug') slug: string,
+    @Param('ticketRef') ticketRef: string,
+    @Body() dto: { phone: string; reason?: string },
+  ) {
+    return this.service.requestCancellation(slug, ticketRef, dto);
   }
 
   /** Création de réservation (rate limit strict) */
@@ -140,11 +220,13 @@ export class PublicPortalController {
     return this.service.createBooking(slug, {
       tripId: dto.tripId,
       passengers: dto.passengers.map(p => ({
-        firstName: p.firstName,
-        lastName:  p.lastName,
-        phone:     p.phone,
-        email:     p.email,
-        seatType:  p.seatType,
+        firstName:          p.firstName,
+        lastName:           p.lastName,
+        phone:              p.phone,
+        email:              p.email,
+        seatType:           p.seatType,
+        wantsSeatSelection: p.wantsSeatSelection,
+        seatNumber:         p.seatNumber,
       })),
       paymentMethod: dto.paymentMethod,
     });

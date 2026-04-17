@@ -5,12 +5,13 @@
  * Path : /api/v1/tenants/:tenantId/portal/*
  *
  * Routes :
- *   GET/PUT   config         — config portail (sections, hero, slogans)
- *   GET/PUT/DELETE pages     — pages CMS (about, terms…)
- *   GET/POST/PUT/DELETE posts — articles/news
+ *   GET/PUT   config         — config portail (sections, hero, slogans, CMS toggle)
+ *   GET/PUT/DELETE pages     — pages CMS (about, terms, news…)
+ *   GET/POST/PUT/DELETE posts — articles/news avec médias
+ *   POST media/upload-url    — URL présignée pour upload média CMS
  */
 import {
-  Controller, Get, Put, Post, Delete, Param, Body,
+  Controller, Get, Put, Post, Delete, Param, Body, Query,
   HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { PortalAdminService }       from './portal-admin.service';
@@ -121,5 +122,16 @@ export class PortalAdminController {
     @Param('postId') postId: string,
   ) {
     return this.service.deletePost(tenantId, postId);
+  }
+
+  // ── Media Upload ──────────────────────────────────────────────────────────
+
+  @Post('media/upload-url')
+  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  getMediaUploadUrl(
+    @Param('tenantId') tenantId: string,
+    @Body('filename') filename: string,
+  ) {
+    return this.service.getMediaUploadUrl(tenantId, filename);
   }
 }

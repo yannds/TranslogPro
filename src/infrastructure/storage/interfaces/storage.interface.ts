@@ -14,6 +14,7 @@ export enum DocumentType {
   EXCEL_EXPORT    = 'EXCEL_EXPORT',     // Export Excel généré côté serveur
   WORD_EXPORT     = 'WORD_EXPORT',      // Export Word généré côté serveur
   BUS_PHOTO       = 'BUS_PHOTO',        // Photo véhicule (intérieur/extérieur, Portail Voyageur)
+  CMS_MEDIA       = 'CMS_MEDIA',        // Média CMS (photos/vidéos actualités portail)
 }
 
 export const SIGNED_URL_TTL_SECONDS: Record<DocumentType, number> = {
@@ -30,6 +31,7 @@ export const SIGNED_URL_TTL_SECONDS: Record<DocumentType, number> = {
   [DocumentType.EXCEL_EXPORT]:    3600,             // 1h
   [DocumentType.WORD_EXPORT]:     3600,             // 1h
   [DocumentType.BUS_PHOTO]:       86400,            // 24h (affichage Portail Voyageur)
+  [DocumentType.CMS_MEDIA]:       86400,            // 24h (médias actualités portail)
 };
 
 export interface IStorageService {

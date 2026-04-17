@@ -9,6 +9,8 @@ import {
 import { Request, Response } from 'express';
 import { ProblemDetails } from '../types/api-response.type';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -26,18 +28,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const detail =
       exception instanceof HttpException
         ? this.extractDetail(exception)
-        : 'An unexpected error occurred';
+        : exception instanceof Error
+          ? exception.message
+          : 'An unexpected error occurred';
 
     const requestId = (request.headers['x-request-id'] as string) ?? 'unknown';
 
     if (status >= 500) {
       this.logger.error(
-        `[${requestId}] ${request.method} ${request.path} → ${status}`,
+        `[${requestId}] ${request.method} ${request.path} → ${status} — ${detail}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     }
 
-    const body: ProblemDetails = {
+    const body: ProblemDetails & { stack?: string } = {
       type:      `https://translogpro.io/errors/${status}`,
       title:     HttpStatus[status] ?? 'Error',
       status,
@@ -45,6 +49,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       instance:  request.path,
       requestId,
     };
+
+    // En dev, inclure le stack trace pour le debugging
+    if (IS_DEV && status >= 500 && exception instanceof Error) {
+      body.stack = exception.stack;
+    }
 
     response
       .status(status)

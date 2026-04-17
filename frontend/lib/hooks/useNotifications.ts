@@ -28,7 +28,19 @@ export type NotificationType =
   | 'DELAY_ALERT'
   | 'SECURITY_ALERT'
   | 'TARIFF_CHANGE'
-  | 'GENERAL_INFO';
+  | 'GENERAL_INFO'
+  | 'ROAD_SAFETY';
+
+/** Icône par type de notification (pour marquee/ticker) */
+export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
+  WEATHER_UPDATE:     '⛅',
+  DELAY_ALERT:        '⏱',
+  SECURITY_ALERT:     '⚠',
+  ROAD_SAFETY:        '🛡',
+  TARIFF_CHANGE:      '💰',
+  TRIP_STATUS_CHANGE: '🚌',
+  GENERAL_INFO:       'ℹ',
+};
 
 export interface Notification {
   id:        string;
@@ -125,6 +137,114 @@ function makeDemoNotifications(): Notification[] {
         pt:  'INFO TARIFA — A partir de 15/04/2026, a tarifa Brazzaville–Pointe-Noire passa para 8.500 FCFA.',
         ar:  'معلومات التعرفة — اعتبارًا من 15/04/2026، ترتفع تعريفة براساڤيل–بوانت-نوار إلى 8.500 فرنك.',
         wo:  'XIBAAR CI PRIX — Ci 15/04/2026, jëg Brazzaville–Pointe-Noire dafa yokk ngir 8 500 FCFA.',
+      },
+    },
+
+    // ── Météo détaillée ───────────────────────────────────────────────────────
+    {
+      id: 'n6', type: 'WEATHER_UPDATE', priority: 3, createdAt: new Date(),
+      message: {
+        fr:  'Brazzaville : ☀ 27°C, humidité 78%, vent 12 km/h — Bonne visibilité',
+        en:  'Brazzaville: ☀ 27°C, humidity 78%, wind 12 km/h — Good visibility',
+        ln:  'Brazzaville: ☀ 27°C, mái 78%, mopɛpɛ 12 km/h — Komona malamu',
+        ktu: 'Brazzaville: ☀ 27°C, mái 78%, mopɛpɛ 12 km/h — Komona malamu',
+        es:  'Brazzaville: ☀ 27°C, humedad 78%, viento 12 km/h — Buena visibilidad',
+        pt:  'Brazzaville: ☀ 27°C, umidade 78%, vento 12 km/h — Boa visibilidade',
+        ar:  'برازافيل: ☀ 27°م، رطوبة 78%، رياح 12 كم/ساعة — رؤية جيدة',
+        wo:  'Brazzaville: ☀ 27°C, ndox ci kanam 78%, fëjël 12 km/h — Gis bu baax',
+      },
+    },
+    {
+      id: 'n7', type: 'WEATHER_UPDATE', priority: 2, createdAt: new Date(),
+      message: {
+        fr:  'Dolisie : 🌧 24°C, pluie modérée attendue — Prudence sur la RN1',
+        en:  'Dolisie: 🌧 24°C, moderate rain expected — Caution on RN1',
+        ln:  'Dolisie: 🌧 24°C, mbula mwa ekoya — Bokeba na nzela RN1',
+        ktu: 'Dolisie: 🌧 24°C, mvula mwa ekoya — Bokeba na nzela RN1',
+        es:  'Dolisie: 🌧 24°C, lluvia moderada prevista — Precaución en la RN1',
+        pt:  'Dolisie: 🌧 24°C, chuva moderada prevista — Cautela na RN1',
+        ar:  'دوليزي: 🌧 24°م، أمطار معتدلة متوقعة — الحذر على الطريق الوطني 1',
+        wo:  'Dolisie: 🌧 24°C, taw bu yàgg dafay ñëw — Wóor ci yoon RN1',
+      },
+    },
+    {
+      id: 'n8', type: 'WEATHER_UPDATE', priority: 3, createdAt: new Date(),
+      message: {
+        fr:  'Ouesso : ☁ 26°C, ciel couvert, humidité 90% — Route praticable',
+        en:  'Ouesso: ☁ 26°C, overcast, humidity 90% — Road passable',
+        ln:  'Ouesso: ☁ 26°C, likoló etondi, mái 90% — Nzela esengeli',
+        ktu: 'Ouesso: ☁ 26°C, likoló etondi, mái 90% — Nzela esengeli',
+        es:  'Ouesso: ☁ 26°C, cielo cubierto, humedad 90% — Carretera transitable',
+        pt:  'Ouesso: ☁ 26°C, céu encoberto, umidade 90% — Estrada transitável',
+        ar:  'أويسو: ☁ 26°م، سماء ملبدة، رطوبة 90% — الطريق سالك',
+        wo:  'Ouesso: ☁ 26°C, asamaan bu ñuul, ndox ci kanam 90% — Yoon bi ngi jëm',
+      },
+    },
+
+    // ── Sécurité routière ─────────────────────────────────────────────────────
+    {
+      id: 'n9', type: 'ROAD_SAFETY', priority: 1, createdAt: new Date(),
+      message: {
+        fr:  'Le port de la ceinture de sécurité est obligatoire pour tous les passagers durant tout le trajet',
+        en:  'Wearing a seatbelt is mandatory for all passengers throughout the entire journey',
+        ln:  'Kolata singilé ya sécurité esengeli po na bato nyonso na mobembo mobimba',
+        ktu: 'Kolata singilé ya sécurité esengeli po na bato nyonso na mobembo mobimba',
+        es:  'El uso del cinturón de seguridad es obligatorio para todos los pasajeros durante todo el trayecto',
+        pt:  'O uso do cinto de segurança é obrigatório para todos os passageiros durante toda a viagem',
+        ar:  'ارتداء حزام الأمان إلزامي لجميع الركاب طوال الرحلة',
+        wo:  'Tàcc ceinture de sécurité dafay wàjib ngir kilifa yépp ci yoon bi yépp',
+      },
+    },
+    {
+      id: 'n10', type: 'ROAD_SAFETY', priority: 2, createdAt: new Date(),
+      message: {
+        fr:  'Restez assis pendant le trajet. Ne vous levez pas lorsque le véhicule est en mouvement',
+        en:  'Stay seated during the trip. Do not stand up while the vehicle is in motion',
+        ln:  'Tóngalá na esíka ya bino na mobembo mobimba. Botéláma tɛ́ soki otobisi ezali kotámbola',
+        ktu: 'Tóngalá na esíka na mobembo mobimba. Botéláma tɛ́ soki otobisi ezali kotámbola',
+        es:  'Permanezca sentado durante el viaje. No se levante mientras el vehículo está en movimiento',
+        pt:  'Permaneça sentado durante a viagem. Não se levante enquanto o veículo estiver em movimento',
+        ar:  'ابقَ جالسًا خلال الرحلة. لا تقم بالوقوف أثناء تحرك المركبة',
+        wo:  'Toogal ci sa palaas ci yoon bi. Bul taxaw bu otobisi di daw',
+      },
+    },
+    {
+      id: 'n11', type: 'ROAD_SAFETY', priority: 2, createdAt: new Date(),
+      message: {
+        fr:  'En cas d\'urgence, les issues de secours sont situées aux fenêtres latérales et à l\'arrière du véhicule',
+        en:  'In case of emergency, emergency exits are located at the side windows and rear of the vehicle',
+        ln:  'Soki likama, ba porte ya kobima ya noki ezali na ba fenêtre ya mipángi mpe na sima ya otobisi',
+        ktu: 'Soki likama, ba porte ya kobima ezali na ba fenêtre ya mipángi mpe na sima ya otobisi',
+        es:  'En caso de emergencia, las salidas están en las ventanas laterales y en la parte trasera del vehículo',
+        pt:  'Em caso de emergência, as saídas estão nas janelas laterais e na traseira do veículo',
+        ar:  'في حالة الطوارئ، مخارج الطوارئ تقع عند النوافذ الجانبية ومؤخرة المركبة',
+        wo:  'Ci jafe-jafe, barab yi ñu génne ci palaas yi nekk ci palanteer yi ak ginnaaw otobisi bi',
+      },
+    },
+    {
+      id: 'n12', type: 'ROAD_SAFETY', priority: 3, createdAt: new Date(),
+      message: {
+        fr:  'Il est interdit de fumer à bord du véhicule. Merci de respecter le confort de tous les voyageurs',
+        en:  'Smoking is prohibited on board. Please respect the comfort of all passengers',
+        ln:  'Komɛla likaya na kati ya otobisi epekisami. Tiká bókómisa bato nyonso báselá malamu',
+        ktu: 'Komɛla likaya na kati ya otobisi epekisami. Tiká bókómisa bato nyonso báselá malamu',
+        es:  'Está prohibido fumar a bordo del vehículo. Respete la comodidad de todos los viajeros',
+        pt:  'É proibido fumar a bordo do veículo. Respeite o conforto de todos os passageiros',
+        ar:  'يُمنع التدخين على متن المركبة. يرجى احترام راحة جميع المسافرين',
+        wo:  'Tuxu dafay tere ci biir otobisi bi. Jëflal hormaal kilifa yépp',
+      },
+    },
+    {
+      id: 'n13', type: 'ROAD_SAFETY', priority: 2, createdAt: new Date(),
+      message: {
+        fr:  'Surveillez vos effets personnels et bagages. La compagnie décline toute responsabilité en cas de perte',
+        en:  'Watch your personal belongings and luggage. The company is not liable for any loss',
+        ln:  'Bókɛngɛla biloko na bino malamu. Compagnie ezali na ngámbo tɛ́ soki biloko ebungi',
+        ktu: 'Bókɛngɛla biloko na bino malamu. Compagnie ezali na ngámbo tɛ́ soki biloko ebungi',
+        es:  'Vigile sus pertenencias y equipaje. La empresa no se hace responsable en caso de pérdida',
+        pt:  'Cuide dos seus pertences e bagagem. A empresa não se responsabiliza por perdas',
+        ar:  'راقب أمتعتك الشخصية. الشركة غير مسؤولة عن أي فقدان',
+        wo:  'Saytul sa yéf ak sa walis. Borom otobisi du am njuumte ci lenn gu ñaari',
       },
     },
   ];

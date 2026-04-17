@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { cn }                  from '../../lib/utils';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
-import { useNotifications }    from '../../lib/hooks/useNotifications';
+import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
 import { useTenantConfig }     from '../../providers/TenantConfigProvider';
 import type { Language, TranslationMap } from '../../lib/i18n/types';
 import { LANGUAGE_META }       from '../../lib/i18n/types';
@@ -100,10 +100,10 @@ function LiveClock({ dateLocale }: { dateLocale: string }) {
   }, []);
   return (
     <time dateTime={now.toISOString()} className="tabular-nums text-right">
-      <p className="text-2xl xl:text-3xl font-black text-white">
+      <p className="text-2xl xl:text-3xl font-black text-slate-900 dark:text-white">
         {now.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}
       </p>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
         {now.toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}
       </p>
     </time>
@@ -125,12 +125,12 @@ function StatCard({
   return (
     <div className={cn(
       'rounded-xl border p-3 xl:p-4 flex flex-col gap-1',
-      'bg-slate-900 dark:bg-slate-900 border-slate-800 dark:border-slate-800',
+      'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none',
     )}>
       <p className="text-base xl:text-lg">{icon}</p>
-      <p className="text-[10px] xl:text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wide font-semibold">{label}</p>
+      <p className="text-[10px] xl:text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide font-semibold">{label}</p>
       <p className={cn('text-xl xl:text-2xl font-black tabular-nums', accentCls.split(' ')[0])}>{value}</p>
-      {sub && <p className="text-[10px] text-slate-600 dark:text-slate-600">{sub}</p>}
+      {sub && <p className="text-[10px] text-slate-400 dark:text-slate-600">{sub}</p>}
     </div>
   );
 }
@@ -168,19 +168,19 @@ function WeatherWidget({
       aria-label={`${t(dict.weather.at_destination)} ${weather.cityName}: ${weather.tempC}°C, ${condLabel}`}
       className={cn(
         'flex items-center gap-2 xl:gap-3 rounded-xl border px-3 py-2',
-        'bg-slate-800 dark:bg-slate-800 border-slate-700 dark:border-slate-700',
+        'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-none',
       )}
     >
       <span className="text-2xl xl:text-3xl" aria-hidden>{WEATHER_ICONS[weather.condition]}</span>
       <div>
-        <p className="text-[10px] text-slate-400 uppercase tracking-wide">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">
           {t(dict.weather.at_destination)} · {weather.cityName}
         </p>
         <div className="flex items-baseline gap-2 mt-0.5">
-          <span className="text-xl xl:text-2xl font-black text-white tabular-nums">{weather.tempC}°C</span>
-          <span className="text-xs text-slate-400">{condLabel}</span>
+          <span className="text-xl xl:text-2xl font-black text-slate-900 dark:text-white tabular-nums">{weather.tempC}°C</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{condLabel}</span>
         </div>
-        <div className="flex gap-2 text-[10px] text-slate-500 mt-0.5">
+        <div className="flex gap-2 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
           <span>{t(dict.weather.feels_like)} {weather.feelsLikeC}°C</span>
           <span>·</span>
           <span>{t(dict.weather.humidity)} {weather.humidity}%</span>
@@ -206,11 +206,11 @@ function Itinerary({
       aria-label="Itinerary"
       className={cn(
         'w-48 xl:w-56 shrink-0 flex flex-col',
-        'bg-slate-900 dark:bg-slate-900 border-r border-slate-800 dark:border-slate-800',
+        'bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none',
         'overflow-y-auto px-4 py-4',
       )}
     >
-      <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">
+      <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">
         Itinéraire
       </p>
 
@@ -256,8 +256,12 @@ function BusTicker({
   dict:          ReturnType<typeof useI18n>['dict'];
   t:             (map: string | TranslationMap) => string;
 }) {
-  const texts = notifications.map(n => n.message[lang] ?? n.message['fr'] ?? n.text ?? '');
-  const text  = texts.join('   ·   ');
+  const texts = notifications.map(n => {
+    const icon = NOTIFICATION_ICONS[n.type] ?? 'ℹ';
+    const msg  = n.message[lang] ?? n.message['fr'] ?? n.text ?? '';
+    return `${icon} ${msg}`;
+  });
+  const text  = texts.join('     ·     ');
   if (!text) return null;
 
   return (
@@ -265,16 +269,16 @@ function BusTicker({
       role="marquee"
       aria-live="polite"
       className={cn(
-        'flex items-center overflow-hidden shrink-0 h-9',
-        'bg-[var(--color-primary)] text-white dark:bg-[var(--color-primary)]',
+        'flex items-center overflow-hidden shrink-0 h-14 xl:h-16',
+        'bg-amber-400 text-slate-900 dark:bg-amber-500 dark:text-slate-950',
       )}
     >
-      <div className="shrink-0 px-3 h-full flex items-center font-black text-[10px] uppercase tracking-widest bg-[var(--color-secondary)] dark:bg-[var(--color-secondary)]">
+      <div className="shrink-0 px-4 xl:px-5 h-full flex items-center font-black text-sm xl:text-base uppercase tracking-widest bg-amber-600 text-white dark:bg-amber-700">
         {t(dict.notifications.info)}
       </div>
       <div className="flex-1 overflow-hidden" aria-hidden>
         <p
-          className="whitespace-nowrap text-xs xl:text-sm font-medium leading-9"
+          className="whitespace-nowrap text-base xl:text-lg font-bold leading-[3.5rem] xl:leading-[4rem]"
           style={{ animation: 'board-ticker 28s linear infinite' }}
         >
           {text}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{text}
@@ -332,14 +336,14 @@ export function BusScreen({
       aria-label={`Bus screen — ${routeLabel}`}
       className={cn(
         'flex flex-col h-screen overflow-hidden select-none',
-        'bg-slate-950 dark:bg-slate-950 text-white',
+        'bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white',
       )}
       style={{ fontFamily: 'var(--font-family)' }}
     >
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className={cn(
         'flex items-center justify-between gap-3 px-4 xl:px-6 py-3 shrink-0',
-        'bg-slate-900 dark:bg-slate-900 border-b border-[var(--color-primary)]/50',
+        'bg-white dark:bg-slate-900 border-b border-[var(--color-primary)]/30 dark:border-[var(--color-primary)]/50 shadow-sm dark:shadow-none',
       )}>
         <div className="flex items-center gap-3 min-w-0">
           <div
@@ -350,15 +354,15 @@ export function BusScreen({
             {tenantConfig.brand.brandName.charAt(0)}
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-white text-sm xl:text-base leading-tight truncate">{routeLabel}</p>
-            <p className="text-xs text-slate-400 font-mono">{tripRef}&nbsp;·&nbsp;{busPlate}</p>
+            <p className="font-bold text-slate-900 dark:text-white text-sm xl:text-base leading-tight truncate">{routeLabel}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{tripRef}&nbsp;·&nbsp;{busPlate}</p>
           </div>
         </div>
 
         {/* Langue active */}
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-sm" title={LANGUAGE_META[lang].label}>{LANGUAGE_META[lang].flag}</span>
-          <span className="text-xs text-slate-500">{LANGUAGE_META[lang].label}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-500">{LANGUAGE_META[lang].label}</span>
         </div>
 
         <LiveClock dateLocale={dateLocale} />
@@ -366,7 +370,7 @@ export function BusScreen({
 
       {/* ── Progress bar ────────────────────────────────────────────── */}
       <div
-        className="h-1 bg-slate-800 dark:bg-slate-800 shrink-0"
+        className="h-1 bg-slate-200 dark:bg-slate-800 shrink-0"
         role="progressbar"
         aria-valuenow={progress}
         aria-valuemin={0}
@@ -399,7 +403,7 @@ export function BusScreen({
               <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--color-accent)' }}>
                 {t('ui.current_stop')}
               </p>
-              <p className="text-3xl xl:text-4xl font-black text-white">{current.cityName}</p>
+              <p className="text-3xl xl:text-4xl font-black text-slate-900 dark:text-white">{current.cityName}</p>
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-accent)' }} />
@@ -407,7 +411,7 @@ export function BusScreen({
                     {current.scheduledAt}
                   </span>
                 </div>
-                <span className="text-sm text-slate-400">{current.distanceKm} km</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{current.distanceKm} km</span>
               </div>
             </section>
           )}
@@ -416,16 +420,16 @@ export function BusScreen({
           {next && (
             <section
               aria-label={t('ui.next_stop')}
-              className="rounded-2xl border p-4 xl:p-5 bg-slate-900 dark:bg-slate-900 border-slate-800 dark:border-slate-800"
+              className="rounded-2xl border p-4 xl:p-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none"
             >
               <p className="text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-1 text-[var(--color-primary)]">
                 {t('ui.next_stop')}
               </p>
               <div className="flex items-end justify-between">
-                <p className="text-2xl xl:text-3xl font-bold text-white">{next.cityName}</p>
+                <p className="text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white">{next.cityName}</p>
                 <div className="text-right">
                   <p className="text-2xl xl:text-3xl font-black tabular-nums text-[var(--color-primary)]">{next.scheduledAt}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
                     {next.distanceKm - (current?.distanceKm ?? 0)} km
                   </p>
                 </div>
@@ -470,9 +474,9 @@ export function BusScreen({
           {/* Infos véhicule */}
           <section
             aria-label="Vehicle info"
-            className="rounded-2xl border p-4 bg-slate-900 dark:bg-slate-900 border-slate-800 dark:border-slate-800"
+            className="rounded-2xl border p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none"
           >
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
               {tenantConfig.brand.brandName}
             </p>
             <dl className="grid grid-cols-3 gap-3 text-sm">
@@ -485,8 +489,8 @@ export function BusScreen({
                 { label: 'Réf',               value: tripRef },
               ].map(({ label, value }) => (
                 <div key={label}>
-                  <dt className="text-slate-500 text-[10px]">{label}</dt>
-                  <dd className="text-white font-semibold mt-0.5 truncate">{value}</dd>
+                  <dt className="text-slate-400 dark:text-slate-500 text-[10px]">{label}</dt>
+                  <dd className="text-slate-900 dark:text-white font-semibold mt-0.5 truncate">{value}</dd>
                 </div>
               ))}
             </dl>

@@ -22,6 +22,10 @@ export class UpsertPortalConfigDto {
   showContact?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  newsCmsEnabled?: boolean;
+
+  @IsOptional()
   @IsUrl()
   heroImageUrl?: string;
 

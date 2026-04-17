@@ -11,7 +11,7 @@ export class UpsertPageDto {
   title!: string;
 
   @IsString()
-  @MaxLength(50_000)
+  @MaxLength(100_000)
   content!: string;
 
   @IsOptional()
@@ -27,4 +27,8 @@ export class UpsertPageDto {
   @IsOptional()
   @IsBoolean()
   published?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showInFooter?: boolean;
 }

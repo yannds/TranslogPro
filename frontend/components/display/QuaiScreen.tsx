@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { cn }                  from '../../lib/utils';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
-import { useNotifications }    from '../../lib/hooks/useNotifications';
+import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
 import { useTenantConfig }     from '../../providers/TenantConfigProvider';
 import type { Language, TranslationMap } from '../../lib/i18n/types';
 import { LANGUAGE_META }       from '../../lib/i18n/types';
@@ -91,7 +91,7 @@ function OccupancyBar({ value, max }: { value: number; max: number }) {
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1"
+      className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-1"
     >
       <div className={cn('h-full rounded-full transition-all', cls)} style={{ width: `${pct}%` }} />
     </div>
@@ -105,10 +105,10 @@ function LiveClock({ dateLocale }: { dateLocale: string }) {
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 1_000); return () => clearInterval(id); }, []);
   return (
     <time dateTime={now.toISOString()} className="tabular-nums text-right">
-      <p className="text-3xl xl:text-4xl font-black text-white leading-none">
+      <p className="text-3xl xl:text-4xl font-black text-slate-900 dark:text-white leading-none">
         {now.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </p>
-      <p className="text-xs text-slate-400 mt-0.5 capitalize">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 capitalize">
         {now.toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric', month: 'short' })}
       </p>
     </time>
@@ -123,20 +123,24 @@ function Ticker({ notifications, lang, t, dict }: {
   t:     (m: string | TranslationMap) => string;
   dict:  ReturnType<typeof useI18n>['dict'];
 }) {
-  const texts = notifications.map(n => n.message[lang] ?? n.message['fr'] ?? '');
-  const text  = texts.join('   ·   ');
+  const texts = notifications.map(n => {
+    const icon = NOTIFICATION_ICONS[n.type] ?? 'ℹ';
+    const msg  = n.message[lang] ?? n.message['fr'] ?? '';
+    return `${icon} ${msg}`;
+  });
+  const text  = texts.join('     ·     ');
   if (!text) return null;
   return (
     <div
       role="marquee"
       aria-live="polite"
-      className="flex items-center overflow-hidden shrink-0 h-10 bg-[var(--color-accent)] text-slate-900 dark:text-slate-950"
+      className="flex items-center overflow-hidden shrink-0 h-16 xl:h-20 bg-amber-400 text-slate-900 dark:bg-amber-500 dark:text-slate-950"
     >
-      <div className="shrink-0 px-3 h-full flex items-center font-black text-xs uppercase tracking-widest bg-amber-600 text-white">
+      <div className="shrink-0 px-4 xl:px-5 h-full flex items-center font-black text-sm xl:text-base uppercase tracking-widest bg-amber-600 text-white dark:bg-amber-700">
         {t(dict.notifications.info)}
       </div>
       <div className="flex-1 overflow-hidden" aria-hidden>
-        <p className="whitespace-nowrap text-sm font-semibold leading-10"
+        <p className="whitespace-nowrap text-lg xl:text-xl font-bold leading-[4rem] xl:leading-[5rem]"
            style={{ animation: 'board-ticker 22s linear infinite' }}>
           {text}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{text}
         </p>
@@ -189,13 +193,13 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
       dir={dir}
       lang={lang}
       aria-label={`Quai ${p.platform} — ${p.destination}`}
-      className="flex flex-col h-screen overflow-hidden select-none bg-slate-950 dark:bg-slate-950 text-white"
+      className="flex flex-col h-screen overflow-hidden select-none bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
       style={{ fontFamily: 'var(--font-family)' }}
     >
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className={cn(
         'flex items-center justify-between gap-4 px-6 xl:px-8 py-4 xl:py-5 shrink-0',
-        'bg-slate-900 dark:bg-slate-900 border-b-2 border-[var(--color-primary)]',
+        'bg-white dark:bg-slate-900 border-b-2 border-[var(--color-primary)] shadow-sm dark:shadow-none',
       )}>
         {/* Numéro de quai */}
         <div className="flex items-center gap-4 xl:gap-6">
@@ -229,7 +233,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
                 {statusCfg.label[lang] ?? statusCfg.label['fr']}
               </span>
             )}
-            <p className="text-slate-400 text-sm mt-2">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
               {t('ui.departure_in')}&nbsp;
               <Countdown targetDate={p.departAt} t={t} dict={dict} />
             </p>
@@ -253,8 +257,8 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         aria-label={t('col.destination')}
         className={cn(
           'px-6 xl:px-8 py-5 xl:py-6 shrink-0',
-          'bg-gradient-to-r from-[var(--color-primary)]/10 to-transparent',
-          'border-b border-slate-800',
+          'bg-gradient-to-r from-[var(--color-primary)]/5 dark:from-[var(--color-primary)]/10 to-transparent',
+          'border-b border-slate-200 dark:border-slate-800',
         )}
       >
         <div className="flex items-end justify-between">
@@ -262,26 +266,39 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
             <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-primary)] mb-1">
               {t('col.destination')}
             </p>
-            <p className="text-5xl xl:text-6xl font-black uppercase tracking-wide text-white">
+            <p className="text-5xl xl:text-6xl font-black uppercase tracking-wide text-slate-900 dark:text-white">
               {p.destination}
             </p>
             {p.via && (
-              <p className="text-slate-400 text-base mt-1.5">via&nbsp;{p.via}</p>
+              <div className="overflow-hidden mt-1.5 max-w-[30rem]">
+                <p
+                  className={cn(
+                    'whitespace-nowrap text-base xl:text-lg font-semibold',
+                    'text-amber-600 dark:text-amber-400',
+                  )}
+                  style={p.via.length > 25
+                    ? { animation: 'via-scroll 10s linear infinite', display: 'inline-block' }
+                    : undefined
+                  }
+                >
+                  via {p.via}
+                </p>
+              </div>
             )}
           </div>
           <div className="text-right flex flex-col items-end gap-2">
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest">{t('col.time')}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t('col.time')}</p>
               <p className="text-6xl xl:text-7xl font-black text-[var(--color-primary)] tabular-nums leading-none">
                 {p.departureTime}
               </p>
             </div>
             {/* Météo destination mini */}
             {weather && (
-              <div className="flex items-center gap-2 text-sm bg-slate-800 rounded-xl px-3 py-1.5 border border-slate-700">
+              <div className="flex items-center gap-2 text-sm bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-1.5 border border-slate-200 dark:border-slate-700">
                 <span>{WEATHER_ICONS[weather.condition]}</span>
-                <span className="font-bold text-white">{weather.tempC}°C</span>
-                <span className="text-slate-400">{weather.cityName}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{weather.tempC}°C</span>
+                <span className="text-slate-500 dark:text-slate-400">{weather.cityName}</span>
               </div>
             )}
           </div>
@@ -292,11 +309,11 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
       <div className="grid grid-cols-4 gap-4 px-6 xl:px-8 py-5 flex-1">
 
         {/* Bus */}
-        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.bus')}</p>
-            <p className="text-xl xl:text-2xl font-black text-white font-mono">{p.busPlate}</p>
-            <p className="text-sm text-slate-400 mt-1">{p.busModel}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.bus')}</p>
+            <p className="text-xl xl:text-2xl font-black text-slate-900 dark:text-white font-mono">{p.busPlate}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{p.busModel}</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -305,16 +322,16 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         </div>
 
         {/* Passagers */}
-        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.passengers')}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.passengers')}</p>
             <div className="flex items-end gap-1">
-              <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.passengersOnBoard}</p>
-              <p className="text-xl text-slate-500 mb-1">/{p.capacity}</p>
+              <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">{p.passengersOnBoard}</p>
+              <p className="text-xl text-slate-400 dark:text-slate-500 mb-1">/{p.capacity}</p>
             </div>
           </div>
           <div>
-            <div className="flex justify-between text-xs text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>{p.passengersConfirmed} confirmés</span>
               <span>{Math.round((p.passengersOnBoard / p.capacity) * 100)}%</span>
             </div>
@@ -323,11 +340,11 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         </div>
 
         {/* Colis */}
-        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.parcels')}</p>
-            <p className="text-4xl xl:text-5xl font-black text-white tabular-nums">{p.parcelsLoaded}</p>
-            <p className="text-sm text-slate-400 mt-1">chargés</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.parcels')}</p>
+            <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">{p.parcelsLoaded}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">chargés</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-purple-400" />
@@ -336,11 +353,11 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         </div>
 
         {/* Chauffeur */}
-        <div className="bg-slate-900 dark:bg-slate-900 rounded-2xl border border-slate-800 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{t('col.driver')}</p>
-            <p className="text-xl xl:text-2xl font-bold text-white leading-tight">{p.driverName}</p>
-            <p className="text-sm text-slate-400 mt-1">{p.agencyName}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.driver')}</p>
+            <p className="text-xl xl:text-2xl font-bold text-slate-900 dark:text-white leading-tight">{p.driverName}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{p.agencyName}</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
             <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
@@ -358,6 +375,10 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         @keyframes board-ticker {
           from { transform: translateX(0); }
           to   { transform: translateX(-50%); }
+        }
+        @keyframes via-scroll {
+          0%, 15%  { transform: translateX(0); }
+          85%, 100% { transform: translateX(calc(-100% + 10rem)); }
         }
       `}</style>
     </div>

@@ -32,6 +32,7 @@ const AGGREGATE_TABLE_MAP: Record<string, string> = {
   Shipment: 'shipments',
   Bus:      'buses',
   Claim:    'claims',
+  Refund:   'refunds',
 };
 
 // ─── Transactional IO ─────────────────────────────────────────────────────────

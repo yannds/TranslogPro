@@ -23,6 +23,7 @@ export interface TripCreatePayload {
   driverId:             string;     // Staff.id (SchedulingGuard)
   departureTime:        string;     // ISO
   estimatedArrivalTime?: string;     // ISO
+  seatingMode?:         'FREE' | 'NUMBERED';
 }
 
 export interface TripCreateFormProps {
@@ -39,6 +40,7 @@ export interface TripCreateFormProps {
 interface Values {
   routeId: string; busId: string; driverStaffId: string;
   date: string; time: string; arrivalTime: string;
+  seatingMode: 'FREE' | 'NUMBERED';
 }
 
 function driverDisplayName(d: StaffLite): string {
@@ -60,7 +62,11 @@ export function TripCreateForm({
     date:          defaultDate,
     time:          '08:00',
     arrivalTime:   '',
+    seatingMode:   'FREE',
   });
+
+  const selectedBus = buses.find(b => b.id === v.busId);
+  const busHasSeatLayout = !!selectedBus?.seatLayout;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -74,6 +80,7 @@ export function TripCreateForm({
       driverId:             v.driverStaffId,
       departureTime:        departureISO,
       estimatedArrivalTime: arrivalISO,
+      seatingMode:          v.seatingMode,
     });
   };
 
@@ -171,6 +178,35 @@ export function TripCreateForm({
             onChange={e => setV(p => ({ ...p, arrivalTime: e.target.value }))}
             className={inputClass} disabled={busy}
           />
+        </div>
+
+        <div className="sm:col-span-2 space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t('tripForm.seatingMode')}
+          </label>
+          <div className="flex gap-3">
+            {(['FREE', 'NUMBERED'] as const).map(mode => (
+              <label key={mode} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all text-sm font-medium ${
+                v.seatingMode === mode
+                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              } ${mode === 'NUMBERED' && !busHasSeatLayout ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <input
+                  type="radio" name="seatingMode" value={mode}
+                  checked={v.seatingMode === mode}
+                  onChange={() => setV(p => ({ ...p, seatingMode: mode }))}
+                  disabled={busy || (mode === 'NUMBERED' && !busHasSeatLayout)}
+                  className="sr-only"
+                />
+                {mode === 'FREE' ? t('tripForm.freeSeating') : t('tripForm.numberedSeating')}
+              </label>
+            ))}
+          </div>
+          {!busHasSeatLayout && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              {t('tripForm.noSeatLayoutHint')}
+            </p>
+          )}
         </div>
       </div>
 

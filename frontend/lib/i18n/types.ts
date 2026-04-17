@@ -50,8 +50,10 @@ export interface TranslogTranslations {
     destination:  TranslationMap;
     origin:       TranslationMap;
     bus:          TranslationMap;
-    agency:       TranslationMap;
-    platform:     TranslationMap;
+    agency:           TranslationMap;
+    agencyDeparture:  TranslationMap;
+    agencyArrival:    TranslationMap;
+    platform:         TranslationMap;
     status:       TranslationMap;
     remarks:      TranslationMap;
     driver:       TranslationMap;
@@ -165,6 +167,7 @@ export interface TranslogTranslations {
     weather: TranslationMap;
     delay:   TranslationMap;
     alert:   TranslationMap;
+    safety:  TranslationMap;
     news:    TranslationMap;
   };
 }

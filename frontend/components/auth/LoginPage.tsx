@@ -45,7 +45,9 @@ export function LoginPage() {
       navigate(from, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 401 || err.status === 400) {
+        if (err.status === 429) {
+          setError(t('auth.tooManyAttempts'));
+        } else if (err.status === 401 || err.status === 400) {
           setError(t('auth.badCredentials'));
         } else {
           setError(`${t('auth.serverError')} (${err.status}). ${t('auth.serverRetry')}`);

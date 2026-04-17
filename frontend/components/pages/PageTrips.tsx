@@ -19,7 +19,7 @@ import {
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useI18n }        from '../../lib/i18n/useI18n';
 import { useFetch }      from '../../lib/hooks/useFetch';
-import { apiPost }       from '../../lib/api';
+import { apiPost, apiPatch } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }         from '../ui/Badge';
 import { Skeleton }      from '../ui/Skeleton';
@@ -56,6 +56,8 @@ export function PageTrips() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [search,       setSearch]       = useState<string>('');
   const [showCreate,   setShowCreate]   = useState(false);
+  const [editTrip,     setEditTrip]     = useState<TripRow | null>(null);
+  const [editMode,     setEditMode]     = useState<'FREE' | 'NUMBERED'>('FREE');
   const [busy,         setBusy]         = useState(false);
   const [actionError,  setActionError]  = useState<string | null>(null);
 
@@ -121,6 +123,26 @@ export function PageTrips() {
     try {
       await apiPost(`${base}/trips`, payload);
       setShowCreate(false);
+      refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t('trips.createError'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openEdit = (trip: TripRow) => {
+    setEditTrip(trip);
+    setEditMode((trip.seatingMode as 'FREE' | 'NUMBERED') ?? 'FREE');
+    setActionError(null);
+  };
+
+  const handleUpdateSeatingMode = async () => {
+    if (!editTrip) return;
+    setBusy(true); setActionError(null);
+    try {
+      await apiPatch(`${base}/trips/${editTrip.id}`, { seatingMode: editMode });
+      setEditTrip(null);
       refetch();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : t('trips.createError'));
@@ -257,8 +279,9 @@ export function PageTrips() {
                     <li
                       key={t2.id}
                       role="row"
+                      onClick={() => openEdit(t2)}
                       className={cn(
-                        'grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-3 items-center',
+                        'grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-3 items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors',
                         delayed && 'bg-red-50/50 dark:bg-red-900/10',
                       )}
                     >
@@ -273,10 +296,15 @@ export function PageTrips() {
                       <div role="cell" className="text-sm font-mono text-slate-600 dark:text-slate-400 truncate">
                         {t2.bus?.plateNumber ?? '—'}
                       </div>
-                      <div role="cell">
+                      <div role="cell" className="flex items-center gap-1.5">
                         <Badge variant={tripStatusBadgeVariant(t2.status)} size="sm">
                           {tripStatusLabel(t2.status)}
                         </Badge>
+                        {t2.seatingMode === 'NUMBERED' && (
+                          <Badge variant="info" size="sm">
+                            {t('tripForm.numberedSeating')}
+                          </Badge>
+                        )}
                       </div>
                       <div role="cell" className="text-right">
                         {delayed
@@ -312,6 +340,78 @@ export function PageTrips() {
             busy={busy}
             error={actionError}
           />
+        )}
+      </Dialog>
+
+      {/* Modal Modifier trajet — seatingMode */}
+      <Dialog
+        open={!!editTrip}
+        onOpenChange={o => { if (!o) { setEditTrip(null); setActionError(null); } }}
+        title={t('trips.editTripTitle')}
+        description={editTrip ? `${routeLabelOf(editTrip)} — ${formatHm(new Date(editTrip.departureScheduled))}` : ''}
+        size="md"
+      >
+        {editTrip && (
+          <div className="space-y-5">
+            <ErrorAlert error={actionError} />
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t('tripForm.seatingMode')}
+              </label>
+              <div className="flex gap-3">
+                {(['FREE', 'NUMBERED'] as const).map(mode => {
+                  const busSeatLayout = editTrip.bus?.seatLayout;
+                  const disabled = mode === 'NUMBERED' && !busSeatLayout;
+                  return (
+                    <label key={mode} className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all text-sm font-medium',
+                      editMode === mode
+                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300',
+                      disabled && 'opacity-50 cursor-not-allowed',
+                    )}>
+                      <input
+                        type="radio" name="editSeatingMode" value={mode}
+                        checked={editMode === mode}
+                        onChange={() => setEditMode(mode)}
+                        disabled={busy || disabled}
+                        className="sr-only"
+                      />
+                      {mode === 'FREE' ? t('tripForm.freeSeating') : t('tripForm.numberedSeating')}
+                    </label>
+                  );
+                })}
+              </div>
+              {!editTrip.bus?.seatLayout && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  {t('tripForm.noSeatLayoutHint')}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setEditTrip(null); setActionError(null); }}
+                disabled={busy}
+                className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleUpdateSeatingMode}
+                disabled={busy || editMode === (editTrip.seatingMode ?? 'FREE')}
+                className={cn(
+                  'flex-1 py-2.5 rounded-lg font-medium text-sm transition-colors',
+                  editMode !== (editTrip.seatingMode ?? 'FREE') && !busy
+                    ? 'bg-teal-600 text-white hover:bg-teal-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed',
+                )}
+              >
+                {busy ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          </div>
         )}
       </Dialog>
     </main>

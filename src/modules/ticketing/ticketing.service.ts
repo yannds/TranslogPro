@@ -421,14 +421,14 @@ export class TicketingService {
       },
     });
 
-    // Auto-create refund for paid tickets cancelled by client
+    // Créer un remboursement basé sur la politique d'annulation du tenant
     if (wasConfirmed) {
-      await this.refundService.createRefund({
+      await this.refundService.createPolicyBasedRefund({
         tenantId,
-        ticketId: ticket.id,
-        amount:   ticket.pricePaid,
-        currency: 'XAF',
-        reason:   RefundReason.CLIENT_CANCEL,
+        ticketId:       ticket.id,
+        reason:         RefundReason.CLIENT_CANCEL,
+        requestedBy:    actor.id,
+        requestChannel: 'CASHIER',
       });
     }
 

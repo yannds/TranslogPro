@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { PrismaExceptionInterceptor } from './common/interceptors/prisma-exception.interceptor';
 import { RedisIoAdapter } from './infrastructure/redis-io.adapter';
 import { SECRET_SERVICE, ISecretService } from './infrastructure/secret/interfaces/secret.interface';
 import cookieParser from 'cookie-parser';
@@ -52,7 +53,7 @@ async function bootstrap() {
 
   // Filtres et intercepteurs globaux
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new RequestIdInterceptor(), new LoggingInterceptor());
+  app.useGlobalInterceptors(new RequestIdInterceptor(), new LoggingInterceptor(), new PrismaExceptionInterceptor());
 
   // CORS (configuré par tenant en production via Kong)
   app.enableCors({

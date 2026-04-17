@@ -26,6 +26,7 @@ import {
   backfillDriverUserTypeZombie,
   seedDefaultVehicleDocumentTypes,
 } from './iam.seed';
+import { seedHtmlTemplates } from './templates.seed';
 
 const prisma = new PrismaClient();
 
@@ -475,7 +476,10 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
   // ── Bus A : 50 places, seatLayout configuré ────────────────────────────────
   const busA = await prisma.bus.upsert({
     where: { plateNumber: 'CG-001-BZV' },
-    update: { seatLayout: { rows: 12, cols: 4, aisleAfter: 2, disabled: ['1-3', '1-4'] } },
+    update: {
+      seatLayout: { rows: 12, cols: 4, aisleAfter: 2, disabled: ['1-3', '1-4'] },
+      amenities:  ['AC', 'WIFI', 'USB_CHARGING', 'RECLINING_SEATS', 'TOILETS'],
+    },
     create: {
       tenantId,
       plateNumber:    'CG-001-BZV',
@@ -486,6 +490,7 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
       luggageCapacityKg: 800,
       luggageCapacityM3: 8,
       seatLayout:     { rows: 12, cols: 4, aisleAfter: 2, disabled: ['1-3', '1-4'] },
+      amenities:      ['AC', 'WIFI', 'USB_CHARGING', 'RECLINING_SEATS', 'TOILETS'],
       status:         'AVAILABLE',
     },
   });
@@ -493,7 +498,7 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
   // ── Bus B : 30 places, pas de seatLayout (FREE seating only) ───────────────
   const busB = await prisma.bus.upsert({
     where: { plateNumber: 'CG-002-BZV' },
-    update: {},
+    update: { amenities: ['AC'] },
     create: {
       tenantId,
       plateNumber:    'CG-002-BZV',
@@ -503,6 +508,7 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
       capacity:       30,
       luggageCapacityKg: 400,
       luggageCapacityM3: 4,
+      amenities:      ['AC'],
       status:         'AVAILABLE',
     },
   });
@@ -605,6 +611,92 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
   console.log(`[Dev Seed] ✅ ${testPassengers.length} billets test (sièges occupés sur trip NUMBERED)`);
 }
 
+// ─── CMS Pages par défaut ────────────────────────────────────────────────────
+// Slugs système : hero, about, contact — contenu structuré JSON.
+// Chaque tenant reçoit ces pages pré-remplies (published) à l'onboarding.
+
+/** Limites de caractères par champ (partagées avec le frontend / validation DTO) */
+const CMS_LIMITS = {
+  hero: { title: 60, subtitle: 200, trustedBy: 100 },
+  about: { description: 500, featureTitle: 30, featureDesc: 80 },
+  contact: { hours: 100 },
+} as const;
+
+const DEFAULT_CMS_PAGES = {
+  hero: {
+    fr: {
+      title: 'Voyagez en toute élégance',
+      subtitle: 'Réservez vos billets de bus en quelques secondes. Confort, sécurité et ponctualité garantis.',
+      trustedBy: 'Des milliers de voyageurs nous font confiance',
+    },
+    en: {
+      title: 'Travel in Style',
+      subtitle: 'Book your bus tickets in seconds. Comfort, safety, and punctuality guaranteed.',
+      trustedBy: 'Thousands of travelers trust us',
+    },
+  },
+  about: {
+    fr: {
+      description: 'Nous sommes une compagnie de transport de premier plan, dédiée à offrir des voyages confortables, sûrs et ponctuels à travers tout le pays. Notre flotte moderne et notre équipe expérimentée sont au service de votre sérénité.',
+      features: [
+        { icon: 'shield', title: 'Sécurité', description: 'Véhicules inspectés, chauffeurs certifiés' },
+        { icon: 'sparkles', title: 'Confort', description: 'Climatisation, WiFi, prises USB' },
+        { icon: 'target', title: 'Fiabilité', description: 'Départs ponctuels, suivi en temps réel' },
+      ],
+    },
+    en: {
+      description: 'We are a leading transport company, dedicated to offering comfortable, safe, and punctual journeys across the country. Our modern fleet and experienced team serve your peace of mind.',
+      features: [
+        { icon: 'shield', title: 'Safety', description: 'Inspected vehicles, certified drivers' },
+        { icon: 'sparkles', title: 'Comfort', description: 'Air conditioning, WiFi, USB outlets' },
+        { icon: 'target', title: 'Reliability', description: 'On-time departures, real-time tracking' },
+      ],
+    },
+  },
+  contact: {
+    fr: {
+      hours: 'Lun-Sam : 06h — 20h',
+    },
+    en: {
+      hours: 'Mon-Sat: 6 AM — 8 PM',
+    },
+  },
+};
+
+async function seedDefaultCmsPages(tenantId: string) {
+  const slugs = ['hero', 'about', 'contact'] as const;
+  const locales = ['fr', 'en'] as const;
+
+  for (const slug of slugs) {
+    for (const locale of locales) {
+      const defaults = DEFAULT_CMS_PAGES[slug][locale];
+      const content = JSON.stringify(defaults);
+      const titles: Record<string, Record<string, string>> = {
+        hero:    { fr: 'Hero — Accroche principale', en: 'Hero — Main tagline' },
+        about:   { fr: 'À propos',                   en: 'About' },
+        contact: { fr: 'Contact — Horaires',          en: 'Contact — Hours' },
+      };
+
+      await prisma.tenantPage.upsert({
+        where: { tenantId_slug_locale: { tenantId, slug, locale } },
+        update: {},  // ne pas écraser si déjà personnalisé
+        create: {
+          tenantId,
+          slug,
+          locale,
+          title:        titles[slug][locale],
+          content,
+          published:    true,
+          showInFooter: false,
+          sortOrder:    slug === 'hero' ? 0 : slug === 'about' ? 1 : 2,
+        },
+      });
+    }
+  }
+
+  console.log(`[Dev Seed] ✅ CMS pages (hero, about, contact) × fr/en pour tenant ${tenantId.slice(0, 8)}…`);
+}
+
 async function main() {
   console.log('[Dev Seed] Démarrage...');
 
@@ -691,6 +783,14 @@ async function main() {
 
   // ── 7. Seed billetterie : stations, route, bus, trips, billets ────────────────
   await seedTicketingData(TENANT1_ID, driver.id);
+
+  // ── 8. Templates HTML système (Ticket 2026, Carte embarquement 2026) ─────────
+  await seedHtmlTemplates(prisma);
+
+  // ── 9. Seed CMS pages par défaut (hero, about, contact) pour chaque tenant ───
+  for (const tenant of TENANTS) {
+    await seedDefaultCmsPages(tenant.id);
+  }
 
   // ── Cleanup Phase 5 : zombie userType='DRIVER' des DB pré-existantes ─────────
   const zombieReport = await backfillDriverUserTypeZombie(prisma);

@@ -172,6 +172,26 @@ model TenantBusinessConfig {
   // Exprimé dans la devise du tenant (Tenant.currency).
   seatSelectionFee Float @default(0)
 
+  // ── Politique d'annulation / remboursement ──────────────────────────────
+  // Palier 1 : remboursement intégral si annulation ≥ cancellationFullRefundMinutes
+  // avant le départ (ex: 1440 = 24 h).
+  cancellationFullRefundMinutes    Int   @default(1440)
+  // Palier 2 : remboursement partiel entre cancellationPartialRefundMinutes et
+  // cancellationFullRefundMinutes (ex: 120 = 2 h).
+  cancellationPartialRefundMinutes Int   @default(120)
+  // Pourcentage du palier partiel (fraction, ex: 0.5 = 50 %).
+  cancellationPartialRefundPct     Float @default(0.5)
+  // En dessous de cancellationPartialRefundMinutes → 0 % (non remboursable).
+  // ── Seuils d'approbation remboursement ──────────────────────────────────
+  // Montant max (en devise tenant) qu'un AGENCY_MANAGER peut approuver.
+  // Au-delà → seul TENANT_ADMIN peut approuver.
+  refundApprovalThreshold          Float @default(50000)
+  // Montant max auto-approuvé (skip approbation manuelle). 0 = désactivé.
+  refundAutoApproveMax             Float @default(0)
+  // Si true, annulation de trajet (TRIP_CANCELLED) → remboursement 100 %
+  // auto-approuvé quel que soit le montant.
+  autoApproveTripCancelled         Boolean @default(true)
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -213,6 +233,7 @@ model User {
   image        String?
   roleId       String?
   userType     String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
+  isActive     Boolean  @default(true)  // désactivable sans suppression
   preferences  Json     @default("{}") // siège préféré, gares fav (clients)
   loyaltyScore Float    @default(0) // calculé — clients uniquement
 
@@ -681,7 +702,10 @@ model Bus {
   luggageCapacityKg Float
   luggageCapacityM3 Float
   seatLayout        Json? // Plan de salle numéroté — OBLIGATOIRE avant vente
+  isFullVip         Boolean  @default(false) // true = tout le bus est VIP
+  vipSeats          String[] @default([])    // Sièges VIP individuels (ex: ["1-1","1-2"]) — ignoré si isFullVip
   photos            String[] @default([]) // Clés MinIO des photos (intérieur/extérieur)
+  amenities         String[] @default([]) // WIFI | AC | TOILETS | USB_CHARGING | RECLINING_SEATS | TV | SNACK_BAR | BLANKETS | LUGGAGE_TRACKING
   status            String  @default("AVAILABLE")
   // AVAILABLE | BOARDING | DEPARTED | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE
   version           Int     @default(1)
@@ -1174,24 +1198,37 @@ model Claim {
 // ─────────────────────────────────────────────────────────────
 
 model Refund {
-  id            String    @id @default(cuid())
-  tenantId      String
-  ticketId      String
-  tripId        String?
-  amount        Float
-  currency      String    @default("XAF")
-  reason        String    // CLIENT_CANCEL | TRIP_CANCELLED
-  status        String    @default("PENDING")
+  id              String    @id @default(cuid())
+  tenantId        String
+  ticketId        String
+  tripId          String?
+  // Montant effectif du remboursement (= originalAmount × policyPercent).
+  amount          Float
+  // Montant original du billet (pricePaid) — audit trail.
+  originalAmount  Float?
+  // Pourcentage appliqué (0.0–1.0) selon la politique d'annulation du tenant.
+  policyPercent   Float?
+  currency        String    @default("XAF")
+  reason          String    // CLIENT_CANCEL | TRIP_CANCELLED
+  status          String    @default("PENDING")
   // PENDING | APPROVED | PROCESSED | REJECTED
-  paymentMethod String?
-  approvedBy    String?
-  approvedAt    DateTime?
-  processedBy   String?
-  processedAt   DateTime?
-  rejectedBy    String?
-  rejectedAt    DateTime?
-  notes         String?
-  createdAt     DateTime  @default(now())
+  paymentMethod   String?
+  // Canal de la demande : CASHIER | PORTAL | SYSTEM
+  requestChannel  String?
+  // userId ayant initié la demande (ou 'SYSTEM')
+  requestedBy     String?
+  // Snapshot de l'heure de départ du trajet au moment de la demande
+  departureAt     DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  processedBy     String?
+  processedAt     DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  notes           String?
+  // Lock optimiste — requis par le WorkflowEngine (SELECT FOR UPDATE + version check).
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([tenantId, ticketId])
@@ -1488,6 +1525,7 @@ model DocumentTemplate {
   version     Int      @default(1)
   isSystem    Boolean  @default(false) // Ne peut pas être supprimé par un tenant
   isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false) // Un seul défaut par docType par tenant
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1495,6 +1533,7 @@ model DocumentTemplate {
   @@unique([tenantId, slug, version])
   @@index([docType, isActive])
   @@index([tenantId, isActive])
+  @@index([tenantId, docType, isDefault])
   @@map("document_templates")
 }
 
@@ -2261,6 +2300,9 @@ model TenantPortalConfig {
   showNews    Boolean @default(true)
   showContact Boolean @default(true)
 
+  // Module CMS actualités (activable/désactivable)
+  newsCmsEnabled Boolean @default(false)
+
   // Hero visuel
   heroImageUrl String?  // URL MinIO de l'image hero (haute résolution)
   heroOverlay  Float    @default(0.4) // opacité overlay sombre sur le hero (0–1)
@@ -2282,17 +2324,18 @@ model TenantPortalConfig {
 
 // ── Pages CMS légères par tenant ─────────────────────────────────────────────
 // Contenu "à propos", mentions légales, conditions de vente…
-// Markdown sanitisé côté service (pas de HTML brut).
+// HTML sanitisé côté service (éditeur riche frontend).
 model TenantPage {
   id       String @id @default(cuid())
   tenantId String
 
-  slug      String  // about | terms | privacy | custom-*
+  slug      String  // about | terms | privacy | news | custom-*
   title     String
-  content   String  @db.Text // Markdown sanitisé
+  content   String  @db.Text // HTML sanitisé
   locale    String  @default("fr") // ISO 639-1
   sortOrder Int     @default(0)
   published Boolean @default(false)
+  showInFooter Boolean @default(false) // Affiché dans le footer du portail uniquement
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2309,20 +2352,41 @@ model TenantPost {
   tenantId String
 
   title       String
+  slug        String?           // URL-friendly slug (auto-generated from title)
   excerpt     String?   @db.VarChar(500)
-  content     String    @db.Text // Markdown sanitisé
+  content     String    @db.Text // HTML sanitisé (éditeur riche)
   coverImage  String?   // URL MinIO
   locale      String    @default("fr")
   published   Boolean   @default(false)
   publishedAt DateTime?
   authorName  String?
+  tags        String[]  @default([])  // Tags libres pour filtrage
 
+  media     PostMedia[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, slug])
   @@index([tenantId, published, publishedAt])
   @@map("tenant_posts")
+}
+
+// ── Médias attachés à un post (photos / vidéos) ─────────────────────────────
+model PostMedia {
+  id     String @id @default(cuid())
+  postId String
+
+  url       String   // Clé MinIO (signée à la lecture)
+  type      String   // IMAGE | VIDEO
+  caption   String?
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  post      TenantPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+  @@map("post_media")
 }
 
 // ─────────────────────────────────────────────────────────────

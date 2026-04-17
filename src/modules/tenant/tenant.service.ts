@@ -22,6 +22,7 @@ export interface UpdateBusinessConfigDto {
   breakEvenThresholdPct?:  number;
   agencyCommissionRate?:   number;
   stationFeePerDeparture?: number;
+  seatSelectionFee?:       number;
 }
 
 export interface UpdateCompanyInfoDto {
@@ -70,6 +71,9 @@ export class TenantService {
         userType: 'STAFF',
       },
     });
+
+    // Seed default CMS pages (hero, about, contact) — éditable via portail admin
+    await this.seedDefaultCmsPages(tenant.id);
 
     return tenant;
   }
@@ -188,6 +192,7 @@ export class TenantService {
         daysPerYear: true, defaultTripsPerMonth: true,
         breakEvenThresholdPct: true, agencyCommissionRate: true,
         stationFeePerDeparture: true,
+        seatSelectionFee: true,
       },
     });
   }
@@ -200,6 +205,7 @@ export class TenantService {
     for (const key of [
       'daysPerYear', 'defaultTripsPerMonth',
       'breakEvenThresholdPct', 'agencyCommissionRate', 'stationFeePerDeparture',
+      'seatSelectionFee',
     ] as const) {
       if (dto[key] !== undefined) data[key] = dto[key];
     }
@@ -213,7 +219,48 @@ export class TenantService {
         daysPerYear: true, defaultTripsPerMonth: true,
         breakEvenThresholdPct: true, agencyCommissionRate: true,
         stationFeePerDeparture: true,
+        seatSelectionFee: true,
       },
+    });
+  }
+
+  // ─── CMS pages par défaut ─────────────────────────────────────────────────
+
+  /**
+   * Crée les pages système (hero, about, contact) en fr + en pour un nouveau tenant.
+   * Contenu structuré JSON — éditable via le portail admin.
+   */
+  private async seedDefaultCmsPages(tenantId: string) {
+    const pages: { slug: string; locale: string; title: string; content: string; sortOrder: number }[] = [
+      // Hero
+      { slug: 'hero', locale: 'fr', title: 'Hero — Accroche principale', sortOrder: 0,
+        content: JSON.stringify({ title: 'Voyagez en toute élégance', subtitle: 'Réservez vos billets de bus en quelques secondes. Confort, sécurité et ponctualité garantis.', trustedBy: 'Des milliers de voyageurs nous font confiance' }) },
+      { slug: 'hero', locale: 'en', title: 'Hero — Main tagline', sortOrder: 0,
+        content: JSON.stringify({ title: 'Travel in Style', subtitle: 'Book your bus tickets in seconds. Comfort, safety, and punctuality guaranteed.', trustedBy: 'Thousands of travelers trust us' }) },
+      // About
+      { slug: 'about', locale: 'fr', title: 'À propos', sortOrder: 1,
+        content: JSON.stringify({ description: 'Nous sommes une compagnie de transport de premier plan, dédiée à offrir des voyages confortables, sûrs et ponctuels à travers tout le pays. Notre flotte moderne et notre équipe expérimentée sont au service de votre sérénité.', features: [{ icon: 'shield', title: 'Sécurité', description: 'Véhicules inspectés, chauffeurs certifiés' }, { icon: 'sparkles', title: 'Confort', description: 'Climatisation, WiFi, prises USB' }, { icon: 'target', title: 'Fiabilité', description: 'Départs ponctuels, suivi en temps réel' }] }) },
+      { slug: 'about', locale: 'en', title: 'About', sortOrder: 1,
+        content: JSON.stringify({ description: 'We are a leading transport company, dedicated to offering comfortable, safe, and punctual journeys across the country. Our modern fleet and experienced team serve your peace of mind.', features: [{ icon: 'shield', title: 'Safety', description: 'Inspected vehicles, certified drivers' }, { icon: 'sparkles', title: 'Comfort', description: 'Air conditioning, WiFi, USB outlets' }, { icon: 'target', title: 'Reliability', description: 'On-time departures, real-time tracking' }] }) },
+      // Contact
+      { slug: 'contact', locale: 'fr', title: 'Contact — Horaires', sortOrder: 2,
+        content: JSON.stringify({ hours: 'Lun-Sam : 06h — 20h' }) },
+      { slug: 'contact', locale: 'en', title: 'Contact — Hours', sortOrder: 2,
+        content: JSON.stringify({ hours: 'Mon-Sat: 6 AM — 8 PM' }) },
+    ];
+
+    await this.prisma.tenantPage.createMany({
+      data: pages.map(p => ({
+        tenantId,
+        slug:         p.slug,
+        locale:       p.locale,
+        title:        p.title,
+        content:      p.content,
+        sortOrder:    p.sortOrder,
+        published:    true,
+        showInFooter: false,
+      })),
+      skipDuplicates: true,
     });
   }
 }

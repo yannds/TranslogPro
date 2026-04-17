@@ -69,10 +69,12 @@ export interface TripRow {
     id?:          string;
     plateNumber?: string | null;
     model?:       string | null;
+    seatLayout?:  Record<string, unknown> | null;
   } | null;
+  seatingMode?: string;
 }
 
-export interface BusLite   { id: string; plateNumber: string; model?: string | null }
+export interface BusLite   { id: string; plateNumber: string; model?: string | null; seatLayout?: Record<string, unknown> | null }
 export interface StaffAssignmentLite {
   id: string; role: string; agencyId: string | null;
   status: string; isAvailable: boolean; startDate: string;

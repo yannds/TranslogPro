@@ -25,6 +25,7 @@ import { TripDatePicker } from './TripDatePicker';
 import type { Language } from '../../lib/i18n/types';
 import { createContext, useContext } from 'react';
 import { getTheme, type PortalTheme } from './portal-themes';
+import { SeatMapPicker } from '../tickets/SeatMapPicker';
 import {
   HorizonNavbar, HorizonHero, HorizonTripCard, HorizonSectionTitle, HorizonFooter,
   VividNavbar, VividHero, VividTripCard, VividSectionTitle, VividFooter,
@@ -48,6 +49,20 @@ const defaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = defaultIcon;
 
+// ─── CMS page types ──────────────────────────────────────────────────────────
+
+interface CmsPage { slug: string; title: string; content: string; locale: string }
+
+interface HeroCms { title: string; subtitle: string; trustedBy: string }
+interface AboutFeature { icon: string; title: string; description: string }
+interface AboutCms { description: string; features: AboutFeature[] }
+interface ContactCms { hours: string }
+
+function parseCmsJson<T>(page: CmsPage | undefined): T | null {
+  if (!page) return null;
+  try { return JSON.parse(page.content) as T; } catch { return null; }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PaymentMethod {
@@ -56,6 +71,13 @@ interface PaymentMethod {
   type: 'MOBILE_MONEY' | 'CARD';
   logoUrl?: string;
   phonePrefix?: string;
+}
+
+interface SeatLayout {
+  rows: number;
+  cols: number;
+  aisleAfter?: number;
+  disabled?: string[];
 }
 
 interface TripResult {
@@ -72,6 +94,11 @@ interface TripResult {
   amenities: string[];
   canBook: boolean;
   stops?: { city: string; name: string; km: number }[];
+  seatingMode?: 'FREE' | 'NUMBERED';
+  seatLayout?: SeatLayout | null;
+  seatSelectionFee?: number;
+  isFullVip?: boolean;
+  vipSeats?: string[];
 }
 
 interface StationInfo {
@@ -87,28 +114,13 @@ interface PassengerInfo {
   phone: string;
   email: string;
   seatType: 'STANDARD' | 'VIP';
+  wantsSeatSelection?: boolean;
+  seatNumber?: string | null;
 }
 
 // ─── Demo data (fallback) ───────────────────────────────────────────────────
 
-const DEMO_STATIONS: StationInfo[] = [
-  { name: 'Gare Centrale', city: 'Brazzaville', type: 'PRINCIPALE', coordinates: { lat: -4.2634, lng: 15.2429 } },
-  { name: 'Gare Routière Nord', city: 'Brazzaville', type: 'RELAIS', coordinates: { lat: -4.2500, lng: 15.2600 } },
-  { name: 'Gare Océan', city: 'Pointe-Noire', type: 'PRINCIPALE', coordinates: { lat: -4.7692, lng: 11.8664 } },
-  { name: 'Gare Loandjili', city: 'Pointe-Noire', type: 'RELAIS', coordinates: { lat: -4.7800, lng: 11.8500 } },
-  { name: 'Gare de Dolisie', city: 'Dolisie', type: 'PRINCIPALE', coordinates: { lat: -4.1956, lng: 12.6666 } },
-  { name: 'Gare de Nkayi', city: 'Nkayi', type: 'RELAIS', coordinates: { lat: -4.1700, lng: 13.2830 } },
-  { name: 'Gare de Ouesso', city: 'Ouesso', type: 'RELAIS', coordinates: { lat: 1.6136, lng: 16.0517 } },
-  { name: 'Gare de Owando', city: 'Owando', type: 'RELAIS', coordinates: { lat: -0.4833, lng: 15.9000 } },
-];
-
-const DEMO_TRIPS: TripResult[] = [
-  { id: 't1', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T06:00:00', arrivalTime: '2026-04-17T14:00:00', price: 15000, availableSeats: 18, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS'], canBook: true },
-  { id: 't2', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T08:30:00', arrivalTime: '2026-04-17T16:30:00', price: 12000, availableSeats: 5, busType: 'CONFORT', busModel: 'Yutong ZK6122', amenities: ['AC', 'USB_CHARGING'], canBook: true },
-  { id: 't3', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T11:00:00', arrivalTime: '2026-04-17T19:00:00', price: 10000, availableSeats: 32, busType: 'STANDARD', busModel: 'King Long XMQ6127', amenities: ['AC'], canBook: true },
-  { id: 't4', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T14:00:00', arrivalTime: '2026-04-17T22:00:00', price: 15000, availableSeats: 0, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS'], canBook: false },
-  { id: 't5', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T18:00:00', arrivalTime: '2026-04-18T02:00:00', price: 18000, availableSeats: 8, busType: 'VIP', busModel: 'Scania Touring', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS', 'RECLINING_SEATS', 'BLANKETS'], canBook: true },
-];
+// Demo data removed — real data comes from the API
 
 const AMENITY_I18N: Record<string, string> = {
   WIFI: 'fleetVehicles.amenityWIFI', AC: 'fleetVehicles.amenityAC',
@@ -133,19 +145,6 @@ const POPULAR_ROUTES = [
   { from: 'Brazzaville', to: 'Dolisie', price: 8000, duration: '6h' },
   { from: 'Pointe-Noire', to: 'Dolisie', price: 5000, duration: '3h' },
   { from: 'Brazzaville', to: 'Ouesso', price: 25000, duration: '14h' },
-];
-
-// Hero scenes — cinematic CSS "photos" evoking luxury bus travel
-// Each has a warm golden-hour palette with depth
-const HERO_SCENES = [
-  // Scene 1: Golden sunrise on open road
-  { bg: 'linear-gradient(160deg, #1a0a00 0%, #3d1a00 20%, #b45309 45%, #f59e0b 65%, #fbbf24 80%, #fef3c7 100%)', overlay: 'radial-gradient(ellipse 120% 60% at 50% 80%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)' },
-  // Scene 2: Dusk highway — deep blue to amber horizon
-  { bg: 'linear-gradient(175deg, #0c1445 0%, #1e3a5f 30%, #b45309 60%, #d97706 75%, #1e293b 100%)', overlay: 'radial-gradient(ellipse 100% 50% at 50% 90%, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)' },
-  // Scene 3: Savanna road — warm earth tones, backlit
-  { bg: 'linear-gradient(165deg, #0f0a05 0%, #44200d 25%, #92400e 50%, #d97706 70%, #fbbf24 90%, #fffbeb 100%)', overlay: 'radial-gradient(ellipse 110% 55% at 45% 85%, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 55%, transparent 100%)' },
-  // Scene 4: Night premium — luxury dark cabin feel
-  { bg: 'linear-gradient(150deg, #0a0a0a 0%, #1c1917 25%, #292524 40%, #44403c 55%, #78716c 75%, #d6d3d1 100%)', overlay: 'radial-gradient(ellipse 90% 60% at 50% 75%, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)' },
 ];
 
 const PAYMENT_COLORS: Record<string, string> = {
@@ -288,7 +287,6 @@ function HeroCarousel({ children }: { children: React.ReactNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: TripResult) => void; fmt: (n: number) => string; t: (k: string) => string }) {
-  const th = usePortalTheme();
   const full = trip.availableSeats === 0, urgent = trip.availableSeats > 0 && trip.availableSeats <= 5, isVip = trip.busType === 'VIP';
   return (
     <div className={cn('group relative rounded-2xl border transition-all duration-300 bg-white dark:bg-slate-900/80 backdrop-blur-sm',
@@ -343,7 +341,18 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
 // Booking Modal (truly responsive — centered, not a bottom drawer)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type BookingStep = 'passengers' | 'payment' | 'confirmation';
+type BookingStep = 'passengers' | 'seats' | 'payment' | 'confirmation';
+
+interface SeatInfo {
+  seatingMode: string;
+  seatLayout: SeatLayout | null;
+  occupiedSeats: string[];
+  availableCount: number;
+  totalCount: number;
+  seatSelectionFee: number;
+  isFullVip?: boolean;
+  vipSeats?: string[];
+}
 
 interface TicketResult {
   bookingRef: string;
@@ -352,6 +361,8 @@ interface TicketResult {
   qrCode: string;
   fareClass: string;
   seatNumber: string | null;
+  pricePaid?: number;
+  wantsSeatSelection?: boolean;
   passenger: { firstName: string; lastName: string };
   documents: { ticketStubUrl: string | null; invoiceUrl: string | null };
 }
@@ -360,6 +371,7 @@ interface BookingResult {
   tickets: TicketResult[];
   trip: { departure: string; arrival: string; departureTime: string; arrivalTime: string; routeName: string; price: number };
   totalPrice: number;
+  seatSelectionFee?: number;
   paymentMethod: string;
 }
 
@@ -375,10 +387,23 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
   const [booking, setBooking] = useState<BookingResult | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
-  const steps: BookingStep[] = ['passengers', 'payment', 'confirmation'];
+
+  // ── Seat selection state ──────────────────────────────────────────────────
+  const [seatInfo, setSeatInfo] = useState<SeatInfo | null>(null);
+  const [seatLoading, setSeatLoading] = useState(false);
+  const isNumbered = trip.seatingMode === 'NUMBERED' && !!trip.seatLayout;
+
+  // Steps: skip "seats" step if trip is FREE seating
+  const steps: BookingStep[] = isNumbered
+    ? ['passengers', 'seats', 'payment', 'confirmation']
+    : ['passengers', 'payment', 'confirmation'];
   const ci = steps.indexOf(step);
   const isVip = trip.busType === 'VIP';
-  const subtotal = trip.price * count;
+
+  // ── Pricing with seat selection fee ───────────────────────────────────────
+  const seatFee = seatInfo?.seatSelectionFee ?? trip.seatSelectionFee ?? 0;
+  const seatSelectCount = passengers.filter(p => p.wantsSeatSelection).length;
+  const subtotal = trip.price * count + seatFee * seatSelectCount;
   const fee = Math.round(subtotal * 0.03);
   const total = subtotal + fee;
 
@@ -386,6 +411,41 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
     setPassengers(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p));
 
   const allPassengersValid = passengers.every(p => p.firstName && p.lastName && p.phone);
+
+  // ── Fetch real-time seat data when entering seats step ────────────────────
+  async function loadSeats() {
+    if (!apiBase) return;
+    setSeatLoading(true);
+    try {
+      const data = await apiFetch<SeatInfo>(`${apiBase}/trips/${trip.id}/seats`, {
+        skipRedirectOn401: true,
+      });
+      setSeatInfo(data);
+    } catch {
+      // Fallback: use trip-level data
+      setSeatInfo(null);
+    } finally {
+      setSeatLoading(false);
+    }
+  }
+
+  function goToSeatsOrPayment() {
+    if (isNumbered) {
+      loadSeats();
+      setStep('seats');
+    } else {
+      setStep('payment');
+    }
+  }
+
+  // All occupied seats = backend occupied + locally selected by other passengers
+  const occupiedForPicker = (idx: number) => {
+    const backend = seatInfo?.occupiedSeats ?? [];
+    const otherPax = passengers
+      .filter((p, i) => i !== idx && p.wantsSeatSelection && p.seatNumber)
+      .map(p => p.seatNumber!);
+    return [...backend, ...otherPax];
+  };
 
   async function handlePay() {
     if (!apiBase || !selectedPayment) return;
@@ -398,11 +458,13 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
         body: {
           tripId: trip.id,
           passengers: passengers.map(p => ({
-            firstName: p.firstName ?? '',
-            lastName:  p.lastName ?? '',
-            phone:     p.phone ?? '',
-            email:     p.email,
-            seatType:  p.seatType ?? 'STANDARD',
+            firstName:          p.firstName ?? '',
+            lastName:           p.lastName ?? '',
+            phone:              p.phone ?? '',
+            email:              p.email,
+            seatType:           p.seatType ?? 'STANDARD',
+            wantsSeatSelection: p.wantsSeatSelection || undefined,
+            seatNumber:         p.wantsSeatSelection ? p.seatNumber : undefined,
           })),
           paymentMethod: selectedPayment,
         },
@@ -434,9 +496,9 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
                 {ci > i ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> : i + 1}
               </div>
               <span className={cn('text-xs font-medium hidden sm:block ml-1', ci === i ? 'text-slate-800 dark:text-white' : 'text-slate-400')}>
-                {s === 'passengers' ? t('portail.passengers') : s === 'payment' ? t('portail.payment') : t('portail.confirmation')}
+                {s === 'passengers' ? t('portail.passengers') : s === 'seats' ? t('portail.seatSelection') : s === 'payment' ? t('portail.payment') : t('portail.confirmation')}
               </span>
-              {i < 2 && <div className={cn('flex-1 h-0.5 rounded-full mx-2', ci > i ? 'bg-emerald-400' : 'bg-slate-200 dark:bg-slate-700')} />}
+              {i < steps.length - 1 && <div className={cn('flex-1 h-0.5 rounded-full mx-2', ci > i ? 'bg-emerald-400' : 'bg-slate-200 dark:bg-slate-700')} />}
             </div>
           ))}</div>
         </div>
@@ -467,11 +529,65 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
               ))}
             </div>
           )}
+          {step === 'seats' && isNumbered && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.seatSelection')}</h3>
+                <p className="text-sm text-slate-500 mt-1">{t('portail.seatSelectionDesc')}</p>
+              </div>
+              {seatLoading && (
+                <div className="flex items-center justify-center gap-2 py-8 text-slate-500">
+                  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75"/></svg>
+                  <span className="text-sm">{t('portail.loadingSeats')}</span>
+                </div>
+              )}
+              {!seatLoading && seatInfo?.seatLayout && (
+                <div className="space-y-6">
+                  {passengers.map((pax, idx) => (
+                    <div key={idx} className={cn('space-y-4', count > 1 && 'bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-4 sm:p-5 border border-slate-100 dark:border-slate-700/50')}>
+                      {count > 1 && <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t('portail.passengerN').replace('{n}', String(idx + 1))} — {pax.firstName} {pax.lastName}</p>}
+                      <label className={cn('flex items-center gap-3 p-3 sm:p-4 rounded-2xl border-2 cursor-pointer transition-all',
+                        pax.wantsSeatSelection ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300')}>
+                        <input type="checkbox" checked={!!pax.wantsSeatSelection}
+                          onChange={e => updatePassenger(idx, {
+                            wantsSeatSelection: e.target.checked,
+                            seatNumber: e.target.checked ? pax.seatNumber : null,
+                          })}
+                          className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500" />
+                        <div className="flex-1">
+                          <span className="text-sm font-semibold text-slate-800 dark:text-white">{t('portail.chooseMySeat')}</span>
+                          {seatFee > 0 && <span className="text-xs text-amber-600 dark:text-amber-400 ml-2">+{fmt(seatFee)}</span>}
+                        </div>
+                      </label>
+                      {pax.wantsSeatSelection && (
+                        <SeatMapPicker
+                          seatLayout={seatInfo.seatLayout!}
+                          occupiedSeats={occupiedForPicker(idx)}
+                          selectedSeat={pax.seatNumber ?? null}
+                          onSelect={seatId => updatePassenger(idx, { seatNumber: pax.seatNumber === seatId ? null : seatId })}
+                          seatSelectionFee={seatFee}
+                          currency={undefined}
+                          isFullVip={seatInfo.isFullVip ?? trip.isFullVip}
+                          vipSeats={seatInfo.vipSeats ?? trip.vipSeats}
+                        />
+                      )}
+                      {!pax.wantsSeatSelection && (
+                        <p className="text-xs text-slate-400 italic">{t('portail.autoAssignSeat')}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {step === 'payment' && (
             <div className="space-y-5">
               <div><h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.payment')}</h3><p className="text-sm text-slate-500 mt-1">{t('portail.selectPayment')}</p></div>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 sm:p-5 space-y-3 border border-slate-100 dark:border-slate-700/50">
-                <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.ticket')} {trip.departure} &rarr; {trip.arrival} &times; {count}</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(subtotal)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.ticket')} {trip.departure} &rarr; {trip.arrival} &times; {count}</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(trip.price * count)}</span></div>
+                {seatSelectCount > 0 && seatFee > 0 && (
+                  <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.seatSelectionFeeLabel')} &times; {seatSelectCount}</span><span className="font-semibold text-amber-600 dark:text-amber-400">{fmt(seatFee * seatSelectCount)}</span></div>
+                )}
                 <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.serviceFee')} (3%)</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(fee)}</span></div>
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between"><span className="font-bold text-slate-900 dark:text-white">{t('portail.total')}</span><span className={cn('text-lg sm:text-xl font-bold', isVip ? '[color:var(--portal-accent)]' : 'text-slate-900 dark:text-white')}>{fmt(total)}</span></div>
               </div>
@@ -502,7 +618,10 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
                     <IRow l={t('portail.passenger')} v={`${tk.passenger.firstName} ${tk.passenger.lastName}`.trim()} />
                     <IRow l={t('portail.fareClassLabel')} v={tk.fareClass} />
                     {tk.seatNumber && <IRow l={t('portail.seatLabel')} v={tk.seatNumber} />}
-                    <IRow l={t('portail.total')} v={fmt(booking.trip.price)} hl />
+                    {tk.wantsSeatSelection && booking.seatSelectionFee && booking.seatSelectionFee > 0 && (
+                      <IRow l={t('portail.seatSelectionFeeLabel')} v={fmt(booking.seatSelectionFee)} />
+                    )}
+                    <IRow l={t('portail.total')} v={fmt(tk.pricePaid ?? booking.trip.price)} hl />
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center pt-1">
                     {tk.documents.ticketStubUrl && (
@@ -527,14 +646,33 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
         </div>
         {/* Footer */}
         <div className="px-5 sm:px-8 pb-5 sm:pb-6 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
-          {step === 'passengers' && <button onClick={() => setStep('payment')} disabled={!allPassengersValid} className={cn('w-full py-3 sm:py-3.5 rounded-xl font-semibold text-sm transition-all', allPassengersValid ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>{t('portail.continueToPayment')}</button>}
+          {step === 'passengers' && (
+            <button onClick={goToSeatsOrPayment} disabled={!allPassengersValid}
+              className={cn('w-full py-3 sm:py-3.5 rounded-xl font-semibold text-sm transition-all',
+                allPassengersValid ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
+              {isNumbered ? t('portail.continueToSeats') : t('portail.continueToPayment')}
+            </button>
+          )}
+          {step === 'seats' && (
+            <div className="flex gap-3">
+              <button onClick={() => setStep('passengers')} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
+              <button onClick={() => setStep('payment')}
+                disabled={passengers.some(p => p.wantsSeatSelection && !p.seatNumber)}
+                className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all',
+                  passengers.every(p => !p.wantsSeatSelection || p.seatNumber)
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
+                {t('portail.continueToPayment')}
+              </button>
+            </div>
+          )}
           {step === 'payment' && (
             <div className="space-y-3">
               {bookingError && (
                 <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{bookingError}</div>
               )}
               <div className="flex gap-3">
-                <button onClick={() => setStep('passengers')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
+                <button onClick={() => setStep(isNumbered ? 'seats' : 'passengers')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
                 <button onClick={handlePay} disabled={!selectedPayment || bookingLoading} className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all', selectedPayment && !bookingLoading ? 'text-white shadow-lg [background:linear-gradient(to_right,var(--portal-accent),var(--portal-accent-dark))] hover:brightness-110' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
                   {bookingLoading ? (
                     <span className="flex items-center justify-center gap-2"><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75"/></svg>{t('portail.processing')}</span>
@@ -685,7 +823,7 @@ function RecenterMap({ center, zoom }: { center: [number, number]; zoom: number 
 // Parcel Section
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ParcelSection({ t, fmt }: { t: (k: string) => string; fmt: (n: number) => string }) {
+function ParcelSection({ t }: { t: (k: string) => string }) {
   const [tab, setTab] = useState<'track' | 'send'>('track');
   const [code, setCode] = useState('');
   const [result, setResult] = useState<{ status: string; from: string; to: string; date: string } | null>(null);
@@ -737,6 +875,7 @@ function ParcelSection({ t, fmt }: { t: (k: string) => string; fmt: (n: number) 
 interface FleetBus {
   model: string; type: string | null; capacity: number;
   year: number | null; photos: string[]; seatLayout: unknown;
+  amenities: string[];
 }
 
 function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: string | null }) {
@@ -745,9 +884,24 @@ function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: strin
   const [selectedBus, setSelectedBus] = useState<FleetBus | null>(null);
   const rows = (bus: FleetBus) => Math.ceil(bus.capacity / 4);
 
+  const currentYear = new Date().getFullYear();
+  const busesWithYear = fleet.filter(b => b.year != null);
+  const avgAge = busesWithYear.length > 0
+    ? Math.round(busesWithYear.reduce((s, b) => s + (currentYear - b.year!), 0) / busesWithYear.length)
+    : 0;
+  const typeCount = (type: string | null) => fleet.filter(b => b.type === type).length;
+
   return (
     <div>
-      <div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.fleetTitle')}</h2></div>
+      <div className="flex items-center gap-3 mb-4"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.fleetTitle')}</h2></div>
+
+      {/* Fleet stats banner */}
+      {fleet.length > 0 && (
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">
+          {t('portail.fleetStats').replace('{count}', String(fleet.length)).replace('{age}', String(avgAge))}
+        </p>
+      )}
+
       {fleetRes.loading ? (
         <div className="flex justify-center py-16"><div className="w-10 h-10 border-[3px] border-slate-200 border-t-amber-500 rounded-full animate-spin" /></div>
       ) : fleet.length === 0 ? (
@@ -773,70 +927,148 @@ function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: strin
               </div>
               <div className="p-4 sm:p-5">
                 <h3 className="font-bold text-slate-900 dark:text-white">{bus.model}</h3>
-                <p className="text-xs text-slate-500 mt-1">{bus.capacity} {t('portail.seats')}{bus.year ? ` \u00b7 ${bus.year}` : ''}{bus.type ? ` \u00b7 ${bus.type}` : ''}</p>
-                <p className="text-xs text-amber-600 font-semibold mt-3">{t('portail.viewSeatmap')} &rarr;</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {bus.capacity} {t('portail.seats')}{bus.year ? ` \u00b7 ${bus.year}` : ''}{bus.type ? ` \u00b7 ${bus.type}` : ''}
+                </p>
+                {/* Amenities badges on card */}
+                {(bus.amenities ?? []).length > 0 && (
+                  <div className="flex gap-1.5 flex-wrap mt-2.5">
+                    {(bus.amenities ?? []).slice(0, 4).map(a => (
+                      <span key={a} className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                        {tAmenity(t, a)}
+                      </span>
+                    ))}
+                    {(bus.amenities ?? []).length > 4 && (
+                      <span className="text-[10px] text-slate-400">+{(bus.amenities ?? []).length - 4}</span>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs font-semibold mt-3" style={{ color: 'var(--portal-accent)' }}>{t('portail.fleetViewDetails')} &rarr;</p>
               </div>
             </button>
           ))}
         </div>
       )}
 
-      {/* Bus detail + seatmap modal */}
+      {/* Bus detail modal — responsive: 2-col on lg, stacked on mobile */}
       {selectedBus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
+        <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center p-0 sm:p-4 lg:p-8">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md" onClick={() => setSelectedBus(null)} />
-          <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-200/50 dark:border-slate-700/50">
-            <div className="p-6 sm:p-8">
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{selectedBus.model}</h3>
-                  <p className="text-sm text-slate-500 mt-1">{selectedBus.type || ''} &middot; {selectedBus.capacity} {t('portail.seats')}{selectedBus.year ? ` \u00b7 ${selectedBus.year}` : ''}</p>
+          <div className="relative z-10 w-full max-w-4xl bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl lg:rounded-3xl shadow-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-slate-200/50 dark:border-slate-700/50">
+            {/* Close button — always visible */}
+            <button
+              onClick={() => setSelectedBus(null)}
+              className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/40 hover:bg-black/60 text-white transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+
+            {/* Desktop: 2-column layout / Mobile: stacked */}
+            <div className="lg:grid lg:grid-cols-5">
+
+              {/* Left column — photo + infos (3/5 on desktop) */}
+              <div className="lg:col-span-3 lg:border-r border-slate-200 dark:border-slate-700/50">
+                {/* Photo */}
+                {selectedBus.photos.length > 0 ? (
+                  <div className="h-52 sm:h-64 lg:h-72 relative overflow-hidden rounded-t-3xl sm:rounded-t-2xl lg:rounded-tl-3xl lg:rounded-tr-none">
+                    <img src={selectedBus.photos[0]} alt={selectedBus.model} className="absolute inset-0 w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    {selectedBus.photos.length > 1 && (
+                      <span className="absolute bottom-3 right-3 text-[11px] bg-black/50 text-white px-2.5 py-1 rounded-full backdrop-blur-sm">{selectedBus.photos.length} photos</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-40 lg:h-52 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center rounded-t-3xl sm:rounded-t-2xl lg:rounded-tl-3xl lg:rounded-tr-none">
+                    <svg className="w-32 h-20 opacity-20" viewBox="0 0 200 80" fill="none">
+                      <rect x="10" y="20" width="180" height="45" rx="8" fill="currentColor" className="text-slate-400" />
+                      <rect x="20" y="10" width="140" height="20" rx="5" fill="currentColor" className="text-slate-300" />
+                      <circle cx="50" cy="70" r="10" fill="currentColor" className="text-slate-500" />
+                      <circle cx="150" cy="70" r="10" fill="currentColor" className="text-slate-500" />
+                    </svg>
+                  </div>
+                )}
+
+                {/* Bus info */}
+                <div className="p-5 sm:p-6 lg:p-8 space-y-5">
+                  {/* Title + type badge */}
+                  <div>
+                    <h3 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white">{selectedBus.model}</h3>
+                    <div className="flex items-center gap-2.5 mt-2 flex-wrap">
+                      {selectedBus.type && (
+                        <span className={cn('px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider',
+                          selectedBus.type === 'VIP' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        )}>{selectedBus.type}</span>
+                      )}
+                      <span className="text-sm text-slate-500">{selectedBus.capacity} {t('portail.seats')}</span>
+                      {selectedBus.year && <span className="text-sm text-slate-400">&middot; {selectedBus.year}</span>}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      {t('portail.fleetTypeCount').replace('{count}', String(typeCount(selectedBus.type)))}
+                    </p>
+                  </div>
+
+                  {/* Amenities */}
+                  {(selectedBus.amenities ?? []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.fleetAmenities')}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {(selectedBus.amenities ?? []).map(a => (
+                          <span key={a} className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+                            {tAmenity(t, a)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <button onClick={() => setSelectedBus(null)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
 
-              {/* Seatmap */}
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-200 dark:border-slate-700/50">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">{t('portail.seatmapTitle')}</p>
-                {/* Driver area */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-slate-300 dark:bg-slate-600 flex items-center justify-center">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500 dark:text-slate-400"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/></svg>
+              {/* Right column — seatmap (2/5 on desktop, full width on mobile) */}
+              <div className="lg:col-span-2 p-5 sm:p-6 lg:p-8 border-t lg:border-t-0 border-slate-200 dark:border-slate-700/50">
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 lg:p-6 border border-slate-200 dark:border-slate-700/50 h-full">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">{t('portail.seatmapTitle')}</p>
+                  {/* Driver area */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-300 dark:bg-slate-600 flex items-center justify-center">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500 dark:text-slate-400"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/></svg>
+                    </div>
+                  </div>
+                  {/* Seat grid */}
+                  {(() => {
+                    const layout = selectedBus.seatLayout as { rows: number; cols: number; disabled?: string[]; aisleAfter?: number } | null;
+                    const r = layout?.rows ?? rows(selectedBus);
+                    const c = layout?.cols ?? 4;
+                    const aisle = layout?.aisleAfter ?? 2;
+                    const disabled = new Set(layout?.disabled ?? []);
+                    return (
+                      <div className="flex flex-col items-center gap-1.5">
+                        {Array.from({ length: r }).map((_, row) => (
+                          <div key={row} className="flex items-center gap-1.5">
+                            {Array.from({ length: c }).map((_, col) => {
+                              const seatKey = `${row + 1}-${col + 1}`;
+                              const seatNum = row * c + col + 1;
+                              const isDis = disabled.has(seatKey);
+                              return (
+                                <span key={col} className="contents">{col === aisle && <span className="w-4 inline-block" />}
+                                <span className={cn(
+                                  'w-7 h-7 lg:w-8 lg:h-8 rounded inline-flex items-center justify-center text-[9px] lg:text-[10px] font-bold',
+                                  isDis ? 'bg-slate-200 dark:bg-slate-700 text-slate-400' : 'bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300/50 text-emerald-700 dark:text-emerald-400'
+                                )}>{isDis ? '\u00d7' : seatNum}</span></span>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {/* Legend */}
+                  <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-emerald-100 border border-emerald-300/50" />{t('portail.seatAvailable')}</div>
+                    <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-slate-200" />{'\u00d7'}</div>
                   </div>
                 </div>
-                {/* Seat grid — uses real seatLayout from DB */}
-                {(() => {
-                  const layout = selectedBus.seatLayout as { rows: number; cols: number; disabled?: string[]; aisleAfter?: number } | null;
-                  const r = layout?.rows ?? rows(selectedBus);
-                  const c = layout?.cols ?? 4;
-                  const aisle = layout?.aisleAfter ?? 2;
-                  const disabled = new Set(layout?.disabled ?? []);
-                  return (
-                    <div className="flex flex-col items-center gap-1.5">
-                      {Array.from({ length: r }).map((_, row) => (
-                        <div key={row} className="flex items-center gap-1.5">
-                          {Array.from({ length: c }).map((_, col) => {
-                            const seatKey = `${row + 1}-${col + 1}`;
-                            const seatNum = row * c + col + 1;
-                            const isDis = disabled.has(seatKey);
-                            return (
-                              <>{col === aisle && <div className="w-4" />}
-                              <div key={col} className={cn('w-7 h-7 rounded flex items-center justify-center text-[9px] font-bold',
-                                isDis ? 'bg-slate-200 dark:bg-slate-700 text-slate-400' : 'bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300/50 text-emerald-700 dark:text-emerald-400'
-                              )}>{isDis ? '\u00d7' : seatNum}</div></>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-                {/* Legend */}
-                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-500">
-                  <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-emerald-100 border border-emerald-300/50" />{t('portail.seatAvailable')}</div>
-                  <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-slate-200" />{'\u00d7'}</div>
-                </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -849,7 +1081,20 @@ function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: strin
 // Main Component
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type Section = 'booking' | 'parcels' | 'nearby' | 'about' | 'fleet' | 'contact';
+type Section = 'booking' | 'parcels' | 'nearby' | 'about' | 'fleet' | 'contact' | 'news' | 'news-detail';
+
+interface NewsPost {
+  id: string;
+  title: string;
+  slug: string | null;
+  excerpt: string | null;
+  content?: string;
+  coverImageUrl: string | null;
+  publishedAt: string | null;
+  authorName: string | null;
+  tags: string[];
+  media?: Array<{ url: string; type: string; caption?: string; signedUrl?: string | null }>;
+}
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -884,7 +1129,7 @@ export function PortailVoyageur() {
   const cfgUrl = apiBase ? `${apiBase}/config` : null;
   const stUrl = apiBase ? `${apiBase}/stations` : null;
   const cfgDeps = useMemo(() => [tenantSlug], [tenantSlug]);
-  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string> }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string } | null }>(cfgUrl, cfgDeps, skip);
+  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string> }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string; newsCmsEnabled?: boolean } | null }>(cfgUrl, cfgDeps, skip);
   const stRes = useFetch<StationInfo[]>(stUrl, cfgDeps, skip);
   // Tenant name takes priority — brand.brandName is only used if tenant specifically set it
   const brandName = cfg.data?.tenant?.name || cfg.data?.brand?.brandName || '';
@@ -932,6 +1177,33 @@ export function PortailVoyageur() {
   const tripDatesDeps = useMemo(() => [tenantSlug, calMonth], [tenantSlug, calMonth]);
   const { data: tripDatesRaw, loading: tripDatesLoading } = useFetch<string[]>(tripDatesUrl, tripDatesDeps, skip);
   const tripDatesSet = useMemo(() => new Set(tripDatesRaw ?? []), [tripDatesRaw]);
+
+  // ── CMS pages (hero, about, contact) ──
+  const pagesUrl = apiBase ? `${apiBase}/pages?locale=${lang}` : null;
+  const pagesDeps = useMemo(() => [tenantSlug, lang], [tenantSlug, lang]);
+  const pagesRes = useFetch<CmsPage[]>(pagesUrl, pagesDeps, skip);
+  const cmsPages = pagesRes.data ?? [];
+  const heroCms   = useMemo(() => parseCmsJson<HeroCms>(cmsPages.find(p => p.slug === 'hero')),     [cmsPages]);
+  const aboutCms  = useMemo(() => parseCmsJson<AboutCms>(cmsPages.find(p => p.slug === 'about')),   [cmsPages]);
+  const contactCms = useMemo(() => parseCmsJson<ContactCms>(cmsPages.find(p => p.slug === 'contact')), [cmsPages]);
+
+  // ── News / Actualités (CMS) ──
+  const newsCmsEnabled = cfg.data?.portal?.newsCmsEnabled ?? false;
+  const newsUrl = apiBase && newsCmsEnabled ? `${apiBase}/posts` : null;
+  const newsRes = useFetch<NewsPost[]>(newsUrl, [tenantSlug, newsCmsEnabled], skip);
+  const [selectedPost, setSelectedPost] = useState<NewsPost | null>(null);
+
+  const openNewsDetail = useCallback(async (post: NewsPost) => {
+    if (!apiBase || !post.slug) return;
+    try {
+      const detail = await apiFetch<NewsPost>(`${apiBase}/posts/${post.slug}`, { skipRedirectOn401: true });
+      setSelectedPost(detail);
+      setSection('news-detail');
+    } catch {
+      setSelectedPost(post);
+      setSection('news-detail');
+    }
+  }, [apiBase]);
 
   const initDone = useRef(false);
 
@@ -1047,18 +1319,21 @@ export function PortailVoyageur() {
           </form>
         );
         const heroStats = [{ value: '50K+', label: t('portail.statPassengers') }, { value: '120+', label: t('portail.statRoutes') }, { value: '99%', label: t('portail.statSatisfaction') }];
+        const hTitle    = heroCms?.title     || t('portail.heroTitle');
+        const hSubtitle = heroCms?.subtitle  || t('portail.heroSubtitle');
+        const hTrusted  = heroCms?.trustedBy || t('portail.trustedBy');
 
-        if (layout === 'horizon') return <HorizonHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
-        if (layout === 'vivid') return <VividHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
-        if (layout === 'prestige') return <PrestigeHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+        if (layout === 'horizon') return <HorizonHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={hTitle} subtitle={hSubtitle} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+        if (layout === 'vivid') return <VividHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={hTitle} subtitle={hSubtitle} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+        if (layout === 'prestige') return <PrestigeHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={hTitle} subtitle={hSubtitle} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
 
         // Classic hero (original)
         return (
           <HeroCarousel>
             <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-16 sm:pb-20">
-              <div className="flex items-center gap-2 mb-4 sm:mb-6">{[1,2,3,4,5].map(i => <span key={i} className="text-amber-400 text-sm">{'\u2605'}</span>)}<span className="text-sm text-slate-400 font-medium">{t('portail.trustedBy')}</span></div>
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-2xl">{t('portail.heroTitle')}</h1>
-              <p className="text-base sm:text-xl text-slate-400 mt-3 sm:mt-4 max-w-xl leading-relaxed">{t('portail.heroSubtitle')}</p>
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">{[1,2,3,4,5].map(i => <span key={i} className="text-amber-400 text-sm">{'\u2605'}</span>)}<span className="text-sm text-slate-400 font-medium">{hTrusted}</span></div>
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-2xl">{hTitle}</h1>
+              <p className="text-base sm:text-xl text-slate-400 mt-3 sm:mt-4 max-w-xl leading-relaxed">{hSubtitle}</p>
               <div className="mt-8 sm:mt-10 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/20 border border-white/5">{searchFormEl}</div>
               <div className="flex items-center justify-center gap-6 sm:gap-12 mt-8 sm:mt-10 text-center">
                 {heroStats.map(s => <div key={s.label}><p className="text-xl sm:text-3xl font-black text-white">{s.value}</p><p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wider">{s.label}</p></div>)}
@@ -1085,12 +1360,37 @@ export function PortailVoyageur() {
             </div>
           ) : (
             <div>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-                <div>
-                  <div className="flex items-center gap-3"><button onClick={() => setSearched(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button><h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{dep} &rarr; {arr}</h2></div>
-                  <p className="text-sm text-slate-500 mt-1 ml-10">{fmtDate(date, lang === 'ar' ? 'ar-SA' : 'fr-FR')} &bull; {sorted.filter(r => r.canBook).length} {t('portail.tripsAvailable')}</p>
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-3"><button onClick={() => setSearched(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button><h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{dep} &rarr; {arr}</h2></div>
+                    <p className="text-sm text-slate-500 mt-1 ml-10">{sorted.filter(r => r.canBook).length} {t('portail.tripsAvailable')}</p>
+                  </div>
+                  <select value={sort} onChange={e => setSort(e.target.value as any)} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]"><option value="time">{t('portail.sortDeparture')}</option><option value="price">{t('portail.sortPrice')}</option></select>
                 </div>
-                <select value={sort} onChange={e => setSort(e.target.value as any)} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]"><option value="time">{t('portail.sortDeparture')}</option><option value="price">{t('portail.sortPrice')}</option></select>
+                {/* ── Inline modifiers: date + passengers ── */}
+                <div className="flex flex-wrap items-center gap-3 ml-10">
+                  <div className="flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-slate-400 shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <input
+                      type="date" value={date}
+                      onChange={e => { setDate(e.target.value); setLoading(true); apiFetch<TripResult[]>(`${apiBase}/trips/search?${new URLSearchParams({ departure: dep, arrival: arr, date: e.target.value, passengers: String(pax) })}`, { method: 'GET', skipRedirectOn401: true }).then(r => setResults(r)).catch(() => setResults([])).finally(() => setLoading(false)); }}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-slate-400 shrink-0"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                    <select
+                      value={pax}
+                      onChange={e => { const n = Number(e.target.value); setPax(n); setLoading(true); apiFetch<TripResult[]>(`${apiBase}/trips/search?${new URLSearchParams({ departure: dep, arrival: arr, date, passengers: String(n) })}`, { method: 'GET', skipRedirectOn401: true }).then(r => setResults(r)).catch(() => setResults([])).finally(() => setLoading(false)); }}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]"
+                    >
+                      {[1,2,3,4,5,6,7,8].map(n => (
+                        <option key={n} value={n}>{n} {n === 1 ? t('portail.passenger') : t('portail.passengers')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
               <div className="space-y-4">
                 {loading ? <div className="flex flex-col items-center py-16 gap-4"><div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-amber-500 rounded-full animate-spin" /><p className="text-sm text-slate-400">{t('portail.searchingTrips')}</p></div>
@@ -1106,13 +1406,23 @@ export function PortailVoyageur() {
             </div>
           )}
         </>)}
-        {section === 'parcels' && <ParcelSection t={t} fmt={fmt} />}
+        {section === 'parcels' && <ParcelSection t={t} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
-        {section === 'about' && (
+        {section === 'about' && (() => {
+          const ICON_MAP: Record<string, string> = { shield: '\u2691', sparkles: '\u2726', target: '\u2316' };
+          const fallbackFeatures = [
+            { i: '\u2691', t: t('portail.aboutSafety'), d: t('portail.aboutSafetyDesc') },
+            { i: '\u2726', t: t('portail.aboutComfort'), d: t('portail.aboutComfortDesc') },
+            { i: '\u2316', t: t('portail.aboutReliability'), d: t('portail.aboutReliabilityDesc') },
+          ];
+          const features = aboutCms?.features
+            ? aboutCms.features.map(f => ({ i: ICON_MAP[f.icon] || '\u2726', t: f.title, d: f.description }))
+            : fallbackFeatures;
+          return (
           <div className="max-w-3xl mx-auto"><STitle title={t('portail.aboutTitle')} />
-            <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700/50"><p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">{t('portail.aboutContent')}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">{[{ i: '\u2691', t: t('portail.aboutSafety'), d: t('portail.aboutSafetyDesc') }, { i: '\u2726', t: t('portail.aboutComfort'), d: t('portail.aboutComfortDesc') }, { i: '\u2316', t: t('portail.aboutReliability'), d: t('portail.aboutReliabilityDesc') }].map(v => <div key={v.t} className="text-center p-4"><span className="text-3xl block mb-3">{v.i}</span><h4 className="font-bold text-slate-900 dark:text-white text-sm">{v.t}</h4><p className="text-xs text-slate-500 mt-1">{v.d}</p></div>)}</div></div></div>
-        )}
+            <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700/50"><p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">{aboutCms?.description || t('portail.aboutContent')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">{features.map(v => <div key={v.t} className="text-center p-4"><span className="text-3xl block mb-3">{v.i}</span><h4 className="font-bold text-slate-900 dark:text-white text-sm">{v.t}</h4><p className="text-xs text-slate-500 mt-1">{v.d}</p></div>)}</div></div></div>);
+        })()}
         {section === 'fleet' && <FleetSection t={t} apiBase={apiBase} />}
         {section === 'contact' && (
           <div className="max-w-2xl mx-auto"><STitle title={t('portail.contactTitle')} />
@@ -1121,8 +1431,108 @@ export function PortailVoyageur() {
                 { i: '\u2706', l: t('portail.phoneLabel'), v: cfg.data?.tenant?.contact?.phone || '+242 06 000 00 00' },
                 { i: '@', l: t('portail.emailLabel'), v: cfg.data?.tenant?.contact?.email || 'contact@transcongo.cg' },
                 { i: '\u2302', l: t('portail.addressLabel'), v: cfg.data?.tenant?.contact?.address || 'Av. de la Paix, Brazzaville' },
-                { i: '\u231A', l: t('portail.hoursLabel'), v: 'Lun-Sam: 06h-20h' },
+                { i: '\u231A', l: t('portail.hoursLabel'), v: contactCms?.hours || t('portail.defaultHours') },
               ].map(c => <div key={c.l} className="flex items-start gap-4"><div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center text-amber-600 font-bold shrink-0">{c.i}</div><div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{c.l}</p><p className="text-sm font-semibold text-slate-900 dark:text-white mt-1">{c.v}</p></div></div>)}</div></div></div>
+        )}
+
+        {/* ── Actualités (news list) — footer-only section ────── */}
+        {section === 'news' && newsCmsEnabled && (
+          <div className="max-w-4xl mx-auto">
+            <STitle title={t('portail.newsTitle')} />
+            {newsRes.loading ? (
+              <div className="flex justify-center py-16"><div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-amber-500 rounded-full animate-spin" /></div>
+            ) : (newsRes.data ?? []).length === 0 ? (
+              <div className="text-center py-16"><p className="text-lg font-semibold text-slate-400">{t('portail.noNews')}</p></div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {(newsRes.data ?? []).map(post => (
+                  <button key={post.id} onClick={() => openNewsDetail(post)} className="group text-left bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-black/30 transition-all hover:-translate-y-0.5">
+                    {post.coverImageUrl ? (
+                      <div className="aspect-video overflow-hidden">
+                        <img src={post.coverImageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      </div>
+                    ) : (
+                      <div className="aspect-video bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300 dark:text-slate-600"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2m10-4H8m4 0v6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </div>
+                    )}
+                    <div className="p-4 sm:p-5">
+                      {post.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {post.tags.slice(0, 2).map(tag => (
+                            <span key={tag} className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: 'var(--portal-accent-light)', color: 'var(--portal-accent-dark)' }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-snug group-hover:[color:var(--portal-accent)] transition-colors line-clamp-2">{post.title}</h3>
+                      {post.excerpt && <p className="text-xs text-slate-500 mt-2 line-clamp-3">{post.excerpt}</p>}
+                      <div className="flex items-center gap-3 mt-3 text-[11px] text-slate-400">
+                        {post.publishedAt && <span>{new Date(post.publishedAt).toLocaleDateString()}</span>}
+                        {post.authorName && <><span>&middot;</span><span>{post.authorName}</span></>}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Détail actualité (news detail) ─────────────────── */}
+        {section === 'news-detail' && selectedPost && (
+          <div className="max-w-3xl mx-auto">
+            <button onClick={() => { setSection('news'); setSelectedPost(null); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 mb-6 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              {t('portail.backToNews')}
+            </button>
+
+            {selectedPost.coverImageUrl && (
+              <div className="aspect-video rounded-2xl overflow-hidden mb-6">
+                <img src={selectedPost.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {selectedPost.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {selectedPost.tags.map(tag => (
+                  <span key={tag} className="text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ background: 'var(--portal-accent-light)', color: 'var(--portal-accent-dark)' }}>{tag}</span>
+                ))}
+              </div>
+            )}
+
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{selectedPost.title}</h1>
+
+            <div className="flex items-center gap-3 mt-3 text-sm text-slate-400">
+              {selectedPost.publishedAt && <span>{new Date(selectedPost.publishedAt).toLocaleDateString()}</span>}
+              {selectedPost.authorName && <><span>&middot;</span><span>{selectedPost.authorName}</span></>}
+            </div>
+
+            {/* Article content (HTML) */}
+            <div
+              className="prose prose-slate dark:prose-invert max-w-none mt-8 prose-img:rounded-xl prose-a:[color:var(--portal-accent)]"
+              dangerouslySetInnerHTML={{ __html: selectedPost.content || '' }}
+            />
+
+            {/* Media gallery */}
+            {(selectedPost.media ?? []).length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">{t('portail.newsGallery')}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(selectedPost.media ?? []).map((m, i) => (
+                    <div key={i} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                      {m.type === 'IMAGE' && m.signedUrl && (
+                        <img src={m.signedUrl} alt={m.caption || ''} className="w-full aspect-video object-cover" />
+                      )}
+                      {m.type === 'VIDEO' && m.signedUrl && (
+                        <video src={m.signedUrl} controls className="w-full aspect-video" />
+                      )}
+                      {m.caption && <p className="p-3 text-xs text-slate-500">{m.caption}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1130,17 +1540,17 @@ export function PortailVoyageur() {
 
       {/* ── Footer (layout-variant) ────────────────────────────── */}
       {layout === 'horizon' ? (
-        <HorizonFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <HorizonFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} newsCmsEnabled={newsCmsEnabled} />
       ) : layout === 'vivid' ? (
-        <VividFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <VividFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} newsCmsEnabled={newsCmsEnabled} />
       ) : layout === 'prestige' ? (
-        <PrestigeFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <PrestigeFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} newsCmsEnabled={newsCmsEnabled} />
       ) : (
         <footer className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 mt-auto shrink-0">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
               <div><div className="flex items-center gap-2 mb-3">{brandLogo ? <img src={brandLogo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-xs">{brandName.charAt(0)}</div>}<span className="font-bold text-slate-900 dark:text-white">{brandName}</span></div><p className="text-xs text-slate-500 leading-relaxed">{t('portail.footerAbout')}</p></div>
-              <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLinks')}</p><div className="space-y-2">{NAV.map(n => <button key={n.key} onClick={() => handleSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{n.label}</button>)}</div></div>
+              <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLinks')}</p><div className="space-y-2">{NAV.map(n => <button key={n.key} onClick={() => handleSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{n.label}</button>)}{newsCmsEnabled && <button onClick={() => handleSection('news')} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{t('portail.newsTitle')}</button>}</div></div>
               <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLegal')}</p><div className="space-y-2"><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">CGV</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.privacy')}</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.legalMentions')}</a></div></div>
             </div>
             <div className="border-t border-slate-200 dark:border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs text-slate-400">{t('portail.copyright')}</p><p className="text-xs text-slate-400">{t('portail.poweredBy')} <span className="font-semibold text-slate-500">TranslogPro</span></p></div>

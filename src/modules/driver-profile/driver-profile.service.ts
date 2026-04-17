@@ -48,6 +48,8 @@ export interface CreateDriverLicenseDto {
   issuedAt:     string;        // ISO date
   expiresAt:    string;        // ISO date
   issuingState?: string;
+  /** Fichier scan du permis (optionnel — envoyé via multipart). */
+  file?: { buffer: Buffer; originalname: string; mimetype: string; size: number };
 }
 
 export interface UpdateDriverLicenseDto {
@@ -56,6 +58,8 @@ export interface UpdateDriverLicenseDto {
   expiresAt?:    string;
   issuingState?: string;
   status?:       string;       // VALID | EXPIRING | EXPIRED | SUSPENDED
+  /** Nouveau scan (optionnel — remplace le précédent). */
+  file?: { buffer: Buffer; originalname: string; mimetype: string; size: number };
 }
 
 export interface StartRestPeriodDto {
@@ -186,6 +190,10 @@ export class DriverProfileService {
   // ─── Driver Licenses ──────────────────────────────────────────────────────
 
   async createLicense(tenantId: string, dto: CreateDriverLicenseDto) {
+    if (!dto.staffId?.trim()) {
+      throw new BadRequestException('staffId is required');
+    }
+
     const category = dto.category.toUpperCase();
 
     // Unicité : un seul permis par chauffeur et catégorie
@@ -201,7 +209,13 @@ export class DriverProfileService {
     const expiresAt = new Date(dto.expiresAt);
     const status    = this._computeLicenseStatus(expiresAt, DEFAULT_LICENSE_ALERT_DAYS);
 
-    return this.prisma.driverLicense.create({
+    // Upload du scan si fichier fourni
+    let fileKey: string | undefined;
+    if (dto.file?.buffer?.length) {
+      fileKey = await this._uploadLicenseScan(tenantId, dto.staffId, dto.file);
+    }
+
+    const license = await this.prisma.driverLicense.create({
       data: {
         tenantId,
         staffId:      dto.staffId,
@@ -211,8 +225,19 @@ export class DriverProfileService {
         expiresAt,
         issuingState: dto.issuingState,
         status,
+        fileKey,
       },
     });
+
+    // Write-through : Attachment(LICENSE) si fichier
+    if (dto.file?.buffer?.length && fileKey) {
+      await this._createLicenseAttachment(tenantId, dto.staffId, dto.file, fileKey);
+    }
+
+    // Write-through : sync vers StaffAssignment.licenseData
+    await this._syncLicenseToAssignment(tenantId, dto.staffId);
+
+    return license;
   }
 
   async updateLicense(tenantId: string, id: string, dto: UpdateDriverLicenseDto) {
@@ -222,7 +247,13 @@ export class DriverProfileService {
     const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : lic.expiresAt;
     const status    = dto.status ?? this._computeLicenseStatus(expiresAt, DEFAULT_LICENSE_ALERT_DAYS);
 
-    return this.prisma.driverLicense.update({
+    // Upload du nouveau scan si fourni
+    let fileKey: string | undefined;
+    if (dto.file?.buffer?.length) {
+      fileKey = await this._uploadLicenseScan(tenantId, lic.staffId, dto.file);
+    }
+
+    const updated = await this.prisma.driverLicense.update({
       where: { id },
       data: {
         licenseNo:    dto.licenseNo,
@@ -230,8 +261,19 @@ export class DriverProfileService {
         expiresAt,
         issuingState: dto.issuingState,
         status,
+        ...(fileKey ? { fileKey } : {}),
       },
     });
+
+    // Write-through : Attachment(LICENSE) si nouveau fichier
+    if (dto.file?.buffer?.length && fileKey) {
+      await this._createLicenseAttachment(tenantId, lic.staffId, dto.file, fileKey);
+    }
+
+    // Write-through : sync vers StaffAssignment.licenseData
+    await this._syncLicenseToAssignment(lic.tenantId, lic.staffId);
+
+    return updated;
   }
 
   async getLicensesForDriver(tenantId: string, staffId: string) {
@@ -260,17 +302,69 @@ export class DriverProfileService {
 
     // Enrichir avec le nom du chauffeur (pas de relation Prisma sur DriverLicense)
     const staffIds = [...new Set(licenses.map(l => l.staffId))];
-    const staffMap = new Map(
-      (await this.prisma.staff.findMany({
-        where:   { id: { in: staffIds } },
-        include: { user: { select: { email: true, name: true } } },
-      })).map(s => [s.id, s]),
-    );
+    const staffList = staffIds.length > 0
+      ? await this.prisma.staff.findMany({
+          where:   { id: { in: staffIds }, tenantId },
+          include: { user: { select: { email: true, name: true } } },
+        })
+      : [];
+    const staffMap = new Map(staffList.map(s => [s.id, s]));
+
+    // Réconciliation : pour les permis sans fileKey, chercher un Attachment(LICENSE)
+    const licensesWithoutFile = licenses.filter(l => !l.fileKey);
+    let attachmentMap = new Map<string, string>(); // staffId → storageKey
+    if (licensesWithoutFile.length > 0) {
+      const userIds = licensesWithoutFile
+        .map(l => staffMap.get(l.staffId))
+        .filter(Boolean)
+        .map(s => s!.userId);
+      if (userIds.length > 0) {
+        const attachments = await this.prisma.attachment.findMany({
+          where:   { tenantId, entityType: 'STAFF', entityId: { in: userIds }, kind: 'LICENSE' },
+          orderBy: { createdAt: 'desc' },
+        });
+        // Map userId → storageKey (most recent first)
+        const userToStaff = new Map(staffList.map(s => [s.userId, s.id]));
+        for (const att of attachments) {
+          const sid = userToStaff.get(att.entityId);
+          if (sid && !attachmentMap.has(sid)) {
+            attachmentMap.set(sid, att.storageKey);
+          }
+        }
+      }
+    }
 
     return licenses.map(l => ({
       ...l,
-      staff: staffMap.get(l.staffId) ?? { user: { email: '?', name: null } },
+      fileKey: l.fileKey || attachmentMap.get(l.staffId) || null,
+      staff:   staffMap.get(l.staffId) ?? { user: { email: '?', name: null } },
     }));
+  }
+
+  async getLicenseScanUrl(tenantId: string, licenseId: string) {
+    const lic = await this.prisma.driverLicense.findFirst({ where: { id: licenseId, tenantId } });
+    if (!lic) throw new NotFoundException(`Permis ${licenseId} introuvable`);
+
+    let fileKey = lic.fileKey;
+
+    // Fallback : chercher un Attachment(LICENSE) si pas de fileKey direct
+    if (!fileKey) {
+      const staff = await this.prisma.staff.findFirst({
+        where: { id: lic.staffId, tenantId }, select: { userId: true },
+      });
+      if (staff) {
+        const att = await this.prisma.attachment.findFirst({
+          where:   { tenantId, entityType: 'STAFF', entityId: staff.userId, kind: 'LICENSE' },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (att) fileKey = att.storageKey;
+      }
+    }
+
+    if (!fileKey) throw new NotFoundException('Aucun scan trouvé pour ce permis');
+
+    const signed = await this.storage.getDownloadUrl(tenantId, fileKey, DocumentType.MAINTENANCE_DOC);
+    return { downloadUrl: signed.url, expiresAt: signed.expiresAt };
   }
 
   async getLicenseAlerts(tenantId: string) {
@@ -556,6 +650,41 @@ export class DriverProfileService {
     });
   }
 
+  // ─── Stats (KPIs) ─────────────────────────────────────────────────────────
+
+  async getStats(tenantId: string) {
+    const [licenseAlerts, overdueTrainings, remediationRules, drivers] = await Promise.all([
+      this.prisma.driverLicense.count({
+        where: { tenantId, status: { in: [LICENSE_STATUS.EXPIRING, LICENSE_STATUS.EXPIRED] } },
+      }),
+      this.prisma.driverTraining.count({
+        where: { tenantId, status: TRAINING_STATUS.PLANNED, scheduledAt: { lt: new Date() } },
+      }),
+      this.prisma.driverRemediationRule.count({
+        where: { tenantId, isActive: true },
+      }),
+      this.prisma.staff.findMany({
+        where: { tenantId, status: 'ACTIVE', assignments: { some: { role: 'DRIVER', status: 'ACTIVE' } } },
+        select: { id: true },
+      }),
+    ]);
+
+    // Chauffeurs bloqués = ceux avec une période de repos ouverte non terminée
+    const blockedCount = drivers.length > 0
+      ? await this.prisma.driverRestPeriod.groupBy({
+          by:    ['staffId'],
+          where: { tenantId, staffId: { in: drivers.map(d => d.id) }, endedAt: null },
+        }).then(g => g.length)
+      : 0;
+
+    return {
+      licenseAlerts,
+      driversBlocked:    blockedCount,
+      remediationRules,
+      overdueTrainings,
+    };
+  }
+
   // ─── Remediation Rules ────────────────────────────────────────────────────
 
   async createRemediationRule(tenantId: string, dto: CreateRemediationRuleDto) {
@@ -613,6 +742,10 @@ export class DriverProfileService {
     const lic = await this.prisma.driverLicense.findFirst({ where: { id, tenantId } });
     if (!lic) throw new NotFoundException(`Permis ${id} introuvable`);
     await this.prisma.driverLicense.delete({ where: { id } });
+
+    // Write-through : sync vers StaffAssignment.licenseData (après suppression)
+    await this._syncLicenseToAssignment(tenantId, lic.staffId);
+
     return { ok: true };
   }
 
@@ -782,6 +915,95 @@ export class DriverProfileService {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
+
+  /**
+   * Upload le scan du permis dans MinIO et retourne la storageKey.
+   */
+  private async _uploadLicenseScan(
+    tenantId: string,
+    staffId:  string,
+    file:     { buffer: Buffer; originalname: string; mimetype: string },
+  ): Promise<string> {
+    const safeName = file.originalname.replace(/[^\w.\-]+/g, '_').slice(0, 160);
+    const key = `drivers/${staffId}/licenses/${Date.now()}-${safeName}`;
+    await this.storage.putObject(tenantId, key, file.buffer, file.mimetype);
+    return key;
+  }
+
+  /**
+   * Crée un Attachment(LICENSE) lié au Staff pour garder le scan visible
+   * dans la section pièces jointes du personnel.
+   */
+  private async _createLicenseAttachment(
+    tenantId:   string,
+    staffId:    string,
+    file:       { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    storageKey: string,
+  ) {
+    const { createHash } = await import('node:crypto');
+    const checksum = createHash('sha256').update(file.buffer).digest('hex');
+    const safeName = file.originalname.replace(/[^\w.\-]+/g, '_').slice(0, 160);
+
+    // Le Staff.userId est nécessaire car Attachment.entityId = userId pour entityType=STAFF
+    const staff = await this.prisma.staff.findFirst({
+      where:  { id: staffId, tenantId },
+      select: { userId: true },
+    });
+    if (!staff) return;
+
+    await this.prisma.attachment.create({
+      data: {
+        tenantId,
+        entityType: 'STAFF',
+        entityId:   staff.userId,
+        kind:       'LICENSE',
+        fileName:   safeName,
+        mimeType:   file.mimetype,
+        size:       file.size,
+        storageKey,
+        checksum,
+      },
+    });
+  }
+
+  /**
+   * Write-through : synchronise les permis DriverLicense vers
+   * StaffAssignment.licenseData (snapshot dénormalisé pour affichage rapide).
+   *
+   * Agrège TOUS les permis actifs du chauffeur dans un objet JSON unique
+   * stocké sur chaque assignment DRIVER actif de ce staff.
+   */
+  private async _syncLicenseToAssignment(tenantId: string, staffId: string) {
+    const licenses = await this.prisma.driverLicense.findMany({
+      where:   { tenantId, staffId },
+      orderBy: { expiresAt: 'asc' },
+    });
+
+    // Snapshot : le premier permis catégorie D/EC (celui que le SchedulingGuard vérifie)
+    // + tableau complet pour affichage
+    const primary = licenses.find(l => ['D', 'EC', 'D+E'].includes(l.category));
+    const licenseData = primary
+      ? {
+          licenseNo:    primary.licenseNo,
+          category:     primary.category,
+          expiresAt:    primary.expiresAt.toISOString().slice(0, 10),
+          issuingState: primary.issuingState,
+          status:       primary.status,
+          allLicenses:  licenses.map(l => ({
+            category:  l.category,
+            licenseNo: l.licenseNo,
+            expiresAt: l.expiresAt.toISOString().slice(0, 10),
+            status:    l.status,
+          })),
+        }
+      : {};
+
+    // Mettre à jour toutes les assignments DRIVER actives de ce staff
+    await this.prisma.staffAssignment.updateMany({
+      where: { staffId, role: 'DRIVER', status: 'ACTIVE' },
+      data:  { licenseData },
+    });
+  }
 
   private _computeLicenseStatus(expiresAt: Date, alertDays: number): string {
     const now        = new Date();
