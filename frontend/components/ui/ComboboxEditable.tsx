@@ -29,6 +29,10 @@ export interface ComboboxOption {
   label: string;
   /** Sous-texte optionnel (ex. pays, région) */
   hint?: string;
+  /** Afficher le label en gras (ex. ville du pays du tenant) */
+  bold?: boolean;
+  /** Emoji drapeau (ex. 🇨🇬) affiché devant le hint */
+  flag?: string;
 }
 
 export interface ComboboxEditableProps {
@@ -89,6 +93,8 @@ export function ComboboxEditable({
   const [remoteResults, setRemoteResults] = useState<ComboboxOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  // When true, the chevron opened the dropdown → show ALL options (bypass filter)
+  const [showAll, setShowAll] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -156,6 +162,7 @@ export function ComboboxEditable({
     setInputText(opt.label);
     onChange(opt.value);
     setOpen(false);
+    setShowAll(false);
     setHighlightIdx(-1);
   }, [onChange]);
 
@@ -163,6 +170,7 @@ export function ComboboxEditable({
   const handleBlur = useCallback(() => {
     setTimeout(() => {
       setOpen(false);
+      setShowAll(false);
       if (!allowFreeText) {
         // Contraindre à une option existante
         const match = (onSearch ? remoteResults : localOptions ?? [])
@@ -181,19 +189,28 @@ export function ComboboxEditable({
     }, 200);
   }, [allowFreeText, inputText, value, onChange, localOptions, remoteResults, onSearch]);
 
+  // ── Toutes les options (non filtrées) — utilisé par chevron + clavier ─────
+  const allOptions = onSearch ? remoteResults : (localOptions ?? []);
+
   // ── Clavier ────────────────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      setShowAll(true);
       updatePos();
       setOpen(true);
+      // Pre-highlight current value
+      const all = onSearch ? remoteResults : (localOptions ?? []);
+      const idx = all.findIndex(o => o.value === value || o.label === value);
+      setHighlightIdx(idx >= 0 ? idx : 0);
       return;
     }
     if (!open) return;
 
+    const opts = showAll ? allOptions : visibleOptions;
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setHighlightIdx(prev => Math.min(prev + 1, visibleOptions.length - 1));
+        setHighlightIdx(prev => Math.min(prev + 1, opts.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -201,16 +218,17 @@ export function ComboboxEditable({
         break;
       case 'Enter':
         e.preventDefault();
-        if (highlightIdx >= 0 && highlightIdx < visibleOptions.length) {
-          pick(visibleOptions[highlightIdx]);
+        if (highlightIdx >= 0 && highlightIdx < opts.length) {
+          pick(opts[highlightIdx]);
         }
         break;
       case 'Escape':
         setOpen(false);
+        setShowAll(false);
         setHighlightIdx(-1);
         break;
     }
-  }, [open, highlightIdx, visibleOptions, pick, updatePos]);
+  }, [open, highlightIdx, visibleOptions, allOptions, showAll, pick, updatePos, value, localOptions, remoteResults, onSearch]);
 
   // ── Scroll l'élément highlighté en vue ─────────────────────────────────────
   useEffect(() => {
@@ -219,17 +237,23 @@ export function ComboboxEditable({
     el?.scrollIntoView({ block: 'nearest' });
   }, [highlightIdx]);
 
-  // ── Clic chevron → ouvrir/fermer avec toutes les options ───────────────────
+  // ── Clic chevron → ouvrir/fermer avec TOUTES les options + highlight actuel ─
   const toggleDropdown = useCallback(() => {
     if (disabled) return;
     if (open) {
       setOpen(false);
+      setShowAll(false);
     } else {
+      setShowAll(true);
       updatePos();
       setOpen(true);
+      // Pre-highlight the currently selected value so it's visible
+      const all = onSearch ? remoteResults : (localOptions ?? []);
+      const currentIdx = all.findIndex(o => o.value === value || o.label === value);
+      setHighlightIdx(currentIdx >= 0 ? currentIdx : -1);
       inputRef.current?.focus();
     }
-  }, [disabled, open, updatePos]);
+  }, [disabled, open, updatePos, value, localOptions, remoteResults, onSearch]);
 
   // ── Fermer si clic extérieur ───────────────────────────────────────────────
   useEffect(() => {
@@ -239,19 +263,13 @@ export function ComboboxEditable({
       // Vérifier aussi le portal dropdown
       if (listRef.current?.contains(e.target as Node)) return;
       setOpen(false);
+      setShowAll(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // ── Dropdown complet (local) quand on clique le chevron sans texte ─────────
-  const allOptions = onSearch
-    ? remoteResults
-    : (localOptions ?? []);
-
-  const displayOptions = open && !inputText.trim() && !onSearch
-    ? allOptions
-    : visibleOptions;
+  const displayOptions = showAll ? allOptions : visibleOptions;
 
   return (
     <div className={cn('flex flex-col gap-1', className)} ref={wrapperRef}>
@@ -271,6 +289,7 @@ export function ComboboxEditable({
           onChange={e => {
             setInputText(e.target.value);
             setHighlightIdx(-1);
+            setShowAll(false); // typing → switch to filtered mode
             if (!open) { updatePos(); setOpen(true); }
           }}
           onFocus={() => {
@@ -341,9 +360,11 @@ export function ComboboxEditable({
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
-                <span className="truncate">{opt.label}</span>
+                <span className={cn('truncate', opt.bold && 'font-semibold')}>{opt.label}</span>
                 {opt.hint && (
-                  <span className="text-[11px] text-slate-400 truncate">{opt.hint}</span>
+                  <span className="text-[11px] text-slate-400 truncate">
+                    {opt.flag && <>{opt.flag} </>}{opt.hint}
+                  </span>
                 )}
               </button>
             </li>
