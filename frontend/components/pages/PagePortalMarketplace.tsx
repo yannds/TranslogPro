@@ -135,6 +135,14 @@ function ThemeCard({
           </div>
         </div>
 
+        {/* Layout badge */}
+        <div className="mb-3">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Layout: <span className="font-semibold capitalize text-slate-700 dark:text-slate-300">{theme.layout}</span>
+          </span>
+        </div>
+
         {/* Scenes mini-previews */}
         <div className="flex gap-1.5 mb-4">
           {theme.heroScenes.map((scene, i) => (

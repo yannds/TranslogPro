@@ -1368,7 +1368,17 @@ const ktu: Record<string, Record<string, string>> = {
     "createDescription": "Plaque ya moko na tenant.",
     "deleteConfirm": "Mosala ekozonga te — eboyami soki milwendo ya mosala esaleli yango.",
     "current": "Ya sikoyo",
-    "fleetIndicators": "Ba indicateurs ya flotte"
+    "fleetIndicators": "Ba indicateurs ya flotte",
+    "amenities": "Bifandelu",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Climatisation",
+    "amenityTOILETS": "Toilettes",
+    "amenityUSB_CHARGING": "USB ya charge",
+    "amenityRECLINING_SEATS": "Kiti ya kokitisa",
+    "amenityTV": "TV / Écran",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Bilamba",
+    "amenityLUGGAGE_TRACKING": "Kolanda bisaka"
   },
   "fleetTracking": {
     "pageTitle": "Kolanda Carburant & Kilomɛtro",
@@ -2162,7 +2172,20 @@ const ktu: Record<string, Record<string, string>> = {
     "clickToShow": "Finá mpo na komonisa",
     "clickToHide": "Finá mpo na kobomba",
     "previewUnavail": "Kotala liboso ezali te mpo na lolenge oyo ya fichier.",
-    "open": "Kofungola"
+    "open": "Kofungola",
+    "licenseRedirectTitle": "Kutukutu ya permis",
+    "licenseRedirectDesc": "Finga awa ngir fungula formulaire ya permis. Yi données yonso yina synchroniser yeka."
+  },
+  "driverLicense": {
+    "modalTitle": "Permis ya kondwi",
+    "driver": "Chauffeur",
+    "noDriver": "Chauffeur ve",
+    "category": "Catégorie",
+    "licenseNo": "Nimero ya permis",
+    "issuedAt": "Pesaka na",
+    "expiresAt": "Suka na",
+    "issuingState": "Nsi / État",
+    "createError": "Erreur na kreye permis"
   },
   "templates": {
     "dtTicket": "Tikɛ ya lwendo",

@@ -103,12 +103,23 @@ const DEMO_STATIONS: StationInfo[] = [
 ];
 
 const DEMO_TRIPS: TripResult[] = [
-  { id: 't1', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T06:00:00', arrivalTime: '2026-04-17T14:00:00', price: 15000, availableSeats: 18, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['Climatisation', 'WiFi', 'Prises USB', 'Toilettes'], canBook: true },
-  { id: 't2', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T08:30:00', arrivalTime: '2026-04-17T16:30:00', price: 12000, availableSeats: 5, busType: 'CONFORT', busModel: 'Yutong ZK6122', amenities: ['Climatisation', 'Prises USB'], canBook: true },
-  { id: 't3', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T11:00:00', arrivalTime: '2026-04-17T19:00:00', price: 10000, availableSeats: 32, busType: 'STANDARD', busModel: 'King Long XMQ6127', amenities: ['Climatisation'], canBook: true },
-  { id: 't4', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T14:00:00', arrivalTime: '2026-04-17T22:00:00', price: 15000, availableSeats: 0, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['Climatisation', 'WiFi', 'Prises USB', 'Toilettes'], canBook: false },
-  { id: 't5', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T18:00:00', arrivalTime: '2026-04-18T02:00:00', price: 18000, availableSeats: 8, busType: 'VIP', busModel: 'Scania Touring', amenities: ['Climatisation', 'WiFi', 'Prises USB', 'Toilettes', 'Couchettes'], canBook: true },
+  { id: 't1', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T06:00:00', arrivalTime: '2026-04-17T14:00:00', price: 15000, availableSeats: 18, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS'], canBook: true },
+  { id: 't2', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T08:30:00', arrivalTime: '2026-04-17T16:30:00', price: 12000, availableSeats: 5, busType: 'CONFORT', busModel: 'Yutong ZK6122', amenities: ['AC', 'USB_CHARGING'], canBook: true },
+  { id: 't3', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T11:00:00', arrivalTime: '2026-04-17T19:00:00', price: 10000, availableSeats: 32, busType: 'STANDARD', busModel: 'King Long XMQ6127', amenities: ['AC'], canBook: true },
+  { id: 't4', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T14:00:00', arrivalTime: '2026-04-17T22:00:00', price: 15000, availableSeats: 0, busType: 'VIP', busModel: 'Mercedes Tourismo', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS'], canBook: false },
+  { id: 't5', departure: 'Brazzaville', arrival: 'Pointe-Noire', departureTime: '2026-04-17T18:00:00', arrivalTime: '2026-04-18T02:00:00', price: 18000, availableSeats: 8, busType: 'VIP', busModel: 'Scania Touring', amenities: ['AC', 'WIFI', 'USB_CHARGING', 'TOILETS', 'RECLINING_SEATS', 'BLANKETS'], canBook: true },
 ];
+
+const AMENITY_I18N: Record<string, string> = {
+  WIFI: 'fleetVehicles.amenityWIFI', AC: 'fleetVehicles.amenityAC',
+  TOILETS: 'fleetVehicles.amenityTOILETS', USB_CHARGING: 'fleetVehicles.amenityUSB_CHARGING',
+  RECLINING_SEATS: 'fleetVehicles.amenityRECLINING_SEATS', TV: 'fleetVehicles.amenityTV',
+  SNACK_BAR: 'fleetVehicles.amenitySNACK_BAR', BLANKETS: 'fleetVehicles.amenityBLANKETS',
+  LUGGAGE_TRACKING: 'fleetVehicles.amenityLUGGAGE_TRACKING',
+};
+function tAmenity(t: (k: string) => string, key: string): string {
+  return AMENITY_I18N[key] ? t(AMENITY_I18N[key]) : key;
+}
 
 const DEMO_PAYMENT_METHODS: PaymentMethod[] = [
   { providerId: 'mtn_momo', displayName: 'MTN Mobile Money', type: 'MOBILE_MONEY', phonePrefix: '+242' },
@@ -286,7 +297,7 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
       <div className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
           <div><p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{trip.busModel}</p><p className="text-xs text-slate-400 mt-0.5 uppercase tracking-wide">{trip.busType}</p></div>
-          <div className="flex gap-1.5 flex-wrap">{trip.amenities.map(a => <span key={a} className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">{a}</span>)}</div>
+          <div className="flex gap-1.5 flex-wrap">{trip.amenities.map(a => <span key={a} className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">{tAmenity(t, a)}</span>)}</div>
         </div>
         <div className="flex items-center gap-3 sm:gap-4 mb-4">
           <div className="text-center min-w-[60px] sm:min-w-[72px]"><p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{fmtTime(trip.departureTime)}</p><p className="text-xs text-slate-500 mt-0.5">{trip.departure}</p></div>
@@ -881,14 +892,25 @@ export function PortailVoyageur() {
   const stations = stRes.data ?? [];
   const pms = cfg.data?.paymentMethods ?? DEMO_PAYMENT_METHODS; // payment methods fallback OK (country-specific)
 
-  // Derive unique cities from stations, sorted by frequency (most routes first)
-  const citiesKey = stations.map(s => s.city).join(',');
-  const cities = useMemo(() => [...new Set(stations.map(s => s.city))].sort(), [citiesKey]);
+  // Derive unique cities sorted by importance: PRINCIPALE stations first, then by count
   const cityOptions: ComboboxOption[] = useMemo(() => {
-    const freq = new Map<string, number>();
-    for (const s of stations) freq.set(s.city, (freq.get(s.city) ?? 0) + 1);
-    return [...freq.entries()]
-      .sort((a, b) => b[1] - a[1])
+    const info = new Map<string, { count: number; hasPrincipale: boolean }>();
+    for (const s of stations) {
+      const prev = info.get(s.city) ?? { count: 0, hasPrincipale: false };
+      info.set(s.city, {
+        count: prev.count + 1,
+        hasPrincipale: prev.hasPrincipale || s.type === 'PRINCIPALE',
+      });
+    }
+    return [...info.entries()]
+      .sort((a, b) => {
+        // Cities with PRINCIPALE stations first
+        if (a[1].hasPrincipale !== b[1].hasPrincipale) return a[1].hasPrincipale ? -1 : 1;
+        // Then by station count (more = more important)
+        if (a[1].count !== b[1].count) return b[1].count - a[1].count;
+        // Then alphabetical
+        return a[0].localeCompare(b[0]);
+      })
       .map(([city]) => ({ value: city, label: city }));
   }, [stations]);
 
@@ -913,14 +935,17 @@ export function PortailVoyageur() {
 
   const initDone = useRef(false);
 
-  // Set default cities ONCE when stations load — not on every render
+  // Set default cities ONCE when stations load — pick the two most
+  // popular cities (most stations), or leave empty if no clear winner.
   useEffect(() => {
-    if (!initDone.current && cities.length >= 2) {
-      setDep(cities[0]);
-      setArr(cities[1]);
+    if (!initDone.current && cityOptions.length >= 2) {
+      setDep(cityOptions[0].value);
+      // Pick first city that differs from dep for arrival
+      const arrOption = cityOptions.find(o => o.value !== cityOptions[0].value);
+      if (arrOption) setArr(arrOption.value);
       initDone.current = true;
     }
-  }, [cities]);
+  }, [cityOptions]);
 
   const doSearch = useCallback(async (e: FormEvent) => {
     e.preventDefault(); setSearched(true); setSection('booking'); setLoading(true);

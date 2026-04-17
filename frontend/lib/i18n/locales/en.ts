@@ -1567,7 +1567,17 @@ const en: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "Amenities",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Air Conditioning",
+    "amenityTOILETS": "Toilets",
+    "amenityUSB_CHARGING": "USB Charging",
+    "amenityRECLINING_SEATS": "Reclining Seats",
+    "amenityTV": "TV / Screens",
+    "amenitySNACK_BAR": "Snack Bar",
+    "amenityBLANKETS": "Blankets",
+    "amenityLUGGAGE_TRACKING": "Luggage Tracking"
   },
   "fleetTracking": {
     "pageTitle": "Fuel & Mileage Tracking",
@@ -2363,7 +2373,20 @@ const en: Record<string, Record<string, string>> = {
     "clickToShow": "Click to show",
     "clickToHide": "Click to hide",
     "previewUnavail": "Preview not available for this file type.",
-    "open": "Open"
+    "open": "Open",
+    "licenseRedirectTitle": "Centralized license management",
+    "licenseRedirectDesc": "Click here to open the driver license form. Data will be synced automatically."
+  },
+  "driverLicense": {
+    "modalTitle": "Driver License",
+    "driver": "Driver",
+    "noDriver": "No driver",
+    "category": "Category",
+    "licenseNo": "License No.",
+    "issuedAt": "Issued on",
+    "expiresAt": "Expires on",
+    "issuingState": "Issuing country/state",
+    "createError": "Error creating license"
   },
   "templates": {
     "dtTicket": "Travel Ticket",

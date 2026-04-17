@@ -1386,7 +1386,17 @@ const ln: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "Bozali malamu",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Climatisation",
+    "amenityTOILETS": "Toilettes",
+    "amenityUSB_CHARGING": "Charge USB",
+    "amenityRECLINING_SEATS": "Kiti ya kokitisa",
+    "amenityTV": "TV / Écran",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Bilamba",
+    "amenityLUGGAGE_TRACKING": "Kolanda bisaka"
   },
   "fleetTracking": {
     "pageTitle": "Kolanda Carburant & Kilomètre",
@@ -2180,7 +2190,20 @@ const ln: Record<string, Record<string, string>> = {
     "clickToShow": "Finá mpo na komonisa",
     "clickToHide": "Finá mpo na kobomba",
     "previewUnavail": "Kotala liboso ezali te mpo na lolenge ya fichier oyo.",
-    "open": "Kofungola"
+    "open": "Kofungola",
+    "licenseRedirectTitle": "Boyangeli ya permis na esika moko",
+    "licenseRedirectDesc": "Finá awa pó fungola formulaire ya permis. Ba données nyonso ekosynchroniser yango moko."
+  },
+  "driverLicense": {
+    "modalTitle": "Permis ya kotambwisa",
+    "driver": "Chauffeur",
+    "noDriver": "Chauffeur te",
+    "category": "Catégorie",
+    "licenseNo": "Nimero ya permis",
+    "issuedAt": "Ebimaki na",
+    "expiresAt": "Esuki na",
+    "issuingState": "Mbóka / État",
+    "createError": "Erreur na kosala permis"
   },
   "templates": {
     "dtTicket": "Tikɛ ya mobembo",

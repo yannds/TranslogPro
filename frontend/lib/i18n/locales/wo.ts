@@ -1382,7 +1382,17 @@ const wo: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "Yi neex",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Climatisation",
+    "amenityTOILETS": "Toilettes",
+    "amenityUSB_CHARGING": "Charge USB",
+    "amenityRECLINING_SEATS": "Siis yu ëmb",
+    "amenityTV": "TV / Écran",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Mbubb",
+    "amenityLUGGAGE_TRACKING": "Topp bagage"
   },
   "fleetTracking": {
     "pageTitle": "Topp Karburant & Kilomeetër",
@@ -2176,7 +2186,20 @@ const wo: Record<string, Record<string, string>> = {
     "clickToShow": "Bës ngir gis",
     "clickToHide": "Bës ngir nëbb",
     "previewUnavail": "Xool-kanam amul ci xeetu dosie bii.",
-    "open": "Ubbi"
+    "open": "Ubbi",
+    "licenseRedirectTitle": "Saytu permis bi ci biir benn",
+    "licenseRedirectDesc": "Bësal fii ngir ubbi formulaire permis bi. Yi donnée yépp dañu ngi synchroniser automatikaaman."
+  },
+  "driverLicense": {
+    "modalTitle": "Permis de conduire",
+    "driver": "Chauffeur",
+    "noDriver": "Amul chauffeur",
+    "category": "Catégorie",
+    "licenseNo": "Nimero permis",
+    "issuedAt": "Jotna ci",
+    "expiresAt": "Jeex ci",
+    "issuingState": "Réew / Département",
+    "createError": "Njuumte ci sortu permis bi"
   },
   "templates": {
     "dtTicket": "Biye tukki",

@@ -1315,7 +1315,17 @@ const ar: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "المرافق",
+    "amenityWIFI": "واي فاي",
+    "amenityAC": "تكييف هواء",
+    "amenityTOILETS": "مراحيض",
+    "amenityUSB_CHARGING": "شحن USB",
+    "amenityRECLINING_SEATS": "مقاعد قابلة للإمالة",
+    "amenityTV": "تلفزيون / شاشات",
+    "amenitySNACK_BAR": "مقصف",
+    "amenityBLANKETS": "بطانيات",
+    "amenityLUGGAGE_TRACKING": "تتبع الأمتعة"
   },
   "fleetTracking": {
     "pageTitle": "تتبع الوقود والمسافة",
@@ -2109,7 +2119,20 @@ const ar: Record<string, Record<string, string>> = {
     "clickToShow": "انقر للعرض",
     "clickToHide": "انقر للإخفاء",
     "previewUnavail": "المعاينة غير متاحة لهذا النوع من الملفات.",
-    "open": "فتح"
+    "open": "فتح",
+    "licenseRedirectTitle": "إدارة مركزية لرخص القيادة",
+    "licenseRedirectDesc": "انقر هنا لفتح نموذج رخصة القيادة. ستتم مزامنة البيانات تلقائيًا."
+  },
+  "driverLicense": {
+    "modalTitle": "رخصة القيادة",
+    "driver": "سائق",
+    "noDriver": "لا يوجد سائق",
+    "category": "الفئة",
+    "licenseNo": "رقم الرخصة",
+    "issuedAt": "صدرت في",
+    "expiresAt": "تنتهي في",
+    "issuingState": "الدولة / الجهة المصدرة",
+    "createError": "خطأ أثناء إنشاء الرخصة"
   },
   "templates": {
     "dtTicket": "تذكرة سفر",

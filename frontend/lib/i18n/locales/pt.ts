@@ -1433,7 +1433,17 @@ const pt: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "Comodidades",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Ar condicionado",
+    "amenityTOILETS": "Banheiros",
+    "amenityUSB_CHARGING": "Carregamento USB",
+    "amenityRECLINING_SEATS": "Assentos reclináveis",
+    "amenityTV": "TV / Telas",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Cobertores",
+    "amenityLUGGAGE_TRACKING": "Rastreamento de bagagem"
   },
   "fleetTracking": {
     "pageTitle": "Acompanhamento de Combustível e Quilometragem",
@@ -2227,7 +2237,20 @@ const pt: Record<string, Record<string, string>> = {
     "clickToShow": "Clique para mostrar",
     "clickToHide": "Clique para ocultar",
     "previewUnavail": "Pré-visualização não disponível para este tipo de arquivo.",
-    "open": "Abrir"
+    "open": "Abrir",
+    "licenseRedirectTitle": "Gestão centralizada de licenças",
+    "licenseRedirectDesc": "Clique aqui para abrir o formulário de carta de condução. Os dados serão sincronizados automaticamente."
+  },
+  "driverLicense": {
+    "modalTitle": "Carta de condução",
+    "driver": "Motorista",
+    "noDriver": "Nenhum motorista",
+    "category": "Categoria",
+    "licenseNo": "N° da carta",
+    "issuedAt": "Emitida em",
+    "expiresAt": "Expira em",
+    "issuingState": "País / Estado emissor",
+    "createError": "Erro ao criar a carta"
   },
   "templates": {
     "dtTicket": "Passagem de Viagem",

@@ -1418,7 +1418,17 @@ const es: Record<string, Record<string, string>> = {
     "createDescription": "Matrícula única por inquilino.",
     "deleteConfirm": "Acción irreversible — denegada si hay viajes activos que lo referencian.",
     "current": "Actual",
-    "fleetIndicators": "Indicadores de flota"
+    "fleetIndicators": "Indicadores de flota",
+    "amenities": "Comodidades",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Aire acondicionado",
+    "amenityTOILETS": "Baños",
+    "amenityUSB_CHARGING": "Carga USB",
+    "amenityRECLINING_SEATS": "Asientos reclinables",
+    "amenityTV": "TV / Pantallas",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Mantas",
+    "amenityLUGGAGE_TRACKING": "Seguimiento de equipaje"
   },
   "fleetTracking": {
     "pageTitle": "Seguimiento de combustible y kilometraje",
@@ -2212,7 +2222,20 @@ const es: Record<string, Record<string, string>> = {
     "clickToShow": "Haga clic para mostrar",
     "clickToHide": "Haga clic para ocultar",
     "previewUnavail": "Vista previa no disponible para este tipo de archivo.",
-    "open": "Abrir"
+    "open": "Abrir",
+    "licenseRedirectTitle": "Gestión centralizada de licencias",
+    "licenseRedirectDesc": "Haga clic aquí para abrir el formulario de licencia. Los datos se sincronizarán automáticamente."
+  },
+  "driverLicense": {
+    "modalTitle": "Licencia de conducir",
+    "driver": "Conductor",
+    "noDriver": "Ningún conductor",
+    "category": "Categoría",
+    "licenseNo": "N° de licencia",
+    "issuedAt": "Emitido el",
+    "expiresAt": "Expira el",
+    "issuingState": "País / Estado emisor",
+    "createError": "Error al crear la licencia"
   },
   "templates": {
     "dtTicket": "Billete de viaje",

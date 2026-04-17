@@ -1447,7 +1447,17 @@ const fr: Record<string, Record<string, string>> = {
     "engineEuro3": "Euro 3",
     "engineEuro4": "Euro 4",
     "engineEuro5": "Euro 5",
-    "engineEuro6": "Euro 6"
+    "engineEuro6": "Euro 6",
+    "amenities": "Commodités",
+    "amenityWIFI": "WiFi",
+    "amenityAC": "Climatisation",
+    "amenityTOILETS": "Toilettes",
+    "amenityUSB_CHARGING": "Prises USB",
+    "amenityRECLINING_SEATS": "Sièges inclinables",
+    "amenityTV": "TV / Écrans",
+    "amenitySNACK_BAR": "Snack-bar",
+    "amenityBLANKETS": "Couvertures",
+    "amenityLUGGAGE_TRACKING": "Suivi bagages"
   },
   "fleetTracking": {
     "pageTitle": "Suivi Carburant & Kilométrage",
@@ -2243,7 +2253,20 @@ const fr: Record<string, Record<string, string>> = {
     "clickToShow": "Cliquer pour afficher",
     "clickToHide": "Cliquer pour masquer",
     "previewUnavail": "Aperçu non disponible pour ce type de fichier.",
-    "open": "Ouvrir"
+    "open": "Ouvrir",
+    "licenseRedirectTitle": "Gestion centralisée des permis",
+    "licenseRedirectDesc": "Cliquez ici pour ouvrir le formulaire permis de conduire. Les données seront synchronisées automatiquement."
+  },
+  "driverLicense": {
+    "modalTitle": "Permis de conduire",
+    "driver": "Chauffeur",
+    "noDriver": "Aucun chauffeur",
+    "category": "Catégorie",
+    "licenseNo": "N° de permis",
+    "issuedAt": "Émis le",
+    "expiresAt": "Expire le",
+    "issuingState": "Pays / État émetteur",
+    "createError": "Erreur lors de la création du permis"
   },
   "templates": {
     "dtTicket": "Billet de voyage",

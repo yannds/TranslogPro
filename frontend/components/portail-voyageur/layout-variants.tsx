@@ -18,6 +18,17 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
+const AMENITY_I18N: Record<string, string> = {
+  WIFI: 'fleetVehicles.amenityWIFI', AC: 'fleetVehicles.amenityAC',
+  TOILETS: 'fleetVehicles.amenityTOILETS', USB_CHARGING: 'fleetVehicles.amenityUSB_CHARGING',
+  RECLINING_SEATS: 'fleetVehicles.amenityRECLINING_SEATS', TV: 'fleetVehicles.amenityTV',
+  SNACK_BAR: 'fleetVehicles.amenitySNACK_BAR', BLANKETS: 'fleetVehicles.amenityBLANKETS',
+  LUGGAGE_TRACKING: 'fleetVehicles.amenityLUGGAGE_TRACKING',
+};
+function tAmenity(t: (k: string) => string, key: string): string {
+  return AMENITY_I18N[key] ? t(AMENITY_I18N[key]) : key;
+}
+
 // ─── Shared types used across variants ───────────────────────────────────────
 
 export interface NavItem { key: string; label: string }
@@ -234,7 +245,7 @@ export function HorizonTripCard({ trip, onBook, fmt, fmtTime, fmtDuration, t }: 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{trip.busModel} <span className="text-slate-400 font-normal">&middot; {trip.busType}</span></p>
           {trip.amenities.length > 0 && (
-            <p className="text-[10px] text-slate-400 mt-1 truncate">{trip.amenities.join(' &middot; ')}</p>
+            <p className="text-[10px] text-slate-400 mt-1 truncate">{trip.amenities.map(a => tAmenity(t, a)).join(' \u00b7 ')}</p>
           )}
           {trip.stops && trip.stops.length > 0 && (
             <p className="text-[10px] text-slate-400 mt-0.5">{trip.stops.length} {t('portail.stops')}</p>
@@ -448,7 +459,7 @@ export function VividTripCard({ trip, onBook, fmt, fmtTime, fmtDuration, accent,
           </div>
           <div className="flex gap-1.5 flex-wrap mt-1.5">
             {trip.amenities.slice(0, 3).map(a => (
-              <span key={a} className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: accentLight, color: accent }}>{a}</span>
+              <span key={a} className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: accentLight, color: accent }}>{tAmenity(t, a)}</span>
             ))}
           </div>
         </div>
@@ -673,7 +684,7 @@ export function PrestigeTripCard({ trip, onBook, fmt, fmtTime, fmtDuration, acce
           {/* Info */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{trip.busModel}</p>
-            <div className="flex gap-1 flex-wrap mt-1">{trip.amenities.map(a => <span key={a} className="text-[10px] text-slate-400 after:content-['·'] after:mx-1 last:after:content-none">{a}</span>)}</div>
+            <div className="flex gap-1 flex-wrap mt-1">{trip.amenities.map(a => <span key={a} className="text-[10px] text-slate-400 after:content-['·'] after:mx-1 last:after:content-none">{tAmenity(t, a)}</span>)}</div>
           </div>
           {/* Price + book */}
           <div className="flex items-center gap-4 sm:flex-col sm:items-end shrink-0">
