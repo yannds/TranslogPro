@@ -318,7 +318,13 @@ const en: Record<string, Record<string, string>> = {
     "via": "Via",
     "yourPosition": "Your position",
     "stationsOnMap": "station(s) on map",
-    "goThere": "Get directions"
+    "goThere": "Get directions",
+    "calPrev": "Previous month",
+    "calNext": "Next month",
+    "calHasTrips": "Trips available",
+    "calBold": "Bold",
+    "calAvailable": "trips available",
+    "calLoading": "Loading availability…"
   },
   "portalAdmin": {
     "title": "Visitor Portal",
@@ -347,7 +353,9 @@ const en: Record<string, Record<string, string>> = {
     "sectionContact": "Contact",
     "sectionContactDesc": "Contact details and form",
     "socialTitle": "Social Media",
-    "socialDesc": "Links to your social media displayed in the footer."
+    "socialDesc": "Links to your social media displayed in the footer.",
+    "activeTheme": "Active theme",
+    "clickToApply": "Click to apply"
   },
   "workflowStudio": {
     "workflowStudio": "Workflow Studio",
@@ -373,6 +381,11 @@ const en: Record<string, Record<string, string>> = {
     "etClaim": "After-Sales Claim",
     "etChecklist": "Departure Checklist",
     "etDriver": "Driver",
+    "etTraveler": "Traveler",
+    "etShipment": "Shipment",
+    "etRefund": "Refund",
+    "etCashRegister": "Cash Register",
+    "etIncident": "Incident",
     "edTicket": "Passenger ticket lifecycle",
     "edTrip": "Trip planning and execution",
     "edParcel": "End-to-end parcel traceability",
@@ -383,6 +396,11 @@ const en: Record<string, Record<string, string>> = {
     "edClaim": "Customer claim processing",
     "edChecklist": "Mandatory pre-departure checks",
     "edDriver": "Availability and HR compliance",
+    "edTraveler": "Passenger lifecycle on a trip (check-in to exit)",
+    "edShipment": "Parcel grouping and transport",
+    "edRefund": "Approval and processing of refunds",
+    "edCashRegister": "Opening, closing and discrepancy management",
+    "edIncident": "Declaration and resolution of exceptional events",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

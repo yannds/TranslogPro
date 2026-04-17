@@ -2226,6 +2226,9 @@ model TenantPortalConfig {
   id       String @id @default(cuid())
   tenantId String @unique
 
+  // Thème visuel du portail (amber-luxury | ocean-blue | emerald-nature)
+  themeId String @default("amber-luxury")
+
   // Sections activées (le booking est toujours ON)
   showAbout   Boolean @default(true)
   showFleet   Boolean @default(true)

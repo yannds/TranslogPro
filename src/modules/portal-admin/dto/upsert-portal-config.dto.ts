@@ -2,6 +2,10 @@ import { IsBoolean, IsNumber, IsObject, IsOptional, IsString, IsUrl, Max, Min } 
 
 export class UpsertPortalConfigDto {
   @IsOptional()
+  @IsString()
+  themeId?: string;
+
+  @IsOptional()
   @IsBoolean()
   showAbout?: boolean;
 

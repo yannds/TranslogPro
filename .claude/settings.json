@@ -213,7 +213,21 @@
       "Bash(npm ls *)",
       "Bash(python3 -c ' *)",
       "Bash(curl -s \"http://localhost:3000/api/public/trans-express/portal/stations\")",
-      "Bash(grep -l \"confirm\\\\|TICKET\" /Users/dsyann/TranslogPro/src/modules/cashier/*.ts)"
+      "Bash(grep -l \"confirm\\\\|TICKET\" /Users/dsyann/TranslogPro/src/modules/cashier/*.ts)",
+      "Bash(awk '/\"portail\": \\\\{/{found=1; next} found && /^  \\\\}/{print NR; found=0}' fr.ts)",
+      "Bash(curl -s -X POST http://localhost:5173/api/public/trans-express/portal/booking -H 'Content-Type: application/json' -d '{\"tripId\":\"test\",\"passenger\":{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+242060000000\",\"seatType\":\"STANDARD\"},\"paymentMethod\":\"mtn_momo\"}')",
+      "Bash(curl -s http://localhost:5173/api/tenants/11111111-1111-1111-1111-111111111111/config)",
+      "Bash(curl -sv http://localhost:5173/api/tenants/11111111-1111-1111-1111-111111111111/config)",
+      "Bash(curl -s -b \"translog_session=0d218dbf-ad74-4ab4-a7ab-93184b3ede31\" http://localhost:5173/api/tenants/11111111-1111-1111-1111-111111111111/config)",
+      "Bash(curl -s -b \"translog_session=0d218dbf-ad74-4ab4-a7ab-93184b3ede31\" -X POST http://localhost:5173/api/public/trans-express/portal/booking -H 'Content-Type: application/json' -d '{\"tripId\":\"test\",\"passenger\":{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+242060000000\",\"seatType\":\"STANDARD\"},\"paymentMethod\":\"mtn_momo\"}')",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c \"SELECT id, status FROM trips WHERE \\\\\"tenantId\\\\\" = '11111111-1111-1111-1111-111111111111' AND status IN \\('PLANNED','OPEN','BOARDING'\\) LIMIT 3;\")",
+      "Bash(curl -s -b \"translog_session=0d218dbf-ad74-4ab4-a7ab-93184b3ede31\" -X POST http://localhost:5173/api/public/trans-express/portal/booking -H 'Content-Type: application/json' -d '{\"tripId\":\"cmo1xvuts00t798oq8t8745d3\",\"passenger\":{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+242060000000\",\"seatType\":\"STANDARD\"},\"paymentMethod\":\"mtn_momo\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/public/trans-express/portal/booking -H 'Content-Type: application/json' -d '{\"tripId\":\"cmo1xvuts00t798oq8t8745d3\",\"passenger\":{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+242060000000\",\"seatType\":\"STANDARD\"},\"paymentMethod\":\"mtn_momo\"}')",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c \"SELECT id, status, \\\\\"qrCode\\\\\" FROM tickets WHERE \\\\\"passengerName\\\\\" = 'John Doe' ORDER BY \\\\\"createdAt\\\\\" DESC LIMIT 5;\")",
+      "Bash(curl -s -H \"X-Vault-Token: dev-root-token\" http://localhost:8200/v1/secret/data/tenants/11111111-1111-1111-1111-111111111111/hmac)",
+      "Bash(curl -s -X POST -H \"X-Vault-Token: dev-root-token\" -H \"Content-Type: application/json\" http://localhost:8200/v1/secret/data/tenants/11111111-1111-1111-1111-111111111111/hmac -d '{\"data\":{\"KEY\":\"a]3f8b2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1\"}}')",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c \"DELETE FROM tickets WHERE status = 'PENDING_PAYMENT' AND \\\\\"passengerName\\\\\" = 'John Doe';\")",
+      "Bash(PGPASSWORD=app_password psql -h localhost -p 5434 -U app_user -d translog -c \"DELETE FROM tickets WHERE \\\\\"passengerName\\\\\" = 'John Doe';\")"
     ],
     "additionalDirectories": [
       "/tmp",

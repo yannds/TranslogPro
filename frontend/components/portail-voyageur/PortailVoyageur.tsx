@@ -20,7 +20,14 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { apiFetch } from '../../lib/api';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { TripDatePicker } from './TripDatePicker';
 import type { Language } from '../../lib/i18n/types';
+import { createContext, useContext } from 'react';
+import { getTheme, type PortalTheme } from './portal-themes';
+
+// Theme context — all sub-components read the active theme from here
+const PortalThemeCtx = createContext<PortalTheme>(getTheme());
+function usePortalTheme() { return useContext(PortalThemeCtx); }
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -191,7 +198,7 @@ function LanguageSwitcher() {
               className={cn(
                 'w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm transition-colors text-left',
                 code === ctx.lang
-                  ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-semibold'
+                  ? '[background:color-mix(in_srgb,var(--portal-accent-light),white_50%)] text-amber-700 dark:text-amber-400 font-semibold'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
@@ -211,12 +218,14 @@ function LanguageSwitcher() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function HeroCarousel({ children }: { children: React.ReactNode }) {
+  const th = usePortalTheme();
+  const scenes = th.heroScenes;
   const [idx, setIdx] = useState(0);
-  useEffect(() => { const t = setInterval(() => setIdx(i => (i + 1) % HERO_SCENES.length), 7000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setIdx(i => (i + 1) % scenes.length), 7000); return () => clearInterval(t); }, [scenes.length]);
   return (
     <div className="relative overflow-hidden">
       {/* Scenic background layers with crossfade */}
-      {HERO_SCENES.map((scene, i) => (
+      {scenes.map((scene, i) => (
         <div key={i} className="absolute inset-0 transition-opacity duration-[2500ms] ease-in-out" style={{ opacity: i === idx ? 1 : 0 }}>
           <div className="absolute inset-0" style={{ background: scene.bg }} />
           <div className="absolute inset-0" style={{ background: scene.overlay }} />
@@ -248,7 +257,7 @@ function HeroCarousel({ children }: { children: React.ReactNode }) {
       <div className="relative">{children}</div>
       {/* Carousel dots */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2.5">
-        {HERO_SCENES.map((_, i) => (
+        {scenes.map((_, i) => (
           <button key={i} onClick={() => setIdx(i)} className={cn('h-1.5 rounded-full transition-all duration-700', i === idx ? 'bg-amber-400 w-8' : 'bg-white/25 hover:bg-white/40 w-1.5')} />
         ))}
       </div>
@@ -261,10 +270,11 @@ function HeroCarousel({ children }: { children: React.ReactNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: TripResult) => void; fmt: (n: number) => string; t: (k: string) => string }) {
+  const th = usePortalTheme();
   const full = trip.availableSeats === 0, urgent = trip.availableSeats > 0 && trip.availableSeats <= 5, isVip = trip.busType === 'VIP';
   return (
     <div className={cn('group relative rounded-2xl border transition-all duration-300 bg-white dark:bg-slate-900/80 backdrop-blur-sm',
-      full ? 'border-slate-200 dark:border-slate-800 opacity-60' : 'border-slate-200/80 dark:border-slate-700/50 hover:border-amber-300/60 hover:shadow-xl hover:shadow-amber-500/5')}>
+      full ? 'border-slate-200 dark:border-slate-800 opacity-60' : 'border-slate-200/80 dark:border-slate-700/50 hover:[border-color:var(--portal-accent)]/60 hover:shadow-xl hover:shadow-amber-500/5')}>
       {isVip && <div className="absolute -top-2.5 left-5 px-3 py-0.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg shadow-amber-500/20">VIP</div>}
       <div className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
@@ -277,7 +287,7 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{fmtDuration(trip.departureTime, trip.arrivalTime)}</span>
             <div className="relative w-full h-[2px]"><div className="absolute inset-0 bg-gradient-to-r from-amber-400/40 via-amber-400 to-amber-400/40 rounded-full" /><div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-amber-500/20" /><div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-amber-500/20" /></div>
             {trip.stops && trip.stops.length > 0 ? (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">{trip.stops.length} {t('portail.stops')}</span>
+              <span className="text-[10px] [color:var(--portal-accent)] font-medium">{trip.stops.length} {t('portail.stops')}</span>
             ) : (
               <span className="text-[10px] text-slate-400">{t('portail.direct')}</span>
             )}
@@ -289,19 +299,19 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
           <div className="flex flex-wrap items-center gap-1.5 mb-4 px-1">
             <span className="text-[10px] text-slate-400 font-medium">{t('portail.via')}:</span>
             {trip.stops.map((s, i) => (
-              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium border border-amber-200/50 dark:border-amber-800/30">{s.city}</span>
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full [background:color-mix(in_srgb,var(--portal-accent-light),white_50%)] text-amber-700 dark:text-amber-400 font-medium border border-amber-200/50 dark:border-amber-800/30">{s.city}</span>
             ))}
             {trip.distanceKm && <span className="text-[10px] text-slate-400 ml-auto">{trip.distanceKm} km</span>}
           </div>
         )}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/80">
-          <div><p className={cn('text-xl sm:text-2xl font-bold', isVip ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white')}>{fmt(trip.price)}</p><p className="text-[11px] text-slate-400 mt-0.5">{t('portail.perPassenger')}</p></div>
+          <div><p className={cn('text-xl sm:text-2xl font-bold', isVip ? '[color:var(--portal-accent)]' : 'text-slate-900 dark:text-white')}>{fmt(trip.price)}</p><p className="text-[11px] text-slate-400 mt-0.5">{t('portail.perPassenger')}</p></div>
           <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
             {full && <span className="text-[11px] font-bold text-red-500 uppercase">{t('portail.full')}</span>}
             {urgent && <span className="text-[11px] font-bold text-amber-600 animate-pulse">{trip.availableSeats} {t('portail.seatsLeftSuffix')}</span>}
             {!full && !urgent && <span className="text-[11px] text-slate-400">{trip.availableSeats} {t('portail.availableSeats')}</span>}
             <button disabled={full} onClick={() => onBook(trip)} className={cn('px-5 sm:px-6 py-2.5 rounded-xl text-sm font-semibold transition-all w-full sm:w-auto',
-              full ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : isVip ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 active:scale-95' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 active:scale-95')}>
+              full ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : isVip ? 'text-white shadow-lg [background:linear-gradient(to_right,var(--portal-accent),var(--portal-accent-dark))] hover:brightness-110 active:scale-95' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 active:scale-95')}>
               {full ? t('portail.unavailable') : t('portail.book')}
             </button>
           </div>
@@ -425,7 +435,7 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 sm:p-5 space-y-3 border border-slate-100 dark:border-slate-700/50">
                 <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.ticket')} {trip.departure} &rarr; {trip.arrival}</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(trip.price)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.serviceFee')} (3%)</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(fee)}</span></div>
-                <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between"><span className="font-bold text-slate-900 dark:text-white">{t('portail.total')}</span><span className={cn('text-lg sm:text-xl font-bold', isVip ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white')}>{fmt(total)}</span></div>
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between"><span className="font-bold text-slate-900 dark:text-white">{t('portail.total')}</span><span className={cn('text-lg sm:text-xl font-bold', isVip ? '[color:var(--portal-accent)]' : 'text-slate-900 dark:text-white')}>{fmt(total)}</span></div>
               </div>
               <div className="space-y-2"><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.paymentMethod')}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{paymentMethods.map(pm => (
@@ -482,7 +492,7 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
               )}
               <div className="flex gap-3">
                 <button onClick={() => setStep('passenger')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
-                <button onClick={handlePay} disabled={!selectedPayment || bookingLoading} className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all', selectedPayment && !bookingLoading ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
+                <button onClick={handlePay} disabled={!selectedPayment || bookingLoading} className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all', selectedPayment && !bookingLoading ? 'text-white shadow-lg [background:linear-gradient(to_right,var(--portal-accent),var(--portal-accent-dark))] hover:brightness-110' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
                   {bookingLoading ? (
                     <span className="flex items-center justify-center gap-2"><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75"/></svg>{t('portail.processing')}</span>
                   ) : (
@@ -500,10 +510,10 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
 }
 
 function Inp({ label, ph, type = 'text', value, set }: { label: string; ph: string; type?: string; value: string; set: (v: string) => void }) {
-  return <div><label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1.5">{label}</label><input type={type} placeholder={ph} value={value} onChange={e => set(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all" /></div>;
+  return <div><label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1.5">{label}</label><input type={type} placeholder={ph} value={value} onChange={e => set(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)] focus:border-amber-500 transition-all" /></div>;
 }
 function IRow({ l, v, hl }: { l: string; v: string; hl?: boolean }) {
-  return <div className="flex justify-between text-sm"><span className="text-slate-500">{l}</span><span className={cn('font-semibold', hl ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-white')}>{v}</span></div>;
+  return <div className="flex justify-between text-sm"><span className="text-slate-500">{l}</span><span className={cn('font-semibold', hl ? '[color:var(--portal-accent)]' : 'text-slate-800 dark:text-white')}>{v}</span></div>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -547,7 +557,7 @@ function NearbyStations({ stations, t }: { stations: StationInfo[]; t: (k: strin
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" />
+        <div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" />
         <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.nearbyTitle')}</h2>
       </div>
 
@@ -555,13 +565,13 @@ function NearbyStations({ stations, t }: { stations: StationInfo[]; t: (k: strin
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <button onClick={reqGps} disabled={gps === 'loading'}
           className={cn('flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all border',
-            gps === 'found' ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-700 hover:border-amber-300')}>
+            gps === 'found' ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-700 hover:[border-color:var(--portal-accent)]')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
           {gps === 'loading' ? t('portail.locating') : gps === 'found' ? t('portail.located') : t('portail.useMyLocation')}
         </button>
         <input placeholder={t('portail.searchCityPlaceholder')} value={city}
           onChange={e => { setCity(e.target.value); setPos(null); setGps('idle'); }}
-          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]" />
       </div>
 
       {gps === 'denied' && <p className="text-sm text-red-500 mb-4">{t('portail.gpsDenied')}</p>}
@@ -640,20 +650,20 @@ function ParcelSection({ t, fmt }: { t: (k: string) => string; fmt: (n: number) 
   const track = (e: FormEvent) => { e.preventDefault(); setResult({ status: 'IN_TRANSIT', from: 'Brazzaville', to: 'Pointe-Noire', date: new Date().toISOString() }); setTracked(true); };
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.parcelTitle')}</h2></div>
+      <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.parcelTitle')}</h2></div>
       <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6 max-w-xs">
         {(['track', 'send'] as const).map(tb => <button key={tb} onClick={() => { setTab(tb); setTracked(false); }} className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all', tab === tb ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}>{tb === 'track' ? t('portail.trackParcel') : t('portail.sendParcel')}</button>)}
       </div>
       {tab === 'track' && (
         <div className="max-w-lg">
           <form onSubmit={track} className="flex flex-col sm:flex-row gap-3">
-            <input placeholder={t('portail.trackingPlaceholder')} value={code} onChange={e => setCode(e.target.value)} className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+            <input placeholder={t('portail.trackingPlaceholder')} value={code} onChange={e => setCode(e.target.value)} className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]" />
             <button type="submit" disabled={!code.trim()} className="px-6 py-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all">{t('portail.track')}</button>
           </form>
           {tracked && result && (
             <div className="mt-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg></div>
+                <div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg></div>
                 <div><p className="font-bold text-slate-900 dark:text-white text-sm">{code}</p><span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-bold uppercase">{t('portail.inTransit')}</span></div>
               </div>
               <div className="space-y-2"><IRow l={t('portail.departure')} v={result.from} /><IRow l={t('portail.arrival')} v={result.to} /><IRow l={t('portail.dateLabel')} v={fmtDate(result.date)} /></div>
@@ -694,7 +704,7 @@ function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: strin
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.fleetTitle')}</h2></div>
+      <div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.fleetTitle')}</h2></div>
       {fleetRes.loading ? (
         <div className="flex justify-center py-16"><div className="w-10 h-10 border-[3px] border-slate-200 border-t-amber-500 rounded-full animate-spin" /></div>
       ) : fleet.length === 0 ? (
@@ -702,7 +712,7 @@ function FleetSection({ t, apiBase }: { t: (k: string) => string; apiBase: strin
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {fleet.map((bus, i) => (
-            <button key={i} onClick={() => setSelectedBus(bus)} className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:border-amber-300 transition-all text-left">
+            <button key={i} onClick={() => setSelectedBus(bus)} className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:[border-color:var(--portal-accent)] transition-all text-left">
               <div className="h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center relative overflow-hidden">
                 {bus.photos.length > 0 ? (
                   <img src={bus.photos[0]} alt={bus.model} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -831,7 +841,7 @@ export function PortailVoyageur() {
   const cfgUrl = apiBase ? `${apiBase}/config` : null;
   const stUrl = apiBase ? `${apiBase}/stations` : null;
   const cfgDeps = useMemo(() => [tenantSlug], [tenantSlug]);
-  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string> }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[] }>(cfgUrl, cfgDeps, skip);
+  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string> }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string } | null }>(cfgUrl, cfgDeps, skip);
   const stRes = useFetch<StationInfo[]>(stUrl, cfgDeps, skip);
   // Tenant name takes priority — brand.brandName is only used if tenant specifically set it
   const brandName = cfg.data?.tenant?.name || cfg.data?.brand?.brandName || '';
@@ -853,6 +863,14 @@ export function PortailVoyageur() {
   const [section, setSection] = useState<Section>('booking');
   const [results, setResults] = useState<TripResult[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // ── Trip dates for calendar highlights ──
+  const [calMonth, setCalMonth] = useState(() => date.slice(0, 7));
+  const tripDatesUrl = apiBase ? `${apiBase}/trips/dates?month=${calMonth}` : null;
+  const tripDatesDeps = useMemo(() => [tenantSlug, calMonth], [tenantSlug, calMonth]);
+  const { data: tripDatesRaw, loading: tripDatesLoading } = useFetch<string[]>(tripDatesUrl, tripDatesDeps, skip);
+  const tripDatesSet = useMemo(() => new Set(tripDatesRaw ?? []), [tripDatesRaw]);
+
   const initDone = useRef(false);
 
   // Set default cities ONCE when stations load — not on every render
@@ -878,18 +896,30 @@ export function PortailVoyageur() {
   const swap = useCallback(() => { setDep(arr); setArr(dep); }, [dep, arr]);
   const sorted = searched ? [...results].sort((a, b) => sort === 'price' ? a.price - b.price : a.departureTime.localeCompare(b.departureTime)) : [];
 
+  // Resolve portal theme from tenant config (persisted in DB)
+  const portalTheme = useMemo(() => getTheme(cfg.data?.portal?.themeId), [cfg.data?.portal?.themeId]);
+
   const NAV: { key: Section; label: string }[] = [
     { key: 'booking', label: t('portail.navBooking') }, { key: 'parcels', label: t('portail.navParcels') }, { key: 'nearby', label: t('portail.navNearby') },
     { key: 'about', label: t('portail.navAbout') }, { key: 'fleet', label: t('portail.navFleet') }, { key: 'contact', label: t('portail.navContact') },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-slate-950 font-sans antialiased">
+    <PortalThemeCtx.Provider value={portalTheme}>
+    <div
+      className="min-h-screen flex flex-col bg-white dark:bg-slate-950 font-sans antialiased"
+      style={{
+        '--portal-accent': portalTheme.accent,
+        '--portal-accent-light': portalTheme.accentLight,
+        '--portal-accent-dark': portalTheme.accentDark,
+        '--portal-secondary': portalTheme.secondary,
+      } as React.CSSProperties}
+    >
       {/* Navbar */}
       <nav className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6">
           <button onClick={() => { setSection('booking'); setSearched(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity">
-            {brandLogo ? <img src={brandLogo} alt={brandName} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-amber-500/20">{brandName.charAt(0) || 'T'}</div>}
+            {brandLogo ? <img src={brandLogo} alt={brandName} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-amber-500/20">{brandName.charAt(0) || 'T'}</div>}
             <span className="font-bold text-slate-900 dark:text-white text-base sm:text-lg tracking-tight hidden sm:block">{brandName}</span>
           </button>
           <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar mx-2 sm:mx-4">
@@ -913,11 +943,11 @@ export function PortailVoyageur() {
             <form onSubmit={doSearch} className="mt-8 sm:mt-10">
               <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/20 border border-white/5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_1fr_auto_auto] gap-3 items-end">
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.departure')}</label><select value={dep} onChange={e => setDep(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
-                  <button type="button" onClick={swap} className="self-end mb-0.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 transition-all hidden lg:flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 16l-4-4m0 0l4-4m-4 4h18M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.arrival')}</label><select value={arr} onChange={e => setArr(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.dateLabel')}</label><input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().slice(0, 10)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50" /></div>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.passengers')}</label><select value={pax} onChange={e => setPax(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50">{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.departure')}</label><select value={dep} onChange={e => setDep(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <button type="button" onClick={swap} className="self-end mb-0.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:[border-color:var(--portal-accent)] transition-all hidden lg:flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 16l-4-4m0 0l4-4m-4 4h18M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>
+                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.arrival')}</label><select value={arr} onChange={e => setArr(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.dateLabel')}</label><TripDatePicker value={date} onChange={setDate} tripDates={tripDatesSet} loading={tripDatesLoading} locale={lang === 'ar' ? 'ar-SA' : 'fr-FR'} t={t} onMonthChange={setCalMonth} /></div>
+                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.passengers')}</label><select value={pax} onChange={e => setPax(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
                   <button type="submit" className="self-end bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl px-6 py-3 font-bold hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25 whitespace-nowrap text-sm active:scale-95 transition-all">{t('portail.search')}</button>
                 </div>
               </div>
@@ -937,12 +967,12 @@ export function PortailVoyageur() {
         {section === 'booking' && (<>
           {!searched ? (
             <div>
-              <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.popularTrips')}</h2></div>
+              <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.popularTrips')}</h2></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{POPULAR_ROUTES.map(r => (
-                <button key={`${r.from}-${r.to}`} onClick={() => quick(r.from, r.to)} className="group relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 hover:border-amber-300 hover:shadow-xl hover:shadow-amber-500/5 transition-all text-left overflow-hidden">
+                <button key={`${r.from}-${r.to}`} onClick={() => quick(r.from, r.to)} className="group relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 hover:[border-color:var(--portal-accent)] hover:shadow-xl hover:shadow-amber-500/5 transition-all text-left overflow-hidden">
                   <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500" />
                   <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">{r.from} &rarr; {r.to}</p>
-                  <div className="flex items-center gap-2 mt-2"><span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{t('portail.from')} {fmt(r.price)}</span><span className="text-xs text-slate-400">&middot; {r.duration}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><span className="text-xs font-semibold [color:var(--portal-accent)]">{t('portail.from')} {fmt(r.price)}</span><span className="text-xs text-slate-400">&middot; {r.duration}</span></div>
                 </button>
               ))}</div>
             </div>
@@ -953,7 +983,7 @@ export function PortailVoyageur() {
                   <div className="flex items-center gap-3"><button onClick={() => setSearched(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button><h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{dep} &rarr; {arr}</h2></div>
                   <p className="text-sm text-slate-500 mt-1 ml-10">{fmtDate(date, lang === 'ar' ? 'ar-SA' : 'fr-FR')} &bull; {sorted.filter(r => r.canBook).length} {t('portail.tripsAvailable')}</p>
                 </div>
-                <select value={sort} onChange={e => setSort(e.target.value as any)} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50"><option value="time">{t('portail.sortDeparture')}</option><option value="price">{t('portail.sortPrice')}</option></select>
+                <select value={sort} onChange={e => setSort(e.target.value as any)} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]"><option value="time">{t('portail.sortDeparture')}</option><option value="price">{t('portail.sortPrice')}</option></select>
               </div>
               <div className="space-y-4">
                 {loading ? <div className="flex flex-col items-center py-16 gap-4"><div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-amber-500 rounded-full animate-spin" /><p className="text-sm text-slate-400">{t('portail.searchingTrips')}</p></div>
@@ -966,20 +996,20 @@ export function PortailVoyageur() {
         {section === 'parcels' && <ParcelSection t={t} fmt={fmt} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
         {section === 'about' && (
-          <div className="max-w-3xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.aboutTitle')}</h2></div>
+          <div className="max-w-3xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.aboutTitle')}</h2></div>
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700/50"><p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">{t('portail.aboutContent')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">{[{ i: '\u2691', t: t('portail.aboutSafety'), d: t('portail.aboutSafetyDesc') }, { i: '\u2726', t: t('portail.aboutComfort'), d: t('portail.aboutComfortDesc') }, { i: '\u2316', t: t('portail.aboutReliability'), d: t('portail.aboutReliabilityDesc') }].map(v => <div key={v.t} className="text-center p-4"><span className="text-3xl block mb-3">{v.i}</span><h4 className="font-bold text-slate-900 dark:text-white text-sm">{v.t}</h4><p className="text-xs text-slate-500 mt-1">{v.d}</p></div>)}</div></div></div>
         )}
         {section === 'fleet' && <FleetSection t={t} apiBase={apiBase} />}
         {section === 'contact' && (
-          <div className="max-w-2xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-gradient-to-b from-amber-500 to-amber-600 rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.contactTitle')}</h2></div>
+          <div className="max-w-2xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.contactTitle')}</h2></div>
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700/50">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">{[
                 { i: '\u2706', l: t('portail.phoneLabel'), v: cfg.data?.tenant?.contact?.phone || '+242 06 000 00 00' },
                 { i: '@', l: t('portail.emailLabel'), v: cfg.data?.tenant?.contact?.email || 'contact@transcongo.cg' },
                 { i: '\u2302', l: t('portail.addressLabel'), v: cfg.data?.tenant?.contact?.address || 'Av. de la Paix, Brazzaville' },
                 { i: '\u231A', l: t('portail.hoursLabel'), v: 'Lun-Sam: 06h-20h' },
-              ].map(c => <div key={c.l} className="flex items-start gap-4"><div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold shrink-0">{c.i}</div><div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{c.l}</p><p className="text-sm font-semibold text-slate-900 dark:text-white mt-1">{c.v}</p></div></div>)}</div></div></div>
+              ].map(c => <div key={c.l} className="flex items-start gap-4"><div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center text-amber-600 font-bold shrink-0">{c.i}</div><div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{c.l}</p><p className="text-sm font-semibold text-slate-900 dark:text-white mt-1">{c.v}</p></div></div>)}</div></div></div>
         )}
       </div>
 
@@ -989,7 +1019,7 @@ export function PortailVoyageur() {
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 mt-auto shrink-0">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
-            <div><div className="flex items-center gap-2 mb-3">{brandLogo ? <img src={brandLogo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs">{brandName.charAt(0)}</div>}<span className="font-bold text-slate-900 dark:text-white">{brandName}</span></div><p className="text-xs text-slate-500 leading-relaxed">{t('portail.footerAbout')}</p></div>
+            <div><div className="flex items-center gap-2 mb-3">{brandLogo ? <img src={brandLogo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-xs">{brandName.charAt(0)}</div>}<span className="font-bold text-slate-900 dark:text-white">{brandName}</span></div><p className="text-xs text-slate-500 leading-relaxed">{t('portail.footerAbout')}</p></div>
             <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLinks')}</p><div className="space-y-2">{NAV.map(n => <button key={n.key} onClick={() => setSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{n.label}</button>)}</div></div>
             <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLegal')}</p><div className="space-y-2"><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">CGV</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.privacy')}</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.legalMentions')}</a></div></div>
           </div>
@@ -999,6 +1029,7 @@ export function PortailVoyageur() {
 
       {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} onClose={() => setSelTrip(null)} />}
     </div>
+    </PortalThemeCtx.Provider>
   );
 }
 

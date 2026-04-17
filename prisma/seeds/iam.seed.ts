@@ -659,13 +659,20 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED',  action: 'CLEAR_INCIDENT',   toState: 'IN_PROGRESS',        requiredPerm: 'data.trip.report.own'    },
   { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'END_TRIP',         toState: 'COMPLETED',          requiredPerm: 'data.trip.update.agency' },
   { entityType: 'Trip', fromState: 'PLANNED',              action: 'CANCEL',           toState: 'CANCELLED',          requiredPerm: 'data.trip.update.agency' },
-  // Ticket
-  { entityType: 'Ticket', fromState: 'CREATED',         action: 'RESERVE',   toState: 'PENDING_PAYMENT', requiredPerm: 'data.ticket.create.agency' },
-  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'PAY',       toState: 'CONFIRMED',       requiredPerm: 'data.ticket.create.agency' },
-  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT', action: 'EXPIRE',    toState: 'EXPIRED',         requiredPerm: 'data.ticket.create.agency' },
-  { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CHECK_IN',  toState: 'CHECKED_IN',      requiredPerm: 'data.ticket.scan.agency'   },
-  { entityType: 'Ticket', fromState: 'CHECKED_IN',      action: 'BOARD',     toState: 'BOARDED',         requiredPerm: 'data.ticket.scan.agency'   },
-  { entityType: 'Ticket', fromState: 'CONFIRMED',       action: 'CANCEL',    toState: 'CANCELLED',       requiredPerm: 'data.ticket.cancel.agency' },
+  // Ticket — PRD §III.7 (cycle complet : émission → embarquement → complétion + remboursement)
+  { entityType: 'Ticket', fromState: 'CREATED',            action: 'RESERVE',   toState: 'PENDING_PAYMENT',  requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT',    action: 'PAY',       toState: 'CONFIRMED',        requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT',    action: 'EXPIRE',    toState: 'EXPIRED',          requiredPerm: 'data.ticket.create.agency' },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',          action: 'CHECK_IN',  toState: 'CHECKED_IN',       requiredPerm: 'data.ticket.scan.agency'   },
+  { entityType: 'Ticket', fromState: 'CHECKED_IN',         action: 'BOARD',     toState: 'BOARDED',          requiredPerm: 'data.ticket.scan.agency'   },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',          action: 'BOARD',     toState: 'BOARDED',          requiredPerm: 'data.ticket.scan.agency'   },
+  { entityType: 'Ticket', fromState: 'BOARDED',            action: 'FINALIZE',  toState: 'COMPLETED',        requiredPerm: 'data.trip.update.agency'   },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',          action: 'CANCEL',    toState: 'CANCELLED',        requiredPerm: 'data.ticket.cancel.agency' },
+  { entityType: 'Ticket', fromState: 'PENDING_PAYMENT',    action: 'CANCEL',    toState: 'CANCELLED',        requiredPerm: 'data.ticket.cancel.agency' },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',          action: 'REFUND',    toState: 'REFUND_PENDING',   requiredPerm: 'data.ticket.cancel.agency' },
+  { entityType: 'Ticket', fromState: 'REFUND_PENDING',     action: 'approve',   toState: 'REFUND_PROCESSING',requiredPerm: 'data.refund.approve.tenant' },
+  { entityType: 'Ticket', fromState: 'REFUND_PROCESSING',  action: 'process',   toState: 'REFUNDED',         requiredPerm: 'data.refund.process.tenant' },
+  { entityType: 'Ticket', fromState: 'REFUND_PROCESSING',  action: 'fail',      toState: 'REFUND_FAILED',    requiredPerm: 'data.refund.process.tenant' },
   // Parcel — PRD §III.7 (8 états métier)
   { entityType: 'Parcel', fromState: 'CREATED',    action: 'RECEIVE',         toState: 'AT_ORIGIN',  requiredPerm: 'data.parcel.scan.agency'   },
   { entityType: 'Parcel', fromState: 'AT_ORIGIN',  action: 'ADD_TO_SHIPMENT', toState: 'PACKED',     requiredPerm: 'data.shipment.group.agency' },
@@ -768,6 +775,19 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Driver', fromState: 'REST_REQUIRED', action: 'start_rest',    toState: 'RESTING',       requiredPerm: 'data.driver.rest.own'         },
   { entityType: 'Driver', fromState: 'RESTING',       action: 'rest_complete', toState: 'AVAILABLE',     requiredPerm: 'data.driver.rest.own'         },
   { entityType: 'Driver', fromState: 'SUSPENDED',     action: 'reinstate',     toState: 'AVAILABLE',     requiredPerm: 'control.driver.manage.tenant' },
+
+  // CashRegister — cycle caisse (ouverture / fermeture / écart)
+  { entityType: 'CashRegister', fromState: 'CLOSED',      action: 'open',       toState: 'OPEN',        requiredPerm: 'data.cashier.open.own'       },
+  { entityType: 'CashRegister', fromState: 'OPEN',         action: 'close',      toState: 'CLOSED',      requiredPerm: 'data.cashier.close.agency'   },
+  { entityType: 'CashRegister', fromState: 'OPEN',         action: 'flag',       toState: 'DISCREPANCY', requiredPerm: 'data.cashier.close.agency'   },
+  { entityType: 'CashRegister', fromState: 'DISCREPANCY',  action: 'resolve',    toState: 'CLOSED',      requiredPerm: 'data.cashier.close.agency'   },
+
+  // Incident — cycle événement exceptionnel (PRD §IV.11)
+  { entityType: 'Incident', fromState: 'OPEN',        action: 'assign',      toState: 'ASSIGNED',    requiredPerm: 'data.trip.update.agency'   },
+  { entityType: 'Incident', fromState: 'ASSIGNED',    action: 'start_work',  toState: 'IN_PROGRESS', requiredPerm: 'data.trip.report.own'      },
+  { entityType: 'Incident', fromState: 'IN_PROGRESS', action: 'resolve',     toState: 'RESOLVED',    requiredPerm: 'data.trip.report.own'      },
+  { entityType: 'Incident', fromState: 'RESOLVED',    action: 'close',       toState: 'CLOSED',      requiredPerm: 'data.trip.update.agency'   },
+  { entityType: 'Incident', fromState: 'RESOLVED',    action: 'reopen',      toState: 'IN_PROGRESS', requiredPerm: 'data.trip.update.agency'   },
 ];
 
 // ─── Types de documents véhicule par défaut ──────────────────────────────────

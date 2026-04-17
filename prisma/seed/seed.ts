@@ -9,7 +9,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { seedSystemTemplates } from '../../server/seed/templates/templates.seeder';
-import { backfillVehicleDocumentTypes } from '../seeds/iam.seed';
+import { backfillVehicleDocumentTypes, backfillDefaultWorkflows } from '../seeds/iam.seed';
 
 const prisma = new PrismaClient();
 
@@ -369,6 +369,61 @@ const BLUEPRINTS = [
       edge('SUSPENDED',     'reinstate',     'AVAILABLE',     'control.driver.manage.tenant'),
     ]),
   },
+
+  // ── Remboursement ────────────────────────────────────────────────────────
+  {
+    slug: 'refund-standard', name: 'Remboursement — Approbation standard',
+    description: 'PENDING → APPROVED → PROCESSED ou REJECTED. Workflow d\'approbation des remboursements.',
+    entityType: 'Refund', isPublic: true, isSystem: true, tags: ['remboursement', 'SAV', 'finance'],
+    graphData: graph('Refund', [
+      node('PENDING',   'initial',  60,  80),
+      node('APPROVED',  'state',   280,  80),
+      node('PROCESSED', 'terminal', 500,  80),
+      node('REJECTED',  'terminal', 280, 220),
+    ], [
+      edge('PENDING',  'approve', 'APPROVED',  'data.refund.approve.tenant'),
+      edge('PENDING',  'reject',  'REJECTED',  'data.refund.approve.tenant'),
+      edge('APPROVED', 'process', 'PROCESSED', 'data.refund.process.tenant'),
+      edge('APPROVED', 'reject',  'REJECTED',  'data.refund.approve.tenant'),
+    ]),
+  },
+
+  // ── Caisse ───────────────────────────────────────────────────────────────
+  {
+    slug: 'cash-register-cycle', name: 'Caisse — Cycle ouverture / fermeture',
+    description: 'CLOSED → OPEN → CLOSED, avec branche DISCREPANCY en cas d\'écart.',
+    entityType: 'CashRegister', isPublic: true, isSystem: true, tags: ['caisse', 'comptabilité', 'cashier'],
+    graphData: graph('CashRegister', [
+      node('CLOSED',      'initial',  60,  80),
+      node('OPEN',         'state',   280,  80),
+      node('DISCREPANCY',  'state',   280, 220),
+    ], [
+      edge('CLOSED',      'open',    'OPEN',        'data.cashier.open.own'),
+      edge('OPEN',         'close',   'CLOSED',      'data.cashier.close.agency'),
+      edge('OPEN',         'flag',    'DISCREPANCY', 'data.cashier.close.agency'),
+      edge('DISCREPANCY',  'resolve', 'CLOSED',      'data.cashier.close.agency'),
+    ]),
+  },
+
+  // ── Incident ─────────────────────────────────────────────────────────────
+  {
+    slug: 'incident-resolution', name: 'Incident — Déclaration & Résolution',
+    description: 'OPEN → ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED. Workflow pour les événements exceptionnels (PRD §IV.11).',
+    entityType: 'Incident', isPublic: true, isSystem: true, tags: ['incident', 'sécurité', 'QHSE'],
+    graphData: graph('Incident', [
+      node('OPEN',        'initial',  60,  80),
+      node('ASSIGNED',    'state',   280,  80),
+      node('IN_PROGRESS', 'state',   500,  80),
+      node('RESOLVED',    'state',   720,  80),
+      node('CLOSED',      'terminal', 940,  80),
+    ], [
+      edge('OPEN',        'assign',     'ASSIGNED',    'data.trip.update.agency'),
+      edge('ASSIGNED',    'start_work', 'IN_PROGRESS', 'data.trip.report.own'),
+      edge('IN_PROGRESS', 'resolve',    'RESOLVED',    'data.trip.report.own'),
+      edge('RESOLVED',    'close',      'CLOSED',      'data.trip.update.agency'),
+      edge('RESOLVED',    'reopen',     'IN_PROGRESS', 'data.trip.update.agency'),
+    ]),
+  },
 ];
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
@@ -411,10 +466,13 @@ async function main() {
     Bus:         opsCat!.id,
     Maintenance: opsCat!.id,
     Manifest:    opsCat!.id,
-    Claim:       qualiteCat!.id,
-    Checklist:   opsCat!.id,
-    Driver:      rhCat!.id,
-    Crew:        rhCat!.id,
+    Claim:        qualiteCat!.id,
+    Checklist:    opsCat!.id,
+    Driver:       rhCat!.id,
+    Crew:         rhCat!.id,
+    Refund:       qualiteCat!.id,
+    CashRegister: opsCat!.id,
+    Incident:     qualiteCat!.id,
   };
 
   let created = 0;
@@ -457,6 +515,12 @@ async function main() {
   const docTypeReport = await backfillVehicleDocumentTypes(prisma);
   if (docTypeReport.rowsCreated > 0) {
     console.log(`✅ VehicleDocumentTypes — ${docTypeReport.rowsCreated} type(s) créé(s) sur ${docTypeReport.scanned} tenant(s)`);
+  }
+
+  // ── Backfill WorkflowConfig pour tous les tenants existants ────────────────
+  const wfReport = await backfillDefaultWorkflows(prisma);
+  if (wfReport.rowsCreated > 0) {
+    console.log(`✅ WorkflowConfigs — ${wfReport.rowsCreated} transition(s) créée(s) sur ${wfReport.scanned} tenant(s)`);
   }
 }
 

@@ -188,7 +188,13 @@ const ar: Record<string, Record<string, string>> = {
     "toCity": "مدينة الوصول",
     "parcelDescription": "وصف الطرد",
     "parcelDescPlaceholder": "مثال: صندوق 10 كغ، مستندات، إلكترونيات…",
-    "requestPickup": "طلب الاستلام"
+    "requestPickup": "طلب الاستلام",
+    "calPrev": "الشهر السابق",
+    "calNext": "الشهر التالي",
+    "calHasTrips": "رحلات متاحة",
+    "calBold": "غامق",
+    "calAvailable": "رحلات متاحة",
+    "calLoading": "جارٍ تحميل التوفر…"
   },
   "workflowStudio": {
     "workflowStudio": "استوديو سير العمل",
@@ -214,6 +220,11 @@ const ar: Record<string, Record<string, string>> = {
     "etClaim": "شكوى خدمة ما بعد البيع",
     "etChecklist": "قائمة تحقق المغادرة",
     "etDriver": "سائق",
+    "etTraveler": "مسافر",
+    "etShipment": "شحنة",
+    "etRefund": "استرداد",
+    "etCashRegister": "صندوق النقد",
+    "etIncident": "حادث",
     "edTicket": "دورة حياة تذكرة الراكب",
     "edTrip": "تخطيط وتنفيذ الرحلة",
     "edParcel": "تتبع الطرد من البداية إلى النهاية",
@@ -224,6 +235,11 @@ const ar: Record<string, Record<string, string>> = {
     "edClaim": "معالجة شكوى العميل",
     "edChecklist": "فحوصات ما قبل المغادرة الإلزامية",
     "edDriver": "التوفر والامتثال للموارد البشرية",
+    "edTraveler": "دورة حياة المسافر في الرحلة (من تسجيل الوصول إلى الخروج)",
+    "edShipment": "تجميع ونقل الطرود",
+    "edRefund": "الموافقة على المبالغ المستردة ومعالجتها",
+    "edCashRegister": "فتح وإغلاق وإدارة الفروقات النقدية",
+    "edIncident": "الإبلاغ عن الأحداث الاستثنائية وحلها",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

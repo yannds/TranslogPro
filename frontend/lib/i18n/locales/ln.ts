@@ -189,7 +189,13 @@ const ln: Record<string, Record<string, string>> = {
     "toCity": "Engumba ya kokóma",
     "parcelDescription": "Ndimbola ya colis",
     "parcelDescPlaceholder": "Ndakisa: Sanduku 10kg, mikanda, electronique…",
-    "requestPickup": "Kosenga bázuzi"
+    "requestPickup": "Kosenga bázuzi",
+    "calPrev": "Sanza eleki",
+    "calNext": "Sanza ekoya",
+    "calHasTrips": "Nzela ezali",
+    "calBold": "Makasi",
+    "calAvailable": "nzela ezali",
+    "calLoading": "Koluka nzela…"
   },
   "workflowStudio": {
     "workflowStudio": "Workflow Studio",
@@ -215,6 +221,11 @@ const ln: Record<string, Record<string, string>> = {
     "etClaim": "Mpamela SAV",
     "etChecklist": "Checklist ya bokei",
     "etDriver": "Molaki-motuka",
+    "etTraveler": "Motamboli",
+    "etShipment": "Bokotindami",
+    "etRefund": "Bozongisi",
+    "etCashRegister": "Kɛsi",
+    "etIncident": "Likambo",
     "edTicket": "Bomoi ya tikɛ ya moto ya mobembo",
     "edTrip": "Kobongisa mpe kosala mobembo",
     "edParcel": "Kolanda mpako banda A tii Z",
@@ -225,6 +236,11 @@ const ln: Record<string, Record<string, string>> = {
     "edClaim": "Kosilisa mpamela ya client",
     "edChecklist": "Kotala ya nkɛngɛ liboso ya bokei",
     "edDriver": "Kozala mpe botosi ya RH",
+    "edTraveler": "Bomoi ya motamboli na mobembo (check-in tii kobima)",
+    "edShipment": "Kosangisa mpe kotinda biloko",
+    "edRefund": "Kondima mpe kosala bozongisi",
+    "edCashRegister": "Kofungola, kokanga mpe kotala bokeseni ya kɛsi",
+    "edIncident": "Koloba mpe kosilisa makambo ya kokamwa",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

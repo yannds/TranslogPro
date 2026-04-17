@@ -27,10 +27,12 @@ import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
+import { PORTAL_THEMES_LIST } from '../portail-voyageur/portal-themes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PortalConfig {
+  themeId: string;
   showAbout: boolean;
   showFleet: boolean;
   showNews: boolean;
@@ -41,48 +43,6 @@ interface PortalConfig {
   socialLinks: Record<string, string>;
   ogImageUrl?: string;
 }
-
-interface BrandConfig {
-  brandName: string;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  bgColor: string;
-  textColor: string;
-}
-
-// ─── Pre-built themes ─────────────────────────────────────────────────────────
-
-const THEMES = [
-  {
-    id: 'amber-luxury',
-    name: 'Ambre Luxe',
-    desc: 'Or & noir — premium, élégant',
-    primary: '#d97706', secondary: '#1e293b', accent: '#f59e0b', bg: '#ffffff', text: '#111827',
-    preview: 'from-amber-500 to-amber-700',
-  },
-  {
-    id: 'ocean-blue',
-    name: 'Océan Bleu',
-    desc: 'Bleu profond — confiance, sérénité',
-    primary: '#2563eb', secondary: '#1e3a5f', accent: '#06b6d4', bg: '#ffffff', text: '#111827',
-    preview: 'from-blue-500 to-blue-700',
-  },
-  {
-    id: 'emerald-nature',
-    name: 'Émeraude Nature',
-    desc: 'Vert & doré — éco, naturel',
-    primary: '#059669', secondary: '#064e3b', accent: '#d97706', bg: '#ffffff', text: '#111827',
-    preview: 'from-emerald-500 to-emerald-700',
-  },
-  {
-    id: 'royal-purple',
-    name: 'Pourpre Royal',
-    desc: 'Violet & or — prestige, distinction',
-    primary: '#7c3aed', secondary: '#2e1065', accent: '#f59e0b', bg: '#ffffff', text: '#111827',
-    preview: 'from-violet-500 to-violet-700',
-  },
-];
 
 // ─── CSS variables documentation for tenant custom CSS ────────────────────────
 
@@ -118,13 +78,11 @@ export function PagePortalAdmin() {
     tenantId ? `/api/v1/tenants/${tenantId}/portal/config` : null,
     [tenantId],
   );
-  const brandRes = useFetch<BrandConfig>(
-    tenantId ? `/api/v1/tenants/${tenantId}/brand` : null,
-    [tenantId],
-  );
+  // brand not needed — themes are self-contained
 
   // Local state
   const [config, setConfig] = useState<Partial<PortalConfig>>({
+    themeId: 'amber-luxury',
     showAbout: true, showFleet: true, showNews: true, showContact: true,
     heroOverlay: 0.4, slogans: {}, socialLinks: {},
   });
@@ -142,18 +100,8 @@ export function PagePortalAdmin() {
     setSaved(false);
   };
 
-  const applyTheme = async (theme: typeof THEMES[0]) => {
-    if (!tenantId) return;
-    await apiPut(`/api/v1/tenants/${tenantId}/brand`, {
-      brandName: brandRes.data?.brandName || 'My Company',
-      primaryColor: theme.primary,
-      secondaryColor: theme.secondary,
-      accentColor: theme.accent,
-      bgColor: theme.bg,
-      textColor: theme.text,
-    });
-    brandRes.refetch();
-    setSaved(false);
+  const selectTheme = (themeId: string) => {
+    updateField('themeId', themeId);
   };
 
   const saveConfig = async () => {
@@ -169,7 +117,7 @@ export function PagePortalAdmin() {
 
   const toggle = (section: string) => setExpandedSection(s => s === section ? null : section);
 
-  if (portalRes.loading || brandRes.loading) {
+  if (portalRes.loading) {
     return (
       <div className="p-6 space-y-4">
         <Skeleton className="h-8 w-64" />
@@ -222,52 +170,50 @@ export function PagePortalAdmin() {
         </button>
         {expandedSection === 'themes' && (
           <CardContent className="space-y-6">
-            {/* Pre-built themes */}
+            {/* Theme selection with live preview */}
             <div>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">{t('portalAdmin.prebuiltThemes')}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {THEMES.map(theme => (
-                  <button
-                    key={theme.id}
-                    onClick={() => applyTheme(theme)}
-                    className={cn(
-                      'flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all hover:shadow-md',
-                      brandRes.data?.primaryColor === theme.primary
-                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/10'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300',
-                    )}
-                  >
-                    <div className={cn('w-10 h-10 rounded-lg bg-gradient-to-br shrink-0', theme.preview)} />
-                    <div>
-                      <p className="font-semibold text-sm text-slate-900 dark:text-white">{theme.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{theme.desc}</p>
-                    </div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 gap-4">
+                {PORTAL_THEMES_LIST.map(theme => {
+                  const active = config.themeId === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => selectTheme(theme.id)}
+                      className={cn(
+                        'relative rounded-2xl border-2 text-left transition-all overflow-hidden',
+                        active ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-400',
+                      )}
+                    >
+                      {/* Mini hero preview */}
+                      <div className="h-28 relative overflow-hidden">
+                        <div className="absolute inset-0" style={{ background: theme.heroScenes[0].bg }} />
+                        <div className="absolute inset-0" style={{ background: theme.heroScenes[0].overlay }} />
+                        <div className="relative p-4 flex flex-col justify-end h-full">
+                          <p className="text-white font-black text-lg leading-tight">{theme.name}</p>
+                          <p className="text-white/60 text-xs mt-0.5">{theme.description}</p>
+                        </div>
+                        {active && (
+                          <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white flex items-center justify-center shadow-lg">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          </div>
+                        )}
+                      </div>
+                      {/* Color swatches */}
+                      <div className="p-3 flex items-center gap-3">
+                        <div className="flex gap-1">
+                          <div className="w-6 h-6 rounded-full border border-slate-200" style={{ backgroundColor: theme.accent }} title="Accent" />
+                          <div className="w-6 h-6 rounded-full border border-slate-200" style={{ backgroundColor: theme.accentLight }} title="Light" />
+                          <div className="w-6 h-6 rounded-full border border-slate-200" style={{ backgroundColor: theme.accentDark }} title="Dark" />
+                          <div className="w-6 h-6 rounded-full border border-slate-200" style={{ backgroundColor: theme.secondary }} title="Secondary" />
+                        </div>
+                        <span className="text-xs text-slate-500 ml-auto">{active ? t('portalAdmin.activeTheme') : t('portalAdmin.clickToApply')}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Current colors (read from brand) */}
-            {brandRes.data && (
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">{t('portalAdmin.currentColors')}</p>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { label: 'Primary', color: brandRes.data.primaryColor },
-                    { label: 'Secondary', color: brandRes.data.secondaryColor },
-                    { label: 'Accent', color: brandRes.data.accentColor },
-                    { label: 'Bg', color: brandRes.data.bgColor },
-                    { label: 'Text', color: brandRes.data.textColor },
-                  ].map(c => (
-                    <div key={c.label} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <div className="w-5 h-5 rounded border border-slate-200 dark:border-slate-600" style={{ backgroundColor: c.color }} />
-                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{c.color}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-400 mt-2">{t('portalAdmin.editColorsHint')}</p>
-              </div>
-            )}
 
             {/* Custom CSS documentation */}
             <div>

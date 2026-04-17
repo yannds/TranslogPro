@@ -308,7 +308,13 @@ const es: Record<string, Record<string, string>> = {
     "toCity": "Ciudad de destino",
     "parcelDescription": "Descripción del paquete",
     "parcelDescPlaceholder": "Ej. Caja 10kg, documentos, electrónica…",
-    "requestPickup": "Solicitar recogida"
+    "requestPickup": "Solicitar recogida",
+    "calPrev": "Mes anterior",
+    "calNext": "Mes siguiente",
+    "calHasTrips": "Viajes disponibles",
+    "calBold": "Negrita",
+    "calAvailable": "viajes disponibles",
+    "calLoading": "Cargando disponibilidad…"
   },
   "workflowStudio": {
     "workflowStudio": "Estudio de flujos de trabajo",
@@ -334,6 +340,11 @@ const es: Record<string, Record<string, string>> = {
     "etClaim": "Reclamación posventa",
     "etChecklist": "Lista de verificación previa a la salida",
     "etDriver": "Conductor",
+    "etTraveler": "Viajero",
+    "etShipment": "Envío",
+    "etRefund": "Reembolso",
+    "etCashRegister": "Caja registradora",
+    "etIncident": "Incidente",
     "edTicket": "Ciclo de vida del billete de pasajero",
     "edTrip": "Planificación y ejecución de viajes",
     "edParcel": "Trazabilidad completa de paquetes",
@@ -344,6 +355,11 @@ const es: Record<string, Record<string, string>> = {
     "edClaim": "Procesamiento de reclamaciones de clientes",
     "edChecklist": "Verificaciones obligatorias previas a la salida",
     "edDriver": "Disponibilidad y cumplimiento de RR.HH.",
+    "edTraveler": "Ciclo del pasajero en un viaje (check-in a salida)",
+    "edShipment": "Agrupamiento y transporte de paquetes",
+    "edRefund": "Aprobación y procesamiento de reembolsos",
+    "edCashRegister": "Apertura, cierre y gestión de discrepancias",
+    "edIncident": "Declaración y resolución de eventos excepcionales",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

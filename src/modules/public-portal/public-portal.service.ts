@@ -111,6 +111,7 @@ export class PublicPortalService {
       },
       brand: resolvedBrand,
       portal: portalConfig ? {
+        themeId:      portalConfig.themeId,
         showAbout:    portalConfig.showAbout,
         showFleet:    portalConfig.showFleet,
         showNews:     portalConfig.showNews,
@@ -123,6 +124,47 @@ export class PublicPortalService {
       } : null,
       paymentMethods,
     };
+  }
+
+  // ─── Trip dates (calendar hints — public) ─────────────────────────────────
+
+  /**
+   * Returns an array of ISO date strings (YYYY-MM-DD) that have at least one
+   * bookable trip for the given month. Used by the passenger calendar to
+   * bold-highlight dates with available departures.
+   *
+   * @param month  Optional "YYYY-MM" string. Defaults to current month.
+   */
+  async getTripDates(tenantSlug: string, month?: string): Promise<string[]> {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const now = new Date();
+    const [y, m] = month
+      ? month.split('-').map(Number)
+      : [now.getFullYear(), now.getMonth() + 1];
+
+    const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+    const end   = new Date(y, m, 0, 23, 59, 59, 999); // last day of month
+
+    // Only return dates from today onwards (no past dates)
+    const floor = now > start ? now : start;
+    floor.setHours(0, 0, 0, 0);
+
+    const trips = await this.prisma.trip.findMany({
+      where: {
+        tenantId: tenant.id,
+        status:   { in: ['PLANNED', 'OPEN', 'BOARDING'] },
+        departureScheduled: { gte: floor, lte: end },
+      },
+      select: { departureScheduled: true },
+    });
+
+    // Deduplicate by date string
+    const dateSet = new Set(
+      trips.map(t => t.departureScheduled.toISOString().slice(0, 10)),
+    );
+
+    return [...dateSet].sort();
   }
 
   // ─── Trip search (public) ─────────────────────────────────────────────────
@@ -398,7 +440,7 @@ export class PublicPortalService {
       ticketId:   ticket.id,
       tenantId:   tenant.id,
       tripId:     dto.tripId,
-      seatNumber: '',
+      seatNumber: 'UNASSIGNED',
       issuedAt:   Date.now(),
     });
 

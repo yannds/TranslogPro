@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { GitFork, Ticket, Bus, Package, MapPin, AlertCircle, Plus, Wrench, ClipboardList, Users, FileText, AlertTriangle, X } from 'lucide-react';
+import { GitFork, Ticket, Bus, Package, MapPin, AlertCircle, Plus, Wrench, ClipboardList, Users, FileText, AlertTriangle, X, Wallet, Siren, Ship, RotateCcw, UserCheck } from 'lucide-react';
 import { WorkflowDesigner } from '../workflow/WorkflowDesigner';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
@@ -30,36 +30,47 @@ import { cn } from '../../lib/utils';
 // ─── Catalogue de tous les types d'entités supportés ─────────────────────────
 
 const ENTITY_TYPE_I18N: Record<string, { label: string; desc: string }> = {
-  Ticket:      { label: 'workflowStudio.etTicket',      desc: 'workflowStudio.edTicket' },
-  Trip:        { label: 'workflowStudio.etTrip',        desc: 'workflowStudio.edTrip' },
-  Parcel:      { label: 'workflowStudio.etParcel',      desc: 'workflowStudio.edParcel' },
-  Bus:         { label: 'workflowStudio.etBus',         desc: 'workflowStudio.edBus' },
-  Maintenance: { label: 'workflowStudio.etMaintenance', desc: 'workflowStudio.edMaintenance' },
-  Manifest:    { label: 'workflowStudio.etManifest',    desc: 'workflowStudio.edManifest' },
-  Crew:        { label: 'workflowStudio.etCrew',        desc: 'workflowStudio.edCrew' },
-  Claim:       { label: 'workflowStudio.etClaim',       desc: 'workflowStudio.edClaim' },
-  Checklist:   { label: 'workflowStudio.etChecklist',   desc: 'workflowStudio.edChecklist' },
-  Driver:      { label: 'workflowStudio.etDriver',      desc: 'workflowStudio.edDriver' },
+  Ticket:       { label: 'workflowStudio.etTicket',       desc: 'workflowStudio.edTicket' },
+  Trip:         { label: 'workflowStudio.etTrip',         desc: 'workflowStudio.edTrip' },
+  Parcel:       { label: 'workflowStudio.etParcel',       desc: 'workflowStudio.edParcel' },
+  Bus:          { label: 'workflowStudio.etBus',          desc: 'workflowStudio.edBus' },
+  Maintenance:  { label: 'workflowStudio.etMaintenance',  desc: 'workflowStudio.edMaintenance' },
+  Manifest:     { label: 'workflowStudio.etManifest',     desc: 'workflowStudio.edManifest' },
+  Crew:         { label: 'workflowStudio.etCrew',         desc: 'workflowStudio.edCrew' },
+  Claim:        { label: 'workflowStudio.etClaim',        desc: 'workflowStudio.edClaim' },
+  Checklist:    { label: 'workflowStudio.etChecklist',    desc: 'workflowStudio.edChecklist' },
+  Driver:       { label: 'workflowStudio.etDriver',       desc: 'workflowStudio.edDriver' },
+  Traveler:     { label: 'workflowStudio.etTraveler',     desc: 'workflowStudio.edTraveler' },
+  Shipment:     { label: 'workflowStudio.etShipment',     desc: 'workflowStudio.edShipment' },
+  Refund:       { label: 'workflowStudio.etRefund',       desc: 'workflowStudio.edRefund' },
+  CashRegister: { label: 'workflowStudio.etCashRegister', desc: 'workflowStudio.edCashRegister' },
+  Incident:     { label: 'workflowStudio.etIncident',     desc: 'workflowStudio.edIncident' },
 };
 
 const ALL_ENTITY_TYPES = [
-  'Ticket', 'Trip', 'Parcel', 'Bus', 'Maintenance',
-  'Manifest', 'Crew', 'Claim', 'Checklist', 'Driver',
+  'Ticket', 'Trip', 'Parcel', 'Traveler', 'Bus', 'Shipment',
+  'Maintenance', 'Manifest', 'Crew', 'Claim', 'Checklist',
+  'Driver', 'Refund', 'CashRegister', 'Incident',
 ];
 
 // ─── Icônes par défaut pour les types connus ──────────────────────────────────
 
 const ENTITY_ICONS: Record<string, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>> = {
-  Ticket:      Ticket,
-  Trip:        MapPin,
-  Parcel:      Package,
-  Bus:         Bus,
-  Maintenance: Wrench,
-  Manifest:    ClipboardList,
-  Crew:        Users,
-  Claim:       AlertTriangle,
-  Checklist:   FileText,
-  Driver:      Users,
+  Ticket:       Ticket,
+  Trip:         MapPin,
+  Parcel:       Package,
+  Bus:          Bus,
+  Maintenance:  Wrench,
+  Manifest:     ClipboardList,
+  Crew:         Users,
+  Claim:        AlertTriangle,
+  Checklist:    FileText,
+  Driver:       Users,
+  Traveler:     UserCheck,
+  Shipment:     Ship,
+  Refund:       RotateCcw,
+  CashRegister: Wallet,
+  Incident:     Siren,
 };
 
 function getEntityIcon(key: string) {

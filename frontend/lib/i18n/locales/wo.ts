@@ -185,7 +185,13 @@ const wo: Record<string, Record<string, string>> = {
     "toCity": "Dëkk bu dem",
     "parcelDescription": "Pinnalu colis bi",
     "parcelDescPlaceholder": "Mis. Boyot 10kg, xët-xët, elektronik…",
-    "requestPickup": "Laaj ndaje"
+    "requestPickup": "Laaj ndaje",
+    "calPrev": "Weer wi jiitu",
+    "calNext": "Weer wi toftal",
+    "calHasTrips": "Yoon yi am",
+    "calBold": "Dëgg",
+    "calAvailable": "yoon yi am",
+    "calLoading": "Yëg amam yi…"
   },
   "workflowStudio": {
     "workflowStudio": "Workflow Studio",
@@ -211,6 +217,11 @@ const wo: Record<string, Record<string, string>> = {
     "etClaim": "Ñaani SAV",
     "etChecklist": "Checklist dem",
     "etDriver": "Sopëkaat",
+    "etTraveler": "Doxandéem",
+    "etShipment": "Yónnent",
+    "etRefund": "Delloo",
+    "etCashRegister": "Kees",
+    "etIncident": "Jafe",
     "edTicket": "Dund biye dem-dikk bi",
     "edTrip": "Natt ak jëf tukki bi",
     "edParcel": "Topp koli bi dale ci A ba ci Z",
@@ -221,6 +232,11 @@ const wo: Record<string, Record<string, string>> = {
     "edClaim": "Jëfandikoo ñaani kiliyaan bi",
     "edChecklist": "Saytu yi waruñu def balaa dem",
     "edDriver": "Am-am ak nangu RH",
+    "edTraveler": "Njëlbéen yi ci ab yoon (check-in ba génn)",
+    "edShipment": "Bokk ak yóbbu yi colis",
+    "edRefund": "Nangu ak jëf delloo xaalis",
+    "edCashRegister": "Ubbi, tëj ak saytu kees bi",
+    "edIncident": "Wax ak saytu jafe yu am",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

@@ -45,6 +45,20 @@ export class PublicPortalController {
     return this.service.getStations(slug);
   }
 
+  /** Dates avec trajets disponibles (pour le calendrier voyageur) */
+  @Get('trips/dates')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 30, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_trip_dates',
+    message: 'Too many requests. Please wait a moment.',
+  })
+  getTripDates(
+    @Param('tenantSlug') slug: string,
+    @Query('month') month?: string,
+  ) {
+    return this.service.getTripDates(slug, month);
+  }
+
   /** Recherche de trajets */
   @Get('trips/search')
   @UseGuards(RedisRateLimitGuard)

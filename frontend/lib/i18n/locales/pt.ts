@@ -308,7 +308,13 @@ const pt: Record<string, Record<string, string>> = {
     "toCity": "Cidade de destino",
     "parcelDescription": "Descrição da encomenda",
     "parcelDescPlaceholder": "Ex. Caixa 10kg, documentos, eletrônicos…",
-    "requestPickup": "Solicitar coleta"
+    "requestPickup": "Solicitar coleta",
+    "calPrev": "Mês anterior",
+    "calNext": "Mês seguinte",
+    "calHasTrips": "Viagens disponíveis",
+    "calBold": "Negrito",
+    "calAvailable": "viagens disponíveis",
+    "calLoading": "Carregando disponibilidade…"
   },
   "workflowStudio": {
     "workflowStudio": "Workflow Studio",
@@ -334,6 +340,11 @@ const pt: Record<string, Record<string, string>> = {
     "etClaim": "Reclamação Pós-Venda",
     "etChecklist": "Checklist de Partida",
     "etDriver": "Motorista",
+    "etTraveler": "Viajante",
+    "etShipment": "Expedição",
+    "etRefund": "Reembolso",
+    "etCashRegister": "Caixa registadora",
+    "etIncident": "Incidente",
     "edTicket": "Ciclo de vida do bilhete de passageiro",
     "edTrip": "Planejamento e execução de viagem",
     "edParcel": "Rastreabilidade completa da encomenda",
@@ -344,6 +355,11 @@ const pt: Record<string, Record<string, string>> = {
     "edClaim": "Processamento de reclamações de clientes",
     "edChecklist": "Verificações obrigatórias pré-partida",
     "edDriver": "Disponibilidade e conformidade RH",
+    "edTraveler": "Ciclo do passageiro numa viagem (check-in até saída)",
+    "edShipment": "Agrupamento e transporte de encomendas",
+    "edRefund": "Aprovação e processamento de reembolsos",
+    "edCashRegister": "Abertura, fecho e gestão de discrepâncias",
+    "edIncident": "Declaração e resolução de eventos excepcionais",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {

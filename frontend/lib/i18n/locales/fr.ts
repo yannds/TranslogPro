@@ -198,7 +198,13 @@ const fr: Record<string, Record<string, string>> = {
     "via": "Via",
     "yourPosition": "Votre position",
     "stationsOnMap": "gare(s) sur la carte",
-    "goThere": "S'y rendre"
+    "goThere": "S'y rendre",
+    "calPrev": "Mois précédent",
+    "calNext": "Mois suivant",
+    "calHasTrips": "Trajets disponibles",
+    "calBold": "Gras",
+    "calAvailable": "trajets disponibles",
+    "calLoading": "Chargement des disponibilités…"
   },
   "portalAdmin": {
     "title": "Portail Visiteur",
@@ -227,7 +233,9 @@ const fr: Record<string, Record<string, string>> = {
     "sectionContact": "Contact",
     "sectionContactDesc": "Coordonnées et formulaire de contact",
     "socialTitle": "Réseaux sociaux",
-    "socialDesc": "Liens vers vos réseaux sociaux affichés dans le footer."
+    "socialDesc": "Liens vers vos réseaux sociaux affichés dans le footer.",
+    "activeTheme": "Thème actif",
+    "clickToApply": "Cliquer pour appliquer"
   },
   "workflowStudio": {
     "workflowStudio": "Workflow Studio",
@@ -253,6 +261,11 @@ const fr: Record<string, Record<string, string>> = {
     "etClaim": "Réclamation SAV",
     "etChecklist": "Checklist départ",
     "etDriver": "Chauffeur",
+    "etTraveler": "Voyageur",
+    "etShipment": "Expédition",
+    "etRefund": "Remboursement",
+    "etCashRegister": "Caisse",
+    "etIncident": "Incident",
     "edTicket": "Cycle de vie d'un billet passager",
     "edTrip": "Planification et exécution d'un trajet",
     "edParcel": "Traçabilité d'un colis de A à Z",
@@ -263,6 +276,11 @@ const fr: Record<string, Record<string, string>> = {
     "edClaim": "Traitement d'une réclamation client",
     "edChecklist": "Vérifications pré-départ obligatoires",
     "edDriver": "Disponibilité et conformité RH",
+    "edTraveler": "Cycle passager sur un trajet (check-in → sortie)",
+    "edShipment": "Groupage et transport de colis",
+    "edRefund": "Processus d'approbation et traitement des remboursements",
+    "edCashRegister": "Ouverture, fermeture et gestion des écarts de caisse",
+    "edIncident": "Déclaration et résolution des événements exceptionnels",
     "workflowLabel": "Workflow"
   },
   "wfSimulate": {
