@@ -46,6 +46,8 @@ const LazyProfitability  = lazy(() => import('../pages/PageProfitability').then(
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyBranding       = lazy(() => import('../pages/PageBranding').then(m => ({ default: m.PageBranding })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPortalAdmin    = lazy(() => import('../pages/PagePortalAdmin').then(m => ({ default: m.PagePortalAdmin })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m => ({ default: m.PageCompanySetup })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamUsers       = lazy(() => import('../pages/PageIamUsers').then(m => ({ default: m.PageIamUsers })));
@@ -113,6 +115,24 @@ const LazyDriverSchedule      = lazy(() => import('../pages/PageDriverSchedule')
 const LazyDriverDocs          = lazy(() => import('../pages/PageDriverDocs').then(m => ({ default: m.PageDriverDocs })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazySellTicket          = lazy(() => import('../pages/PageSellTicket').then(m => ({ default: m.PageSellTicket })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyIssuedTickets       = lazy(() => import('../pages/PageIssuedTickets').then(m => ({ default: m.PageIssuedTickets })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTicketCancellations = lazy(() => import('../pages/PageTicketCancellations').then(m => ({ default: m.PageTicketCancellations })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyManifests           = lazy(() => import('../pages/PageManifests').then(m => ({ default: m.PageManifests })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazySavClaims           = lazy(() => import('../pages/PageSavClaims').then(m => ({ default: m.PageSavClaims })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazySavReports          = lazy(() => import('../pages/PageSavReports').then(m => ({ default: m.PageSavReports })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazySavRefunds          = lazy(() => import('../pages/PageSavRefunds').then(m => ({ default: m.PageSavRefunds })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTariffGrid          = lazy(() => import('../pages/PageTariffGrid').then(m => ({ default: m.PageTariffGrid })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyInvoices            = lazy(() => import('../pages/PageInvoices').then(m => ({ default: m.PageInvoices })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPromotions          = lazy(() => import('../pages/PagePromotions').then(m => ({ default: m.PagePromotions })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,27 +158,27 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'trips-delays':        return <LazyTripDelays />;
 
     // ── Billetterie ────────────────────────────────────────────────────────
-    case 'tickets-new':         return <PageWip title={t('router.sellTicket')} />;
-    case 'tickets-list':        return <PageWip title={t('router.issuedTickets')} />;
-    case 'tickets-cancel':      return <PageWip title={t('router.cancellations')} />;
+    case 'tickets-new':         return <LazySellTicket />;
+    case 'tickets-list':        return <LazyIssuedTickets />;
+    case 'tickets-cancel':      return <LazyTicketCancellations />;
 
     // ── Colis & Manifestes ─────────────────────────────────────────────────
-    case 'manifests':           return <PageWip title={t('router.manifests')} />;
+    case 'manifests':           return <LazyManifests />;
     case 'parcel-new':          return <LazyParcelNew />;
     case 'parcels-list':        return <LazyParcelsList />;
     case 'shipments':           return <LazyShipments />;
 
     // ── SAV ────────────────────────────────────────────────────────────────
-    case 'sav-claims':          return <PageWip title={t('router.savClaims')} />;
-    case 'sav-reports':         return <PageWip title={t('router.savReports')} />;
-    case 'sav-returns':         return <PageWip title={t('router.savRefunds')} />;
+    case 'sav-claims':          return <LazySavClaims />;
+    case 'sav-reports':         return <LazySavReports />;
+    case 'sav-returns':         return <LazySavRefunds />;
 
     // ── Finance ────────────────────────────────────────────────────────────
     case 'cashier':             return <PageCashier />;
-    case 'pricing-grid':        return <PageWip title={t('router.pricingGrid')} />;
+    case 'pricing-grid':        return <LazyTariffGrid />;
     case 'pricing-yield':       return <LazyProfitability />;
-    case 'pricing-promo':       return <PageWip title={t('router.promotions')} />;
-    case 'invoices':            return <PageWip title={t('router.invoicing')} />;
+    case 'pricing-promo':       return <LazyPromotions />;
+    case 'invoices':            return <LazyInvoices />;
 
     // ── Analytique & IA ────────────────────────────────────────────────────
     case 'analytics':           return <PageAnalytics />;
@@ -250,6 +270,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'stations':            return <LazyStations />;
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
+    case 'portal-admin':        return <LazyPortalAdmin />;
     case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <PageWip title={t('router.apiIntegrations')} />;
     case 'documents-templates': return <LazyTemplateStudio />;

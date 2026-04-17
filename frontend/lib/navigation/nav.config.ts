@@ -40,6 +40,7 @@ const P = {
   TRIP_DELAY:            'control.trip.delay.agency',
   TRIP_CANCEL:           'control.trip.cancel.tenant',
   TRIP_READ_OWN:         'data.trip.read.own',
+  TRIP_READ_TENANT:      'data.trip.read.tenant',
   TRIP_CHECK_OWN:        'data.trip.check.own',
   TRIP_REPORT_OWN:       'data.trip.report.own',
   TRIP_LOG_EVENT:        'control.trip.log_event.own',
@@ -90,6 +91,7 @@ const P = {
   SAV_REPORT:            'data.sav.report.agency',
   SAV_CLAIM:             'data.sav.claim.tenant',
   SAV_DELIVER:           'data.sav.deliver.agency',
+  REFUND_READ:           'data.refund.read.tenant',
   // Staff & Crew
   STAFF_MANAGE:          'control.staff.manage.tenant',
   STAFF_READ:            'data.staff.read.agency',
@@ -121,6 +123,21 @@ const P = {
   // QHSE & Accidents
   QHSE_MANAGE:           'control.qhse.manage.tenant',
   ACCIDENT_REPORT:       'data.accident.report.own',
+  // Tarification
+  TARIFF_MANAGE:         'control.tariff.manage.tenant',
+  TARIFF_READ:           'data.tariff.read.agency',
+  PROMOTION_MANAGE:      'control.promotion.manage.tenant',
+  PROMOTION_READ:        'data.promotion.read.agency',
+  // Facturation
+  INVOICE_MANAGE:        'control.invoice.manage.tenant',
+  INVOICE_CREATE:        'data.invoice.create.agency',
+  INVOICE_READ:          'data.invoice.read.agency',
+  INVOICE_READ_TENANT:   'data.invoice.read.tenant',
+  // Quais & Annonces
+  PLATFORM_MANAGE:       'control.platform.manage.tenant',
+  PLATFORM_READ:         'data.platform.read.agency',
+  ANNOUNCEMENT_MANAGE:   'control.announcement.manage.tenant',
+  ANNOUNCEMENT_READ:     'data.announcement.read.agency',
 };
 
 // ─── Portail Admin ─────────────────────────────────────────────────────────────
@@ -203,12 +220,12 @@ export const ADMIN_NAV: PortalNavConfig = {
           id: 'sav',
           label: 'nav.after_sales_claims',
           icon: 'MessageSquareWarning',
-          anyOf: [P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER],
+          anyOf: [P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER, P.REFUND_READ],
           moduleKey: 'SAV_MODULE',
           children: [
             { kind: 'leaf', id: 'sav-claims',    label: 'nav.claims',        href: '/admin/sav/claims',    icon: 'FileWarning', anyOf: [P.SAV_CLAIM] },
             { kind: 'leaf', id: 'sav-reports',   label: 'nav.reports',        href: '/admin/sav/reports',   icon: 'Flag',        anyOf: [P.SAV_REPORT] },
-            { kind: 'leaf', id: 'sav-returns',   label: 'nav.refunds',      href: '/admin/sav/returns',   icon: 'RotateCcw',   anyOf: [P.SAV_CLAIM, P.SAV_DELIVER] },
+            { kind: 'leaf', id: 'sav-returns',   label: 'nav.refunds',      href: '/admin/sav/returns',   icon: 'RotateCcw',   anyOf: [P.REFUND_READ] },
           ],
         },
       ],
@@ -233,11 +250,11 @@ export const ADMIN_NAV: PortalNavConfig = {
           id: 'pricing',
           label: 'nav.pricing',
           icon: 'Tags',
-          anyOf: [P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ],
+          anyOf: [P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ, P.TARIFF_MANAGE, P.TARIFF_READ, P.PROMOTION_MANAGE],
           children: [
-            { kind: 'leaf', id: 'pricing-grid',   label: 'nav.pricing_grid',    href: '/admin/pricing',        icon: 'Grid3x3',     anyOf: [P.PRICING_MANAGE, P.PRICING_READ] },
+            { kind: 'leaf', id: 'pricing-grid',   label: 'nav.pricing_grid',        href: '/admin/pricing',        icon: 'Grid3x3',     anyOf: [P.TARIFF_MANAGE, P.TARIFF_READ, P.PRICING_MANAGE, P.PRICING_READ] },
             { kind: 'leaf', id: 'pricing-yield',  label: 'nav.yield_management',    href: '/admin/pricing/yield',  icon: 'TrendingUp',  anyOf: [P.PRICING_YIELD], moduleKey: 'YIELD_ENGINE' },
-            { kind: 'leaf', id: 'pricing-promo',  label: 'nav.promotions',          href: '/admin/pricing/promo',  icon: 'Percent',     anyOf: [P.PRICING_MANAGE], wip: true },
+            { kind: 'leaf', id: 'pricing-promo',  label: 'nav.promotions',          href: '/admin/pricing/promo',  icon: 'Percent',     anyOf: [P.PROMOTION_MANAGE, P.PROMOTION_READ] },
           ],
         },
         {
@@ -246,7 +263,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.invoicing',
           href: '/admin/invoices',
           icon: 'Receipt',
-          anyOf: [P.INVOICE_PRINT],
+          anyOf: [P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE],
         },
       ],
     },
@@ -446,7 +463,7 @@ export const ADMIN_NAV: PortalNavConfig = {
     {
       id: 'display',
       title: 'nav.display_station',
-      anyOf: [P.DISPLAY_UPDATE, P.TRIP_UPDATE],
+      anyOf: [P.DISPLAY_UPDATE, P.TRIP_UPDATE, P.PLATFORM_MANAGE, P.PLATFORM_READ, P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ],
       items: [
         {
           kind: 'leaf',
@@ -462,7 +479,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.platform_management',
           href: '/admin/display/quais',
           icon: 'MapPinned',
-          anyOf: [P.TRIP_UPDATE, P.DISPLAY_UPDATE],
+          anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ, P.TRIP_UPDATE, P.DISPLAY_UPDATE],
         },
         {
           kind: 'leaf',
@@ -470,7 +487,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.station_announcements',
           href: '/admin/display/announcements',
           icon: 'Volume2',
-          anyOf: [P.DISPLAY_UPDATE],
+          anyOf: [P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ, P.DISPLAY_UPDATE],
         },
       ],
     },
@@ -560,6 +577,14 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Palette',
           anyOf: [P.SETTINGS_MANAGE],
           moduleKey: 'WHITE_LABEL',
+        },
+        {
+          kind: 'leaf',
+          id: 'portal-admin',
+          label: 'nav.visitor_portal',
+          href: '/admin/settings/portal',
+          icon: 'Globe',
+          anyOf: [P.SETTINGS_MANAGE],
         },
         {
           kind: 'leaf',

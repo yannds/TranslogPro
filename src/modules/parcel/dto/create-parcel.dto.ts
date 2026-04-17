@@ -1,4 +1,4 @@
-import { IsString, IsUUID, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
 
 export class CreateParcelDto {
   @IsString()
@@ -11,7 +11,7 @@ export class CreateParcelDto {
   @IsOptional()
   address?: string;
 
-  @IsUUID()
+  @IsString()
   destinationId: string;
 
   @IsNumber() @Min(0)

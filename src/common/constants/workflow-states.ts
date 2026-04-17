@@ -162,6 +162,21 @@ export const ClaimAction = {
 } as const;
 export type ClaimAction = typeof ClaimAction[keyof typeof ClaimAction];
 
+// ─── Refund — PRD §IV.12 remboursements ──────────────────────────────────────
+export const RefundState = {
+  PENDING:   'PENDING',
+  APPROVED:  'APPROVED',
+  PROCESSED: 'PROCESSED',
+  REJECTED:  'REJECTED',
+} as const;
+export type RefundState = typeof RefundState[keyof typeof RefundState];
+
+export const RefundReason = {
+  CLIENT_CANCEL:  'CLIENT_CANCEL',
+  TRIP_CANCELLED: 'TRIP_CANCELLED',
+} as const;
+export type RefundReason = typeof RefundReason[keyof typeof RefundReason];
+
 // ─── Shipment ─────────────────────────────────────────────────────────────────
 export const ShipmentState = {
   OPEN:       'OPEN',       // Accepte des colis

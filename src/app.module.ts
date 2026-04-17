@@ -58,11 +58,18 @@ import { ProfitabilityModule }   from './modules/pricing/pricing.module';
 import { FleetDocsModule }       from './modules/fleet-docs/fleet-docs.module';
 import { DriverProfileModule }   from './modules/driver-profile/driver-profile.module';
 import { CrewBriefingModule }    from './modules/crew-briefing/crew-briefing.module';
+import { ShipmentModule }        from './modules/shipment/shipment.module';
 import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
+import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
+import { PortalAdminModule }    from './modules/portal-admin/portal-admin.module';
+import { TariffModule }          from './modules/tariff/tariff.module';
+import { InvoiceModule }         from './modules/invoice/invoice.module';
+import { QuaiModule }            from './modules/quai/quai.module';
+import { AnnouncementModule }    from './modules/announcement/announcement.module';
 
 // Interceptors
 import { AuditLoggingInterceptor } from './common/interceptors/audit-logging.interceptor';
@@ -153,6 +160,8 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     DriverProfileModule,
     // Crew Briefing — checklist équipements pré-départ
     CrewBriefingModule,
+    // Shipment — groupement de colis par destination
+    ShipmentModule,
     // QHSE — accidents, litiges, procédures QHSE
     QhseModule,
     // Scheduling Guard — garde-fou avant affectation trajet/bus/chauffeur
@@ -162,6 +171,18 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
     MfaModule,
+    // Portail public voyageur — endpoints sans auth, rate-limités
+    PublicPortalModule,
+    // CMS Admin portail — pages, posts, config portail (SETTINGS_MANAGE_TENANT)
+    PortalAdminModule,
+    // Tarification — grille tarifaire & promotions
+    TariffModule,
+    // Facturation — factures émises (billets, colis, corporate)
+    InvoiceModule,
+    // Quais de gare — zones d'embarquement physiques
+    QuaiModule,
+    // Annonces gare — messages sonores/visuels diffusés aux écrans
+    AnnouncementModule,
   ],
   providers: [
     // PermissionGuard global — protège TOUTES les routes

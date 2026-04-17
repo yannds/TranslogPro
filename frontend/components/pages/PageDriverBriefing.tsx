@@ -33,9 +33,28 @@ interface MyAssignment {
   staffId:        string;
   crewRole:       string;
   briefedAt:      string | null;
-  trip:           { id: string; reference?: string | null; departureAt?: string | null };
+  trip: {
+    id: string;
+    reference?: string | null;
+    departureScheduled?: string | null;
+    status?: string | null;
+    route?: {
+      name?: string | null;
+      origin?:      { name: string } | null;
+      destination?: { name: string } | null;
+    } | null;
+    bus?: { plateNumber: string } | null;
+  };
   briefingRecord: { id: string; allEquipmentOk: boolean; completedAt: string } | null;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  DRIVER:            'driverBriefing.roleDriver',
+  CO_PILOT:          'driverBriefing.roleCoPilot',
+  HOSTESS:           'driverBriefing.roleHostess',
+  SECURITY:          'driverBriefing.roleSecurity',
+  MECHANIC_ON_BOARD: 'driverBriefing.roleMechanic',
+};
 
 interface EquipmentType {
   id:          string;
@@ -160,11 +179,17 @@ export function PageDriverBriefing() {
                 <li key={a.id} className="flex items-center justify-between px-6 py-4 gap-4">
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
-                      {t('driverBriefing.tripLabel')} {a.trip?.reference ?? a.tripId.slice(0, 8)}
+                      {a.trip?.route?.name ?? a.trip?.reference ?? a.tripId.slice(0, 8)}
+                      {a.trip?.route?.origin && a.trip?.route?.destination && (
+                        <span className="font-normal text-slate-500 ml-2">
+                          {a.trip.route.origin.name} → {a.trip.route.destination.name}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {t('driverBriefing.role')} : {a.crewRole}
-                      {a.trip?.departureAt && ` — ${t('driverBriefing.departure')} ${new Date(a.trip.departureAt).toLocaleString('fr-FR')}`}
+                      {ROLE_LABELS[a.crewRole] ? t(ROLE_LABELS[a.crewRole]) : a.crewRole}
+                      {a.trip?.bus && ` · ${a.trip.bus.plateNumber}`}
+                      {a.trip?.departureScheduled && ` · ${t('driverBriefing.departure')} ${new Date(a.trip.departureScheduled).toLocaleString('fr-FR')}`}
                     </p>
                   </div>
                   <Button
@@ -192,10 +217,11 @@ export function PageDriverBriefing() {
                 <li key={a.id} className="flex items-center justify-between px-6 py-3">
                   <div>
                     <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                      {t('driverBriefing.tripLabel')} {a.trip?.reference ?? a.tripId.slice(0, 8)}
+                      {a.trip?.route?.name ?? a.trip?.reference ?? a.tripId.slice(0, 8)}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {a.briefingRecord && new Date(a.briefingRecord.completedAt).toLocaleString('fr-FR')}
+                      {ROLE_LABELS[a.crewRole] ? t(ROLE_LABELS[a.crewRole]) : a.crewRole}
+                      {a.briefingRecord && ` · ${new Date(a.briefingRecord.completedAt).toLocaleString('fr-FR')}`}
                     </p>
                   </div>
                   {a.briefingRecord?.allEquipmentOk ? (
@@ -214,7 +240,7 @@ export function PageDriverBriefing() {
       {selected && (
         <Card>
           <CardHeader
-            heading={`${t('driverBriefing.checklistTitle')} — ${t('driverBriefing.tripLabel')} ${selected.trip?.reference ?? selected.tripId.slice(0, 8)}`}
+            heading={`${t('driverBriefing.checklistTitle')} — ${selected.trip?.route?.name ?? selected.trip?.reference ?? selected.tripId.slice(0, 8)}`}
             description={t('driverBriefing.checklistDesc')}
             action={
               <Button size="sm" variant="outline" onClick={closeChecklist} disabled={busy}>

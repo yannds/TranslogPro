@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Boxes, Plus, Package, ArrowRight } from 'lucide-react';
+import { Boxes, Plus, Package, ArrowRight, PackagePlus } from 'lucide-react';
 import { useAuth }                       from '../../lib/auth/auth.context';
 import { useI18n }                        from '../../lib/i18n/useI18n';
 import { useFetch }                      from '../../lib/hooks/useFetch';
@@ -51,6 +51,15 @@ interface Shipment {
   remainingWeight: number;
   status:          string;
   parcels?:        ParcelLite[];
+}
+
+interface AvailableParcel {
+  id:            string;
+  trackingCode:  string;
+  weight:        number;
+  status:        string;
+  destinationId: string;
+  destination?:  { name: string; city: string } | null;
 }
 
 interface StationRow { id: string; name: string; city: string; }
@@ -116,6 +125,43 @@ export function PageShipments() {
       else refetchShip();
     } catch (err) { setActionErr((err as Error).message); }
     finally { setBusy(false); }
+  };
+
+  // ─── Add parcel to shipment ───────────────────────────────────────────────
+  const [addParcelOpen, setAddParcelOpen] = useState(false);
+  const [addParcelShipmentId, setAddParcelShipmentId] = useState<string | null>(null);
+  const [addParcelDestId, setAddParcelDestId] = useState<string | null>(null);
+  const [addParcelBusy, setAddParcelBusy] = useState(false);
+  const [addParcelErr, setAddParcelErr]   = useState<string | null>(null);
+
+  const { data: availableParcels } = useFetch<AvailableParcel[]>(
+    tenantId && addParcelOpen ? `${base}/parcels?status=CREATED` : null,
+    [tenantId, addParcelOpen],
+  );
+
+  const filteredParcels = useMemo(
+    () => (availableParcels ?? []).filter(p =>
+      !addParcelDestId || p.destinationId === addParcelDestId,
+    ),
+    [availableParcels, addParcelDestId],
+  );
+
+  const openAddParcel = (shipment: Shipment) => {
+    setAddParcelShipmentId(shipment.id);
+    setAddParcelDestId(shipment.destinationId);
+    setAddParcelErr(null);
+    setAddParcelOpen(true);
+  };
+
+  const handleAddParcel = async (parcelId: string) => {
+    if (!addParcelShipmentId) return;
+    setAddParcelBusy(true); setAddParcelErr(null);
+    try {
+      await apiPost(`${base}/shipments/${addParcelShipmentId}/parcels/${parcelId}`, {});
+      setAddParcelOpen(false);
+      refetchShip();
+    } catch (err) { setAddParcelErr((err as Error).message); }
+    finally { setAddParcelBusy(false); }
   };
 
   const tripLabel = (t: TripRow) => {
@@ -231,6 +277,14 @@ export function PageShipments() {
                           ))}
                         </ul>
                       )}
+                      {s.status === 'OPEN' && (
+                        <div className="mt-3 flex justify-end">
+                          <Button variant="outline" size="sm" onClick={() => openAddParcel(s)}>
+                            <PackagePlus className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+                            {t('shipments.addParcel')}
+                          </Button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -240,6 +294,44 @@ export function PageShipments() {
         </Card>
       )}
 
+      {/* Dialog — Ajouter un colis au groupement */}
+      <Dialog
+        open={addParcelOpen}
+        onOpenChange={o => { if (!o) setAddParcelOpen(false); }}
+        title={t('shipments.addParcelDialog')}
+        description={t('shipments.addParcelDesc')}
+        size="lg"
+      >
+        <div className="space-y-3">
+          <ErrorAlert error={addParcelErr} />
+          {filteredParcels.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">{t('shipments.noMatchingParcel')}</p>
+          ) : (
+            <ul role="list" className="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto">
+              {filteredParcels.map(p => (
+                <li key={p.id} className="flex items-center justify-between py-3 px-2">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-indigo-500" aria-hidden />
+                    <span className="font-mono text-sm tabular-nums">{p.trackingCode}</span>
+                    <Badge size="sm" variant="outline">{p.status}</Badge>
+                    <span className="text-xs text-slate-500 tabular-nums">{p.weight} kg</span>
+                    {p.destination && (
+                      <span className="text-xs text-slate-400">→ {p.destination.name}</span>
+                    )}
+                  </div>
+                  <Button size="sm" disabled={addParcelBusy}
+                    onClick={() => handleAddParcel(p.id)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" aria-hidden />
+                    {t('shipments.add')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Dialog — Nouveau groupement */}
       <Dialog
         open={showCreate}
         onOpenChange={o => { if (!o) setShowCreate(false); }}

@@ -525,14 +525,13 @@ function BusCostProfileSection({ tenantId, busId }: { tenantId: string; busId: s
     (async () => {
       setLoading(true); setErr(null);
       try {
-        const data = await apiGet<BusCostProfile>(base);
-        if (!cancelled) { setForm(data); setConfigured(true); }
-      } catch (e: unknown) {
+        const data = await apiGet<BusCostProfile | null>(base);
         if (!cancelled) {
-          const status = (e as { status?: number }).status;
-          if (status === 404) { setForm({ ...COST_DEFAULTS }); setConfigured(false); }
-          else setErr((e as Error).message);
+          if (data) { setForm(data); setConfigured(true); }
+          else { setForm({ ...COST_DEFAULTS }); setConfigured(false); }
         }
+      } catch (e: unknown) {
+        if (!cancelled) setErr((e as Error).message);
       } finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
@@ -735,7 +734,7 @@ function buildColumns(agencies: AgencyRow[], t: (k: string | Record<string, stri
     },
     {
       key: 'currentOdometerKm',
-      header: 'Km',
+      header: t('fleetVehicles.mileageKm'),
       sortable: true,
       align: 'right',
       cellRenderer: (v) => (

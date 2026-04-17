@@ -17,6 +17,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Logger,
@@ -185,6 +186,18 @@ export class DriverProfileService {
   // ─── Driver Licenses ──────────────────────────────────────────────────────
 
   async createLicense(tenantId: string, dto: CreateDriverLicenseDto) {
+    const category = dto.category.toUpperCase();
+
+    // Unicité : un seul permis par chauffeur et catégorie
+    const existing = await this.prisma.driverLicense.findFirst({
+      where: { tenantId, staffId: dto.staffId, category },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Ce chauffeur possède déjà un permis catégorie ${category}`,
+      );
+    }
+
     const expiresAt = new Date(dto.expiresAt);
     const status    = this._computeLicenseStatus(expiresAt, DEFAULT_LICENSE_ALERT_DAYS);
 
@@ -192,7 +205,7 @@ export class DriverProfileService {
       data: {
         tenantId,
         staffId:      dto.staffId,
-        category:     dto.category.toUpperCase(),
+        category,
         licenseNo:    dto.licenseNo,
         issuedAt:     new Date(dto.issuedAt),
         expiresAt,
@@ -237,6 +250,27 @@ export class DriverProfileService {
 
     await this.prisma.driverLicense.update({ where: { id: licenseId }, data: { fileKey: key } });
     return { uploadUrl: url, fileKey: key };
+  }
+
+  async getAllLicenses(tenantId: string) {
+    const licenses = await this.prisma.driverLicense.findMany({
+      where:   { tenantId },
+      orderBy: { expiresAt: 'asc' },
+    });
+
+    // Enrichir avec le nom du chauffeur (pas de relation Prisma sur DriverLicense)
+    const staffIds = [...new Set(licenses.map(l => l.staffId))];
+    const staffMap = new Map(
+      (await this.prisma.staff.findMany({
+        where:   { id: { in: staffIds } },
+        include: { user: { select: { email: true, name: true } } },
+      })).map(s => [s.id, s]),
+    );
+
+    return licenses.map(l => ({
+      ...l,
+      staff: staffMap.get(l.staffId) ?? { user: { email: '?', name: null } },
+    }));
   }
 
   async getLicenseAlerts(tenantId: string) {

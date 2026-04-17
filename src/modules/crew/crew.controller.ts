@@ -21,7 +21,7 @@ export class CrewController {
   }
 
   @Get()
-  @RequirePermission(Permission.TRIP_READ_OWN)
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
   getForTrip(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,

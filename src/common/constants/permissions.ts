@@ -42,10 +42,12 @@ export const P_SETTINGS_MANAGE_TENANT      = 'control.settings.manage.tenant';
 export const P_ROUTE_MANAGE_TENANT         = 'control.route.manage.tenant';
 export const P_TRIP_CREATE_TENANT          = 'data.trip.create.tenant';
 export const P_TRIP_READ_OWN               = 'data.trip.read.own';
+export const P_TRIP_READ_TENANT            = 'data.trip.read.tenant';
 export const P_TRIP_UPDATE_AGENCY          = 'data.trip.update.agency';
 export const P_TRIP_CHECK_OWN              = 'data.trip.check.own';
 export const P_TRIP_REPORT_OWN             = 'data.trip.report.own';
 export const P_TRIP_DELAY_AGENCY           = 'control.trip.delay.agency';
+export const P_TRIP_DELETE_TENANT           = 'control.trip.delete.tenant';
 export const P_TRIP_CANCEL_TENANT          = 'control.trip.cancel.tenant';
 export const P_TRIP_LOG_EVENT_OWN          = 'control.trip.log_event.own';
 
@@ -102,6 +104,11 @@ export const P_SAV_REPORT_AGENCY           = 'data.sav.report.agency';
 export const P_SAV_DELIVER_AGENCY          = 'data.sav.deliver.agency';
 export const P_SAV_CLAIM_TENANT            = 'data.sav.claim.tenant';
 
+// ─── Refunds ─────────────────────────────────────────────────────────────────
+export const P_REFUND_READ_TENANT      = 'data.refund.read.tenant';
+export const P_REFUND_APPROVE_TENANT   = 'data.refund.approve.tenant';
+export const P_REFUND_PROCESS_TENANT   = 'data.refund.process.tenant';
+
 // ─── Staff & Tenant ───────────────────────────────────────────────────────────
 export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
 export const P_STAFF_READ_AGENCY           = 'data.staff.read.agency';
@@ -136,6 +143,24 @@ export const P_CREW_MANAGE_TENANT          = 'data.crew.manage.tenant';
 
 // ─── Display ─────────────────────────────────────────────────────────────────
 export const P_DISPLAY_UPDATE_AGENCY       = 'data.display.update.agency';
+
+// ─── Tarification (grille tarifaire, promotions) ─────────────────────────────
+export const P_TARIFF_MANAGE_TENANT        = 'control.tariff.manage.tenant';
+export const P_TARIFF_READ_AGENCY          = 'data.tariff.read.agency';
+export const P_PROMOTION_MANAGE_TENANT     = 'control.promotion.manage.tenant';
+export const P_PROMOTION_READ_AGENCY       = 'data.promotion.read.agency';
+
+// ─── Facturation ─────────────────────────────────────────────────────────────
+export const P_INVOICE_MANAGE_TENANT       = 'control.invoice.manage.tenant';
+export const P_INVOICE_CREATE_AGENCY       = 'data.invoice.create.agency';
+export const P_INVOICE_READ_AGENCY         = 'data.invoice.read.agency';
+export const P_INVOICE_READ_TENANT         = 'data.invoice.read.tenant';
+
+// ─── Quais & Annonces gare ───────────────────────────────────────────────────
+export const P_PLATFORM_MANAGE_TENANT      = 'control.platform.manage.tenant';
+export const P_PLATFORM_READ_AGENCY        = 'data.platform.read.agency';
+export const P_ANNOUNCEMENT_MANAGE_TENANT  = 'control.announcement.manage.tenant';
+export const P_ANNOUNCEMENT_READ_AGENCY    = 'data.announcement.read.agency';
 
 // ─── Impersonation (Control Plane — tenant 00000000-...) ─────────────────────
 // Réservé aux rôles SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2 du tenant plateforme.
@@ -210,10 +235,12 @@ export const Permission = {
   ROUTE_MANAGE_TENANT:        P_ROUTE_MANAGE_TENANT,
   TRIP_CREATE_TENANT:         P_TRIP_CREATE_TENANT,
   TRIP_READ_OWN:              P_TRIP_READ_OWN,
+  TRIP_READ_TENANT:           P_TRIP_READ_TENANT,
   TRIP_UPDATE_AGENCY:         P_TRIP_UPDATE_AGENCY,
   TRIP_CHECK_OWN:             P_TRIP_CHECK_OWN,
   TRIP_REPORT_OWN:            P_TRIP_REPORT_OWN,
   TRIP_DELAY_AGENCY:          P_TRIP_DELAY_AGENCY,
+  TRIP_DELETE_TENANT:          P_TRIP_DELETE_TENANT,
   TRIP_CANCEL_TENANT:         P_TRIP_CANCEL_TENANT,
   TRIP_LOG_EVENT_OWN:         P_TRIP_LOG_EVENT_OWN,
   // Tickets
@@ -263,6 +290,10 @@ export const Permission = {
   SAV_REPORT_AGENCY:          P_SAV_REPORT_AGENCY,
   SAV_DELIVER_AGENCY:         P_SAV_DELIVER_AGENCY,
   SAV_CLAIM_TENANT:           P_SAV_CLAIM_TENANT,
+  // Refunds
+  REFUND_READ_TENANT:     P_REFUND_READ_TENANT,
+  REFUND_APPROVE_TENANT:  P_REFUND_APPROVE_TENANT,
+  REFUND_PROCESS_TENANT:  P_REFUND_PROCESS_TENANT,
   // Staff & Tenant
   STAFF_MANAGE:               P_STAFF_MANAGE_TENANT,
   STAFF_READ:                 P_STAFF_READ_AGENCY,
@@ -286,6 +317,21 @@ export const Permission = {
   CREW_MANAGE_TENANT:         P_CREW_MANAGE_TENANT,
   // Display
   DISPLAY_UPDATE_AGENCY:      P_DISPLAY_UPDATE_AGENCY,
+  // Tarification
+  TARIFF_MANAGE_TENANT:       P_TARIFF_MANAGE_TENANT,
+  TARIFF_READ_AGENCY:         P_TARIFF_READ_AGENCY,
+  PROMOTION_MANAGE_TENANT:    P_PROMOTION_MANAGE_TENANT,
+  PROMOTION_READ_AGENCY:      P_PROMOTION_READ_AGENCY,
+  // Facturation
+  INVOICE_MANAGE_TENANT:      P_INVOICE_MANAGE_TENANT,
+  INVOICE_CREATE_AGENCY:      P_INVOICE_CREATE_AGENCY,
+  INVOICE_READ_AGENCY:        P_INVOICE_READ_AGENCY,
+  INVOICE_READ_TENANT:        P_INVOICE_READ_TENANT,
+  // Quais & Annonces
+  PLATFORM_MANAGE_TENANT:     P_PLATFORM_MANAGE_TENANT,
+  PLATFORM_READ_AGENCY:       P_PLATFORM_READ_AGENCY,
+  ANNOUNCEMENT_MANAGE_TENANT: P_ANNOUNCEMENT_MANAGE_TENANT,
+  ANNOUNCEMENT_READ_AGENCY:   P_ANNOUNCEMENT_READ_AGENCY,
   // Impersonation
   IMPERSONATION_SWITCH_GLOBAL: P_IMPERSONATION_SWITCH_GLOBAL,
   IMPERSONATION_REVOKE_GLOBAL: P_IMPERSONATION_REVOKE_GLOBAL,

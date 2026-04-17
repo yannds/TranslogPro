@@ -77,6 +77,7 @@ function EntityTypeTab({
   isActive:   boolean;
   onSelect:   (key: string) => void;
 }) {
+  const { t } = useI18n();
   const Icon = getEntityIcon(entityType);
   return (
     <button
@@ -94,7 +95,7 @@ function EntityTypeTab({
       )}
     >
       <Icon className="w-4 h-4" aria-hidden />
-      {entityType}
+      {ENTITY_TYPE_I18N[entityType] ? t(ENTITY_TYPE_I18N[entityType].label) : entityType}
     </button>
   );
 }
@@ -193,7 +194,7 @@ export function PageWorkflowStudio() {
             return <Icon className="w-3.5 h-3.5 t-text-3" aria-hidden />;
           })()}
           <p className="text-xs t-text-2">
-            Workflow <span className="font-mono font-semibold t-text">{active}</span>
+            {t('workflowStudio.workflowLabel')} <span className="font-mono font-semibold t-text">{active}</span>
             {!types.includes(active) && (
               <span className="ml-2 text-amber-600 dark:text-amber-400 text-[10px]">({t('workflowStudio.newSaveToActivate')})</span>
             )}

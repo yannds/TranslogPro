@@ -104,6 +104,7 @@ const TENANT_ROLES: Array<{
       'control.workflow.config.tenant',
       'control.module.install.tenant',
       'control.settings.manage.tenant',
+      'control.trip.delete.tenant',
       'control.trip.cancel.tenant',
       'control.trip.delay.agency',
       'control.pricing.manage.tenant',
@@ -118,7 +119,7 @@ const TENANT_ROLES: Array<{
       'control.staff.manage.tenant',
       // Data
       'data.trip.create.tenant',
-      'data.trip.read.own',
+      'data.trip.read.tenant',
       'data.trip.update.agency',
       'data.trip.check.own',
       'data.trip.report.own',
@@ -150,6 +151,9 @@ const TENANT_ROLES: Array<{
       'data.sav.report.agency',
       'data.sav.deliver.agency',
       'data.sav.claim.tenant',
+      'data.refund.read.tenant',
+      'data.refund.approve.tenant',
+      'data.refund.process.tenant',
       'data.staff.read.tenant',
       'data.staff.read.agency',
       'data.user.read.agency',
@@ -191,6 +195,21 @@ const TENANT_ROLES: Array<{
       'control.workflow.marketplace.publish.tenant',
       'control.workflow.blueprint.import.tenant',
       'control.workflow.simulate.tenant',
+      // Tarification — grille tarifaire & promotions
+      'control.tariff.manage.tenant',
+      'data.tariff.read.agency',
+      'control.promotion.manage.tenant',
+      'data.promotion.read.agency',
+      // Facturation
+      'control.invoice.manage.tenant',
+      'data.invoice.create.agency',
+      'data.invoice.read.agency',
+      'data.invoice.read.tenant',
+      // Quais & Annonces gare
+      'control.platform.manage.tenant',
+      'data.platform.read.agency',
+      'control.announcement.manage.tenant',
+      'data.announcement.read.agency',
     ],
   },
   {
@@ -198,7 +217,7 @@ const TENANT_ROLES: Array<{
     isSystem: true,
     permissions: [
       'control.trip.delay.agency',
-      'data.trip.read.own',
+      'data.trip.read.tenant',
       'data.trip.update.agency',
       'data.ticket.read.agency',
       'data.ticket.cancel.agency',
@@ -221,6 +240,7 @@ const TENANT_ROLES: Array<{
       'data.sav.report.agency',
       'data.sav.deliver.agency',
       'data.sav.claim.tenant',
+      'data.refund.read.tenant',
       'data.staff.read.agency',
       'data.user.read.agency',
       'data.display.update.agency',
@@ -231,6 +251,17 @@ const TENANT_ROLES: Array<{
       'data.manifest.print.agency',
       'data.parcel.print.agency',
       'data.invoice.print.agency',
+      // Tarification (lecture + promotions)
+      'data.tariff.read.agency',
+      'data.promotion.read.agency',
+      // Facturation
+      'data.invoice.create.agency',
+      'data.invoice.read.agency',
+      // Quais & Annonces
+      'data.platform.read.agency',
+      'control.platform.manage.tenant',
+      'data.announcement.read.agency',
+      'control.announcement.manage.tenant',
     ],
   },
   {
@@ -251,6 +282,12 @@ const TENANT_ROLES: Array<{
       'data.ticket.print.agency',
       'data.parcel.print.agency',
       'data.invoice.print.agency',
+      // Tarification (lecture pour POS)
+      'data.tariff.read.agency',
+      'data.promotion.read.agency',
+      // Facturation (création au guichet)
+      'data.invoice.create.agency',
+      'data.invoice.read.agency',
     ],
   },
   {
@@ -336,6 +373,11 @@ const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'data.notification.read.own',
       'data.session.revoke.own',
+      // Quais & Annonces (dispatch opérationnel)
+      'data.platform.read.agency',
+      'control.platform.manage.tenant',
+      'data.announcement.read.agency',
+      'control.announcement.manage.tenant',
     ],
   },
   {
@@ -683,6 +725,12 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'escalate',    toState: 'ESCALATED',     requiredPerm: 'data.sav.claim.tenant'    },
   { entityType: 'Claim', fromState: 'ESCALATED',     action: 'resolve',     toState: 'RESOLVED',      requiredPerm: 'data.sav.claim.tenant'    },
   { entityType: 'Claim', fromState: 'ESCALATED',     action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
+
+  // Refund — remboursement billet (blueprint refund-standard)
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'approve', toState: 'APPROVED',  requiredPerm: 'data.refund.approve.tenant' },
+  { entityType: 'Refund', fromState: 'PENDING',  action: 'reject',  toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
+  { entityType: 'Refund', fromState: 'APPROVED', action: 'process', toState: 'PROCESSED', requiredPerm: 'data.refund.process.tenant' },
+  { entityType: 'Refund', fromState: 'APPROVED', action: 'reject',  toState: 'REJECTED',  requiredPerm: 'data.refund.approve.tenant' },
 
   // Manifest — signature & archivage (blueprint manifest-standard)
   { entityType: 'Manifest', fromState: 'DRAFT',     action: 'submit',   toState: 'SUBMITTED', requiredPerm: 'data.manifest.generate.agency' },

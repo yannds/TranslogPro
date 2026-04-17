@@ -1,10 +1,10 @@
-import { IsUUID, IsNumber, Min } from 'class-validator';
+import { IsString, IsNumber, Min } from 'class-validator';
 
 export class CreateShipmentDto {
-  @IsUUID()
+  @IsString()
   tripId: string;
 
-  @IsUUID()
+  @IsString()
   destinationId: string;   // FK Station — doit correspondre à Parcel.destinationId
 
   @IsNumber() @Min(0)

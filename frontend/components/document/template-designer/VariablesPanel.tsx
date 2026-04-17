@@ -56,8 +56,8 @@ export interface VariablesPanelProps {
 // ─── Catégories pertinentes par type de document ─────────────────────────────
 
 const DOC_TYPE_CATEGORIES: Record<string, VariableCategory[]> = {
-  TICKET:       ['tenant', 'ticket', 'trip', 'system'],
-  INVOICE:      ['tenant', 'ticket', 'invoice', 'trip', 'system'],
+  TICKET:       ['tenant', 'ticket', 'customer', 'trip', 'system'],
+  INVOICE:      ['tenant', 'ticket', 'invoice', 'customer', 'trip', 'system'],
   LABEL:        ['tenant', 'parcel', 'trip', 'system'],
   MANIFEST:     ['tenant', 'trip', 'system'],
   PACKING_LIST: ['tenant', 'parcel', 'system'],

@@ -53,8 +53,22 @@ export class ParcelService {
     });
   }
 
+  async findAll(tenantId: string, filters?: { status?: string }) {
+    return this.prisma.parcel.findMany({
+      where: {
+        tenantId,
+        ...(filters?.status ? { status: filters.status } : {}),
+      },
+      include: { destination: true, shipment: { select: { id: true, tripId: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findOne(tenantId: string, id: string) {
-    const parcel = await this.prisma.parcel.findFirst({ where: { id, tenantId } });
+    const parcel = await this.prisma.parcel.findFirst({
+      where: { id, tenantId },
+      include: { destination: true, shipment: { select: { id: true, tripId: true, status: true } } },
+    });
     if (!parcel) throw new NotFoundException(`Parcel ${id} not found`);
     return parcel;
   }
@@ -114,7 +128,7 @@ export class ParcelService {
     description: string,
     actor:       CurrentUserPayload,
   ) {
-    return this.transition(tenantId, parcelId, 'REPORT_DAMAGE', actor, undefined);
+    return this.transition(tenantId, parcelId, 'DAMAGE', actor, undefined);
   }
 
   async findByShipment(tenantId: string, shipmentId: string) {

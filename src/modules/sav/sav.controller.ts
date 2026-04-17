@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
 import { SavService, CreateClaimDto } from './sav.service';
+import { RefundService } from './refund.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -7,7 +8,10 @@ import { Permission } from '../../common/constants/permissions';
 
 @Controller('tenants/:tenantId/sav')
 export class SavController {
-  constructor(private readonly savService: SavService) {}
+  constructor(
+    private readonly savService: SavService,
+    private readonly refundService: RefundService,
+  ) {}
 
   /**
    * Déclaration objet trouvé par chauffeur — scope own.
@@ -72,5 +76,50 @@ export class SavController {
   @RequirePermission(Permission.SAV_DELIVER_AGENCY)
   deliver(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.savService.getIdPhotoUploadUrl(tenantId, id);
+  }
+
+  // ── Refunds ───────────────────────────────────────────────────────────────
+
+  @Get('refunds')
+  @RequirePermission(Permission.REFUND_READ_TENANT)
+  findAllRefunds(@TenantId() tenantId: string, @Query('status') status?: string) {
+    return this.refundService.findAll(tenantId, status);
+  }
+
+  @Get('refunds/:id')
+  @RequirePermission(Permission.REFUND_READ_TENANT)
+  findOneRefund(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.refundService.findOne(tenantId, id);
+  }
+
+  @Post('refunds/:id/approve')
+  @RequirePermission(Permission.REFUND_APPROVE_TENANT)
+  approveRefund(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.refundService.approve(tenantId, id, actor);
+  }
+
+  @Post('refunds/:id/process')
+  @RequirePermission(Permission.REFUND_PROCESS_TENANT)
+  processRefund(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.refundService.process(tenantId, id, actor);
+  }
+
+  @Post('refunds/:id/reject')
+  @RequirePermission(Permission.REFUND_APPROVE_TENANT)
+  rejectRefund(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('notes') notes: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.refundService.reject(tenantId, id, actor, notes);
   }
 }

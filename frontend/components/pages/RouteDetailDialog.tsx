@@ -53,12 +53,12 @@ interface CheckpointCost {
 }
 
 const CHECKPOINT_TYPES = [
-  { value: 'PEAGE',       labelKey: 'cpPeage' as const,      icon: Landmark },
-  { value: 'POLICE',      labelKey: 'cpPolice' as const,     icon: Shield },
-  { value: 'DOUANE',      labelKey: 'cpDouane' as const,     icon: Flag },
-  { value: 'EAUX_FORETS', labelKey: 'cpEauxForets' as const, icon: Trees },
-  { value: 'FRONTIERE',   labelKey: 'cpFrontiere' as const,  icon: Flag },
-  { value: 'AUTRE',       labelKey: 'cpAutre' as const,      icon: CircleDot },
+  { value: 'PEAGE',       labelKey: 'routeDetail.cpPeage' as const,      icon: Landmark },
+  { value: 'POLICE',      labelKey: 'routeDetail.cpPolice' as const,     icon: Shield },
+  { value: 'DOUANE',      labelKey: 'routeDetail.cpDouane' as const,     icon: Flag },
+  { value: 'EAUX_FORETS', labelKey: 'routeDetail.cpEauxForets' as const, icon: Trees },
+  { value: 'FRONTIERE',   labelKey: 'routeDetail.cpFrontiere' as const,  icon: Flag },
+  { value: 'AUTRE',       labelKey: 'routeDetail.cpAutre' as const,      icon: CircleDot },
 ] as const;
 
 interface SegmentPriceRow {
@@ -404,7 +404,7 @@ export function RouteDetailDialog({
             value={newDistanceKm}
             onChange={e => setNewDistanceKm(e.target.value)}
             className={inputClass}
-            placeholder="ex. 120"
+            placeholder={t('routeDetail.distancePlaceholder')}
           />
         </div>
         <div className="space-y-1">
@@ -428,7 +428,7 @@ export function RouteDetailDialog({
             value={newEstimatedWait}
             onChange={e => setNewEstimatedWait(e.target.value)}
             className={inputClass}
-            placeholder="ex. 15"
+            placeholder={t('routeDetail.waitTimePlaceholder')}
           />
         </div>
       </div>
@@ -485,7 +485,7 @@ export function RouteDetailDialog({
               value={cp.costXaf}
               onChange={e => updateCheckpoint(cpIdx, { costXaf: Number(e.target.value) })}
               className={inputClass}
-              placeholder="XAF"
+              placeholder={t('routeDetail.currencyPlaceholder')}
             />
             <button
               type="button"
@@ -629,17 +629,17 @@ export function RouteDetailDialog({
                         {stationLabel(wp.station)}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-500">{wp.distanceFromOriginKm} km</span>
+                        <span className="text-xs text-slate-500">{wp.distanceFromOriginKm} {t('routeDetail.unitKm')}</span>
                         {wp.isMandatoryStop && <Badge variant="warning" size="sm">{t('routeDetail.mandatoryBadge')}</Badge>}
                         {(wp.estimatedWaitTime ?? 0) > 0 && (
-                          <span className="text-xs text-slate-500">~{wp.estimatedWaitTime} min</span>
+                          <span className="text-xs text-slate-500">~{wp.estimatedWaitTime} {t('routeDetail.unitMin')}</span>
                         )}
                         {wp.tollCostXaf > 0 && (
-                          <Badge variant="default" size="sm">Péage {formatXof(wp.tollCostXaf)}</Badge>
+                          <Badge variant="default" size="sm">{t('routeDetail.cpPeage')} {formatXof(wp.tollCostXaf)}</Badge>
                         )}
                         {Array.isArray(wp.checkpointCosts) && wp.checkpointCosts.length > 0 && (
                           <Badge variant="default" size="sm">
-                            {wp.checkpointCosts.length} checkpoint{wp.checkpointCosts.length > 1 ? 's' : ''}
+                            {wp.checkpointCosts.length} {wp.checkpointCosts.length > 1 ? t('routeDetail.checkpointsPlural') : t('routeDetail.checkpointSingular')}
                           </Badge>
                         )}
                       </div>

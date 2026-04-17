@@ -63,9 +63,17 @@ model Tenant {
   config          TenantConfig?
   brand           TenantBrand?
   businessConfig  TenantBusinessConfig?
+  portalConfig    TenantPortalConfig?
+  pages           TenantPage[]
+  posts           TenantPost[]
   busCostProfiles  BusCostProfile[]
   fuelLogs         FuelLog[]
   odometerReadings OdometerReading[]
+  tariffGrids      TariffGrid[]
+  promotions       Promotion[]
+  invoices         Invoice[]
+  platforms        Platform[]
+  announcements    Announcement[]
 
   @@map("tenants")
 }
@@ -557,6 +565,8 @@ model Station {
   parcelsTo          Parcel[]            @relation("ParcelDestination")
   shipmentsTo        Shipment[]          @relation("ShipmentDestination")
   travelersDropoff   Traveler[]          @relation("TravelerDropOff")
+  platforms          Platform[]
+  announcements      Announcement[]
 
   @@index([tenantId])
   @@index([tenantId, city]) // Lookup multi-gares par ville (DisplayService scope=city)
@@ -582,6 +592,7 @@ model Route {
   waypoints     Waypoint[]
   segmentPrices RouteSegmentPrice[]
   trips         Trip[]
+  tariffGrids   TariffGrid[]
 
   @@index([tenantId])
   @@map("routes")
@@ -1130,6 +1141,35 @@ model Claim {
 
   @@index([tenantId, status])
   @@map("claims")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 12b : REFUNDS (remboursements billets — PRD §IV.12)
+// ─────────────────────────────────────────────────────────────
+
+model Refund {
+  id            String    @id @default(cuid())
+  tenantId      String
+  ticketId      String
+  tripId        String?
+  amount        Float
+  currency      String    @default("XAF")
+  reason        String    // CLIENT_CANCEL | TRIP_CANCELLED
+  status        String    @default("PENDING")
+  // PENDING | APPROVED | PROCESSED | REJECTED
+  paymentMethod String?
+  approvedBy    String?
+  approvedAt    DateTime?
+  processedBy   String?
+  processedAt   DateTime?
+  rejectedBy    String?
+  rejectedAt    DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, ticketId])
+  @@map("refunds")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1744,6 +1784,7 @@ model DriverLicense {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@unique([tenantId, staffId, category])
   @@index([tenantId, staffId])
   @@index([tenantId, expiresAt])
   @@index([tenantId, status])
@@ -2172,4 +2213,293 @@ model Attachment {
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, kind])
   @@map("attachments")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION : PORTAIL PUBLIC VOYAGEUR
+// ─────────────────────────────────────────────────────────────
+
+// ── Configuration du portail public par tenant ───────────────────────────────
+// Stocke les réglages propres au portail voyageur : sections activées, hero,
+// slogan multilingue, réseaux sociaux, moyens de paiement par pays.
+model TenantPortalConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+
+  // Sections activées (le booking est toujours ON)
+  showAbout   Boolean @default(true)
+  showFleet   Boolean @default(true)
+  showNews    Boolean @default(true)
+  showContact Boolean @default(true)
+
+  // Hero visuel
+  heroImageUrl String?  // URL MinIO de l'image hero (haute résolution)
+  heroOverlay  Float    @default(0.4) // opacité overlay sombre sur le hero (0–1)
+
+  // Slogan multilingue — JSON { fr: "...", en: "...", ... }
+  slogans Json @default("{}")
+
+  // Réseaux sociaux — JSON { facebook?: url, twitter?: url, instagram?: url, ... }
+  socialLinks Json @default("{}")
+
+  // SEO additionnels
+  ogImageUrl String? // Open Graph image
+
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_portal_configs")
+}
+
+// ── Pages CMS légères par tenant ─────────────────────────────────────────────
+// Contenu "à propos", mentions légales, conditions de vente…
+// Markdown sanitisé côté service (pas de HTML brut).
+model TenantPage {
+  id       String @id @default(cuid())
+  tenantId String
+
+  slug      String  // about | terms | privacy | custom-*
+  title     String
+  content   String  @db.Text // Markdown sanitisé
+  locale    String  @default("fr") // ISO 639-1
+  sortOrder Int     @default(0)
+  published Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug, locale])
+  @@index([tenantId, published])
+  @@map("tenant_pages")
+}
+
+// ── Actualités / blog par tenant ─────────────────────────────────────────────
+model TenantPost {
+  id       String @id @default(cuid())
+  tenantId String
+
+  title       String
+  excerpt     String?   @db.VarChar(500)
+  content     String    @db.Text // Markdown sanitisé
+  coverImage  String?   // URL MinIO
+  locale      String    @default("fr")
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  authorName  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, published, publishedAt])
+  @@map("tenant_posts")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 27 : TARIFICATION — Grille tarifaire & Promotions
+// ─────────────────────────────────────────────────────────────
+
+// ── Grille tarifaire par route (surcharge classe / type / période) ──────────
+// Complémentaire à PricingRules (prix de base) : applique des modificateurs
+// en fonction de la classe (STANDARD/CONFORT/VIP), du type de trajet,
+// ou de créneaux horaires (heures de pointe, week-end, jours fériés).
+model TariffGrid {
+  id        String   @id @default(cuid())
+  tenantId  String
+  routeId   String
+  name      String   // "Tarif Haute Saison", "Tarif Nuit"
+  // Classe véhicule ciblée (null = toutes classes)
+  busType   String?  // STANDARD | CONFORT | VIP | MINIBUS (null = all)
+  // Modificateur : multiplicateur (1.0 = pas de changement, 1.2 = +20%)
+  multiplier Float   @default(1.0)
+  // Ou : prix fixe (prend la priorité sur multiplier si > 0)
+  fixedPrice Float?
+  // Plage horaire (optionnelle)
+  startHour  Int?    // 0–23
+  endHour    Int?    // 0–23
+  // Jours de semaine (bitmask : 1=Lun, 2=Mar, 4=Mer, 8=Jeu, 16=Ven, 32=Sam, 64=Dim)
+  dayMask    Int     @default(127) // 127 = tous les jours
+  // Période de validité
+  validFrom  DateTime?
+  validTo    DateTime?
+  isActive   Boolean  @default(true)
+  priority   Int      @default(0) // plus élevé = appliqué en priorité
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  route  Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, routeId, isActive])
+  @@map("tariff_grids")
+}
+
+// ── Promotions (réductions, codes promo, campagnes) ─────────────────────────
+// Applicable sur une route, une classe, ou globale (routeId null).
+model Promotion {
+  id           String    @id @default(cuid())
+  tenantId     String
+  code         String    // Code promo (ex: "NOEL2026", "EARLYBIRD")
+  name         String    // Nom d'affichage
+  description  String?
+  // Type de réduction
+  discountType String    // PERCENTAGE | FIXED_AMOUNT
+  discountValue Float    // ex: 10 (= 10% ou 10 XAF selon le type)
+  // Limites
+  maxUses      Int?      // Nombre max d'utilisations (null = illimité)
+  usedCount    Int       @default(0)
+  maxPerUser   Int       @default(1) // Utilisation max par client
+  minAmount    Float?    // Montant minimum de commande requis
+  // Ciblage
+  routeId      String?   // Null = toutes routes
+  busType      String?   // Null = toutes classes
+  // Période de validité
+  validFrom    DateTime
+  validTo      DateTime
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([tenantId, validFrom, validTo])
+  @@map("promotions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 28 : FACTURATION
+// ─────────────────────────────────────────────────────────────
+
+// ── Factures émises (billets, colis, abonnements, corporate) ────────────────
+model Invoice {
+  id             String    @id @default(cuid())
+  tenantId       String
+  invoiceNumber  String    // Numéro séquentiel par tenant (ex: "INV-2026-00042")
+  // Client
+  customerName   String
+  customerEmail  String?
+  customerPhone  String?
+  customerId     String?   // userId si client enregistré
+  // Montants
+  subtotal       Float     // Total HT
+  taxRate        Float     @default(0) // TVA / taxe locale (fraction, ex: 0.18 = 18%)
+  taxAmount      Float     @default(0) // Montant taxe calculé
+  totalAmount    Float     // TTC
+  currency       String    @default("XAF")
+  // Références
+  entityType     String    // TICKET | PARCEL | SUBSCRIPTION | CORPORATE
+  entityId       String?   // ticketId, parcelId…
+  // Statut
+  status         String    @default("DRAFT")
+  // DRAFT | ISSUED | PAID | CANCELLED | REFUNDED
+  issuedAt       DateTime?
+  paidAt         DateTime?
+  dueDate        DateTime?
+  // Paiement
+  paymentMethod  String?   // CASH | MOBILE_MONEY | CARD
+  paymentRef     String?   // Référence externe paiement
+  // Metadata / lignes
+  lineItems      Json      @default("[]")
+  // [{ description, quantity, unitPrice, total }]
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, issuedAt])
+  @@index([tenantId, customerId])
+  @@map("invoices")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 29 : AFFICHAGE GARE — Quais & Annonces
+// ─────────────────────────────────────────────────────────────
+
+// ── Quais / Plateformes de gare ─────────────────────────────────────────────
+// Un quai est une zone physique d'embarquement dans une station.
+model Platform {
+  id         String   @id @default(cuid())
+  tenantId   String
+  stationId  String
+  name       String   // "Quai A", "Quai 1", "Zone VIP"
+  code       String   // "A", "1", "VIP" — identifiant court affiché
+  capacity   Int      @default(1) // Nombre de bus simultanés
+  status     String   @default("AVAILABLE")
+  // AVAILABLE | OCCUPIED | MAINTENANCE | CLOSED
+  // Bus actuellement affecté (null si libre)
+  currentTripId String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, stationId, code])
+  @@index([tenantId, stationId])
+  @@index([tenantId, status])
+  @@map("platforms")
+}
+
+// ── Annonces gare (sonores / visuelles) ──────────────────────────────────────
+// Messages diffusés sur les écrans et haut-parleurs d'une station.
+model Announcement {
+  id         String    @id @default(cuid())
+  tenantId   String
+  stationId  String?   // Null = diffusé sur toutes les stations du tenant
+  // Contenu
+  title      String
+  message    String
+  type       String    @default("INFO")
+  // INFO | DELAY | CANCELLATION | SECURITY | PROMO | CUSTOM
+  priority   Int       @default(0) // plus élevé = affiché en premier
+  // Diffusion
+  isActive   Boolean   @default(true)
+  startsAt   DateTime  @default(now())
+  endsAt     DateTime?
+  // Auteur
+  createdById String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  station Station? @relation(fields: [stationId], references: [id])
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, stationId, isActive])
+  @@map("announcements")
+}
+
+// ── Moyens de paiement par pays ──────────────────────────────────────────────
+// Table de référence : quels moyens de paiement sont disponibles par pays.
+// Le tenant hérite des méthodes de son `country` (ISO 3166-1 alpha-2).
+model PaymentMethodConfig {
+  id          String @id @default(cuid())
+  countryCode String // ISO 3166-1 alpha-2 (CG, SN, CD, CM, CI…)
+
+  // Identifiant interne du provider (mtn_momo, airtel_money, orange_money, wave, card_visa, card_mastercard…)
+  providerId  String
+  // Nom d'affichage
+  displayName String
+  // Type : MOBILE_MONEY | CARD | BANK_TRANSFER
+  type        String
+  // Logo URL (CDN/MinIO)
+  logoUrl     String?
+  // Indicatif téléphonique par défaut pour ce provider dans ce pays
+  phonePrefix String? // ex: "+242", "+243"
+  // Ordre d'affichage (plus petit = plus haut)
+  sortOrder   Int     @default(0)
+  // Actif ou non
+  enabled     Boolean @default(true)
+
+  @@unique([countryCode, providerId])
+  @@index([countryCode, enabled])
+  @@map("payment_method_configs")
 }

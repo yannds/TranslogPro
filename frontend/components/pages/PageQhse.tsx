@@ -206,7 +206,7 @@ function AccidentForm({
           <select required value={f.reportedByRole}
             onChange={e => patch({ reportedByRole: e.target.value })}
             className={inp} disabled={busy}>
-            {REPORTER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            {REPORTER_ROLES.map(r => <option key={r} value={r}>{t(`qhse.role_${r}`)}</option>)}
           </select>
         </div>
       </div>
@@ -239,7 +239,7 @@ function AccidentForm({
         </label>
         <input type="text" value={f.locationDesc}
           onChange={e => patch({ locationDesc: e.target.value })}
-          className={inp} disabled={busy} placeholder="PK 42, RN1 — Edéa" />
+          className={inp} disabled={busy} placeholder={t('qhse.locationPlaceholder')} />
       </div>
 
       <div className="space-y-1.5">
@@ -301,15 +301,15 @@ function SeverityForm({
           </label>
           <input type="text" required value={f.name}
             onChange={e => patch({ name: e.target.value })}
-            className={inp} disabled={busy} placeholder="Accident léger" />
+            className={inp} disabled={busy} placeholder={t('qhse.severityNamePlaceholder')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Code <span aria-hidden className="text-red-500">*</span>
+            {t('qhse.codeLabel')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="text" required value={f.code}
             onChange={e => patch({ code: e.target.value.toUpperCase() })}
-            className={inp} disabled={busy} placeholder="MINOR" />
+            className={inp} disabled={busy} placeholder={t('qhse.codePlaceholder')} />
         </div>
       </div>
 
@@ -395,7 +395,7 @@ function HospitalForm({
           </label>
           <input type="text" required value={f.name}
             onChange={e => patch({ name: e.target.value })}
-            className={inp} disabled={busy} placeholder="Hôpital Général de Yaoundé" />
+            className={inp} disabled={busy} placeholder={t('qhse.hospitalNamePlaceholder')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -403,7 +403,7 @@ function HospitalForm({
           </label>
           <input type="text" required value={f.city}
             onChange={e => patch({ city: e.target.value })}
-            className={inp} disabled={busy} placeholder="Yaoundé" />
+            className={inp} disabled={busy} placeholder={t('qhse.cityPlaceholder')} />
         </div>
       </div>
 
@@ -537,7 +537,7 @@ function ProcedureForm({
           </label>
           <input type="text" required value={f.name}
             onChange={e => setF(p => ({ ...p, name: e.target.value }))}
-            className={inp} disabled={busy} placeholder="Procédure accident grave" />
+            className={inp} disabled={busy} placeholder={t('qhse.procedureNamePlaceholder')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -545,7 +545,7 @@ function ProcedureForm({
           </label>
           <input type="text" required value={f.triggerCode}
             onChange={e => setF(p => ({ ...p, triggerCode: e.target.value.toUpperCase() }))}
-            className={inp} disabled={busy} placeholder="ACCIDENT_SERIOUS" />
+            className={inp} disabled={busy} placeholder={t('qhse.triggerCodePlaceholder')} />
         </div>
       </div>
 
@@ -588,11 +588,11 @@ function ProcedureForm({
                   <select value={s.responsible}
                     onChange={e => updateStep(idx, { responsible: e.target.value })}
                     className={inp} disabled={busy}>
-                    {STEP_RESPONSIBLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {STEP_RESPONSIBLES.map(r => <option key={r} value={r}>{t(`qhse.role_${r}`)}</option>)}
                   </select>
                 </div>
                 <button type="button" onClick={() => removeStep(idx)}
-                  aria-label={`Supprimer l'étape ${s.order}`}
+                  aria-label={`${t('qhse.removeStep')} ${s.order}`}
                   className="mt-1 p-1.5 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                   disabled={busy}>
                   <Trash2 className="w-3.5 h-3.5" aria-hidden />
@@ -654,7 +654,7 @@ function DisputeForm({
         <select required value={f.mode}
           onChange={e => patch({ mode: e.target.value })}
           className={inp} disabled={busy}>
-          {DISPUTE_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+          {DISPUTE_MODES.map(m => <option key={m} value={m}>{t(`qhse.mode_${m}`)}</option>)}
         </select>
       </div>
 
@@ -673,7 +673,7 @@ function DisputeForm({
           </label>
           <input type="text" value={f.insurerName}
             onChange={e => patch({ insurerName: e.target.value })}
-            className={inp} disabled={busy} placeholder="Activa Assurances" />
+            className={inp} disabled={busy} placeholder={t('qhse.insurerNamePlaceholder')} />
         </div>
       </div>
 
@@ -842,19 +842,19 @@ function AccidentDetailDialog({
               <p className="text-xs text-slate-500 italic">{t('qhse.noThirdParty')}</p>
             ) : (
               <ul className="space-y-2">
-                {detail.thirdParties.map(t => (
-                  <li key={t.id} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 text-sm">
+                {detail.thirdParties.map(party => (
+                  <li key={party.id} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 text-sm">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="default" size="sm">{t.type}</Badge>
-                      {t.name && <span className="font-medium">{t.name}</span>}
-                      {t.plateNumber && <span className="font-mono text-xs text-slate-500">{t.plateNumber}</span>}
+                      <Badge variant="default" size="sm">{party.type}</Badge>
+                      {party.name && <span className="font-medium">{party.name}</span>}
+                      {party.plateNumber && <span className="font-mono text-xs text-slate-500">{party.plateNumber}</span>}
                     </div>
-                    {(t.phone || t.insuranceRef || t.vehicleModel) && (
+                    {(party.phone || party.insuranceRef || party.vehicleModel) && (
                       <p className="text-xs text-slate-500 mt-1">
-                        {[t.phone, t.vehicleModel, t.insuranceRef && `Assurance: ${t.insuranceRef}`].filter(Boolean).join(' · ')}
+                        {[party.phone, party.vehicleModel, party.insuranceRef && `${t('qhse.insurance')}: ${party.insuranceRef}`].filter(Boolean).join(' · ')}
                       </p>
                     )}
-                    {t.notes && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.notes}</p>}
+                    {party.notes && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{party.notes}</p>}
                   </li>
                 ))}
               </ul>
@@ -862,20 +862,20 @@ function AccidentDetailDialog({
             <form onSubmit={submitThirdParty} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <select required value={tp.type} onChange={e => setTp({ ...tp, type: e.target.value })}
                 className={inp} disabled={busy}>
-                {THIRD_PARTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                {THIRD_PARTY_TYPES.map(tpt => <option key={tpt} value={tpt}>{t(`qhse.tpType_${tpt}`)}</option>)}
               </select>
               <input value={tp.name} onChange={e => setTp({ ...tp, name: e.target.value })}
-                className={inp} disabled={busy} placeholder="Nom" />
+                className={inp} disabled={busy} placeholder={t('common.name')} />
               <input value={tp.phone} onChange={e => setTp({ ...tp, phone: e.target.value })}
                 className={inp} disabled={busy} placeholder={t('common.phone')} />
               <input value={tp.plateNumber} onChange={e => setTp({ ...tp, plateNumber: e.target.value.toUpperCase() })}
-                className={inp} disabled={busy} placeholder="Immatriculation" />
+                className={inp} disabled={busy} placeholder={t('qhse.plateNumber')} />
               <input value={tp.vehicleModel} onChange={e => setTp({ ...tp, vehicleModel: e.target.value })}
-                className={inp} disabled={busy} placeholder="Modèle véhicule" />
+                className={inp} disabled={busy} placeholder={t('qhse.vehicleModel')} />
               <input value={tp.insuranceRef} onChange={e => setTp({ ...tp, insuranceRef: e.target.value })}
-                className={inp} disabled={busy} placeholder="Réf. assurance" />
+                className={inp} disabled={busy} placeholder={t('qhse.insuranceRef')} />
               <input value={tp.notes} onChange={e => setTp({ ...tp, notes: e.target.value })}
-                className={cn(inp, 'sm:col-span-2')} disabled={busy} placeholder="Notes" />
+                className={cn(inp, 'sm:col-span-2')} disabled={busy} placeholder={t('common.notes')} />
               <Button type="submit" size="sm" disabled={busy} loading={busy}>
                 <Plus className="w-3.5 h-3.5 mr-1" aria-hidden /> {t('qhse.addThirdParty')}
               </Button>
@@ -916,13 +916,13 @@ function AccidentDetailDialog({
             <form onSubmit={submitInjury} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <select required value={inj.personType} onChange={e => setInj({ ...inj, personType: e.target.value })}
                 className={inp} disabled={busy}>
-                {INJURY_PERSON_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                {INJURY_PERSON_TYPES.map(ipt => <option key={ipt} value={ipt}>{t(`qhse.personType_${ipt}`)}</option>)}
               </select>
               <input value={inj.personName} onChange={e => setInj({ ...inj, personName: e.target.value })}
-                className={inp} disabled={busy} placeholder="Nom" />
+                className={inp} disabled={busy} placeholder={t('common.name')} />
               <select required value={inj.severity} onChange={e => setInj({ ...inj, severity: e.target.value })}
                 className={inp} disabled={busy}>
-                {INJURY_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+                {INJURY_SEVERITIES.map(s => <option key={s} value={s}>{t(`qhse.injSeverity_${s}`)}</option>)}
               </select>
               <select value={inj.hospitalId} onChange={e => setInj({ ...inj, hospitalId: e.target.value })}
                 className={inp} disabled={busy}>
@@ -962,7 +962,7 @@ function AccidentDetailDialog({
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500 tabular-nums">{done}/{sortedSteps.length}</span>
                           <Badge variant={exec.status === 'COMPLETED' ? 'success' : exec.status === 'ABORTED' ? 'danger' : 'warning'} size="sm">
-                            {exec.status}
+                            {t(`qhse.execStatus_${exec.status}`)}
                           </Badge>
                         </div>
                       </div>
@@ -1272,7 +1272,7 @@ export function PageQhse() {
       csvValue: (v) => new Date(v as string).toLocaleString('fr-FR'),
     },
     {
-      key: 'busId', header: 'Bus',
+      key: 'busId', header: t('qhse.bus'),
       cellRenderer: (v) => (
         <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {busPlate(v as string | null)}
@@ -1404,7 +1404,7 @@ export function PageQhse() {
 
   const disputeColumns: Column<AccidentRow>[] = useMemo(() => [
     {
-      key: 'occurredAt', header: 'Date', sortable: true,
+      key: 'occurredAt', header: t('common.date'), sortable: true,
       cellRenderer: (v) => (
         <span className="text-sm text-slate-700 dark:text-slate-300 tabular-nums">
           {new Date(v as string).toLocaleDateString('fr-FR')}
@@ -1412,7 +1412,7 @@ export function PageQhse() {
       ),
     },
     {
-      key: 'busId', header: 'Bus',
+      key: 'busId', header: t('qhse.bus'),
       cellRenderer: (v) => <span className="text-sm">{busPlate(v as string | null)}</span>,
     },
     {
@@ -1485,24 +1485,24 @@ export function PageQhse() {
       csvValue: (_v, row) => row.name,
     },
     {
-      key: 'code', header: 'Code', sortable: true,
+      key: 'code', header: t('qhse.codeLabel'), sortable: true,
       cellRenderer: (v) => (
         <span className="text-xs font-mono text-slate-500">{v as string}</span>
       ),
     },
     {
       key: 'requiresQhse', header: 'QHSE',
-      cellRenderer: (v) => v ? <Badge variant="warning" size="sm">QHSE</Badge> : <span className="text-slate-300">—</span>,
+      cellRenderer: (v) => v ? <Badge variant="warning" size="sm">{t('qhse.qhseLabel')}</Badge> : <span className="text-slate-300">—</span>,
       csvValue: (v) => (v ? 'oui' : ''),
     },
     {
-      key: 'requiresPolice', header: 'Police',
-      cellRenderer: (v) => v ? <Badge variant="danger" size="sm">Police</Badge> : <span className="text-slate-300">—</span>,
+      key: 'requiresPolice', header: t('qhse.police'),
+      cellRenderer: (v) => v ? <Badge variant="danger" size="sm">{t('qhse.police')}</Badge> : <span className="text-slate-300">—</span>,
       csvValue: (v) => (v ? 'oui' : ''),
     },
     {
       key: 'requiresInsurer', header: t('qhse.insurance'),
-      cellRenderer: (v) => v ? <Badge variant="info" size="sm">Assureur</Badge> : <span className="text-slate-300">—</span>,
+      cellRenderer: (v) => v ? <Badge variant="info" size="sm">{t('qhse.insurer')}</Badge> : <span className="text-slate-300">—</span>,
       csvValue: (v) => (v ? 'oui' : ''),
     },
   ];
@@ -1586,7 +1586,7 @@ export function PageQhse() {
       </section>
 
       {/* ── Tabs ── */}
-      <nav aria-label="Sections QHSE" role="tablist">
+      <nav aria-label={t('qhse.sectionsQhse')} role="tablist">
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
           {tabs.map(tb => (
             <button
@@ -1675,7 +1675,7 @@ export function PageQhse() {
           <div className="flex justify-end">
             <Button size="sm"
               onClick={() => { setActionErr(null); setShowProcedure(true); }}
-              aria-label="Créer une nouvelle procédure QHSE">
+              aria-label={t('qhse.createProcTitle')}>
               <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('qhse.procedure')}
             </Button>
           </div>
@@ -1706,8 +1706,8 @@ export function PageQhse() {
                 {t('qhse.severityTypes')}
               </h2>
               <Button size="sm" onClick={() => { setActionErr(null); setShowSeverity(true); }}
-                aria-label="Ajouter un type de sévérité">
-                <Plus className="w-4 h-4 mr-1" aria-hidden /> Type
+                aria-label={t('qhse.addSeverityTitle')}>
+                <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('qhse.typeLabel')}
               </Button>
             </div>
             <DataTableMaster<SeverityType>
@@ -1732,8 +1732,8 @@ export function PageQhse() {
                 {t('qhse.referencedHospitals')}
               </h2>
               <Button size="sm" onClick={() => { setActionErr(null); setShowHospital(true); }}
-                aria-label="Ajouter un hôpital">
-                <Plus className="w-4 h-4 mr-1" aria-hidden /> Hôpital
+                aria-label={t('qhse.addHospitalTitle')}>
+                <Plus className="w-4 h-4 mr-1" aria-hidden /> {t('qhse.hospital')}
               </Button>
             </div>
             <DataTableMaster<Hospital>

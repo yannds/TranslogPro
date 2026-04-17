@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, Headers } from '@nestjs/common';
 import { ParcelService } from './parcel.service';
 import { CreateParcelDto } from './dto/create-parcel.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
@@ -21,6 +21,19 @@ export class ParcelController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.parcelService.register(tenantId, dto, actor);
+  }
+
+  /** Transition générique — action passée dans le body */
+  @Post(':id/transition')
+  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
+  transition(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('action') action: string,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.parcelService.transition(tenantId, id, action, actor, idempotencyKey);
   }
 
   /** Scan chargement/déchargement — agent de quai */
@@ -49,10 +62,18 @@ export class ParcelController {
     return this.parcelService.reportDamage(tenantId, id, description, actor);
   }
 
+  /** Liste tous les colis du tenant — filtrable par status */
+  @Get()
+  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
+  findAll(
+    @TenantId() tenantId: string,
+    @Query('status') status?: string,
+  ) {
+    return this.parcelService.findAll(tenantId, status ? { status } : undefined);
+  }
+
   /**
    * "Mes colis" — colis expédiés par le CUSTOMER courant (filtré senderId).
-   * Permission .own : tout client connecté peut consulter ses propres colis.
-   * Le filtre est forcé côté service ; aucun query param ne l'override.
    */
   @Get('my')
   @RequirePermission(Permission.PARCEL_READ_OWN)
@@ -63,15 +84,15 @@ export class ParcelController {
     return this.parcelService.findMine(tenantId, actor.id);
   }
 
-  @Get(':id')
-  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
-  findOne(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.parcelService.findOne(tenantId, id);
-  }
-
   /** Public tracking — path param tenantId, RlsMiddleware autorisé */
   @Get('track/:code')
   track(@Param('tenantId') tenantId: string, @Param('code') code: string) {
     return this.parcelService.trackByCode(tenantId, code);
+  }
+
+  @Get(':id')
+  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
+  findOne(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.parcelService.findOne(tenantId, id);
   }
 }

@@ -40,6 +40,18 @@ interface LicenseAlert {
   daysUntilExpiry: number;
 }
 
+interface LicenseRow {
+  id:           string;
+  staffId:      string;
+  category:     string;
+  licenseNo:    string;
+  issuedAt:     string;
+  expiresAt:    string;
+  issuingState?: string | null;
+  status:       string;
+  staff:        { user: { email: string; name?: string | null } };
+}
+
 interface DriverSummary {
   id:     string;
   userId: string;
@@ -473,7 +485,7 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
         <DocumentAttachments
           tenantId={tenantId}
           entityType="STAFF"
-          entityId={driver.userId}
+          entityId={driver.id}
           allowedKinds={['CONTRACT', 'ID_CARD', 'LICENSE', 'CERTIFICATE', 'PHOTO', 'OTHER']}
         />
       </section>
@@ -508,7 +520,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
   }
 
   const handleDeleteLicense = (id: string) =>
-    confirmAndRun(t('driverProfile.confirmDeleteLicense'), () => apiDelete(`${base}/driver-profile/licenses/${id}`), refetchLic);
+    confirmAndRun(t('driverProfile.confirmDeleteLicense'), () => apiDelete(`${base}/driver-profile/licenses/${id}`), () => { refetchLic(); refetchAllLic(); });
 
   const handleDeleteTraining = (id: string) =>
     confirmAndRun(t('driverProfile.confirmDeleteTraining'), () => apiDelete(`${base}/driver-profile/trainings/${id}`), refetchTrainings);
@@ -527,6 +539,10 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
   const base = `/api/tenants/${tenantId}`;
 
   const { data: drivers,     loading: loadingDrivers }    = useFetch<DriverSummary[]>(`${base}/staff?role=DRIVER`, [tenantId]);
+  const { data: allLicenses, loading: loadingAllLic, refetch: refetchAllLic } = useFetch<LicenseRow[]>(
+    tab === 'licenses' ? `${base}/driver-profile/licenses` : null,
+    [tenantId, tab],
+  );
   const { data: licAlerts,   loading: loadingLic, refetch: refetchLic } = useFetch<LicenseAlert[]>(`${base}/driver-profile/licenses/alerts`, [tenantId]);
   const { data: overdueTrainings, loading: loadingTrainings, refetch: refetchTrainings } = useFetch<OverdueTraining[]>(`${base}/driver-profile/trainings/overdue`, [tenantId]);
   const { data: trainingTypes } = useFetch<TrainingType[]>(`${base}/driver-profile/training-types`, [tenantId]);
@@ -702,11 +718,36 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
 
       {/* ── Permis ── */}
       {tab === 'licenses' && (
-        <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses">
+        <section id="tabpanel-driver-licenses" role="tabpanel" aria-labelledby="tab-driver-licenses" className="space-y-6">
+          {/* Alertes (expirant / expirés) */}
+          {licAlerts && licAlerts.length > 0 && (
+            <Card>
+              <CardHeader
+                heading={t('driverProfile.alertLicenses')}
+                description={t('driverProfile.alertLicensesDesc')}
+              />
+              <CardContent className="p-0">
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
+                  {licAlerts.map(a => (
+                    <li key={a.id} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{a.staffName}</p>
+                        <p className="text-xs text-slate-500 font-mono">{a.licenseNo} · Cat. {a.category}</p>
+                      </div>
+                      <Badge variant={a.daysUntilExpiry <= 0 ? 'danger' : 'warning'} size="sm">
+                        {a.daysUntilExpiry <= 0 ? t('driverProfile.expired') : `J-${a.daysUntilExpiry}`}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Liste complète des permis */}
           <Card>
             <CardHeader
-              heading={t('driverProfile.alertLicenses')}
-              description={t('driverProfile.alertLicensesDesc')}
+              heading={t('driverProfile.allLicenses')}
               action={
                 <Button
                   size="sm"
@@ -718,44 +759,43 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
               }
             />
             <CardContent className="p-0">
-              {loadingLic ? (
+              {loadingAllLic ? (
                 <div className="p-6 space-y-3" aria-busy="true">
                   {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : !licAlerts || licAlerts.length === 0 ? (
+              ) : !allLicenses || allLicenses.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 dark:text-slate-400" role="status">
-                  <Shield className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden />
-                  <p className="font-medium">{t('driverProfile.noLicenseAlert')}</p>
+                  <Shield className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" aria-hidden />
+                  <p className="font-medium">{t('driverProfile.noLicense')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
-                  {licAlerts.map(a => (
-                    <li key={a.id} className="flex items-center justify-between px-6 py-3">
+                  {allLicenses.map(lic => (
+                    <li key={lic.id} className="flex items-center justify-between px-6 py-3">
                       <div>
-                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{a.staffName}</p>
-                        <p className="text-xs text-slate-500 font-mono">{a.licenseNo} · Cat. {a.category}</p>
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
+                          {lic.staff.user.name ?? lic.staff.user.email}
+                        </p>
+                        <p className="text-xs text-slate-500 font-mono">
+                          {lic.licenseNo} · Cat. {lic.category}
+                          {lic.issuingState ? ` · ${lic.issuingState}` : ''}
+                        </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs tabular-nums text-slate-500">
-                          {a.expiresAt ? new Date(a.expiresAt).toLocaleDateString('fr-FR') : '—'}
+                          {lic.expiresAt ? new Date(lic.expiresAt).toLocaleDateString('fr-FR') : '—'}
                         </span>
-                        <Badge variant={a.daysUntilExpiry <= 0 ? 'danger' : 'warning'} size="sm">
-                          {a.daysUntilExpiry <= 0 ? t('driverProfile.expired') : `J-${a.daysUntilExpiry}`}
+                        <Badge
+                          variant={lic.status === 'EXPIRED' ? 'danger' : lic.status === 'EXPIRING' ? 'warning' : 'success'}
+                          size="sm"
+                        >
+                          {lic.status}
                         </Badge>
                         <button
                           type="button"
-                          onClick={() => { setEditingLicense(a); setActionError(null); }}
-                          className="p-1.5 rounded text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                          aria-label={`${t('common.edit')} — ${a.staffName}`}
-                          title={t('common.edit')}
-                        >
-                          <Pencil className="w-4 h-4" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLicense(a.id)}
+                          onClick={() => handleDeleteLicense(lic.id)}
                           className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          aria-label={`${t('common.delete')} — ${a.staffName}`}
+                          aria-label={`${t('common.delete')} — ${lic.staff.user.name ?? lic.staff.user.email}`}
                           title={t('common.delete')}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden />
@@ -959,6 +999,7 @@ export function PageDriverProfile({ initialTab = 'overview' }: PageDriverProfile
                 setShowLicenseForm(false);
                 setEditingLicense(null);
                 refetchLic();
+                refetchAllLic();
               } catch (e) {
                 setActionError(e instanceof Error ? e.message : t('driverProfile.unknownError'));
               } finally { setBusy(false); }

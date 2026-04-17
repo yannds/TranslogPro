@@ -9,10 +9,18 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
   <!--
-    TranslogPro est 100 % dark. Applique la classe 'dark' sur <html>
-    AVANT le premier paint React (zéro flash blanc).
+    Theme: lire localStorage, sinon dark pour l'admin, light pour le portail public.
+    Le portail public (/p/*) s'affiche en light par défaut.
   -->
-  <script>document.documentElement.classList.add('dark');</script>
+  <script>
+    (function(){
+      var t = localStorage.getItem('translog-theme');
+      if (t === 'light') { document.documentElement.classList.add('light'); }
+      else if (t === 'dark') { document.documentElement.classList.add('dark'); }
+      else if (location.pathname.startsWith('/p/')) { document.documentElement.classList.add('light'); }
+      else { document.documentElement.classList.add('dark'); }
+    })();
+  </script>
 </head>
 <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50">
   <div id="root"></div>

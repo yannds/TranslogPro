@@ -66,9 +66,7 @@ export class ProfitabilityService {
   }
 
   async getCostProfile(tenantId: string, busId: string) {
-    const profile = await this.prisma.busCostProfile.findFirst({ where: { busId, tenantId } });
-    if (!profile) throw new NotFoundException(`Aucun profil de coût pour le bus ${busId}`);
-    return profile;
+    return this.prisma.busCostProfile.findFirst({ where: { busId, tenantId } });
   }
 
   // ── Calcul de rentabilité ──────────────────────────────────────────────────

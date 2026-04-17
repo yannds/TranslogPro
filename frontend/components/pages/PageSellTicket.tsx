@@ -176,7 +176,7 @@ export function PageSellTicket() {
       // Default boarding = origin
       if (r.origin) setBoardingStationId(r.origin.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('sellTicket LIamAudit.errorLoadRoute'));
+      setError(err instanceof Error ? err.message : t('sellTicket.errorLoadRoute'));
     } finally {
       setLoadingRoute(false);
     }
@@ -208,7 +208,7 @@ export function PageSellTicket() {
         setEditablePrice(String(result.pricing.total));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('sellTicket LIamAudit.errorCalc'));
+      setError(err instanceof Error ? err.message : t('sellTicket.errorCalc'));
     } finally {
       setLoadingPrice(false);
     }
@@ -226,7 +226,7 @@ export function PageSellTicket() {
         price: Number(editablePrice),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('sellTicket LIamAudit.errorSaveFare'));
+      setError(err instanceof Error ? err.message : t('sellTicket.errorSaveFare'));
     } finally {
       setSavingPrice(false);
     }
@@ -240,7 +240,7 @@ export function PageSellTicket() {
       await apiPost(`/api/tenants/${tenantId}/tickets/${pricingResult.ticket.id}/confirm`);
       setConfirmed(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('sellTicket LIamAudit.errorConfirm'));
+      setError(err instanceof Error ? err.message : t('sellTicket.errorConfirm'));
     } finally {
       setConfirming(false);
     }
@@ -277,10 +277,10 @@ export function PageSellTicket() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50">
-            {t('sellTicket LIamAudit.pageTitle')}
+            {t('sellTicket.pageTitle')}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {t('sellTicket LIamAudit.pageDesc')}
+            {t('sellTicket.pageDesc')}
           </p>
         </div>
       </div>
@@ -293,7 +293,7 @@ export function PageSellTicket() {
           <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
             <CheckCircle2 className="w-14 h-14 text-green-500" />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-              {t('sellTicket LIamAudit.ticketConfirmed')}
+              {t('sellTicket.ticketConfirmed')}
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {pricingResult.pricing.segmentLabel} — {passengerName}
@@ -303,10 +303,10 @@ export function PageSellTicket() {
             </p>
             <div className="flex gap-3 mt-2">
               <Button variant="outline" leftIcon={<Printer className="w-4 h-4" />}>
-                {t('sellTicket LIamAudit.print')}
+                {t('sellTicket.print')}
               </Button>
               <Button onClick={handleReset}>
-                {t('sellTicket LIamAudit.newTicket')}
+                {t('sellTicket.newTicket')}
               </Button>
             </div>
           </CardContent>
@@ -320,11 +320,11 @@ export function PageSellTicket() {
           <div className="lg:col-span-3 space-y-5">
             {/* Trip selector */}
             <Card>
-              <CardHeader heading={t('sellTicket LIamAudit.tripSection')} />
+              <CardHeader heading={t('sellTicket.tripSection')} />
               <CardContent className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    {t('sellTicket LIamAudit.selectTrip')}
+                    {t('sellTicket.selectTrip')}
                   </label>
                   <select
                     className={inputClass}
@@ -333,7 +333,7 @@ export function PageSellTicket() {
                     disabled={loadingTrips}
                   >
                     <option value="">
-                      {loadingTrips ? t('sellTicket LIamAudit.loadingTrips') : t('sellTicket LIamAudit.chooseTrip')}
+                      {loadingTrips ? t('sellTicket.loadingTrips') : t('sellTicket.chooseTrip')}
                     </option>
                     {trips?.map(trip => (
                       <option key={trip.id} value={trip.id}>
@@ -348,7 +348,7 @@ export function PageSellTicket() {
                 </div>
                 {loadingRoute && (
                   <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Loader2 className="w-4 h-4 animate-spin" /> {t('sellTicket LIamAudit.loadingRoute')}
+                    <Loader2 className="w-4 h-4 animate-spin" /> {t('sellTicket.loadingRoute')}
                   </div>
                 )}
               </CardContent>
@@ -357,28 +357,28 @@ export function PageSellTicket() {
             {/* Passenger + options */}
             {route && (
               <Card>
-                <CardHeader heading={t('sellTicket LIamAudit.passengerSection')} />
+                <CardHeader heading={t('sellTicket.passengerSection')} />
                 <CardContent className="space-y-4">
                   {/* Name + Phone */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.passengerName')}
+                        {t('sellTicket.passengerName')}
                       </label>
                       <input
                         className={inputClass}
-                        placeholder={t('sellTicket LIamAudit.namePlaceholder')}
+                        placeholder={t('sellTicket.namePlaceholder')}
                         value={passengerName}
                         onChange={e => setPassengerName(e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.phone')}
+                        {t('sellTicket.phone')}
                       </label>
                       <input
                         className={inputClass}
-                        placeholder="+237 6XX XXX XXX"
+                        placeholder={t('sellTicket.phonePlaceholder')}
                         value={passengerPhone}
                         onChange={e => setPassengerPhone(e.target.value)}
                       />
@@ -388,7 +388,7 @@ export function PageSellTicket() {
                   {/* Fare class */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      {t('sellTicket LIamAudit.fareClass')}
+                      {t('sellTicket.fareClass')}
                     </label>
                     <select
                       className={inputClass}
@@ -405,7 +405,7 @@ export function PageSellTicket() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.boardingStation')}
+                        {t('sellTicket.boardingStation')}
                       </label>
                       <select
                         className={inputClass}
@@ -423,7 +423,7 @@ export function PageSellTicket() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.alightingStation')}
+                        {t('sellTicket.alightingStation')}
                       </label>
                       <select
                         className={inputClass}
@@ -433,7 +433,7 @@ export function PageSellTicket() {
                           setPricingResult(null);
                         }}
                       >
-                        <option value="">{t('sellTicket LIamAudit.selectStation')}</option>
+                        <option value="">{t('sellTicket.selectStation')}</option>
                         {alightingOptions.map(s => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
@@ -445,36 +445,36 @@ export function PageSellTicket() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.seatNumber')}
+                        {t('sellTicket.seatNumber')}
                       </label>
                       <input
                         className={inputClass}
-                        placeholder="ex: 12A"
+                        placeholder={t('sellTicket.seatPlaceholder')}
                         value={seatNumber}
                         onChange={e => setSeatNumber(e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.luggageKg')}
+                        {t('sellTicket.luggageKg')}
                       </label>
                       <input
                         className={inputClass}
                         type="number"
                         min="0"
                         step="0.5"
-                        placeholder="0"
+                        placeholder={t('sellTicket.luggagePlaceholder')}
                         value={luggageKg}
                         onChange={e => setLuggageKg(e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        {t('sellTicket LIamAudit.promoCode')}
+                        {t('sellTicket.promoCode')}
                       </label>
                       <input
                         className={inputClass}
-                        placeholder="ex: PROMO20"
+                        placeholder={t('sellTicket.promoPlaceholder')}
                         value={discountCode}
                         onChange={e => setDiscountCode(e.target.value)}
                       />
@@ -484,17 +484,17 @@ export function PageSellTicket() {
                   {/* Payment method */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      {t('sellTicket LIamAudit.paymentMethod')}
+                      {t('sellTicket.paymentMethod')}
                     </label>
                     <select
                       className={inputClass}
                       value={paymentMethod}
                       onChange={e => setPaymentMethod(e.target.value)}
                     >
-                      <option value="">{t('sellTicket LIamAudit.payDefault')}</option>
-                      <option value="CASH">{t('sellTicket LIamAudit.payCash')}</option>
-                      <option value="MOBILE_MONEY">{t('sellTicket LIamAudit.payMobile')}</option>
-                      <option value="CARD">{t('sellTicket LIamAudit.payCard')}</option>
+                      <option value="">{t('sellTicket.payDefault')}</option>
+                      <option value="CASH">{t('sellTicket.payCash')}</option>
+                      <option value="MOBILE_MONEY">{t('sellTicket.payMobile')}</option>
+                      <option value="CARD">{t('sellTicket.payCard')}</option>
                     </select>
                   </div>
 
@@ -506,7 +506,7 @@ export function PageSellTicket() {
                       loading={loadingPrice}
                       leftIcon={<Calculator className="w-4 h-4" />}
                     >
-                      {t('sellTicket LIamAudit.calculatePrice')}
+                      {t('sellTicket.calculatePrice')}
                     </Button>
                   </div>
                 </CardContent>
@@ -520,9 +520,9 @@ export function PageSellTicket() {
               <Card>
                 <CardContent className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">
                   <Ticket className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  {t('sellTicket LIamAudit.fillFormHint')}
+                  {t('sellTicket.fillFormHint')}
                   <br />
-                  <span className="font-medium">"{t('sellTicket LIamAudit.calculatePrice')}"</span>
+                  <span className="font-medium">"{t('sellTicket.calculatePrice')}"</span>
                 </CardContent>
               </Card>
             )}
@@ -531,7 +531,7 @@ export function PageSellTicket() {
               <Card>
                 <CardContent className="py-12 flex flex-col items-center gap-3 text-sm text-slate-500">
                   <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
-                  {t('sellTicket LIamAudit.calculating')}
+                  {t('sellTicket.calculating')}
                 </CardContent>
               </Card>
             )}
@@ -544,7 +544,7 @@ export function PageSellTicket() {
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                       <div className="text-sm text-amber-800 dark:text-amber-300">
-                        <p className="font-semibold">{t('sellTicket LIamAudit.autoPrice')}</p>
+                        <p className="font-semibold">{t('sellTicket.autoPrice')}</p>
                         {pricingResult.pricing.warnings.map((w, i) => (
                           <p key={i} className="mt-1">{w}</p>
                         ))}
@@ -552,7 +552,7 @@ export function PageSellTicket() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">
-                        {t('sellTicket LIamAudit.correctedPrice')}
+                        {t('sellTicket.correctedPrice')}
                       </label>
                       <input
                         className={inputClass}
@@ -570,7 +570,7 @@ export function PageSellTicket() {
                       loading={savingPrice}
                       disabled={savingPrice}
                     >
-                      {t('sellTicket LIamAudit.validateFare')}
+                      {t('sellTicket.validateFare')}
                     </Button>
                   </div>
                 )}
@@ -582,36 +582,36 @@ export function PageSellTicket() {
                     : 'border-green-300 dark:border-green-700'
                 }>
                   <CardHeader
-                    heading={t('sellTicket LIamAudit.priceSummary')}
+                    heading={t('sellTicket.priceSummary')}
                     description={pricingResult.pricing.segmentLabel}
                   />
                   <CardContent className="space-y-3">
-                    <PriceLine label={t('sellTicket LIamAudit.basePrice')} amount={pricingResult.pricing.basePrice} currency={pricingResult.pricing.currency} />
+                    <PriceLine label={t('sellTicket.basePrice')} amount={pricingResult.pricing.basePrice} currency={pricingResult.pricing.currency} />
                     {pricingResult.pricing.taxes > 0 && (
-                      <PriceLine label={t('sellTicket LIamAudit.taxes')} amount={pricingResult.pricing.taxes} currency={pricingResult.pricing.currency} />
+                      <PriceLine label={t('sellTicket.taxes')} amount={pricingResult.pricing.taxes} currency={pricingResult.pricing.currency} />
                     )}
                     {pricingResult.pricing.tolls > 0 && (
-                      <PriceLine label={t('sellTicket LIamAudit.tolls')} amount={pricingResult.pricing.tolls} currency={pricingResult.pricing.currency} />
+                      <PriceLine label={t('sellTicket.tolls')} amount={pricingResult.pricing.tolls} currency={pricingResult.pricing.currency} />
                     )}
                     {pricingResult.pricing.luggageFee > 0 && (
-                      <PriceLine label={t('sellTicket LIamAudit.luggageSurcharge')} amount={pricingResult.pricing.luggageFee} currency={pricingResult.pricing.currency} />
+                      <PriceLine label={t('sellTicket.luggageSurcharge')} amount={pricingResult.pricing.luggageFee} currency={pricingResult.pricing.currency} />
                     )}
                     {pricingResult.pricing.yieldSurplus > 0 && (
-                      <PriceLine label={t('sellTicket LIamAudit.yieldSurplus')} amount={pricingResult.pricing.yieldSurplus} currency={pricingResult.pricing.currency} />
+                      <PriceLine label={t('sellTicket.yieldSurplus')} amount={pricingResult.pricing.yieldSurplus} currency={pricingResult.pricing.currency} />
                     )}
                     {pricingResult.pricing.discount > 0 && (
-                      <PriceLine label={t('sellTicket LIamAudit.discount')} amount={-pricingResult.pricing.discount} currency={pricingResult.pricing.currency} discount />
+                      <PriceLine label={t('sellTicket.discount')} amount={-pricingResult.pricing.discount} currency={pricingResult.pricing.currency} discount />
                     )}
 
                     <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between items-baseline">
-                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t('sellTicket LIamAudit.total')}</span>
+                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t('sellTicket.total')}</span>
                       <span className="text-xl font-bold text-slate-900 dark:text-slate-50">
                         {formatCurrency(pricingResult.pricing.total, pricingResult.pricing.currency)}
                       </span>
                     </div>
 
                     <p className="text-xs text-slate-400 dark:text-slate-500">
-                      {t('sellTicket LIamAudit.classLabel')} : {pricingResult.pricing.fareClass}
+                      {t('sellTicket.classLabel')} : {pricingResult.pricing.fareClass}
                     </p>
                   </CardContent>
                 </Card>
@@ -625,7 +625,7 @@ export function PageSellTicket() {
                   disabled={confirming}
                   leftIcon={<Printer className="w-5 h-5" />}
                 >
-                  {t('sellTicket LIamAudit.confirmAndPrint')}
+                  {t('sellTicket.confirmAndPrint')}
                 </Button>
               </>
             )}

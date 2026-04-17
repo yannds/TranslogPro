@@ -33,6 +33,18 @@ export class TicketingController {
     return this.ticketingService.validate(tenantId, qrToken, actor);
   }
 
+  /** Confirmer le paiement d'un billet → signe le QR et passe en CONFIRMED */
+  @Post(':id/confirm')
+  @RequirePermission(Permission.TICKET_CREATE_AGENCY)
+  confirm(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.ticketingService.confirm(tenantId, id, actor, idempotencyKey);
+  }
+
   @Post(':id/cancel')
   @RequirePermission(Permission.TICKET_CANCEL_AGENCY)
   cancel(
@@ -50,8 +62,9 @@ export class TicketingController {
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
     @Query('tripId') tripId?: string,
+    @Query('status') status?: string,
   ) {
-    return this.ticketingService.findMany(tenantId, tripId);
+    return this.ticketingService.findMany(tenantId, tripId, status ? { status } : undefined);
   }
 
   /**

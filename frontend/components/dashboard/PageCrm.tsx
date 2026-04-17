@@ -62,11 +62,11 @@ interface EditForm {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function tierFromScore(score: number): { label: string; variant: 'default' | 'success' | 'warning' | 'info' } {
-  if (score >= 4000) return { label: 'Platinum', variant: 'info'    };
-  if (score >= 2000) return { label: 'Gold',     variant: 'warning' };
-  if (score >= 500)  return { label: 'Silver',   variant: 'default' };
-  return { label: 'Bronze', variant: 'default' };
+function tierFromScore(score: number, t: (k: string) => string): { label: string; variant: 'default' | 'success' | 'warning' | 'info' } {
+  if (score >= 4000) return { label: t('crmPage.tierPlatinum'), variant: 'info'    };
+  if (score >= 2000) return { label: t('crmPage.tierGold'),     variant: 'warning' };
+  if (score >= 500)  return { label: t('crmPage.tierSilver'),   variant: 'default' };
+  return { label: t('crmPage.tierBronze'), variant: 'default' };
 }
 
 function getPhone(prefs: Record<string, unknown> | null): string {
@@ -113,7 +113,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
       sortable: true,
       width: '140px',
       cellRenderer: (v) => {
-        const tier = tierFromScore(Number(v));
+        const tier = tierFromScore(Number(v), t);
         return (
           <div className="flex items-center gap-2">
             <Badge variant={tier.variant}>
@@ -159,11 +159,11 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
       <div className="space-y-3">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Email <span aria-hidden className="text-red-500">*</span>
+            {t('common.email')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <input type="email" required value={f.email}
             onChange={e => set('email', e.target.value)}
-            className={inp} disabled={busy} placeholder="voyageur@example.com"
+            className={inp} disabled={busy} placeholder={t('crmPage.emailPlaceholder')}
             autoComplete="email" />
         </div>
         <div className="space-y-1.5">
@@ -172,14 +172,14 @@ function CreateCustomerForm({ onSubmit, onCancel, busy, error }: {
           </label>
           <input type="text" required value={f.name}
             onChange={e => set('name', e.target.value)}
-            className={inp} disabled={busy} placeholder="Jean Dupont"
+            className={inp} disabled={busy} placeholder={t('crmPage.namePlaceholder')}
             autoComplete="name" />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('crmPage.colPhone')}</label>
           <input type="tel" value={f.phone}
             onChange={e => set('phone', e.target.value)}
-            className={inp} disabled={busy} placeholder="+242 06 123 4567"
+            className={inp} disabled={busy} placeholder={t('crmPage.phonePlaceholder')}
             autoComplete="tel" />
         </div>
       </div>
@@ -233,7 +233,7 @@ function EditCustomerForm({ customer, tenantId, onSubmit, onCancel, busy, error,
             className={inp} disabled={busy} />
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p>Email : <span className="font-mono">{customer.email}</span></p>
+          <p>{t('common.email')} : <span className="font-mono">{customer.email}</span></p>
           <p>{t('crmPage.registered')} : {new Date(customer.createdAt).toLocaleDateString('fr-FR')}</p>
         </div>
 
@@ -269,7 +269,7 @@ function CrmKpis({ customers, t }: { customers: CustomerRow[]; t: (k: string | R
   const items = [
     { label: t('crmPage.customers'),        value: total.toLocaleString('fr-FR'),      sub: t('crmPage.total'),         color: 'teal' },
     { label: t('crmPage.newThisMonth'),    value: newMonth.toLocaleString('fr-FR'),   sub: t('crmPage.registrations'), color: 'emerald' },
-    { label: t('crmPage.platinumCust'),    value: platinum.toLocaleString('fr-FR'),   sub: '≥ 4 000 pts',      color: 'amber' },
+    { label: t('crmPage.platinumCust'),    value: platinum.toLocaleString('fr-FR'),   sub: t('crmPage.ptsThreshold'),      color: 'amber' },
     { label: t('crmPage.avgScore'),        value: avgScore.toFixed(0),                sub: t('crmPage.loyalty'),       color: 'blue' },
   ] as const;
 

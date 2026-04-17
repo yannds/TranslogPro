@@ -186,7 +186,7 @@ function exportToPdf<T>(columns: Column<T>[], data: T[], title: string) {
     </style></head><body>
     <h2>${escHtml(title)}</h2>
     <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-    <br><button onclick="window.print()">Print / Save as PDF</button>
+    <br><button onclick="window.print()">PDF</button>
     <script>setTimeout(function(){ window.print(); }, 400);</script>
     </body></html>`;
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -562,7 +562,7 @@ function DataTableMaster<T extends { id: string }>({
                     })}
                     {hasRowActions && (
                       <td className="dtm-td dtm-td-actions" onClick={e => e.stopPropagation()}>
-                        <div className="dtm-actions-group" role="group" aria-label="Actions">
+                        <div className="dtm-actions-group" role="group" aria-label={t('dataTable.actions')}>
                           {rowActions!
                             .filter(a => !a.hidden?.(row))
                             .map((action, i) => (
@@ -590,7 +590,7 @@ function DataTableMaster<T extends { id: string }>({
       </div>
 
       {/* ── Pied de tableau (pagination + résumé) ───────────────────────────── */}
-      <div className="dtm-footer" aria-label="Pagination">
+      <div className="dtm-footer" aria-label={t('dataTable.pagination')}>
         <span className="dtm-summary">
           {loading ? '…'
            : sorted.length === 0 ? t('dataTable.zeroResults')

@@ -20,6 +20,7 @@ export type VariableCategory =
   | 'invoice'
   | 'parcel'
   | 'trip'
+  | 'customer'
   | 'system';
 
 export const TEMPLATE_VARIABLES: TemplateVariable[] = [
@@ -75,6 +76,14 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: 'totalBags',     placeholder: '{{totalBags}}',     label: 'Total bagages',         category: 'parcel', example: '2' },
   { key: 'bagDescription',placeholder: '{{bagDescription}}',label: 'Description bagage',   category: 'parcel', example: 'Valise rouge 24 pouces' },
 
+  // ─── Client / Voyageur ─────────────────────────────────────────────────────────
+  { key: 'customerName',     placeholder: '{{customerName}}',     label: 'Nom du voyageur',        category: 'customer', example: 'Aminata DIALLO' },
+  { key: 'customerEmail',    placeholder: '{{customerEmail}}',    label: 'Email du voyageur',      category: 'customer', example: 'aminata@example.com' },
+  { key: 'customerPhone',    placeholder: '{{customerPhone}}',    label: 'Téléphone du voyageur',  category: 'customer', example: '+221 77 xxx xx xx' },
+  { key: 'customerLoyalty',  placeholder: '{{customerLoyalty}}',  label: 'Score fidélité',         category: 'customer', example: '2 450' },
+  { key: 'customerTier',     placeholder: '{{customerTier}}',     label: 'Niveau fidélité',        category: 'customer', example: 'Gold' },
+  { key: 'customerSince',    placeholder: '{{customerSince}}',    label: 'Client depuis',          category: 'customer', example: '12/01/2023' },
+
   // ─── Système ──────────────────────────────────────────────────────────────────
   { key: 'qrCodeValue',   placeholder: '{{qrCodeValue}}',   label: 'Valeur QR Code',        category: 'system', example: 'https://verify.translogpro.com/TKT-001' },
   { key: 'generatedAt',   placeholder: '{{generatedAt}}',   label: 'Date de génération',    category: 'system', example: '15/03/2024 14:30' },
@@ -82,21 +91,23 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
 ];
 
 export const CATEGORY_LABELS: Record<VariableCategory, string> = {
-  tenant:  'Entreprise (tenant)',
-  ticket:  'Billet de voyage',
-  invoice: 'Facture',
-  trip:    'Trajet',
-  parcel:  'Colis / Expédition',
-  system:  'Système',
+  tenant:   'Entreprise (tenant)',
+  ticket:   'Billet de voyage',
+  invoice:  'Facture',
+  trip:     'Trajet',
+  parcel:   'Colis / Expédition',
+  customer: 'Client / Voyageur',
+  system:   'Système',
 };
 
 export const CATEGORY_COLORS: Record<VariableCategory, string> = {
-  tenant:  '#1a3a5c',
-  ticket:  '#2563eb',
-  invoice: '#16a34a',
-  trip:    '#7c3aed',
-  parcel:  '#dc2626',
-  system:  '#6b7280',
+  tenant:   '#1a3a5c',
+  ticket:   '#2563eb',
+  invoice:  '#16a34a',
+  trip:     '#7c3aed',
+  parcel:   '#dc2626',
+  customer: '#0891b2',
+  system:   '#6b7280',
 };
 
 /** Retourne les variables groupées par catégorie */

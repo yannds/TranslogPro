@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, Headers, Req } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Query, Headers, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { TripService } from './trip.service';
 import { CreateTripDto } from './dto/create-trip.dto';
@@ -23,7 +23,7 @@ export class TripController {
   }
 
   @Get()
-  @RequirePermission(Permission.TRIP_READ_OWN)
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
   findAll(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
@@ -33,12 +33,21 @@ export class TripController {
   }
 
   @Get(':id')
-  @RequirePermission(Permission.TRIP_READ_OWN)
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
   findOne(
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @ScopeCtx() scope: ScopeContext,
   ) {
     return this.tripService.findOne(tenantId, id, scope);
+  }
+
+  @Delete(':id')
+  @RequirePermission(Permission.TRIP_DELETE_TENANT)
+  remove(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.tripService.remove(tenantId, id);
   }
 }

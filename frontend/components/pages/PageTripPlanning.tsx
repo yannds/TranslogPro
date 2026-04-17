@@ -12,14 +12,14 @@
  * WCAG · dark mode · responsive (scroll horizontal sur mobile).
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Plus, AlertTriangle, Bus,
+  CalendarDays, ChevronLeft, ChevronRight, Plus, AlertTriangle, Bus, Trash2,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useI18n }       from '../../lib/i18n/useI18n';
 import { useFetch }      from '../../lib/hooks/useFetch';
-import { apiPost }       from '../../lib/api';
+import { apiPost, apiDelete } from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }         from '../ui/Badge';
 import { Skeleton }      from '../ui/Skeleton';
@@ -62,6 +62,7 @@ export function PageTripPlanning() {
   const [createBusId, setCreateBusId] = useState<string | null>(null);
   const [busy, setBusy]   = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const base = `/api/tenants/${tenantId}`;
 
@@ -136,6 +137,19 @@ export function PageTripPlanning() {
     setShowCreate(true);
     setActionError(null);
   };
+
+  const handleDelete = useCallback(async (tripId: string) => {
+    setDeletingId(tripId);
+    setActionError(null);
+    try {
+      await apiDelete(`${base}/trips/${tripId}`);
+      refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t('tripPlanning.deleteError'));
+    } finally {
+      setDeletingId(null);
+    }
+  }, [base, refetch, t]);
 
   const handleCreate = async (payload: TripCreatePayload) => {
     setBusy(true); setActionError(null);
@@ -296,23 +310,38 @@ export function PageTripPlanning() {
                               <ul className="space-y-1" role="list">
                                 {cellTrips.map(tr => {
                                   const isConflict = conflictIds.has(tr.id);
+                                  const isDeleting = deletingId === tr.id;
+                                  const isPlanned  = tr.status === 'PLANNED';
                                   return (
                                     <li key={tr.id}>
                                       <div
                                         className={cn(
-                                          'rounded-md border px-2 py-1.5 text-xs',
+                                          'rounded-md border px-2 py-1.5 text-xs group relative',
                                           isConflict
                                             ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
                                             : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+                                          isDeleting && 'opacity-50',
                                         )}
                                       >
                                         <div className="flex items-center justify-between gap-2">
                                           <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
                                             {formatHm(new Date(tr.departureScheduled))}
                                           </span>
-                                          {isConflict && (
-                                            <AlertTriangle className="w-3 h-3 text-red-500" aria-label={t('tripPlanning.conflictLabel')} />
-                                          )}
+                                          <div className="flex items-center gap-1">
+                                            {isConflict && (
+                                              <AlertTriangle className="w-3 h-3 text-red-500" aria-label={t('tripPlanning.conflictLabel')} />
+                                            )}
+                                            {isPlanned && (
+                                              <button
+                                                onClick={() => handleDelete(tr.id)}
+                                                disabled={isDeleting}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                                aria-label={t('tripPlanning.deleteTrip')}
+                                              >
+                                                <Trash2 className="w-3 h-3" aria-hidden />
+                                              </button>
+                                            )}
+                                          </div>
                                         </div>
                                         <p className="truncate text-slate-600 dark:text-slate-400">{routeLabelOf(tr)}</p>
                                         <Badge variant={tripStatusBadgeVariant(tr.status)} size="sm">

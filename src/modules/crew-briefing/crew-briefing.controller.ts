@@ -28,7 +28,7 @@ export class CrewBriefingController {
   }
 
   @Get('equipment-types')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   listEquipmentTypes(@TenantId() tenantId: string) {
     return this.svc.listEquipmentTypes(tenantId);
   }

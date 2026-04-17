@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -32,14 +32,39 @@ export class TripService {
       throw new BadRequestException(`Affectation impossible: ${details}`);
     }
 
+    const departure = new Date(dto.departureTime);
+    const arrival   = dto.estimatedArrivalTime
+      ? new Date(dto.estimatedArrivalTime)
+      : new Date(departure.getTime() + 3600_000); // +1h par défaut pour la détection de chevauchement
+
+    // ── Anti-doublon : vérifier chevauchement bus OU chauffeur ───────────────
+    const overlap = await this.prisma.trip.findFirst({
+      where: {
+        tenantId,
+        status: { notIn: [TripState.CANCELLED, TripState.COMPLETED] },
+        OR: [
+          { busId: dto.busId },
+          { driverId: dto.driverId },
+        ],
+        departureScheduled: { lt: arrival },
+        arrivalScheduled:   { gt: departure },
+      },
+    });
+    if (overlap) {
+      const what = overlap.busId === dto.busId ? 'Ce véhicule' : 'Ce chauffeur';
+      throw new BadRequestException(
+        `${what} est déjà affecté à un trajet sur ce créneau (${overlap.id})`,
+      );
+    }
+
     return this.prisma.trip.create({
       data: {
         tenantId,
         routeId:             dto.routeId,
         busId:               dto.busId,
         driverId:            dto.driverId,
-        departureScheduled:  new Date(dto.departureTime),
-        arrivalScheduled:    dto.estimatedArrivalTime ? new Date(dto.estimatedArrivalTime) : new Date(dto.departureTime),
+        departureScheduled:  departure,
+        arrivalScheduled:    arrival,
         status:              TripState.PLANNED,
         version:             0,
       },
@@ -51,14 +76,29 @@ export class TripService {
     filters?: { agencyId?: string; status?: string },
     scope?:   ScopeContext,
   ) {
+    // scope 'own' : Trip.driverId est un Staff ID, pas un User ID.
+    // Il faut résoudre le staffId du user pour filtrer correctement.
+    let ownerFilter: Record<string, string> = {};
+    if (scope?.scope === 'own') {
+      const staff = await this.prisma.staff.findFirst({
+        where: { userId: scope.userId, tenantId },
+        select: { id: true },
+      });
+      ownerFilter = staff ? { driverId: staff.id } : { driverId: '__none__' };
+    } else if (scope) {
+      ownerFilter = ownershipWhere(scope, 'driverId');
+    }
+
     return this.prisma.trip.findMany({
       where: {
         tenantId,
         ...(filters?.status ? { status: filters.status } : {}),
-        // Enforcement scope : un chauffeur (.own) ne voit que ses trajets.
-        ...(scope ? ownershipWhere(scope, 'driverId') : {}),
+        ...ownerFilter,
       },
-      include: { route: true, bus: true },
+      include: {
+        route: { include: { origin: true, destination: true } },
+        bus: true,
+      },
       orderBy: { departureScheduled: 'asc' },
     });
   }
@@ -72,6 +112,28 @@ export class TripService {
     // Enforcement scope : un chauffeur ne peut pas lire le trip d'un autre.
     if (scope) assertOwnership(scope, trip, 'driverId');
     return trip;
+  }
+
+  async remove(tenantId: string, tripId: string) {
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: tripId, tenantId },
+    });
+    if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
+    if (trip.status !== TripState.PLANNED) {
+      throw new ConflictException(
+        `Impossible de supprimer un trajet en statut « ${trip.status} ». Seuls les trajets PLANIFIÉS peuvent être supprimés.`,
+      );
+    }
+
+    // Suppression en cascade dans une transaction
+    await this.prisma.$transaction([
+      this.prisma.crewAssignment.deleteMany({ where: { tripId, tenantId } }),
+      this.prisma.checklist.deleteMany({ where: { tripId } }),
+      this.prisma.tripEvent.deleteMany({ where: { tripId } }),
+      this.prisma.trip.delete({ where: { id: tripId } }),
+    ]);
+
+    return { deleted: true };
   }
 
   async transition(

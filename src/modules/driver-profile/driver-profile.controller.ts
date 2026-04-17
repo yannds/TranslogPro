@@ -77,7 +77,7 @@ export class DriverProfileController {
   }
 
   @Get('drivers/:staffId/licenses')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   getLicensesForDriver(
     @TenantId() tenantId: string,
     @Param('staffId') staffId: string,
@@ -92,6 +92,12 @@ export class DriverProfileController {
     @Param('id') id: string,
   ) {
     return this.svc.getLicenseUploadUrl(tenantId, id);
+  }
+
+  @Get('licenses')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getAllLicenses(@TenantId() tenantId: string) {
+    return this.svc.getAllLicenses(tenantId);
   }
 
   @Get('licenses/alerts')

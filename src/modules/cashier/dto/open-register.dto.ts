@@ -1,7 +1,7 @@
-import { IsUUID, IsNumber, Min } from 'class-validator';
+import { IsString, IsNumber, Min } from 'class-validator';
 
 export class OpenRegisterDto {
-  @IsUUID()
+  @IsString()
   agencyId: string;
 
   @IsNumber() @Min(0)

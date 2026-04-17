@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsUUID, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsBoolean } from 'class-validator';
 
 export enum IncidentType {
   ACCIDENT    = 'ACCIDENT',
@@ -27,11 +27,11 @@ export class CreateIncidentDto {
   @IsString()
   description: string;
 
-  @IsUUID()
+  @IsString()
   @IsOptional()
   tripId?: string;
 
-  @IsUUID()
+  @IsString()
   @IsOptional()
   busId?: string;
 

@@ -30,6 +30,28 @@ export class CrewService {
     });
     if (existing) throw new ConflictException('Ce membre d\'équipage est déjà assigné à ce trajet');
 
+    // ── Unicité temporelle : même staff ne peut pas être sur 2 trajets qui se chevauchent ──
+    const overlapping = await this.prisma.crewAssignment.findFirst({
+      where: {
+        tenantId,
+        staffId: dto.staffId,
+        tripId:  { not: tripId },
+        trip: {
+          status:             { notIn: ['CANCELLED', 'COMPLETED'] },
+          departureScheduled: { lt: trip.arrivalScheduled },
+          arrivalScheduled:   { gt: trip.departureScheduled },
+        },
+      },
+      include: { trip: { include: { route: true } } },
+    });
+    if (overlapping) {
+      const dep = overlapping.trip.departureScheduled.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const routeName = overlapping.trip.route?.name ?? overlapping.tripId;
+      throw new ConflictException(
+        `Ce membre d'équipage est déjà affecté au trajet "${routeName}" à ${dep} (conflit horaire)`,
+      );
+    }
+
     // ── Scheduling Guard: vérifier disponibilité du membre d'équipage ─────────
     // On vérifie seulement le personnel (pas le bus — déjà vérifié à la création du trip)
     const check = await this.schedulingGuard.checkAssignability(tenantId, undefined, dto.staffId);
@@ -44,11 +66,65 @@ export class CrewService {
   }
 
   async getMineUpcoming(tenantId: string, userId: string) {
-    return this.prisma.crewAssignment.findMany({
-      where: { tenantId, staffId: userId },
-      include: { trip: true, briefingRecord: true },
+    // CrewAssignment.staffId is a Staff.id, not a User.id — resolve first.
+    const staff = await this.prisma.staff.findFirst({
+      where: { userId, tenantId },
+      select: { id: true },
+    });
+    if (!staff) return [];
+
+    const tripInclude = {
+      route: {
+        include: {
+          origin:      { select: { id: true, name: true } },
+          destination: { select: { id: true, name: true } },
+        },
+      },
+      bus: { select: { plateNumber: true } },
+    };
+
+    // 1. Crew assignments (co-pilot, hostess, etc.)
+    const crewAssignments = await this.prisma.crewAssignment.findMany({
+      where: { tenantId, staffId: staff.id },
+      include: { trip: { include: tripInclude }, briefingRecord: true },
       orderBy: { createdAt: 'desc' },
     });
+
+    // 2. Trips where the user is the main driver (Trip.driverId)
+    //    Synthesize virtual "assignments" so the frontend has a uniform shape.
+    const driverTrips = await this.prisma.trip.findMany({
+      where: {
+        tenantId,
+        driverId: staff.id,
+        status: { notIn: ['COMPLETED', 'CANCELLED'] },
+      },
+      include: {
+        ...tripInclude,
+        crewAssignments: {
+          where: { staffId: staff.id },
+          select: { id: true },
+        },
+      },
+      orderBy: { departureScheduled: 'desc' },
+    });
+
+    // Only synthesize for trips where the driver does NOT already have a CrewAssignment
+    const existingTripIds = new Set(crewAssignments.map(a => a.tripId));
+    const syntheticAssignments = driverTrips
+      .filter(t => !existingTripIds.has(t.id) && t.crewAssignments.length === 0)
+      .map(t => ({
+        id:             `driver-${t.id}`,
+        tenantId,
+        tripId:         t.id,
+        staffId:        staff.id,
+        crewRole:       'DRIVER',
+        briefedAt:      null as Date | null,
+        createdAt:      t.departureScheduled,
+        trip:           t,
+        briefingRecord: null,
+      }));
+
+    return [...crewAssignments, ...syntheticAssignments];
   }
 
   async getForTrip(tenantId: string, tripId: string, scope?: ScopeContext) {

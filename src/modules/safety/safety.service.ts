@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { IsEnum, IsOptional, IsString, IsNumber, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsNumber } from 'class-validator';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -20,7 +20,7 @@ export class ReportAlertDto {
   @IsEnum(AlertType)
   type: AlertType;
 
-  @IsUUID()
+  @IsString()
   @IsOptional()
   tripId?: string;
 

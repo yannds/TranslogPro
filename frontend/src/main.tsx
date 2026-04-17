@@ -25,6 +25,7 @@ import { CustomerDashboard }    from '../components/customer/CustomerDashboard';
 import { DriverDashboard }      from '../components/driver/DriverDashboard';
 import { StationAgentDashboard } from '../components/station-agent/StationAgentDashboard';
 import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
+import { PortailVoyageur }      from '../components/portail-voyageur/PortailVoyageur';
 import { useAuth }              from '../lib/auth/auth.context';
 import { resolvePortal }        from '../lib/navigation/resolvePortal';
 import type { PortalId }        from '../lib/navigation/resolvePortal';
@@ -116,6 +117,9 @@ createRoot(root).render(
                   </ProtectedRoute>
                 }
               />
+
+              {/* Portail public voyageur — sans auth, white-label par tenant */}
+              <Route path="/p/:tenantSlug/*" element={<PortailVoyageur />} />
 
               {/* Racine → redirection contextuelle selon userType */}
               <Route path="/" element={<HomeRedirect />} />

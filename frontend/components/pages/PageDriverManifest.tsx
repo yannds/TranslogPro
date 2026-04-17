@@ -20,10 +20,10 @@ import DataTableMaster, { type Column } from '../DataTableMaster';
 interface ActiveTrip {
   id:           string;
   reference?:   string | null;
-  route?:       string | null;
-  bus?:         string | null;
+  route?:       { name?: string; origin?: { name: string } | null; destination?: { name: string } | null } | null;
+  bus?:         { plateNumber: string; model?: string | null } | null;
   departureScheduled?: string | null;
-  travelers?:   number;
+  travelers?:   { id: string }[];
 }
 
 interface Passenger {
@@ -108,7 +108,7 @@ export function PageDriverManifest() {
           {trip && (
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               {trip.reference && <span className="font-medium text-slate-700 dark:text-slate-300">{trip.reference}</span>}
-              {trip.route && <span> — {trip.route}</span>}
+              {trip.route?.name && <span> — {trip.route.name}</span>}
             </p>
           )}
         </div>
@@ -129,10 +129,10 @@ export function PageDriverManifest() {
       {trip && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: 'Référence', value: trip.reference ?? '—' },
-            { label: 'Itinéraire', value: trip.route ?? '—' },
-            { label: 'Bus', value: trip.bus ?? '—' },
-            { label: 'Départ', value: trip.departureScheduled ? new Date(trip.departureScheduled).toLocaleString('fr-FR') : '—' },
+            { label: t('driverManifest.reference'), value: trip.reference ?? '—' },
+            { label: t('driverManifest.route'), value: trip.route?.name ?? '—' },
+            { label: t('driverManifest.bus'), value: trip.bus?.plateNumber ?? '—' },
+            { label: t('driverManifest.departureLabel'), value: trip.departureScheduled ? new Date(trip.departureScheduled).toLocaleString('fr-FR') : '—' },
           ].map(item => (
             <div key={item.label} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{item.label}</p>

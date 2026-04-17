@@ -467,7 +467,7 @@ export function PageIamAudit() {
             onChange={e => setDraft(d => ({ ...d, action: e.target.value }))}
           />
           <Input
-            placeholder="User ID…"
+            placeholder={t('iamAudit.userIdPlaceholder')}
             value={draft.userId}
             onChange={e => setDraft(d => ({ ...d, userId: e.target.value }))}
           />

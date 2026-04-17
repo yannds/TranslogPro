@@ -36,9 +36,9 @@ interface ActiveTrip {
   departureScheduled?: string | null;
   route: {
     id: string;
-    originStation?: string | null;
-    destinationStation?: string | null;
     name?: string | null;
+    origin?: { id: string; name: string } | null;
+    destination?: { id: string; name: string } | null;
   } | null;
   bus: { id: string; plateNumber: string; model?: string | null } | null;
   travelers: { id: string }[];
@@ -214,11 +214,11 @@ export function PageDriverTrip() {
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {trip.route?.originStation ?? '—'}
+                    {trip.route?.origin?.name ?? '—'}
                   </span>
                   <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {trip.route?.destinationStation ?? '—'}
+                    {trip.route?.destination?.name ?? '—'}
                   </span>
                   {trip.route?.name && (
                     <Badge variant="outline" size="sm">{trip.route.name}</Badge>
@@ -250,7 +250,7 @@ export function PageDriverTrip() {
                 <div className="flex items-center gap-3 text-sm">
                   <Users className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
                   <span className="text-slate-700 dark:text-slate-300">
-                    {passengersCount} passager{passengersCount > 1 ? 's' : ''} enregistré{passengersCount > 1 ? 's' : ''}
+                    {passengersCount} {t('driverTrip.registered')}
                   </span>
                 </div>
               </div>

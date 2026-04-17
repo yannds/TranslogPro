@@ -37,15 +37,15 @@ export class ShipmentController {
     return this.shipmentService.addParcel(tenantId, id, parcelId, actor, idempotencyKey);
   }
 
-  @Get(':id')
-  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
-  findOne(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.shipmentService.findOne(tenantId, id);
-  }
-
   @Get('trips/:tripId')
   @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
   findByTrip(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.shipmentService.findByTrip(tenantId, tripId);
+  }
+
+  @Get(':id')
+  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
+  findOne(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.shipmentService.findOne(tenantId, id);
   }
 }

@@ -8,6 +8,8 @@ import { EventTypes } from '../../common/types/domain-event.type';
 import { TicketAction } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { IssueTicketDto } from './dto/issue-ticket.dto';
+import { RefundService } from '../sav/refund.service';
+import { RefundReason } from '../../common/constants/workflow-states';
 import { v4 as uuidv4 } from 'uuid';
 
 const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1_000; // 15 minutes
@@ -19,6 +21,7 @@ export class TicketingService {
     private readonly workflow: WorkflowEngine,
     private readonly pricing:  PricingEngine,
     private readonly qr:       QrService,
+    private readonly refundService: RefundService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -137,8 +140,9 @@ export class TicketingService {
 
   async cancel(tenantId: string, ticketId: string, actor: CurrentUserPayload, reason?: string) {
     const ticket = await this.findOne(tenantId, ticketId);
+    const wasConfirmed = ticket.status === 'CONFIRMED' || ticket.status === 'CHECKED_IN';
 
-    return this.workflow.transition(ticket as any, {
+    const updated = await this.workflow.transition(ticket as any, {
       action:  TicketAction.CANCEL,
       actor,
       context: { reason },
@@ -151,6 +155,19 @@ export class TicketingService {
         }) as Promise<typeof entity>;
       },
     });
+
+    // Auto-create refund for paid tickets cancelled by client
+    if (wasConfirmed) {
+      await this.refundService.createRefund({
+        tenantId,
+        ticketId: ticket.id,
+        amount:   ticket.pricePaid,
+        currency: 'XAF',
+        reason:   RefundReason.CLIENT_CANCEL,
+      });
+    }
+
+    return updated;
   }
 
   async findOne(tenantId: string, id: string) {
@@ -159,10 +176,18 @@ export class TicketingService {
     return ticket;
   }
 
-  async findMany(tenantId: string, tripId?: string) {
+  async findMany(tenantId: string, tripId?: string, filters?: { status?: string }) {
     return this.prisma.ticket.findMany({
-      where:   { tenantId, ...(tripId ? { tripId } : {}) },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        tenantId,
+        ...(tripId ? { tripId } : {}),
+        ...(filters?.status ? { status: filters.status } : {}),
+      },
+      include: {
+        boardingStation:  { select: { id: true, name: true, city: true } },
+        alightingStation: { select: { id: true, name: true, city: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

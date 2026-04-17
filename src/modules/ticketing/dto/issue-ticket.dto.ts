@@ -1,4 +1,4 @@
-import { IsString, IsUUID, IsOptional, IsInt, IsEnum, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsEnum, Min } from 'class-validator';
 
 export enum FareClass {
   STANDARD = 'STANDARD',
@@ -8,7 +8,7 @@ export enum FareClass {
 }
 
 export class IssueTicketDto {
-  @IsUUID()
+  @IsString()
   tripId: string;
 
   @IsString()
@@ -20,11 +20,11 @@ export class IssueTicketDto {
   @IsEnum(FareClass)
   fareClass: FareClass;
 
-  @IsUUID()
+  @IsString()
   @IsOptional()
   boardingStationId?: string;   // défaut = route.originId
 
-  @IsUUID()
+  @IsString()
   alightingStationId: string;   // obligatoire — gare de descente
 
   @IsString()

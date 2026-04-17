@@ -34,6 +34,12 @@ export const EventTypes = {
   TICKET_REFUNDED:        'ticket.refunded',
   TICKET_EXPIRED:         'ticket.expired',
 
+  // Refund
+  REFUND_CREATED:         'refund.created',
+  REFUND_APPROVED:        'refund.approved',
+  REFUND_PROCESSED:       'refund.processed',
+  REFUND_REJECTED:        'refund.rejected',
+
   // Parcel
   PARCEL_REGISTERED:      'parcel.registered',
   PARCEL_DISPATCHED:      'parcel.dispatched',

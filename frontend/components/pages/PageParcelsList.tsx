@@ -1,18 +1,27 @@
 /**
- * PageParcelsList — « Suivi colis »
+ * PageParcelsList — « Gestion des colis »
  *
- * Recherche par code de suivi + journal des colis récemment consultés
- * (stockage localStorage). Permet aussi de déclarer un dommage.
+ * Vue complète des colis du tenant avec :
+ *   - DataTableMaster (tri, recherche, pagination, export)
+ *   - Actions de transition par ligne (RECEIVE, LOAD, ARRIVE, DELIVER)
+ *   - Recherche par code de suivi (tracking public)
+ *   - Signalement dommage / perte
  *
  * API :
- *   GET  /api/tenants/:tid/parcels/track/:code      (public tracking)
- *   POST /api/tenants/:tid/parcels/:id/report-damage  body: { description }
+ *   GET  /api/tenants/:tid/parcels                      (liste complète)
+ *   GET  /api/tenants/:tid/parcels/track/:code           (tracking public)
+ *   POST /api/tenants/:tid/parcels/:id/transition        body: { action }
+ *   POST /api/tenants/:tid/parcels/:id/report-damage     body: { description }
  */
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { Truck, Search, PackageSearch, AlertOctagon, Clock, MapPin } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import {
+  Package, Search, PackageCheck, PackageX, Truck, MapPin, ArrowDownToLine,
+  AlertOctagon, RotateCcw, Eye,
+} from 'lucide-react';
 import { useAuth }                       from '../../lib/auth/auth.context';
 import { useI18n }                        from '../../lib/i18n/useI18n';
+import { useFetch }                      from '../../lib/hooks/useFetch';
 import { apiGet, apiPost }               from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge, statusToVariant }        from '../ui/Badge';
@@ -21,6 +30,8 @@ import { Dialog }                        from '../ui/Dialog';
 import { ErrorAlert }                    from '../ui/ErrorAlert';
 import { FormFooter }                    from '../ui/FormFooter';
 import { inputClass as inp }             from '../ui/inputClass';
+import DataTableMaster                   from '../DataTableMaster';
+import type { Column, RowAction }        from '../DataTableMaster';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,26 +43,20 @@ interface Parcel {
   price:         number;
   destinationId: string;
   destination?:  { name: string; city: string } | null;
+  shipment?:     { id: string; tripId: string; status: string } | null;
   recipientInfo?: { name?: string; phone?: string; address?: string } | null;
   createdAt?:    string;
-  updatedAt?:    string;
 }
 
-const HISTORY_KEY = 'translog.parcel.history';
-const MAX_HISTORY = 10;
-
-function loadHistory(): string[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-  } catch { return []; }
-}
-
-function saveHistory(codes: string[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(codes.slice(0, MAX_HISTORY))); } catch { /* ignore */ }
-}
+// Maps parcel state → list of available actions
+const ACTION_MAP: Record<string, { action: string; labelKey: string; icon: React.ReactNode }[]> = {
+  CREATED:    [{ action: 'RECEIVE',         labelKey: 'parcelsList.actionReceive',   icon: <ArrowDownToLine className="w-3.5 h-3.5" /> }],
+  AT_ORIGIN:  [],  // ADD_TO_SHIPMENT is done from PageShipments
+  PACKED:     [{ action: 'LOAD',            labelKey: 'parcelsList.actionLoad',      icon: <Truck className="w-3.5 h-3.5" /> }],
+  LOADED:     [],  // DEPART is auto via Trip side-effect
+  IN_TRANSIT: [{ action: 'ARRIVE',          labelKey: 'parcelsList.actionArrive',    icon: <MapPin className="w-3.5 h-3.5" /> }],
+  ARRIVED:    [{ action: 'DELIVER',         labelKey: 'parcelsList.actionDeliver',   icon: <PackageCheck className="w-3.5 h-3.5" /> }],
+};
 
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -60,157 +65,267 @@ export function PageParcelsList() {
   const { user } = useAuth();
   const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
+  const base     = `/api/tenants/${tenantId}`;
 
-  const [code,    setCode]    = useState('');
-  const [parcel,  setParcel]  = useState<Parcel | null>(null);
-  const [busy,    setBusy]    = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  const { data: parcels, loading, error, refetch } =
+    useFetch<Parcel[]>(tenantId ? `${base}/parcels` : null, [tenantId]);
 
-  const [damageOpen, setDamageOpen] = useState(false);
-  const [damageText, setDamageText] = useState('');
-  const [damageBusy, setDamageBusy] = useState(false);
-  const [damageErr,  setDamageErr]  = useState<string | null>(null);
+  // ─── Detail dialog ────────────────────────────────────────────────────────
+  const [detail, setDetail]       = useState<Parcel | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
-  useEffect(() => { setHistory(loadHistory()); }, []);
-
-  const doSearch = async (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    setBusy(true); setError(null); setParcel(null);
-    try {
-      const p = await apiGet<Parcel>(`/api/tenants/${tenantId}/parcels/track/${encodeURIComponent(trimmed)}`);
-      setParcel(p);
-      setCode(trimmed);
-      const next = [trimmed, ...history.filter(c => c !== trimmed)].slice(0, MAX_HISTORY);
-      setHistory(next); saveHistory(next);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+  const openDetail = (p: Parcel) => {
+    setDetail(p);
+    setDetailOpen(true);
   };
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    void doSearch(code);
+  // ─── Transition ──────────────────────────────────────────────────────────
+  const [actionBusy, setActionBusy]   = useState(false);
+  const [actionErr, setActionErr]     = useState<string | null>(null);
+
+  const doTransition = async (parcelId: string, action: string) => {
+    setActionBusy(true); setActionErr(null);
+    try {
+      await apiPost(`${base}/parcels/${parcelId}/transition`, { action });
+      refetch();
+      setDetailOpen(false);
+    } catch (err) { setActionErr((err as Error).message); }
+    finally { setActionBusy(false); }
+  };
+
+  // ─── Damage dialog ───────────────────────────────────────────────────────
+  const [damageOpen, setDamageOpen] = useState(false);
+  const [damageId, setDamageId]     = useState<string | null>(null);
+  const [damageText, setDamageText] = useState('');
+  const [damageBusy, setDamageBusy] = useState(false);
+  const [damageErr, setDamageErr]   = useState<string | null>(null);
+
+  const openDamage = (p: Parcel) => {
+    setDamageId(p.id);
+    setDamageText('');
+    setDamageErr(null);
+    setDamageOpen(true);
   };
 
   const handleDamage = async () => {
-    if (!parcel) return;
+    if (!damageId) return;
     setDamageBusy(true); setDamageErr(null);
     try {
-      await apiPost(`/api/tenants/${tenantId}/parcels/${parcel.id}/report-damage`,
-        { description: damageText.trim() });
-      setDamageOpen(false); setDamageText('');
-      void doSearch(parcel.trackingCode);
-    } catch (e) { setDamageErr((e as Error).message); }
+      await apiPost(`${base}/parcels/${damageId}/report-damage`, { description: damageText.trim() });
+      setDamageOpen(false);
+      refetch();
+    } catch (err) { setDamageErr((err as Error).message); }
     finally { setDamageBusy(false); }
   };
 
+  // ─── Tracking search ─────────────────────────────────────────────────────
+  const [trackCode, setTrackCode]     = useState('');
+  const [trackResult, setTrackResult] = useState<Parcel | null>(null);
+  const [trackBusy, setTrackBusy]     = useState(false);
+  const [trackErr, setTrackErr]       = useState<string | null>(null);
+  const [trackOpen, setTrackOpen]     = useState(false);
+
+  const doTrack = async (e: FormEvent) => {
+    e.preventDefault();
+    const code = trackCode.trim();
+    if (!code) return;
+    setTrackBusy(true); setTrackErr(null); setTrackResult(null);
+    try {
+      const p = await apiGet<Parcel>(`${base}/parcels/track/${encodeURIComponent(code)}`);
+      setTrackResult(p);
+    } catch (err) { setTrackErr((err as Error).message); }
+    finally { setTrackBusy(false); }
+  };
+
+  // ─── Columns ──────────────────────────────────────────────────────────────
+  const columns: Column<Parcel>[] = [
+    {
+      key: 'trackingCode', header: t('parcelsList.trackingCode'), sortable: true,
+      cellRenderer: (v) => <span className="font-mono tabular-nums text-xs">{v as string}</span>,
+    },
+    {
+      key: 'status', header: t('parcelsList.status'), sortable: true,
+      cellRenderer: (v) => <Badge size="sm" variant={statusToVariant(v as string)}>{v as string}</Badge>,
+    },
+    {
+      key: 'destination', header: t('parcelsList.destination'), sortable: false,
+      cellRenderer: (_v, row) =>
+        row.destination ? `${row.destination.name} — ${row.destination.city}` : '—',
+    },
+    {
+      key: 'weight', header: t('parcelsList.weight'), sortable: true, align: 'right',
+      cellRenderer: (v) => `${(v as number).toLocaleString('fr-FR')} kg`,
+    },
+    {
+      key: 'price', header: t('parcelsList.value'), sortable: true, align: 'right',
+      cellRenderer: (v) => `${(v as number).toLocaleString('fr-FR')} XAF`,
+    },
+    {
+      key: 'createdAt', header: t('parcelsList.createdOn'), sortable: true,
+      cellRenderer: (v) => v ? new Date(v as string).toLocaleDateString('fr-FR') : '—',
+    },
+  ];
+
+  // ─── Row Actions ─────────────────────────────────────────────────────────
+  const rowActions: RowAction<Parcel>[] = [
+    {
+      label: t('parcelsList.details'),
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (row) => openDetail(row),
+    },
+    // Dynamic transition actions
+    ...(['CREATED', 'PACKED', 'IN_TRANSIT', 'ARRIVED'] as const).flatMap(status =>
+      (ACTION_MAP[status] ?? []).map(a => ({
+        label: t(a.labelKey),
+        icon: a.icon,
+        onClick: (row: Parcel) => doTransition(row.id, a.action),
+        hidden: (row: Parcel) => row.status !== status,
+      })),
+    ),
+    {
+      label: t('parcelsList.reportDamage'),
+      icon: <AlertOctagon className="w-3.5 h-3.5" />,
+      onClick: (row) => openDamage(row),
+      hidden: (row) => ['DELIVERED', 'DAMAGED', 'LOST', 'RETURNED'].includes(row.status),
+      danger: true,
+    },
+    {
+      label: t('parcelsList.declareLost'),
+      icon: <PackageX className="w-3.5 h-3.5" />,
+      onClick: (row) => doTransition(row.id, 'DECLARE_LOST'),
+      hidden: (row) => row.status !== 'IN_TRANSIT',
+      danger: true,
+    },
+  ];
+
   return (
-    <main className="p-6 space-y-6" role="main" aria-label={t('parcelsList.trackParcels')}>
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
-          <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" aria-hidden />
+    <main className="p-6 space-y-6" role="main" aria-label={t('parcelsList.title')}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+            <Package className="w-5 h-5 text-indigo-600 dark:text-indigo-400" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('parcelsList.title')}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              {t('parcelsList.subtitle')}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('parcelsList.trackParcels')}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('parcelsList.subtitle')}
-          </p>
-        </div>
+        <Button variant="outline" onClick={() => { setTrackOpen(true); setTrackResult(null); setTrackErr(null); setTrackCode(''); }}>
+          <Search className="w-4 h-4 mr-2" aria-hidden />
+          {t('parcelsList.trackByCode')}
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader heading={t('parcelsList.searchParcel')} />
-        <CardContent>
-          <form onSubmit={onSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={code}
-              onChange={e => setCode(e.target.value.toUpperCase())}
-              className={inp}
-              placeholder="Ex. TENA-MXYZ-AB12"
-              disabled={busy}
-              aria-label={t('parcelsList.trackingCode')}
-            />
-            <Button type="submit" disabled={busy || !code.trim()}>
-              <Search className="w-4 h-4 mr-1.5" aria-hidden />
-              {busy ? t('parcelsList.searching') : t('ui.search')}
-            </Button>
-          </form>
-          <ErrorAlert error={error} icon />
+      <ErrorAlert error={error || actionErr} icon />
 
-          {history.length > 0 && !parcel && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                {t('parcelsList.recents')}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {history.map(h => (
-                  <button key={h} type="button"
-                    onClick={() => { setCode(h); void doSearch(h); }}
-                    className="text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-300 tabular-nums">
-                    {h}
-                  </button>
-                ))}
+      <DataTableMaster<Parcel>
+        columns={columns}
+        data={parcels ?? []}
+        loading={loading}
+        rowActions={rowActions}
+        onRowClick={openDetail}
+        defaultSort={{ key: 'createdAt', dir: 'desc' }}
+        exportFormats={['csv', 'xls']}
+        exportFilename="colis"
+        emptyMessage={t('parcelsList.noParcels')}
+        searchPlaceholder={t('parcelsList.searchPlaceholder')}
+      />
+
+      {/* Detail dialog */}
+      <Dialog
+        open={detailOpen}
+        onOpenChange={o => { if (!o) setDetailOpen(false); }}
+        title={detail?.trackingCode ?? ''}
+        description={`${t('parcelsList.parcelDetail')} — ${detail?.status ?? ''}`}
+        size="lg"
+      >
+        {detail && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.status')}</p>
+                <Badge variant={statusToVariant(detail.status)}>{detail.status}</Badge>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {parcel && (
-        <Card>
-          <CardHeader
-            heading={parcel.trackingCode}
-            description={`Colis ${parcel.id.slice(0, 8)}`}
-          />
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <InfoBlock icon={<PackageSearch className="w-4 h-4" />} label={t('parcelsList.status')}>
-                <Badge variant={statusToVariant(parcel.status)}>{parcel.status}</Badge>
-              </InfoBlock>
-              <InfoBlock icon={<MapPin className="w-4 h-4" />} label={t('parcelsList.destination')}>
-                {parcel.destination
-                  ? `${parcel.destination.name} — ${parcel.destination.city}`
-                  : parcel.destinationId}
-              </InfoBlock>
-              <InfoBlock icon={<Clock className="w-4 h-4" />} label={t('parcelsList.createdOn')}>
-                {parcel.createdAt
-                  ? new Date(parcel.createdAt).toLocaleString('fr-FR')
-                  : '—'}
-              </InfoBlock>
-              <InfoBlock label={t('parcelsList.weightValue')}>
-                <span className="tabular-nums">
-                  {parcel.weight} kg · {parcel.price.toLocaleString('fr-FR')} XAF
-                </span>
-              </InfoBlock>
-              {parcel.recipientInfo?.name && (
-                <InfoBlock label={t('parcelsList.recipient')} wide>
-                  <div className="space-y-0.5">
-                    <p>{parcel.recipientInfo.name}</p>
-                    {parcel.recipientInfo.phone && (
-                      <p className="text-xs text-slate-500 tabular-nums">{parcel.recipientInfo.phone}</p>
-                    )}
-                    {parcel.recipientInfo.address && (
-                      <p className="text-xs text-slate-500">{parcel.recipientInfo.address}</p>
-                    )}
-                  </div>
-                </InfoBlock>
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.destination')}</p>
+                <p>{detail.destination ? `${detail.destination.name} — ${detail.destination.city}` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.weight')}</p>
+                <p className="tabular-nums">{detail.weight} kg</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.value')}</p>
+                <p className="tabular-nums">{detail.price.toLocaleString('fr-FR')} XAF</p>
+              </div>
+              {detail.recipientInfo?.name && (
+                <div className="col-span-2">
+                  <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.recipient')}</p>
+                  <p>{detail.recipientInfo.name} {detail.recipientInfo.phone && `· ${detail.recipientInfo.phone}`}</p>
+                  {detail.recipientInfo.address && <p className="text-xs text-slate-500">{detail.recipientInfo.address}</p>}
+                </div>
+              )}
+              {detail.shipment && (
+                <div className="col-span-2">
+                  <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.shipment')}</p>
+                  <p className="text-xs tabular-nums">Shipment {detail.shipment.id.slice(0, 8)} · {detail.shipment.status}</p>
+                </div>
               )}
             </div>
 
-            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-              <Button variant="outline"
-                onClick={() => { setDamageErr(null); setDamageText(''); setDamageOpen(true); }}
-                className="text-red-700 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-900/20">
-                <AlertOctagon className="w-4 h-4 mr-1.5" aria-hidden />
-                {t('parcelsList.reportDamage')}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            {/* Action buttons */}
+            {(ACTION_MAP[detail.status] ?? []).length > 0 && (
+              <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                {(ACTION_MAP[detail.status] ?? []).map(a => (
+                  <Button key={a.action} size="sm" disabled={actionBusy}
+                    onClick={() => doTransition(detail.id, a.action)}>
+                    {a.icon}
+                    <span className="ml-1.5">{t(a.labelKey)}</span>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Dialog>
 
+      {/* Tracking dialog */}
+      <Dialog
+        open={trackOpen}
+        onOpenChange={o => { if (!o) setTrackOpen(false); }}
+        title={t('parcelsList.trackByCode')}
+        description={t('parcelsList.trackDesc')}
+      >
+        <div className="space-y-4">
+          <form onSubmit={doTrack} className="flex gap-2">
+            <input type="text" value={trackCode}
+              onChange={e => setTrackCode(e.target.value.toUpperCase())}
+              className={inp} placeholder="Ex. TENA-MXYZ-AB12"
+              disabled={trackBusy} />
+            <Button type="submit" disabled={trackBusy || !trackCode.trim()}>
+              <Search className="w-4 h-4 mr-1.5" aria-hidden />
+              {trackBusy ? t('parcelsList.searching') : t('ui.search')}
+            </Button>
+          </form>
+          <ErrorAlert error={trackErr} />
+          {trackResult && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm tabular-nums">{trackResult.trackingCode}</span>
+                <Badge variant={statusToVariant(trackResult.status)}>{trackResult.status}</Badge>
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {trackResult.destination ? `${trackResult.destination.name} — ${trackResult.destination.city}` : '—'}
+              </p>
+              <p className="text-xs text-slate-500 tabular-nums">{trackResult.weight} kg · {trackResult.price.toLocaleString('fr-FR')} XAF</p>
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Damage dialog */}
       <Dialog
         open={damageOpen}
         onOpenChange={o => { if (!o) setDamageOpen(false); }}
@@ -226,30 +341,12 @@ export function PageParcelsList() {
             <textarea required rows={4} value={damageText}
               onChange={e => setDamageText(e.target.value)}
               className={inp} disabled={damageBusy}
-              placeholder="Cartonnage écrasé, emballage percé, contenu visible…" />
+              placeholder={t('parcelsList.damagePlaceholder')} />
           </div>
           <FormFooter onCancel={() => setDamageOpen(false)} busy={damageBusy}
             submitLabel={t('parcelsList.report')} pendingLabel={t('parcelsList.sending')} />
         </form>
       </Dialog>
     </main>
-  );
-}
-
-function InfoBlock({
-  icon, label, children, wide,
-}: {
-  icon?:    React.ReactNode;
-  label:    string;
-  children: React.ReactNode;
-  wide?:    boolean;
-}) {
-  return (
-    <div className={wide ? 'sm:col-span-2' : ''}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
-        {icon} {label}
-      </p>
-      <div className="text-sm text-slate-800 dark:text-slate-200">{children}</div>
-    </div>
   );
 }

@@ -23,7 +23,7 @@ export class TrackingController {
   }
 
   @Get('trips/:tripId/position')
-  @RequirePermission(Permission.TRIP_READ_OWN)
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
   lastPosition(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,
@@ -33,7 +33,7 @@ export class TrackingController {
   }
 
   @Get('trips/:tripId/history')
-  @RequirePermission(Permission.TRIP_READ_OWN)
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
   history(
     @TenantId() tenantId: string,
     @Param('tripId') tripId: string,

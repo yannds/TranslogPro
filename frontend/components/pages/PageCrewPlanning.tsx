@@ -349,6 +349,7 @@ function TripCardWithCrew(props: {
   );
 
   const [busyStaff, setBusyStaff] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const markBusy = useCallback((sid: string, on: boolean) => {
     setBusyStaff(prev => {
@@ -369,24 +370,30 @@ function TripCardWithCrew(props: {
 
   const doRemove = useCallback(async (staffId: string) => {
     markBusy(staffId, true);
+    setError(null);
     try {
       await apiDelete(`/api/tenants/${tenantId}/trips/${trip.id}/crew/${staffId}`);
       refetch();
       onAction();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du retrait');
     } finally { markBusy(staffId, false); }
   }, [tenantId, trip.id, markBusy, refetch, onAction]);
 
   return (
-    <TripCard
-      trip={trip}
-      assignments={assignments}
-      loadingCrew={loading}
-      onAssignClick={() => onAssignClick(trip)}
-      onMarkBriefed={doBrief}
-      onRemove={doRemove}
-      busyStaff={busyStaff}
-      staffIndex={staffIndex}
-    />
+    <>
+      <TripCard
+        trip={trip}
+        assignments={assignments}
+        loadingCrew={loading}
+        onAssignClick={() => onAssignClick(trip)}
+        onMarkBriefed={doBrief}
+        onRemove={doRemove}
+        busyStaff={busyStaff}
+        staffIndex={staffIndex}
+      />
+      {error && <ErrorAlert error={error} />}
+    </>
   );
 }
 
