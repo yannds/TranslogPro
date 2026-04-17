@@ -5,7 +5,7 @@
  * Aucune donnée sensible n'est exposée (pas d'IDs internes, pas de
  * données financières, pas de données personnelles d'autres utilisateurs).
  */
-import { Injectable, NotFoundException, BadRequestException, Inject, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { PrismaService }   from '../../infrastructure/database/prisma.service';
 import { WhiteLabelService } from '../white-label/white-label.service';
@@ -350,14 +350,14 @@ export class PublicPortalService {
     return stations;
   }
 
-  // ─── Booking (real ticket issuance) ────────────────────────────────────────
+  // ─── Booking (real ticket issuance — multi-passenger) ───────────────────────
 
   async createBooking(tenantSlug: string, dto: {
     tripId: string;
-    passenger: {
+    passengers: Array<{
       firstName: string; lastName: string;
       phone: string; email?: string; seatType: string;
-    };
+    }>;
     paymentMethod: string;
   }) {
     const tenant = await this.resolveTenant(tenantSlug);
@@ -372,19 +372,10 @@ export class PublicPortalService {
             destination: { select: { id: true, name: true, city: true } },
           },
         },
-        bus: { select: { capacity: true } },
+        bus: { select: { capacity: true, seatLayout: true } },
       },
     });
     if (!trip) throw new NotFoundException('Trip not found or no longer available');
-
-    // Check seat availability
-    const bookedCount = await this.prisma.ticket.count({
-      where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
-    });
-    const capacity = trip.bus?.capacity ?? 0;
-    if (capacity > 0 && bookedCount >= capacity) {
-      throw new BadRequestException('No seats available for this trip');
-    }
 
     // Resolve default agency for the tenant (every tenant has at least one)
     const defaultAgency = await this.prisma.agency.findFirst({
@@ -394,82 +385,160 @@ export class PublicPortalService {
     });
     const agencyId = defaultAgency?.id ?? '';
 
-    const passengerName = `${dto.passenger.firstName} ${dto.passenger.lastName}`.trim();
-    const fareClass = dto.passenger.seatType === 'VIP' ? 'VIP' : 'STANDARD';
+    // SeatLayout-aware capacity
+    const seatLayout = trip.bus?.seatLayout as { rows: number; cols: number; disabled?: string[] } | null;
+    const totalSeats = seatLayout
+      ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
+      : (trip.bus?.capacity ?? 0);
 
-    // 1. Create ticket in PENDING_PAYMENT
-    const ticketId = uuidv4();
-    const pendingQr = `pending-${ticketId}`;
-
-    const ticket = await this.prisma.transact(async (tx) => {
-      const t = await tx.ticket.create({
-        data: {
-          id:                 ticketId,
-          tenantId:           tenant.id,
-          tripId:             dto.tripId,
-          passengerId:        'portal-anonymous',
-          passengerName,
-          boardingStationId:  trip.route.origin.id,
-          alightingStationId: trip.route.destination.id,
-          fareClass,
-          pricePaid:          trip.route.basePrice,
-          agencyId,
-          status:             'PENDING_PAYMENT',
-          qrCode:             pendingQr,
-          expiresAt:          new Date(Date.now() + 15 * 60_000),
-          version:            0,
-        },
+    // 1. Create all tickets in PENDING_PAYMENT (single transaction for atomicity)
+    const tickets = await this.prisma.transact(async (tx) => {
+      // ── Garde capacité globale (pour tous les passagers demandés) ────────
+      const bookedCount = await tx.ticket.count({
+        where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
       });
+      if (totalSeats > 0 && bookedCount + dto.passengers.length > totalSeats) {
+        throw new BadRequestException(
+          `Not enough seats: ${totalSeats - bookedCount} available, ${dto.passengers.length} requested`,
+        );
+      }
 
-      const event: DomainEvent = {
-        id:            uuidv4(),
-        type:          EventTypes.TICKET_ISSUED,
-        tenantId:      tenant.id,
-        aggregateId:   t.id,
-        aggregateType: 'Ticket',
-        payload:       { ticketId: t.id, tripId: dto.tripId, price: trip.route.basePrice, source: 'portal' },
-        occurredAt:    new Date(),
-      };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+      // ── Charger les sièges occupés une seule fois (NUMBERED) ────────────
+      const occupiedSeats = new Set<string>();
+      if ((trip as any).seatingMode === 'NUMBERED' && seatLayout) {
+        const occupiedRows = await tx.ticket.findMany({
+          where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] }, seatNumber: { not: null } },
+          select: { seatNumber: true },
+        });
+        for (const row of occupiedRows as Array<{ seatNumber: string | null }>) if (row.seatNumber) occupiedSeats.add(row.seatNumber);
+      }
 
-      return t;
+      // ── Charger les noms déjà bookés pour le contrôle de doublon ────────
+      const existingNames = await tx.ticket.findMany({
+        where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+        select: { passengerName: true },
+      });
+      const bookedNames = new Set((existingNames as Array<{ passengerName: string }>).map(r => r.passengerName.toLowerCase()));
+
+      const created: Array<{ id: string; seatNumber: string | null; fareClass: string; passengerIdx: number }> = [];
+
+      for (let i = 0; i < dto.passengers.length; i++) {
+        const pax = dto.passengers[i];
+        const passengerName = `${pax.firstName} ${pax.lastName}`.trim();
+        const fareClass = pax.seatType === 'VIP' ? 'VIP' : 'STANDARD';
+
+        // ── Garde doublon passager ──────────────────────────────────────
+        if (bookedNames.has(passengerName.toLowerCase())) {
+          throw new ConflictException(
+            `A ticket already exists for "${passengerName}" on this trip`,
+          );
+        }
+        bookedNames.add(passengerName.toLowerCase());
+
+        // ── Attribution automatique du siège (NUMBERED) ─────────────────
+        let seatNumber: string | null = null;
+        if ((trip as any).seatingMode === 'NUMBERED' && seatLayout) {
+          for (let r = 1; r <= seatLayout.rows; r++) {
+            for (let c = 1; c <= seatLayout.cols; c++) {
+              const id = `${r}-${c}`;
+              if (seatLayout.disabled?.includes(id)) continue;
+              if (occupiedSeats.has(id)) continue;
+              seatNumber = id;
+              break;
+            }
+            if (seatNumber) break;
+          }
+          if (!seatNumber) {
+            throw new BadRequestException('No seats available for this trip');
+          }
+          occupiedSeats.add(seatNumber);
+        }
+
+        const ticketId = uuidv4();
+        const t = await tx.ticket.create({
+          data: {
+            id:                 ticketId,
+            tenantId:           tenant.id,
+            tripId:             dto.tripId,
+            passengerId:        'portal-anonymous',
+            passengerName,
+            seatNumber,
+            boardingStationId:  trip.route.origin.id,
+            alightingStationId: trip.route.destination.id,
+            fareClass,
+            pricePaid:          trip.route.basePrice,
+            agencyId,
+            status:             'PENDING_PAYMENT',
+            qrCode:             `pending-${ticketId}`,
+            expiresAt:          new Date(Date.now() + 15 * 60_000),
+            version:            0,
+          },
+        });
+
+        const event: DomainEvent = {
+          id:            uuidv4(),
+          type:          EventTypes.TICKET_ISSUED,
+          tenantId:      tenant.id,
+          aggregateId:   t.id,
+          aggregateType: 'Ticket',
+          payload:       { ticketId: t.id, tripId: dto.tripId, price: trip.route.basePrice, source: 'portal' },
+          occurredAt:    new Date(),
+        };
+        await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+
+        created.push({ id: t.id, seatNumber, fareClass, passengerIdx: i });
+      }
+
+      return created;
     });
 
-    // 2. Immediately confirm (payment not yet implemented — simulate success)
-    const qrToken = await this.qrService.sign({
-      ticketId:   ticket.id,
-      tenantId:   tenant.id,
-      tripId:     dto.tripId,
-      seatNumber: 'UNASSIGNED',
-      issuedAt:   Date.now(),
-    });
-
-    const confirmedTicket = await this.prisma.ticket.update({
-      where: { id: ticket.id },
-      data:  { status: 'CONFIRMED', qrCode: qrToken, version: { increment: 1 } },
-    });
-
-    // 3. Generate documents (ticket stub + invoice) — fire-and-forget on error
+    // 2. Confirm all tickets (payment not yet implemented — simulate success)
     const systemActor = { id: 'portal-system', tenantId: tenant.id, agencyId, role: 'SYSTEM' } as any;
-    let ticketDocUrl: string | null = null;
-    let invoiceDocUrl: string | null = null;
+    const confirmedTickets = await Promise.all(
+      tickets.map(async (tk) => {
+        const qrToken = await this.qrService.sign({
+          ticketId:   tk.id,
+          tenantId:   tenant.id,
+          tripId:     dto.tripId,
+          seatNumber: tk.seatNumber ?? '',
+          issuedAt:   Date.now(),
+        });
 
-    try {
-      const [ticketDoc, invoiceDoc] = await Promise.all([
-        this.documentsService.printTicketStub(tenant.id, ticket.id, systemActor, undefined),
-        this.documentsService.printInvoicePro(tenant.id, ticket.id, systemActor, undefined),
-      ]);
-      ticketDocUrl  = (ticketDoc  as any)?.downloadUrl ?? null;
-      invoiceDocUrl = (invoiceDoc as any)?.downloadUrl ?? null;
-    } catch (err) {
-      this.logger.warn(`Document generation failed for portal ticket ${ticket.id}: ${err}`);
-    }
+        const confirmed = await this.prisma.ticket.update({
+          where: { id: tk.id },
+          data:  { status: 'CONFIRMED', qrCode: qrToken, version: { increment: 1 } },
+        });
+
+        // Generate documents — fire-and-forget on error
+        let ticketDocUrl: string | null = null;
+        let invoiceDocUrl: string | null = null;
+        try {
+          const [ticketDoc, invoiceDoc] = await Promise.all([
+            this.documentsService.printTicketStub(tenant.id, tk.id, systemActor, undefined),
+            this.documentsService.printInvoicePro(tenant.id, tk.id, systemActor, undefined),
+          ]);
+          ticketDocUrl  = (ticketDoc  as any)?.downloadUrl ?? null;
+          invoiceDocUrl = (invoiceDoc as any)?.downloadUrl ?? null;
+        } catch (err) {
+          this.logger.warn(`Document generation failed for portal ticket ${tk.id}: ${err}`);
+        }
+
+        const pax = dto.passengers[tk.passengerIdx];
+        return {
+          bookingRef: confirmed.id.slice(0, 12).toUpperCase(),
+          ticketId:   confirmed.id,
+          status:     'CONFIRMED' as const,
+          qrCode:     qrToken,
+          fareClass:  tk.fareClass,
+          seatNumber: tk.seatNumber,
+          passenger:  { firstName: pax.firstName, lastName: pax.lastName },
+          documents:  { ticketStubUrl: ticketDocUrl, invoiceUrl: invoiceDocUrl },
+        };
+      }),
+    );
 
     return {
-      bookingRef:     confirmedTicket.id.slice(0, 12).toUpperCase(),
-      ticketId:       confirmedTicket.id,
-      status:         'CONFIRMED',
-      qrCode:         qrToken,
+      tickets: confirmedTickets,
       trip: {
         departure:     trip.route.origin.city || trip.route.origin.name,
         arrival:       trip.route.destination.city || trip.route.destination.name,
@@ -478,16 +547,8 @@ export class PublicPortalService {
         routeName:     trip.route.name,
         price:         trip.route.basePrice,
       },
-      passenger: {
-        firstName: dto.passenger.firstName,
-        lastName:  dto.passenger.lastName,
-      },
-      fareClass,
+      totalPrice:    trip.route.basePrice * dto.passengers.length,
       paymentMethod: dto.paymentMethod,
-      documents: {
-        ticketStubUrl: ticketDocUrl,
-        invoiceUrl:    invoiceDocUrl,
-      },
     };
   }
 }

@@ -1,6 +1,6 @@
 import {
-  IsEmail, IsEnum, IsOptional, IsPhoneNumber, IsString,
-  MaxLength, ValidateNested,
+  IsArray, IsEmail, IsEnum, IsOptional, IsString,
+  MaxLength, ValidateNested, ArrayMinSize, ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -29,9 +29,13 @@ export class CreateBookingDto {
   @IsString()
   tripId!: string;
 
-  @ValidateNested()
+  /** Multi-passenger: tableau de 1-8 passagers */
+  @IsArray()
+  @ValidateNested({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(8)
   @Type(() => PassengerDto)
-  passenger!: PassengerDto;
+  passengers!: PassengerDto[];
 
   @IsString()
   @MaxLength(50)

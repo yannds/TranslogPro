@@ -48,6 +48,8 @@ const LazyBranding       = lazy(() => import('../pages/PageBranding').then(m => 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPortalAdmin    = lazy(() => import('../pages/PagePortalAdmin').then(m => ({ default: m.PagePortalAdmin })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPortalMarket   = lazy(() => import('../pages/PagePortalMarketplace').then(m => ({ default: m.PagePortalMarketplace })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m => ({ default: m.PageCompanySetup })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamUsers       = lazy(() => import('../pages/PageIamUsers').then(m => ({ default: m.PageIamUsers })));
@@ -271,6 +273,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
     case 'portal-admin':        return <LazyPortalAdmin />;
+    case 'portal-marketplace':  return <LazyPortalMarket />;
     case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <PageWip title={t('router.apiIntegrations')} />;
     case 'documents-templates': return <LazyTemplateStudio />;

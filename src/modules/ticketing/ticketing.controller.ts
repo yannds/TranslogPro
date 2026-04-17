@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, Headers } from '@nestjs/common';
 import { TicketingService } from './ticketing.service';
-import { IssueTicketDto } from './dto/issue-ticket.dto';
+import { IssueTicketDto, IssueBatchDto, ConfirmBatchDto } from './dto/issue-ticket.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
@@ -20,6 +20,30 @@ export class TicketingController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.ticketingService.issue(tenantId, dto, actor, idempotencyKey);
+  }
+
+  /** Achat groupé — crée N billets en une transaction */
+  @Post('batch')
+  @RequirePermission(Permission.TICKET_CREATE_AGENCY)
+  issueBatch(
+    @TenantId() tenantId: string,
+    @Body() dto: IssueBatchDto,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.ticketingService.issueBatch(tenantId, dto, actor, idempotencyKey);
+  }
+
+  /** Confirmation groupée — confirme N billets, génère les QR codes */
+  @Post('batch/confirm')
+  @RequirePermission(Permission.TICKET_CREATE_AGENCY)
+  confirmBatch(
+    @TenantId() tenantId: string,
+    @Body() dto: ConfirmBatchDto,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.ticketingService.confirmBatch(tenantId, dto, actor, idempotencyKey);
   }
 
   /** Scan QR — check-in + embarquement */

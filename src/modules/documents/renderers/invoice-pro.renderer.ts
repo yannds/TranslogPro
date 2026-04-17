@@ -19,6 +19,7 @@ import { ScopeContext } from '../../../common/decorators/scope-context.decorator
 import {
   htmlProDoc, certifyPro, impBanner, perfLine, escHtml, fmtDate, fmtCfa, qrPng,
 } from './shared-pro';
+import { docLabels } from './doc-i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,10 +30,17 @@ export interface InvoiceProLine {
   tvaRate:     number;
 }
 
+/** Registre fiscal configurable par pays */
+interface FiscalRegistry { label: string; value: string; }
+
 export interface InvoiceProData {
   invoiceNumber: string;
   issuedAt:      Date;
   dueAt?:        Date | null;
+  /** Si false, le prix affiché est net — pas de colonnes HT/TVA */
+  tvaEnabled?:   boolean;
+  /** Langue du tenant (ISO 639-1) — pilote les labels du document */
+  lang?:         string;
   client: {
     name:    string;
     phone?:  string | null;
@@ -41,14 +49,14 @@ export interface InvoiceProData {
     taxId?:  string | null;
   };
   seller: {
-    name:    string;
-    address?: string | null;
-    phone?:  string | null;
-    email?:  string | null;
-    nif?:    string | null;
-    rccm?:   string | null;
-    bank?:   string | null;
-    iban?:   string | null;
+    name:              string;
+    address?:          string | null;
+    phone?:            string | null;
+    email?:            string | null;
+    /** Registres fiscaux configurables (NIU, RCCM, TIN…) — affichés dans l'en-tête */
+    fiscalRegistries?: FiscalRegistry[];
+    bank?:             string | null;
+    iban?:             string | null;
   };
   lines:      InvoiceProLine[];
   currency:   string;
@@ -178,14 +186,28 @@ const CSS = `
 
 export async function renderInvoicePro(data: InvoiceProData): Promise<string> {
   const { invoiceNumber, issuedAt, dueAt, client, seller, lines, currency, notes, actorId, scope } = data;
+  const tvaEnabled = data.tvaEnabled ?? true;
+  const i = docLabels(data.lang ?? 'fr');
+  const registries = seller.fiscalRegistries ?? [];
 
-  // ── Calculs TVA ──────────────────────────────────────────────────────────
+  // ── Calculs ──────────────────────────────────────────────────────────────
   let totalHt = 0, totalTva = 0, totalTtc = 0;
   const lineRows = lines.map(l => {
     const ht  = l.quantity * l.unitPriceHt;
-    const tva = ht * l.tvaRate;
+    const tva = tvaEnabled ? ht * l.tvaRate : 0;
     const ttc = ht + tva;
     totalHt  += ht; totalTva += tva; totalTtc += ttc;
+
+    if (!tvaEnabled) {
+      // Prix net — 4 colonnes : Description | Qté | P.U. | Montant
+      return [
+        escHtml(l.description),
+        String(l.quantity),
+        fmtCfa(l.unitPriceHt),
+        `<strong>${fmtCfa(Math.round(ttc))}</strong>`,
+      ];
+    }
+    // TVA activée — 6 colonnes
     return [
       escHtml(l.description),
       String(l.quantity),
@@ -212,40 +234,38 @@ ${impBanner(scope)}
     <div class="name">${escHtml(seller.name)}</div>
     <div class="coords">
       ${seller.address ? escHtml(seller.address) + '<br>' : ''}
-      ${seller.phone   ? 'Tél : ' + escHtml(seller.phone) + '<br>' : ''}
+      ${seller.phone   ? (i.bank === 'Bank' ? 'Tel: ' : 'Tél : ') + escHtml(seller.phone) + '<br>' : ''}
       ${seller.email   ? escHtml(seller.email) + '<br>' : ''}
-      ${seller.nif     ? 'NIF : ' + escHtml(seller.nif) + '<br>' : ''}
-      ${seller.rccm    ? 'RCCM : ' + escHtml(seller.rccm) : ''}
+      ${registries.map(r => `${escHtml(r.label)} : ${escHtml(r.value)}`).join('<br>')}
     </div>
   </div>
   <div class="inv-meta">
-    <div class="label">Facture</div>
+    <div class="label">${i.invoice}</div>
     <div class="number">${escHtml(invoiceNumber)}</div>
-    <div class="date">Émise le ${fmtDate(issuedAt)}</div>
-    ${dueAt ? `<div class="date" style="margin-top:1mm;">Échéance ${fmtDate(dueAt)}</div>` : ''}
+    <div class="date">${i.issuedDate} ${fmtDate(issuedAt)}</div>
+    ${dueAt ? `<div class="date" style="margin-top:1mm;">${i.dueDate} ${fmtDate(dueAt)}</div>` : ''}
   </div>
 </div>
 
 <!-- ═══ PARTIES ═══ -->
 <div class="inv-parties">
   <div class="inv-party">
-    <div class="party-title">Facturé à</div>
+    <div class="party-title">${i.billedTo}</div>
     <div class="party-name">${escHtml(client.name)}</div>
     <div class="party-info">
       ${client.address ? escHtml(client.address) + '<br>' : ''}
-      ${client.phone   ? 'Tél : ' + escHtml(client.phone) + '<br>' : ''}
-      ${client.email   ? escHtml(client.email) + '<br>' : ''}
-      ${client.taxId   ? 'NIF : ' + escHtml(client.taxId) : ''}
+      ${client.phone   ? (i.bank === 'Bank' ? 'Tel: ' : 'Tél : ') + escHtml(client.phone) + '<br>' : ''}
+      ${client.email   ? escHtml(client.email) : ''}
     </div>
   </div>
   <div class="inv-party">
     <div class="party-title">Récapitulatif</div>
     <div class="party-info" style="font-size:8.5pt;">
-      <strong>N° Facture</strong> ${escHtml(invoiceNumber)}<br>
-      <strong>Date</strong> ${fmtDate(issuedAt)}<br>
-      <strong>Devise</strong> ${escHtml(currency)}<br>
-      ${dueAt ? `<strong>Échéance</strong> ${fmtDate(dueAt)}<br>` : ''}
-      <strong style="font-size:11pt;color:var(--c-brand);">Total TTC</strong>
+      <strong>${i.invoiceNumber}</strong> ${escHtml(invoiceNumber)}<br>
+      <strong>${i.date}</strong> ${fmtDate(issuedAt)}<br>
+      <strong>${i.currency}</strong> ${escHtml(currency)}<br>
+      ${dueAt ? `<strong>${i.dueDate}</strong> ${fmtDate(dueAt)}<br>` : ''}
+      <strong style="font-size:11pt;color:var(--c-brand);">${tvaEnabled ? i.totalTtc : i.total}</strong>
       <span style="font-size:11pt;font-weight:700;">${fmtCfa(Math.round(totalTtc))}</span>
     </div>
   </div>
@@ -255,18 +275,29 @@ ${impBanner(scope)}
 <div class="inv-table">
   <table>
     <thead>
-      <tr>
-        <th style="width:44%">Description</th>
-        <th style="text-align:center;width:8%">Qté</th>
-        <th style="text-align:right;width:14%">P.U. HT</th>
-        <th style="text-align:center;width:8%">TVA</th>
-        <th style="text-align:right;width:12%">TVA</th>
-        <th style="text-align:right;width:14%">Total TTC</th>
-      </tr>
+      ${tvaEnabled ? `<tr>
+        <th style="width:44%">${i.description}</th>
+        <th style="text-align:center;width:8%">${i.qty}</th>
+        <th style="text-align:right;width:14%">${i.unitPriceHt}</th>
+        <th style="text-align:center;width:8%">${i.tvaPercent}</th>
+        <th style="text-align:right;width:12%">${i.tvaAmount}</th>
+        <th style="text-align:right;width:14%">${i.totalTtc}</th>
+      </tr>` : `<tr>
+        <th style="width:54%">${i.description}</th>
+        <th style="text-align:center;width:10%">${i.qty}</th>
+        <th style="text-align:right;width:18%">${i.unitPrice}</th>
+        <th style="text-align:right;width:18%">${i.amount}</th>
+      </tr>`}
     </thead>
     <tbody>
       ${lineRows.map(r =>
-        `<tr>${r.map((v, i) => `<td style="text-align:${[1,3].includes(i)?'center':[2,4,5].includes(i)?'right':'left'}">${v}</td>`).join('')}</tr>`
+        `<tr>${r.map((v, ci) => {
+          const cols = r.length;
+          const align = cols === 4
+            ? (ci === 1 ? 'center' : ci >= 2 ? 'right' : 'left')
+            : ([1,3].includes(ci) ? 'center' : [2,4,5].includes(ci) ? 'right' : 'left');
+          return `<td style="text-align:${align}">${v}</td>`;
+        }).join('')}</tr>`
       ).join('')}
     </tbody>
   </table>
@@ -275,49 +306,54 @@ ${impBanner(scope)}
 <!-- ═══ TOTAUX ═══ -->
 <div class="inv-totals">
   <div class="inv-totals-box">
-    <div class="tot-row"><span>Sous-total HT</span><span>${fmtCfa(Math.round(totalHt))}</span></div>
-    <div class="tot-row"><span>TVA</span><span>${fmtCfa(Math.round(totalTva))}</span></div>
-    <div class="tot-row ttc"><span>TOTAL TTC</span><span>${fmtCfa(Math.round(totalTtc))}</span></div>
+    ${tvaEnabled ? `
+    <div class="tot-row"><span>${i.subtotalHt}</span><span>${fmtCfa(Math.round(totalHt))}</span></div>
+    <div class="tot-row"><span>${i.tva}</span><span>${fmtCfa(Math.round(totalTva))}</span></div>
+    <div class="tot-row ttc"><span>${i.total} TTC</span><span>${fmtCfa(Math.round(totalTtc))}</span></div>
+    ` : `
+    <div class="tot-row ttc"><span>${i.total}</span><span>${fmtCfa(Math.round(totalTtc))}</span></div>
+    `}
   </div>
 </div>
 
 <!-- ═══ PAIEMENT ═══ -->
 ${seller.bank || seller.iban ? `
 <div class="inv-payment">
-  <div class="pay-title">Informations de paiement</div>
-  ${seller.bank ? `<div>Banque : <span class="pay-bank">${escHtml(seller.bank)}</span></div>` : ''}
-  ${seller.iban ? `<div>IBAN / Compte : <span class="pay-bank">${escHtml(seller.iban)}</span></div>` : ''}
+  <div class="pay-title">${i.paymentInfo}</div>
+  ${seller.bank ? `<div>${i.bank} : <span class="pay-bank">${escHtml(seller.bank)}</span></div>` : ''}
+  ${seller.iban ? `<div>${i.ibanAccount} : <span class="pay-bank">${escHtml(seller.iban)}</span></div>` : ''}
 </div>` : ''}
 
 <!-- ═══ NOTES ═══ -->
-${notes ? `<div class="inv-notes"><strong>Notes :</strong> ${escHtml(notes)}</div>` : ''}
+${notes ? `<div class="inv-notes"><strong>${i.notes} :</strong> ${escHtml(notes)}</div>` : ''}
 
 <!-- ═══ SIGNATURES ═══ -->
 <div class="sig-row" style="margin-top:8mm;">
-  <div class="sig-line">Cachet &amp; Signature vendeur</div>
-  <div class="sig-line">Signature client</div>
+  <div class="sig-line">${i.sellerStamp}</div>
+  <div class="sig-line">${i.clientSignature}</div>
 </div>
 
 <!-- ═══ MENTIONS LÉGALES ═══ -->
 <div class="inv-legal" style="margin-top:6mm;">
-  TVA appliquée conformément à la législation UEMOA. En cas de litige : ${escHtml(seller.name)}.
-  Tout paiement après émission est définitif.
+  ${tvaEnabled ? i.tvaLegal : i.noTvaLegal}
+  ${i.dispute} ${escHtml(seller.name)}.
+  ${i.paymentFinal}
 </div>
 
 <!-- ═══════════════════════════════════════════════════
      TALON DÉTACHABLE — à retourner avec le règlement
      ══════════════════════════════════════════════════ -->
-${perfLine('Détacher et retourner avec votre règlement')}
+${perfLine(i.detachAndReturn)}
 
 <div class="inv-stub">
   <div>
-    <div class="stub-title">Coupon de paiement</div>
+    <div class="stub-title">${i.paymentCoupon}</div>
     <div class="stub-fields">
-      <div class="stub-field"><label>N° Facture</label><span class="mono">${escHtml(invoiceNumber)}</span></div>
-      <div class="stub-field"><label>Client</label><span>${escHtml(client.name)}</span></div>
-      <div class="stub-field"><label>Montant TTC</label><span>${fmtCfa(Math.round(totalTtc))}</span></div>
-      <div class="stub-field"><label>Échéance</label><span>${dueLabel}</span></div>
-      <div class="stub-field"><label>Devise</label><span>${escHtml(currency)}</span></div>
+      <div class="stub-field"><label>${i.invoiceNumber}</label><span class="mono">${escHtml(invoiceNumber)}</span></div>
+      <div class="stub-field"><label>${i.client}</label><span>${escHtml(client.name)}</span></div>
+      <div class="stub-field"><label>${tvaEnabled ? i.totalTtc : i.amount}</label><span>${fmtCfa(Math.round(totalTtc))}</span></div>
+      <div class="stub-field"><label>${i.dueDate}</label><span>${dueLabel}</span></div>
+      <div class="stub-field"><label>${i.currency}</label><span>${escHtml(currency)}</span></div>
     </div>
   </div>
   <div class="stub-qr">
@@ -325,7 +361,7 @@ ${perfLine('Détacher et retourner avec votre règlement')}
     <div class="mono">${escHtml(invoiceNumber)}</div>
   </div>
   <div class="stub-note">
-    Merci de mentionner le numéro de facture sur votre virement. — ${escHtml(seller.name)}
+    ${i.mentionInvoice} — ${escHtml(seller.name)}
   </div>
 </div>
 `;

@@ -108,7 +108,20 @@ export function PagePortalAdmin() {
     if (!tenantId) return;
     setSaving(true);
     try {
-      await apiPut(`/api/v1/tenants/${tenantId}/portal/config`, config);
+      // Only send DTO-valid fields — strip id, tenantId, updatedAt etc.
+      const payload = {
+        themeId:      config.themeId,
+        showAbout:    config.showAbout,
+        showFleet:    config.showFleet,
+        showNews:     config.showNews,
+        showContact:  config.showContact,
+        heroImageUrl: config.heroImageUrl || undefined,
+        heroOverlay:  config.heroOverlay,
+        slogans:      config.slogans,
+        socialLinks:  config.socialLinks,
+        ogImageUrl:   config.ogImageUrl || undefined,
+      };
+      await apiPut(`/api/v1/tenants/${tenantId}/portal/config`, payload);
       setSaved(true);
     } finally {
       setSaving(false);

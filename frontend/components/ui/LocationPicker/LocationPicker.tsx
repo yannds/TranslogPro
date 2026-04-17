@@ -10,9 +10,10 @@
  *   - La modale parente n'a aucune dépendance à la carte pour soumettre un form.
  */
 import {
-  lazy, Suspense, useEffect, useRef, useState, Component,
+  lazy, Suspense, useEffect, useRef, useState, useCallback, Component,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, Search, Loader2 } from 'lucide-react';
 import { apiGet } from '../../../lib/api';
 import { inputClass as inp } from '../inputClass';
@@ -70,10 +71,18 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const lat = parseCoord(value.lat);
   const lng = parseCoord(value.lng);
+
+  const updateDropdownPos = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+  }, []);
 
   useEffect(() => {
     const q = query.trim();
@@ -97,6 +106,7 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
           { signal: ac.signal },
         );
         setResults(data.results ?? []);
+        updateDropdownPos();
         setShowResults(true);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
@@ -137,11 +147,12 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
             aria-hidden
           />
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onFocus={() => results.length > 0 && setShowResults(true)}
-            onBlur={() => setTimeout(() => setShowResults(false), 150)}
+            onFocus={() => { updateDropdownPos(); if (results.length > 0) setShowResults(true); }}
+            onBlur={() => setTimeout(() => setShowResults(false), 200)}
             className={`${inp} pl-9 pr-9`}
             placeholder="ex. Gare routière Poto-Poto, Brazzaville"
             disabled={disabled}
@@ -156,10 +167,11 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
               aria-hidden
             />
           )}
-          {showResults && results.length > 0 && (
+          {showResults && results.length > 0 && dropdownPos && createPortal(
             <ul
               role="listbox"
-              className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-auto"
+              style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+              className="z-[100] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-auto"
             >
               {results.map((r, i) => (
                 <li key={`${r.lat},${r.lng},${i}`} role="option">
@@ -173,7 +185,8 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
                   </button>
                 </li>
               ))}
-            </ul>
+            </ul>,
+            document.body,
           )}
         </div>
         {searchErr && (

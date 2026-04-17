@@ -30,6 +30,7 @@ export interface PricingInput {
   alightingStationId: string;   // gare de descente
   luggageKg?:         number;
   discountCode?:      string;
+  wantsSeatSelection?: boolean; // true = le passager paie l'option choix de siège
 }
 
 export interface PricingResult {
@@ -38,6 +39,7 @@ export interface PricingResult {
   tolls:            number;
   luggageFee:       number;
   yieldSurplus:     number;
+  seatSelectionFee: number;     // supplément choix de siège (0 si non demandé ou gratuit)
   discount:         number;
   total:            number;
   currency:         string;
@@ -118,17 +120,33 @@ export class PricingEngine {
       }
     }
 
-    // ── 8. Remise ──────────────────────────────────────────────────────────
+    // ── 8. Supplément choix de siège ────────────────────────────────────────
+    let seatSelectionFee = 0;
+    if (input.wantsSeatSelection && trip.seatingMode === 'NUMBERED') {
+      const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+        where: { tenantId: input.tenantId },
+        select: { seatSelectionFee: true },
+      });
+      seatSelectionFee = bizConfig?.seatSelectionFee ?? 0;
+    }
+
+    // ── 9. Remise ──────────────────────────────────────────────────────────
     const discount = await this.resolveDiscount(input.discountCode, basePrice, input.tenantId);
 
-    // ── 9. Labels des stations ─────────────────────────────────────────────
+    // ── 10. Labels des stations ────────────────────────────────────────────
     const [fromStation, toStation] = await Promise.all([
       this.prisma.station.findUnique({ where: { id: input.boardingStationId }, select: { name: true } }),
       this.prisma.station.findUnique({ where: { id: input.alightingStationId }, select: { name: true } }),
     ]);
 
-    // ── 10. Total ──────────────────────────────────────────────────────────
-    const total = Math.max(0, basePrice + taxes + tolls + luggageFee + yieldSurplus - discount);
+    // ── 11. Devise du tenant (jamais hardcodée) ───────────────────────────
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: input.tenantId },
+      select: { currency: true },
+    });
+
+    // ── 12. Total ──────────────────────────────────────────────────────────
+    const total = Math.max(0, basePrice + taxes + tolls + luggageFee + yieldSurplus + seatSelectionFee - discount);
 
     return {
       basePrice,
@@ -136,9 +154,10 @@ export class PricingEngine {
       tolls,
       luggageFee,
       yieldSurplus,
+      seatSelectionFee,
       discount,
       total,
-      currency:         'XAF',
+      currency:         tenant.currency,
       fareClass:        input.fareClass,
       segmentLabel:     `${fromStation?.name ?? '?'} → ${toStation?.name ?? '?'}`,
       isAutoCalculated: segmentResult.isAutoCalculated,
@@ -151,9 +170,10 @@ export class PricingEngine {
         base:    basePrice,
         taxes,
         tolls,
-        luggage: luggageFee,
-        yield:   yieldSurplus,
-        discount: -discount,
+        luggage:       luggageFee,
+        yield:         yieldSurplus,
+        seatSelection: seatSelectionFee,
+        discount:      -discount,
       },
     };
   }

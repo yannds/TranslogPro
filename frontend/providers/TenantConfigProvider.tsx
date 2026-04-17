@@ -12,7 +12,7 @@
  */
 
 import {
-  createContext, useContext, useEffect, useState,
+  createContext, useCallback, useContext, useEffect, useState,
   type ReactNode,
 } from 'react';
 import type { Language }      from '../lib/i18n/types';
@@ -160,9 +160,9 @@ export function TenantConfigProvider({
     root.style.setProperty('--font-family',     brand.fontFamily);
   }, [config]);
 
-  const applyPatch = (patch: Partial<TenantConfig>) => {
+  const applyPatch = useCallback((patch: Partial<TenantConfig>) => {
     setConfig(prev => mergeConfig(prev, patch));
-  };
+  }, []);
 
   return (
     <TenantConfigContext.Provider value={{ config, applyPatch }}>

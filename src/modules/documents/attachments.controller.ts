@@ -38,7 +38,7 @@ export class AttachmentsController {
   constructor(private readonly service: AttachmentsService) {}
 
   @Get()
-  @RequirePermission(Permission.CRM_READ_TENANT)
+  @RequirePermission([Permission.CRM_READ_TENANT, Permission.DRIVER_REST_OWN])
   list(
     @TenantId() tenantId: string,
     @Query('entityType') entityType: string,
@@ -76,7 +76,7 @@ export class AttachmentsController {
   }
 
   @Get(':id/download')
-  @RequirePermission(Permission.CRM_READ_TENANT)
+  @RequirePermission([Permission.CRM_READ_TENANT, Permission.DRIVER_REST_OWN])
   async download(
     @TenantId() tenantId: string,
     @Param('id') id: string,

@@ -120,8 +120,8 @@ async function poc2TicketStub(): Promise<void> {
       arrivalScheduled:   ARRIVE,
       route: {
         name:          'Dakar — Bamako Express',
-        originId:      'Dakar, Sénégal',
-        destinationId: 'Bamako, Mali',
+        originCity:      'Dakar, Sénégal',
+        destinationCity: 'Bamako, Mali',
       },
       bus: {
         plateNumber: 'DK 4521 AB',

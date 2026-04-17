@@ -47,6 +47,11 @@ model Tenant {
   address     String?
   taxId       String?
 
+  // Registres fiscaux configurables par pays — affiché sur les documents
+  // Format : [{ label: "NIU", value: "CG-NIU-2024-00142" }, { label: "RCCM", value: "..." }]
+  // Chaque pays utilise ses propres identifiants (NIU Congo, NIF France, TIN USA…)
+  fiscalRegistries Json @default("[]")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -152,6 +157,20 @@ model TenantBusinessConfig {
   agencyCommissionRate   Float @default(0.03)
   // Redevance gare routière par départ (en devise tenant)
   stationFeePerDeparture Float @default(0.0)
+
+  // ── Fiscalité / TVA ─────────────────────────────────────────────────────────
+  // En Afrique la TVA n'est pas systématique — certains transporteurs ne sont
+  // pas assujettis ou appliquent un taux réduit. Si tvaEnabled = false les
+  // prix affichés sont nets (= TTC), aucun calcul HT/TVA n'est effectué sur
+  // les documents (factures, reçus).
+  tvaEnabled Boolean @default(false)
+  tvaRate    Float   @default(0.18) // fraction (0.18 = 18 %)
+
+  // ── Option choix de siège (mode NUMBERED) ─────────────────────────────────
+  // Montant facturé au passager s'il veut choisir son siège sur la seatmap.
+  // 0 = option gratuite (la seatmap s'affiche sans surcoût).
+  // Exprimé dans la devise du tenant (Tenant.currency).
+  seatSelectionFee Float @default(0)
 
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -586,6 +605,10 @@ model Route {
   // le pricing engine calcule proportionnellement à la distance.
   // Si false → vente bloquée ("Tarif non configuré").
 
+  // TVA override par route (null = utilise le taux tenant)
+  // Permet d'exonérer certaines lignes ou d'appliquer un taux réduit.
+  tvaOverrideRate Float?
+
   tenant        Tenant              @relation(fields: [tenantId], references: [id])
   origin        Station             @relation("RouteOrigin", fields: [originId], references: [id])
   destination   Station             @relation("RouteDestination", fields: [destinationId], references: [id])
@@ -825,6 +848,9 @@ model Trip {
   status             String    @default("PLANNED")
   // PLANNED | OPEN | BOARDING | IN_PROGRESS | IN_PROGRESS_PAUSED
   // IN_PROGRESS_DELAYED | COMPLETED | CANCELLED
+  seatingMode        String    @default("FREE")
+  // FREE = placement libre (pas de choix de siège, mais capacité respectée)
+  // NUMBERED = places numérotées (siège attribué auto ou choisi via option payante)
   roadbook           Json      @default("{}")
   // Stocké en DB (pas MinIO) pour permettre les requêtes sur waypoints
   departureScheduled DateTime

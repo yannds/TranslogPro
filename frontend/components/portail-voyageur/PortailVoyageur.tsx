@@ -20,10 +20,17 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { apiFetch } from '../../lib/api';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { ComboboxEditable, type ComboboxOption } from '../ui/ComboboxEditable';
 import { TripDatePicker } from './TripDatePicker';
 import type { Language } from '../../lib/i18n/types';
 import { createContext, useContext } from 'react';
 import { getTheme, type PortalTheme } from './portal-themes';
+import {
+  HorizonNavbar, HorizonHero, HorizonTripCard, HorizonSectionTitle, HorizonFooter,
+  VividNavbar, VividHero, VividTripCard, VividSectionTitle, VividFooter,
+  PrestigeNavbar, PrestigeHero, PrestigeTripCard, PrestigeSectionTitle, PrestigeFooter,
+  type NavItem as LayoutNavItem, type VariantTripCardProps,
+} from './layout-variants';
 
 // Theme context — all sub-components read the active theme from here
 const PortalThemeCtx = createContext<PortalTheme>(getTheme());
@@ -325,34 +332,49 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
 // Booking Modal (truly responsive — centered, not a bottom drawer)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type BookingStep = 'passenger' | 'payment' | 'confirmation';
+type BookingStep = 'passengers' | 'payment' | 'confirmation';
 
-interface BookingResult {
+interface TicketResult {
   bookingRef: string;
   ticketId: string;
   status: string;
   qrCode: string;
-  trip: { departure: string; arrival: string; departureTime: string; arrivalTime: string; routeName: string; price: number };
-  passenger: { firstName: string; lastName: string };
   fareClass: string;
-  paymentMethod: string;
+  seatNumber: string | null;
+  passenger: { firstName: string; lastName: string };
   documents: { ticketStubUrl: string | null; invoiceUrl: string | null };
 }
 
-function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; onClose: () => void }) {
+interface BookingResult {
+  tickets: TicketResult[];
+  trip: { departure: string; arrival: string; departureTime: string; arrivalTime: string; routeName: string; price: number };
+  totalPrice: number;
+  paymentMethod: string;
+}
+
+const emptyPassenger = (): Partial<PassengerInfo> => ({ seatType: 'STANDARD' });
+
+function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; passengerCount: number; onClose: () => void }) {
   const { t } = useI18n();
   const fmt = useCurrencyFormatter();
-  const [step, setStep] = useState<BookingStep>('passenger');
-  const [passenger, setPassenger] = useState<Partial<PassengerInfo>>({});
+  const count = Math.max(1, Math.min(passengerCount, 8));
+  const [step, setStep] = useState<BookingStep>('passengers');
+  const [passengers, setPassengers] = useState<Partial<PassengerInfo>[]>(() => Array.from({ length: count }, emptyPassenger));
   const [selectedPayment, setSelectedPayment] = useState('');
   const [booking, setBooking] = useState<BookingResult | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
-  const steps: BookingStep[] = ['passenger', 'payment', 'confirmation'];
+  const steps: BookingStep[] = ['passengers', 'payment', 'confirmation'];
   const ci = steps.indexOf(step);
   const isVip = trip.busType === 'VIP';
-  const fee = Math.round(trip.price * 0.03);
-  const total = trip.price + fee;
+  const subtotal = trip.price * count;
+  const fee = Math.round(subtotal * 0.03);
+  const total = subtotal + fee;
+
+  const updatePassenger = (idx: number, patch: Partial<PassengerInfo>) =>
+    setPassengers(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p));
+
+  const allPassengersValid = passengers.every(p => p.firstName && p.lastName && p.phone);
 
   async function handlePay() {
     if (!apiBase || !selectedPayment) return;
@@ -364,13 +386,13 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
         skipRedirectOn401: true,
         body: {
           tripId: trip.id,
-          passenger: {
-            firstName: passenger.firstName ?? '',
-            lastName:  passenger.lastName ?? '',
-            phone:     passenger.phone ?? '',
-            email:     passenger.email,
-            seatType:  passenger.seatType ?? 'STANDARD',
-          },
+          passengers: passengers.map(p => ({
+            firstName: p.firstName ?? '',
+            lastName:  p.lastName ?? '',
+            phone:     p.phone ?? '',
+            email:     p.email,
+            seatType:  p.seatType ?? 'STANDARD',
+          })),
           paymentMethod: selectedPayment,
         },
       });
@@ -389,7 +411,7 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
       <div className="relative z-10 w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[92vh] flex flex-col border border-slate-200/50 dark:border-slate-700/50 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="min-w-0"><p className="font-bold text-slate-900 dark:text-white text-base sm:text-lg truncate">{trip.departure} &rarr; {trip.arrival}</p><p className="text-sm text-slate-500 mt-0.5 truncate">{fmtTime(trip.departureTime)} &middot; {trip.busModel} &middot; {fmt(trip.price)}</p></div>
+          <div className="min-w-0"><p className="font-bold text-slate-900 dark:text-white text-base sm:text-lg truncate">{trip.departure} &rarr; {trip.arrival}</p><p className="text-sm text-slate-500 mt-0.5 truncate">{fmtTime(trip.departureTime)} &middot; {trip.busModel} &middot; {count > 1 ? `${count} ${t('portail.passengers')}` : fmt(trip.price)}</p></div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors shrink-0 ml-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
         {/* Progress */}
@@ -401,7 +423,7 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
                 {ci > i ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> : i + 1}
               </div>
               <span className={cn('text-xs font-medium hidden sm:block ml-1', ci === i ? 'text-slate-800 dark:text-white' : 'text-slate-400')}>
-                {s === 'passenger' ? t('portail.passenger') : s === 'payment' ? t('portail.payment') : t('portail.confirmation')}
+                {s === 'passengers' ? t('portail.passengers') : s === 'payment' ? t('portail.payment') : t('portail.confirmation')}
               </span>
               {i < 2 && <div className={cn('flex-1 h-0.5 rounded-full mx-2', ci > i ? 'bg-emerald-400' : 'bg-slate-200 dark:bg-slate-700')} />}
             </div>
@@ -409,31 +431,36 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
         </div>
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-          {step === 'passenger' && (
-            <div className="space-y-5">
-              <div><h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.passengerInfo')}</h3><p className="text-sm text-slate-500 mt-1">{t('portail.passengerInfoDesc')}</p></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Inp label={t('portail.firstName')} ph="Jean" value={passenger.firstName || ''} set={v => setPassenger(p => ({ ...p, firstName: v }))} />
-                <Inp label={t('portail.lastName')} ph="Makaya" value={passenger.lastName || ''} set={v => setPassenger(p => ({ ...p, lastName: v }))} />
-              </div>
-              <Inp label={t('portail.phoneLabel')} ph="+242 06 000 00 00" value={passenger.phone || ''} set={v => setPassenger(p => ({ ...p, phone: v }))} />
-              <Inp label={t('portail.emailOptional')} ph="jean@exemple.com" type="email" value={passenger.email || ''} set={v => setPassenger(p => ({ ...p, email: v }))} />
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
-                <div className="grid grid-cols-2 gap-3">{(['STANDARD', 'VIP'] as const).map(type => (
-                  <button key={type} onClick={() => setPassenger(p => ({ ...p, seatType: type }))} className={cn('relative p-3 sm:p-4 rounded-2xl border-2 text-sm font-medium transition-all text-left',
-                    passenger.seatType === type ? (type === 'VIP' ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-900 dark:border-white bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white') : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300')}>
-                    <span className="text-lg block mb-1">{type === 'VIP' ? '\u2605' : '\u25CB'}</span><span className="font-bold">{type}</span><span className="block text-xs mt-0.5 opacity-70">{type === 'VIP' ? t('portail.vipDesc') : t('portail.standardDesc')}</span>
-                  </button>
-                ))}</div>
-              </div>
+          {step === 'passengers' && (
+            <div className="space-y-6">
+              {passengers.map((pax, idx) => (
+                <div key={idx} className={cn('space-y-4', count > 1 && 'bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-4 sm:p-5 border border-slate-100 dark:border-slate-700/50')}>
+                  {count > 1 && <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t('portail.passengerN').replace('{n}', String(idx + 1))}</p>}
+                  {idx === 0 && <div><h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.passengerInfo')}</h3><p className="text-sm text-slate-500 mt-1">{t('portail.passengerInfoDesc')}</p></div>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Inp label={t('portail.firstName')} ph="Jean" value={pax.firstName || ''} set={v => updatePassenger(idx, { firstName: v })} />
+                    <Inp label={t('portail.lastName')} ph="Makaya" value={pax.lastName || ''} set={v => updatePassenger(idx, { lastName: v })} />
+                  </div>
+                  <Inp label={t('portail.phoneLabel')} ph="+242 06 000 00 00" value={pax.phone || ''} set={v => updatePassenger(idx, { phone: v })} />
+                  <Inp label={t('portail.emailOptional')} ph="jean@exemple.com" type="email" value={pax.email || ''} set={v => updatePassenger(idx, { email: v })} />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
+                    <div className="grid grid-cols-2 gap-3">{(['STANDARD', 'VIP'] as const).map(type => (
+                      <button key={type} onClick={() => updatePassenger(idx, { seatType: type })} className={cn('relative p-3 sm:p-4 rounded-2xl border-2 text-sm font-medium transition-all text-left',
+                        pax.seatType === type ? (type === 'VIP' ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-900 dark:border-white bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white') : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300')}>
+                        <span className="text-lg block mb-1">{type === 'VIP' ? '\u2605' : '\u25CB'}</span><span className="font-bold">{type}</span><span className="block text-xs mt-0.5 opacity-70">{type === 'VIP' ? t('portail.vipDesc') : t('portail.standardDesc')}</span>
+                      </button>
+                    ))}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
           {step === 'payment' && (
             <div className="space-y-5">
               <div><h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.payment')}</h3><p className="text-sm text-slate-500 mt-1">{t('portail.selectPayment')}</p></div>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 sm:p-5 space-y-3 border border-slate-100 dark:border-slate-700/50">
-                <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.ticket')} {trip.departure} &rarr; {trip.arrival}</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(trip.price)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.ticket')} {trip.departure} &rarr; {trip.arrival} &times; {count}</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(subtotal)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">{t('portail.serviceFee')} (3%)</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(fee)}</span></div>
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between"><span className="font-bold text-slate-900 dark:text-white">{t('portail.total')}</span><span className={cn('text-lg sm:text-xl font-bold', isVip ? '[color:var(--portal-accent)]' : 'text-slate-900 dark:text-white')}>{fmt(total)}</span></div>
               </div>
@@ -452,46 +479,51 @@ function BookingModal({ trip, paymentMethods, apiBase, onClose }: { trip: TripRe
           {step === 'confirmation' && booking && (
             <div className="text-center space-y-6 py-2 sm:py-4">
               <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/30"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-              <div><h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.bookingConfirmed')}</h3><p className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">{t('portail.ticketSentSms')}</p></div>
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 sm:p-6 text-white"><p className="text-xs uppercase tracking-[0.2em] font-semibold text-slate-400 mb-2">{t('portail.ticketCodeLabel')}</p><p className="text-2xl sm:text-3xl font-mono font-black tracking-[0.15em]">{booking.bookingRef}</p></div>
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 sm:p-5 text-left space-y-3 border border-slate-100 dark:border-slate-700/50">
-                <IRow l={t('portail.trip')} v={`${booking.trip.departure} \u2192 ${booking.trip.arrival}`} />
-                <IRow l={t('portail.departure')} v={fmtTime(booking.trip.departureTime)} />
-                <IRow l={t('portail.busLabel')} v={trip.busModel} />
-                <IRow l={t('portail.passenger')} v={`${booking.passenger.firstName} ${booking.passenger.lastName}`.trim()} />
-                <IRow l={t('portail.fareClassLabel')} v={booking.fareClass} />
-                <IRow l={t('portail.total')} v={fmt(booking.trip.price)} hl />
-              </div>
-              {/* Document downloads */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                {booking.documents.ticketStubUrl && (
-                  <a href={booking.documents.ticketStubUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-sm hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 transition-all">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {t('portail.downloadTicket')}
-                  </a>
-                )}
-                {booking.documents.invoiceUrl && (
-                  <a href={booking.documents.invoiceUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:border-slate-300 hover:bg-slate-50 transition-all">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    {t('portail.downloadInvoice')}
-                  </a>
-                )}
-              </div>
+              <div><h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.bookingConfirmed')}</h3><p className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">{booking.tickets.length > 1 ? t('portail.ticketsSentSms').replace('{count}', String(booking.tickets.length)) : t('portail.ticketSentSms')}</p></div>
+              {booking.tickets.map((tk, idx) => (
+                <div key={tk.ticketId} className="space-y-4">
+                  {booking.tickets.length > 1 && <p className="text-xs font-bold text-slate-500 uppercase tracking-widest pt-2">{t('portail.passengerN').replace('{n}', String(idx + 1))}</p>}
+                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 sm:p-6 text-white"><p className="text-xs uppercase tracking-[0.2em] font-semibold text-slate-400 mb-2">{t('portail.ticketCodeLabel')}</p><p className="text-2xl sm:text-3xl font-mono font-black tracking-[0.15em]">{tk.bookingRef}</p></div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 sm:p-5 text-left space-y-3 border border-slate-100 dark:border-slate-700/50">
+                    <IRow l={t('portail.trip')} v={`${booking.trip.departure} \u2192 ${booking.trip.arrival}`} />
+                    <IRow l={t('portail.departure')} v={fmtTime(booking.trip.departureTime)} />
+                    <IRow l={t('portail.busLabel')} v={trip.busModel} />
+                    <IRow l={t('portail.passenger')} v={`${tk.passenger.firstName} ${tk.passenger.lastName}`.trim()} />
+                    <IRow l={t('portail.fareClassLabel')} v={tk.fareClass} />
+                    {tk.seatNumber && <IRow l={t('portail.seatLabel')} v={tk.seatNumber} />}
+                    <IRow l={t('portail.total')} v={fmt(booking.trip.price)} hl />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center pt-1">
+                    {tk.documents.ticketStubUrl && (
+                      <a href={tk.documents.ticketStubUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-sm hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 transition-all">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        {t('portail.downloadTicket')}
+                      </a>
+                    )}
+                    {tk.documents.invoiceUrl && (
+                      <a href={tk.documents.invoiceUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:border-slate-300 hover:bg-slate-50 transition-all">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        {t('portail.downloadInvoice')}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
         {/* Footer */}
         <div className="px-5 sm:px-8 pb-5 sm:pb-6 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
-          {step === 'passenger' && <button onClick={() => setStep('payment')} disabled={!passenger.firstName || !passenger.lastName || !passenger.phone} className={cn('w-full py-3 sm:py-3.5 rounded-xl font-semibold text-sm transition-all', passenger.firstName && passenger.lastName && passenger.phone ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>{t('portail.continueToPayment')}</button>}
+          {step === 'passengers' && <button onClick={() => setStep('payment')} disabled={!allPassengersValid} className={cn('w-full py-3 sm:py-3.5 rounded-xl font-semibold text-sm transition-all', allPassengersValid ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>{t('portail.continueToPayment')}</button>}
           {step === 'payment' && (
             <div className="space-y-3">
               {bookingError && (
                 <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{bookingError}</div>
               )}
               <div className="flex gap-3">
-                <button onClick={() => setStep('passenger')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
+                <button onClick={() => setStep('passengers')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
                 <button onClick={handlePay} disabled={!selectedPayment || bookingLoading} className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all', selectedPayment && !bookingLoading ? 'text-white shadow-lg [background:linear-gradient(to_right,var(--portal-accent),var(--portal-accent-dark))] hover:brightness-110' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
                   {bookingLoading ? (
                     <span className="flex items-center justify-center gap-2"><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75"/></svg>{t('portail.processing')}</span>
@@ -849,9 +881,16 @@ export function PortailVoyageur() {
   const stations = stRes.data ?? [];
   const pms = cfg.data?.paymentMethods ?? DEMO_PAYMENT_METHODS; // payment methods fallback OK (country-specific)
 
-  // Derive unique sorted cities from stations (stable ref via JSON key)
+  // Derive unique cities from stations, sorted by frequency (most routes first)
   const citiesKey = stations.map(s => s.city).join(',');
   const cities = useMemo(() => [...new Set(stations.map(s => s.city))].sort(), [citiesKey]);
+  const cityOptions: ComboboxOption[] = useMemo(() => {
+    const freq = new Map<string, number>();
+    for (const s of stations) freq.set(s.city, (freq.get(s.city) ?? 0) + 1);
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([city]) => ({ value: city, label: city }));
+  }, [stations]);
 
   const [dep, setDep] = useState('');
   const [arr, setArr] = useState('');
@@ -861,6 +900,7 @@ export function PortailVoyageur() {
   const [sort, setSort] = useState<'price' | 'time'>('time');
   const [selTrip, setSelTrip] = useState<TripResult | null>(null);
   const [section, setSection] = useState<Section>('booking');
+  const [mobileNav, setMobileNav] = useState(false);
   const [results, setResults] = useState<TripResult[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -904,6 +944,20 @@ export function PortailVoyageur() {
     { key: 'about', label: t('portail.navAbout') }, { key: 'fleet', label: t('portail.navFleet') }, { key: 'contact', label: t('portail.navContact') },
   ];
 
+  const layout = portalTheme.layout;
+  const navItems: LayoutNavItem[] = NAV;
+  const handleSection = (key: string) => { setSection(key as Section); if (key !== 'booking') setSearched(false); };
+  const handleHome = () => { setSection('booking'); setSearched(false); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  // Layout-aware section title
+  const STitle = ({ title }: { title: string }) => {
+    const p = { title, accent: portalTheme.accent, accentDark: portalTheme.accentDark };
+    if (layout === 'horizon') return <HorizonSectionTitle {...p} />;
+    if (layout === 'vivid') return <VividSectionTitle {...p} />;
+    if (layout === 'prestige') return <PrestigeSectionTitle {...p} />;
+    return <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{title}</h2></div>;
+  };
+
   return (
     <PortalThemeCtx.Provider value={portalTheme}>
     <div
@@ -915,59 +969,87 @@ export function PortailVoyageur() {
         '--portal-secondary': portalTheme.secondary,
       } as React.CSSProperties}
     >
-      {/* Navbar */}
-      <nav className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
-        <div className="max-w-6xl mx-auto flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6">
-          <button onClick={() => { setSection('booking'); setSearched(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity">
-            {brandLogo ? <img src={brandLogo} alt={brandName} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-amber-500/20">{brandName.charAt(0) || 'T'}</div>}
-            <span className="font-bold text-slate-900 dark:text-white text-base sm:text-lg tracking-tight hidden sm:block">{brandName}</span>
-          </button>
-          <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar mx-2 sm:mx-4">
-            {NAV.map(n => <button key={n.key} onClick={() => { setSection(n.key); if (n.key !== 'booking') setSearched(false); }} className={cn('px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap', section === n.key ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700')}>{n.label}</button>)}
-          </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <ThemeToggle />
-            <LanguageSwitcher />
-            <button className="text-xs sm:text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 sm:px-4 py-2 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm ml-1">{t('portail.login')}</button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Hero */}
-      {section === 'booking' && !searched && (
-        <HeroCarousel>
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-16 sm:pb-20">
-            <div className="flex items-center gap-2 mb-4 sm:mb-6">{[1,2,3,4,5].map(i => <span key={i} className="text-amber-400 text-sm">{'\u2605'}</span>)}<span className="text-sm text-slate-400 font-medium">{t('portail.trustedBy')}</span></div>
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-2xl">{t('portail.heroTitle')}</h1>
-            <p className="text-base sm:text-xl text-slate-400 mt-3 sm:mt-4 max-w-xl leading-relaxed">{t('portail.heroSubtitle')}</p>
-            <form onSubmit={doSearch} className="mt-8 sm:mt-10">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/20 border border-white/5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_1fr_auto_auto] gap-3 items-end">
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.departure')}</label><select value={dep} onChange={e => setDep(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
-                  <button type="button" onClick={swap} className="self-end mb-0.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:[border-color:var(--portal-accent)] transition-all hidden lg:flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 16l-4-4m0 0l4-4m-4 4h18M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.arrival')}</label><select value={arr} onChange={e => setArr(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{cities.map(c => <option key={c}>{c}</option>)}</select></div>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.dateLabel')}</label><TripDatePicker value={date} onChange={setDate} tripDates={tripDatesSet} loading={tripDatesLoading} locale={lang === 'ar' ? 'ar-SA' : 'fr-FR'} t={t} onMonthChange={setCalMonth} /></div>
-                  <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.passengers')}</label><select value={pax} onChange={e => setPax(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
-                  <button type="submit" className="self-end bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl px-6 py-3 font-bold hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25 whitespace-nowrap text-sm active:scale-95 transition-all">{t('portail.search')}</button>
-                </div>
-              </div>
-            </form>
-            <div className="flex items-center justify-center gap-6 sm:gap-12 mt-8 sm:mt-10 text-center">
-              {[{ v: '50K+', l: t('portail.statPassengers') }, { v: '120+', l: t('portail.statRoutes') }, { v: '99%', l: t('portail.statSatisfaction') }].map(s => (
-                <div key={s.l}><p className="text-xl sm:text-3xl font-black text-white">{s.v}</p><p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wider">{s.l}</p></div>
-              ))}
+      {/* ── Navbar (layout-variant) ────────────────────────────── */}
+      {layout === 'horizon' ? (
+        <HorizonNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : layout === 'vivid' ? (
+        <VividNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : layout === 'prestige' ? (
+        <PrestigeNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : (
+        /* Classic navbar (original) */
+        <nav className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
+          <div className="max-w-6xl mx-auto flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6">
+            <button onClick={handleHome} className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity">
+              {brandLogo ? <img src={brandLogo} alt={brandName} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-amber-500/20">{brandName.charAt(0) || 'T'}</div>}
+              <span className="font-bold text-slate-900 dark:text-white text-base sm:text-lg tracking-tight hidden sm:block">{brandName}</span>
+            </button>
+            <div className="hidden md:flex items-center gap-0.5 mx-4">
+              {NAV.map(n => <button key={n.key} onClick={() => handleSection(n.key)} className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap', section === n.key ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300')}>{n.label}</button>)}
+            </div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <ThemeToggle />
+              <LanguageSwitcher />
+              <button className="hidden sm:block text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm ml-1">{t('portail.login')}</button>
+              <button onClick={() => setMobileNav(v => !v)} className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1" aria-label={mobileNav ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileNav}>
+                {mobileNav ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>}
+              </button>
             </div>
           </div>
-        </HeroCarousel>
+          {mobileNav && (
+            <div className="md:hidden border-t border-slate-200/50 dark:border-slate-800/50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl animate-in slide-in-from-top-2 duration-150">
+              <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
+                {NAV.map(n => <button key={n.key} onClick={() => { handleSection(n.key); setMobileNav(false); }} className={cn('w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors', section === n.key ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50')}>{n.label}</button>)}
+                <button className="sm:hidden w-full mt-2 text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm text-center">{t('portail.login')}</button>
+              </div>
+            </div>
+          )}
+        </nav>
       )}
+
+      {/* ── Hero (layout-variant) ────────────────────────────── */}
+      {section === 'booking' && !searched && (() => {
+        const searchFormEl = (
+          <form onSubmit={doSearch}>
+            <div className={cn('grid gap-3 items-end', layout === 'vivid' ? 'grid-cols-1 sm:grid-cols-2' : layout === 'prestige' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto_auto]' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_1fr_auto_auto]')}>
+              <ComboboxEditable label={t('portail.departure')} value={dep} onChange={setDep} options={cityOptions} placeholder={t('portail.selectCity')} labelClassName="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5" inputClassName="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]" />
+              {layout !== 'vivid' && layout !== 'prestige' && <button type="button" onClick={swap} className="self-end mb-0.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:[border-color:var(--portal-accent)] transition-all hidden lg:flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 16l-4-4m0 0l4-4m-4 4h18M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>}
+              <ComboboxEditable label={t('portail.arrival')} value={arr} onChange={setArr} options={cityOptions} placeholder={t('portail.selectCity')} labelClassName="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5" inputClassName="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]" />
+              <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.dateLabel')}</label><TripDatePicker value={date} onChange={setDate} tripDates={tripDatesSet} loading={tripDatesLoading} locale={lang === 'ar' ? 'ar-SA' : 'fr-FR'} t={t} onMonthChange={setCalMonth} /></div>
+              {layout !== 'vivid' && <div><label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t('portail.passengers')}</label><select value={pax} onChange={e => setPax(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]">{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}</select></div>}
+              <button type="submit" className={cn('self-end text-white rounded-xl px-6 py-3 font-bold shadow-lg whitespace-nowrap text-sm active:scale-95 transition-all', layout === 'vivid' ? 'sm:col-span-2' : '')} style={{ background: `linear-gradient(to right, ${portalTheme.accent}, ${portalTheme.accentDark})` }}>{t('portail.search')}</button>
+            </div>
+          </form>
+        );
+        const heroStats = [{ value: '50K+', label: t('portail.statPassengers') }, { value: '120+', label: t('portail.statRoutes') }, { value: '99%', label: t('portail.statSatisfaction') }];
+
+        if (layout === 'horizon') return <HorizonHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+        if (layout === 'vivid') return <VividHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+        if (layout === 'prestige') return <PrestigeHero scenes={portalTheme.heroScenes} searchForm={searchFormEl} title={t('portail.heroTitle')} subtitle={t('portail.heroSubtitle')} stats={heroStats} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />;
+
+        // Classic hero (original)
+        return (
+          <HeroCarousel>
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-16 sm:pb-20">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">{[1,2,3,4,5].map(i => <span key={i} className="text-amber-400 text-sm">{'\u2605'}</span>)}<span className="text-sm text-slate-400 font-medium">{t('portail.trustedBy')}</span></div>
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-2xl">{t('portail.heroTitle')}</h1>
+              <p className="text-base sm:text-xl text-slate-400 mt-3 sm:mt-4 max-w-xl leading-relaxed">{t('portail.heroSubtitle')}</p>
+              <div className="mt-8 sm:mt-10 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/20 border border-white/5">{searchFormEl}</div>
+              <div className="flex items-center justify-center gap-6 sm:gap-12 mt-8 sm:mt-10 text-center">
+                {heroStats.map(s => <div key={s.label}><p className="text-xl sm:text-3xl font-black text-white">{s.value}</p><p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wider">{s.label}</p></div>)}
+              </div>
+            </div>
+          </HeroCarousel>
+        );
+      })()}
 
       {/* Content — flex-1 so footer always sticks to bottom */}
       <div className="flex-1">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-14">
+      <div className={cn('max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-14', layout === 'horizon' && section === 'booking' && !searched && 'pt-20 sm:pt-24')}>
         {section === 'booking' && (<>
           {!searched ? (
             <div>
-              <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.popularTrips')}</h2></div>
+              <STitle title={t('portail.popularTrips')} />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{POPULAR_ROUTES.map(r => (
                 <button key={`${r.from}-${r.to}`} onClick={() => quick(r.from, r.to)} className="group relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 hover:[border-color:var(--portal-accent)] hover:shadow-xl hover:shadow-amber-500/5 transition-all text-left overflow-hidden">
                   <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500" />
@@ -988,7 +1070,13 @@ export function PortailVoyageur() {
               <div className="space-y-4">
                 {loading ? <div className="flex flex-col items-center py-16 gap-4"><div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-amber-500 rounded-full animate-spin" /><p className="text-sm text-slate-400">{t('portail.searchingTrips')}</p></div>
                 : sorted.length === 0 ? <div className="text-center py-16"><p className="text-lg font-semibold text-slate-400">{t('portail.noTripsFound')}</p><p className="text-sm text-slate-400 mt-1">{t('portail.tryAnotherDate')}</p></div>
-                : sorted.map(trip => <TripCard key={trip.id} trip={trip} onBook={setSelTrip} fmt={fmt} t={t} />)}
+                : sorted.map(trip => {
+                  const variantProps: VariantTripCardProps = { trip, onBook: setSelTrip, fmt, fmtTime, fmtDuration, accent: portalTheme.accent, accentDark: portalTheme.accentDark, accentLight: portalTheme.accentLight, t };
+                  if (layout === 'horizon') return <HorizonTripCard key={trip.id} {...variantProps} />;
+                  if (layout === 'vivid') return <VividTripCard key={trip.id} {...variantProps} />;
+                  if (layout === 'prestige') return <PrestigeTripCard key={trip.id} {...variantProps} />;
+                  return <TripCard key={trip.id} trip={trip} onBook={setSelTrip} fmt={fmt} t={t} />;
+                })}
               </div>
             </div>
           )}
@@ -996,13 +1084,13 @@ export function PortailVoyageur() {
         {section === 'parcels' && <ParcelSection t={t} fmt={fmt} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
         {section === 'about' && (
-          <div className="max-w-3xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.aboutTitle')}</h2></div>
+          <div className="max-w-3xl mx-auto"><STitle title={t('portail.aboutTitle')} />
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700/50"><p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">{t('portail.aboutContent')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">{[{ i: '\u2691', t: t('portail.aboutSafety'), d: t('portail.aboutSafetyDesc') }, { i: '\u2726', t: t('portail.aboutComfort'), d: t('portail.aboutComfortDesc') }, { i: '\u2316', t: t('portail.aboutReliability'), d: t('portail.aboutReliabilityDesc') }].map(v => <div key={v.t} className="text-center p-4"><span className="text-3xl block mb-3">{v.i}</span><h4 className="font-bold text-slate-900 dark:text-white text-sm">{v.t}</h4><p className="text-xs text-slate-500 mt-1">{v.d}</p></div>)}</div></div></div>
         )}
         {section === 'fleet' && <FleetSection t={t} apiBase={apiBase} />}
         {section === 'contact' && (
-          <div className="max-w-2xl mx-auto"><div className="flex items-center gap-3 mb-8"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.contactTitle')}</h2></div>
+          <div className="max-w-2xl mx-auto"><STitle title={t('portail.contactTitle')} />
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700/50">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">{[
                 { i: '\u2706', l: t('portail.phoneLabel'), v: cfg.data?.tenant?.contact?.phone || '+242 06 000 00 00' },
@@ -1015,19 +1103,27 @@ export function PortailVoyageur() {
 
       </div>{/* end flex-1 content */}
 
-      {/* Footer — always at bottom thanks to flex layout */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 mt-auto shrink-0">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
-            <div><div className="flex items-center gap-2 mb-3">{brandLogo ? <img src={brandLogo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-xs">{brandName.charAt(0)}</div>}<span className="font-bold text-slate-900 dark:text-white">{brandName}</span></div><p className="text-xs text-slate-500 leading-relaxed">{t('portail.footerAbout')}</p></div>
-            <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLinks')}</p><div className="space-y-2">{NAV.map(n => <button key={n.key} onClick={() => setSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{n.label}</button>)}</div></div>
-            <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLegal')}</p><div className="space-y-2"><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">CGV</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.privacy')}</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.legalMentions')}</a></div></div>
+      {/* ── Footer (layout-variant) ────────────────────────────── */}
+      {layout === 'horizon' ? (
+        <HorizonFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : layout === 'vivid' ? (
+        <VividFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : layout === 'prestige' ? (
+        <PrestigeFooter brandName={brandName} brandLogo={brandLogo} nav={navItems} onSection={handleSection} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+      ) : (
+        <footer className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 mt-auto shrink-0">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
+              <div><div className="flex items-center gap-2 mb-3">{brandLogo ? <img src={brandLogo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-[image:linear-gradient(to_bottom_right,var(--portal-accent),var(--portal-accent-dark))] flex items-center justify-center text-white font-bold text-xs">{brandName.charAt(0)}</div>}<span className="font-bold text-slate-900 dark:text-white">{brandName}</span></div><p className="text-xs text-slate-500 leading-relaxed">{t('portail.footerAbout')}</p></div>
+              <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLinks')}</p><div className="space-y-2">{NAV.map(n => <button key={n.key} onClick={() => handleSection(n.key)} className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors">{n.label}</button>)}</div></div>
+              <div><p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t('portail.footerLegal')}</p><div className="space-y-2"><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">CGV</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.privacy')}</a><a href="#" className="block text-sm text-slate-600 dark:text-slate-400 hover:text-amber-600">{t('portail.legalMentions')}</a></div></div>
+            </div>
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs text-slate-400">{t('portail.copyright')}</p><p className="text-xs text-slate-400">{t('portail.poweredBy')} <span className="font-semibold text-slate-500">TranslogPro</span></p></div>
           </div>
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs text-slate-400">{t('portail.copyright')}</p><p className="text-xs text-slate-400">{t('portail.poweredBy')} <span className="font-semibold text-slate-500">TranslogPro</span></p></div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
-      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} onClose={() => setSelTrip(null)} />}
+      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} passengerCount={pax} onClose={() => setSelTrip(null)} />}
     </div>
     </PortalThemeCtx.Provider>
   );

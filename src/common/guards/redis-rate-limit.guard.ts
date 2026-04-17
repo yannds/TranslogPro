@@ -5,12 +5,16 @@ import {
   HttpException,
   HttpStatus,
   Inject,
+  Logger,
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Redis } from 'ioredis';
 import { Request } from 'express';
 import { REDIS_CLIENT } from '../../infrastructure/eventbus/redis-publisher.service';
+
+/** Timeout pour les opérations Redis — évite un hang si Redis est down/lent */
+const REDIS_TIMEOUT_MS = 2_000;
 
 /**
  * RATE_LIMIT_KEY — métadonnée attachée via @RateLimit() sur un endpoint.
@@ -65,6 +69,8 @@ export const RateLimit = (config: RateLimitConfig) =>
  */
 @Injectable()
 export class RedisRateLimitGuard implements CanActivate {
+  private readonly log = new Logger(RedisRateLimitGuard.name);
+
   constructor(
     private readonly reflector: Reflector,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
@@ -97,15 +103,28 @@ export class RedisRateLimitGuard implements CanActivate {
     const windowStart = now - config.windowMs;
 
     // Pipeline atomique : ZADD + ZREMRANGEBYSCORE + ZCARD + EXPIRE
-    const [,, countRaw] = await this.redis
-      .pipeline()
-      .zadd(redisKey, now, `${now}`)                   // ajouter event
-      .zremrangebyscore(redisKey, '-inf', windowStart)  // purger anciens
-      .zcard(redisKey)                                  // compter restants
-      .expire(redisKey, Math.ceil(config.windowMs / 1_000) + 60) // TTL
-      .exec() as [unknown, unknown, [unknown, number], unknown];
+    // Fail-open avec timeout : si Redis est down/lent, on laisse passer
+    // plutôt que de bloquer la requête indéfiniment.
+    let count: number;
+    try {
+      const result = await Promise.race([
+        this.redis
+          .pipeline()
+          .zadd(redisKey, now, `${now}`)
+          .zremrangebyscore(redisKey, '-inf', windowStart)
+          .zcard(redisKey)
+          .expire(redisKey, Math.ceil(config.windowMs / 1_000) + 60)
+          .exec(),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error('Redis timeout')), REDIS_TIMEOUT_MS),
+        ),
+      ]) as [unknown, unknown, [unknown, number], unknown];
 
-    const count = countRaw?.[1] ?? 0;
+      count = result[2]?.[1] ?? 0;
+    } catch (e) {
+      this.log.warn(`Rate limit check failed (${(e as Error).message}) — fail-open for ${config.suffix}`);
+      return true;
+    }
 
     if (count > config.limit) {
       const retryAfterSec = Math.ceil(config.windowMs / 1_000);

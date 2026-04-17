@@ -1,11 +1,15 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ScopeContext } from '../decorators/scope-context.decorator';
 
-/** Sous-type minimal d'un client Prisma capable de retrouver un Trip par id. */
+/** Sous-type minimal d'un client Prisma capable de retrouver un Trip et un Staff. */
 type TripFinder = {
   trip: {
     findFirst: (args: { where: Record<string, unknown>; select: { driverId: true } }) =>
       Promise<{ driverId: string | null } | null>;
+  };
+  staff: {
+    findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) =>
+      Promise<{ id: string } | null>;
   };
 };
 
@@ -73,12 +77,19 @@ export async function assertTripOwnership(
   scope:    ScopeContext,
 ): Promise<void> {
   if (scope.scope !== 'own') return;
+
+  // Trip.driverId is a Staff.id, not a User.id — resolve first.
+  const staff = await prisma.staff.findFirst({
+    where: { userId: scope.userId, tenantId },
+    select: { id: true },
+  });
+
   const trip = await prisma.trip.findFirst({
     where:  { id: tripId, tenantId },
     select: { driverId: true },
   });
   if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
-  if (trip.driverId !== scope.userId) {
+  if (trip.driverId !== staff?.id) {
     throw new ForbiddenException(`Scope 'own' violation — trip not assigned to actor`);
   }
 }

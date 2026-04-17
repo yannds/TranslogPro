@@ -1,21 +1,28 @@
 /**
- * TicketStubRenderer — Billet de voyage avec talon détachable
+ * TicketStubRenderer — Billet de voyage style carte + talon détachable
  *
- * Format « Boarding Pass » :
- *   ┌────────────────────────────────────────────────────────────┐
- *   │  BILLET PRINCIPAL (2/3 largeur)                            │
- *   │  Logo | Nom passager | Trajet | Horaires | Siège | QR Code │
- *   ├── ✂ Perforation ────────────────────────────────────────── ┤
- *   │  TALON DÉTACHABLE (coupon embarquement)                    │
- *   │  N° billet | Siège | Départ | QR (identique) | Agent scan  │
- *   └────────────────────────────────────────────────────────────┘
+ * Visual design calqué sur le composant React TicketReceipt :
+ *   ┌────────────────────────────────────────────┐
+ *   │  HEADER branding (nom compagnie + classe)  │
+ *   │  Bandeau route                             │
+ *   │  Départ ──→ Arrivée + heure                │
+ *   │  Date + Bus                                │
+ *   │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  │
+ *   │  Passager  |  QR code                      │
+ *   │  Prix      |  (short ID)                   │
+ *   │  ───────────────────────────────────────── │
+ *   │  UUID complet          STATUT              │
+ *   └────────────────────────────────────────────┘
+ *   ✂ Perforation
+ *   ┌────────────────────────────────────────────┐
+ *   │  COUPON EMBARQUEMENT (talon compact)       │
+ *   └────────────────────────────────────────────┘
  *
- * Format : A5 (148×210mm) — billet standard ou A4 plié
- * Puppeteer : PrintFormat = 'A5'
+ * Format : A5 (148×210mm)
  */
 import { ScopeContext } from '../../../common/decorators/scope-context.decorator';
 import {
-  htmlProDoc, certifyPro, impBanner, perfLine, escHtml, fmtDate, fmtCfa, qrPng,
+  htmlProDoc, certifyPro, impBanner, perfLine, escHtml, fmtCfa, qrPng,
 } from './shared-pro';
 
 export interface TicketStubData {
@@ -28,274 +35,357 @@ export interface TicketStubData {
     qrToken:       string;
     createdAt:     Date;
     expiresAt?:    Date | null;
-    class?:        string | null;  // 'ECONOMY' | 'BUSINESS' | null
+    class?:        string | null;
+    boardingStationName?:  string | null;
+    alightingStationName?: string | null;
   };
   trip: {
     id:                 string;
     departureScheduled: Date;
     arrivalScheduled:   Date;
-    route?: { name: string; originId: string; destinationId: string } | null;
+    route?: { name: string; originCity: string; destinationCity: string } | null;
     bus?:   { plateNumber: string; model: string } | null;
   };
-  tenantName: string;
-  actorId:    string;
-  scope?:     ScopeContext;
+  tenantName:     string;
+  tenantSlug:     string;
+  primaryColor:   string;
+  secondaryColor: string;
+  actorId:        string;
+  scope?:         ScopeContext;
 }
 
-const CSS = `
-  body { padding: 0; }
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
 
-  /* ── Billet principal ──────────────────────────────────────── */
-  .ticket-wrap {
-    border: 1.5pt solid var(--c-brand);
-    border-radius: 3pt;
-    overflow: hidden;
+function fmtDateShort(d: Date): string {
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtTime(d: Date): string {
+  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
+  CONFIRMED:       { bg: '#dcfce7', fg: '#166534' },
+  CHECKED_IN:      { bg: '#dcfce7', fg: '#166534' },
+  BOARDED:         { bg: '#ccfbf1', fg: '#115e59' },
+  COMPLETED:       { bg: '#f1f5f9', fg: '#475569' },
+  PENDING_PAYMENT: { bg: '#fef9c3', fg: '#854d0e' },
+  CREATED:         { bg: '#f1f5f9', fg: '#64748b' },
+  CANCELLED:       { bg: '#fee2e2', fg: '#991b1b' },
+  EXPIRED:         { bg: '#fee2e2', fg: '#991b1b' },
+};
+
+/* ── CSS ──────────────────────────────────────────────────────────────────── */
+
+function buildCss(primary: string, secondary: string): string {
+  return `
+  :root {
+    --c-primary:   ${primary};
+    --c-secondary: ${secondary};
+  }
+  body { padding: 0; display: flex; flex-direction: column; align-items: center; }
+
+  /* ── Ticket card ──────────────────────────────────────────── */
+  .ticket-card {
+    width: 100%; max-width: 380px;
+    background: #fff; border-radius: 12px;
+    overflow: hidden; border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     break-inside: avoid;
   }
 
-  /* Header sombre */
-  .ticket-header {
-    background: var(--c-brand); color: #fff;
+  /* Header branding */
+  .tc-header {
+    background: var(--c-primary); color: #fff;
+    padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .tc-header .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .tc-header .sub   { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+  .tc-header .class-badge {
+    font-size: 11px; font-weight: 600;
+    background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px;
+  }
+
+  /* Route banner */
+  .tc-route {
+    background: var(--c-secondary); color: #fff;
+    padding: 8px 20px; font-size: 13px; font-weight: 600;
+    text-align: center; letter-spacing: 0.3px;
+  }
+
+  /* Stations row */
+  .tc-stations {
+    padding: 16px 20px 8px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .tc-station { flex: 1; text-align: center; }
+  .tc-station .label {
+    font-size: 11px; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tc-station .name { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .tc-station .stn  { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+  .tc-station .time { font-size: 12px; color: #64748b; margin-top: 2px; font-weight: 600; }
+  .tc-arrow {
+    display: flex; align-items: center; color: #cbd5e1;
+  }
+
+  /* Date + bus */
+  .tc-datebus {
+    text-align: center; font-size: 12px; color: #64748b;
+    padding: 4px 0 12px;
+  }
+  .tc-datebus .plate { margin-left: 12px; font-weight: 600; }
+
+  /* Dashed separator */
+  .tc-sep { border-top: 2px dashed #e2e8f0; margin: 0 12px; }
+
+  /* Passenger + QR area */
+  .tc-body {
+    padding: 16px 20px;
+    display: flex; gap: 16px; align-items: flex-start;
+  }
+  .tc-info { flex: 1; }
+  .tc-info .label {
+    font-size: 11px; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tc-info .passenger { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .tc-info .seat-row { display: flex; gap: 12px; margin-top: 8px; }
+  .tc-info .seat-box {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #f1f5f9; border-radius: 6px; padding: 4px 10px;
+  }
+  .tc-info .seat-box .seat-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+  .tc-info .seat-box .seat-val  { font-size: 16px; font-weight: 800; color: var(--c-primary); }
+  .tc-info .price-label { margin-top: 10px; }
+  .tc-info .price {
+    font-size: 22px; font-weight: 800; margin-top: 2px;
+    color: var(--c-primary);
+  }
+  .tc-info .price .unit { font-size: 13px; font-weight: 600; }
+
+  /* QR block */
+  .tc-qr { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .tc-qr img { width: 120px; height: 120px; border-radius: 6px; }
+  .tc-qr .caption {
+    font-size: 9px; color: #94a3b8; text-align: center;
+    max-width: 120px; word-break: break-all;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* Footer */
+  .tc-footer {
+    background: #f8fafc; border-top: 1px solid #e2e8f0;
+    padding: 10px 20px;
     display: flex; justify-content: space-between; align-items: center;
-    padding: 3mm 5mm;
+    font-size: 11px;
   }
-  .ticket-header .company { font-size: 11pt; font-weight: 700; letter-spacing: -.2pt; }
-  .ticket-header .doctype { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
-  .ticket-header .number  { font-size: 8pt; font-family: var(--font-mono); opacity: .9; }
-
-  /* Accent route */
-  .ticket-route {
-    background: var(--c-brand2); color: #fff;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 2.5mm 5mm;
+  .tc-footer .id {
+    font-family: 'Courier New', monospace; color: #64748b;
+    max-width: 70%; word-break: break-all;
   }
-  .ticket-route .city    { font-size: 13pt; font-weight: 700; }
-  .ticket-route .arrow   { font-size: 16pt; color: var(--c-accent); }
-  .ticket-route .subinfo { font-size: 7pt; opacity: .8; margin-top: 0.5mm; }
-
-  /* Corps principal */
-  .ticket-body {
-    padding: 4mm 5mm; display: grid; grid-template-columns: 1fr auto; gap: 5mm; align-items: start;
-  }
-  .ticket-fields { display: flex; flex-direction: column; gap: 2mm; }
-  .tf-row { display: flex; gap: 4mm; }
-  .tf {
-    flex: 1; border-bottom: 0.5pt solid var(--c-line); padding-bottom: 1.5mm;
-  }
-  .tf label { display: block; font-size: 6.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c-muted); margin-bottom: 0.5mm; }
-  .tf span  { font-size: 9pt; font-weight: 700; }
-  .tf.seat span { font-size: 14pt; color: var(--c-brand2); }
-  .tf.class span {
-    font-size: 7.5pt; font-weight: 700; padding: 1pt 5pt;
-    background: var(--c-accent); color: #fff; border-radius: 2pt;
+  .tc-footer .status {
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 2px 8px; border-radius: 4px; font-size: 10px;
   }
 
-  /* QR zone */
-  .ticket-qr { text-align: center; }
-  .ticket-qr img { width: 32mm; height: 32mm; }
-  .ticket-qr .caption {
-    font-size: 6pt; color: var(--c-muted); margin-top: 1mm;
-    font-family: var(--font-mono);
-  }
-
-  /* Prix */
-  .ticket-price {
-    border-top: 0.5pt solid var(--c-line);
-    padding: 2.5mm 5mm;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .ticket-price .label { font-size: 7.5pt; color: var(--c-muted); }
-  .ticket-price .amount { font-size: 12pt; font-weight: 700; color: var(--c-brand2); }
-  .ticket-price .status {
-    font-size: 7pt; padding: 1pt 5pt; border-radius: 2pt;
-    font-weight: 700; background: #dcfce7; color: #166534;
-  }
-
-  /* ── Talon ─────────────────────────────────────────────────── */
-  .stub-wrap {
-    border: 1.5pt solid var(--c-brand); border-radius: 3pt;
-    overflow: hidden; break-inside: avoid; margin-top: 0;
+  /* ── Stub (boarding coupon) ──────────────────────────────── */
+  .stub-card {
+    width: 100%; max-width: 380px;
+    background: #fff; border-radius: 12px;
+    overflow: hidden; border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    break-inside: avoid; margin-top: 0;
   }
   .stub-header {
-    background: var(--c-accent); color: #fff;
+    background: var(--c-primary); color: #fff;
+    padding: 10px 20px;
     display: flex; justify-content: space-between; align-items: center;
-    padding: 2mm 5mm;
   }
-  .stub-header .sh-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-  .stub-header .sh-note  { font-size: 6.5pt; opacity: .9; }
+  .stub-header .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stub-header .note  { font-size: 10px; opacity: 0.85; }
 
   .stub-body {
-    padding: 3mm 5mm;
-    display: grid; grid-template-columns: 1fr auto;
-    gap: 5mm; align-items: center;
+    padding: 14px 20px;
+    display: flex; gap: 14px; align-items: center;
   }
-  .stub-info { display: flex; flex-direction: column; gap: 2mm; }
-  .si-row { display: flex; gap: 5mm; }
-  .sf { flex: 1; }
-  .sf label { display: block; font-size: 6pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c-muted); }
-  .sf span  { font-size: 8.5pt; font-weight: 700; }
-  .sf.big span { font-size: 11pt; color: var(--c-brand2); }
-
-  .stub-qr { text-align: center; }
-  .stub-qr img { width: 24mm; height: 24mm; }
-  .stub-qr .mono { font-size: 5.5pt; font-family: var(--font-mono); color: var(--c-muted); }
-
-  .stub-scan {
-    border-top: 0.5pt dashed var(--c-line); margin: 2mm 5mm 0;
-    padding: 2mm 0; font-size: 6.5pt; color: var(--c-muted);
-    display: flex; justify-content: space-between;
+  .stub-info { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .stub-row  { display: flex; gap: 14px; }
+  .stub-field .label {
+    font-size: 9px; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
   }
-  .scan-box {
-    border: 1pt dashed #94a3b8; border-radius: 2pt;
-    width: 28mm; height: 8mm; display: flex; align-items: center;
-    justify-content: center; font-size: 6pt; color: #94a3b8;
+  .stub-field .value { font-size: 12px; font-weight: 700; }
+  .stub-field.big .value { font-size: 14px; color: var(--c-primary); }
+
+  .stub-qr { flex-shrink: 0; text-align: center; }
+  .stub-qr img { width: 80px; height: 80px; border-radius: 4px; }
+  .stub-qr .id { font-size: 8px; font-family: 'Courier New', monospace; color: #94a3b8; margin-top: 2px; }
+
+  .stub-footer {
+    border-top: 1px dashed #e2e8f0;
+    padding: 8px 20px; font-size: 10px; color: #94a3b8;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .stub-footer .visa-box {
+    border: 1px dashed #cbd5e1; border-radius: 4px;
+    width: 28mm; height: 8mm;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #94a3b8;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .ticket-card, .stub-card { box-shadow: none; }
   }
 `;
+}
+
+/* ── Arrow SVG (same as TicketReceipt) ────────────────────────────────────── */
+
+const ARROW_SVG = `<svg width="32" height="16" viewBox="0 0 32 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0 8h28M24 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+/* ── Main render ──────────────────────────────────────────────────────────── */
 
 export async function renderTicketStub(data: TicketStubData): Promise<string> {
-  const { ticket, trip, tenantName, actorId, scope } = data;
+  const { ticket, trip, tenantName, tenantSlug, primaryColor, secondaryColor, actorId, scope } = data;
 
-  // QR code identique pour billet + talon
-  const qrSrc = await qrPng(ticket.qrToken, 128);
-  const qrBig  = qrSrc ? `<img src="${qrSrc}" alt="QR billet" />` : '';
-  const qrSmall = qrSrc
-    ? `<img src="${qrSrc}" alt="QR talon" width="96" height="96" />`
-    : '';
+  const qrSrc    = await qrPng(ticket.qrToken, 160);
+  const qrBig    = qrSrc ? `<img src="${qrSrc}" alt="QR billet" />` : '';
+  const qrSmall  = qrSrc ? `<img src="${qrSrc}" alt="QR talon" />` : '';
 
-  const ticketShort = ticket.id.slice(0, 12).toUpperCase();
-  const origin      = trip.route?.originId      ?? '—';
-  const dest        = trip.route?.destinationId  ?? '—';
-  const routeName   = trip.route?.name           ?? '—';
+  const ticketShort = ticket.id.slice(0, 12);
+  const origin      = trip.route?.originCity      ?? '—';
+  const dest        = trip.route?.destinationCity ?? '—';
+  const routeName   = trip.route?.name            ?? null;
+  const depTime     = fmtTime(trip.departureScheduled);
+  const arrTime     = fmtTime(trip.arrivalScheduled);
+  const depDate     = fmtDateShort(trip.departureScheduled);
+  const plate       = trip.bus?.plateNumber ?? null;
+  const fareClass   = ticket.class ?? 'STANDARD';
+  const sc          = STATUS_COLORS[ticket.status] ?? STATUS_COLORS['CREATED'];
+  const bStation    = ticket.boardingStationName  ?? null;
+  const aStation    = ticket.alightingStationName ?? null;
 
   const body = `
 ${impBanner(scope)}
 
-<!-- ═══════════════════ BILLET PRINCIPAL ═══════════════════ -->
-<div class="ticket-wrap">
+<!-- ═══════════════════ BILLET CARTE ═══════════════════ -->
+<div class="ticket-card">
 
-  <!-- Header sombre -->
-  <div class="ticket-header">
+  <!-- Header branding -->
+  <div class="tc-header">
     <div>
-      <div class="company">${escHtml(tenantName)}</div>
-      <div class="doctype">Billet de Voyage</div>
+      <div class="brand">${escHtml(tenantName)}</div>
+      <div class="sub">Billet de voyage</div>
     </div>
-    <div class="number">N° ${ticketShort}</div>
+    <div class="class-badge">${escHtml(fareClass)}</div>
   </div>
 
-  <!-- Route accent -->
-  <div class="ticket-route">
-    <div>
-      <div class="city">${escHtml(origin)}</div>
-      <div class="subinfo">${fmtDate(trip.departureScheduled)}</div>
+  <!-- Route banner -->
+  ${routeName ? `<div class="tc-route">${escHtml(routeName)}</div>` : ''}
+
+  <!-- Stations -->
+  <div class="tc-stations">
+    <div class="tc-station">
+      <div class="label">Départ</div>
+      <div class="name">${escHtml(origin)}</div>
+      ${bStation ? `<div class="stn">${escHtml(bStation)}</div>` : ''}
+      ${depTime ? `<div class="time">${depTime}</div>` : ''}
     </div>
-    <div class="arrow">→</div>
-    <div style="text-align:right;">
-      <div class="city">${escHtml(dest)}</div>
-      <div class="subinfo">Arr. ${fmtDate(trip.arrivalScheduled)}</div>
+    <div class="tc-arrow">${ARROW_SVG}</div>
+    <div class="tc-station">
+      <div class="label">Arrivée</div>
+      <div class="name">${escHtml(dest)}</div>
+      ${aStation ? `<div class="stn">${escHtml(aStation)}</div>` : ''}
+      ${arrTime ? `<div class="time">${arrTime}</div>` : ''}
     </div>
   </div>
 
-  <!-- Corps -->
-  <div class="ticket-body">
-    <div class="ticket-fields">
-      <!-- Passager + Siège -->
-      <div class="tf-row">
-        <div class="tf" style="flex:2;">
-          <label>Passager</label>
-          <span>${escHtml(ticket.passengerName)}</span>
+  <!-- Date + Bus -->
+  <div class="tc-datebus">
+    ${depDate}
+    ${plate ? `<span class="plate">Bus ${escHtml(plate)}</span>` : ''}
+  </div>
+
+  <!-- Dashed separator -->
+  <div class="tc-sep"></div>
+
+  <!-- Passenger + QR -->
+  <div class="tc-body">
+    <div class="tc-info">
+      <div class="label">Passager</div>
+      <div class="passenger">${escHtml(ticket.passengerName)}</div>
+      ${ticket.seatNumber ? `
+      <div class="seat-row">
+        <div class="seat-box">
+          <span class="seat-label">Siège</span>
+          <span class="seat-val">${escHtml(ticket.seatNumber)}</span>
         </div>
-        <div class="tf seat">
-          <label>Siège</label>
-          <span>${escHtml(ticket.seatNumber ?? '—')}</span>
-        </div>
-        ${ticket.class ? `
-        <div class="tf class">
-          <label>Classe</label>
-          <span>${escHtml(ticket.class)}</span>
-        </div>` : ''}
-      </div>
-      <!-- Ligne + Bus -->
-      <div class="tf-row">
-        <div class="tf" style="flex:2;">
-          <label>Ligne</label>
-          <span>${escHtml(routeName)}</span>
-        </div>
-        <div class="tf">
-          <label>Véhicule</label>
-          <span>${escHtml(trip.bus?.plateNumber ?? '—')}</span>
-        </div>
-      </div>
-      <!-- Émission + Expiration -->
-      <div class="tf-row">
-        <div class="tf">
-          <label>Émis le</label>
-          <span>${fmtDate(ticket.createdAt)}</span>
-        </div>
-        ${ticket.expiresAt ? `
-        <div class="tf">
-          <label>Expire le</label>
-          <span>${fmtDate(ticket.expiresAt)}</span>
-        </div>` : ''}
-      </div>
+      </div>` : ''}
+
+      <div class="label price-label">Prix</div>
+      <div class="price">${fmtCfa(ticket.pricePaid).replace('XAF', '')} <span class="unit">XAF</span></div>
     </div>
 
-    <!-- QR code -->
-    <div class="ticket-qr">
+    <div class="tc-qr">
       ${qrBig}
-      <div class="caption">Présenter à l'embarquement<br>${ticketShort}</div>
+      <div class="caption">${ticketShort}</div>
     </div>
   </div>
 
-  <!-- Prix + statut -->
-  <div class="ticket-price">
-    <div>
-      <div class="label">Tarif payé</div>
-      <div class="amount">${fmtCfa(ticket.pricePaid)}</div>
-    </div>
-    <div class="status">${escHtml(ticket.status)}</div>
+  <!-- Footer -->
+  <div class="tc-footer">
+    <span class="id">${ticket.id}</span>
+    <span class="status" style="background:${sc.bg};color:${sc.fg};">${escHtml(ticket.status)}</span>
   </div>
 </div>
 
 <!-- ═══════════════════ PERFORATION ═══════════════════ -->
 ${perfLine('Conserver le talon — À remettre au contrôleur')}
 
-<!-- ═══════════════════ TALON EMBARQUEMENT ═══════════════════ -->
-<div class="stub-wrap">
+<!-- ═══════════════════ COUPON EMBARQUEMENT ═══════════════════ -->
+<div class="stub-card">
   <div class="stub-header">
-    <div class="sh-title">Coupon d'embarquement</div>
-    <div class="sh-note">Ne pas séparer avant le contrôle</div>
+    <span class="title">Coupon d'embarquement</span>
+    <span class="note">Ne pas séparer avant le contrôle</span>
   </div>
 
   <div class="stub-body">
     <div class="stub-info">
-      <div class="si-row">
-        <div class="sf big"><label>Passager</label><span>${escHtml(ticket.passengerName)}</span></div>
-        <div class="sf big"><label>Siège</label><span>${escHtml(ticket.seatNumber ?? '—')}</span></div>
+      <div class="stub-row">
+        <div class="stub-field big"><div class="label">Passager</div><div class="value">${escHtml(ticket.passengerName)}</div></div>
+        ${ticket.seatNumber ? `<div class="stub-field big"><div class="label">Siège</div><div class="value">${escHtml(ticket.seatNumber)}</div></div>` : ''}
       </div>
-      <div class="si-row">
-        <div class="sf"><label>De</label><span>${escHtml(origin)}</span></div>
-        <div class="sf"><label>À</label><span>${escHtml(dest)}</span></div>
-        <div class="sf"><label>Départ</label><span>${fmtDate(trip.departureScheduled)}</span></div>
+      <div class="stub-row">
+        <div class="stub-field"><div class="label">De</div><div class="value">${escHtml(origin)}</div></div>
+        <div class="stub-field"><div class="label">À</div><div class="value">${escHtml(dest)}</div></div>
+        <div class="stub-field"><div class="label">Départ</div><div class="value">${depTime}</div></div>
       </div>
-      <div class="si-row">
-        <div class="sf"><label>N° Billet</label><span class="mono">${ticketShort}</span></div>
-        <div class="sf"><label>Véhicule</label><span>${escHtml(trip.bus?.plateNumber ?? '—')}</span></div>
+      <div class="stub-row">
+        <div class="stub-field"><div class="label">N° Billet</div><div class="value" style="font-family:'Courier New',monospace;">${ticketShort}</div></div>
+        ${plate ? `<div class="stub-field"><div class="label">Véhicule</div><div class="value">${escHtml(plate)}</div></div>` : ''}
       </div>
     </div>
 
     <div class="stub-qr">
       ${qrSmall}
-      <div class="mono">${ticketShort}</div>
+      <div class="id">${ticketShort}</div>
     </div>
   </div>
 
-  <div class="stub-scan">
-    <span>✓ Billet valide pour ce voyage uniquement — Non remboursable</span>
-    <div class="scan-box">Visa contrôleur</div>
+  <div class="stub-footer">
+    <span>Billet valide pour ce voyage uniquement — Non remboursable</span>
+    <div class="visa-box">Visa contrôleur</div>
   </div>
 </div>
 `;
 
-  const raw = htmlProDoc(`Billet ${ticketShort} — ${tenantName}`, body, 'A5', CSS);
+  const css = buildCss(primaryColor, secondaryColor);
+  const raw = htmlProDoc(`Billet ${ticketShort} — ${tenantName}`, body, 'A5', css);
   return certifyPro(raw, actorId, scope);
 }

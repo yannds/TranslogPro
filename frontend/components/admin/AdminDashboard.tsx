@@ -4,9 +4,9 @@
  * Light mode par défaut — Dark mode via classe 'dark' sur <html>.
  */
 
-import { useMemo, Suspense }  from 'react';
+import { useMemo, useState, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
-import { LogOut, Sun, Moon }  from 'lucide-react';
+import { LogOut, Sun, Moon, Menu, X }  from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation } from '../../lib/hooks/useNavigation';
@@ -136,9 +136,12 @@ export function AdminDashboard() {
     </div>
   );
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   return (
     <div className="flex h-screen overflow-hidden t-app">
 
+      {/* ── Sidebar desktop ──────────────────────────────────── */}
       <aside
         aria-label="Navigation principale"
         className="hidden lg:flex flex-col w-64 shrink-0 t-sidebar border-r t-border"
@@ -152,12 +155,57 @@ export function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Contenu principal */}
-      <main className="flex-1 overflow-y-auto t-app" role="main">
-        <Suspense fallback={<PageLoadingFallback />}>
-          <PageRouter activeId={activeId} />
-        </Suspense>
-      </main>
+      {/* ── Sidebar mobile (drawer) ──────────────────────────── */}
+      {drawerOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setDrawerOpen(false)}
+            aria-hidden
+          />
+          <aside
+            className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col t-sidebar border-r t-border lg:hidden animate-in slide-in-from-left duration-200"
+            aria-label="Navigation principale"
+          >
+            <div className="flex h-14 items-center justify-between px-4 border-b t-border shrink-0">
+              {logo}
+              <button
+                onClick={() => setDrawerOpen(false)}
+                className="p-1.5 rounded-lg t-text-2 hover:t-text transition-colors"
+                aria-label="Fermer le menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {sidebarContent}
+            <div className="shrink-0 border-t t-border p-3">
+              {userPanel}
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* ── Main ─────────────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-3 border-b t-border bg-white dark:bg-slate-900 px-4 py-3 lg:hidden">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          {logo}
+        </div>
+
+        {/* Scroll container */}
+        <main className="flex-1 overflow-y-auto t-app" role="main">
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PageRouter activeId={activeId} />
+          </Suspense>
+        </main>
+      </div>
     </div>
   );
 }

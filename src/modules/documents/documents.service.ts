@@ -45,9 +45,34 @@ import { renderTicketStub }   from './renderers/ticket-stub.renderer';
 import { renderMultiLabel }   from './renderers/multi-label.renderer';
 import { renderEnvelope }     from './renderers/envelope.renderer';
 import { renderBaggageTag }   from './renderers/baggage-tag.renderer';
+import { docLabels }         from './renderers/doc-i18n';
 
-// TVA par défaut UEMOA — surchargeable via TenantConfig dans une future itération
+// TVA par défaut UEMOA — utilisé uniquement si TenantBusinessConfig n'existe pas
 const DEFAULT_TVA_RATE = 0.18;
+
+/** Résolution TVA : route override > tenant config > fallback 18 % */
+interface TvaConfig { enabled: boolean; rate: number; }
+
+/** Registre fiscal configurable par pays ({label: "NIU", value: "CG-..."}) */
+interface FiscalRegistry { label: string; value: string; }
+
+/** ISO 4217 → nom d'affichage courant sur les documents */
+const CURRENCY_DISPLAY: Record<string, string> = {
+  XAF: 'FCFA', XOF: 'FCFA', USD: 'USD', EUR: 'EUR', GBP: 'GBP',
+  MAD: 'MAD', TND: 'TND', NGN: 'NGN', KES: 'KES', ZAR: 'ZAR',
+};
+function displayCurrency(iso: string): string {
+  return CURRENCY_DISPLAY[iso] ?? iso;
+}
+
+/** Champs Tenant nécessaires pour la génération de documents */
+const TENANT_DOC_SELECT = {
+  id: true, name: true, slug: true,
+  country: true, city: true, language: true, currency: true,
+  address: true, phoneNumber: true, email: true,
+  website: true, taxId: true, rccm: true,
+  fiscalRegistries: true,
+} as const;
 
 // Correspondance docType → format papier par défaut
 const DEFAULT_FORMAT: Partial<Record<DocumentType, PrintFormat>> = {
@@ -70,6 +95,17 @@ export class DocumentsService {
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
+  // ─── TVA resolution ─────────────────────────────────────────────────────────
+
+  /** Résout la config TVA : route override > tenant config > fallback 18 % */
+  private async resolveTva(tenantId: string, routeTvaOverride?: number | null): Promise<TvaConfig> {
+    const bc = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId },
+    });
+    if (!bc || !(bc as any).tvaEnabled) return { enabled: false, rate: 0 };
+    return { enabled: true, rate: routeTvaOverride ?? (bc as any).tvaRate };
+  }
+
   // ─── Billet voyageur ────────────────────────────────────────────────────────
 
   async printTicket(
@@ -81,13 +117,18 @@ export class DocumentsService {
     const ticket = await this.prisma.ticket.findFirst({ where: { id: ticketId, tenantId } });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
 
-    const [tenant, trip] = await Promise.all([
-      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+    const [tenant, trip, bStation, aStation] = await Promise.all([
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT }),
       this.prisma.trip.findUnique({
         where:   { id: ticket.tripId },
-        include: { route: true, bus: true },
+        include: { route: { include: { origin: true, destination: true } }, bus: true },
       }),
+      this.prisma.station.findUnique({ where: { id: (ticket as any).boardingStationId }, select: { name: true, city: true } }),
+      this.prisma.station.findUnique({ where: { id: (ticket as any).alightingStationId }, select: { name: true, city: true } }),
     ]);
+
+    const originCity = trip?.route?.origin?.city || trip?.route?.origin?.name || '—';
+    const destCity   = trip?.route?.destination?.city || trip?.route?.destination?.name || '—';
 
     const html = await renderTicket({
       ticket: {
@@ -113,24 +154,56 @@ export class DocumentsService {
       scope,
     });
 
-    const s = (tenant.settings ?? {}) as Record<string, unknown>;
+    const depart   = trip?.departureScheduled ?? new Date();
+    const arrival  = trip?.arrivalScheduled   ?? new Date();
+    const boarding = new Date(depart.getTime() - 15 * 60_000);
+    const cur      = displayCurrency(tenant.currency ?? 'XAF');
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:    tenant.name,
-      tenantAddress: (s.address as string) ?? '',
-      tenantPhone:   (s.phone   as string) ?? '',
+      tenantSlug:    tenant.slug,
+      tenantAddress: tenant.address ?? '',
+      tenantPhone:   tenant.phoneNumber ?? '',
+      tenantEmail:   tenant.email ?? '',
+      tenantWebsite: tenant.website ?? '',
+      tenantNif:     tenant.taxId ?? '',
+      tenantRccm:    tenant.rccm ?? '',
+      tenantCountry: tenant.country ?? '',
+      tenantCurrency: cur,
+      // ── Ticket ──
       ticketRef:     ticket.id,
+      ticketStatus:  ticket.status,
       passengerName: ticket.passengerName,
-      passengerPhone:(s.phone   as string) ?? '',
-      seatNumber:    (ticket as any).seatNumber ?? '—',
+      seatNumber:    ticket.seatNumber ?? '—',
+      fareClass:     (ticket as any).fareClass ?? 'STANDARD',
       price:         String(ticket.pricePaid),
-      currency:      'FCFA',
-      origin:        (trip as any)?.route?.originId      ?? '',
-      destination:   (trip as any)?.route?.destinationId ?? '',
-      tripDate:      (trip?.departureScheduled ?? new Date()).toLocaleString('fr-FR'),
-      routeName:     (trip as any)?.route?.name     ?? '',
+      currency:      cur,
+      boardingStation:  bStation?.name ?? originCity,
+      boardingCity:     bStation?.city ?? '',
+      alightingStation: aStation?.name ?? destCity,
+      alightingCity:    aStation?.city ?? '',
+      ticketCreatedAt:  ticket.createdAt.toLocaleString('fr-FR'),
+      ticketExpiresAt:  ticket.expiresAt ? ticket.expiresAt.toLocaleString('fr-FR') : '',
+      // ── Trip / Route ──
+      origin:        originCity,
+      destination:   destCity,
+      originStation: trip?.route?.origin?.name ?? '',
+      destStation:   trip?.route?.destination?.name ?? '',
+      tripDate:      depart.toLocaleString('fr-FR'),
+      departureTime: depart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      arrivalTime:   arrival.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      boardingDate:  depart.toLocaleDateString('fr-FR'),
+      boardingTime:  boarding.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      routeName:     (trip as any)?.route?.name ?? '',
+      distanceKm:    trip?.route?.distanceKm ? `${trip.route.distanceKm} km` : '',
+      // ── Bus ──
       busPlate:      (trip as any)?.bus?.plateNumber ?? '',
+      busModel:      (trip as any)?.bus?.model ?? '',
+      busType:       (trip as any)?.bus?.type ?? '',
+      busCapacity:   (trip as any)?.bus?.capacity ? String((trip as any).bus.capacity) : '',
+      // ── System ──
       qrCodeValue:   ticket.qrCode ?? ticket.id,
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
@@ -152,10 +225,10 @@ export class DocumentsService {
     const trip = await this.prisma.trip.findFirst({
       where:   { id: tripId, tenantId },
       include: {
-        route:     true,
+        route:     { include: { origin: true, destination: true } },
         bus:       true,
         travelers: true,
-        shipments: { include: { parcels: true } },
+        shipments: { include: { parcels: true, destination: true } },
       },
     });
     if (!trip) throw new NotFoundException(`Trip ${tripId} introuvable`);
@@ -171,7 +244,14 @@ export class DocumentsService {
       : [];
     const ticketMap = new Map(tickets.map(t => [t.id, t]));
 
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    // Résoudre les noms des gares de descente des voyageurs
+    const dropOffIds = [...new Set((trip.travelers as any[]).map(t => t.dropOffStationId).filter(Boolean))];
+    const dropOffStations = dropOffIds.length > 0
+      ? await this.prisma.station.findMany({ where: { id: { in: dropOffIds } }, select: { id: true, name: true, city: true } })
+      : [];
+    const dropOffMap = new Map(dropOffStations.map(s => [s.id, s]));
+
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
 
     const travelers = (trip.travelers as any[]).map(t => ({
       id:               t.id,
@@ -226,24 +306,56 @@ export class DocumentsService {
       sh.parcels.map(p => [p.trackingCode, p.destinationId, `${p.weight} kg`, p.status]),
     );
 
+    const originStation = (trip as any).route?.origin;
+    const destStation   = (trip as any).route?.destination;
+    const originCity    = originStation?.city || originStation?.name || '';
+    const destCity      = destStation?.city   || destStation?.name   || '';
+    const cur           = displayCurrency(tenant.currency ?? 'XAF');
+
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:     tenant.name,
-      tenantAddress:  '',
-      tenantPhone:    '',
+      tenantSlug:     tenant.slug,
+      tenantAddress:  tenant.address ?? '',
+      tenantPhone:    tenant.phoneNumber ?? '',
+      tenantEmail:    tenant.email ?? '',
+      tenantWebsite:  tenant.website ?? '',
+      tenantNif:      tenant.taxId ?? '',
+      tenantRccm:     tenant.rccm ?? '',
+      tenantCountry:  tenant.country ?? '',
+      tenantCurrency: cur,
+      // ── Trip ──
       tripId:         trip.id.slice(0, 12).toUpperCase(),
+      tripIdFull:     trip.id,
+      tripStatus:     trip.status,
       routeName:      (trip as any).route?.name ?? '',
-      origin:         (trip as any).route?.originId      ?? '',
-      destination:    (trip as any).route?.destinationId ?? '',
+      distanceKm:     (trip as any).route?.distanceKm ? `${(trip as any).route.distanceKm} km` : '',
+      origin:         originCity,
+      destination:    destCity,
+      originStation:  originStation?.name ?? '',
+      destStation:    destStation?.name ?? '',
       tripDate:       trip.departureScheduled.toLocaleString('fr-FR'),
+      departureTime:  trip.departureScheduled.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      arrivalDate:    trip.arrivalScheduled.toLocaleString('fr-FR'),
+      arrivalTime:    trip.arrivalScheduled.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      // ── Bus ──
       busPlate:       (trip as any).bus?.plateNumber ?? '—',
+      busModel:       (trip as any).bus?.model ?? '',
+      busType:        (trip as any).bus?.type ?? '',
+      busCapacity:    (trip as any).bus?.capacity ? String((trip as any).bus.capacity) : '',
+      // ── Driver ──
       driverName:     driver?.name ?? driver?.email ?? '—',
+      driverEmail:    driver?.email ?? '',
+      // ── Passengers ──
       passengerCount: String(travelers.length),
+      passengerRows:  JSON.stringify(passengerRows.length ? passengerRows : [['—','Aucun passager','—','—','']]),
+      // ── Shipments / Parcels ──
       parcelCount:    String(totalParcels),
       totalWeight:    String(totalWeight),
-      passengerRows:  JSON.stringify(passengerRows.length ? passengerRows : [['—','Aucun passager','—','—','']]),
       parcelRows:     JSON.stringify(parcelRows.length    ? parcelRows    : [['—','Aucun colis','—','—']]),
+      // ── System ──
       qrCodeValue:    `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/manifest/${trip.id}`,
       generatedAt:    new Date().toLocaleString('fr-FR'),
     };
@@ -270,7 +382,7 @@ export class DocumentsService {
     if (!parcel) throw new NotFoundException(`Colis ${parcelId} introuvable`);
 
     const sender = await this.prisma.user.findUnique({ where: { id: parcel.senderId } });
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
     const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
 
     const html = await renderParcelLabel({
@@ -292,23 +404,42 @@ export class DocumentsService {
     });
 
     const recip = (parcel.recipientInfo ?? {}) as Record<string, unknown>;
+    const cur   = displayCurrency(tenant.currency ?? 'XAF');
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:       tenant.name,
+      tenantAddress:    tenant.address ?? '',
+      tenantPhone:      tenant.phoneNumber ?? '',
+      tenantEmail:      tenant.email ?? '',
+      tenantNif:        tenant.taxId ?? '',
+      tenantRccm:       tenant.rccm ?? '',
+      tenantCountry:    tenant.country ?? '',
+      tenantCurrency:   cur,
+      // ── Parcel ──
       parcelRef:        parcel.id,
       trackingCode:     parcel.trackingCode,
+      parcelStatus:     parcel.status,
       weight:           String(parcel.weight),
+      price:            String(parcel.price),
+      priceFmt:         `${parcel.price} ${cur}`,
       dimensions:       (parcel as any).dimensions ?? '',
+      parcelCreatedAt:  parcel.createdAt.toLocaleString('fr-FR'),
+      // ── Sender ──
       senderName:       sender?.name ?? '',
+      senderEmail:      sender?.email ?? '',
       senderAddress:    '',
       senderPhone:      sender?.email ?? '',
+      // ── Recipient ──
       recipientName:    (recip.name    as string) ?? '',
       recipientAddress: (recip.address as string) ?? '',
       recipientPhone:   (recip.phone   as string) ?? '',
-      origin:           '',
+      // ── Destination ──
       destination:      (parcel as any).destination?.name ?? '',
-      qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/${parcel.trackingCode}`,
+      destinationCity:  (parcel as any).destination?.city ?? '',
+      // ── System ──
+      qrCodeValue:      `${trackingBase}/${parcel.trackingCode}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
     return this.storeWithPdfmeFallback(
@@ -329,8 +460,9 @@ export class DocumentsService {
     const shipment = await this.prisma.shipment.findFirst({
       where:   { id: shipmentId, tenantId },
       include: {
-        parcels: true,
-        trip:    { include: { route: true } },
+        parcels:     true,
+        destination: true,
+        trip:        { include: { route: { include: { origin: true, destination: true } }, bus: true } },
       },
     });
     if (!shipment) throw new NotFoundException(`Shipment ${shipmentId} introuvable`);
@@ -344,7 +476,7 @@ export class DocumentsService {
       : [];
     const senderMap = new Map(senders.map(s => [s.id, s]));
 
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
     const trip   = (shipment as any).trip;
 
     const html = renderPackingList({
@@ -387,28 +519,53 @@ export class DocumentsService {
       ];
     });
 
-    const tenantSettings = (tenant.settings ?? {}) as Record<string, unknown>;
+    const shipDest    = (shipment as any).destination;
+    const routeOrigin = (trip as any)?.route?.origin;
+    const routeDest   = (trip as any)?.route?.destination;
+    const cur         = displayCurrency(tenant.currency ?? 'XAF');
+
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:       tenant.name,
-      tenantAddress:    (tenantSettings.address as string) ?? '',
-      tenantPhone:      (tenantSettings.phone   as string) ?? '',
-      tenantNif:        (tenantSettings.nif     as string) ?? '',
-      tenantRccm:       (tenantSettings.rccm    as string) ?? '',
+      tenantSlug:       tenant.slug,
+      tenantAddress:    tenant.address ?? '',
+      tenantPhone:      tenant.phoneNumber ?? '',
+      tenantEmail:      tenant.email ?? '',
+      tenantNif:        tenant.taxId ?? '',
+      tenantRccm:       tenant.rccm ?? '',
+      tenantCountry:    tenant.country ?? '',
+      tenantCurrency:   cur,
+      // ── Shipment ──
       shipmentId:       shipment.id.slice(0, 12).toUpperCase(),
+      shipmentIdFull:   shipment.id,
       shipmentDate:     shipment.createdAt.toLocaleDateString('fr-FR'),
+      shipmentStatus:   shipment.status,
+      totalWeight:      String(shipment.totalWeight),
+      parcelCount:      String((shipment.parcels as any[]).length),
+      // ── Destination ──
+      destination:      shipDest?.name ?? shipment.destinationId,
+      destinationCity:  shipDest?.city ?? '',
+      // ── Route / Trip ──
+      origin:           routeOrigin?.city || routeOrigin?.name || '—',
+      originStation:    routeOrigin?.name ?? '',
+      destStation:      routeDest?.name ?? '',
+      routeName:        (trip as any)?.route?.name ?? '',
+      tripDate:         trip?.departureScheduled ? trip.departureScheduled.toLocaleString('fr-FR') : '',
+      busPlate:         (trip as any)?.bus?.plateNumber ?? '',
+      busModel:         (trip as any)?.bus?.model ?? '',
+      // ── First sender / recipient ──
       senderName:       firstSender?.name ?? '—',
+      senderEmail:      firstSender?.email ?? '',
       senderAddress:    '',
       senderPhone:      firstSender?.email ?? '',
       recipientName:    (firstRecip.name    as string) ?? '—',
       recipientAddress: (firstRecip.address as string) ?? '',
       recipientPhone:   (firstRecip.phone   as string) ?? '',
-      origin:           (trip as any)?.route?.originId      ?? '—',
-      destination:      (trip as any)?.route?.destinationId ?? shipment.destinationId,
-      parcelCount:      String((shipment.parcels as any[]).length),
-      totalWeight:      String(shipment.totalWeight),
+      // ── Parcel rows ──
       parcelRows:       JSON.stringify(parcelRows.length ? parcelRows : [['—','Aucun colis','—','—']]),
+      // ── System ──
       qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
@@ -583,20 +740,38 @@ export class DocumentsService {
     const ticket = await this.prisma.ticket.findFirst({ where: { id: ticketId, tenantId } });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
 
-    const [tenant, trip] = await Promise.all([
-      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
-      this.prisma.trip.findUnique({ where: { id: ticket.tripId }, include: { route: true } }),
+    const [tenant, trip, tva] = await Promise.all([
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT }),
+      this.prisma.trip.findUnique({
+        where: { id: ticket.tripId },
+        include: { route: { include: { origin: true, destination: true } } },
+      }),
+      this.resolveTva(tenantId),
     ]);
 
-    const ht        = Math.round(ticket.pricePaid / (1 + DEFAULT_TVA_RATE));
-    const tvaRate   = DEFAULT_TVA_RATE;
-    const s         = (tenant.settings ?? {}) as Record<string, unknown>;
-    const dueAt     = new Date(Date.now() + 30 * 86400_000); // +30 jours
+    const routeTvaOverride = (trip?.route as any)?.tvaOverrideRate ?? null;
+    const effectiveTva: TvaConfig = routeTvaOverride != null
+      ? { enabled: tva.enabled, rate: routeTvaOverride }
+      : tva;
+
+    // Si TVA activée : pricePaid = TTC → extraire HT. Sinon : prix net = montant affiché.
+    const tvaRate   = effectiveTva.enabled ? effectiveTva.rate : 0;
+    const ht        = effectiveTva.enabled ? Math.round(ticket.pricePaid / (1 + tvaRate)) : ticket.pricePaid;
+    const dueAt     = new Date(Date.now() + 30 * 86400_000);
+
+    const originCity = trip?.route?.origin?.city || trip?.route?.origin?.name || '—';
+    const destCity   = trip?.route?.destination?.city || trip?.route?.destination?.name || '—';
+    const registries = (tenant.fiscalRegistries ?? []) as unknown as FiscalRegistry[];
+    const lang       = tenant.language ?? 'fr';
+    const cur        = displayCurrency(tenant.currency ?? 'XAF');
+    const i          = docLabels(lang);
 
     const html = await renderInvoicePro({
       invoiceNumber: buildInvoiceNumber(ticketId),
       issuedAt:      ticket.createdAt,
       dueAt,
+      tvaEnabled:    effectiveTva.enabled,
+      lang,
       client: {
         name:    ticket.passengerName,
         phone:   null,
@@ -604,14 +779,13 @@ export class DocumentsService {
         email:   null,
       },
       seller: {
-        name:    tenant.name,
-        address: (s.address as string) ?? null,
-        phone:   (s.phone   as string) ?? null,
-        email:   (s.email   as string) ?? null,
-        nif:     (s.nif     as string) ?? null,
-        rccm:    (s.rccm    as string) ?? null,
-        bank:    (s.bank    as string) ?? null,
-        iban:    (s.iban    as string) ?? null,
+        name:           tenant.name,
+        address:        tenant.address     ?? null,
+        phone:          tenant.phoneNumber ?? null,
+        email:          tenant.email       ?? null,
+        fiscalRegistries: registries,
+        bank:           null,
+        iban:           null,
       },
       lines: [{
         description: `Transport voyageur — ${trip?.route?.name ?? 'Trajet'} — ${ticket.passengerName}`,
@@ -619,43 +793,73 @@ export class DocumentsService {
         unitPriceHt: ht,
         tvaRate,
       }],
-      currency: 'FCFA',
+      currency: cur,
       notes:    null,
       actorId:  actor.id,
       scope,
     });
 
-    const tvaAmt = Math.round(ticket.pricePaid - ht);
+    const tvaAmt = effectiveTva.enabled ? Math.round(ticket.pricePaid - ht) : 0;
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
+    const registriesStr = registries.map(r => `${r.label} : ${r.value}`).join('\n');
+
+    const localeFmt = lang === 'en' ? 'en-GB' : 'fr-FR';
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:    tenant.name,
-      tenantAddress: (s.address as string) ?? '',
-      tenantPhone:   (s.phone   as string) ?? '',
-      tenantNif:     (s.nif     as string) ?? '',
-      tenantRccm:    (s.rccm    as string) ?? '',
+      tenantSlug:    tenant.slug,
+      tenantAddress: tenant.address     ?? '',
+      tenantPhone:   tenant.phoneNumber ?? '',
+      tenantEmail:   tenant.email       ?? '',
+      tenantWebsite: tenant.website     ?? '',
+      tenantNif:     registriesStr,
+      tenantRccm:    tenant.rccm ?? '',
+      tenantCountry: tenant.country ?? '',
+      tenantCurrency: cur,
+      tenantContact: [tenant.address, tenant.phoneNumber ? `${i.bank === 'Bank' ? 'Tel' : 'Tél'} : ${tenant.phoneNumber}` : '', tenant.email].filter(Boolean).join('\n'),
+      // ── Invoice ──
       invoiceNumber: `INV-${ticket.id.slice(-8).toUpperCase()}`,
-      invoiceDate:   new Date().toLocaleDateString('fr-FR'),
+      invoiceDate:   new Date().toLocaleDateString(localeFmt),
+      // ── Client / Passenger ──
       clientName:    ticket.passengerName,
       clientAddress: '',
       clientPhone:   '',
-      origin:        (trip as any)?.route?.originId      ?? '',
-      destination:   (trip as any)?.route?.destinationId ?? '',
-      tripDate:      (trip?.departureScheduled ?? new Date()).toLocaleDateString('fr-FR'),
-      seatNumber:    (ticket as any).seatNumber ?? '—',
+      passengerName: ticket.passengerName,
+      ticketRef:     ticket.id,
+      ticketStatus:  ticket.status,
+      seatNumber:    ticket.seatNumber ?? '—',
+      fareClass:     (ticket as any).fareClass ?? 'STANDARD',
+      // ── Trip / Route ──
+      origin:        originCity,
+      destination:   destCity,
+      originStation: trip?.route?.origin?.name ?? '',
+      destStation:   trip?.route?.destination?.name ?? '',
+      routeName:     trip?.route?.name ?? '',
+      distanceKm:    trip?.route?.distanceKm ? `${trip.route.distanceKm} km` : '',
+      tripDate:      (trip?.departureScheduled ?? new Date()).toLocaleDateString(localeFmt),
+      departureTime: (trip?.departureScheduled ?? new Date()).toLocaleTimeString(localeFmt, { hour: '2-digit', minute: '2-digit' }),
+      arrivalTime:   (trip?.arrivalScheduled ?? new Date()).toLocaleTimeString(localeFmt, { hour: '2-digit', minute: '2-digit' }),
+      // ── Montants ──
+      price:         String(ticket.pricePaid),
       priceHt:       String(ht),
-      tvaRate:       String(Math.round(tvaRate * 100)),
+      tvaRate:       effectiveTva.enabled ? String(Math.round(tvaRate * 100)) : '0',
       tvaAmount:     String(tvaAmt),
-      totalTtc:      String(ticket.pricePaid),
-      currency:      'FCFA',
+      totalTtc:      `${ticket.pricePaid} ${cur}`,
+      totalHtValue:  effectiveTva.enabled ? `${ht} ${cur}` : '',
+      tvaValue:      effectiveTva.enabled ? `${tvaAmt} ${cur}` : '',
+      currency:      cur,
       paymentMethod: 'Espèces',
+      tvaEnabled:    effectiveTva.enabled ? 'true' : 'false',
       invoiceLines:  JSON.stringify([[
         `Transport — ${trip?.route?.name ?? 'Trajet'} — ${ticket.passengerName}`,
         '1',
-        `${ht} FCFA`,
-        `${ht} FCFA`,
+        `${ht} ${cur}`,
+        `${ticket.pricePaid} ${cur}`,
       ]]),
+      // ── System ──
       qrCodeValue:   ticket.qrCode ?? ticket.id,
+      qrCode:        ticket.qrCode ?? ticket.id,
       generatedAt:   new Date().toLocaleString('fr-FR'),
     };
     return this.storeWithPdfmeFallback(
@@ -675,13 +879,22 @@ export class DocumentsService {
     const ticket = await this.prisma.ticket.findFirst({ where: { id: ticketId, tenantId } });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
 
-    const [tenant, trip] = await Promise.all([
-      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+    const [tenant, trip, brand, bStation, aStation] = await Promise.all([
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT }),
       this.prisma.trip.findUnique({
         where:   { id: ticket.tripId },
-        include: { route: true, bus: true },
+        include: { route: { include: { origin: true, destination: true } }, bus: true },
       }),
+      this.prisma.tenantBrand.findUnique({
+        where:  { tenantId },
+        select: { brandName: true, primaryColor: true, secondaryColor: true },
+      }),
+      this.prisma.station.findUnique({ where: { id: (ticket as any).boardingStationId }, select: { name: true } }),
+      this.prisma.station.findUnique({ where: { id: (ticket as any).alightingStationId }, select: { name: true } }),
     ]);
+
+    const originCity = trip?.route?.origin?.city || trip?.route?.origin?.name || '—';
+    const destCity   = trip?.route?.destination?.city || trip?.route?.destination?.name || '—';
 
     const html = await renderTicketStub({
       ticket: {
@@ -693,43 +906,94 @@ export class DocumentsService {
         qrToken:       ticket.qrCode,
         createdAt:     ticket.createdAt,
         expiresAt:     (ticket as any).expiresAt ?? null,
-        class:         null,
+        class:         (ticket as any).fareClass ?? null,
+        boardingStationName:  bStation?.name ?? null,
+        alightingStationName: aStation?.name ?? null,
       },
       trip: {
         id:                 trip?.id ?? ticket.tripId,
         departureScheduled: trip?.departureScheduled ?? new Date(),
         arrivalScheduled:   trip?.arrivalScheduled   ?? new Date(),
-        route:              (trip as any)?.route ?? null,
+        route: trip?.route ? {
+          name:          trip.route.name,
+          originCity,
+          destinationCity: destCity,
+        } : null,
         bus:                (trip as any)?.bus   ?? null,
       },
-      tenantName: tenant.name,
+      tenantName:     brand?.brandName ?? tenant.name,
+      tenantSlug:     tenant.slug,
+      primaryColor:   brand?.primaryColor   ?? '#0d9488',
+      secondaryColor: brand?.secondaryColor ?? '#0f766e',
       actorId:    actor.id,
       scope,
     });
 
-    const depart  = trip?.departureScheduled ?? new Date();
+    const depart   = trip?.departureScheduled ?? new Date();
+    const arrival  = trip?.arrivalScheduled   ?? new Date();
     const boarding = new Date(depart.getTime() - 15 * 60_000);
+    const cur      = displayCurrency(tenant.currency ?? 'XAF');
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
-      tenantName:   tenant.name,
-      flightCode:   (trip as any)?.route?.code ?? (trip?.id ?? ticketId).slice(0, 8).toUpperCase(),
+      tenantName:    brand?.brandName ?? tenant.name,
+      tenantSlug:    tenant.slug,
+      tenantAddress: tenant.address ?? '',
+      tenantPhone:   tenant.phoneNumber ?? '',
+      tenantEmail:   tenant.email ?? '',
+      tenantNif:     tenant.taxId ?? '',
+      tenantRccm:    tenant.rccm ?? '',
+      tenantCountry: tenant.country ?? '',
+      tenantCurrency: cur,
+      // ── Ticket ──
+      ticketRef:     ticket.id,
+      ticketStatus:  ticket.status,
+      bookingRef:    ticket.id.slice(-8).toUpperCase(),
       passengerName: ticket.passengerName,
-      origin:        (trip as any)?.route?.originId      ?? '',
-      destination:   (trip as any)?.route?.destinationId ?? '',
+      seatNumber:    (ticket as any).seatNumber ?? '—',
+      fareClass:     (ticket as any).fareClass || 'STANDARD',
+      class:         (ticket as any).fareClass || '—',
+      price:         String(ticket.pricePaid),
+      currency:      cur,
+      ticketCreatedAt: ticket.createdAt.toLocaleString('fr-FR'),
+      ticketExpiresAt: (ticket as any).expiresAt ? new Date((ticket as any).expiresAt).toLocaleString('fr-FR') : '',
+      // ── Stations ──
+      boardingStation:  bStation?.name ?? originCity,
+      alightingStation: aStation?.name ?? destCity,
+      // ── Trip / Route ──
+      flightCode:    (trip as any)?.route?.code ?? (trip?.id ?? ticketId).slice(0, 8).toUpperCase(),
+      origin:        originCity,
+      destination:   destCity,
+      routeOrigin:   originCity,
+      routeDest:     destCity,
+      originStation: trip?.route?.origin?.name ?? '',
+      destStation:   trip?.route?.destination?.name ?? '',
+      routeName:     trip?.route?.name ?? '',
+      distanceKm:    trip?.route?.distanceKm ? `${trip.route.distanceKm} km` : '',
       boardingDate:  depart.toLocaleDateString('fr-FR'),
       departureTime: depart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      arrivalTime:   arrival.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       boardingTime:  boarding.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      class:         '—',
+      tripDate:      depart.toLocaleString('fr-FR'),
+      // ── Bus ──
+      busPlate:      (trip as any)?.bus?.plateNumber ?? '',
+      busModel:      (trip as any)?.bus?.model ?? '',
+      busType:       (trip as any)?.bus?.type ?? '',
+      busCapacity:   (trip as any)?.bus?.capacity ? String((trip as any).bus.capacity) : '',
+      // ── Boarding pass fields ──
       gate:          '—',
-      seatNumber:    (ticket as any).seatNumber ?? '—',
       zone:          '—',
-      bookingRef:    ticket.id.slice(-8).toUpperCase(),
+      // ── System ──
       qrCodeValue:   ticket.qrCode ?? ticket.id,
+      qrCode:        ticket.qrCode ?? ticket.id,
       barcodeValue:  ticket.id,
+      barcodeText:   ticket.id,
+      generatedAt:   new Date().toLocaleString('fr-FR'),
     };
+    // Utilise directement le renderer HTML (pas le template pdfme boarding-pass-a6)
     return this.storeWithPdfmeFallback(
-      tenantId, 'boarding-pass-a6', pdfmeData,
+      tenantId, 'ticket-stub-html', pdfmeData,
       async () => html,
       `poc/ticket-stub/${ticketId}`, DocumentType.TICKET_PDF, actor, 'A5',
     );
@@ -818,8 +1082,7 @@ export class DocumentsService {
     });
     if (!shipment) throw new NotFoundException(`Shipment ${shipmentId} introuvable`);
 
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-    const s      = (tenant.settings ?? {}) as Record<string, unknown>;
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
 
     // La destination du shipment sert de destinataire
     const station = await this.prisma.station.findFirst({
@@ -829,13 +1092,13 @@ export class DocumentsService {
     const html = await renderEnvelope({
       recipient: {
         name:    station?.name ?? shipment.destinationId,
-        address: (station as any)?.address ?? 'Adresse à compléter',
-        city:    (station as any)?.city ?? '—',
+        address: 'Adresse à compléter',
+        city:    station?.city ?? '—',
       },
       sender: {
         name:    tenant.name,
-        address: (s.address as string) ?? '',
-        city:    (s.city    as string) ?? '',
+        address: tenant.address ?? '',
+        city:    tenant.city ?? '',
       },
       reference:  shipment.id.slice(0, 12).toUpperCase(),
       format,
@@ -847,17 +1110,27 @@ export class DocumentsService {
     const printFmt = format === 'C5' ? 'ENVELOPE_C5' as PrintFormat : 'ENVELOPE_C5' as PrintFormat;
     const slug = format === 'DL' ? 'envelope-dl' : 'envelope-c5';
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantName:       tenant.name,
+      tenantSlug:       tenant.slug,
+      tenantAddress:    tenant.address ?? '',
+      tenantPhone:      tenant.phoneNumber ?? '',
+      tenantEmail:      tenant.email ?? '',
+      tenantCountry:    tenant.country ?? '',
+      // ── Envelope ──
       reference:        shipment.id.slice(0, 12).toUpperCase(),
+      shipmentId:       shipment.id,
+      shipmentStatus:   shipment.status,
+      // ── Sender ──
       senderName:       tenant.name,
-      senderAddress:    (s.address as string) ?? '',
-      senderCity:       (s.city    as string) ?? '',
-      senderZip:        (s.zip     as string) ?? '',
+      senderAddress:    tenant.address ?? '',
+      senderCity:       tenant.city ?? '',
+      // ── Recipient ──
       recipientName:    station?.name ?? shipment.destinationId,
-      recipientAddress: (station as any)?.address ?? 'Adresse à compléter',
-      recipientCity:    (station as any)?.city ?? '',
-      recipientZip:     (station as any)?.zip  ?? '',
-      recipientCountry: (station as any)?.country ?? '',
+      recipientCity:    station?.city ?? '',
+      destination:      station?.name ?? '',
+      destinationCity:  station?.city ?? '',
+      // ── System ──
       qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
@@ -891,22 +1164,22 @@ export class DocumentsService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
 
-    // Récupérer passager et trajet
-    const traveler = await this.prisma.traveler.findFirst({
-      where: { id: (ticket as any).travelerId },
-    }).catch(() => null);
-
     const trip = await this.prisma.trip.findFirst({
-      where:   { id: (ticket as any).tripId },
+      where:   { id: ticket.tripId },
       include: {
-        route: true,
-        bus:   { select: { plateNumber: true, model: true } },
+        route: { include: { origin: true, destination: true } },
+        bus:   true,
       },
     }).catch(() => null);
 
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
 
     const trackingCode = `${tenantId.slice(0, 4).toUpperCase()}-BAG-${ticketId.slice(-6).toUpperCase()}-${bagIndex}`;
+
+    const originStation = (trip?.route as any)?.origin;
+    const destStation   = (trip?.route as any)?.destination;
+    const originName    = originStation?.city || originStation?.name || 'Origine';
+    const destName      = destStation?.city   || destStation?.name   || 'Destination';
 
     const html = await renderBaggageTag({
       tag: {
@@ -917,18 +1190,16 @@ export class DocumentsService {
         description,
       },
       passenger: {
-        name:     traveler
-          ? `${(traveler as any).firstName ?? ''} ${(traveler as any).lastName ?? ''}`.trim()
-          : 'Passager inconnu',
-        phone:    (traveler as any)?.phone ?? null,
+        name:     ticket.passengerName,
+        phone:    null,
         ticketId: ticket.id,
       },
       trip: {
         id:                  trip?.id ?? 'N/A',
-        departureScheduled:  (trip as any)?.departureScheduled ?? new Date(),
-        origin:              (trip?.route as any)?.originId    ?? 'Origine',
-        destination:         (trip?.route as any)?.destinationId ?? 'Destination',
-        routeName:           (trip?.route as any)?.name        ?? null,
+        departureScheduled:  trip?.departureScheduled ?? new Date(),
+        origin:              originName,
+        destination:         destName,
+        routeName:           (trip?.route as any)?.name ?? null,
         busPlate:            (trip?.bus  as any)?.plateNumber  ?? null,
       },
       tenantName: tenant.name,
@@ -936,26 +1207,51 @@ export class DocumentsService {
       scope,
     });
 
+    const depart = trip?.departureScheduled ?? new Date();
+    const cur    = displayCurrency(tenant.currency ?? 'XAF');
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
+      // ── Tenant ──
       tenantLogo,
       tenantName:    tenant.name,
+      tenantSlug:    tenant.slug,
+      tenantAddress: tenant.address ?? '',
+      tenantPhone:   tenant.phoneNumber ?? '',
+      tenantEmail:   tenant.email ?? '',
+      tenantCountry: tenant.country ?? '',
+      tenantCurrency: cur,
+      // ── Baggage ──
       trackingCode,
-      weight:        String(weightKg),
-      bagNumber:     String(bagIndex),
-      totalBags:     String(totalBags),
-      bagDescription:description ?? '',
-      passengerName: html.includes('Passager inconnu') ? 'Passager inconnu' : ticket.passengerName,
-      passengerPhone:'',
-      ticketRef:     ticket.id,
-      origin:        (trip?.route as any)?.originId      ?? '',
-      destination:   (trip?.route as any)?.destinationId ?? '',
-      tripDate:      (trip as any)?.departureScheduled
-                       ? new Date((trip as any).departureScheduled).toLocaleString('fr-FR')
-                       : '',
-      busPlate:      (trip?.bus as any)?.plateNumber ?? '',
-      qrCodeValue:   trackingCode,
-      generatedAt:   new Date().toLocaleString('fr-FR'),
+      weight:         String(weightKg),
+      bagNumber:      String(bagIndex),
+      totalBags:      String(totalBags),
+      bagDescription: description ?? '',
+      // ── Passenger / Ticket ──
+      passengerName:  ticket.passengerName,
+      passengerPhone: '',
+      ticketRef:      ticket.id,
+      ticketStatus:   ticket.status,
+      seatNumber:     ticket.seatNumber ?? '—',
+      fareClass:      (ticket as any).fareClass ?? 'STANDARD',
+      price:          String(ticket.pricePaid),
+      currency:       cur,
+      // ── Trip / Route ──
+      origin:         originName,
+      destination:    destName,
+      originStation:  originStation?.name ?? '',
+      destStation:    destStation?.name ?? '',
+      routeName:      (trip?.route as any)?.name ?? '',
+      distanceKm:     (trip?.route as any)?.distanceKm ? `${(trip?.route as any).distanceKm} km` : '',
+      tripDate:       depart.toLocaleString('fr-FR'),
+      departureTime:  depart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      boardingDate:   depart.toLocaleDateString('fr-FR'),
+      // ── Bus ──
+      busPlate:       (trip?.bus as any)?.plateNumber ?? '',
+      busModel:       (trip?.bus as any)?.model ?? '',
+      busType:        (trip?.bus as any)?.type ?? '',
+      // ── System ──
+      qrCodeValue:    trackingCode,
+      generatedAt:    new Date().toLocaleString('fr-FR'),
     };
     return this.storeWithPdfmeFallback(
       tenantId, 'baggage-tag', pdfmeData,
@@ -1157,14 +1453,21 @@ function buildInvoiceNumber(entityId: string): string {
   return `${yyyymm}-${entityId.slice(0, 8).toUpperCase()}`;
 }
 
-function buildSellerFromTenant(tenant: { name: string; settings?: unknown }) {
-  const s = (tenant.settings ?? {}) as Record<string, unknown>;
+function buildSellerFromTenant(tenant: {
+  name: string;
+  address?: string | null;
+  phoneNumber?: string | null;
+  email?: string | null;
+  taxId?: string | null;
+  rccm?: string | null;
+  settings?: unknown;
+}) {
   return {
     name:    tenant.name,
-    address: (s.address as string) ?? null,
-    phone:   (s.phone   as string) ?? null,
-    email:   (s.email   as string) ?? null,
-    nif:     (s.nif     as string) ?? null,
-    rccm:    (s.rccm    as string) ?? null,
+    address: tenant.address ?? null,
+    phone:   tenant.phoneNumber ?? null,
+    email:   tenant.email ?? null,
+    nif:     tenant.taxId ?? null,
+    rccm:    tenant.rccm ?? null,
   };
 }

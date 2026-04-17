@@ -11,7 +11,8 @@
  *   t           — fonction i18n
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface TripDatePickerProps {
@@ -96,10 +97,21 @@ export function TripDatePicker({
     });
   }, [value, locale]);
 
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+  }, [open]);
+
   return (
     <div className="relative">
       {/* Trigger button */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-left"
@@ -107,9 +119,12 @@ export function TripDatePicker({
         {displayLabel}
       </button>
 
-      {/* Dropdown calendar */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-3 animate-in fade-in slide-in-from-top-1">
+      {/* Dropdown calendar — rendered via portal to escape overflow:hidden parents */}
+      {open && createPortal(
+        <div
+          style={{ position: 'absolute', top: pos.top, left: pos.left }}
+          className="z-[9999] w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-3 animate-in fade-in slide-in-from-top-1"
+        >
           {/* Nav header */}
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={() => navigate(-1)}
@@ -203,12 +218,14 @@ export function TripDatePicker({
               </span>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {/* Click-outside overlay */}
-      {open && (
-        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+      {/* Click-outside overlay — also via portal */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />,
+        document.body,
       )}
     </div>
   );

@@ -85,7 +85,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
       vars = vars.filter(
         v =>
           v.key.toLowerCase().includes(q) ||
-          v.label.toLowerCase().includes(q) ||
+          t(v.label).toLowerCase().includes(q) ||
           v.example.toLowerCase().includes(q),
       );
     }
@@ -206,7 +206,7 @@ export function VariablesPanel({ docType, onSelect }: VariablesPanelProps) {
                   >
                     {v.placeholder}
                   </div>
-                  <div style={{ fontSize: '10px', color: p.textMuted }}>{v.label}</div>
+                  <div style={{ fontSize: '10px', color: p.textMuted }}>{t(v.label)}</div>
                 </div>
                 {copied === v.key && (
                   <span style={{ fontSize: '10px', color: p.textOk, fontWeight: 700 }}>

@@ -1,4 +1,4 @@
-import { IsString, IsDateString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsDateString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 
 export class CreateTripDto {
   @IsString()
@@ -23,4 +23,8 @@ export class CreateTripDto {
   @IsString()
   @IsOptional()
   agencyId?: string;
+
+  @IsIn(['FREE', 'NUMBERED'])
+  @IsOptional()
+  seatingMode?: 'FREE' | 'NUMBERED';
 }

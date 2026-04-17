@@ -56,12 +56,16 @@ export class FlightDeckService {
     });
     if (active) return active;
 
-    // Priority 2: next upcoming trip (nearest departure)
+    // Priority 2: nearest upcoming or today's trip (skip past trips still stuck in PLANNED)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
     return this.prisma.trip.findFirst({
       where: {
         tenantId,
         driverId: staffId,
         status: { in: [TripState.PLANNED, TripState.OPEN] },
+        departureScheduled: { gte: startOfToday },
       },
       orderBy: { departureScheduled: 'asc' },
       include,

@@ -43,12 +43,14 @@ export class PortalAdminService {
   }
 
   async upsertPortalConfig(tenantId: string, dto: {
+    themeId?: string;
     showAbout?: boolean; showFleet?: boolean; showNews?: boolean; showContact?: boolean;
     heroImageUrl?: string; heroOverlay?: number;
     slogans?: Record<string, string>; socialLinks?: Record<string, string>;
     ogImageUrl?: string;
   }) {
     const data = {
+      themeId:      dto.themeId,
       showAbout:    dto.showAbout,
       showFleet:    dto.showFleet,
       showNews:     dto.showNews,
@@ -71,7 +73,9 @@ export class PortalAdminService {
       update: cleanData,
     });
 
-    await this.redis.del(`portal:slug:*`);
+    // Invalidate portal config cache — find tenant slug and clear
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true } });
+    if (tenant) await this.redis.del(`portal:slug:${tenant.slug}`);
     return result;
   }
 

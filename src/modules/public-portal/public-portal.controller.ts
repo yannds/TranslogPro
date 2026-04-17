@@ -139,13 +139,13 @@ export class PublicPortalController {
   ) {
     return this.service.createBooking(slug, {
       tripId: dto.tripId,
-      passenger: {
-        firstName: dto.passenger.firstName,
-        lastName:  dto.passenger.lastName,
-        phone:     dto.passenger.phone,
-        email:     dto.passenger.email,
-        seatType:  dto.passenger.seatType,
-      },
+      passengers: dto.passengers.map(p => ({
+        firstName: p.firstName,
+        lastName:  p.lastName,
+        phone:     p.phone,
+        email:     p.email,
+        seatType:  p.seatType,
+      })),
       paymentMethod: dto.paymentMethod,
     });
   }

@@ -27,7 +27,7 @@ export class TripController {
   findAll(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
-    @Query('status') status?: string,
+    @Query('status') status?: string | string[],
   ) {
     return this.tripService.findAll(tenantId, { status }, scope);
   }
@@ -40,6 +40,15 @@ export class TripController {
     @ScopeCtx() scope: ScopeContext,
   ) {
     return this.tripService.findOne(tenantId, id, scope);
+  }
+
+  @Get(':id/seats')
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
+  getSeats(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.tripService.getSeats(tenantId, id);
   }
 
   @Delete(':id')

@@ -10,16 +10,17 @@
  *   DELETE /api/tenants/:tid/stations/:id    409 si référencée
  */
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, useCallback, type FormEvent } from 'react';
 import {
   MapPin, Plus, Pencil, Trash2, Building2, Link as LinkIcon,
 } from 'lucide-react';
 import { useAuth }                          from '../../lib/auth/auth.context';
 import { useI18n }                      from '../../lib/i18n/useI18n';
 import { useFetch }                         from '../../lib/hooks/useFetch';
-import { apiPost, apiPatch, apiDelete }     from '../../lib/api';
+import { apiGet, apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { Badge }                            from '../ui/Badge';
 import { Button }                           from '../ui/Button';
+import { ComboboxEditable, type ComboboxOption } from '../ui/ComboboxEditable';
 import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
 import { FormFooter }                       from '../ui/FormFooter';
@@ -69,6 +70,9 @@ function refsCount(c: StationRow['_count']): number {
 
 // ─── Formulaire ───────────────────────────────────────────────────────────────
 
+interface GeoResult { displayName: string; lat: number; lng: number }
+interface GeoResponse { results: GeoResult[] }
+
 function StationForm({
   tenantId, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel,
 }: {
@@ -84,6 +88,18 @@ function StationForm({
   const { t } = useI18n();
   const [f, setF] = useState<StationFormValues>(initial);
   const patch = (p: Partial<StationFormValues>) => setF(prev => ({ ...prev, ...p }));
+
+  // Recherche Nominatim pour le champ Ville
+  const searchCity = useCallback(async (q: string): Promise<ComboboxOption[]> => {
+    const data = await apiGet<GeoResponse>(
+      `/api/tenants/${tenantId}/geo/search?q=${encodeURIComponent(q)}`,
+    );
+    return (data.results ?? []).map(r => ({
+      value: r.displayName.split(',')[0].trim(),
+      label: r.displayName.split(',')[0].trim(),
+      hint:  r.displayName.split(',').slice(1).join(',').trim(),
+    }));
+  }, [tenantId]);
 
   return (
     <form
@@ -102,14 +118,17 @@ function StationForm({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('stations.city')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input type="text" required value={f.city}
-            onChange={e => patch({ city: e.target.value })}
-            className={inp} disabled={busy} placeholder={t('stations.placeholderCity')} />
-        </div>
+        <ComboboxEditable
+          label={t('stations.city')}
+          value={f.city}
+          onChange={v => patch({ city: v })}
+          onSearch={searchCity}
+          allowFreeText
+          freeTextWarning={t('stations.cityFreeTextWarning')}
+          placeholder={t('stations.placeholderCity')}
+          disabled={busy}
+          required
+        />
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
             {t('common.type')} <span aria-hidden className="text-red-500">*</span>

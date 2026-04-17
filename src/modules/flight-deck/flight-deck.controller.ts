@@ -50,7 +50,7 @@ export class FlightDeckController {
   }
 
   @Get('trips/:tripId/passengers')
-  @RequirePermission([Permission.TICKET_READ_AGENCY, Permission.TRIP_CHECK_OWN])
+  @RequirePermission([Permission.TICKET_READ_AGENCY, Permission.TRIP_CHECK_OWN, Permission.MANIFEST_READ_OWN])
   getPassengers(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.flightDeckService.getPassengerList(tenantId, tripId);
   }

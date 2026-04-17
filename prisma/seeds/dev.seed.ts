@@ -389,6 +389,222 @@ async function seedSystemBlueprints(categoryIds: Record<string, string>) {
   }
 }
 
+/** Seed billetterie : 2 stations, 1 route, 2 bus (avec seatLayout), 2 trips (FREE + NUMBERED), billets test. */
+async function seedTicketingData(tenantId: string, driverUserId: string) {
+  // Résoudre le staffId du driver (Trip.driverId = Staff.id, pas User.id)
+  const driverStaff = await prisma.staff.findFirst({
+    where: { userId: driverUserId, tenantId },
+    select: { id: true },
+  });
+  if (!driverStaff) {
+    console.log('[Dev Seed] ⚠ Pas de profil staff pour le driver — skip ticketing seed');
+    return;
+  }
+  const driverId = driverStaff.id;
+
+  // ── Stations ────────────────────────────────────────────────────────────────
+  const stationA = await prisma.station.upsert({
+    where: { id: 'station-brazza-central' },
+    update: {},
+    create: {
+      id:          'station-brazza-central',
+      tenantId,
+      name:        'Brazzaville Central',
+      city:        'Brazzaville',
+      coordinates: { lat: -4.2634, lng: 15.2429 },
+      type:        'PRINCIPALE',
+    },
+  });
+
+  const stationB = await prisma.station.upsert({
+    where: { id: 'station-pointe-noire' },
+    update: {},
+    create: {
+      id:          'station-pointe-noire',
+      tenantId,
+      name:        'Pointe-Noire Gare Routière',
+      city:        'Pointe-Noire',
+      coordinates: { lat: -4.7692, lng: 11.8664 },
+      type:        'PRINCIPALE',
+    },
+  });
+
+  console.log(`[Dev Seed] ✅ Stations: ${stationA.name}, ${stationB.name}`);
+
+  // ── Route ───────────────────────────────────────────────────────────────────
+  const route = await prisma.route.upsert({
+    where: { id: 'route-bzv-pnr' },
+    update: {},
+    create: {
+      id:            'route-bzv-pnr',
+      tenantId,
+      name:          'Brazzaville → Pointe-Noire',
+      originId:      stationA.id,
+      destinationId: stationB.id,
+      distanceKm:    510,
+      basePrice:     15000,
+    },
+  });
+
+  // Pricing rules pour la route
+  await prisma.pricingRules.upsert({
+    where: { id: 'pricing-bzv-pnr' },
+    update: {},
+    create: {
+      id:       'pricing-bzv-pnr',
+      tenantId,
+      routeId:  route.id,
+      rules: {
+        basePriceXof:      15000,
+        taxRate:           0.18,
+        tollsXof:          500,
+        costPerKm:         25,
+        luggageFreeKg:     15,
+        luggagePerExtraKg: 200,
+        fareMultipliers:   { STANDARD: 1.0, CONFORT: 1.4, VIP: 2.0, STANDING: 0.7 },
+        yieldSteps:        [
+          { occupancyThreshold: 0.7, priceMultiplier: 1.10 },
+          { occupancyThreshold: 0.9, priceMultiplier: 1.25 },
+        ],
+      },
+    },
+  });
+
+  console.log(`[Dev Seed] ✅ Route: ${route.name} (${route.distanceKm} km, base ${route.basePrice})`);
+
+  // ── Bus A : 50 places, seatLayout configuré ────────────────────────────────
+  const busA = await prisma.bus.upsert({
+    where: { plateNumber: 'CG-001-BZV' },
+    update: { seatLayout: { rows: 12, cols: 4, aisleAfter: 2, disabled: ['1-3', '1-4'] } },
+    create: {
+      tenantId,
+      plateNumber:    'CG-001-BZV',
+      model:          'Mercedes Travego',
+      type:           'CONFORT',
+      year:           2022,
+      capacity:       46,
+      luggageCapacityKg: 800,
+      luggageCapacityM3: 8,
+      seatLayout:     { rows: 12, cols: 4, aisleAfter: 2, disabled: ['1-3', '1-4'] },
+      status:         'AVAILABLE',
+    },
+  });
+
+  // ── Bus B : 30 places, pas de seatLayout (FREE seating only) ───────────────
+  const busB = await prisma.bus.upsert({
+    where: { plateNumber: 'CG-002-BZV' },
+    update: {},
+    create: {
+      tenantId,
+      plateNumber:    'CG-002-BZV',
+      model:          'Toyota Coaster',
+      type:           'STANDARD',
+      year:           2020,
+      capacity:       30,
+      luggageCapacityKg: 400,
+      luggageCapacityM3: 4,
+      status:         'AVAILABLE',
+    },
+  });
+
+  console.log(`[Dev Seed] ✅ Bus: ${busA.plateNumber} (seatLayout 12×4), ${busB.plateNumber} (free seating)`);
+
+  // ── TenantBusinessConfig — frais choix de siège ────────────────────────────
+  await prisma.tenantBusinessConfig.upsert({
+    where:  { tenantId },
+    update: { seatSelectionFee: 500 },
+    create: {
+      tenantId,
+      seatSelectionFee: 500,
+    },
+  });
+  console.log('[Dev Seed] ✅ TenantBusinessConfig: seatSelectionFee = 500');
+
+  // ── Trip 1 : NUMBERED seating (bus avec seatLayout) ────────────────────────
+  const dep1 = new Date();
+  dep1.setDate(dep1.getDate() + 1);
+  dep1.setHours(8, 0, 0, 0);
+  const arr1 = new Date(dep1.getTime() + 7 * 3600_000); // +7h
+
+  const tripNumbered = await prisma.trip.upsert({
+    where: { id: 'trip-numbered-demo' },
+    update: {},
+    create: {
+      id:                 'trip-numbered-demo',
+      tenantId,
+      routeId:            route.id,
+      busId:              busA.id,
+      driverId:           driverId,
+      seatingMode:        'NUMBERED',
+      departureScheduled: dep1,
+      arrivalScheduled:   arr1,
+      status:             'OPEN',
+      version:            0,
+    },
+  });
+
+  // ── Trip 2 : FREE seating ──────────────────────────────────────────────────
+  const dep2 = new Date();
+  dep2.setDate(dep2.getDate() + 2);
+  dep2.setHours(6, 30, 0, 0);
+  const arr2 = new Date(dep2.getTime() + 8 * 3600_000);
+
+  const tripFree = await prisma.trip.upsert({
+    where: { id: 'trip-free-demo' },
+    update: {},
+    create: {
+      id:                 'trip-free-demo',
+      tenantId,
+      routeId:            route.id,
+      busId:              busB.id,
+      driverId:           driverId,
+      seatingMode:        'FREE',
+      departureScheduled: dep2,
+      arrivalScheduled:   arr2,
+      status:             'OPEN',
+      version:            0,
+    },
+  });
+
+  console.log(`[Dev Seed] ✅ Trip NUMBERED: ${tripNumbered.id} (${dep1.toISOString().slice(0, 10)})`);
+  console.log(`[Dev Seed] ✅ Trip FREE: ${tripFree.id} (${dep2.toISOString().slice(0, 10)})`);
+
+  // ── Billets test sur le trip NUMBERED (pour montrer des sièges occupés) ────
+  const testPassengers = [
+    { name: 'Marie Ngouabi',    phone: '+242 06 100 0001', seat: '1-1', fareClass: 'STANDARD' },
+    { name: 'Pierre Makosso',   phone: '+242 06 100 0002', seat: '1-2', fareClass: 'CONFORT' },
+    { name: 'Aline Mouamba',    phone: '+242 06 100 0003', seat: '2-1', fareClass: 'STANDARD' },
+    { name: 'Didier Bounkosso', phone: '+242 06 100 0004', seat: '3-3', fareClass: 'VIP' },
+  ];
+
+  for (const tp of testPassengers) {
+    const existing = await prisma.ticket.findFirst({
+      where: { tenantId, tripId: tripNumbered.id, passengerName: tp.name },
+    });
+    if (!existing) {
+      await prisma.ticket.create({
+        data: {
+          tenantId,
+          tripId:             tripNumbered.id,
+          passengerId:        driverUserId, // dummy — en dev le vendeur est le passager
+          passengerName:      tp.name,
+          seatNumber:         tp.seat,
+          boardingStationId:  stationA.id,
+          alightingStationId: stationB.id,
+          fareClass:          tp.fareClass,
+          pricePaid:          15000,
+          agencyId:           '',
+          status:             'CONFIRMED',
+          qrCode:             `demo-${tp.seat}-${Date.now()}`,
+          version:            0,
+        },
+      });
+    }
+  }
+
+  console.log(`[Dev Seed] ✅ ${testPassengers.length} billets test (sièges occupés sur trip NUMBERED)`);
+}
+
 async function main() {
   console.log('[Dev Seed] Démarrage...');
 
@@ -472,6 +688,9 @@ async function main() {
 
   await upsertDriverProfile(driver.id, TENANT1_ID);
   console.log(`[Dev Seed] ✅ driver@tenant1.dev (DRIVER + profil complet, id=${driver.id})`);
+
+  // ── 7. Seed billetterie : stations, route, bus, trips, billets ────────────────
+  await seedTicketingData(TENANT1_ID, driver.id);
 
   // ── Cleanup Phase 5 : zombie userType='DRIVER' des DB pré-existantes ─────────
   const zombieReport = await backfillDriverUserTypeZombie(prisma);

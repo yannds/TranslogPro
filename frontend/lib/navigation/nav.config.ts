@@ -579,12 +579,28 @@ export const ADMIN_NAV: PortalNavConfig = {
           moduleKey: 'WHITE_LABEL',
         },
         {
-          kind: 'leaf',
-          id: 'portal-admin',
+          kind: 'group',
+          id: 'portal-group',
           label: 'nav.visitor_portal',
-          href: '/admin/settings/portal',
           icon: 'Globe',
-          anyOf: [P.SETTINGS_MANAGE],
+          children: [
+            {
+              kind: 'leaf',
+              id: 'portal-admin',
+              label: 'nav.portal_settings',
+              href: '/admin/settings/portal',
+              icon: 'Settings',
+              anyOf: [P.SETTINGS_MANAGE],
+            },
+            {
+              kind: 'leaf',
+              id: 'portal-marketplace',
+              label: 'nav.portal_marketplace',
+              href: '/admin/settings/portal/marketplace',
+              icon: 'Store',
+              anyOf: [P.SETTINGS_MANAGE],
+            },
+          ],
         },
         {
           kind: 'leaf',
