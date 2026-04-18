@@ -87,6 +87,12 @@ vault kv put secret/platform/app \
   JWT_SECRET="dev-jwt-secret-change-in-production-$(date +%s)" \
   BETTER_AUTH_SECRET="dev-auth-secret-change-in-production-$(date +%s)"
 
+# Clé HMAC pour les tokens d'impersonation cross-subdomain (Phase 2).
+# ImpersonationService.signPayload la lit via secret/platform/impersonation_key.
+# Doit faire ≥ 32 chars. En prod : rotation indépendante des autres clés.
+vault kv put secret/platform/impersonation_key \
+  KEY="dev-impersonation-hmac-$(date +%s)-$(openssl rand -hex 32 2>/dev/null || echo padding-padding-padding-padding)"
+
 # ─── Tenant par défaut (développement) ───────────────────────
 echo "🏢 Creating default dev tenant secrets..."
 
