@@ -29,10 +29,12 @@ import { DriverDashboard }      from '../components/driver/DriverDashboard';
 import { StationAgentDashboard } from '../components/station-agent/StationAgentDashboard';
 import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
 import { PortailVoyageur }      from '../components/portail-voyageur/PortailVoyageur';
+import { LegacyTenantRedirect } from '../components/legacy/LegacyTenantRedirect';
 import { PageClaim }            from '../components/pages/PageClaim';
 import { useAuth }              from '../lib/auth/auth.context';
 import { resolvePortal }        from '../lib/navigation/resolvePortal';
 import type { PortalId }        from '../lib/navigation/resolvePortal';
+import { resolveHost }          from '../lib/tenancy/host';
 
 /**
  * Redirige vers le portail correspondant à (userType, permissions) via
@@ -52,7 +54,16 @@ const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
+
+  // Phase 1 multi-tenant : si le host est un sous-domaine tenant et l'utilisateur
+  // n'est pas connecté → afficher le portail public voyageur, pas la page login.
+  // Cela remplace l'ancien `/p/:tenantSlug/*` par une URL propre sur le sous-domaine.
+  if (!user) {
+    const host = resolveHost();
+    if (host.slug) return <PortailVoyageur />;
+    return <Navigate to="/login" replace />;
+  }
+
   const portal = resolvePortal({ userType: user.userType, permissions: user.permissions });
   // Le staff du tenant plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2)
   // atterrit directement sur son dashboard plateforme — le dashboard tenant
@@ -133,8 +144,11 @@ createRoot(root).render(
                 }
               />
 
-              {/* Portail public voyageur — sans auth, white-label par tenant */}
-              <Route path="/p/:tenantSlug/*" element={<PortailVoyageur />} />
+              {/* Legacy : ancien portail par path `/p/:slug/*` — redirige vers le
+                  sous-domaine `{slug}.translogpro.com/*` (Phase 1 cutover).
+                  Composant client-side pour forcer un vrai changement d'origine
+                  (le cookie tenant ne suit pas — désiré). */}
+              <Route path="/p/:tenantSlug/*" element={<LegacyTenantRedirect />} />
 
               {/* Claim CRM — magic link "revendication" d'historique shadow */}
               <Route path="/claim" element={<PageClaim />} />

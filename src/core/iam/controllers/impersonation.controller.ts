@@ -87,10 +87,17 @@ export class ImpersonationController {
     );
 
     return {
-      token:     result.token,
-      sessionId: result.sessionId,
-      expiresAt: result.expiresAt.toISOString(),
-      message:   'Session d\'impersonation créée. Token valide 15 minutes. Non-renouvelable.',
+      token:       result.token,
+      sessionId:   result.sessionId,
+      expiresAt:   result.expiresAt.toISOString(),
+      // Phase 2 cross-subdomain — le frontend admin redirige la fenêtre
+      // vers cette URL sur le sous-domaine du tenant cible. Le endpoint
+      // /api/auth/impersonate/exchange là-bas échange le token contre un
+      // cookie scopé, puis redirige vers /admin du tenant.
+      redirectUrl: result.redirectUrl,
+      targetSlug:  result.targetSlug,
+      message:     'Session d\'impersonation créée. Token valide 15 minutes. Non-renouvelable. ' +
+                   'Charger redirectUrl pour basculer sur le sous-domaine du tenant.',
     };
   }
 

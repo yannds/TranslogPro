@@ -53,17 +53,22 @@ async function upsertUserWithCredential(opts: {
   const { tenantId, email, name, roleId, password, agencyId } = opts;
   const userType = 'STAFF';
 
+  // Phase 1 multi-tenant : email unique par (tenantId, email)
   const user = await prisma.user.upsert({
-    where:  { email },
+    where:  { tenantId_email: { tenantId, email } },
     update: { name, roleId, ...(agencyId !== undefined ? { agencyId } : {}) },
     create: { email, name, tenantId, roleId, userType, ...(agencyId !== undefined ? { agencyId } : {}) },
   });
 
   const hash = await hashPwd(password);
+  // Phase 1 multi-tenant : Account unique par (tenantId, providerId, accountId)
   await prisma.account.upsert({
-    where:  { providerId_accountId: { providerId: 'credential', accountId: email } },
+    where:  {
+      tenantId_providerId_accountId: { tenantId, providerId: 'credential', accountId: email },
+    },
     update: { password: hash },
     create: {
+      tenantId,
       userId:     user.id,
       providerId: 'credential',
       accountId:  email,

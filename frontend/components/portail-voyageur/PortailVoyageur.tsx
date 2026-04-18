@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef, useMemo, type FormEvent, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth/auth.context';
+import { resolveHost } from '../../lib/tenancy/host';
 import { cn } from '../../lib/utils';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
@@ -1332,7 +1333,12 @@ function ThemeToggle() {
 }
 
 export function PortailVoyageur() {
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  // Phase 1 multi-tenant : le slug peut venir
+  //   (a) du path legacy `/p/:tenantSlug/*` (redirigé vers le sous-domaine
+  //       par LegacyTenantRedirect → cette branche ne tourne plus longtemps)
+  //   (b) du sous-domaine `{slug}.translogpro.com` (nouveau routing)
+  const params = useParams<{ tenantSlug: string }>();
+  const tenantSlug = params.tenantSlug ?? resolveHost().slug ?? undefined;
   const { t, lang } = useI18n();
   const fmt = useCurrencyFormatter();
   const { theme, toggle: toggleTheme } = useTheme();

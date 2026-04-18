@@ -50,9 +50,9 @@ model Tenant {
   // ── SaaS Plan / Lifecycle (gérés par le tenant plateforme) ──────────────
   // planId et subscription sont nullable — un tenant peut exister sans plan
   // souscrit (ex: tenant plateforme lui-même, tenants créés avant facturation).
-  planId       String?
-  activatedAt  DateTime?
-  suspendedAt  DateTime?
+  planId      String?
+  activatedAt DateTime?
+  suspendedAt DateTime?
 
   // Registres fiscaux configurables par pays — affiché sur les documents
   // Format : [{ label: "NIU", value: "CG-NIU-2024-00142" }, { label: "RCCM", value: "..." }]
@@ -62,22 +62,22 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users           User[]
-  agencies        Agency[]
-  modules         InstalledModule[]
-  routes          Route[]
-  trips           Trip[]
-  workflowConfigs WorkflowConfig[]
-  pricingRules    PricingRules[]
-  buses           Bus[]
-  stations        Station[]
-  parcels         Parcel[]
-  config          TenantConfig?
-  brand           TenantBrand?
-  businessConfig  TenantBusinessConfig?
-  portalConfig    TenantPortalConfig?
-  pages           TenantPage[]
-  posts           TenantPost[]
+  users            User[]
+  agencies         Agency[]
+  modules          InstalledModule[]
+  routes           Route[]
+  trips            Trip[]
+  workflowConfigs  WorkflowConfig[]
+  pricingRules     PricingRules[]
+  buses            Bus[]
+  stations         Station[]
+  parcels          Parcel[]
+  config           TenantConfig?
+  brand            TenantBrand?
+  businessConfig   TenantBusinessConfig?
+  portalConfig     TenantPortalConfig?
+  pages            TenantPage[]
+  posts            TenantPost[]
   busCostProfiles  BusCostProfile[]
   fuelLogs         FuelLog[]
   odometerReadings OdometerReading[]
@@ -96,6 +96,13 @@ model Tenant {
   domains          TenantDomain[]
   accounts         Account[]
 
+  // ── Paiements & Fiscalité (ADR-paiement) ────────────────────────────────────
+  // Toutes ces relations sont créées lors du provisioning via des seeds idempotents.
+  taxes                 TenantTax[]
+  paymentConfig         TenantPaymentConfig?
+  paymentIntents        PaymentIntent[]
+  paymentProviderStates PaymentProviderState[]
+
   @@map("tenants")
 }
 
@@ -111,14 +118,14 @@ model Tenant {
 // Unicité globale de `hostname` : un hostname ne peut pointer que sur 1 tenant.
 // ─────────────────────────────────────────────────────────────
 model TenantDomain {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   tenantId   String
-  hostname   String   @unique  // ex: "compagnie-a.translogpro.com", "billets.sa-marque.com"
-  isPrimary  Boolean  @default(false) // hostname canonique du tenant (1 par tenant max)
-  verifiedAt DateTime?                 // null tant que le CNAME n'est pas vérifié (Phase 3)
-  certStatus String?                   // "ISSUED" | "PENDING" | "FAILED" — Phase 3 (Caddy)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  hostname   String    @unique // ex: "compagnie-a.translogpro.com", "billets.sa-marque.com"
+  isPrimary  Boolean   @default(false) // hostname canonique du tenant (1 par tenant max)
+  verifiedAt DateTime? // null tant que le CNAME n'est pas vérifié (Phase 3)
+  certStatus String? // "ISSUED" | "PENDING" | "FAILED" — Phase 3 (Caddy)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -219,19 +226,19 @@ model TenantBusinessConfig {
   // ── Politique d'annulation / remboursement ──────────────────────────────
   // Palier 1 : remboursement intégral si annulation ≥ cancellationFullRefundMinutes
   // avant le départ (ex: 1440 = 24 h).
-  cancellationFullRefundMinutes    Int   @default(1440)
+  cancellationFullRefundMinutes    Int     @default(1440)
   // Palier 2 : remboursement partiel entre cancellationPartialRefundMinutes et
   // cancellationFullRefundMinutes (ex: 120 = 2 h).
-  cancellationPartialRefundMinutes Int   @default(120)
+  cancellationPartialRefundMinutes Int     @default(120)
   // Pourcentage du palier partiel (fraction, ex: 0.5 = 50 %).
-  cancellationPartialRefundPct     Float @default(0.5)
+  cancellationPartialRefundPct     Float   @default(0.5)
   // En dessous de cancellationPartialRefundMinutes → 0 % (non remboursable).
   // ── Seuils d'approbation remboursement ──────────────────────────────────
   // Montant max (en devise tenant) qu'un AGENCY_MANAGER peut approuver.
   // Au-delà → seul TENANT_ADMIN peut approuver.
-  refundApprovalThreshold          Float @default(50000)
+  refundApprovalThreshold          Float   @default(50000)
   // Montant max auto-approuvé (skip approbation manuelle). 0 = désactivé.
-  refundAutoApproveMax             Float @default(0)
+  refundAutoApproveMax             Float   @default(0)
   // Si true, annulation de trajet (TRIP_CANCELLED) → remboursement 100 %
   // auto-approuvé quel que soit le montant.
   autoApproveTripCancelled         Boolean @default(true)
@@ -269,7 +276,7 @@ model Agency {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String  @id @default(cuid())
   tenantId     String
   agencyId     String?
   // Email unique PAR TENANT (pas global) — un même humain peut avoir un compte
@@ -280,19 +287,19 @@ model User {
   name         String?
   image        String?
   roleId       String?
-  userType     String   @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
-  isActive     Boolean  @default(true)  // désactivable sans suppression
-  preferences  Json     @default("{}") // siège préféré, gares fav (clients)
-  loyaltyScore Float    @default(0) // calculé — clients uniquement
+  userType     String  @default("STAFF") // STAFF | CUSTOMER | ANONYMOUS
+  isActive     Boolean @default(true) // désactivable sans suppression
+  preferences  Json    @default("{}") // siège préféré, gares fav (clients)
+  loyaltyScore Float   @default(0) // calculé — clients uniquement
 
   // ── MFA / TOTP ─────────────────────────────────────────────────
   // Infrastructure prête ; activation par tenant (plateforme, caissiers…)
   // via flag d'activation côté service. `mfaEnabled` reste à false tant
   // que l'utilisateur n'a pas finalisé le setup (scan QR + code valide).
-  mfaEnabled      Boolean   @default(false)
-  mfaSecret       String?   // secret base32 TOTP (à chiffrer en prod — KMS)
-  mfaBackupCodes  String[]  @default([]) // codes de secours (hash bcrypt), single-use
-  mfaVerifiedAt   DateTime? // moment d'activation effective
+  mfaEnabled     Boolean   @default(false)
+  mfaSecret      String? // secret base32 TOTP (à chiffrer en prod — KMS)
+  mfaBackupCodes String[]  @default([]) // codes de secours (hash bcrypt), single-use
+  mfaVerifiedAt  DateTime? // moment d'activation effective
 
   // ── Activity tracking (pour DAU/MAU/adoption plateforme) ────────────────
   // Mis à jour par AuthService au login et périodiquement via middleware.
@@ -300,8 +307,8 @@ model User {
   lastActiveAt DateTime?
   loginCount   Int       @default(0)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id])
   agency                 Agency?                 @relation(fields: [agencyId], references: [id])
@@ -634,20 +641,27 @@ model DeadLetterEvent {
 // targetTenantId est l'ID du tenant client accédé.
 // Ne jamais supprimer les lignes — utiliser revokedAt pour indiquer la fin.
 model ImpersonationSession {
-  id             String    @id @default(uuid())
-  actorId        String // User.id de l'agent SA ou Support
-  actorTenantId  String // toujours "00000000-0000-0000-0000-000000000000"
-  targetTenantId String // tenant client ciblé
-  token          String    @unique // JWT signé (référence — non stocké en clair)
-  tokenHash      String    @unique // SHA-256(token) — pour révocation sans stocker le token
-  status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
-  reason         String? // justification saisie par l'agent (audit)
-  ipAddress      String?
-  userAgent      String?
-  expiresAt      DateTime
-  revokedAt      DateTime?
-  revokedBy      String? // userId qui a révoqué (peut être différent de actorId)
-  createdAt      DateTime  @default(now())
+  id                    String    @id @default(uuid())
+  actorId               String // User.id de l'agent SA ou Support
+  actorTenantId         String // toujours "00000000-0000-0000-0000-000000000000"
+  targetTenantId        String // tenant client ciblé
+  token                 String    @unique // JWT signé (référence — non stocké en clair)
+  tokenHash             String    @unique // SHA-256(token) — pour révocation sans stocker le token
+  status                String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED | EXCHANGED
+  reason                String? // justification saisie par l'agent (audit)
+  ipAddress             String?
+  userAgent             String?
+  expiresAt             DateTime
+  revokedAt             DateTime?
+  revokedBy             String? // userId qui a révoqué (peut être différent de actorId)
+  // Phase 2 cross-subdomain : marque l'échange one-shot du token contre
+  // un cookie de session sur le sous-domaine cible. Null = non échangé.
+  // Une seconde tentative avec le même token est rejetée (anti-replay).
+  exchangedAt           DateTime?
+  // Session utilisateur créée via l'exchange (token opaque) — pour pouvoir
+  // révoquer en cascade si on invalide l'impersonation a posteriori.
+  exchangedSessionToken String?
+  createdAt             DateTime  @default(now())
 
   @@index([actorId, createdAt])
   @@index([targetTenantId, createdAt])
@@ -667,20 +681,20 @@ model Station {
   coordinates Json // { lat: Float, lng: Float }
   type        String // PRINCIPALE | RELAIS
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  agencies           Agency[]
-  routesOrigin       Route[]             @relation("RouteOrigin")
-  routesDestination  Route[]             @relation("RouteDestination")
-  waypoints          Waypoint[]
-  segmentsFrom       RouteSegmentPrice[] @relation("SegmentFrom")
-  segmentsTo         RouteSegmentPrice[] @relation("SegmentTo")
-  ticketsBoarding    Ticket[]            @relation("TicketBoarding")
-  ticketsAlighting   Ticket[]            @relation("TicketAlighting")
-  parcelsTo          Parcel[]            @relation("ParcelDestination")
-  shipmentsTo        Shipment[]          @relation("ShipmentDestination")
-  travelersDropoff   Traveler[]          @relation("TravelerDropOff")
-  platforms          Platform[]
-  announcements      Announcement[]
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  agencies          Agency[]
+  routesOrigin      Route[]             @relation("RouteOrigin")
+  routesDestination Route[]             @relation("RouteDestination")
+  waypoints         Waypoint[]
+  segmentsFrom      RouteSegmentPrice[] @relation("SegmentFrom")
+  segmentsTo        RouteSegmentPrice[] @relation("SegmentTo")
+  ticketsBoarding   Ticket[]            @relation("TicketBoarding")
+  ticketsAlighting  Ticket[]            @relation("TicketAlighting")
+  parcelsTo         Parcel[]            @relation("ParcelDestination")
+  shipmentsTo       Shipment[]          @relation("ShipmentDestination")
+  travelersDropoff  Traveler[]          @relation("TravelerDropOff")
+  platforms         Platform[]
+  announcements     Announcement[]
 
   @@index([tenantId])
   @@index([tenantId, city]) // Lookup multi-gares par ville (DisplayService scope=city)
@@ -688,13 +702,13 @@ model Station {
 }
 
 model Route {
-  id                       String  @id @default(cuid())
-  tenantId                 String
-  name                     String
-  originId                 String
-  destinationId            String
-  distanceKm               Float
-  basePrice                Float
+  id                        String  @id @default(cuid())
+  tenantId                  String
+  name                      String
+  originId                  String
+  destinationId             String
+  distanceKm                Float
+  basePrice                 Float
   allowProportionalFallback Boolean @default(false)
   // Si true et qu'un segment n'a pas de prix configuré,
   // le pricing engine calcule proportionnellement à la distance.
@@ -765,10 +779,10 @@ model RouteSegmentPrice {
 // ─────────────────────────────────────────────────────────────
 
 model Bus {
-  id                String  @id @default(cuid())
+  id                String   @id @default(cuid())
   tenantId          String
   agencyId          String?
-  plateNumber       String  @unique
+  plateNumber       String   @unique
   model             String
   type              String? // STANDARD | CONFORT | VIP | MINIBUS (validé côté DTO)
   year              Int?
@@ -777,25 +791,25 @@ model Bus {
   luggageCapacityM3 Float
   seatLayout        Json? // Plan de salle numéroté — OBLIGATOIRE avant vente
   isFullVip         Boolean  @default(false) // true = tout le bus est VIP
-  vipSeats          String[] @default([])    // Sièges VIP individuels (ex: ["1-1","1-2"]) — ignoré si isFullVip
+  vipSeats          String[] @default([]) // Sièges VIP individuels (ex: ["1-1","1-2"]) — ignoré si isFullVip
   photos            String[] @default([]) // Clés MinIO des photos (intérieur/extérieur)
   amenities         String[] @default([]) // WIFI | AC | TOILETS | USB_CHARGING | RECLINING_SEATS | TV | SNACK_BAR | BLANKETS | LUGGAGE_TRACKING
-  status            String  @default("AVAILABLE")
+  status            String   @default("AVAILABLE")
   // AVAILABLE | BOARDING | DEPARTED | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE
-  version           Int     @default(1)
+  version           Int      @default(1)
 
   // ── Champs techniques véhicule (optionnels) ─────────────────────────────
-  vin                    String?  // Numéro de châssis / VIN
-  fuelType               String?  // DIESEL | PETROL | BIO_DIESEL | HYBRID | ELECTRIC
-  engineType             String?  // EURO_3 | EURO_4 | EURO_5 | EURO_6
-  fuelTankCapacityL      Float?   // Capacité réservoir carburant (litres)
-  adBlueTankCapacityL    Float?   // Capacité réservoir AdBlue (litres)
-  registrationDate       DateTime? // Date de 1ère immatriculation
-  purchaseDate           DateTime? // Date d'acquisition
-  purchasePrice          Float?   // Prix d'achat (XOF)
-  initialOdometerKm      Float?   // Kilométrage à l'enregistrement
-  currentOdometerKm      Float?   // Dernier relevé kilométrique connu
-  fuelConsumptionPer100Km Float?  // Consommation déclarée/constructeur (L/100km)
+  vin                       String? // Numéro de châssis / VIN
+  fuelType                  String? // DIESEL | PETROL | BIO_DIESEL | HYBRID | ELECTRIC
+  engineType                String? // EURO_3 | EURO_4 | EURO_5 | EURO_6
+  fuelTankCapacityL         Float? // Capacité réservoir carburant (litres)
+  adBlueTankCapacityL       Float? // Capacité réservoir AdBlue (litres)
+  registrationDate          DateTime? // Date de 1ère immatriculation
+  purchaseDate              DateTime? // Date d'acquisition
+  purchasePrice             Float? // Prix d'achat (XOF)
+  initialOdometerKm         Float? // Kilométrage à l'enregistrement
+  currentOdometerKm         Float? // Dernier relevé kilométrique connu
+  fuelConsumptionPer100Km   Float? // Consommation déclarée/constructeur (L/100km)
   adBlueConsumptionPer100Km Float? // Consommation AdBlue déclarée (L/100km) — moteurs Euro 6
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
@@ -818,11 +832,11 @@ model OdometerReading {
   id          String   @id @default(cuid())
   tenantId    String
   busId       String
-  readingKm   Float    // Valeur odomètre (km)
+  readingKm   Float // Valeur odomètre (km)
   readingDate DateTime @default(now()) // Date/heure du relevé
   source      String   @default("MANUAL") // MANUAL | TRIP | MAINTENANCE | GPS
   note        String?
-  createdById String?  // Utilisateur ayant saisi le relevé
+  createdById String? // Utilisateur ayant saisi le relevé
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   bus    Bus    @relation(fields: [busId], references: [id])
@@ -838,15 +852,15 @@ model FuelLog {
   tenantId    String
   busId       String
   logDate     DateTime @default(now()) // Date/heure du plein
-  fuelType    String   // DIESEL | PETROL | ADBLUE
-  quantityL   Float    // Quantité (litres)
-  pricePerL   Float?   // Prix unitaire (XOF/litre)
-  totalCost   Float?   // Coût total (XOF) — calculé ou saisi
-  odometerKm  Float?   // Kilométrage au moment du plein
-  stationName String?  // Nom de la station-service
+  fuelType    String // DIESEL | PETROL | ADBLUE
+  quantityL   Float // Quantité (litres)
+  pricePerL   Float? // Prix unitaire (XOF/litre)
+  totalCost   Float? // Coût total (XOF) — calculé ou saisi
+  odometerKm  Float? // Kilométrage au moment du plein
+  stationName String? // Nom de la station-service
   fullTank    Boolean  @default(false) // Plein complet (pour calcul consommation réelle)
   note        String?
-  createdById String?  // Utilisateur ayant saisi le plein
+  createdById String? // Utilisateur ayant saisi le plein
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   bus    Bus    @relation(fields: [busId], references: [id])
@@ -1073,8 +1087,8 @@ model Ticket {
   // FK vers l'entité CRM canonique (présente dès que phone ou email sont fournis).
   customerId         String?
   seatNumber         String?
-  boardingStationId  String    // Gare de montée (défaut = route.originId)
-  alightingStationId String    // Gare de descente (défaut = route.destinationId)
+  boardingStationId  String // Gare de montée (défaut = route.originId)
+  alightingStationId String // Gare de descente (défaut = route.destinationId)
   fareClass          String    @default("STANDARD") // STANDARD | CONFORT | VIP | STANDING
   pricePaid          Float
   status             String    @default("CREATED")
@@ -1135,32 +1149,32 @@ model Baggage {
 // ─────────────────────────────────────────────────────────────
 
 model Parcel {
-  id            String   @id @default(cuid())
-  tenantId      String
+  id                  String   @id @default(cuid())
+  tenantId            String
   // Nullable : un colis peut être enregistré pour un expéditeur non
   // authentifié. La traçabilité CRM passe par senderCustomerId.
-  senderId      String?
-  trackingCode  String   @unique
-  weight        Float
-  price         Float
-  destinationId String // FK Station (plus un String libre)
-  recipientInfo Json // { name, phone, address } — legacy ; conservé en miroir
+  senderId            String?
+  trackingCode        String   @unique
+  weight              Float
+  price               Float
+  destinationId       String // FK Station (plus un String libre)
+  recipientInfo       Json // { name, phone, address } — legacy ; conservé en miroir
   //                   pendant la transition vers recipientCustomerId
   // FK CRM canoniques (présentes dès que phone ou email sont fournis).
   senderCustomerId    String?
   recipientCustomerId String?
-  shipmentId    String?
-  status        String   @default("CREATED")
+  shipmentId          String?
+  status              String   @default("CREATED")
   // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED
-  history       Json     @default("[]")
+  history             Json     @default("[]")
   // [{ timestamp, agentId, stationId, action }]
-  version       Int      @default(1)
-  createdAt     DateTime @default(now())
+  version             Int      @default(1)
+  createdAt           DateTime @default(now())
 
-  tenant      Tenant    @relation(fields: [tenantId], references: [id])
-  destination Station   @relation("ParcelDestination", fields: [destinationId], references: [id])
-  shipment    Shipment? @relation(fields: [shipmentId], references: [id])
-  senderCustomer    Customer? @relation("ParcelSender",    fields: [senderCustomerId],    references: [id])
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  destination       Station   @relation("ParcelDestination", fields: [destinationId], references: [id])
+  shipment          Shipment? @relation(fields: [shipmentId], references: [id])
+  senderCustomer    Customer? @relation("ParcelSender", fields: [senderCustomerId], references: [id])
   recipientCustomer Customer? @relation("ParcelRecipient", fields: [recipientCustomerId], references: [id])
 
   @@index([tenantId, status])
@@ -1182,37 +1196,38 @@ model Parcel {
 // Source de vérité pour segmentation, fidélité, campaigns.
 
 model Customer {
-  id               String    @id @default(cuid())
-  tenantId         String
-  phoneE164        String?   // E.164 normalisé, clé de matching primaire
-  email            String?
-  name             String
-  firstName        String?
-  lastName         String?
-  language         String?   // ISO 639-1 (fr, en, wo…) — préférence contact
+  id              String    @id @default(cuid())
+  tenantId        String
+  phoneE164       String? // E.164 normalisé, clé de matching primaire
+  email           String?
+  name            String
+  firstName       String?
+  lastName        String?
+  language        String? // ISO 639-1 (fr, en, wo…) — préférence contact
   // userId = null → shadow profile (anonyme, jamais connecté)
-  userId           String?   @unique
-  preferences      Json      @default("{}")
+  userId          String?   @unique
+  preferences     Json      @default("{}")
   // { favoriteSeatType, favoriteSeatNumber, favoriteRoute, channels: { sms, whatsapp, email } }
-  segments         String[]  @default([])
+  segments        String[]  @default([])
   // Ex. ['VIP', 'FREQUENT', 'CORPORATE'] — dérivés ou édités
-  totalTickets     Int       @default(0)
-  totalParcels     Int       @default(0)
+  totalTickets    Int       @default(0)
+  totalParcels    Int       @default(0)
   // Centimes (ou plus petite unité de la devise tenant) — JAMAIS Float sur un compteur monétaire
-  totalSpentCents  BigInt    @default(0)
-  firstSeenAt      DateTime  @default(now())
-  lastSeenAt       DateTime  @default(now())
+  totalSpentCents BigInt    @default(0)
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
   // Soft-delete / RGPD : anonymisation sans perdre les agrégats financiers
-  deletedAt        DateTime?
+  deletedAt       DateTime?
   // Fusion : si mergé dans un autre Customer, pointe vers la survivante
-  mergedIntoId     String?
+  mergedIntoId    String?
 
-  tenant   Tenant  @relation(fields: [tenantId], references: [id])
-  user     User?   @relation("UserCustomerProfile", fields: [userId], references: [id])
-  tickets           Ticket[]
-  parcelsAsSender   Parcel[] @relation("ParcelSender")
-  parcelsAsRecipient Parcel[] @relation("ParcelRecipient")
-  claimTokens       CustomerClaimToken[]
+  tenant             Tenant               @relation(fields: [tenantId], references: [id])
+  user               User?                @relation("UserCustomerProfile", fields: [userId], references: [id])
+  tickets            Ticket[]
+  parcelsAsSender    Parcel[]             @relation("ParcelSender")
+  parcelsAsRecipient Parcel[]             @relation("ParcelRecipient")
+  claimTokens        CustomerClaimToken[]
+  paymentIntents     PaymentIntent[]
 
   // Unicité par tenant — phone et email peuvent être NULL (plusieurs NULL tolérés par PG)
   @@unique([tenantId, phoneE164])
@@ -1231,8 +1246,8 @@ model CustomerClaimToken {
   id            String    @id @default(cuid())
   tenantId      String
   customerId    String
-  tokenHash     String    @unique   // sha-256(token) — le token clair n'est jamais stocké
-  channel       String    // MAGIC_EMAIL | MAGIC_WHATSAPP | MAGIC_SMS
+  tokenHash     String    @unique // sha-256(token) — le token clair n'est jamais stocké
+  channel       String // MAGIC_EMAIL | MAGIC_WHATSAPP | MAGIC_SMS
   expiresAt     DateTime
   usedAt        DateTime?
   invalidatedAt DateTime?
@@ -1257,19 +1272,19 @@ model CustomerClaimToken {
 model CustomerRetroClaimOtp {
   id            String    @id @default(cuid())
   tenantId      String
-  phoneE164     String    // clef de lookup, normalisé côté service
-  otpHash       String    // sha-256(otp)
-  targetType    String    // TICKET | PARCEL
-  targetId      String    // ticket.id ou parcel.id (qrCode/trackingCode résolu)
-  attempts      Int       @default(0)   // compteur brute-force
-  expiresAt     DateTime  // now + 5 min
+  phoneE164     String // clef de lookup, normalisé côté service
+  otpHash       String // sha-256(otp)
+  targetType    String // TICKET | PARCEL
+  targetId      String // ticket.id ou parcel.id (qrCode/trackingCode résolu)
+  attempts      Int       @default(0) // compteur brute-force
+  expiresAt     DateTime // now + 5 min
   usedAt        DateTime?
   invalidatedAt DateTime?
   createdAt     DateTime  @default(now())
   createdByIp   String?
 
   @@index([tenantId, phoneE164, usedAt])
-  @@index([tenantId, phoneE164, createdAt])   // pour le rate-limit 3/jour/phone
+  @@index([tenantId, phoneE164, createdAt]) // pour le rate-limit 3/jour/phone
   @@map("customer_retro_claim_otps")
 }
 
@@ -1396,37 +1411,37 @@ model Claim {
 // ─────────────────────────────────────────────────────────────
 
 model Refund {
-  id              String    @id @default(cuid())
-  tenantId        String
-  ticketId        String
-  tripId          String?
+  id             String    @id @default(cuid())
+  tenantId       String
+  ticketId       String
+  tripId         String?
   // Montant effectif du remboursement (= originalAmount × policyPercent).
-  amount          Float
+  amount         Float
   // Montant original du billet (pricePaid) — audit trail.
-  originalAmount  Float?
+  originalAmount Float?
   // Pourcentage appliqué (0.0–1.0) selon la politique d'annulation du tenant.
-  policyPercent   Float?
-  currency        String    @default("XAF")
-  reason          String    // CLIENT_CANCEL | TRIP_CANCELLED
-  status          String    @default("PENDING")
+  policyPercent  Float?
+  currency       String    @default("XAF")
+  reason         String // CLIENT_CANCEL | TRIP_CANCELLED
+  status         String    @default("PENDING")
   // PENDING | APPROVED | PROCESSED | REJECTED
-  paymentMethod   String?
+  paymentMethod  String?
   // Canal de la demande : CASHIER | PORTAL | SYSTEM
-  requestChannel  String?
+  requestChannel String?
   // userId ayant initié la demande (ou 'SYSTEM')
-  requestedBy     String?
+  requestedBy    String?
   // Snapshot de l'heure de départ du trajet au moment de la demande
-  departureAt     DateTime?
-  approvedBy      String?
-  approvedAt      DateTime?
-  processedBy     String?
-  processedAt     DateTime?
-  rejectedBy      String?
-  rejectedAt      DateTime?
-  notes           String?
+  departureAt    DateTime?
+  approvedBy     String?
+  approvedAt     DateTime?
+  processedBy    String?
+  processedAt    DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  notes          String?
   // Lock optimiste — requis par le WorkflowEngine (SELECT FOR UPDATE + version check).
-  version         Int       @default(1)
-  createdAt       DateTime  @default(now())
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([tenantId, ticketId])
@@ -2502,8 +2517,8 @@ model TenantPortalConfig {
   newsCmsEnabled Boolean @default(false)
 
   // Hero visuel
-  heroImageUrl String?  // URL MinIO de l'image hero (haute résolution)
-  heroOverlay  Float    @default(0.4) // opacité overlay sombre sur le hero (0–1)
+  heroImageUrl String? // URL MinIO de l'image hero (haute résolution)
+  heroOverlay  Float   @default(0.4) // opacité overlay sombre sur le hero (0–1)
 
   // Slogan multilingue — JSON { fr: "...", en: "...", ... }
   slogans Json @default("{}")
@@ -2527,12 +2542,12 @@ model TenantPage {
   id       String @id @default(cuid())
   tenantId String
 
-  slug      String  // about | terms | privacy | news | custom-*
-  title     String
-  content   String  @db.Text // HTML sanitisé
-  locale    String  @default("fr") // ISO 639-1
-  sortOrder Int     @default(0)
-  published Boolean @default(false)
+  slug         String // about | terms | privacy | news | custom-*
+  title        String
+  content      String  @db.Text // HTML sanitisé
+  locale       String  @default("fr") // ISO 639-1
+  sortOrder    Int     @default(0)
+  published    Boolean @default(false)
   showInFooter Boolean @default(false) // Affiché dans le footer du portail uniquement
 
   createdAt DateTime @default(now())
@@ -2550,20 +2565,20 @@ model TenantPost {
   tenantId String
 
   title       String
-  slug        String?           // URL-friendly slug (auto-generated from title)
+  slug        String? // URL-friendly slug (auto-generated from title)
   excerpt     String?   @db.VarChar(500)
   content     String    @db.Text // HTML sanitisé (éditeur riche)
-  coverImage  String?   // URL MinIO
+  coverImage  String? // URL MinIO
   locale      String    @default("fr")
   published   Boolean   @default(false)
   publishedAt DateTime?
   authorName  String?
-  tags        String[]  @default([])  // Tags libres pour filtrage
+  tags        String[]  @default([]) // Tags libres pour filtrage
 
   media     PostMedia[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, slug])
   @@index([tenantId, published, publishedAt])
@@ -2575,12 +2590,12 @@ model PostMedia {
   id     String @id @default(cuid())
   postId String
 
-  url       String   // Clé MinIO (signée à la lecture)
-  type      String   // IMAGE | VIDEO
+  url       String // Clé MinIO (signée à la lecture)
+  type      String // IMAGE | VIDEO
   caption   String?
-  sortOrder Int      @default(0)
+  sortOrder Int     @default(0)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
   post      TenantPost @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([postId, sortOrder])
@@ -2596,28 +2611,28 @@ model PostMedia {
 // en fonction de la classe (STANDARD/CONFORT/VIP), du type de trajet,
 // ou de créneaux horaires (heures de pointe, week-end, jours fériés).
 model TariffGrid {
-  id        String   @id @default(cuid())
-  tenantId  String
-  routeId   String
-  name      String   // "Tarif Haute Saison", "Tarif Nuit"
+  id         String    @id @default(cuid())
+  tenantId   String
+  routeId    String
+  name       String // "Tarif Haute Saison", "Tarif Nuit"
   // Classe véhicule ciblée (null = toutes classes)
-  busType   String?  // STANDARD | CONFORT | VIP | MINIBUS (null = all)
+  busType    String? // STANDARD | CONFORT | VIP | MINIBUS (null = all)
   // Modificateur : multiplicateur (1.0 = pas de changement, 1.2 = +20%)
-  multiplier Float   @default(1.0)
+  multiplier Float     @default(1.0)
   // Ou : prix fixe (prend la priorité sur multiplier si > 0)
   fixedPrice Float?
   // Plage horaire (optionnelle)
-  startHour  Int?    // 0–23
-  endHour    Int?    // 0–23
+  startHour  Int? // 0–23
+  endHour    Int? // 0–23
   // Jours de semaine (bitmask : 1=Lun, 2=Mar, 4=Mer, 8=Jeu, 16=Ven, 32=Sam, 64=Dim)
-  dayMask    Int     @default(127) // 127 = tous les jours
+  dayMask    Int       @default(127) // 127 = tous les jours
   // Période de validité
   validFrom  DateTime?
   validTo    DateTime?
-  isActive   Boolean  @default(true)
-  priority   Int      @default(0) // plus élevé = appliqué en priorité
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  isActive   Boolean   @default(true)
+  priority   Int       @default(0) // plus élevé = appliqué en priorité
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   route  Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
@@ -2630,28 +2645,28 @@ model TariffGrid {
 // ── Promotions (réductions, codes promo, campagnes) ─────────────────────────
 // Applicable sur une route, une classe, ou globale (routeId null).
 model Promotion {
-  id           String    @id @default(cuid())
-  tenantId     String
-  code         String    // Code promo (ex: "NOEL2026", "EARLYBIRD")
-  name         String    // Nom d'affichage
-  description  String?
+  id            String   @id @default(cuid())
+  tenantId      String
+  code          String // Code promo (ex: "NOEL2026", "EARLYBIRD")
+  name          String // Nom d'affichage
+  description   String?
   // Type de réduction
-  discountType String    // PERCENTAGE | FIXED_AMOUNT
-  discountValue Float    // ex: 10 (= 10% ou 10 XAF selon le type)
+  discountType  String // PERCENTAGE | FIXED_AMOUNT
+  discountValue Float // ex: 10 (= 10% ou 10 XAF selon le type)
   // Limites
-  maxUses      Int?      // Nombre max d'utilisations (null = illimité)
-  usedCount    Int       @default(0)
-  maxPerUser   Int       @default(1) // Utilisation max par client
-  minAmount    Float?    // Montant minimum de commande requis
+  maxUses       Int? // Nombre max d'utilisations (null = illimité)
+  usedCount     Int      @default(0)
+  maxPerUser    Int      @default(1) // Utilisation max par client
+  minAmount     Float? // Montant minimum de commande requis
   // Ciblage
-  routeId      String?   // Null = toutes routes
-  busType      String?   // Null = toutes classes
+  routeId       String? // Null = toutes routes
+  busType       String? // Null = toutes classes
   // Période de validité
-  validFrom    DateTime
-  validTo      DateTime
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  validFrom     DateTime
+  validTo       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -2667,38 +2682,38 @@ model Promotion {
 
 // ── Factures émises (billets, colis, abonnements, corporate) ────────────────
 model Invoice {
-  id             String    @id @default(cuid())
-  tenantId       String
-  invoiceNumber  String    // Numéro séquentiel par tenant (ex: "INV-2026-00042")
+  id            String    @id @default(cuid())
+  tenantId      String
+  invoiceNumber String // Numéro séquentiel par tenant (ex: "INV-2026-00042")
   // Client
-  customerName   String
-  customerEmail  String?
-  customerPhone  String?
-  customerId     String?   // userId si client enregistré
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  customerId    String? // userId si client enregistré
   // Montants
-  subtotal       Float     // Total HT
-  taxRate        Float     @default(0) // TVA / taxe locale (fraction, ex: 0.18 = 18%)
-  taxAmount      Float     @default(0) // Montant taxe calculé
-  totalAmount    Float     // TTC
-  currency       String    @default("XAF")
+  subtotal      Float // Total HT
+  taxRate       Float     @default(0) // TVA / taxe locale (fraction, ex: 0.18 = 18%)
+  taxAmount     Float     @default(0) // Montant taxe calculé
+  totalAmount   Float // TTC
+  currency      String    @default("XAF")
   // Références
-  entityType     String    // TICKET | PARCEL | SUBSCRIPTION | CORPORATE
-  entityId       String?   // ticketId, parcelId…
+  entityType    String // TICKET | PARCEL | SUBSCRIPTION | CORPORATE
+  entityId      String? // ticketId, parcelId…
   // Statut
-  status         String    @default("DRAFT")
+  status        String    @default("DRAFT")
   // DRAFT | ISSUED | PAID | CANCELLED | REFUNDED
-  issuedAt       DateTime?
-  paidAt         DateTime?
-  dueDate        DateTime?
+  issuedAt      DateTime?
+  paidAt        DateTime?
+  dueDate       DateTime?
   // Paiement
-  paymentMethod  String?   // CASH | MOBILE_MONEY | CARD
-  paymentRef     String?   // Référence externe paiement
+  paymentMethod String? // CASH | MOBILE_MONEY | CARD
+  paymentRef    String? // Référence externe paiement
   // Metadata / lignes
-  lineItems      Json      @default("[]")
+  lineItems     Json      @default("[]")
   // [{ description, quantity, unitPrice, total }]
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -2716,19 +2731,19 @@ model Invoice {
 // ── Quais / Plateformes de gare ─────────────────────────────────────────────
 // Un quai est une zone physique d'embarquement dans une station.
 model Platform {
-  id         String   @id @default(cuid())
-  tenantId   String
-  stationId  String
-  name       String   // "Quai A", "Quai 1", "Zone VIP"
-  code       String   // "A", "1", "VIP" — identifiant court affiché
-  capacity   Int      @default(1) // Nombre de bus simultanés
-  status     String   @default("AVAILABLE")
+  id            String   @id @default(cuid())
+  tenantId      String
+  stationId     String
+  name          String // "Quai A", "Quai 1", "Zone VIP"
+  code          String // "A", "1", "VIP" — identifiant court affiché
+  capacity      Int      @default(1) // Nombre de bus simultanés
+  status        String   @default("AVAILABLE")
   // AVAILABLE | OCCUPIED | MAINTENANCE | CLOSED
   // Bus actuellement affecté (null si libre)
   currentTripId String?
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
   station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
@@ -2742,23 +2757,23 @@ model Platform {
 // ── Annonces gare (sonores / visuelles) ──────────────────────────────────────
 // Messages diffusés sur les écrans et haut-parleurs d'une station.
 model Announcement {
-  id         String    @id @default(cuid())
-  tenantId   String
-  stationId  String?   // Null = diffusé sur toutes les stations du tenant
+  id          String    @id @default(cuid())
+  tenantId    String
+  stationId   String? // Null = diffusé sur toutes les stations du tenant
   // Contenu
-  title      String
-  message    String
-  type       String    @default("INFO")
+  title       String
+  message     String
+  type        String    @default("INFO")
   // INFO | DELAY | CANCELLATION | SECURITY | PROMO | CUSTOM
-  priority   Int       @default(0) // plus élevé = affiché en premier
+  priority    Int       @default(0) // plus élevé = affiché en premier
   // Diffusion
-  isActive   Boolean   @default(true)
-  startsAt   DateTime  @default(now())
-  endsAt     DateTime?
+  isActive    Boolean   @default(true)
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
   // Auteur
   createdById String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   station Station? @relation(fields: [stationId], references: [id])
@@ -2810,26 +2825,26 @@ model PaymentMethodConfig {
 // de moduleKeys activables. Pas de contrainte dure côté DB (le tenant peut
 // souscrire n'importe quel plan actif) — la logique métier vit dans le service.
 model Plan {
-  id             String   @id @default(cuid())
-  slug           String   @unique // identifiant stable ("starter", "pro"…)
-  name           String   // affichage
-  description    String?
-  price          Float    @default(0) // montant facturé par cycle (0 = gratuit/trial)
-  currency       String   @default("EUR")
-  billingCycle   String   @default("MONTHLY") // MONTHLY | YEARLY | ONE_SHOT | CUSTOM
-  trialDays      Int      @default(0)
+  id           String   @id @default(cuid())
+  slug         String   @unique // identifiant stable ("starter", "pro"…)
+  name         String // affichage
+  description  String?
+  price        Float    @default(0) // montant facturé par cycle (0 = gratuit/trial)
+  currency     String   @default("EUR")
+  billingCycle String   @default("MONTHLY") // MONTHLY | YEARLY | ONE_SHOT | CUSTOM
+  trialDays    Int      @default(0)
   // Limites et quotas (soft — informatif UI, le backend applique ce qui est
   // nécessaire via QuotaManager). Structure libre : { maxUsers: 50, maxAgencies: 5, … }
-  limits         Json     @default("{}")
+  limits       Json     @default("{}")
   // SLA affiché au client (ex: { firstResponseMin: 60, uptimePct: 99.5 })
-  sla            Json     @default("{}")
+  sla          Json     @default("{}")
   // Ordre d'affichage dans le catalogue (petit = haut)
-  sortOrder      Int      @default(0)
+  sortOrder    Int      @default(0)
   // isPublic : visible dans le catalogue tenant. Si false, invitation-only.
-  isPublic       Boolean  @default(true)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isPublic     Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   modules       PlanModule[]
   tenants       Tenant[]
@@ -2858,21 +2873,21 @@ model PlanModule {
 // 1:1 avec Tenant (un tenant a au plus une souscription active).
 // L'historique des changements de plan vit dans AuditLog.
 model PlatformSubscription {
-  id            String    @id @default(cuid())
-  tenantId      String    @unique
-  planId        String
-  status        String    @default("TRIAL") // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED
-  startedAt     DateTime  @default(now())
-  trialEndsAt   DateTime?
+  id                 String    @id @default(cuid())
+  tenantId           String    @unique
+  planId             String
+  status             String    @default("TRIAL") // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED
+  startedAt          DateTime  @default(now())
+  trialEndsAt        DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
-  renewsAt      DateTime?
-  cancelledAt   DateTime?
-  cancelReason  String?
+  renewsAt           DateTime?
+  cancelledAt        DateTime?
+  cancelReason       String?
   // meta free-form : ID Stripe, PayPal, etc. quand on branchera un PSP
-  externalRefs  Json      @default("{}")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  externalRefs       Json      @default("{}")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id])
   plan     Plan              @relation(fields: [planId], references: [id])
@@ -2886,27 +2901,27 @@ model PlatformSubscription {
 // ── Facture plateforme → tenant ──────────────────────────────────────────────
 // Distinct de `Invoice` (qui est tenant→client final). Scopée tenant plateforme.
 model PlatformInvoice {
-  id              String    @id @default(cuid())
-  subscriptionId  String
-  tenantId        String
-  invoiceNumber   String    @unique // ex: "TRANSLOG-2026-00042"
-  periodStart     DateTime
-  periodEnd       DateTime
-  subtotal        Float
-  taxRate         Float     @default(0)
-  taxAmount       Float     @default(0)
-  totalAmount     Float
-  currency        String    @default("EUR")
-  status          String    @default("DRAFT") // DRAFT | ISSUED | PAID | VOID | OVERDUE
-  issuedAt        DateTime?
-  dueAt           DateTime?
-  paidAt          DateTime?
-  paymentMethod   String?
-  paymentRef      String?
-  lineItems       Json      @default("[]")
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  subscriptionId String
+  tenantId       String
+  invoiceNumber  String    @unique // ex: "TRANSLOG-2026-00042"
+  periodStart    DateTime
+  periodEnd      DateTime
+  subtotal       Float
+  taxRate        Float     @default(0)
+  taxAmount      Float     @default(0)
+  totalAmount    Float
+  currency       String    @default("EUR")
+  status         String    @default("DRAFT") // DRAFT | ISSUED | PAID | VOID | OVERDUE
+  issuedAt       DateTime?
+  dueAt          DateTime?
+  paidAt         DateTime?
+  paymentMethod  String?
+  paymentRef     String?
+  lineItems      Json      @default("[]")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   subscription PlatformSubscription @relation(fields: [subscriptionId], references: [id])
   tenant       Tenant               @relation(fields: [tenantId], references: [id])
@@ -2921,21 +2936,21 @@ model PlatformInvoice {
 // queue du support plateforme. Les agents L1/L2/SA y répondent via
 // SupportMessage.
 model SupportTicket {
-  id                      String    @id @default(cuid())
-  tenantId                String    // tenant émetteur
-  reporterUserId          String    // user du tenant qui a ouvert
-  title                   String
-  description             String
-  category                String    @default("OTHER") // BUG | QUESTION | FEATURE_REQUEST | INCIDENT | BILLING | OTHER
-  priority                String    @default("NORMAL") // LOW | NORMAL | HIGH | CRITICAL
-  status                  String    @default("OPEN") // OPEN | IN_PROGRESS | WAITING_CUSTOMER | RESOLVED | CLOSED
-  assignedToPlatformUserId String?   // null = queue non assignée
-  firstResponseAt         DateTime?
-  resolvedAt              DateTime?
-  closedAt                DateTime?
-  slaDueAt                DateTime?  // calculé depuis plan.sla + priority
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
+  id                       String    @id @default(cuid())
+  tenantId                 String // tenant émetteur
+  reporterUserId           String // user du tenant qui a ouvert
+  title                    String
+  description              String
+  category                 String    @default("OTHER") // BUG | QUESTION | FEATURE_REQUEST | INCIDENT | BILLING | OTHER
+  priority                 String    @default("NORMAL") // LOW | NORMAL | HIGH | CRITICAL
+  status                   String    @default("OPEN") // OPEN | IN_PROGRESS | WAITING_CUSTOMER | RESOLVED | CLOSED
+  assignedToPlatformUserId String? // null = queue non assignée
+  firstResponseAt          DateTime?
+  resolvedAt               DateTime?
+  closedAt                 DateTime?
+  slaDueAt                 DateTime? // calculé depuis plan.sla + priority
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id])
   messages SupportMessage[]
@@ -2947,15 +2962,15 @@ model SupportTicket {
 }
 
 model SupportMessage {
-  id        String   @id @default(cuid())
-  ticketId  String
-  authorId  String   // userId (tenant OU plateforme)
+  id          String   @id @default(cuid())
+  ticketId    String
+  authorId    String // userId (tenant OU plateforme)
   authorScope String // TENANT | PLATFORM — source de vérité UX
-  body      String
+  body        String
   // attachments : [{ url, filename, mime, size }] via MinIO
-  attachments Json   @default("[]")
-  isInternal Boolean @default(false) // note privée plateforme (pas visible au tenant)
-  createdAt DateTime @default(now())
+  attachments Json     @default("[]")
+  isInternal  Boolean  @default(false) // note privée plateforme (pas visible au tenant)
+  createdAt   DateTime @default(now())
 
   ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
@@ -2988,7 +3003,7 @@ model TenantHealthScore {
   id         String   @id @default(cuid())
   tenantId   String
   date       DateTime @db.Date
-  score      Int      // 0-100
+  score      Int // 0-100
   // components : { uptime: 0.99, incidents: 2, refundRate: 0.01, supportResponseMin: 45, dlqCount: 0 }
   components Json     @default("{}")
   createdAt  DateTime @default(now())
@@ -3021,4 +3036,271 @@ model PlatformConfig {
   createdAt DateTime @default(now())
 
   @@map("platform_config")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 31 : PAIEMENTS & FISCALITÉ — Domaine canonique multi-provider
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Architecture (hexagonale) :
+//   PaymentIntent (1)   ── entité canonique d'un achat (unique par transaction métier)
+//     └─ PaymentAttempt (N)   ── chaque tentative auprès d'un provider (retry, switch)
+//           └─ PaymentEvent (N)  ── journal append-only (webhook, statut, refund)
+//
+// Toutes les valeurs numériques (limites, timings, taux, devises) proviennent
+// de TenantPaymentConfig / TenantTax / PaymentProviderState / PlatformConfig.
+// AUCUNE constante littérale dans le code métier — règle d'or du projet.
+//
+// Les secrets provider vivent uniquement dans Vault (path = PaymentProviderState.vaultPath).
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Intent : l'achat vu par le métier (billet, colis, facture, abonnement) ───
+// Idempotent par (tenantId, idempotencyKey) — rejeu sûr depuis le front/Webhook.
+// Le provider est choisi par PaymentRouter au moment de créer la première Attempt ;
+// il peut changer au retry (MTN down → fallback Flutterwave).
+model PaymentIntent {
+  id             String    @id @default(cuid())
+  tenantId       String
+  // Idempotency-Key propagée depuis le client (header ou calculée côté serveur).
+  // Unique par tenant : un même achat ne crée jamais deux Intents.
+  idempotencyKey String
+  // Référence métier (TICKET | PARCEL | INVOICE | SUBSCRIPTION | CUSTOM)
+  entityType     String
+  entityId       String? // ticketId | parcelId | invoiceId | subscriptionId
+  // CRM — lien Customer (tenant-scoped), nullable (achat guest)
+  customerId     String?
+  // Montant TTC (taxes incluses, calculées par TaxCalculatorService en amont)
+  amount         Float
+  currency       String
+  // Méthode demandée (le router choisit le provider concret derrière)
+  method         String // MOBILE_MONEY | CARD | BANK_TRANSFER | USSD
+  // Statut agrégé (dérivé de la dernière Attempt active)
+  status         String    @default("CREATED")
+  // CREATED | PROCESSING | SUCCEEDED | FAILED | CANCELLED | REFUNDED | PARTIALLY_REFUNDED | EXPIRED
+  // Contexte client (never sensitive) — enrichi par l'orchestrator
+  description    String?
+  metadata       Json      @default("{}")
+  // TTL — après expiresAt une Attempt ne peut plus être initiée (cron GC).
+  expiresAt      DateTime
+  settledAt      DateTime?
+  // Décomposition fiscale figée au moment de la création (audit trail).
+  // [{ code: 'TVA', label: 'TVA 18%', base: 'SUBTOTAL', kind: 'PERCENT', rate: 0.18, amount: 180 }, …]
+  taxBreakdown   Json      @default("[]")
+  subtotal       Float // Montant HT avant taxes
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  customer Customer?        @relation(fields: [customerId], references: [id])
+  attempts PaymentAttempt[]
+  events   PaymentEvent[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, expiresAt])
+  @@map("payment_intents")
+}
+
+// ── Attempt : une tentative concrète auprès d'un provider ────────────────────
+// Chiffrement application-level des payloads bruts (clé Vault) — jamais en clair.
+model PaymentAttempt {
+  id                 String    @id @default(cuid())
+  intentId           String
+  // Clé du provider dans le registry ('mtn_momo_cg', 'airtel_cg', 'wave', 'flutterwave_agg'…)
+  providerKey        String
+  // Identifiant retourné par le provider (transaction_id Flutterwave, referenceId MTN…).
+  // Peut être null jusqu'à la réponse du provider.
+  externalRef        String?
+  status             String    @default("INITIATED")
+  // INITIATED | PENDING | SUCCESSFUL | FAILED | CANCELLED | REVERSED
+  // Montant effectif de cette tentative (partiel pour retry possible).
+  amount             Float
+  currency           String
+  // URL de redirection (flows card/hosted)
+  paymentUrl         String?
+  // Payloads bruts CHIFFRÉS (AES-GCM, clé rotative via Vault "platform/payments/app-key").
+  requestEnc         String?   @db.Text
+  responseEnc        String?   @db.Text
+  // Erreur si échec
+  failureCode        String?
+  failureMessage     String?
+  // Timestamps de corrélation webhook
+  providerCallAt     DateTime?
+  providerResolvedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  intent PaymentIntent  @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  events PaymentEvent[]
+
+  @@unique([providerKey, externalRef]) // dédup webhook par provider
+  @@index([intentId, createdAt])
+  @@index([providerKey, status])
+  @@map("payment_attempts")
+}
+
+// ── Event : journal append-only (audit immuable) ─────────────────────────────
+// Aucun UPDATE ni DELETE — seul INSERT. Utilisé pour reconstruction et audit.
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  intentId  String
+  attemptId String? // null = event au niveau Intent (création, expiration…)
+  type      String
+  // INTENT_CREATED | ATTEMPT_STARTED | PROVIDER_CALLED | WEBHOOK_RECEIVED
+  // | STATUS_CHANGED | REFUND_INITIATED | REFUND_COMPLETED | ERROR | EXPIRED
+  payload   Json     @default("{}")
+  source    String   @default("SYSTEM") // SYSTEM | WEBHOOK | CRON | USER
+  createdAt DateTime @default(now())
+
+  intent  PaymentIntent   @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  attempt PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
+  @@index([intentId, createdAt])
+  @@index([attemptId, createdAt])
+  @@index([type, createdAt])
+  @@map("payment_events")
+}
+
+// ── ProviderState : toggle DISABLED | SANDBOX | LIVE par provider et tenant ──
+// Règle : tenantId nullable — NULL = défaut plateforme (sandbox partout).
+// Une ligne tenant surcharge la ligne plateforme. Le registry en module init
+// ne retient que les providers dont mode != DISABLED.
+model PaymentProviderState {
+  id                    String    @id @default(cuid())
+  tenantId              String? // null = défaut plateforme
+  providerKey           String // 'mtn_momo_cg', 'airtel_cg', 'wave', 'flutterwave_agg', 'paystack_agg', 'stripe_cards'
+  displayName           String
+  mode                  String    @default("DISABLED") // DISABLED | SANDBOX | LIVE
+  // Chemin Vault des secrets — lu par le connecteur (ex: "platform/payments/mtn_momo_cg").
+  vaultPath             String
+  // Méthodes supportées (MOBILE_MONEY, CARD, BANK_TRANSFER, USSD)
+  supportedMethods      String[]  @default([])
+  // Pays couverts (ISO 3166-1 alpha-2)
+  supportedCountries    String[]  @default([])
+  // Devises acceptées (ISO 4217)
+  supportedCurrencies   String[]  @default([])
+  // Santé
+  lastHealthCheckAt     DateTime?
+  lastHealthCheckStatus String? // UP | DOWN | DEGRADED
+  lastHealthCheckError  String?
+  // Activation (LIVE nécessite MFA + audit)
+  activatedBy           String?
+  activatedAt           DateTime?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, providerKey])
+  @@index([tenantId, mode])
+  @@index([providerKey])
+  @@map("payment_provider_states")
+}
+
+// ── TenantTax : taxes multiples empilables (remplace tvaEnabled/tvaRate) ─────
+// Seed-migration depuis TenantBusinessConfig au provisioning.
+// base = SUBTOTAL  → taxe appliquée au HT (classique)
+// base = TOTAL_AFTER_PREVIOUS → taxe appliquée à (HT + taxes précédentes selon sortOrder)
+model TenantTax {
+  id        String    @id @default(cuid())
+  tenantId  String
+  // Code court identifiant (TVA, TIMBRE, TAXE_GARE, TAXE_COMMUNALE, …)
+  code      String
+  // Libellé affiché (traduit via labelKey si présent)
+  label     String
+  labelKey  String? // clé i18n optionnelle (ex: 'tax.tva')
+  // Valeur numérique — pourcentage (0.18) ou montant fixe (500)
+  rate      Float
+  kind      String    @default("PERCENT") // PERCENT | FIXED
+  // Base de calcul
+  base      String    @default("SUBTOTAL") // SUBTOTAL | TOTAL_AFTER_PREVIOUS
+  // Types d'entités concernés ('TICKET', 'PARCEL', 'SUBSCRIPTION', 'ALL')
+  appliesTo String[]  @default(["ALL"])
+  // Ordre d'application (petit = appliqué en premier, utile pour cascade)
+  sortOrder Int       @default(0)
+  enabled   Boolean   @default(true)
+  // Versioning fiscal — permet une bascule nette à date (loi de finances)
+  validFrom DateTime?
+  validTo   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, enabled])
+  @@map("tenant_taxes")
+}
+
+// ── TenantPaymentConfig : toutes les constantes paiement par tenant ──────────
+// Créé automatiquement au provisioning avec les valeurs par défaut (seed).
+// Toute la logique métier lit ici — jamais de magic number en dur.
+model TenantPaymentConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+
+  // ── Routing provider par méthode ────────────────────────────────────────
+  // { "MOBILE_MONEY": "flutterwave_agg", "CARD": "flutterwave_agg", … }
+  // Fallback : PaymentRouter recherche par pays dans PaymentMethodConfig.
+  defaultProviderByMethod Json @default("{}")
+  // Liste ordonnée de providers de fallback par méthode
+  // { "MOBILE_MONEY": ["mtn_momo_cg", "airtel_cg", "flutterwave_agg"] }
+  fallbackChainByMethod   Json @default("{}")
+
+  // ── Limites de montants (devise = Tenant.currency) ──────────────────────
+  // { "MOBILE_MONEY": 100, "CARD": 500 }
+  minAmountByMethod Json     @default("{}")
+  maxAmountByMethod Json     @default("{}")
+  // Devises acceptées par ce tenant. Vide = Tenant.currency uniquement.
+  allowedCurrencies String[] @default([])
+
+  // ── Timings (tous en minutes/secondes, pas de magic number) ─────────────
+  intentTtlMinutes         Int @default(15) // TTL d'un Intent avant EXPIRED
+  momoPushTimeoutSeconds   Int @default(90) // Timeout push MoMo avant FAILED
+  webhookRetryMaxAttempts  Int @default(5)
+  reconciliationLagMinutes Int @default(30) // Lag min avant tentative reconciliation
+
+  // ── Frais & surcharges (répercussion au client) ─────────────────────────
+  passProviderFeesToCustomer Boolean @default(false)
+  // { "CARD": 0.025, "MOBILE_MONEY": 0.0 } — fraction appliquée en surcharge
+  surchargePercentByMethod   Json    @default("{}")
+
+  // ── Politique client ────────────────────────────────────────────────────
+  // Méthodes exigeant un email client valide (cartes typiquement).
+  requireCustomerEmailFor String[] @default([])
+  allowGuestCheckout      Boolean  @default(true)
+
+  // ── Seuils approbation & sécurité ───────────────────────────────────────
+  // Montant au-delà duquel un refund nécessite MFA step-up (devise tenant).
+  refundMfaThreshold Float @default(100000)
+
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_payment_configs")
+}
+
+// ── PlatformPaymentConfig : constantes plateforme (singleton) ────────────────
+// Une seule ligne (id='singleton'). Édité depuis l'UI Settings plateforme par SA.
+model PlatformPaymentConfig {
+  id                            String   @id @default("singleton")
+  // Grace period avant PAST_DUE → SUSPENDED (heures)
+  pastDueGraceHours             Int      @default(72)
+  // Retry max global d'un webhook avant DLQ définitif
+  globalWebhookRetryMax         Int      @default(5)
+  // Backoff exponentiel initial (secondes) pour retry webhook
+  webhookRetryInitialBackoffSec Int      @default(30)
+  // Réconciliation
+  reconciliationCronEnabled     Boolean  @default(true)
+  reconciliationLagMinutes      Int      @default(30)
+  // Alertes
+  alertEmailOnGhostPayment      String?
+  // Chiffrement application-level — rotation key path dans Vault
+  payloadEncryptionVaultPath    String   @default("platform/payments/app-key")
+  updatedAt                     DateTime @updatedAt
+
+  @@map("platform_payment_config")
 }

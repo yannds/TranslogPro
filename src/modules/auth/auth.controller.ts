@@ -1,6 +1,7 @@
 import {
-  Controller, Post, Get, Body, Req, Res,
+  Controller, Post, Get, Body, Req, Res, Query,
   HttpCode, UseGuards, UnauthorizedException, BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService, AuthUserDto } from './auth.service';
@@ -9,6 +10,7 @@ import {
   RateLimit,
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
+import { ImpersonationService } from '../../core/iam/services/impersonation.service';
 
 const COOKIE_NAME = 'translog_session';
 
@@ -49,7 +51,10 @@ function extractIp(req: Request): string {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService:         AuthService,
+    private readonly impersonationService: ImpersonationService,
+  ) {}
 
   /**
    * POST /api/auth/sign-in
@@ -180,6 +185,73 @@ export class AuthController {
 
     res.clearCookie(COOKIE_NAME, { path: '/', sameSite: 'strict' });
     return { ok: true };
+  }
+
+  /**
+   * GET /api/auth/impersonate/exchange?token=X
+   *
+   * Phase 2 cross-subdomain — endpoint public (pas de PermissionGuard — le token
+   * signé HMAC fait autorité). Atterri sur le sous-domaine du tenant cible
+   * via redirect depuis admin.translogpro.com.
+   *
+   * Flow :
+   *   1. Super-admin clique "Impersonate tenantA" sur admin.translogpro.com
+   *   2. Backend génère token one-shot → retourne redirectUrl vers
+   *      tenanta.translogpro.com/api/auth/impersonate/exchange?token=...
+   *   3. Frontend admin redirige la fenêtre vers cette URL
+   *   4. Cet endpoint échange le token contre un cookie translog_session
+   *      scopé au sous-domaine tenanta.
+   *   5. Redirige vers "/" du tenant cible (page d'accueil).
+   *
+   * Le cookie admin sur admin.translogpro.com reste INTACT — pas d'override
+   * ni de pollution. Pour revenir admin : l'admin rouvre admin.translogpro.com.
+   *
+   * SÉCURITÉ :
+   *   - Le token est vérifié HMAC + one-shot (exchangedAt).
+   *   - Le host doit matcher le tenant cible du token (anti-smuggling).
+   *   - Audit log level=critical à chaque exchange.
+   */
+  @Get('impersonate/exchange')
+  @HttpCode(302)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'auth_imp_exchange' })
+  async impersonateExchange(
+    @Query('token') rawToken: string,
+    @Req()          req:      Request,
+    @Res()          res:      Response,
+  ): Promise<void> {
+    if (!rawToken || typeof rawToken !== 'string') {
+      throw new BadRequestException('Token d\'impersonation requis');
+    }
+
+    const hostTenant = req.resolvedHostTenant;
+    if (!hostTenant) {
+      throw new BadRequestException(
+        'L\'échange doit être fait sur le sous-domaine du tenant cible',
+      );
+    }
+
+    const result = await this.impersonationService.exchangeTokenForSession(
+      rawToken,
+      extractIp(req),
+      req.headers['user-agent'] ?? '',
+    );
+
+    // Le token est signé pour `targetTenantId` : si le host actuel ne correspond
+    // pas, refuser (anti-smuggling : un admin qui essaie d'injecter un token de
+    // tenantA sur le sous-domaine de tenantB).
+    if (result.targetTenantId !== hostTenant.tenantId) {
+      throw new ForbiddenException(
+        'Token d\'impersonation destiné à un autre tenant que ce sous-domaine',
+      );
+    }
+
+    // Poser le cookie scopé au sous-domaine courant (pas de domain attribute)
+    res.cookie(COOKIE_NAME, result.sessionToken, COOKIE_OPTS);
+
+    // Redirect vers l'UI admin du tenant cible. Le frontend lira son tenant
+    // depuis window.location.host et affichera la zone admin.
+    res.redirect(302, '/admin');
   }
 
   // ─── Helpers privés ───────────────────────────────────────────────────────

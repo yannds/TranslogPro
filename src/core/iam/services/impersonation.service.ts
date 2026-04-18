@@ -6,10 +6,11 @@ import {
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
-import { createHmac, createHash, timingSafeEqual, randomUUID } from 'crypto';
+import { createHmac, createHash, timingSafeEqual, randomUUID, randomBytes } from 'crypto';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../../infrastructure/secret/interfaces/secret.interface';
 import { PLATFORM_TENANT_ID } from '../guards/permission.guard';
+import { HostConfigService } from '../../tenancy';
 
 /**
  * Durée de vie d'une session d'impersonation JIT.
@@ -69,8 +70,9 @@ export class ImpersonationService {
   private readonly KEY_TTL_MS = 5 * 60 * 1_000;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:        PrismaService,
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    private readonly hostConfig:    HostConfigService,
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -89,7 +91,20 @@ export class ImpersonationService {
       ipAddress?: string;
       userAgent?: string;
     },
-  ): Promise<{ token: string; sessionId: string; expiresAt: Date }> {
+  ): Promise<{
+    token:       string;
+    sessionId:   string;
+    expiresAt:   Date;
+    /**
+     * URL de redirection vers le sous-domaine du tenant cible pour échanger
+     * le token contre un cookie de session scopé. Permet au super-admin de
+     * basculer sur admin.translogpro.com → {target}.translogpro.com sans
+     * pollution du cookie admin. Phase 2 cross-subdomain.
+     */
+    redirectUrl: string;
+    /** Slug du tenant cible (utile pour le frontend à afficher). */
+    targetSlug:  string;
+  }> {
     // Vérifier que le tenant cible existe et est actif
     const targetTenant = await this.prisma.tenant.findFirst({
       where: { id: targetTenantId, isActive: true },
@@ -152,7 +167,119 @@ export class ImpersonationService {
       `[IMPERSONATION START] actor=${actorId} target=${targetTenantId} session=${sessionId}`,
     );
 
-    return { token, sessionId, expiresAt };
+    // Phase 2 : URL de redirect cross-subdomain que le frontend admin va charger.
+    // Le target échangera le token contre un cookie de session local.
+    const redirectUrl = this.hostConfig.buildTenantUrl(
+      targetTenant.slug,
+      `/api/auth/impersonate/exchange?token=${encodeURIComponent(token)}`,
+    );
+
+    return {
+      token,
+      sessionId,
+      expiresAt,
+      redirectUrl,
+      targetSlug: targetTenant.slug,
+    };
+  }
+
+  /**
+   * Phase 2 cross-subdomain — échange un token d'impersonation contre une
+   * Session DB utilisable via cookie sur le sous-domaine du tenant cible.
+   *
+   * One-shot : une seconde tentative avec le même token est rejetée.
+   *
+   * Appelé par `GET /api/auth/impersonate/exchange?token=X` sur le sous-domaine
+   * `{targetSlug}.translogpro.com`. Le controller pose ensuite le cookie
+   * `translog_session` scopé à ce host.
+   *
+   * @throws UnauthorizedException si token invalide/expiré/déjà échangé
+   */
+  async exchangeTokenForSession(
+    rawToken:  string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<{
+    sessionToken: string;
+    sessionExpiresAt: Date;
+    actorId: string;
+    targetTenantId: string;
+    sessionId: string;
+  }> {
+    // 1. Vérifier signature + DB session (réutilise verifyToken)
+    const ctx = await this.verifyToken(rawToken);
+
+    // 2. Charger la ligne DB pour checker exchangedAt et setter atomiquement
+    const tokenHash = this.hashToken(rawToken);
+
+    // 3. Update atomique : si exchangedAt est NULL, le passer à NOW et verrouiller.
+    //    Sinon, updateMany retourne count=0 et on throw.
+    const newSessionToken = randomBytes(32).toString('hex');
+    const SESSION_TTL_MS_LOCAL = 15 * 60 * 1_000; // aligné sur ImpersonationSession TTL
+    const newSessionExpiresAt  = new Date(Date.now() + SESSION_TTL_MS_LOCAL);
+
+    const { count } = await this.prisma.impersonationSession.updateMany({
+      where: {
+        tokenHash,
+        status:     'ACTIVE',
+        exchangedAt: null,
+        expiresAt:  { gt: new Date() },
+      },
+      data: {
+        exchangedAt:           new Date(),
+        exchangedSessionToken: newSessionToken,
+        status:                'EXCHANGED',
+      },
+    });
+
+    if (count === 0) {
+      // Soit déjà échangé, soit révoqué, soit expiré entre-temps
+      throw new UnauthorizedException(
+        'Token d\'impersonation déjà utilisé, révoqué ou expiré',
+      );
+    }
+
+    // 4. Créer la Session utilisable côté tenant cible
+    //    tenantId = target. userId = actor (l'acteur IMPERSONE le tenant cible
+    //    mais reste identifié comme lui-même — les logs d'audit et le guard
+    //    d'impersonation continuent de voir l'acteur original).
+    await this.prisma.session.create({
+      data: {
+        userId:    ctx.actorId,
+        tenantId:  ctx.targetTenantId,
+        token:     newSessionToken,
+        expiresAt: newSessionExpiresAt,
+        ipAddress,
+        userAgent,
+      },
+    });
+
+    await this.writeAuditLog({
+      actorId:        ctx.actorId,
+      targetTenantId: ctx.targetTenantId,
+      action:         'control.impersonation.exchange.global',
+      resource:       `ImpersonationSession:${ctx.sessionId}`,
+      level:          'critical',
+      ipAddress,
+      detail: {
+        sessionId:      ctx.sessionId,
+        targetTenantId: ctx.targetTenantId,
+        newSessionIssued: true,
+      },
+    });
+
+    this.logger.warn(
+      `[IMPERSONATION EXCHANGE] actor=${ctx.actorId} target=${ctx.targetTenantId} ` +
+      `session=${ctx.sessionId} → cookie-scoped session créée`,
+    );
+
+    return {
+      sessionToken:     newSessionToken,
+      sessionExpiresAt: newSessionExpiresAt,
+      actorId:          ctx.actorId,
+      targetTenantId:   ctx.targetTenantId,
+      sessionId:        ctx.sessionId,
+    };
   }
 
   /**
