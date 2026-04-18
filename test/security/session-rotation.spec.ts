@@ -16,6 +16,7 @@ import { AuthService } from '@/modules/auth/auth.service';
 import { PrismaService } from '@/infrastructure/database/prisma.service';
 import { TenantModuleService } from '@/modules/tenant/tenant-module.service';
 import { MfaService } from '@/modules/mfa/mfa.service';
+import { AuthIdentityService } from '@/core/identity/auth-identity.service';
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 
 const FIFTEEN_DAYS_MS = 15 * 24 * 3600 * 1_000;
@@ -72,16 +73,21 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
     const mfa = {} as MfaService;
 
-    return { prisma, modules, mfa, session };
+    // Phase 1 multi-tenant : AuthService dépend maintenant de AuthIdentityService
+    // pour toute recherche tenant-scoped. Non utilisé par `me()` (seul le
+    // session.findUnique suffit), donc un mock vide convient.
+    const identity = {} as AuthIdentityService;
+
+    return { prisma, modules, mfa, identity, session };
   };
 
   // ── No rotation below threshold ────────────────────────────────────────────
 
   it('should NOT rotate a fresh session (< 15 days)', async () => {
     const fiveDaysAgo = new Date(Date.now() - FIVE_DAYS_MS);
-    const { prisma, modules, mfa } = makeMocks(fiveDaysAgo);
+    const { prisma, modules, mfa, identity } = makeMocks(fiveDaysAgo);
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     const result = await svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent');
 
     expect(result.user).toBeDefined();
@@ -95,9 +101,9 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
   it('should rotate a session aged exactly 15 days', async () => {
     const fifteenDaysAgo = new Date(Date.now() - FIFTEEN_DAYS_MS);
-    const { prisma, modules, mfa } = makeMocks(fifteenDaysAgo);
+    const { prisma, modules, mfa, identity } = makeMocks(fifteenDaysAgo);
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     const result = await svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent');
 
     expect(result.rotatedToken).toBeDefined();
@@ -118,9 +124,9 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
   it('should rotate a session older than 15 days', async () => {
     const sixteenDaysAgo = new Date(Date.now() - SIXTEEN_DAYS_MS);
-    const { prisma, modules, mfa } = makeMocks(sixteenDaysAgo);
+    const { prisma, modules, mfa, identity } = makeMocks(sixteenDaysAgo);
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     const result = await svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent');
 
     expect(result.rotatedToken).toBeDefined();
@@ -138,8 +144,8 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
   it('should produce different tokens on repeated rotations', async () => {
     const tokens = new Set<string>();
     for (let i = 0; i < 10; i++) {
-      const { prisma, modules, mfa } = makeMocks(new Date(Date.now() - SIXTEEN_DAYS_MS));
-      const svc = new AuthService(prisma, modules, mfa);
+      const { prisma, modules, mfa, identity } = makeMocks(new Date(Date.now() - SIXTEEN_DAYS_MS));
+      const svc = new AuthService(prisma, modules, mfa, identity);
       const result = await svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent');
       tokens.add(result.rotatedToken!);
     }
@@ -151,11 +157,11 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
   it('should throw UnauthorizedException on expired session (no rotation)', async () => {
     const sixteenDaysAgo = new Date(Date.now() - SIXTEEN_DAYS_MS);
-    const { prisma, modules, mfa } = makeMocks(sixteenDaysAgo, {
+    const { prisma, modules, mfa, identity } = makeMocks(sixteenDaysAgo, {
       expiresAt: new Date(Date.now() - 1000), // expirée il y a 1s
     });
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     await expect(svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent'))
       .rejects.toThrow(UnauthorizedException);
 
@@ -166,11 +172,11 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
   it('should reject rotation if IP changed (session hijacking protection)', async () => {
     const sixteenDaysAgo = new Date(Date.now() - SIXTEEN_DAYS_MS);
-    const { prisma, modules, mfa } = makeMocks(sixteenDaysAgo, {
+    const { prisma, modules, mfa, identity } = makeMocks(sixteenDaysAgo, {
       ipAddress: '203.0.113.42', // IP publique d'origine
     });
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     await expect(svc.me(OLD_TOKEN, '198.51.100.7', 'test-agent'))
       .rejects.toThrow(ForbiddenException);
 
@@ -183,10 +189,10 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
 
   it('should reject rotation if user account is disabled', async () => {
     const sixteenDaysAgo = new Date(Date.now() - SIXTEEN_DAYS_MS);
-    const { prisma, modules, mfa, session } = makeMocks(sixteenDaysAgo);
+    const { prisma, modules, mfa, identity, session } = makeMocks(sixteenDaysAgo);
     session.user.isActive = false;
 
-    const svc = new AuthService(prisma, modules, mfa);
+    const svc = new AuthService(prisma, modules, mfa, identity);
     await expect(svc.me(OLD_TOKEN, '127.0.0.1', 'test-agent'))
       .rejects.toThrow(UnauthorizedException);
 
