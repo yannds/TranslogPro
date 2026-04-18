@@ -338,6 +338,10 @@ export class FleetDocsService {
 
   // ─── Scheduler: recompute document statuses daily ────────────────────────
 
+  /**
+   * Cross-tenant cron — parcourt les documents véhicule de TOUS les tenants.
+   * Chaque update est scoped par `id + tenantId` (defense-in-depth).
+   */
   @Cron(CronExpression.EVERY_DAY_AT_6AM)
   async refreshDocumentStatuses(): Promise<void> {
     this.logger.log('Refreshing vehicle document statuses…');
@@ -350,8 +354,9 @@ export class FleetDocsService {
     for (const doc of docs) {
       const newStatus = this._computeDocStatus(doc.expiresAt ?? undefined, doc.type.alertDaysBeforeExpiry);
       if (newStatus !== doc.status) {
-        await this.prisma.vehicleDocument.update({
-          where: { id: doc.id },
+        // updateMany avec tenantId en condition racine → defense-in-depth.
+        await this.prisma.vehicleDocument.updateMany({
+          where: { id: doc.id, tenantId: doc.tenantId },
           data:  { status: newStatus },
         });
         if (newStatus === DOC_STATUS.EXPIRING || newStatus === DOC_STATUS.EXPIRED) {

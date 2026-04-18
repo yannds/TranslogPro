@@ -15,6 +15,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth/auth.context';
 import { useTenantConfigApply } from './TenantConfigProvider';
 import { useI18n } from '../lib/i18n/useI18n';
+import { resolveHost, buildTenantUrl } from '../lib/tenancy/host';
 import type { Language } from '../lib/i18n/types';
 
 interface CompanyInfoResponse {
@@ -64,6 +65,26 @@ export function TenantConfigBridge() {
     })
       .then(res => {
         if (cancelled) return;
+
+        // Defense in depth frontend : si le slug du tenant connecté ne
+        // correspond pas au sous-domaine courant, on ne charge PAS la config
+        // (évite d'afficher les branding/couleurs du tenantA sur le
+        // sous-domaine tenantB — scénario impossible en Phase 1+2 puisque
+        // le cookie est scopé au sous-domaine, mais belt-and-suspenders).
+        const host = resolveHost();
+        if (host.slug && res.company.slug && host.slug !== res.company.slug && !host.isAdmin) {
+          if (import.meta.env.DEV) {
+            console.warn(
+              `[TenantConfigBridge] Host/session tenant mismatch: ` +
+              `host.slug=${host.slug} session.slug=${res.company.slug}. ` +
+              `Redirect vers le sous-domaine correct.`,
+            );
+          }
+          // Redirect vers le sous-domaine effectif de la session — remplace
+          // l'URL actuelle (pas de retour arrière).
+          window.location.replace(buildTenantUrl(res.company.slug, window.location.pathname + window.location.search));
+          return;
+        }
 
         // 1. Langue : priorité absolue au choix du tenant.
         if (isSupportedLanguage(res.company.language)) {

@@ -247,6 +247,13 @@ export class PlatformAnalyticsService {
   /**
    * 02:00 UTC — calcul DailyActiveUser pour J-1.
    * Source : users avec lastActiveAt dans la fenêtre [00:00, 24:00) de J-1.
+   *
+   * SÉCURITÉ CROSS-TENANT : ce cron parcourt explicitement tous les tenants
+   * en une seule transaction. Chaque upsert porte son `tenantId` (pris de
+   * `u.tenantId`), donc chaque INSERT est tenant-scoped par construction.
+   * RLS PG n'est pas actif ici (pas de request context), mais le filtre est
+   * appliqué côté query — invariant : NE JAMAIS ajouter une query sans
+   * `tenantId` dans ce cron sans wrapper `withTenant`.
    */
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async runDailyActiveUsersJob(): Promise<void> {
@@ -306,30 +313,36 @@ export class PlatformAnalyticsService {
 
     for (const t of tenants) {
       try {
-        const [incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers] = await Promise.all([
-          this.prisma.incident.count({ where: { tenantId: t.id, resolvedAt: null } }),
-          this.prisma.supportTicket.count({ where: { tenantId: t.id, status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
-          this.prisma.deadLetterEvent.count({ where: { tenantId: t.id, resolvedAt: null } }),
-          this.prisma.user.count({ where: { tenantId: t.id, lastActiveAt: { gte: start30d } } }),
-          this.prisma.user.count({ where: { tenantId: t.id, isActive: true } }),
-        ]);
+        // Defense in depth : wrap per-tenant body dans withTenant → RLS PG
+        // applique app.tenant_id=t.id pour cette itération, en plus des
+        // filtres explicites tenantId: t.id dans chaque query.
+        // Si un futur refactor oublie le filter, RLS bloque quand même.
+        await this.prisma.withTenant(t.id, async (tx) => {
+          const [incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers] = await Promise.all([
+            tx.incident.count({ where: { tenantId: t.id, resolvedAt: null } }),
+            tx.supportTicket.count({ where: { tenantId: t.id, status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+            tx.deadLetterEvent.count({ where: { tenantId: t.id, resolvedAt: null } }),
+            tx.user.count({ where: { tenantId: t.id, lastActiveAt: { gte: start30d } } }),
+            tx.user.count({ where: { tenantId: t.id, isActive: true } }),
+          ]);
 
-        const uptimeComp   = clamp01(1 - incidentsOpen / thIncidents) * HEALTH_SCORE.weights.uptime;
-        const supportComp  = clamp01(1 - ticketsOpen   / thTickets  ) * HEALTH_SCORE.weights.support;
-        const dlqComp      = clamp01(1 - dlqOpen       / thDlq      ) * HEALTH_SCORE.weights.dlq;
-        const engageComp   = (activeUsers > 0 ? clamp01(mau / activeUsers) : 0) * HEALTH_SCORE.weights.engagement;
-        const score        = Math.round(uptimeComp + supportComp + dlqComp + engageComp);
+          const uptimeComp   = clamp01(1 - incidentsOpen / thIncidents) * HEALTH_SCORE.weights.uptime;
+          const supportComp  = clamp01(1 - ticketsOpen   / thTickets  ) * HEALTH_SCORE.weights.support;
+          const dlqComp      = clamp01(1 - dlqOpen       / thDlq      ) * HEALTH_SCORE.weights.dlq;
+          const engageComp   = (activeUsers > 0 ? clamp01(mau / activeUsers) : 0) * HEALTH_SCORE.weights.engagement;
+          const score        = Math.round(uptimeComp + supportComp + dlqComp + engageComp);
 
-        await this.prisma.tenantHealthScore.upsert({
-          where:  { tenantId_date: { tenantId: t.id, date: today } },
-          update: {
-            score,
-            components: { uptimeComp, supportComp, dlqComp, engageComp, incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers } as object,
-          },
-          create: {
-            tenantId: t.id, date: today, score,
-            components: { uptimeComp, supportComp, dlqComp, engageComp, incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers } as object,
-          },
+          await tx.tenantHealthScore.upsert({
+            where:  { tenantId_date: { tenantId: t.id, date: today } },
+            update: {
+              score,
+              components: { uptimeComp, supportComp, dlqComp, engageComp, incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers } as object,
+            },
+            create: {
+              tenantId: t.id, date: today, score,
+              components: { uptimeComp, supportComp, dlqComp, engageComp, incidentsOpen, ticketsOpen, dlqOpen, mau, activeUsers } as object,
+            },
+          });
         });
       } catch (e) {
         this.logger.error(`[Health cron] échec tenant=${t.slug}`, e as Error);

@@ -40,7 +40,13 @@ export class PublicPortalService {
 
   // ─── Tenant resolution ────────────────────────────────────────────────────
 
-  /** Resolve tenant slug to tenant ID. Cached in Redis (5 min). */
+  /** Resolve tenant slug to tenant ID. Cached in Redis (5 min).
+   *
+   * Sécurité cache : `portal:slug:${slug}` est safe car `Tenant.slug` est
+   * globally unique (contrainte Prisma @unique). Pas de collision cross-tenant
+   * possible. Pas de préfixe tenantId nécessaire — le slug EST l'identifiant
+   * tenant pour ce lookup public.
+   */
   async resolveTenant(slug: string) {
     const cacheKey = `portal:slug:${slug}`;
     const cached = await this.redis.get(cacheKey);

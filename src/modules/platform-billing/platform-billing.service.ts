@@ -314,8 +314,10 @@ export class PlatformBillingService {
               lineItems:      [{ description: `${sub.plan.name} — ${sub.plan.billingCycle}`, quantity: 1, unitPrice: sub.plan.price, total: sub.plan.price }] as object,
             },
           }),
-          this.prisma.platformSubscription.update({
-            where: { id: sub.id },
+          // updateMany avec tenantId → defense-in-depth : empêche toute bascule
+          // cross-tenant accidentelle si sub.id serait altéré par une race.
+          this.prisma.platformSubscription.updateMany({
+            where: { id: sub.id, tenantId: sub.tenantId },
             data: {
               currentPeriodStart: periodStart,
               currentPeriodEnd:   periodEnd,

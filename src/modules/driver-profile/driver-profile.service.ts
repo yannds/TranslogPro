@@ -866,6 +866,13 @@ export class DriverProfileService {
 
   // ─── Scheduler : recompute license statuses daily ────────────────────────
 
+  /**
+   * Cross-tenant cron — scan global DES licences de TOUS les tenants et recalcul
+   * des statuts. Chaque update est scoped par `id + tenantId` (defense-in-depth)
+   * pour empêcher une bascule cross-tenant accidentelle en cas de refactor.
+   * RLS PG n'est pas actif (pas de request context), donc le filtre query est
+   * la seule garantie — on l'ajoute explicitement.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_6AM)
   async refreshLicenseStatuses(): Promise<void> {
     this.logger.log('Refreshing driver license statuses…');
@@ -878,8 +885,9 @@ export class DriverProfileService {
     for (const lic of licenses) {
       const newStatus = this._computeLicenseStatus(lic.expiresAt, DEFAULT_LICENSE_ALERT_DAYS);
       if (newStatus !== lic.status) {
-        await this.prisma.driverLicense.update({
-          where: { id: lic.id },
+        // updateMany avec tenantId en condition racine → defense-in-depth.
+        await this.prisma.driverLicense.updateMany({
+          where: { id: lic.id, tenantId: lic.tenantId },
           data:  { status: newStatus },
         });
         if (newStatus === LICENSE_STATUS.EXPIRING || newStatus === LICENSE_STATUS.EXPIRED) {

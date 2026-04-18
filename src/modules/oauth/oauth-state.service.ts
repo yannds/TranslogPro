@@ -18,6 +18,14 @@ const REDIS_KEY_PREFIX = 'oauth:state:';
  *
  * Avantage vs HMAC signé : pas de secret à gérer, révocation immédiate,
  * one-shot strict par suppression de la clé.
+ *
+ * Sécurité cache-key : `oauth:state:${nonce}` sans préfixe tenantId.
+ * C'est SAFE car :
+ *   - nonce = 256 bits d'entropie (crypto.randomBytes) — collision
+ *     cross-tenant cryptographiquement impossible (probabilité < 2^-128).
+ *   - Le payload stocké CONTIENT payload.tenantId ; le caller de consume()
+ *     DOIT cross-checker payload.tenantId contre le tenant attendu du callback.
+ *   - One-shot via del() immédiat rend tout replay impossible.
  */
 @Injectable()
 export class OAuthStateService {
