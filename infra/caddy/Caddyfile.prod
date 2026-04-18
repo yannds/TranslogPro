@@ -59,16 +59,10 @@
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
 
-    # Headers propagés au backend (impératif pour TenantHostMiddleware)
-    header_up Host              {host}
-    header_up X-Real-IP         {remote_host}
-    header_up X-Forwarded-For   {remote_host}
-    header_up X-Forwarded-Proto {scheme}
-    header_up X-Forwarded-Host  {host}
-
-    # Rate limiting global (IP) — aligné sur l'ancien nginx
-    # (requires Caddy L4 module ou external rate limiter — stub ici)
-    # rate_limit @all 100r/s
+    # Note Caddy : les `header_up` doivent être DANS un reverse_proxy block,
+    # pas au scope site. Caddy propage Host + X-Forwarded-* par défaut —
+    # on les explicite ci-dessous dans chaque reverse_proxy pour que
+    # TenantHostMiddleware + audit voient le Host original.
 
     # Sécurité headers (CSP dynamique géré par backend via helmet)
     header {
@@ -82,13 +76,24 @@
     # ── API REST ────────────────────────────────────────────────────────────
     @api path /api/*
     handle @api {
-        reverse_proxy backend:3000
+        reverse_proxy backend:3000 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host  {host}
+        }
     }
 
     # ── WebSocket (Socket.IO) ──────────────────────────────────────────────
     @ws path /socket.io/*
     handle @ws {
-        reverse_proxy backend:3001
+        reverse_proxy backend:3001 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     # ── Health checks (bypass static build) ────────────────────────────────

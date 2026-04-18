@@ -15,8 +15,20 @@ export default defineConfig({
   },
 
   server: {
+    // 0.0.0.0 — indispensable pour que Caddy (dans un container Docker)
+    // puisse atteindre Vite via host.docker.internal. Sans ça Vite n'écoute
+    // que sur localhost IPv6, et Caddy reçoit "Connection refused" sur la
+    // route catch-all `handle { reverse_proxy host.docker.internal:5173 }`.
+    host: '0.0.0.0',
     port: 5173,
-    // Proxy API → NestJS (évite CORS en dev)
+    // Vite rejette par défaut les requêtes dont le Host header ne correspond
+    // pas à `server.host`. En dev multi-tenant le browser envoie
+    // `tenanta.translog.test` comme Host → on doit explicitement autoriser
+    // tout *.translog.test + localhost/127.0.0.1 pour ne pas bloquer Caddy.
+    allowedHosts: ['.translog.test', 'localhost', '127.0.0.1'],
+
+    // Proxy API → NestJS (évite CORS en dev quand on hit Vite directement
+    // sur localhost:5173 sans passer par Caddy).
     proxy: {
       '/api': {
         target:      'http://localhost:3000',

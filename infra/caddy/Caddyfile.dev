@@ -56,18 +56,18 @@
 *.translog.test, translog.test {
     tls /certs/dev.crt /certs/dev.key
 
-    # Propager le Host original au backend (essentiel pour TenantHostMiddleware).
-    # Caddy le fait par défaut, on le rend explicite pour review/audit.
-    header_up Host {host}
-    header_up X-Real-IP {remote_host}
-    header_up X-Forwarded-For {remote_host}
-    header_up X-Forwarded-Proto {scheme}
+    # Note Caddy : les headers proxy (Host, X-Forwarded-*) sont gérés à
+    # L'INTÉRIEUR de chaque `reverse_proxy` block, pas au scope site.
+    # Caddy propage Host automatiquement — on l'explicite ici pour garantir
+    # que TenantHostMiddleware voie bien le Host original (pas "backend:3000").
 
     # ── API REST ────────────────────────────────────────────────────────────
     @api path /api/*
     handle @api {
         reverse_proxy host.docker.internal:3000 {
             header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Host {host}
             header_up X-Forwarded-Proto https
         }

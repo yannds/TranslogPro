@@ -137,36 +137,10 @@ CREATE INDEX IF NOT EXISTS "tenant_domains_tenantId_idx"
 CREATE INDEX IF NOT EXISTS "tenant_domains_tenantId_isPrimary_idx"
   ON public.tenant_domains ("tenantId", "isPrimary");
 
--- ─── 4. Seed idempotent : 1 domain primary par tenant ──────────────────────
--- Format : {slug}.{PLATFORM_BASE_DOMAIN}
--- En dev, PLATFORM_BASE_DOMAIN = "translog.test" → certains développeurs vont
---   vouloir tester localement avec un autre suffixe. Ce seed utilise translog.test
---   par défaut ; le vrai domaine est résolu par TenantResolverService à runtime
---   depuis HostConfig (pas d'impact sur le matching host).
--- En prod, PLATFORM_BASE_DOMAIN = "translogpro.com".
+-- ─── 4. Seed tenant_domains — DÉPLACÉ dans scripts/seed-tenant-domains.sh
+-- Pourquoi : le hostname dépend de $PLATFORM_BASE_DOMAIN (dev vs prod).
+-- Hardcoder 2 valeurs ici aboutissait à des lignes "fantômes" (ex: seed
+-- "*.translog.test" sur une DB prod). Le seed est maintenant shell-templated
+-- et tire sa valeur de scripts/dev.config.sh (dev) ou du runbook prod.
 --
--- Idempotent : ON CONFLICT DO NOTHING (hostname est unique).
--- Le seed génère LES DEUX formats (dev + prod) pour que le matching fonctionne
--- dans les deux environnements sans data migration supplémentaire.
-
-INSERT INTO public.tenant_domains (id, "tenantId", hostname, "isPrimary", "verifiedAt", "createdAt", "updatedAt")
-SELECT
-  'td_' || t.slug || '_dev'  AS id,
-  t.id                        AS "tenantId",
-  t.slug || '.translog.test'  AS hostname,
-  FALSE                       AS "isPrimary",   -- le primary reste le domaine prod
-  CURRENT_TIMESTAMP           AS "verifiedAt",  -- auto-vérifié pour wildcard plateforme
-  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM public.tenants t
-ON CONFLICT (hostname) DO NOTHING;
-
-INSERT INTO public.tenant_domains (id, "tenantId", hostname, "isPrimary", "verifiedAt", "createdAt", "updatedAt")
-SELECT
-  'td_' || t.slug || '_prod' AS id,
-  t.id                        AS "tenantId",
-  t.slug || '.translogpro.com' AS hostname,
-  TRUE                        AS "isPrimary",   -- domaine canonique prod
-  CURRENT_TIMESTAMP           AS "verifiedAt",
-  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM public.tenants t
-ON CONFLICT (hostname) DO NOTHING;
+-- Ce fichier ne fait donc plus QUE du schema migration (idempotent).
