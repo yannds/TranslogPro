@@ -1,0 +1,58 @@
+# ═══════════════════════════════════════════════════════════════
+# TransLog Pro — .dockerignore (sécu : éviter de copier des secrets
+# dans le build context Docker)
+# ═══════════════════════════════════════════════════════════════
+
+# Secrets locaux (NE JAMAIS les embarquer dans une image)
+.env
+.env.local
+.env.*.local
+secrets/
+infra/caddy/certs/
+*.pem
+*.key
+*.crt
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Node / build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+build/
+coverage/
+.cache/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test / dev
+test-results/
+playwright-report/
+test/playwright/.auth/
+test/playwright/.report/
+.nyc_output/
+jest-*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docs non utiles dans l'image
+*.md
+docs/
+infra/runbooks/
+
+# Local state
+.nest/
+.tsbuildinfo
+tsconfig.tsbuildinfo

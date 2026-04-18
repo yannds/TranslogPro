@@ -14,6 +14,7 @@
  * Produit du HTML sanitisé (pas de <script>, pas d'event handlers).
  */
 import { useRef, useCallback, useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Bold, Italic, Underline, Strikethrough,
   Heading2, Heading3, List, ListOrdered,
@@ -74,10 +75,12 @@ export function RichTextEditor({
   const [fullscreen, setFullscreen] = useState(false);
   const initialSetRef = useRef(false);
 
-  // Set initial content once
+  // Set initial content once — sanitized via DOMPurify pour éviter XSS
+  // (si `value` vient d'une API non-fiable ou d'un contenu saved par un
+  // utilisateur malveillant, le HTML est nettoyé avant insertion).
   useEffect(() => {
     if (editorRef.current && !initialSetRef.current) {
-      editorRef.current.innerHTML = value || '';
+      editorRef.current.innerHTML = DOMPurify.sanitize(value || '');
       initialSetRef.current = true;
     }
   }, [value]);

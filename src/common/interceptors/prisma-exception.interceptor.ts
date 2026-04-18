@@ -53,10 +53,18 @@ export class PrismaExceptionInterceptor implements NestInterceptor {
 
   private handleKnownError(error: Prisma.PrismaClientKnownRequestError) {
     const meta = error.meta as Record<string, unknown> | undefined;
+    // En prod, on masque les détails de schéma DB pour éviter l'énumération
+    // et le leak de structure interne. En dev, on garde les infos pour le debug.
+    const isProd = process.env.NODE_ENV === 'production';
 
     switch (error.code) {
       // ── Unique constraint violation ────────────────────────────────
       case 'P2002': {
+        if (isProd) {
+          // Message générique : empêche l'énumération (ex: tester un email
+          // pour savoir s'il est déjà inscrit en observant 409 vs 400).
+          return new ConflictException('Cette valeur existe déjà.');
+        }
         const fields = (meta?.target as string[])?.join(', ') ?? 'champ inconnu';
         return new ConflictException(
           `Doublon détecté sur : ${fields}. Cette valeur existe déjà.`,
@@ -65,6 +73,9 @@ export class PrismaExceptionInterceptor implements NestInterceptor {
 
       // ── Foreign key constraint violation ───────────────────────────
       case 'P2003': {
+        if (isProd) {
+          return new BadRequestException('Référence invalide.');
+        }
         const field = (meta?.field_name as string) ?? 'relation inconnue';
         return new BadRequestException(
           `Référence invalide : ${field}. L'enregistrement lié n'existe pas.`,

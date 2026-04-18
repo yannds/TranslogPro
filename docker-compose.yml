@@ -37,10 +37,10 @@ services:
       - translog-net
 
   # ── PgBouncer (SESSION mode — obligatoire pour RLS) ───────
-  # Image : edoburu/pgbouncer (image officielle communautaire)
-  # pgbouncer/pgbouncer n'existe pas sur Docker Hub
+  # Image : edoburu/pgbouncer — pinning version explicite pour reproductibilité
+  # (audit sécu : `latest` interdit en prod, CVE non traçables).
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:1.23.1
     container_name: translog-pgbouncer
     restart: unless-stopped
     environment:
@@ -129,8 +129,10 @@ services:
       - translog-net
 
   # ── MinIO (Object Storage) ────────────────────────────────
+  # Pinning sur RELEASE stable explicite — `latest` peut casser l'API entre
+  # majors (v1 → v2). Version vérifiée compatible avec @aws-sdk/client-s3.
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: translog-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -182,19 +184,12 @@ services:
     networks:
       - translog-net
 
-  # ── Nginx (Reverse Proxy) ─────────────────────────────────
-  nginx:
-    image: nginx:alpine
-    container_name: translog-nginx
-    restart: unless-stopped
-    volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "80:80"
-    depends_on:
-      - api
-    networks:
-      - translog-net
+  # ── Nginx SUPPRIMÉ — remplacé par Caddy (voir docker-compose.dev.yml /
+  # docker-compose.prod.yml + infra/caddy/). L'ancien service nginx a été
+  # retiré du compose de base pour éviter toute confusion et surface d'attaque
+  # passive (2026-04-18 — post audit sécu).
+  # Le fichier infra/nginx/nginx.conf reste en archive pour référence, mais
+  # n'est plus monté ni lu par aucun service.
 
 # ─────────────────────────────────────────────────────────────
 volumes:

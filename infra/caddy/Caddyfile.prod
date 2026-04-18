@@ -35,7 +35,11 @@
             roll_keep     10
             roll_keep_for 720h
         }
-        format json
+        format json {
+            # Scrub secrets — Authorization, Cookie et X-Impersonation-Token
+            # ne doivent JAMAIS apparaître dans les logs (audit compliance).
+            message_key msg
+        }
         level  INFO
     }
 
@@ -100,6 +104,14 @@
     @health path /health/*
     handle @health {
         reverse_proxy backend:3000
+    }
+
+    # ── Error pages — n'expose PAS la topologie interne ────────────────────
+    handle_errors {
+        @5xx expression {http.error.status_code} >= 500
+        respond @5xx "Service temporairement indisponible. Veuillez réessayer." 503
+        @4xx expression {http.error.status_code} >= 400
+        respond @4xx "Requête invalide." {http.error.status_code}
     }
 
     # ── SPA — static React build + fallback vers /index.html (SPA routing) ─

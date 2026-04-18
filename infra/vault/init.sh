@@ -10,6 +10,13 @@ echo "⏳ Waiting for Vault to be ready..."
 until vault status > /dev/null 2>&1; do sleep 1; done
 echo "✅ Vault is ready"
 
+# ─── Audit logs (CRITIQUE sécu — toute opération Vault tracée) ───────
+# Sans audit, aucune traçabilité des lectures/écritures de secrets → viole
+# les exigences de compliance (ISO 27001, SOC 2).
+echo "📋 Enabling audit logs..."
+mkdir -p /vault/logs 2>/dev/null || true
+vault audit enable -path=file_audit file file_path=/vault/logs/audit.log 2>/dev/null || echo "  (audit déjà activé)"
+
 # ─── Secrets Engine ──────────────────────────────────────────
 echo "📦 Enabling secrets engines..."
 vault secrets enable -version=2 -path=secret kv || true
@@ -28,9 +35,12 @@ vault write pki/config/urls \
   crl_distribution_points="http://vault:8200/v1/pki/crl" \
   > /dev/null 2>&1 || true
 
+# PKI role — restreint aux domaines internes, PAS de wildcard sous-domaines
+# (prévention mis-issuance : un attaquant compromettant l'API ne doit pas
+# pouvoir émettre un cert pour attacker.translog.internal).
 vault write pki/roles/translog-services \
-  allowed_domains="translog.internal,svc.cluster.local" \
-  allow_subdomains=true \
+  allowed_domains="translog.internal,svc.cluster.local,backend.translog.internal,api.translog.internal" \
+  allow_subdomains=false \
   max_ttl=72h \
   > /dev/null 2>&1 || true
 

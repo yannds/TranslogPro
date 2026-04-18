@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, type FormEvent, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth/auth.context';
 import { resolveHost } from '../../lib/tenancy/host';
@@ -1769,10 +1770,13 @@ export function PortailVoyageur() {
               {selectedPost.authorName && <><span>&middot;</span><span>{selectedPost.authorName}</span></>}
             </div>
 
-            {/* Article content (HTML) */}
+            {/* Article content (HTML) — sanitized via DOMPurify pour éviter
+                XSS (le contenu vient de l'admin tenant via /portal/posts).
+                Un tenant compromis ou un bug d'injection côté CMS serait
+                bloqué ici, pas juste par CSP. */}
             <div
               className="prose prose-slate dark:prose-invert max-w-none mt-8 prose-img:rounded-xl prose-a:[color:var(--portal-accent)]"
-              dangerouslySetInnerHTML={{ __html: selectedPost.content || '' }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedPost.content || '') }}
             />
 
             {/* Media gallery */}

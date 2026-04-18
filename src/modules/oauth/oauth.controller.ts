@@ -155,13 +155,42 @@ export class OAuthController {
   }
 
   /**
-   * Whitelist simple : on n'autorise que les URLs internes (commencent par /).
-   * Empêche l'open redirect via returnTo=https://malicieux.com.
+   * Whitelist STRICTE des paths autorisés en returnTo (post-OAuth).
+   *
+   * Avant : acceptait tout path commençant par /, ce qui permettait des
+   * redirects vers /admin/override, /driver/impersonate, etc. — surface
+   * d'attaque pour phishing via paramètre OAuth manipulé.
+   *
+   * Après : whitelist explicite des paths de landing légitimes. Toute
+   * valeur hors liste → undefined (le controller redirige vers '/').
+   *
+   * Empêche aussi : open redirect (//evil.com), protocol leak (javascript:),
+   * et path traversal (/../..).
    */
   private sanitizeReturnTo(v?: string): string | undefined {
     if (!v) return undefined;
+    if (v.length > 512) return undefined;
     if (!v.startsWith('/')) return undefined;
-    if (v.startsWith('//')) return undefined; // protocol-relative
-    return v.slice(0, 512); // cap
+    if (v.startsWith('//')) return undefined;                // protocol-relative
+    if (v.includes('..') || v.includes('\\')) return undefined; // traversal
+    if (/[<>"'`]/.test(v)) return undefined;                 // injection chars
+
+    // Whitelist des path roots autorisés — la query string est OK après.
+    const ALLOWED_ROOTS = [
+      '/',
+      '/login',
+      '/admin',
+      '/customer',
+      '/driver',
+      '/agent',
+      '/quai',
+      '/portail',
+      '/p/',        // legacy portail public
+    ];
+    const path = v.split('?')[0]!;   // ignore query pour le check
+    const allowed = ALLOWED_ROOTS.some(
+      (root) => path === root || path.startsWith(root),
+    );
+    return allowed ? v : undefined;
   }
 }
