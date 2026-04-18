@@ -73,6 +73,8 @@ export interface BulkAction<T> {
   icon?:   React.ReactNode;
   onClick: (selectedRows: T[]) => void;
   danger?: boolean;
+  /** Si fourni, demande confirmation via window.confirm avant d'exécuter. */
+  confirmLabel?: string | ((count: number) => string);
 }
 
 export interface DataTableMasterProps<T extends { id: string }> {
@@ -353,8 +355,8 @@ function DataTableMaster<T extends { id: string }>({
   // ── Rendu ────────────────────────────────────────────────────────────────────
   const hasRowActions  = rowActions && rowActions.length > 0;
   const hasBulkAct     = bulkActions && bulkActions.length > 0;
-  /** Actions batch visibles uniquement quand PLUS D'UN élément sélectionné */
-  const showBulkPanel  = hasBulkAct && selected.size > 1;
+  /** Actions batch visibles dès qu'au moins un élément est sélectionné. */
+  const showBulkPanel  = hasBulkAct && selected.size >= 1;
   const hasExport      = activeFormats.length > 0;
 
   return (
@@ -380,7 +382,16 @@ function DataTableMaster<T extends { id: string }>({
                 <button
                   key={i}
                   className={`dtm-btn ${action.danger ? 'dtm-btn-danger' : 'dtm-btn-secondary'}`}
-                  onClick={() => { action.onClick(selectedRows); clearSelected(); }}
+                  onClick={() => {
+                    if (action.confirmLabel) {
+                      const msg = typeof action.confirmLabel === 'function'
+                        ? action.confirmLabel(selectedRows.length)
+                        : action.confirmLabel;
+                      if (!window.confirm(msg)) return;
+                    }
+                    action.onClick(selectedRows);
+                    clearSelected();
+                  }}
                   aria-label={action.label}
                 >
                   {action.icon} {action.label}

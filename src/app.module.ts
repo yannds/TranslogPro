@@ -50,6 +50,10 @@ import { TravelerModule } from './modules/traveler/traveler.module';
 import { DlqModule } from './modules/dlq/dlq.module';
 import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.module';
 import { PlatformModule }   from './modules/platform/platform.module';
+import { PlatformPlansModule }     from './modules/platform-plans/platform-plans.module';
+import { PlatformBillingModule }   from './modules/platform-billing/platform-billing.module';
+import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module';
+import { SupportModule }           from './modules/support/support.module';
 import { DocumentsModule }      from './modules/documents/documents.module';
 import { TemplatesModule }       from './modules/templates/templates.module';
 import { WorkflowStudioModule }  from './modules/workflow-studio/workflow-studio.module';
@@ -62,6 +66,7 @@ import { ShipmentModule }        from './modules/shipment/shipment.module';
 import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
+import { PasswordResetModule }   from './modules/password-reset/password-reset.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
 import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
@@ -144,6 +149,14 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     WorkflowDispatchModule,
     // Platform SaaS (bootstrap + staff interne)
     PlatformModule,
+    // Plans SaaS (catalogue DB-driven, CRUD SA)
+    PlatformPlansModule,
+    // Billing plateforme — souscriptions + factures plateforme → tenants
+    PlatformBillingModule,
+    // Analytics plateforme — growth/adoption/health + crons DAU/HealthScore
+    PlatformAnalyticsModule,
+    // Support tenant → plateforme (tickets + thread)
+    SupportModule,
     // Documents imprimables (billets, manifestes, colis, factures)
     DocumentsModule,
     // Templates de documents (CRUD + stockage MinIO)
@@ -168,6 +181,8 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     SchedulingGuardModule,
     // Auth — sign-in / sign-out / me (credential provider)
     AuthModule,
+    // Password reset — routes publiques /auth/password-reset/* + service admin
+    PasswordResetModule,
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
     MfaModule,

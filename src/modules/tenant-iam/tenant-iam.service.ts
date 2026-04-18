@@ -223,6 +223,52 @@ export class TenantIamService {
     });
   }
 
+  /**
+   * Suppression en masse. L'actor ne peut pas se supprimer lui-même ; les
+   * userIds invalides (hors tenant) sont ignorés et listés dans `skipped`.
+   * Retourne un rapport par-user pour permettre un feedback UI détaillé.
+   */
+  async batchDeleteUsers(
+    tenantId: string,
+    userIds:  string[],
+    actorId:  string,
+  ): Promise<{
+    results: Array<{ userId: string; ok: boolean; reason?: string }>;
+  }> {
+    const results: Array<{ userId: string; ok: boolean; reason?: string }> = [];
+
+    for (const userId of userIds) {
+      if (userId === actorId) {
+        results.push({ userId, ok: false, reason: 'cannot_delete_self' });
+        continue;
+      }
+      const user = await this.prisma.user.findFirst({
+        where:  { id: userId, tenantId },
+        select: { id: true, email: true },
+      });
+      if (!user) {
+        results.push({ userId, ok: false, reason: 'not_found' });
+        continue;
+      }
+      try {
+        await this.prisma.user.delete({ where: { id: userId } });
+        await this.log({
+          tenantId, actorId,
+          action:   'control.iam.user.delete.tenant',
+          resource: `User:${userId}`,
+          level:    'warn',
+          oldValue: { email: user.email, batch: true },
+        });
+        results.push({ userId, ok: true });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'unknown';
+        results.push({ userId, ok: false, reason });
+      }
+    }
+
+    return { results };
+  }
+
   async toggleUserActive(tenantId: string, userId: string, actorId: string) {
     if (userId === actorId) {
       throw new ForbiddenException('Vous ne pouvez pas désactiver votre propre compte');

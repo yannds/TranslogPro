@@ -38,6 +38,12 @@ const SUPER_ADMIN_PERMISSIONS = [
   'control.stats.read.tenant',
   // Platform staff management
   'control.platform.staff.global',
+  // Portail plateforme SaaS — plans / billing / metrics / support
+  'control.platform.plans.manage.global',
+  'control.platform.billing.manage.global',
+  'data.platform.metrics.read.global',
+  'control.platform.support.read.global',
+  'control.platform.support.write.global',
   // Data Plane — accès global en lecture
   'data.traveler.track.global',
   'data.parcel.track.global',
@@ -75,6 +81,10 @@ const SUPPORT_L1_PERMISSIONS = [
   'data.session.revoke.own',
   // Documents — lecture manifeste global (diagnostic support)
   'data.manifest.print.global',
+  // Portail plateforme — metrics (lecture) et support (lire + répondre)
+  'data.platform.metrics.read.global',
+  'control.platform.support.read.global',
+  'control.platform.support.write.global',
 ];
 
 // ─── Permissions SUPPORT_L2 : L1 + debug technique ───────────────────────────
@@ -158,6 +168,10 @@ const TENANT_ROLES: Array<{
       'data.staff.read.agency',
       'data.user.read.agency',
       'data.crm.read.tenant',
+      'data.crm.read.agency',
+      'data.crm.write.tenant',
+      'data.crm.merge.tenant',
+      'data.crm.delete.tenant',
       'data.crew.manage.tenant',
       'data.notification.read.own',
       'data.session.revoke.own',
@@ -167,6 +181,9 @@ const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'control.iam.manage.tenant',
       'control.iam.audit.tenant',
+      // IAM — reset mot de passe et suppression en masse (ops destructives)
+      'control.iam.user.reset-password.tenant',
+      'control.iam.user.bulk-delete.tenant',
       // Documents imprimables
       'data.ticket.print.agency',
       'data.manifest.print.agency',
@@ -210,6 +227,11 @@ const TENANT_ROLES: Array<{
       'data.platform.read.agency',
       'control.announcement.manage.tenant',
       'data.announcement.read.agency',
+      // Support tenant → plateforme + plan auto-service
+      'data.support.create.tenant',
+      'data.support.read.tenant',
+      'data.tenant.plan.read.tenant',
+      'control.tenant.plan.change.tenant',
     ],
   },
   {
@@ -248,6 +270,9 @@ const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'data.notification.read.own',
       'data.session.revoke.own',
+      // CRM (scope agence — lecture et édition limitée)
+      'data.crm.read.agency',
+      'data.crm.write.agency',
       // Documents imprimables
       'data.ticket.print.agency',
       'data.manifest.print.agency',
@@ -264,6 +289,9 @@ const TENANT_ROLES: Array<{
       'control.platform.manage.tenant',
       'data.announcement.read.agency',
       'control.announcement.manage.tenant',
+      // Support — peut ouvrir un ticket et voir ceux du tenant
+      'data.support.create.tenant',
+      'data.support.read.tenant',
     ],
   },
   {
@@ -290,6 +318,8 @@ const TENANT_ROLES: Array<{
       // Facturation (création au guichet)
       'data.invoice.create.agency',
       'data.invoice.read.agency',
+      // Support — peut ouvrir un ticket plateforme
+      'data.support.create.tenant',
     ],
   },
   {
@@ -315,6 +345,7 @@ const TENANT_ROLES: Array<{
       'data.ticket.read.agency',      // liste passagers du trajet
       'data.maintenance.update.own',   // signalement de panne depuis le terrain
       'data.feedback.submit.own',      // retours voyageur post-trajet
+      'data.support.create.tenant',
     ],
   },
   {
@@ -330,6 +361,7 @@ const TENANT_ROLES: Array<{
       'data.notification.read.own',
       'data.session.revoke.own',
       'data.manifest.print.agency',
+      'data.support.create.tenant',
     ],
   },
   {
@@ -340,6 +372,7 @@ const TENANT_ROLES: Array<{
       'data.maintenance.update.own',
       'data.notification.read.own',
       'data.session.revoke.own',
+      'data.support.create.tenant',
     ],
   },
   {
@@ -382,6 +415,7 @@ const TENANT_ROLES: Array<{
       'control.platform.manage.tenant',
       'data.announcement.read.agency',
       'control.announcement.manage.tenant',
+      'data.support.create.tenant',
     ],
   },
   {

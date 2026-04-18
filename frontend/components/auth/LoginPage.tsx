@@ -11,7 +11,7 @@
  */
 
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { ApiError } from '../../lib/api';
@@ -155,6 +155,19 @@ export function LoginPage() {
           >
             {loading ? t('auth.signing') : t('auth.signIn')}
           </button>
+
+          {/* Forgot password */}
+          <div className="text-center">
+            <Link
+              to="/auth/forgot-password"
+              className={cn(
+                'text-xs text-slate-400 hover:text-teal-400 transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded',
+              )}
+            >
+              {t('auth.forgotPassword')}
+            </Link>
+          </div>
         </form>
 
         <p className="text-center text-xs text-slate-600">

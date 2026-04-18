@@ -29,6 +29,8 @@ export const P_IAM_MANAGE_TENANT           = 'control.iam.manage.tenant';
 export const P_IAM_AUDIT_TENANT            = 'control.iam.audit.tenant';
 export const P_INTEGRATION_SETUP_TENANT    = 'control.integration.setup.tenant';
 export const P_USER_READ_AGENCY            = 'data.user.read.agency';
+export const P_USER_RESET_PASSWORD_TENANT  = 'control.iam.user.reset-password.tenant';
+export const P_USER_BULK_DELETE_TENANT     = 'control.iam.user.bulk-delete.tenant';
 export const P_SESSION_REVOKE_OWN          = 'data.session.revoke.own';
 export const P_SESSION_REVOKE_TENANT       = 'data.session.revoke.tenant';
 
@@ -132,6 +134,11 @@ export const P_STATION_READ_TENANT         = 'data.station.read.tenant';
 
 // ─── CRM & Campagnes ─────────────────────────────────────────────────────────
 export const P_CRM_READ_TENANT             = 'data.crm.read.tenant';
+export const P_CRM_READ_AGENCY             = 'data.crm.read.agency';
+export const P_CRM_WRITE_TENANT            = 'data.crm.write.tenant';   // upsert CUSTOMER shadow, édition
+export const P_CRM_WRITE_AGENCY            = 'data.crm.write.agency';   // édition limitée à son agence
+export const P_CRM_MERGE_TENANT            = 'data.crm.merge.tenant';   // fusion Customer (op destructive, audit log)
+export const P_CRM_DELETE_TENANT           = 'data.crm.delete.tenant';  // RGPD droit à l'oubli
 export const P_CAMPAIGN_MANAGE_TENANT      = 'control.campaign.manage.tenant';
 
 // ─── Safety & Feedback ────────────────────────────────────────────────────────
@@ -220,6 +227,29 @@ export const P_WORKFLOW_MARKETPLACE_PUBLISH = 'control.workflow.marketplace.publ
 export const P_WORKFLOW_BLUEPRINT_IMPORT    = 'control.workflow.blueprint.import.tenant';
 export const P_WORKFLOW_SIMULATE_TENANT     = 'control.workflow.simulate.tenant';
 
+// ─── Portail plateforme SaaS (SA / L1 / L2) ─────────────────────────────────
+// Plans : création / édition / retrait des plans proposés dans le catalogue.
+// Billing : gestion des souscriptions et factures plateforme → tenant.
+// Metrics : lecture des agrégats analytics cross-tenant (DAU, adoption, health).
+// Support : queue des tickets des tenants + répondre / assigner / escalader.
+export const P_PLATFORM_PLANS_MANAGE_GLOBAL    = 'control.platform.plans.manage.global';
+export const P_PLATFORM_BILLING_MANAGE_GLOBAL  = 'control.platform.billing.manage.global';
+export const P_PLATFORM_METRICS_READ_GLOBAL    = 'data.platform.metrics.read.global';
+export const P_PLATFORM_SUPPORT_READ_GLOBAL    = 'control.platform.support.read.global';
+export const P_PLATFORM_SUPPORT_WRITE_GLOBAL   = 'control.platform.support.write.global';
+
+// ─── Support ticket (côté tenant client) ────────────────────────────────────
+// Un utilisateur tenant peut ouvrir un ticket vers la plateforme. La
+// permission tenant couvre aussi le read de ses propres tickets.
+export const P_SUPPORT_CREATE_TENANT           = 'data.support.create.tenant';
+export const P_SUPPORT_READ_TENANT             = 'data.support.read.tenant';
+
+// ─── Plan du tenant (auto-service) ───────────────────────────────────────────
+// Un TENANT_ADMIN peut consulter le catalogue public et basculer son plan
+// dans les limites autorisées par la plateforme.
+export const P_TENANT_PLAN_READ_TENANT         = 'data.tenant.plan.read.tenant';
+export const P_TENANT_PLAN_CHANGE_TENANT       = 'control.tenant.plan.change.tenant';
+
 // ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
@@ -227,6 +257,8 @@ export const Permission = {
   IAM_AUDIT_TENANT:           P_IAM_AUDIT_TENANT,
   INTEGRATION_SETUP_TENANT:   P_INTEGRATION_SETUP_TENANT,
   USER_READ_AGENCY:           P_USER_READ_AGENCY,
+  USER_RESET_PASSWORD_TENANT: P_USER_RESET_PASSWORD_TENANT,
+  USER_BULK_DELETE_TENANT:    P_USER_BULK_DELETE_TENANT,
   SESSION_REVOKE_OWN:         P_SESSION_REVOKE_OWN,
   SESSION_REVOKE_TENANT:      P_SESSION_REVOKE_TENANT,
   // Workflow
@@ -313,6 +345,11 @@ export const Permission = {
   STATION_READ_TENANT:        P_STATION_READ_TENANT,
   // CRM
   CRM_READ_TENANT:            P_CRM_READ_TENANT,
+  CRM_READ_AGENCY:            P_CRM_READ_AGENCY,
+  CRM_WRITE_TENANT:           P_CRM_WRITE_TENANT,
+  CRM_WRITE_AGENCY:           P_CRM_WRITE_AGENCY,
+  CRM_MERGE_TENANT:           P_CRM_MERGE_TENANT,
+  CRM_DELETE_TENANT:          P_CRM_DELETE_TENANT,
   CAMPAIGN_MANAGE_TENANT:     P_CAMPAIGN_MANAGE_TENANT,
   // Safety & Feedback
   FEEDBACK_SUBMIT_OWN:        P_FEEDBACK_SUBMIT_OWN,
@@ -376,6 +413,18 @@ export const Permission = {
   WORKFLOW_MARKETPLACE_PUBLISH: P_WORKFLOW_MARKETPLACE_PUBLISH,
   WORKFLOW_BLUEPRINT_IMPORT:    P_WORKFLOW_BLUEPRINT_IMPORT,
   WORKFLOW_SIMULATE_TENANT:     P_WORKFLOW_SIMULATE_TENANT,
+  // Portail plateforme SaaS (SA / L1 / L2)
+  PLATFORM_PLANS_MANAGE_GLOBAL:   P_PLATFORM_PLANS_MANAGE_GLOBAL,
+  PLATFORM_BILLING_MANAGE_GLOBAL: P_PLATFORM_BILLING_MANAGE_GLOBAL,
+  PLATFORM_METRICS_READ_GLOBAL:   P_PLATFORM_METRICS_READ_GLOBAL,
+  PLATFORM_SUPPORT_READ_GLOBAL:   P_PLATFORM_SUPPORT_READ_GLOBAL,
+  PLATFORM_SUPPORT_WRITE_GLOBAL:  P_PLATFORM_SUPPORT_WRITE_GLOBAL,
+  // Support tenant (émetteur)
+  SUPPORT_CREATE_TENANT:          P_SUPPORT_CREATE_TENANT,
+  SUPPORT_READ_TENANT:            P_SUPPORT_READ_TENANT,
+  // Plan tenant (auto-service)
+  TENANT_PLAN_READ_TENANT:        P_TENANT_PLAN_READ_TENANT,
+  TENANT_PLAN_CHANGE_TENANT:      P_TENANT_PLAN_CHANGE_TENANT,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];

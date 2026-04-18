@@ -27,9 +27,11 @@
  */
 import {
   Controller, Get, Post, Patch, Put, Delete,
-  Param, Body, Query, HttpCode, HttpStatus,
+  Param, Body, Query, Req, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { TenantIamService }    from './tenant-iam.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import { RequirePermission }   from '../../common/decorators/require-permission.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission }          from '../../common/constants/permissions';
@@ -38,10 +40,24 @@ import {
   CreateRoleDto, UpdateRoleDto, SetPermissionsDto,
   AuditQueryDto,
 } from './dto/tenant-iam.dto';
+import {
+  AdminInitiateResetDto, BatchUserIdsDto,
+} from '../password-reset/dto/password-reset.dto';
+
+function extractIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (process.env.NODE_ENV === 'production' && typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim() ?? req.ip ?? '';
+  }
+  return req.ip ?? req.socket?.remoteAddress ?? '';
+}
 
 @Controller({ version: '1', path: 'tenants/:tenantId/iam' })
 export class TenantIamController {
-  constructor(private readonly iam: TenantIamService) {}
+  constructor(
+    private readonly iam:           TenantIamService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   // ─── Utilisateurs ──────────────────────────────────────────────────────────
 
@@ -104,6 +120,67 @@ export class TenantIamController {
     @CurrentUser()     actor:    CurrentUserPayload,
   ) {
     return this.iam.toggleUserActive(tenantId, userId, actor.id);
+  }
+
+  /**
+   * Reset du mot de passe d'un user par un admin.
+   * Mode 'link' : retourne un lien à transmettre hors-bande (email à venir).
+   * Mode 'set'  : applique immédiatement un mdp fourni + force rotation au prochain login.
+   */
+  @Post('users/:userId/reset-password')
+  @RequirePermission(Permission.USER_RESET_PASSWORD_TENANT)
+  @HttpCode(HttpStatus.OK)
+  async resetUserPassword(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @Body()            dto:      AdminInitiateResetDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+    @Req()             req:      Request,
+  ) {
+    return this.passwordReset.initiateByAdmin({
+      actorTenantId: tenantId,
+      actorId:       actor.id,
+      targetUserId:  userId,
+      mode:          dto.mode,
+      newPassword:   dto.newPassword,
+      ipAddress:     extractIp(req),
+    });
+  }
+
+  /**
+   * Batch — envoi d'un lien de reset à plusieurs users (mode 'link' uniquement).
+   * Le mode 'set' en batch est interdit (trop dangereux).
+   */
+  @Post('users/batch/reset-password')
+  @RequirePermission(Permission.USER_RESET_PASSWORD_TENANT)
+  @HttpCode(HttpStatus.OK)
+  async batchResetPassword(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      BatchUserIdsDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+    @Req()             req:      Request,
+  ) {
+    return this.passwordReset.initiateByAdminBatch({
+      actorTenantId: tenantId,
+      actorId:       actor.id,
+      targetUserIds: dto.userIds,
+      ipAddress:     extractIp(req),
+    });
+  }
+
+  /**
+   * Batch — suppression de plusieurs users. Transaction atomique ; l'actor
+   * ne peut pas se supprimer lui-même (même logique que deleteUser).
+   */
+  @Post('users/batch/delete')
+  @RequirePermission(Permission.USER_BULK_DELETE_TENANT)
+  @HttpCode(HttpStatus.OK)
+  async batchDelete(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      BatchUserIdsDto,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.iam.batchDeleteUsers(tenantId, dto.userIds, actor.id);
   }
 
   // ─── Rôles ────────────────────────────────────────────────────────────────

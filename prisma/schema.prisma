@@ -47,6 +47,13 @@ model Tenant {
   address     String?
   taxId       String?
 
+  // ── SaaS Plan / Lifecycle (gérés par le tenant plateforme) ──────────────
+  // planId et subscription sont nullable — un tenant peut exister sans plan
+  // souscrit (ex: tenant plateforme lui-même, tenants créés avant facturation).
+  planId       String?
+  activatedAt  DateTime?
+  suspendedAt  DateTime?
+
   // Registres fiscaux configurables par pays — affiché sur les documents
   // Format : [{ label: "NIU", value: "CG-NIU-2024-00142" }, { label: "RCCM", value: "..." }]
   // Chaque pays utilise ses propres identifiants (NIU Congo, NIF France, TIN USA…)
@@ -79,6 +86,13 @@ model Tenant {
   invoices         Invoice[]
   platforms        Platform[]
   announcements    Announcement[]
+  customers        Customer[]
+  plan             Plan?                 @relation(fields: [planId], references: [id])
+  subscription     PlatformSubscription?
+  platformInvoices PlatformInvoice[]
+  supportTickets   SupportTicket[]
+  dailyActiveUsers DailyActiveUser[]
+  healthScores     TenantHealthScore[]
 
   @@map("tenants")
 }
@@ -246,6 +260,12 @@ model User {
   mfaBackupCodes  String[]  @default([]) // codes de secours (hash bcrypt), single-use
   mfaVerifiedAt   DateTime? // moment d'activation effective
 
+  // ── Activity tracking (pour DAU/MAU/adoption plateforme) ────────────────
+  // Mis à jour par AuthService au login et périodiquement via middleware.
+  lastLoginAt  DateTime?
+  lastActiveAt DateTime?
+  loginCount   Int       @default(0)
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -262,6 +282,7 @@ model User {
   notifications          Notification[]
   feedbacks              Feedback[]
   safetyAlerts           SafetyAlert[]
+  customerProfile        Customer?               @relation("UserCustomerProfile")
 
   @@index([tenantId])
   @@index([tenantId, agencyId])
@@ -369,9 +390,21 @@ model Account {
   refreshToken String?
   expiresAt    DateTime?
 
+  // ── Password reset (credential uniquement) ──────────────────────────
+  // Le token clair n'est jamais stocké : seul son SHA-256 l'est, et la
+  // ligne est effacée à la consommation (one-shot). TTL 30 min.
+  passwordResetTokenHash String?   @unique
+  passwordResetExpiresAt DateTime?
+
+  // Forcer le changement de mot de passe au prochain login. Utilisé quand
+  // un admin a défini lui-même un mot de passe pour un user (anti-pattern
+  // atténué : l'admin le connaît, on force la rotation immédiate).
+  forcePasswordChange Boolean @default(false)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([providerId, accountId])
+  @@index([passwordResetExpiresAt])
   @@map("accounts")
 }
 
@@ -987,8 +1020,17 @@ model Ticket {
   id                 String    @id @default(cuid())
   tenantId           String
   tripId             String
-  passengerId        String
+  // Nullable : un billet peut être émis pour un client non authentifié
+  // (caisse, guichet, portail anonyme). La traçabilité CRM se fait via
+  // customerId ; passengerId reste la FK "user logué/connecté" si présent.
+  passengerId        String?
   passengerName      String
+  // Contacts dénormalisés — permettent la recherche rapide et le backfill CRM
+  // (source de vérité = Customer via customerId quand disponible).
+  passengerPhone     String?
+  passengerEmail     String?
+  // FK vers l'entité CRM canonique (présente dès que phone ou email sont fournis).
+  customerId         String?
   seatNumber         String?
   boardingStationId  String    // Gare de montée (défaut = route.originId)
   alightingStationId String    // Gare de descente (défaut = route.destinationId)
@@ -1000,16 +1042,19 @@ model Ticket {
   expiresAt          DateTime?
   qrCode             String    @unique
   // Format: base64url(payload).HMAC-SHA256(payload, tenant_hmac_key)
-  agencyId           String
+  agencyId           String?
   version            Int       @default(1)
   createdAt          DateTime  @default(now())
 
-  boardingStation  Station @relation("TicketBoarding", fields: [boardingStationId], references: [id])
-  alightingStation Station @relation("TicketAlighting", fields: [alightingStationId], references: [id])
+  boardingStation  Station   @relation("TicketBoarding", fields: [boardingStationId], references: [id])
+  alightingStation Station   @relation("TicketAlighting", fields: [alightingStationId], references: [id])
+  customer         Customer? @relation(fields: [customerId], references: [id])
 
   @@index([tenantId, tripId, status])
   @@index([qrCode])
   @@index([tenantId, agencyId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, passengerPhone])
   @@map("tickets")
 }
 
@@ -1051,12 +1096,18 @@ model Baggage {
 model Parcel {
   id            String   @id @default(cuid())
   tenantId      String
-  senderId      String
+  // Nullable : un colis peut être enregistré pour un expéditeur non
+  // authentifié. La traçabilité CRM passe par senderCustomerId.
+  senderId      String?
   trackingCode  String   @unique
   weight        Float
   price         Float
   destinationId String // FK Station (plus un String libre)
-  recipientInfo Json // { name, phone, address }
+  recipientInfo Json // { name, phone, address } — legacy ; conservé en miroir
+  //                   pendant la transition vers recipientCustomerId
+  // FK CRM canoniques (présentes dès que phone ou email sont fournis).
+  senderCustomerId    String?
+  recipientCustomerId String?
   shipmentId    String?
   status        String   @default("CREATED")
   // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED
@@ -1068,11 +1119,117 @@ model Parcel {
   tenant      Tenant    @relation(fields: [tenantId], references: [id])
   destination Station   @relation("ParcelDestination", fields: [destinationId], references: [id])
   shipment    Shipment? @relation(fields: [shipmentId], references: [id])
+  senderCustomer    Customer? @relation("ParcelSender",    fields: [senderCustomerId],    references: [id])
+  recipientCustomer Customer? @relation("ParcelRecipient", fields: [recipientCustomerId], references: [id])
 
   @@index([tenantId, status])
   @@index([trackingCode])
   @@index([tenantId, destinationId])
+  @@index([tenantId, senderCustomerId])
+  @@index([tenantId, recipientCustomerId])
   @@map("parcels")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 10.bis : CRM — CUSTOMER CANONIQUE
+// ─────────────────────────────────────────────────────────────
+// Customer = identité CRM tenant-scoped, indépendante du User.
+//   - Créé au 1er contact (ticket / colis), même si anonyme.
+//   - Lié à un User si la personne s'inscrit (userId one-to-one).
+//   - Clé de matching : (tenantId, phoneE164). Email secondaire.
+//   - phoneE164 nullable pour les cas email-only (achat web).
+// Source de vérité pour segmentation, fidélité, campaigns.
+
+model Customer {
+  id               String    @id @default(cuid())
+  tenantId         String
+  phoneE164        String?   // E.164 normalisé, clé de matching primaire
+  email            String?
+  name             String
+  firstName        String?
+  lastName         String?
+  language         String?   // ISO 639-1 (fr, en, wo…) — préférence contact
+  // userId = null → shadow profile (anonyme, jamais connecté)
+  userId           String?   @unique
+  preferences      Json      @default("{}")
+  // { favoriteSeatType, favoriteSeatNumber, favoriteRoute, channels: { sms, whatsapp, email } }
+  segments         String[]  @default([])
+  // Ex. ['VIP', 'FREQUENT', 'CORPORATE'] — dérivés ou édités
+  totalTickets     Int       @default(0)
+  totalParcels     Int       @default(0)
+  // Centimes (ou plus petite unité de la devise tenant) — JAMAIS Float sur un compteur monétaire
+  totalSpentCents  BigInt    @default(0)
+  firstSeenAt      DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  // Soft-delete / RGPD : anonymisation sans perdre les agrégats financiers
+  deletedAt        DateTime?
+  // Fusion : si mergé dans un autre Customer, pointe vers la survivante
+  mergedIntoId     String?
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  user     User?   @relation("UserCustomerProfile", fields: [userId], references: [id])
+  tickets           Ticket[]
+  parcelsAsSender   Parcel[] @relation("ParcelSender")
+  parcelsAsRecipient Parcel[] @relation("ParcelRecipient")
+  claimTokens       CustomerClaimToken[]
+
+  // Unicité par tenant — phone et email peuvent être NULL (plusieurs NULL tolérés par PG)
+  @@unique([tenantId, phoneE164])
+  @@unique([tenantId, email])
+  @@index([tenantId, lastSeenAt])
+  @@index([tenantId, deletedAt])
+  @@map("customers")
+}
+
+// Token de claim (magic link) envoyé post-transaction anonyme.
+//   - On stocke le HASH (sha-256), jamais le token en clair.
+//   - Un nouveau token invalide les précédents du même Customer (invalidatedAt).
+//   - usedAt ≠ null ⇒ one-shot, plus utilisable.
+
+model CustomerClaimToken {
+  id            String    @id @default(cuid())
+  tenantId      String
+  customerId    String
+  tokenHash     String    @unique   // sha-256(token) — le token clair n'est jamais stocké
+  channel       String    // MAGIC_EMAIL | MAGIC_WHATSAPP | MAGIC_SMS
+  expiresAt     DateTime
+  usedAt        DateTime?
+  invalidatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  createdByIp   String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, usedAt, invalidatedAt])
+  @@index([tenantId, expiresAt])
+  @@map("customer_claim_tokens")
+}
+
+// OTP SMS/WhatsApp pour le claim RÉTROACTIF (Phase 3).
+// Quand l'utilisateur retrouve un colis/billet avec son phone APRÈS expiration
+// du magic link : on lui envoie un code à 6 chiffres (TTL 5min, 5 essais max).
+//   - On stocke le HASH (sha-256), jamais l'OTP en clair.
+//   - 1 OTP actif par (phone, target) ; nouvelle initiation invalide l'ancien.
+//   - usedAt ≠ null ⇒ one-shot.
+//   - attempts ≥ 5 ⇒ OTP détruit (équivalent à expiré).
+
+model CustomerRetroClaimOtp {
+  id            String    @id @default(cuid())
+  tenantId      String
+  phoneE164     String    // clef de lookup, normalisé côté service
+  otpHash       String    // sha-256(otp)
+  targetType    String    // TICKET | PARCEL
+  targetId      String    // ticket.id ou parcel.id (qrCode/trackingCode résolu)
+  attempts      Int       @default(0)   // compteur brute-force
+  expiresAt     DateTime  // now + 5 min
+  usedAt        DateTime?
+  invalidatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  createdByIp   String?
+
+  @@index([tenantId, phoneE164, usedAt])
+  @@index([tenantId, phoneE164, createdAt])   // pour le rate-limit 3/jour/phone
+  @@map("customer_retro_claim_otps")
 }
 
 model Shipment {
@@ -2595,4 +2752,209 @@ model PaymentMethodConfig {
   @@unique([countryCode, providerId])
   @@index([countryCode, enabled])
   @@map("payment_method_configs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 30 : PORTAIL PLATEFORME SaaS — Plans, Billing, Support, Analytics
+// ─────────────────────────────────────────────────────────────
+//
+// Ces modèles sont gérés uniquement par les agents du tenant plateforme
+// (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2). Aucun hardcoding de plan :
+// les SA créent/éditent/retirent les plans et les modules associés depuis
+// l'interface d'administration ; les tenants clients choisissent dans le
+// catalogue disponible.
+
+// ── Plan SaaS (catalogue proposé aux tenants) ────────────────────────────────
+// Un plan agrège un prix, une devise, un cycle de facturation et un ensemble
+// de moduleKeys activables. Pas de contrainte dure côté DB (le tenant peut
+// souscrire n'importe quel plan actif) — la logique métier vit dans le service.
+model Plan {
+  id             String   @id @default(cuid())
+  slug           String   @unique // identifiant stable ("starter", "pro"…)
+  name           String   // affichage
+  description    String?
+  price          Float    @default(0) // montant facturé par cycle (0 = gratuit/trial)
+  currency       String   @default("EUR")
+  billingCycle   String   @default("MONTHLY") // MONTHLY | YEARLY | ONE_SHOT | CUSTOM
+  trialDays      Int      @default(0)
+  // Limites et quotas (soft — informatif UI, le backend applique ce qui est
+  // nécessaire via QuotaManager). Structure libre : { maxUsers: 50, maxAgencies: 5, … }
+  limits         Json     @default("{}")
+  // SLA affiché au client (ex: { firstResponseMin: 60, uptimePct: 99.5 })
+  sla            Json     @default("{}")
+  // Ordre d'affichage dans le catalogue (petit = haut)
+  sortOrder      Int      @default(0)
+  // isPublic : visible dans le catalogue tenant. Si false, invitation-only.
+  isPublic       Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  modules       PlanModule[]
+  tenants       Tenant[]
+  subscriptions PlatformSubscription[]
+
+  @@index([isActive, isPublic, sortOrder])
+  @@map("plans")
+}
+
+// ── Module inclus dans un plan (M2M Plan × moduleKey) ────────────────────────
+// moduleKey référence une clé InstalledModule.moduleKey — pas de FK pour
+// permettre aux SA d'ajouter des modules nouveaux sans migration.
+model PlanModule {
+  id        String @id @default(cuid())
+  planId    String
+  moduleKey String
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, moduleKey])
+  @@index([planId])
+  @@map("plan_modules")
+}
+
+// ── Souscription d'un tenant à un plan ───────────────────────────────────────
+// 1:1 avec Tenant (un tenant a au plus une souscription active).
+// L'historique des changements de plan vit dans AuditLog.
+model PlatformSubscription {
+  id            String    @id @default(cuid())
+  tenantId      String    @unique
+  planId        String
+  status        String    @default("TRIAL") // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED
+  startedAt     DateTime  @default(now())
+  trialEndsAt   DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  renewsAt      DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?
+  // meta free-form : ID Stripe, PayPal, etc. quand on branchera un PSP
+  externalRefs  Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  plan     Plan              @relation(fields: [planId], references: [id])
+  invoices PlatformInvoice[]
+
+  @@index([status])
+  @@index([renewsAt])
+  @@map("platform_subscriptions")
+}
+
+// ── Facture plateforme → tenant ──────────────────────────────────────────────
+// Distinct de `Invoice` (qui est tenant→client final). Scopée tenant plateforme.
+model PlatformInvoice {
+  id              String    @id @default(cuid())
+  subscriptionId  String
+  tenantId        String
+  invoiceNumber   String    @unique // ex: "TRANSLOG-2026-00042"
+  periodStart     DateTime
+  periodEnd       DateTime
+  subtotal        Float
+  taxRate         Float     @default(0)
+  taxAmount       Float     @default(0)
+  totalAmount     Float
+  currency        String    @default("EUR")
+  status          String    @default("DRAFT") // DRAFT | ISSUED | PAID | VOID | OVERDUE
+  issuedAt        DateTime?
+  dueAt           DateTime?
+  paidAt          DateTime?
+  paymentMethod   String?
+  paymentRef      String?
+  lineItems       Json      @default("[]")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  subscription PlatformSubscription @relation(fields: [subscriptionId], references: [id])
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, dueAt])
+  @@map("platform_invoices")
+}
+
+// ── Support ticket (tenant ↔ plateforme) ─────────────────────────────────────
+// Un ticket est ouvert par un user d'un tenant client et atterrit dans la
+// queue du support plateforme. Les agents L1/L2/SA y répondent via
+// SupportMessage.
+model SupportTicket {
+  id                      String    @id @default(cuid())
+  tenantId                String    // tenant émetteur
+  reporterUserId          String    // user du tenant qui a ouvert
+  title                   String
+  description             String
+  category                String    @default("OTHER") // BUG | QUESTION | FEATURE_REQUEST | INCIDENT | BILLING | OTHER
+  priority                String    @default("NORMAL") // LOW | NORMAL | HIGH | CRITICAL
+  status                  String    @default("OPEN") // OPEN | IN_PROGRESS | WAITING_CUSTOMER | RESOLVED | CLOSED
+  assignedToPlatformUserId String?   // null = queue non assignée
+  firstResponseAt         DateTime?
+  resolvedAt              DateTime?
+  closedAt                DateTime?
+  slaDueAt                DateTime?  // calculé depuis plan.sla + priority
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  messages SupportMessage[]
+
+  @@index([tenantId, status])
+  @@index([status, priority, createdAt])
+  @@index([assignedToPlatformUserId, status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String   // userId (tenant OU plateforme)
+  authorScope String // TENANT | PLATFORM — source de vérité UX
+  body      String
+  // attachments : [{ url, filename, mime, size }] via MinIO
+  attachments Json   @default("[]")
+  isInternal Boolean @default(false) // note privée plateforme (pas visible au tenant)
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
+}
+
+// ── Agrégats analytics (alimentés par cron nocturne) ─────────────────────────
+// DailyActiveUser : 1 ligne par (tenant, user, date). Source de DAU/MAU
+// agrégés dans les endpoints /platform/analytics/*.
+model DailyActiveUser {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String
+  date          DateTime @db.Date // jour (00:00 UTC)
+  sessionsCount Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([userId, date])
+  @@index([tenantId, date])
+  @@index([date])
+  @@map("daily_active_users")
+}
+
+// TenantHealthScore : 1 ligne par (tenant, date). Score agrégé 0-100 +
+// détail des composantes (uptime, incidents, refunds, support, dlq…).
+model TenantHealthScore {
+  id         String   @id @default(cuid())
+  tenantId   String
+  date       DateTime @db.Date
+  score      Int      // 0-100
+  // components : { uptime: 0.99, incidents: 2, refundRate: 0.01, supportResponseMin: 45, dlqCount: 0 }
+  components Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, date])
+  @@index([date, score])
+  @@map("tenant_health_scores")
 }
