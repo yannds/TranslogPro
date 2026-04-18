@@ -5,6 +5,8 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { AuthIdentityService } from '../../core/identity/auth-identity.service';
+import { HostConfigService } from '../../core/tenancy';
 
 /** 30 minutes — suffisant pour cliquer le lien email, court pour limiter l'exposition. */
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1_000;
@@ -27,7 +29,11 @@ export interface InitiateByAdminResult {
 export class PasswordResetService {
   private readonly logger = new Logger(PasswordResetService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:     PrismaService,
+    private readonly identity:   AuthIdentityService,
+    private readonly hostConfig: HostConfigService,
+  ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -35,16 +41,18 @@ export class PasswordResetService {
     return createHash('sha256').update(raw).digest('hex');
   }
 
-  private buildResetUrl(rawToken: string): string {
-    const base = process.env.PUBLIC_APP_URL?.replace(/\/$/, '') ?? '';
-    return `${base}/auth/reset?token=${encodeURIComponent(rawToken)}`;
-  }
-
-  private async findCredentialAccount(email: string) {
-    return this.prisma.account.findUnique({
-      where:   { providerId_accountId: { providerId: 'credential', accountId: email } },
-      include: { user: { select: { id: true, tenantId: true, email: true, isActive: true } } },
-    });
+  /**
+   * Construit l'URL de reset password scopée au sous-domaine tenant.
+   * En Phase 1+, chaque tenant reçoit un lien qui pointe vers SON sous-domaine :
+   *   https://{slug}.translogpro.com/auth/reset?token=...
+   * Un même humain avec 2 comptes (2 tenants) reçoit donc 2 liens distincts,
+   * ce qui évite toute ambiguïté ("quel compte réinitialise ce lien ?").
+   */
+  private buildResetUrl(rawToken: string, tenantSlug: string): string {
+    return this.hostConfig.buildTenantUrl(
+      tenantSlug,
+      `/auth/reset?token=${encodeURIComponent(rawToken)}`,
+    );
   }
 
   private async writeAuditLog(params: {
@@ -75,15 +83,24 @@ export class PasswordResetService {
    * Auto-service : un user clique "mot de passe oublié" → on crée un token
    * de reset si le compte existe. Réponse TOUJOURS générique (pas d'énumération).
    *
-   * Appelé depuis la page publique /auth/forgot-password.
+   * Appelé depuis la page publique /auth/forgot-password qui est servie SUR LE
+   * SOUS-DOMAINE DU TENANT (ex: compagnieA.translogpro.com/auth/forgot-password).
+   * Le controller extrait `tenantId + slug` depuis req.resolvedHostTenant et les
+   * passe ici — c'est le seul endroit qui connaît le bon scope.
+   *
    * Le caller (controller) applique un rate-limit strict par IP + email.
    */
-  async initiateBySelf(email: string, ipAddress: string): Promise<void> {
-    const account = await this.findCredentialAccount(email);
+  async initiateBySelf(
+    tenantId:   string,
+    tenantSlug: string,
+    email:      string,
+    ipAddress:  string,
+  ): Promise<void> {
+    const account = await this.identity.findCredentialAccount(tenantId, email);
 
     if (!account || !account.user.isActive) {
       // Ne pas révéler l'inexistence du compte — réponse générique
-      this.logger.debug(`[PasswordReset] self-service on unknown/inactive email=${email}`);
+      this.logger.debug(`[PasswordReset] self-service on unknown/inactive email=${email} tenant=${tenantId}`);
       return;
     }
 
@@ -99,13 +116,13 @@ export class PasswordResetService {
       },
     });
 
-    const resetUrl = this.buildResetUrl(rawToken);
+    const resetUrl = this.buildResetUrl(rawToken, tenantSlug);
 
     // Email stub — NotificationService dispatchera quand l'EMAIL channel sera
     // câblé (Resend/SendGrid). En attendant on logge pour traçabilité.
     this.logger.log(
       `[PasswordReset] self-service link issued user=${account.user.id} ` +
-      `email=${email} expiresAt=${expiresAt.toISOString()} link=${resetUrl}`,
+      `email=${email} tenant=${tenantId} expiresAt=${expiresAt.toISOString()} link=${resetUrl}`,
     );
 
     await this.writeAuditLog({
@@ -146,7 +163,10 @@ export class PasswordResetService {
 
     const target = await this.prisma.user.findFirst({
       where:  { id: params.targetUserId, tenantId: params.actorTenantId },
-      select: { id: true, email: true, tenantId: true, isActive: true },
+      select: {
+        id: true, email: true, tenantId: true, isActive: true,
+        tenant: { select: { slug: true } },
+      },
     });
     if (!target) {
       throw new NotFoundException('Utilisateur introuvable dans ce tenant');
@@ -206,11 +226,11 @@ export class PasswordResetService {
       },
     });
 
-    const resetUrl = this.buildResetUrl(rawToken);
+    const resetUrl = this.buildResetUrl(rawToken, target.tenant.slug);
 
     this.logger.log(
       `[PasswordReset] admin-issued link user=${target.id} actor=${params.actorId} ` +
-      `email=${target.email} expiresAt=${expiresAt.toISOString()}`,
+      `email=${target.email} tenant=${target.tenant.slug} expiresAt=${expiresAt.toISOString()}`,
     );
 
     await this.writeAuditLog({

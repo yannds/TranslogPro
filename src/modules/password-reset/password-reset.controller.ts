@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Body, Req, HttpCode, UseGuards,
+  Controller, Post, Body, Req, HttpCode, UseGuards, BadRequestException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { PasswordResetService } from './password-reset.service';
@@ -46,7 +46,16 @@ export class PasswordResetController {
     @Body() dto: RequestPasswordResetDto,
     @Req()  req: Request,
   ): Promise<{ ok: true }> {
-    await this.service.initiateBySelf(dto.email, extractIp(req));
+    // Le reset password est scopé au tenant : un même email peut avoir des
+    // comptes dans plusieurs tenants — sans savoir LEQUEL, on ne peut pas
+    // générer le bon lien. Le sous-domaine (Host) fait foi.
+    const host = req.resolvedHostTenant;
+    if (!host) {
+      throw new BadRequestException(
+        'Sous-domaine tenant requis pour demander un reset de mot de passe',
+      );
+    }
+    await this.service.initiateBySelf(host.tenantId, host.slug, dto.email, extractIp(req));
     return { ok: true };
   }
 

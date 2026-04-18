@@ -96,8 +96,12 @@ export class TenantIamService {
   }
 
   async createUser(tenantId: string, dto: CreateUserDto, actorId: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException(`L'email "${dto.email}" est déjà utilisé`);
+    // Phase 1 multi-tenant : email unique par (tenantId, email) — un même humain
+    // peut avoir des comptes dans plusieurs tenants.
+    const existing = await this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email: dto.email } },
+    });
+    if (existing) throw new ConflictException(`L'email "${dto.email}" est déjà utilisé dans ce tenant`);
 
     if (dto.roleId) {
       await this.findRole(tenantId, dto.roleId);
@@ -122,8 +126,11 @@ export class TenantIamService {
       },
     });
 
+    // Account.tenantId obligatoire depuis Phase 1 (dénormalisé pour l'unicité
+    // par tenant + pour filtrer les lookups en O(1) via l'index composite).
     await this.prisma.account.create({
       data: {
+        tenantId,
         userId:     user.id,
         providerId: 'credential',
         accountId:  dto.email,

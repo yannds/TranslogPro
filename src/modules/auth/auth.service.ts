@@ -1,12 +1,13 @@
 import {
   Injectable, UnauthorizedException, Logger,
-  ForbiddenException, NotFoundException,
+  ForbiddenException, NotFoundException, BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TenantModuleService } from '../tenant/tenant-module.service';
 import { MfaService } from '../mfa/mfa.service';
+import { AuthIdentityService } from '../../core/identity/auth-identity.service';
 
 /** Durée de validité d'une session (30 jours). */
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1_000;
@@ -64,27 +65,44 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private readonly prisma:  PrismaService,
-    private readonly modules: TenantModuleService,
-    private readonly mfa:     MfaService,
+    private readonly prisma:   PrismaService,
+    private readonly modules:  TenantModuleService,
+    private readonly mfa:      MfaService,
+    private readonly identity: AuthIdentityService,
   ) {}
 
   // ─── Sign-in ───────────────────────────────────────────────────────────────
 
+  /**
+   * Authentification credential (email+password) scopée à un tenant.
+   *
+   * PHASE 1 : le tenantId vient de req.resolvedHostTenant (Host header) posé
+   * par TenantHostMiddleware. Le controller extrait cette valeur et la passe
+   * ici. Un login sans tenant résolu → BadRequest 400 (domaine manquant).
+   *
+   * Même humain → peut avoir un compte credential dans chaque tenant avec les
+   * mêmes email + password ; l'isolation est garantie par le tenantId.
+   */
   async signIn(
+    tenantId:  string,
     email:     string,
     password:  string,
     ipAddress: string,
     userAgent: string,
   ): Promise<{ token: string; user: AuthUserDto }> {
 
-    // 1. Recherche du compte credential
+    if (!tenantId) {
+      // Filet de sécurité : ne jamais signer sans tenant résolu.
+      throw new BadRequestException(
+        'Tenant non résolu : l\'authentification doit passer par un sous-domaine tenant',
+      );
+    }
+
+    // 1. Recherche du compte credential via AuthIdentityService
+    //    (abstraction qui gère la clé composite (tenantId, providerId, accountId))
     //    On fait systématiquement le bcrypt compare même si l'account est introuvable
-    //    (timing-safe : évite l'énumération d'emails par mesure du temps de réponse)
-    const account = await this.prisma.account.findUnique({
-      where:   { providerId_accountId: { providerId: 'credential', accountId: email } },
-      include: { user: { include: { role: { include: { permissions: true } } } } },
-    });
+    //    (timing-safe : évite l'énumération d'emails par mesure du temps de réponse).
+    const account = await this.identity.findCredentialAccount(tenantId, email);
 
     const dummyHash = '$2a$12$Wz1q2FAKEHASHJUSTFORTIMINGPROTECTION.padding.padding';
     const hashToCheck = account?.password ?? dummyHash;
@@ -94,7 +112,7 @@ export class AuthService {
       // Audit log tentative échouée
       await this.auditSignIn({
         userId:    account?.userId ?? null,
-        tenantId:  account?.user.tenantId ?? '00000000-0000-0000-0000-000000000000',
+        tenantId,
         success:   false,
         ipAddress,
         userAgent,
@@ -417,21 +435,23 @@ export class AuthService {
 
   // ─── Création compte credential (utilisé par le seed dev) ─────────────────
 
+  /**
+   * Crée ou met à jour un compte credential pour un User.
+   * Depuis Phase 1 : le tenantId est requis (Account.tenantId NOT NULL).
+   * Les seeds/admins doivent passer le tenantId du User cible.
+   */
   async createCredentialAccount(
+    tenantId: string,
     userId:   string,
     email:    string,
     password: string,
   ): Promise<void> {
     const hash = await bcrypt.hash(password, 12);
-    await this.prisma.account.upsert({
-      where:  { providerId_accountId: { providerId: 'credential', accountId: email } },
-      update: { password: hash },
-      create: {
-        userId,
-        providerId: 'credential',
-        accountId:  email,
-        password:   hash,
-      },
+    await this.identity.upsertCredentialAccount({
+      tenantId,
+      userId,
+      email,
+      passwordHash: hash,
     });
   }
 

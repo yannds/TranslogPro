@@ -1,0 +1,127 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# TransLog Pro — Caddyfile PROD
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ARCHITECTURE PROD :
+#   - Caddy en front (remplace nginx au cutover Phase 1)
+#   - ACME DNS-01 via Cloudflare (wildcard *.translogpro.com)
+#   - On-demand TLS PRÉPARÉ mais désactivé tant qu'on n'a pas de custom
+#     domain actif (Phase 3). Le bloc est présent pour activation en 1 ligne.
+#
+# SECRETS requis (docker-compose.prod.yml via Docker secrets) :
+#   - CLOUDFLARE_API_TOKEN       : permission Zone:DNS:Edit sur translogpro.com
+#   - DOMAIN_CHECK_API_KEY       : partagé Caddy ↔ backend, sécurise
+#                                  /internal/domain-check (anti-DoS Let's Encrypt)
+#
+# DNS requis :
+#   *.translogpro.com  A / AAAA  → IP serveur
+#   translogpro.com    A / AAAA  → IP serveur (optionnel, pour apex)
+#
+# VOLUME CRITIQUE : caddy_data (certificats + ACME account).
+# Perdre ce volume = re-provisioning de tous les certs (rate-limit LE à 50/sem).
+# Backup quotidien mandatoire (voir runbook PHASE1_CUTOVER.md).
+# ═══════════════════════════════════════════════════════════════════════════
+
+{
+    # Email de notification Let's Encrypt (expiration/incidents)
+    email ops@translogpro.com
+
+    # Admin API désactivée — on ne modifie Caddy qu'en redémarrant le container
+    admin off
+
+    log {
+        output file /var/log/caddy/caddy.log {
+            roll_size     100MB
+            roll_keep     10
+            roll_keep_for 720h
+        }
+        format json
+        level  INFO
+    }
+
+    # ── On-demand TLS (Phase 3 custom domains) ────────────────────────────
+    # Désactivé au boot Phase 1. Quand on l'activera, Caddy interrogera
+    # backend:/internal/domain-check?name=xxx pour valider chaque domaine
+    # AVANT de déclencher un ACME challenge. Sans ce garde-fou, un attaquant
+    # peut pointer n'importe quel DNS chez nous et nous faire consommer le
+    # quota Let's Encrypt (50 certs/domaine/semaine).
+    on_demand_tls {
+        ask       https://backend:3000/internal/domain-check
+        interval  2m
+        burst     5
+    }
+}
+
+# ─── Sous-domaines tenant : *.translogpro.com ──────────────────────────────
+# Wildcard via DNS-01. UN SEUL cert couvre tous les tenants + admin.
+*.translogpro.com, translogpro.com {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+
+    # Headers propagés au backend (impératif pour TenantHostMiddleware)
+    header_up Host              {host}
+    header_up X-Real-IP         {remote_host}
+    header_up X-Forwarded-For   {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-Host  {host}
+
+    # Rate limiting global (IP) — aligné sur l'ancien nginx
+    # (requires Caddy L4 module ou external rate limiter — stub ici)
+    # rate_limit @all 100r/s
+
+    # Sécurité headers (CSP dynamique géré par backend via helmet)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # ── API REST ────────────────────────────────────────────────────────────
+    @api path /api/*
+    handle @api {
+        reverse_proxy backend:3000
+    }
+
+    # ── WebSocket (Socket.IO) ──────────────────────────────────────────────
+    @ws path /socket.io/*
+    handle @ws {
+        reverse_proxy backend:3001
+    }
+
+    # ── Health checks (bypass static build) ────────────────────────────────
+    @health path /health/*
+    handle @health {
+        reverse_proxy backend:3000
+    }
+
+    # ── SPA — static React build + fallback vers /index.html (SPA routing) ─
+    handle {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size     100MB
+            roll_keep     10
+            roll_keep_for 720h
+        }
+        format json
+    }
+}
+
+# ─── Custom domains (Phase 3 — activation future) ──────────────────────────
+# BLOC DÉSACTIVÉ au boot Phase 1. Quand on voudra lancer la feature "white-label
+# domaine custom" (ex: billets.sa-marque.com), décommenter ce bloc ET activer
+# on_demand_tls dans les globals. Zéro changement côté backend.
+#
+# :443 {
+#     tls {
+#         on_demand
+#     }
+#     reverse_proxy backend:3000
+# }

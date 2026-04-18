@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────
+# TransLog Pro — Overlay DEV (Caddy + multi-tenant subdomains)
+# ─────────────────────────────────────────────────────────────
+# Usage :
+#   docker compose up caddy                      (ajoute juste Caddy au stack dev)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up caddy
+#
+# Prérequis setup local (une fois) :
+#   - mkcert -install
+#   - mkcert -cert-file ./infra/caddy/certs/dev.crt \
+#            -key-file  ./infra/caddy/certs/dev.key \
+#            "*.translog.test" translog.test localhost
+#   - /etc/hosts OU dnsmasq (voir Caddyfile.dev header)
+#
+# Après setup :
+#   - Vite (NON dockerisé)      :  npm run dev --prefix frontend      → :5173
+#   - API  (NON dockerisé)      :  npm run start:dev                   → :3000, :3001
+#   - Caddy (dockerisé)         :  docker compose up caddy             → :443
+#   - Navigateur → https://tenanta.translog.test
+#
+# Pourquoi Caddy en container et pas Vite/API ? → dev.sh fait tourner Vite+API
+# sur l'hôte avec hot-reload. Caddy n'est qu'un reverse proxy TLS : zéro raison
+# de le recompiler, un container stock suffit.
+# ─────────────────────────────────────────────────────────────
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: translog-caddy-dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/certs:/certs:ro
+      - caddy_data_dev:/data
+      - caddy_config_dev:/config
+    # host.docker.internal est natif sur Docker Desktop (macOS/Windows).
+    # Sur Linux, ajouter : extra_hosts: ["host.docker.internal:host-gateway"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - translog-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  caddy_data_dev:
+  caddy_config_dev:

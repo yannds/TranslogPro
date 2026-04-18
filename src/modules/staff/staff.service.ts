@@ -24,8 +24,11 @@ export class StaffService {
   ) {}
 
   async create(tenantId: string, dto: CreateStaffDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré`);
+    // Phase 1 multi-tenant : email unique par (tenantId, email), pas global.
+    const existing = await this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email: dto.email } },
+    });
+    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré dans ce tenant`);
 
     const agencyId = dto.agencyId && dto.agencyId.trim() !== '' ? dto.agencyId : null;
 

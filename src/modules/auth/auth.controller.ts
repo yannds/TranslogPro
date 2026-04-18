@@ -1,6 +1,6 @@
 import {
   Controller, Post, Get, Body, Req, Res,
-  HttpCode, UseGuards, UnauthorizedException,
+  HttpCode, UseGuards, UnauthorizedException, BadRequestException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService, AuthUserDto } from './auth.service';
@@ -66,7 +66,19 @@ export class AuthController {
     @Req()  req:  Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<Omit<AuthUserDto, 'roleId'> & { roleId: string | null }> {
+    // Le tenant est résolu depuis le Host par TenantHostMiddleware
+    // (voir core/tenancy). Sans sous-domaine tenant valide, on refuse le login
+    // — pas de fallback "global" : un cookie doit être scopé à un sous-domaine.
+    const tenantId = req.resolvedHostTenant?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException(
+        'Sous-domaine tenant requis pour s\'authentifier. ' +
+        'Utilisez https://{votre-tenant}.translogpro.com/login',
+      );
+    }
+
     const { token, user } = await this.authService.signIn(
+      tenantId,
       dto.email,
       dto.password,
       extractIp(req),

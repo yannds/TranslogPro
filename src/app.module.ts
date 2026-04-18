@@ -15,6 +15,8 @@ import { WeatherModule } from './infrastructure/weather/weather.module';
 import { NotificationProviderModule } from './infrastructure/notification/notification-provider.module';
 
 // Core Engines
+import { TenancyModule } from './core/tenancy';
+import { IdentityCoreModule } from './core/identity/identity-core.module';
 import { IamModule } from './core/iam/iam.module';
 import { WorkflowModule } from './core/workflow/workflow.module';
 import { PricingModule } from './core/pricing/pricing.module';
@@ -86,6 +88,7 @@ import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
 import { SessionMiddleware }     from './core/iam/middleware/session.middleware';
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
+import { TenantHostMiddleware }  from './core/tenancy';
 
 @Module({
   imports: [
@@ -113,7 +116,9 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
     WeatherModule,
 
     // Core Engines
-    GeoSafetyModule,   // @Global — TenantConfigService + GeoSafetyProvider disponibles partout
+    TenancyModule,       // @Global — HostConfig, TenantResolver, TenantDomainRepo, guards/middleware
+    IdentityCoreModule,  // @Global — AuthIdentityService (tenant-scoped credential lookups)
+    GeoSafetyModule,     // @Global — TenantConfigService + GeoSafetyProvider disponibles partout
     IamModule,
     WorkflowModule,
     PricingModule,
@@ -216,7 +221,15 @@ import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middlew
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // SessionMiddleware DOIT tourner en premier — hydrate req.user pour tous les guards
+    // TenantHostMiddleware est le TOUT PREMIER — résout req.resolvedHostTenant
+    // depuis le header Host AVANT toute authentification. Cela permet à
+    // SessionMiddleware (ou TenantIsolationGuard) d'enforcer ensuite que
+    // session.tenantId == host.tenantId (anti cookie smuggling cross-tenant).
+    consumer
+      .apply(TenantHostMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+
+    // SessionMiddleware — hydrate req.user pour tous les guards
     consumer
       .apply(SessionMiddleware)
       .forRoutes({ path: '*', method: RequestMethod.ALL });

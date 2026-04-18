@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────
+# TransLog Pro — Overlay PROD (Caddy + Let's Encrypt ACME)
+# ─────────────────────────────────────────────────────────────
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# PRÉREQUIS :
+#   - DNS wildcard *.translogpro.com → IP serveur (tests via dig)
+#   - Cloudflare API Token avec permission Zone:DNS:Edit sur translogpro.com
+#   - Secrets Docker :
+#       ./secrets/cloudflare_api_token    (750 root:root, contient le token)
+#       ./secrets/domain_check_api_key    (secret partagé Caddy ↔ backend)
+#   - Frontend build généré : frontend/dist/ (npm run build --prefix frontend)
+#
+# CUTOVER NGINX → CADDY :
+#   Voir infra/runbooks/PHASE1_CUTOVER.md pour la procédure pas-à-pas
+#   (DNS TTL, healthcheck Caddy avant swap, rollback).
+#
+# SUPERVISION :
+#   Les logs d'accès et d'erreur Caddy sont en JSON (roll 100MB × 10, 30j).
+#   À ingérer dans Loki/Elasticsearch/CloudWatch selon votre stack.
+#
+# BACKUP :
+#   caddy_data contient les certs LE + l'ACME account key.
+#   Perdre ce volume = 50 certs/domaine/semaine pour reprovisionner.
+#   BACKUP QUOTIDIEN OBLIGATOIRE — voir runbook.
+# ─────────────────────────────────────────────────────────────
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: translog-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro          # SPA build
+      - caddy_data_prod:/data                      # ACME certs (CRITIQUE backup)
+      - caddy_config_prod:/config
+      - caddy_logs_prod:/var/log/caddy
+    secrets:
+      - cloudflare_api_token
+    environment:
+      # Caddy expanse {env.CLOUDFLARE_API_TOKEN} dans le Caddyfile
+      CLOUDFLARE_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
+    # Le container Caddy officiel ne supporte pas nativement _FILE → on
+    # résout via un entrypoint léger qui exporte puis exec caddy. Alternative :
+    # image personnalisée caddy:2-cloudflare-dns (construite avec le plugin).
+    # Stub ici — ajuster selon votre build choisi.
+    depends_on:
+      - backend
+    networks:
+      - translog-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health/live"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend NestJS (overrides du compose de base pour prod) ──────────────
+  backend:
+    # L'image est reconstruite via CI — ici on la référence
+    image: ${API_IMAGE:-translogpro-backend:latest}
+    container_name: translog-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PLATFORM_BASE_DOMAIN: translogpro.com
+      ADMIN_SUBDOMAIN:      admin
+      PUBLIC_APP_URL:       https://translogpro.com
+      # Secret partagé pour que l'endpoint /internal/domain-check (consommé
+      # par Caddy on-demand TLS) rejette les callers non autorisés.
+      DOMAIN_CHECK_API_KEY_FILE: /run/secrets/domain_check_api_key
+    secrets:
+      - domain_check_api_key
+    networks:
+      - translog-net
+
+secrets:
+  cloudflare_api_token:
+    file: ./secrets/cloudflare_api_token
+  domain_check_api_key:
+    file: ./secrets/domain_check_api_key
+
+volumes:
+  caddy_data_prod:
+  caddy_config_prod:
+  caddy_logs_prod:

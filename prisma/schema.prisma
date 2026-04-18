@@ -2999,3 +2999,26 @@ model TenantHealthScore {
   @@index([date, score])
   @@map("tenant_health_scores")
 }
+
+// ── Configuration plateforme (KV store global, DB-driven) ───────────────────
+// Source de vérité pour les seuils et paramètres plateforme qui ne vivent pas
+// sur un plan spécifique. Édités depuis l'UI Settings plateforme par le SA
+// sans redéploiement. Toujours un fallback hardcodé côté service si la clé
+// est absente ou si la DB est indisponible — pas de panique.
+//
+// Conventions de clés (namespacées, pas d'enum pour rester extensible) :
+//   - "health.riskThreshold"              (number 0-100)
+//   - "health.thresholds.incidents"       (number)
+//   - "health.thresholds.tickets"         (number)
+//   - "health.thresholds.dlqEvents"       (number)
+//   - "billing.defaultInvoiceDueDays"     (number)
+//   - "billing.defaultCustomCycleDays"    (number)
+model PlatformConfig {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("platform_config")
+}

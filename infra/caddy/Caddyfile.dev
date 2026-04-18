@@ -1,0 +1,106 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# TransLog Pro — Caddyfile DEV
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Usage :
+#   1. Installer mkcert + générer le CA local et un cert wildcard :
+#        brew install mkcert nss
+#        mkcert -install
+#        mkcert -cert-file ./infra/caddy/certs/dev.crt \
+#               -key-file  ./infra/caddy/certs/dev.key  \
+#               "*.translog.test" translog.test localhost
+#
+#   2. Déclarer le wildcard DNS local (UNE des 2 options) :
+#
+#      (a) /etc/hosts — simple mais par-tenant :
+#          127.0.0.1 tenanta.translog.test
+#          127.0.0.1 tenantb.translog.test
+#          127.0.0.1 admin.translog.test
+#
+#      (b) dnsmasq (macOS, brew) — wildcard zéro maintenance :
+#          echo 'address=/.translog.test/127.0.0.1' > /opt/homebrew/etc/dnsmasq.d/translog.conf
+#          sudo brew services restart dnsmasq
+#          puis dans macOS System Settings → Network → DNS : ajouter 127.0.0.1 en priorité
+#
+#   3. Lancer Caddy via docker-compose.dev.yml :
+#        docker compose -f docker-compose.yml -f docker-compose.dev.yml up caddy
+#
+#   4. Naviguer :
+#        https://tenanta.translog.test   → Vite (5173) + API proxy
+#        https://admin.translog.test     → Vite + API (zone super-admin Phase 2)
+#
+# Hors Caddy : Vite tourne sur :5173, NestJS API sur :3000. Caddy proxifie les
+# deux en fonction de l'URL path. Aucun CORS nécessaire côté app.
+# ═══════════════════════════════════════════════════════════════════════════
+
+{
+    # Mode local : désactiver ACME (certs mkcert locaux)
+    local_certs
+    # Auto-reload sur edit du Caddyfile via le flag --watch dans docker-compose.dev.yml
+    admin off
+    log {
+        output stdout
+        format console
+        level  INFO
+    }
+}
+
+# ─── Sous-domaines tenant (*.translog.test) ────────────────────────────────
+#   - Tous les sous-domaines routent le même backend.
+#   - TenantResolverService fait le mapping Host → tenantId côté NestJS.
+#   - Le wildcard matche aussi admin.translog.test, géré par le même bloc.
+#   - API (/api/*) → NestJS (container api sur :3000)
+#   - WebSocket (/socket.io/*) → NestJS WS sur :3001
+#   - Tout le reste → Vite (host.docker.internal:5173 en dev hot-reload)
+# ───────────────────────────────────────────────────────────────────────────
+*.translog.test, translog.test {
+    tls /certs/dev.crt /certs/dev.key
+
+    # Propager le Host original au backend (essentiel pour TenantHostMiddleware).
+    # Caddy le fait par défaut, on le rend explicite pour review/audit.
+    header_up Host {host}
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+
+    # ── API REST ────────────────────────────────────────────────────────────
+    @api path /api/*
+    handle @api {
+        reverse_proxy host.docker.internal:3000 {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # ── WebSocket (Socket.IO) ──────────────────────────────────────────────
+    @ws path /socket.io/*
+    handle @ws {
+        reverse_proxy host.docker.internal:3001 {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # ── Health check (bypass Vite pour que monitoring local fonctionne) ──
+    @health path /health/*
+    handle @health {
+        reverse_proxy host.docker.internal:3000
+    }
+
+    # ── Tout le reste : Vite dev server (hot-reload, HMR, asset) ──────────
+    handle {
+        reverse_proxy host.docker.internal:5173 {
+            # Vite WebSocket pour HMR
+            header_up Connection {>Connection}
+            header_up Upgrade    {>Upgrade}
+        }
+    }
+
+    # Log d'accès lisible
+    log {
+        output stdout
+        format console
+    }
+}

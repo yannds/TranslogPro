@@ -41,8 +41,13 @@ export class CrmService {
   // ─── Customer Profiles ───────────────────────────────────────────────────────
 
   async createCustomer(tenantId: string, dto: CreateCustomerDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré`);
+    // Email unique par (tenantId, email) depuis la Phase 1 multi-tenant isolation.
+    // Le même humain peut exister chez plusieurs tenants — seule la duplication
+    // DANS CE tenant est interdite.
+    const existing = await this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email: dto.email } },
+    });
+    if (existing) throw new ConflictException(`Email ${dto.email} déjà enregistré dans ce tenant`);
 
     const agencyId = dto.agencyId && dto.agencyId.trim() !== '' ? dto.agencyId : undefined;
     if (agencyId) {

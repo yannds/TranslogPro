@@ -1,4 +1,5 @@
 import { PasswordResetService } from '../../../src/modules/password-reset/password-reset.service';
+import { HostConfigService } from '../../../src/core/tenancy/host-config.service';
 import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import {
@@ -14,13 +15,23 @@ function hash(raw: string): string {
  * expiration, non-énumération en self-service, garde anti-self-reset admin,
  * mode 'set' force la rotation + purge sessions.
  *
- * Prisma entièrement mocké. Pas de DB, pas de Redis, pas de bcrypt round.
+ * MISE À JOUR Phase 1 multi-tenant :
+ *   - Le service prend maintenant AuthIdentityService + HostConfigService
+ *   - initiateBySelf requiert (tenantId, tenantSlug, email, ip)
+ *   - L'URL de reset est scoped au sous-domaine du tenant
+ *
+ * Prisma, AuthIdentity et HostConfig entièrement mockés. Pas de DB, pas de Redis.
  */
 describe('PasswordResetService', () => {
-  let prismaMock: any;
-  let service:    PasswordResetService;
+  let prismaMock:   any;
+  let identityMock: any;
+  let hostConfig:   HostConfigService;
+  let service:      PasswordResetService;
 
   beforeEach(() => {
+    process.env.PLATFORM_BASE_DOMAIN = 'translog.test';
+    process.env.ADMIN_SUBDOMAIN      = 'admin';
+
     prismaMock = {
       account: {
         findUnique: jest.fn(),
@@ -38,31 +49,39 @@ describe('PasswordResetService', () => {
       },
       $transaction: jest.fn().mockImplementation(async (ops: any[]) => Promise.all(ops)),
     };
-    service = new PasswordResetService(prismaMock);
+
+    identityMock = {
+      findCredentialAccount: jest.fn(),
+    };
+
+    hostConfig = new HostConfigService();
+    service = new PasswordResetService(prismaMock, identityMock, hostConfig);
   });
 
   // ─── initiateBySelf ─────────────────────────────────────────────────────────
 
   describe('initiateBySelf()', () => {
     it('ne révèle jamais l\'inexistence du compte (no-op silencieux)', async () => {
-      prismaMock.account.findUnique.mockResolvedValueOnce(null);
-      await expect(service.initiateBySelf('unknown@x.com', '1.2.3.4')).resolves.toBeUndefined();
+      identityMock.findCredentialAccount.mockResolvedValueOnce(null);
+      await expect(
+        service.initiateBySelf('T1', 'tenanta', 'unknown@x.com', '1.2.3.4'),
+      ).resolves.toBeUndefined();
       expect(prismaMock.account.update).not.toHaveBeenCalled();
     });
 
     it('ne génère pas de token si le user est inactive', async () => {
-      prismaMock.account.findUnique.mockResolvedValueOnce({
+      identityMock.findCredentialAccount.mockResolvedValueOnce({
         id: 'a1', user: { id: 'u1', tenantId: 'T1', email: 'x@x.com', isActive: false },
       });
-      await service.initiateBySelf('x@x.com', '1.2.3.4');
+      await service.initiateBySelf('T1', 'tenanta', 'x@x.com', '1.2.3.4');
       expect(prismaMock.account.update).not.toHaveBeenCalled();
     });
 
     it('stocke le HASH sha-256 du token, jamais le clair', async () => {
-      prismaMock.account.findUnique.mockResolvedValueOnce({
+      identityMock.findCredentialAccount.mockResolvedValueOnce({
         id: 'a1', user: { id: 'u1', tenantId: 'T1', email: 'x@x.com', isActive: true },
       });
-      await service.initiateBySelf('x@x.com', '1.2.3.4');
+      await service.initiateBySelf('T1', 'tenanta', 'x@x.com', '1.2.3.4');
 
       expect(prismaMock.account.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'a1' },
@@ -74,16 +93,22 @@ describe('PasswordResetService', () => {
     });
 
     it('écrit un audit log self-service', async () => {
-      prismaMock.account.findUnique.mockResolvedValueOnce({
+      identityMock.findCredentialAccount.mockResolvedValueOnce({
         id: 'a1', user: { id: 'u1', tenantId: 'T1', email: 'x@x.com', isActive: true },
       });
-      await service.initiateBySelf('x@x.com', '1.2.3.4');
+      await service.initiateBySelf('T1', 'tenanta', 'x@x.com', '1.2.3.4');
       expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({
           action: 'auth.password_reset.request.self',
           tenantId: 'T1',
         }),
       }));
+    });
+
+    it('appelle AuthIdentityService avec le tenantId correct', async () => {
+      identityMock.findCredentialAccount.mockResolvedValueOnce(null);
+      await service.initiateBySelf('T-ALPHA', 'alpha', 'x@x.com', '1.2.3.4');
+      expect(identityMock.findCredentialAccount).toHaveBeenCalledWith('T-ALPHA', 'x@x.com');
     });
   });
 
@@ -108,6 +133,7 @@ describe('PasswordResetService', () => {
     it('refuse si aucun Account credential', async () => {
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'u@x.com', tenantId: 'T1', isActive: true,
+        tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce(null);
       await expect(service.initiateByAdmin({
@@ -116,10 +142,10 @@ describe('PasswordResetService', () => {
       })).rejects.toThrow(BadRequestException);
     });
 
-    it('mode "link" retourne resetUrl + expiresAt', async () => {
-      process.env.PUBLIC_APP_URL = 'https://app.translog.pro';
+    it('mode "link" retourne une URL sur le sous-domaine du tenant', async () => {
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'u@x.com', tenantId: 'T1', isActive: true,
+        tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce({ id: 'a1' });
 
@@ -130,7 +156,8 @@ describe('PasswordResetService', () => {
 
       expect(res.mode).toBe('link');
       expect(res.email).toBe('u@x.com');
-      expect(res.resetUrl).toMatch(/^https:\/\/app\.translog\.pro\/auth\/reset\?token=/);
+      // URL scopée au sous-domaine du tenant — sécurité : chaque lien tenant-unique
+      expect(res.resetUrl).toMatch(/^https:\/\/tenanta\.translog\.test\/auth\/reset\?token=/);
       expect(res.expiresAt).toBeInstanceOf(Date);
       expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ action: 'auth.password_reset.admin.link', level: 'warn' }),
@@ -140,6 +167,7 @@ describe('PasswordResetService', () => {
     it('mode "set" sans newPassword → BadRequest', async () => {
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'u@x.com', tenantId: 'T1', isActive: true,
+        tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce({ id: 'a1' });
       await expect(service.initiateByAdmin({
@@ -151,6 +179,7 @@ describe('PasswordResetService', () => {
     it('mode "set" applique hash + force rotation + purge sessions', async () => {
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'u@x.com', tenantId: 'T1', isActive: true,
+        tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce({ id: 'a1' });
 
@@ -258,6 +287,7 @@ describe('PasswordResetService', () => {
       // 1er user OK
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'a@x.com', tenantId: 'T1', isActive: true,
+        tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce({ id: 'a1' });
       // 2e user introuvable
