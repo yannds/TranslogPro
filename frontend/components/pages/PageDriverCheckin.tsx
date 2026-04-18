@@ -27,6 +27,7 @@ interface ActiveTrip {
   id: string;
   status: string;
   reference?: string | null;
+  bus?: { plateNumber: string } | null;
 }
 
 interface Passenger {
@@ -114,16 +115,19 @@ export function PageDriverCheckin() {
   const boardedCount = paxList.filter(p => p.status === 'BOARDED').length;
   const loading = loadingTrip || loadingPax;
 
+  const busPlate = activeTrip?.bus?.plateNumber ?? '—';
   const columns = useMemo<Column<Passenger>[]>(() => [
     { key: 'passengerName', header: t('driverCheckin.colName'), sortable: true },
     { key: 'seatNumber', header: t('driverCheckin.colSeat'), sortable: true,
       cellRenderer: (v) => (v as string | null) ?? '—', width: '90px' },
     { key: 'fareClass', header: t('driverCheckin.colClass'), sortable: true,
       cellRenderer: (v) => (v as string | null) ?? '—', width: '100px' },
+    { key: 'id', header: t('driverCheckin.colBus'), sortable: false, width: '120px',
+      cellRenderer: () => busPlate, csvValue: () => busPlate },
     { key: 'status', header: t('driverCheckin.colStatus'), sortable: true, width: '130px',
       cellRenderer: (v) => <CheckinStatusCell value={v as string} />,
     },
-  ], [t]);
+  ], [t, busPlate]);
 
   return (
     <main className="p-6 space-y-6" role="main" aria-label="Check passagers">

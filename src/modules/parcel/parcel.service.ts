@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -6,31 +6,58 @@ import { EventTypes } from '../../common/types/domain-event.type';
 import { ParcelState } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { CreateParcelDto } from './dto/create-parcel.dto';
+import { CustomerResolverService } from '../crm/customer-resolver.service';
+import { CustomerClaimService } from '../crm/customer-claim.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ParcelService {
+  private readonly logger = new Logger(ParcelService.name);
+
   constructor(
     private readonly prisma:   PrismaService,
     private readonly workflow: WorkflowEngine,
+    private readonly crmResolver: CustomerResolverService,
+    private readonly crmClaim:    CustomerClaimService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
   async register(tenantId: string, dto: CreateParcelDto, actor: CurrentUserPayload) {
     const trackingCode = this.generateTrackingCode(tenantId);
 
-    return this.prisma.transact(async (tx) => {
-      const parcel = await tx.parcel.create({
+    const parcel = await this.prisma.transact(async (tx) => {
+      // ── Résolution CRM expéditeur ─────────────────────────────────────────
+      // Si senderName/Phone/Email fourni → shadow ou match ; sinon on essaie
+      // de retrouver le Customer attaché à l'User connecté (s'il en a un).
+      const senderRes = dto.senderName || dto.senderPhone || dto.senderEmail
+        ? await this.crmResolver.resolveOrCreate(tenantId, {
+            name:  dto.senderName,
+            phone: dto.senderPhone,
+            email: dto.senderEmail,
+          }, tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2])
+        : null;
+
+      // ── Résolution CRM destinataire ───────────────────────────────────────
+      const recipientRes = await this.crmResolver.resolveOrCreate(tenantId, {
+        name:  dto.recipientName,
+        phone: dto.recipientPhone,
+        email: dto.recipientEmail,
+      }, tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2]);
+
+      const created = await tx.parcel.create({
         data: {
           tenantId,
           trackingCode,
-          senderId:      actor.id,
+          senderId:            actor.id,
+          senderCustomerId:    senderRes?.customer.id ?? null,
+          recipientCustomerId: recipientRes?.customer.id ?? null,
           weight:        dto.weightKg,
           price:         dto.declaredValue ?? 0,
           destinationId: dto.destinationId,
           recipientInfo: {
             name:    dto.recipientName,
             phone:   dto.recipientPhone,
+            email:   dto.recipientEmail ?? null,
             address: dto.address ?? '',
           },
           status:  ParcelState.CREATED,
@@ -38,19 +65,54 @@ export class ParcelService {
         },
       });
 
+      // Phase 5 : compteurs CRM pour sender + recipient dans la même transaction
+      const priceCents = BigInt(Math.round((dto.declaredValue ?? 0) * 100));
+      if (senderRes?.customer.id) {
+        await this.crmResolver.bumpCounters(
+          tx as unknown as { customer: { update: Function } },
+          senderRes.customer.id, 'parcel', priceCents,
+        );
+      }
+      if (recipientRes?.customer.id && recipientRes.customer.id !== senderRes?.customer.id) {
+        await this.crmResolver.bumpCounters(
+          tx as unknown as { customer: { update: Function } },
+          recipientRes.customer.id, 'parcel',
+          // pas de montant côté destinataire (il ne paie pas)
+        );
+      }
+
       const event: DomainEvent = {
         id:            uuidv4(),
         type:          EventTypes.PARCEL_REGISTERED,
         tenantId,
-        aggregateId:   parcel.id,
+        aggregateId:   created.id,
         aggregateType: 'Parcel',
-        payload:       { parcelId: parcel.id, trackingCode },
+        payload:       {
+          parcelId:           created.id,
+          trackingCode,
+          senderCustomerId:   senderRes?.customer.id ?? null,
+          recipientCustomerId: recipientRes?.customer.id ?? null,
+        },
         occurredAt:    new Date(),
       };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+      await this.eventBus.publish(event, tx as any);
 
-      return parcel;
+      return created;
     });
+
+    // Émission magic link + recompute segments pour sender et recipient
+    // (fire-and-forget, hors transaction).
+    const postTx = (cid: string | null | undefined) => {
+      if (!cid) return;
+      void this.crmClaim.issueToken(tenantId, cid).catch(err =>
+        this.logger.warn(`[CRM Claim] issueToken failed: ${err?.message ?? err}`),
+      );
+      void this.crmResolver.recomputeSegmentsFor(tenantId, cid);
+    };
+    postTx(parcel.senderCustomerId);
+    postTx(parcel.recipientCustomerId);
+
+    return parcel;
   }
 
   async findAll(tenantId: string, filters?: { status?: string }) {

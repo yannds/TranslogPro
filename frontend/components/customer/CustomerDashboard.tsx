@@ -21,6 +21,7 @@ import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageCustomerHome }   from './PageCustomerHome';
 import { PageMyTickets }      from './PageMyTickets';
 import { PageMyParcels }      from './PageMyParcels';
+import { PageRetroClaim }     from './PageRetroClaim';
 import type { ResolvedNavItem, ResolvedNavSection } from '../../lib/navigation/nav.types';
 
 function PageCustomerWip({ title }: { title: string }) {
@@ -39,6 +40,7 @@ function CustomerPageRouter({ activeId }: { activeId: string | null }) {
     case 'cust-home':     return <PageCustomerHome />;
     case 'cust-trips':    return <PageMyTickets />;
     case 'cust-parcels':  return <PageMyParcels />;
+    case 'cust-retro':    return <PageRetroClaim />;
     case 'cust-claim':    return <PageCustomerWip title="Réclamation" />;
     case 'cust-feedback': return <PageCustomerWip title="Donner un avis" />;
     default:              return <PageCustomerHome />;

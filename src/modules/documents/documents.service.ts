@@ -383,7 +383,9 @@ export class DocumentsService {
     });
     if (!parcel) throw new NotFoundException(`Colis ${parcelId} introuvable`);
 
-    const sender = await this.prisma.user.findUnique({ where: { id: parcel.senderId } });
+    const sender = parcel.senderId
+      ? await this.prisma.user.findUnique({ where: { id: parcel.senderId } })
+      : null;
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
     const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
 
@@ -638,7 +640,9 @@ export class DocumentsService {
     });
     if (!parcel) throw new NotFoundException(`Colis ${parcelId} introuvable`);
 
-    const sender      = await this.prisma.user.findUnique({ where: { id: parcel.senderId } });
+    const sender      = parcel.senderId
+      ? await this.prisma.user.findUnique({ where: { id: parcel.senderId } })
+      : null;
     const tenant      = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
     const destination = (parcel as any).destination;
     const recipient   = parcel.recipientInfo as { name?: string; phone?: string; address?: string };
@@ -1018,7 +1022,7 @@ export class DocumentsService {
       include: { destination: true },
     });
 
-    const senderIds = [...new Set(parcels.map(p => p.senderId))];
+    const senderIds = [...new Set(parcels.map(p => p.senderId).filter((s): s is string => !!s))];
     const senders   = senderIds.length > 0
       ? await this.prisma.user.findMany({
           where:  { id: { in: senderIds } },
@@ -1036,7 +1040,7 @@ export class DocumentsService {
       status:        p.status,
       createdAt:     p.createdAt,
       recipientInfo: p.recipientInfo as { name?: string; phone?: string; address?: string },
-      sender:        senderMap.get(p.senderId) ?? null,
+      sender:        p.senderId ? (senderMap.get(p.senderId) ?? null) : null,
       destination:   (p as any).destination ?? null,
     }));
 

@@ -44,7 +44,10 @@ export interface VariantNavbarProps {
   setMobileNav: (v: boolean | ((p: boolean) => boolean)) => void;
   themeToggle: ReactNode;
   langSwitcher: ReactNode;
+  /** Libellé du bouton d'auth — "Connexion" (anonyme) ou "Mon compte" (CUSTOMER connecté) */
   loginLabel: string;
+  /** Callback invoqué au clic sur le bouton d'auth */
+  onLogin: () => void;
   accent: string;
   accentDark: string;
   t: (k: string) => string;
@@ -112,7 +115,7 @@ export interface VariantSectionTitleProps {
 
 export function HorizonNavbar({
   brandName, brandLogo, nav, section, onSection, onHome,
-  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, t,
+  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, onLogin, t,
 }: VariantNavbarProps) {
   return (
     <nav className="sticky top-0 z-40 bg-white/60 dark:bg-slate-950/60 backdrop-blur-2xl" role="navigation" aria-label={t('portail.navLabel')}>
@@ -130,7 +133,11 @@ export function HorizonNavbar({
             <span className="font-semibold text-slate-900 dark:text-white text-sm tracking-tight hidden sm:block">{brandName}</span>
           </button>
           <div className="flex items-center gap-1.5 shrink-0">
-            <button className="hidden sm:block text-xs border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">{loginLabel}</button>
+            <button
+              type="button"
+              onClick={onLogin}
+              className="hidden sm:block text-xs border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            >{loginLabel}</button>
             <button
               onClick={() => setMobileNav((v: boolean) => !v)}
               className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
@@ -171,7 +178,11 @@ export function HorizonNavbar({
                 {n.label}
               </button>
             ))}
-            <button className="sm:hidden mt-2 text-xs border border-slate-300 text-slate-700 px-4 py-2 rounded-full font-medium">{loginLabel}</button>
+            <button
+              type="button"
+              onClick={() => { setMobileNav(false); onLogin(); }}
+              className="sm:hidden mt-2 text-xs border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-full font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            >{loginLabel}</button>
           </div>
         </div>
       )}
@@ -309,7 +320,7 @@ export function HorizonFooter({ brandName, nav, onSection, t, newsCmsEnabled }: 
 
 export function VividNavbar({
   brandName, brandLogo, nav, section, onSection, onHome,
-  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, accent, t,
+  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, onLogin, accent, t,
 }: VariantNavbarProps) {
   return (
     <nav className="sticky top-0 z-40 bg-white dark:bg-slate-950 border-b border-slate-200/50 dark:border-slate-800/50 shadow-sm" role="navigation" aria-label={t('portail.navLabel')}>
@@ -341,7 +352,12 @@ export function VividNavbar({
         <div className="flex items-center gap-1 shrink-0">
           {themeToggle}
           {langSwitcher}
-          <button className="hidden sm:block text-xs text-white px-4 py-2 rounded-full font-semibold shadow-md hover:brightness-110 transition-all ml-1" style={{ background: `linear-gradient(135deg, ${accent}, var(--portal-accent-dark))` }}>{loginLabel}</button>
+          <button
+            type="button"
+            onClick={onLogin}
+            className="hidden sm:block text-xs text-white px-4 py-2 rounded-full font-semibold shadow-md hover:brightness-110 transition-all ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white"
+            style={{ background: `linear-gradient(135deg, ${accent}, var(--portal-accent-dark))` }}
+          >{loginLabel}</button>
           <button
             onClick={() => setMobileNav((v: boolean) => !v)}
             className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1"
@@ -366,6 +382,12 @@ export function VividNavbar({
                 {n.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => { setMobileNav(false); onLogin(); }}
+              className="col-span-2 py-3 rounded-2xl text-sm font-semibold text-white text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white"
+              style={{ background: `linear-gradient(135deg, ${accent}, var(--portal-accent-dark))` }}
+            >{loginLabel}</button>
           </div>
         </div>
       )}
@@ -546,7 +568,7 @@ export function VividFooter({ brandName, brandLogo, nav, onSection, accent, t, n
 
 export function PrestigeNavbar({
   brandName, brandLogo, nav, section, onSection, onHome,
-  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, accent, t,
+  mobileNav, setMobileNav, themeToggle, langSwitcher, loginLabel, onLogin, accent, t,
 }: VariantNavbarProps) {
   return (
     <nav className="sticky top-0 z-40 bg-slate-950 text-white" role="navigation" aria-label={t('portail.navLabel')}>
@@ -573,7 +595,12 @@ export function PrestigeNavbar({
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="[&_button]:text-slate-400 [&_button:hover]:text-white">{themeToggle}</div>
           <div className="[&_button]:text-slate-400 [&_button:hover]:text-white">{langSwitcher}</div>
-          <button className="hidden sm:block text-xs px-4 py-2 rounded-lg font-semibold border transition-colors ml-2 hover:bg-white/5" style={{ borderColor: accent, color: accent }}>{loginLabel}</button>
+          <button
+            type="button"
+            onClick={onLogin}
+            className="hidden sm:block text-xs px-4 py-2 rounded-lg font-semibold border transition-colors ml-2 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            style={{ borderColor: accent, color: accent }}
+          >{loginLabel}</button>
           <button
             onClick={() => setMobileNav((v: boolean) => !v)}
             className="md:hidden p-2 text-slate-400 hover:text-white transition-colors ml-1"
@@ -597,6 +624,12 @@ export function PrestigeNavbar({
                 {n.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => { setMobileNav(false); onLogin(); }}
+              className="mt-2 w-full text-center px-4 py-3 text-sm font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              style={{ borderColor: accent, color: accent }}
+            >{loginLabel}</button>
           </div>
         </div>
       )}

@@ -150,6 +150,96 @@ export class CrmService {
   }
 
   /**
+   * Liste les Customer CRM unifiés — inclut les shadows (sans compte) et les
+   * registered (Customer.userId ≠ null). Source de vérité pour PageCrm v2.
+   *
+   * @param tenantId  - isolation racine
+   * @param filter    - { segment?: 'all'|'shadow'|'registered', q?: recherche }
+   */
+  async listCrmCustomers(
+    tenantId: string,
+    filter:   { segment?: 'all' | 'shadow' | 'registered'; q?: string } = {},
+    page     = 1,
+    limit    = 50,
+  ) {
+    const where: Record<string, unknown> = { tenantId, deletedAt: null };
+    if (filter.segment === 'shadow')     where.userId = null;
+    if (filter.segment === 'registered') where.userId = { not: null };
+    if (filter.q && filter.q.trim()) {
+      const q = filter.q.trim();
+      where.OR = [
+        { name:      { contains: q, mode: 'insensitive' } },
+        { email:     { contains: q, mode: 'insensitive' } },
+        { phoneE164: { contains: q } },
+      ];
+    }
+
+    const [total, rows] = await Promise.all([
+      this.prisma.customer.count({ where }),
+      this.prisma.customer.findMany({
+        where,
+        orderBy: { lastSeenAt: 'desc' },
+        skip:    (page - 1) * limit,
+        take:    limit,
+      }),
+    ]);
+
+    // BigInt n'est pas serialisable en JSON natif — on transpose en number
+    // (Number.MAX_SAFE_INTEGER largement suffisant pour un total en centimes).
+    const data = rows.map(r => ({
+      ...r,
+      totalSpentCents: Number(r.totalSpentCents),
+      isShadow:        r.userId === null,
+    }));
+
+    return { total, page, limit, data };
+  }
+
+  /**
+   * Historique unifié d'un Customer : tickets, colis envoyés, colis reçus.
+   * Agrégation en runtime — pas de vue matérialisée (volume raisonnable).
+   */
+  async getCustomerHistory(tenantId: string, customerId: string) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { tenantId, id: customerId },
+    });
+    if (!customer) throw new NotFoundException('Customer introuvable');
+
+    const [tickets, parcelsSent, parcelsReceived] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where:   { tenantId, customerId },
+        select:  { id: true, status: true, pricePaid: true, createdAt: true, tripId: true, seatNumber: true, fareClass: true },
+        orderBy: { createdAt: 'desc' },
+        take:    200,
+      }),
+      this.prisma.parcel.findMany({
+        where:   { tenantId, senderCustomerId: customerId },
+        select:  { id: true, trackingCode: true, status: true, price: true, createdAt: true, destinationId: true },
+        orderBy: { createdAt: 'desc' },
+        take:    200,
+      }),
+      this.prisma.parcel.findMany({
+        where:   { tenantId, recipientCustomerId: customerId },
+        select:  { id: true, trackingCode: true, status: true, createdAt: true, destinationId: true },
+        orderBy: { createdAt: 'desc' },
+        take:    200,
+      }),
+    ]);
+
+    return {
+      customer: { ...customer, totalSpentCents: Number(customer.totalSpentCents), isShadow: customer.userId === null },
+      tickets,
+      parcelsSent,
+      parcelsReceived,
+      counts: {
+        tickets:         tickets.length,
+        parcelsSent:     parcelsSent.length,
+        parcelsReceived: parcelsReceived.length,
+      },
+    };
+  }
+
+  /**
    * Profil détaillé d'un client : infos + historique tickets + plaintes.
    */
   async getCustomer(tenantId: string, userId: string) {
@@ -258,24 +348,55 @@ export class CrmService {
 
   /**
    * Estime l'audience de la campagne selon ses critères.
-   * Critères supportés : minLoyalty, agencyId, registeredSince (ISO date).
+   *
+   * Critères supportés (v2 — sur Customer unifié) :
+   *   - segments:           string[]           — audience = Customers ayant AU MOINS 1 des segments
+   *   - minTotalSpentCents: number (centimes) — seuil financier
+   *   - minTransactions:    number             — totalTickets + totalParcels
+   *   - agencyId:           string             — (legacy User.agencyId, fallback)
+   *   - registeredSince:    ISO date           — Customer.firstSeenAt >= …
+   *   - onlyRegistered:     boolean            — exclut les shadows
+   *
+   * Retour : count(Customer). Basculement v2 : Customer devient la source de
+   * vérité du CRM. L'ancien agrégat User.CUSTOMER est conservé pour compat.
    */
   async estimateAudience(tenantId: string, id: string): Promise<{ count: number }> {
     const campaign = await this.getCampaign(tenantId, id);
     const criteria = campaign.criteria as Record<string, unknown>;
 
-    const where: Record<string, unknown> = { tenantId, userType: 'CUSTOMER' };
-    if (criteria['minLoyalty'] != null) {
-      where['loyaltyScore'] = { gte: Number(criteria['minLoyalty']) };
-    }
-    if (criteria['agencyId']) {
-      where['agencyId'] = criteria['agencyId'];
-    }
-    if (criteria['registeredSince']) {
-      where['createdAt'] = { gte: new Date(criteria['registeredSince'] as string) };
+    const where: Record<string, unknown> = { tenantId, deletedAt: null };
+
+    // Segments (OR sur le tableau segments[])
+    const segs = criteria['segments'];
+    if (Array.isArray(segs) && segs.length > 0) {
+      where['segments'] = { hasSome: segs.filter((s: unknown) => typeof s === 'string') };
     }
 
-    const count = await this.prisma.user.count({ where });
+    // Seuils financiers & transactionnels
+    if (criteria['minTotalSpentCents'] != null) {
+      where['totalSpentCents'] = { gte: BigInt(Number(criteria['minTotalSpentCents'])) };
+    }
+    // minTransactions non supporté directement par Prisma (pas de colonne totale) :
+    // on filtre via OR avec totalTickets OU totalParcels >= seuil/2, approximation raisonnable
+    const minTx = criteria['minTransactions'];
+    if (typeof minTx === 'number' && minTx > 0) {
+      where['OR'] = [
+        { totalTickets: { gte: minTx } },
+        { totalParcels: { gte: minTx } },
+      ];
+    }
+
+    if (criteria['onlyRegistered']) {
+      where['userId'] = { not: null };
+    }
+    if (criteria['registeredSince']) {
+      where['firstSeenAt'] = { gte: new Date(criteria['registeredSince'] as string) };
+    }
+
+    // Agency scope : non présent directement sur Customer ; on laisse vide
+    // pour éviter un full-scan sur User. Legacy géré à part si besoin.
+
+    const count = await this.prisma.customer.count({ where });
     return { count };
   }
 }

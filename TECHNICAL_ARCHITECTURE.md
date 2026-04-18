@@ -756,6 +756,50 @@ Formule: delay = min(attempts² × 10s, 600s)
 | CrewAssignment | Équipage par trajet | id, tripId, staffId, crewRole, briefedAt? |
 | PublicReport | Signalement citoyen | id, tenantId, plateOrPark, type, reporterGpsExpireAt |
 | Campaign | Campagne marketing tenant | id, tenantId, criteria JSONB, status |
+| **v4.0 — CRM Customer unifié (2026-04-18)** | | |
+| Customer | Identité CRM tenant-scoped (voyageur + expéditeur unifiés) | id, tenantId, phoneE164, email, name, userId?, segments[], compteurs, deletedAt, @@unique([tenantId, phoneE164]), @@unique([tenantId, email]) |
+| CustomerClaimToken | Magic link sha-256 hashé (one-shot, TTL 30j) | id, tenantId, customerId, tokenHash@unique, channel, expiresAt, usedAt?, invalidatedAt? |
+| CustomerRetroClaimOtp | OTP SMS/WhatsApp pour claim rétroactif (Phase 3, TTL 5min, 5 attempts max) | id, tenantId, phoneE164, otpHash, targetType, targetId, attempts, expiresAt, usedAt?, invalidatedAt? |
+
+**Changements FKs (v4.0 CRM) :**
+- `Ticket.passengerId` devient **nullable** (plus de sentinel `portal-anonymous`) ; ajout de `customerId`, `passengerPhone`, `passengerEmail` ; index `[tenantId, customerId]`, `[tenantId, passengerPhone]`.
+- `Ticket.agencyId` devient **nullable** (vente portail public sans agence).
+- `Parcel.senderId` devient **nullable** ; ajout de `senderCustomerId`, `recipientCustomerId` ; index dédiés.
+- `User.customerProfile` : back-relation optionnelle vers `Customer` (one-to-one via `Customer.userId`).
+
+### 5.1.bis Architecture CRM — Customer canonique
+
+**Principe :** `Customer` (identité CRM) est décorrélé de `User` (authentification). Un Customer existe dès la 1ʳᵉ transaction, avec ou sans compte :
+
+```
+   ┌─────────────┐      ┌──────────────────┐        ┌──────────┐
+   │  Ticket     │──────▶  Customer        │◀───────│  Parcel  │
+   │  (issue)    │      │  (resolveOr      │        │ (register)│
+   └─────────────┘      │   CreateCustomer)│        └──────────┘
+                        │                  │
+                        │  userId?         │   claim (magic link sha-256)
+                        └────────┬─────────┘        │
+                                 │                  ▼
+                                 └────────────▶  User (signup)
+```
+
+Clef de matching : `(tenantId, phoneE164)` → fallback `(tenantId, email)`. Téléphone normalisé E.164 via `src/common/helpers/phone.helper.ts` (country du tenant).
+
+**Services** :
+- `CustomerResolverService.resolveOrCreate` : upsert idempotent, tenant-scoped, enrichissement progressif.
+- `CustomerClaimService.issueToken` : génère token (crypto.randomBytes 32), stocke `sha256(token)`, invalide les tokens précédents, dispatche WhatsApp+SMS+Email.
+- `CustomerClaimService.previewToken` / `completeToken` : consomme one-shot avec isolation tenant stricte.
+- `RetroClaimService.initiate` / `confirm` (Phase 3) : claim rétroactif avec OTP 6 chiffres, sha256, 5 tentatives max, rate-limit 3/jour/phone, isolation tenant.
+- `CustomerRecommendationService.byCustomer` / `byPhone` (Phase 4) : recommandations dérivées à la volée (top siège, fareClass, routes) depuis l'historique Ticket/Parcel, sans persistance.
+- `CustomerSegmentService.recomputeForCustomer` / `recomputeForTenant` (Phase 5) : segments auto VIP/FREQUENT/NEW/DORMANT, préserve les segments manuels (CORPORATE, labels libres), idempotent.
+- `CustomerResolverService.bumpCounters` : incrémente totalTickets / totalParcels / totalSpentCents dans la tx ticket/parcel ; `recomputeSegmentsFor` : hook fire-and-forget post-commit.
+
+**Règles d'or :**
+1. Le token clair n'est JAMAIS stocké — seulement `sha-256`.
+2. `@@unique([tenantId, phoneE164])` partielle (NULL toléré par PG) — plusieurs Customers email-only possibles.
+3. `totalSpentCents: BigInt` — JAMAIS Float sur un compteur monétaire.
+4. Soft-delete via `deletedAt` + `mergedIntoId` pour RGPD droit à l'oubli sans perdre les agrégats financiers.
+5. Rate-limit claim endpoints : 10 preview/min/IP, 5 complete/min/IP via `@Throttle` Nest.
 
 ### 5.2 Politiques RLS (Row Level Security)
 

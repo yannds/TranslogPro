@@ -108,12 +108,19 @@ const P = {
   // Templates & Docs
   TEMPLATE_READ:         'data.template.read.agency',
   TEMPLATE_WRITE:        'data.template.write.agency',
-  // Platform (SUPER_ADMIN)
+  // Platform (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2)
   TENANT_MANAGE:         'control.tenant.manage.global',
   PLATFORM_STAFF:        'control.platform.staff.global',
   IMPERSONATION_SWITCH:  'control.impersonation.switch.global',
   WORKFLOW_DEBUG:        'data.workflow.debug.global',
   OUTBOX_REPLAY:         'data.outbox.replay.global',
+  PLATFORM_PLANS_MANAGE:   'control.platform.plans.manage.global',
+  PLATFORM_BILLING_MANAGE: 'control.platform.billing.manage.global',
+  PLATFORM_METRICS_READ:   'data.platform.metrics.read.global',
+  PLATFORM_SUPPORT_READ:   'control.platform.support.read.global',
+  // Support (côté tenant)
+  SUPPORT_CREATE_TENANT: 'data.support.create.tenant',
+  SUPPORT_READ_TENANT:   'data.support.read.tenant',
   // Session
   SESSION_REVOKE_TENANT: 'data.session.revoke.tenant',
   // Driver & HR (Fleet Docs, rest, training, remediation)
@@ -166,6 +173,15 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Bell',
           // tous les admins
           anyOf: [P.STATS_READ, P.TRIP_UPDATE, P.IAM_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'support',
+          label: 'nav.support',
+          href: '/admin/support',
+          icon: 'LifeBuoy',
+          // Tout staff tenant avec au moins la perm "créer ticket" voit l'item.
+          anyOf: [P.SUPPORT_CREATE_TENANT, P.SUPPORT_READ_TENANT],
         },
       ],
     },
@@ -291,8 +307,8 @@ export const ADMIN_NAV: PortalNavConfig = {
           children: [
             { kind: 'leaf', id: 'ai-routes',      label: 'nav.route_profitability',    href: '/admin/ai/routes',      icon: 'TrendingUp',  anyOf: [P.STATS_READ] },
             { kind: 'leaf', id: 'ai-fleet',       label: 'nav.fleet_optimization', href: '/admin/ai/fleet',       icon: 'Bus',         anyOf: [P.STATS_READ, P.FLEET_MANAGE] },
-            { kind: 'leaf', id: 'ai-demand',      label: 'nav.demand_forecast',  href: '/admin/ai/demand',      icon: 'Activity',    anyOf: [P.STATS_READ], wip: true },
-            { kind: 'leaf', id: 'ai-pricing',     label: 'nav.dynamic_pricing',   href: '/admin/ai/pricing',     icon: 'Zap',         anyOf: [P.PRICING_YIELD, P.STATS_READ], wip: true },
+            { kind: 'leaf', id: 'ai-demand',      label: 'nav.demand_forecast',  href: '/admin/ai/demand',      icon: 'Activity',    anyOf: [P.STATS_READ] },
+            { kind: 'leaf', id: 'ai-pricing',     label: 'nav.dynamic_pricing',   href: '/admin/ai/pricing',     icon: 'Zap',         anyOf: [P.PRICING_YIELD, P.STATS_READ] },
           ],
         },
         {
@@ -658,25 +674,72 @@ export const ADMIN_NAV: PortalNavConfig = {
       ],
     },
 
-    // ── Plateforme (SUPER_ADMIN uniquement) ───────────────────────────────────
+    // ── Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ───────────────────
+    // Tous les rôles système du tenant plateforme y accèdent. Chaque item est
+    // gaté par sa permission dédiée — la nav se compose donc automatiquement
+    // selon le plan de données (data/control) de l'acteur : un L1 ne verra que
+    // l'impersonation, un L2 y ajoute le debug, un SA voit tout.
     {
       id: 'platform',
       title: 'nav.platform',
-      anyOf: [P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH, P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY],
+      anyOf: [
+        P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH,
+        P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
+        P.PLATFORM_PLANS_MANAGE, P.PLATFORM_BILLING_MANAGE,
+        P.PLATFORM_METRICS_READ, P.PLATFORM_SUPPORT_READ,
+      ],
       items: [
+        {
+          kind: 'leaf',
+          id: 'platform-dashboard',
+          label: 'nav.platform_dashboard',
+          href: '/admin/platform/dashboard',
+          icon: 'LayoutDashboard',
+          // Visible dès qu'une permission plateforme est présente (tous les rôles).
+          anyOf: [
+            P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH,
+            P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
+            P.PLATFORM_PLANS_MANAGE, P.PLATFORM_BILLING_MANAGE,
+            P.PLATFORM_METRICS_READ, P.PLATFORM_SUPPORT_READ,
+          ],
+        },
         {
           kind: 'leaf',
           id: 'tenants',
           label: 'nav.tenant_management',
-          href: '/platform/tenants',
+          href: '/admin/platform/tenants',
           icon: 'Building2',
           anyOf: [P.TENANT_MANAGE],
         },
         {
           kind: 'leaf',
+          id: 'platform-plans',
+          label: 'nav.platform_plans',
+          href: '/admin/platform/plans',
+          icon: 'Wallet',
+          anyOf: [P.PLATFORM_PLANS_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-billing',
+          label: 'nav.platform_billing',
+          href: '/admin/platform/billing',
+          icon: 'CreditCard',
+          anyOf: [P.PLATFORM_BILLING_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-support',
+          label: 'nav.platform_support',
+          href: '/admin/platform/support',
+          icon: 'LifeBuoy',
+          anyOf: [P.PLATFORM_SUPPORT_READ],
+        },
+        {
+          kind: 'leaf',
           id: 'platform-staff',
           label: 'nav.platform_staff',
-          href: '/platform/staff',
+          href: '/admin/platform/staff',
           icon: 'UserCog',
           anyOf: [P.PLATFORM_STAFF],
         },
@@ -684,7 +747,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           kind: 'leaf',
           id: 'impersonation',
           label: 'nav.jit_impersonation',
-          href: '/platform/impersonation',
+          href: '/admin/platform/impersonation',
           icon: 'UserCheck',
           anyOf: [P.IMPERSONATION_SWITCH],
         },
@@ -695,8 +758,8 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Terminal',
           anyOf: [P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY],
           children: [
-            { kind: 'leaf', id: 'debug-workflow', label: 'nav.workflow_debug',   href: '/platform/debug/workflow', icon: 'Bug',     anyOf: [P.WORKFLOW_DEBUG] },
-            { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',    href: '/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
+            { kind: 'leaf', id: 'debug-workflow', label: 'nav.workflow_debug',   href: '/admin/platform/debug/workflow', icon: 'Bug',     anyOf: [P.WORKFLOW_DEBUG] },
+            { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',    href: '/admin/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
           ],
         },
       ],
@@ -856,6 +919,7 @@ export const CUSTOMER_NAV: PortalNavConfig = {
       title: 'nav.support',
       anyOf: [P.SAV_REPORT_OWN, P.FEEDBACK_SUBMIT],
       items: [
+        { kind: 'leaf', id: 'cust-retro',    label: 'nav.retro_claim', href: '/customer/retro-claim', icon: 'History',              anyOf: [P.FEEDBACK_SUBMIT] },
         { kind: 'leaf', id: 'cust-claim',    label: 'nav.claim',    href: '/customer/claim',    icon: 'MessageSquareWarning', anyOf: [P.SAV_REPORT_OWN] },
         { kind: 'leaf', id: 'cust-feedback', label: 'nav.leave_a_review', href: '/customer/feedback', icon: 'Star',                 anyOf: [P.FEEDBACK_SUBMIT] },
       ],

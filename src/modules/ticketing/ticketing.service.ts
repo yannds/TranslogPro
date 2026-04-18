@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { PricingEngine } from '../../core/pricing/pricing.engine';
@@ -10,6 +10,8 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { IssueTicketDto, IssueBatchDto, ConfirmBatchDto } from './dto/issue-ticket.dto';
 import { RefundService } from '../sav/refund.service';
 import { RefundReason } from '../../common/constants/workflow-states';
+import { CustomerResolverService } from '../crm/customer-resolver.service';
+import { CustomerClaimService } from '../crm/customer-claim.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1_000; // 15 minutes
@@ -23,12 +25,16 @@ interface SeatLayout {
 
 @Injectable()
 export class TicketingService {
+  private readonly logger = new Logger(TicketingService.name);
+
   constructor(
     private readonly prisma:   PrismaService,
     private readonly workflow: WorkflowEngine,
     private readonly pricing:  PricingEngine,
     private readonly qr:       QrService,
     private readonly refundService: RefundService,
+    private readonly crmResolver: CustomerResolverService,
+    private readonly crmClaim:    CustomerClaimService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -145,18 +151,33 @@ export class TicketingService {
         }
       }
 
+      // Résolveur CRM (idempotent, intra-transaction) — crée ou retrouve le
+      // Customer identifié par (phone, email). Null si aucun signal fourni.
+      const crmRes = await this.crmResolver.resolveOrCreate(
+        tenantId,
+        {
+          name:  dto.passengerName,
+          phone: dto.passengerPhone,
+          email: (dto as unknown as { passengerEmail?: string }).passengerEmail,
+        },
+        tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2],
+      );
+
       const t = await tx.ticket.create({
         data: {
           tenantId,
           tripId:             dto.tripId,
           passengerId:        actor.id,
           passengerName:      dto.passengerName.trim(),
+          passengerPhone:     dto.passengerPhone?.trim() || null,
+          passengerEmail:     (dto as unknown as { passengerEmail?: string }).passengerEmail?.trim() || null,
+          customerId:         crmRes?.customer.id ?? null,
           seatNumber,
           boardingStationId,
           alightingStationId,
           fareClass:          dto.fareClass,
           pricePaid:          price.total,
-          agencyId:           actor.agencyId ?? '',
+          agencyId:           actor.agencyId ?? null,
           status:             'PENDING_PAYMENT',
           qrCode:             `pending-${uuidv4()}`,
           expiresAt,
@@ -164,19 +185,36 @@ export class TicketingService {
         },
       });
 
+      // Phase 5 : compteurs CRM incrémentés dans la même transaction
+      if (crmRes?.customer.id) {
+        await this.crmResolver.bumpCounters(
+          tx as unknown as { customer: { update: Function } },
+          crmRes.customer.id, 'ticket',
+          BigInt(Math.round(price.total * 100)),
+        );
+      }
+
       const event: DomainEvent = {
         id:            uuidv4(),
         type:          EventTypes.TICKET_ISSUED,
         tenantId,
         aggregateId:   t.id,
         aggregateType: 'Ticket',
-        payload:       { ticketId: t.id, tripId: dto.tripId, price: price.total },
+        payload:       { ticketId: t.id, tripId: dto.tripId, price: price.total, customerId: crmRes?.customer.id ?? null },
         occurredAt:    new Date(),
       };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+      await this.eventBus.publish(event, tx as any);
 
       return t;
     });
+
+    // Emission magic link + recompute segments (fire-and-forget, hors transaction).
+    if (ticket.customerId) {
+      void this.crmClaim
+        .issueToken(tenantId, ticket.customerId)
+        .catch(err => this.logger.warn(`[CRM Claim] issueToken failed: ${err?.message ?? err}`));
+      void this.crmResolver.recomputeSegmentsFor(tenantId, ticket.customerId);
+    }
 
     return { ticket, pricing: price };
   }
@@ -286,18 +324,32 @@ export class TicketingService {
       const created = [];
       for (let i = 0; i < dto.passengers.length; i++) {
         const p = dto.passengers[i];
+
+        const crmRes = await this.crmResolver.resolveOrCreate(
+          tenantId,
+          {
+            name:  p.passengerName,
+            phone: p.passengerPhone,
+            email: (p as unknown as { passengerEmail?: string }).passengerEmail,
+          },
+          tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2],
+        );
+
         const t = await tx.ticket.create({
           data: {
             tenantId,
             tripId:             dto.tripId,
             passengerId:        actor.id,
             passengerName:      p.passengerName.trim(),
+            passengerPhone:     p.passengerPhone?.trim() || null,
+            passengerEmail:     (p as unknown as { passengerEmail?: string }).passengerEmail?.trim() || null,
+            customerId:         crmRes?.customer.id ?? null,
             seatNumber:         resolvedSeats[i],
             boardingStationId:  p.boardingStationId ?? trip.route.originId,
             alightingStationId: p.alightingStationId,
             fareClass:          p.fareClass,
             pricePaid:          pricings[i].total,
-            agencyId:           actor.agencyId ?? '',
+            agencyId:           actor.agencyId ?? null,
             status:             'PENDING_PAYMENT',
             qrCode:             `pending-${uuidv4()}`,
             expiresAt,
@@ -305,22 +357,39 @@ export class TicketingService {
           },
         });
 
+        // Phase 5 : compteurs CRM incrémentés dans la même transaction
+        if (crmRes?.customer.id) {
+          await this.crmResolver.bumpCounters(
+            tx as unknown as { customer: { update: Function } },
+            crmRes.customer.id, 'ticket',
+            BigInt(Math.round(pricings[i].total * 100)),
+          );
+        }
+
         const event: DomainEvent = {
           id:            uuidv4(),
           type:          EventTypes.TICKET_ISSUED,
           tenantId,
           aggregateId:   t.id,
           aggregateType: 'Ticket',
-          payload:       { ticketId: t.id, tripId: dto.tripId, price: pricings[i].total },
+          payload:       { ticketId: t.id, tripId: dto.tripId, price: pricings[i].total, customerId: crmRes?.customer.id ?? null },
           occurredAt:    new Date(),
         };
-        await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+        await this.eventBus.publish(event, tx as any);
 
         created.push(t);
       }
 
       return created;
     });
+
+    // Recompute segments pour tous les Customers touchés (fire-and-forget)
+    const touchedCustomers = [...new Set(
+      tickets.map(t => (t as unknown as { customerId: string | null }).customerId).filter((s): s is string => !!s),
+    )];
+    for (const cid of touchedCustomers) {
+      void this.crmResolver.recomputeSegmentsFor(tenantId, cid);
+    }
 
     const grandTotal = pricings.reduce((sum, p) => sum + p.total, 0);
 

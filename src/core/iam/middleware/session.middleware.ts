@@ -62,6 +62,17 @@ export class SessionMiddleware implements NestMiddleware {
         roleName: user.role?.name ?? '',
         userType: user.userType,
       };
+
+      // Tracking d'activité — throttle à ~5 min pour éviter un write par requête.
+      // Source DAU/MAU exploitée par PlatformAnalyticsService (cron DailyActiveUser).
+      // Fire-and-forget : le tracking ne doit jamais ralentir la requête.
+      const now = Date.now();
+      const last = user.lastActiveAt?.getTime() ?? 0;
+      if (now - last > 5 * 60 * 1000) {
+        this.prisma.user
+          .update({ where: { id: user.id }, data: { lastActiveAt: new Date(now) } })
+          .catch(() => { /* non-bloquant */ });
+      }
     } catch {
       // Erreur DB — ne jamais bloquer la requête (let PermissionGuard reject)
     }

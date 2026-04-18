@@ -24,6 +24,7 @@ import { Card, CardHeader, CardContent } from '../ui/Card';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { inputClass } from '../ui/inputClass';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { CrmPhoneHint } from '../crm/CrmPhoneHint';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { SeatMapPicker } from '../tickets/SeatMapPicker';
 
@@ -79,6 +80,7 @@ interface PassengerRow {
   id:                  string; // client-only key
   passengerName:       string;
   passengerPhone:      string;
+  passengerEmail:      string;  // optionnel — alimente le CRM si fourni
   fareClass:           FareClass;
   boardingStationId:   string;
   alightingStationId:  string;
@@ -126,6 +128,7 @@ function newPassengerRow(defaults: Partial<PassengerRow> = {}): PassengerRow {
     id:                  `pr-${++_rowId}`,
     passengerName:       '',
     passengerPhone:      '',
+    passengerEmail:      '',
     fareClass:           'STANDARD',
     boardingStationId:   defaults.boardingStationId ?? '',
     alightingStationId:  '',
@@ -280,6 +283,7 @@ export function PageSellTicket() {
         passengers: passengers.map(p => ({
           passengerName:      p.passengerName.trim(),
           passengerPhone:     p.passengerPhone.trim(),
+          passengerEmail:     p.passengerEmail.trim() || undefined,
           fareClass:          p.fareClass,
           boardingStationId:  p.boardingStationId || undefined,
           alightingStationId: p.alightingStationId,
@@ -524,29 +528,57 @@ export function PageSellTicket() {
                         </div>
                       )}
 
-                      {/* Name + Phone */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Name + Phone + Email (optionnel — CRM) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          <label htmlFor={`pn-${p.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {t('sellTicket.passengerName')}
+                            <span aria-hidden className="text-red-600 ml-0.5">*</span>
                           </label>
                           <input
+                            id={`pn-${p.id}`}
                             className={inputClass}
                             placeholder={t('sellTicket.namePlaceholder')}
                             value={p.passengerName}
                             onChange={e => updatePassenger(p.id, { passengerName: e.target.value })}
+                            required
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          <label htmlFor={`pp-${p.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {t('sellTicket.phone')}
+                            <span aria-hidden className="text-red-600 ml-0.5">*</span>
                           </label>
                           <input
+                            id={`pp-${p.id}`}
                             className={inputClass}
                             placeholder={t('sellTicket.phonePlaceholder')}
                             value={p.passengerPhone}
                             onChange={e => updatePassenger(p.id, { passengerPhone: e.target.value })}
+                            required
                           />
+                          {/* Phase 4 : hint CRM inline quand le phone matche un Customer existant */}
+                          <CrmPhoneHint tenantId={user?.tenantId ?? ''} phone={p.passengerPhone} />
+                        </div>
+                        <div>
+                          <label htmlFor={`pe-${p.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            {t('sellTicket.email')}
+                            <span className="text-xs text-slate-500 dark:text-slate-400 ml-1 font-normal">
+                              {t('common.optional')}
+                            </span>
+                          </label>
+                          <input
+                            id={`pe-${p.id}`}
+                            type="email"
+                            className={inputClass}
+                            placeholder={t('sellTicket.emailPlaceholder')}
+                            value={p.passengerEmail}
+                            onChange={e => updatePassenger(p.id, { passengerEmail: e.target.value })}
+                            aria-describedby={`pe-help-${p.id}`}
+                          />
+                          <p id={`pe-help-${p.id}`} className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {t('sellTicket.emailHelp')}
+                          </p>
                         </div>
                       </div>
 

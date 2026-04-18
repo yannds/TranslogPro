@@ -41,21 +41,46 @@ const PRICING_RESULT = {
 };
 
 const DTO_ISSUE = {
-  tripId: 'trip-001', fareClass: 'STANDARD', passengerName: 'Alice', seatNumber: '12A',
+  tripId: 'trip-001', fareClass: 'STANDARD', passengerName: 'Alice',
+  passengerPhone: '+242612345678', seatNumber: '12A',
+  alightingStationId: 'dest-001',
 };
 
 // ─── Mock factories ────────────────────────────────────────────────────────────
 
 function makePrisma(ticket = TICKET_BASE): jest.Mocked<PrismaService> {
+  const tripStub = {
+    id: 'trip-001',
+    route: { originId: 'origin-001' },
+    bus:   { id: 'bus-001', capacity: 50, seatLayout: null },
+    seatingMode: 'FREE',
+  };
   return {
     ticket: {
       create:    jest.fn().mockResolvedValue(ticket),
       update:    jest.fn().mockResolvedValue({ ...ticket, status: 'CONFIRMED' }),
       findFirst: jest.fn().mockResolvedValue(ticket),
       findMany:  jest.fn().mockResolvedValue([ticket]),
+      count:     jest.fn().mockResolvedValue(0),
+    },
+    trip: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue(tripStub),
+    },
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({ country: 'CG' }),
+    },
+    customer: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create:    jest.fn().mockResolvedValue({ id: 'cust-001' }),
+      update:    jest.fn().mockResolvedValue({ id: 'cust-001' }),
     },
     transact: jest.fn().mockImplementation((fn: (tx: PrismaService) => Promise<unknown>) => fn({
-      ticket:   { create: jest.fn().mockResolvedValue(ticket) },
+      ticket: {
+        create:    jest.fn().mockResolvedValue(ticket),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany:  jest.fn().mockResolvedValue([]),
+        count:     jest.fn().mockResolvedValue(0),
+      },
       outboxEvent: { create: jest.fn().mockResolvedValue({}) },
     } as unknown as PrismaService)),
   } as unknown as jest.Mocked<PrismaService>;
@@ -96,7 +121,15 @@ function buildService(overrides: Partial<{
   const pricing  = overrides.pricing   ?? makePricing();
   const qr       = overrides.qr        ?? makeQr();
   const eventBus = overrides.eventBus  ?? makeEventBus();
-  const service  = new TicketingService(prisma, workflow, pricing, qr, eventBus);
+  // Stubs CRM + refund — tests ciblent la logique workflow/pricing
+  const refund      = { createPolicyBasedRefund: jest.fn().mockResolvedValue({ id: 'r1' }) } as any;
+  const crmResolver = { resolveOrCreate: jest.fn().mockResolvedValue(null) } as any;
+  const crmClaim    = { issueToken:      jest.fn().mockResolvedValue(null) } as any;
+  const service  = new TicketingService(
+    prisma as any, workflow as any, pricing as any, qr as any,
+    refund, crmResolver, crmClaim,
+    eventBus as any,
+  );
   return { service, prisma, workflow, pricing, qr, eventBus };
 }
 

@@ -13,7 +13,7 @@ import { QrService }        from '../../core/security/qr/qr.service';
 import { DocumentsService } from '../documents/documents.service';
 import { CancellationPolicyService } from '../sav/cancellation-policy.service';
 import { RefundService }    from '../sav/refund.service';
-import { RefundReason }     from '../../common/constants/workflow-states';
+import { RefundReason, ParcelState }     from '../../common/constants/workflow-states';
 import { REDIS_CLIENT }     from '../../infrastructure/eventbus/redis-publisher.service';
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -803,6 +803,120 @@ export class PublicPortalService {
       refundPercent: (refund as any).policyPercent,
       currency:      (refund as any).currency,
     };
+  }
+
+  // ── Colis — demande d'enlèvement publique (anonyme) ─────────────────────
+
+  /**
+   * Demande d'enlèvement de colis soumise depuis le portail voyageur.
+   * Anonyme — l'agent vérifie l'identité de l'expéditeur lors du dépôt en agence.
+   * Résout la station destination par nom/ville (insensible à la casse).
+   */
+  async createParcelPickupRequest(tenantSlug: string, dto: {
+    senderName: string; senderPhone: string;
+    recipientName: string; recipientPhone: string;
+    fromCity: string; toCity: string;
+    description: string; weightKg?: number;
+  }) {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const destination = await this.prisma.station.findFirst({
+      where: {
+        tenantId: tenant.id,
+        OR: [
+          { city: { equals: dto.toCity, mode: 'insensitive' } },
+          { city: { contains: dto.toCity, mode: 'insensitive' } },
+          { name: { contains: dto.toCity, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { type: 'asc' },
+      select: { id: true, name: true, city: true },
+    });
+    if (!destination) {
+      throw new NotFoundException(`No station found for destination "${dto.toCity}"`);
+    }
+
+    const trackingCode = this.generateParcelTrackingCode(tenant.id);
+    const parcelId = uuidv4();
+
+    const parcel = await this.prisma.transact(async (tx) => {
+      const created = await tx.parcel.create({
+        data: {
+          id:            parcelId,
+          tenantId:      tenant.id,
+          trackingCode,
+          senderId:      'portal-anonymous',
+          weight:        dto.weightKg ?? 0,
+          price:         0,
+          destinationId: destination.id,
+          recipientInfo: {
+            name:        dto.recipientName,
+            phone:       dto.recipientPhone,
+            sender:      { name: dto.senderName, phone: dto.senderPhone },
+            fromCity:    dto.fromCity,
+            toCity:      dto.toCity,
+            description: dto.description,
+            source:      'portal',
+          },
+          status:  ParcelState.CREATED,
+          version: 0,
+        },
+      });
+
+      const event: DomainEvent = {
+        id:            uuidv4(),
+        type:          EventTypes.PARCEL_REGISTERED,
+        tenantId:      tenant.id,
+        aggregateId:   created.id,
+        aggregateType: 'Parcel',
+        payload:       { parcelId: created.id, trackingCode, source: 'portal' },
+        occurredAt:    new Date(),
+      };
+      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+
+      return created;
+    });
+
+    this.logger.log(
+      `[Portal] Parcel pickup request created: ${parcel.id} tracking=${trackingCode} tenant=${tenant.slug}`,
+    );
+
+    return {
+      trackingCode: parcel.trackingCode,
+      status:       parcel.status,
+      destination:  { name: destination.name, city: destination.city },
+    };
+  }
+
+  /**
+   * Suivi public d'un colis par code — ne retourne que les champs non sensibles.
+   * Pas d'ID interne, pas d'infos expéditeur/destinataire.
+   */
+  async trackParcelByCode(tenantSlug: string, trackingCode: string) {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const parcel = await this.prisma.parcel.findFirst({
+      where:   { tenantId: tenant.id, trackingCode },
+      include: { destination: { select: { name: true, city: true } } },
+    });
+    if (!parcel) throw new NotFoundException('Parcel not found');
+
+    const info = (parcel.recipientInfo ?? {}) as Record<string, unknown>;
+
+    return {
+      trackingCode: parcel.trackingCode,
+      status:       parcel.status,
+      fromCity:     (info.fromCity as string | undefined) ?? null,
+      toCity:       parcel.destination?.city || parcel.destination?.name || null,
+      createdAt:    parcel.createdAt.toISOString(),
+    };
+  }
+
+  private generateParcelTrackingCode(tenantId: string): string {
+    const prefix = tenantId.slice(0, 4).toUpperCase();
+    const ts     = Date.now().toString(36).toUpperCase();
+    const rand   = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${prefix}-${ts}-${rand}`;
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────

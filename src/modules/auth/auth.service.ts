@@ -12,6 +12,13 @@ import { MfaService } from '../mfa/mfa.service';
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1_000;
 
 /**
+ * Seuil de rotation du token de session (15 jours = demi-TTL).
+ * Au-delà, `me()` regénère un nouveau token et invalide l'ancien.
+ * Réduit la fenêtre d'exploitation en cas de vol de token.
+ */
+const SESSION_ROTATION_THRESHOLD_MS = SESSION_TTL_MS / 2;
+
+/**
  * Longueur du token de session en octets → 256 bits d'entropie.
  * Supérieur au minimum OWASP (128 bits) pour résister aux attaques par
  * force brute sur l'espace de tokens.
@@ -131,6 +138,19 @@ export class AuthService {
       },
     });
 
+    // 3b. Tracking d'activité pour les métriques plateforme (DAU/MAU/growth).
+    // On incrémente loginCount et on pose lastLoginAt/lastActiveAt. Ces
+    // champs sont exploités par PlatformAnalyticsService (cron DAU + KPIs).
+    const now = new Date();
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt:  now,
+        lastActiveAt: now,
+        loginCount:   { increment: 1 },
+      },
+    });
+
     // 4. Audit log succès
     await this.auditSignIn({
       userId:   user.id,
@@ -151,10 +171,19 @@ export class AuthService {
 
   // ─── Me ───────────────────────────────────────────────────────────────────
 
+  /**
+   * Retourne l'utilisateur courant et, si la session a dépassé le seuil de
+   * rotation (mi-TTL), un nouveau token à poser en cookie.
+   *
+   * - `rotatedToken` : défini uniquement si une rotation a eu lieu.
+   *   Le controller doit dans ce cas réécrire le cookie `translog_session`.
+   * - L'ancien token est supprimé atomiquement après création du nouveau.
+   */
   async me(
     token:     string,
     ipAddress: string,
-  ): Promise<AuthUserDto> {
+    userAgent: string = '',
+  ): Promise<{ user: AuthUserDto; rotatedToken?: string; rotatedExpiresAt?: Date }> {
     const session = await this.prisma.session.findUnique({
       where:   { token },
       include: { user: { include: { role: { include: { permissions: true } } } } },
@@ -182,7 +211,39 @@ export class AuthService {
       throw new ForbiddenException('Session invalidée (IP modifiée)');
     }
 
-    return this.toDto(session.user);
+    const user = await this.toDto(session.user);
+
+    // Rotation à mi-TTL (15 jours) : on regénère un nouveau token pour réduire
+    // la fenêtre d'exploitation en cas de vol. L'ancien est invalidé immédiatement.
+    const sessionAgeMs = Date.now() - session.createdAt.getTime();
+    if (sessionAgeMs >= SESSION_ROTATION_THRESHOLD_MS) {
+      const newToken     = randomBytes(SESSION_TOKEN_BYTES).toString('hex');
+      const newExpiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+      // Créer la nouvelle session AVANT de supprimer l'ancienne : garantit
+      // qu'aucune requête concurrente ne se retrouve avec un token orphelin.
+      await this.prisma.session.create({
+        data: {
+          userId:    session.userId,
+          tenantId:  session.tenantId,
+          token:     newToken,
+          expiresAt: newExpiresAt,
+          ipAddress,
+          userAgent: userAgent || session.userAgent,
+        },
+      });
+      await this.prisma.session.delete({ where: { token } })
+        .catch(() => {/* best-effort — la nouvelle session est déjà créée */});
+
+      this.logger.log(
+        `[AUTH] session rotated — user=${session.userId} ` +
+        `age=${Math.round(sessionAgeMs / 86_400_000)}d`,
+      );
+
+      return { user, rotatedToken: newToken, rotatedExpiresAt: newExpiresAt };
+    }
+
+    return { user };
   }
 
 

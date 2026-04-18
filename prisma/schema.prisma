@@ -93,8 +93,38 @@ model Tenant {
   supportTickets   SupportTicket[]
   dailyActiveUsers DailyActiveUser[]
   healthScores     TenantHealthScore[]
+  domains          TenantDomain[]
+  accounts         Account[]
 
   @@map("tenants")
+}
+
+// ─────────────────────────────────────────────────────────────
+// TenantDomain — routage host → tenant (isolation cookies par sous-domaine)
+//
+// Phase 1 : une ligne `{slug}.translogpro.com` auto-créée par tenant
+//           (seed-idempotent dans prisma/seeds/tenant-domain.seed.ts).
+// Phase 3 : ajout de lignes custom (`billets.sa-marque.com`) pour white-label
+//           premium ; vérification CNAME + provisioning Caddy on-demand TLS.
+//
+// Résolu par TenantResolverService (core/tenancy) via Host header.
+// Unicité globale de `hostname` : un hostname ne peut pointer que sur 1 tenant.
+// ─────────────────────────────────────────────────────────────
+model TenantDomain {
+  id         String   @id @default(cuid())
+  tenantId   String
+  hostname   String   @unique  // ex: "compagnie-a.translogpro.com", "billets.sa-marque.com"
+  isPrimary  Boolean  @default(false) // hostname canonique du tenant (1 par tenant max)
+  verifiedAt DateTime?                 // null tant que le CNAME n'est pas vérifié (Phase 3)
+  certStatus String?                   // "ISSUED" | "PENDING" | "FAILED" — Phase 3 (Caddy)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isPrimary])
+  @@map("tenant_domains")
 }
 
 // Paramètres opérationnels par tenant — 1:1 avec Tenant.
@@ -242,7 +272,11 @@ model User {
   id           String   @id @default(cuid())
   tenantId     String
   agencyId     String?
-  email        String   @unique
+  // Email unique PAR TENANT (pas global) — un même humain peut avoir un compte
+  // chez plusieurs tenants avec la même adresse. Voir @@unique([tenantId, email])
+  // en fin de modèle. Pour l'isolation complète, l'auth résout le tenant depuis
+  // le Host (sous-domaine) via TenantResolverService avant le lookup.
+  email        String
   name         String?
   image        String?
   roleId       String?
@@ -284,6 +318,7 @@ model User {
   safetyAlerts           SafetyAlert[]
   customerProfile        Customer?               @relation("UserCustomerProfile")
 
+  @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, agencyId])
   @@index([tenantId, userType])
@@ -382,9 +417,13 @@ model MfaChallenge {
 
 model Account {
   id           String    @id @default(cuid())
+  // tenantId dénormalisé depuis User : permet l'unicité `(tenantId, providerId, accountId)`
+  // → même email "credential" peut exister dans plusieurs tenants (1 compte par tenant).
+  // Source de vérité = User.tenantId ; synchronisé au create/upsert par AuthIdentityService.
+  tenantId     String
   userId       String
   providerId   String // "credential" | "google" | ...
-  accountId    String // email pour credential
+  accountId    String // email pour credential, userId OAuth pour providers externes
   password     String? // hash bcrypt (credential uniquement)
   accessToken  String?
   refreshToken String?
@@ -401,9 +440,11 @@ model Account {
   // atténué : l'admin le connaît, on force la rotation immédiate).
   forcePasswordChange Boolean @default(false)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([providerId, accountId])
+  @@unique([tenantId, providerId, accountId])
+  @@index([tenantId])
   @@index([passwordResetExpiresAt])
   @@map("accounts")
 }

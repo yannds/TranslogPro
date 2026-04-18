@@ -34,16 +34,24 @@ interface ParcelCreated {
 }
 
 interface FormValues {
+  // Destinataire (obligatoire)
   recipientName:  string;
   recipientPhone: string;
+  recipientEmail: string;    // CRM — optionnel
   address:        string;
+  // Expéditeur (optionnel — sinon l'actor connecté est pris par défaut)
+  senderName:     string;
+  senderPhone:    string;
+  senderEmail:    string;
+  // Colis
   destinationId:  string;
   weightKg:       string;
   declaredValue:  string;
 }
 
 const EMPTY_FORM: FormValues = {
-  recipientName: '', recipientPhone: '', address: '',
+  recipientName: '', recipientPhone: '', recipientEmail: '', address: '',
+  senderName: '', senderPhone: '', senderEmail: '',
   destinationId: '', weightKg: '', declaredValue: '',
 };
 
@@ -71,7 +79,11 @@ export function PageParcelNew() {
       const parcel = await apiPost<ParcelCreated>(`/api/tenants/${tenantId}/parcels`, {
         recipientName:  f.recipientName.trim(),
         recipientPhone: f.recipientPhone.trim(),
+        recipientEmail: f.recipientEmail.trim() || undefined,
         address:        f.address.trim() || undefined,
+        senderName:     f.senderName.trim()  || undefined,
+        senderPhone:    f.senderPhone.trim() || undefined,
+        senderEmail:    f.senderEmail.trim() || undefined,
         destinationId:  f.destinationId,
         weightKg:       Number(f.weightKg),
         declaredValue:  f.declaredValue ? Number(f.declaredValue) : undefined,
@@ -147,32 +159,85 @@ export function PageParcelNew() {
                 <legend className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">
                   {t('parcelNew.recipient')}
                 </legend>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <label htmlFor="rec-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                       {t('parcelNew.name')} <span aria-hidden className="text-red-500">*</span>
                     </label>
-                    <input type="text" required value={f.recipientName}
+                    <input id="rec-name" type="text" required value={f.recipientName}
                       onChange={e => patch({ recipientName: e.target.value })}
                       className={inp} disabled={busy} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <label htmlFor="rec-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                       {t('parcelNew.phone')} <span aria-hidden className="text-red-500">*</span>
                     </label>
-                    <input type="tel" required value={f.recipientPhone}
+                    <input id="rec-phone" type="tel" required value={f.recipientPhone}
                       onChange={e => patch({ recipientPhone: e.target.value })}
                       className={inp} disabled={busy} placeholder="+242 06 000 00 00" />
                   </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="rec-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('parcelNew.email')}
+                      <span className="text-xs text-slate-500 dark:text-slate-400 ml-1 font-normal">
+                        {t('common.optional')}
+                      </span>
+                    </label>
+                    <input id="rec-email" type="email" value={f.recipientEmail}
+                      onChange={e => patch({ recipientEmail: e.target.value })}
+                      className={inp} disabled={busy} aria-describedby="rec-email-help" />
+                    <p id="rec-email-help" className="text-xs text-slate-500 dark:text-slate-400">
+                      {t('parcelNew.emailHelp')}
+                    </p>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="rec-address" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                     {t('parcelNew.deliveryAddress')}
                   </label>
-                  <input type="text" value={f.address}
+                  <input id="rec-address" type="text" value={f.address}
                     onChange={e => patch({ address: e.target.value })}
                     className={inp} disabled={busy}
                     placeholder={t('parcelNew.addressPlaceholder')} />
+                </div>
+              </fieldset>
+
+              {/* Expéditeur — optionnel ; sinon l'user connecté (guichet) sera pris */}
+              <fieldset className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <legend className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                  {t('parcelNew.sender')}
+                  <span className="text-xs text-slate-500 dark:text-slate-400 ml-2 font-normal">
+                    {t('common.optional')}
+                  </span>
+                </legend>
+                <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+                  {t('parcelNew.senderHelp')}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="snd-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('parcelNew.name')}
+                    </label>
+                    <input id="snd-name" type="text" value={f.senderName}
+                      onChange={e => patch({ senderName: e.target.value })}
+                      className={inp} disabled={busy} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="snd-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('parcelNew.phone')}
+                    </label>
+                    <input id="snd-phone" type="tel" value={f.senderPhone}
+                      onChange={e => patch({ senderPhone: e.target.value })}
+                      className={inp} disabled={busy} placeholder="+242 06 000 00 00" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="snd-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('parcelNew.email')}
+                    </label>
+                    <input id="snd-email" type="email" value={f.senderEmail}
+                      onChange={e => patch({ senderEmail: e.target.value })}
+                      className={inp} disabled={busy} />
+                  </div>
                 </div>
               </fieldset>
 

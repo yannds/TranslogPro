@@ -4,9 +4,10 @@ import { TicketingController } from './ticketing.controller';
 import { QrService } from '../../core/security/qr/qr.service';
 import { PricingModule } from '../../core/pricing/pricing.module';
 import { SavModule } from '../sav/sav.module';
+import { CrmModule } from '../crm/crm.module';
 
 @Module({
-  imports:     [PricingModule, SavModule],
+  imports:     [PricingModule, SavModule, CrmModule],
   controllers: [TicketingController],
   providers:   [TicketingService, QrService],
   exports:     [TicketingService],

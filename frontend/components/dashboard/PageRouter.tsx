@@ -144,6 +144,38 @@ const LazyDisplayGare         = lazy(() => import('../pages/PageDisplayGare').th
 const LazyDisplayQuai         = lazy(() => import('../pages/PageDisplayQuai').then(m => ({ default: m.PageDisplayQuai })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDisplayBus          = lazy(() => import('../pages/PageDisplayBus').then(m => ({ default: m.PageDisplayBus })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAiFleet             = lazy(() => import('../pages/PageAiFleet').then(m => ({ default: m.PageAiFleet })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAiDemand            = lazy(() => import('../pages/PageAiDemand').then(m => ({ default: m.PageAiDemand })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAiPricing           = lazy(() => import('../pages/PageAiPricing').then(m => ({ default: m.PageAiPricing })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyReports             = lazy(() => import('../pages/PageReports').then(m => ({ default: m.PageReports })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyNotifications       = lazy(() => import('../pages/PageNotifications').then(m => ({ default: m.PageNotifications })));
+
+// ── Portail Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ────────────────
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformDashboard   = lazy(() => import('../pages/PagePlatformDashboard').then(m => ({ default: m.PagePlatformDashboard })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTenants             = lazy(() => import('../pages/PageTenants').then(m => ({ default: m.PageTenants })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformStaff       = lazy(() => import('../pages/PagePlatformStaff').then(m => ({ default: m.PagePlatformStaff })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyImpersonation       = lazy(() => import('../pages/PageImpersonation').then(m => ({ default: m.PageImpersonation })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDebugWorkflow       = lazy(() => import('../pages/PageDebugWorkflow').then(m => ({ default: m.PageDebugWorkflow })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDebugOutbox         = lazy(() => import('../pages/PageDebugOutbox').then(m => ({ default: m.PageDebugOutbox })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformPlans       = lazy(() => import('../pages/PagePlatformPlans').then(m => ({ default: m.PagePlatformPlans })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformBilling     = lazy(() => import('../pages/PagePlatformBilling').then(m => ({ default: m.PagePlatformBilling })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformSupport     = lazy(() => import('../pages/PagePlatformSupport').then(m => ({ default: m.PagePlatformSupport })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCustomerSupport     = lazy(() => import('../pages/PageCustomerSupport').then(m => ({ default: m.PageCustomerSupport })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -194,10 +226,10 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // ── Analytique & IA ────────────────────────────────────────────────────
     case 'analytics':           return <PageAnalytics />;
     case 'ai-routes':           return <PageAiRoutes />;
-    case 'ai-fleet':            return <PageWip title={t('router.fleetOptim')} />;
-    case 'ai-demand':           return <PageWip title={t('router.demandForecast')} />;
-    case 'ai-pricing':          return <PageWip title={t('router.dynamicPricing')} />;
-    case 'reports':             return <PageWip title={t('router.periodicReports')} />;
+    case 'ai-fleet':            return <LazyAiFleet />;
+    case 'ai-demand':           return <LazyAiDemand />;
+    case 'ai-pricing':          return <LazyAiPricing />;
+    case 'reports':             return <LazyReports />;
 
     // ── Flotte & Maintenance ───────────────────────────────────────────────
     case 'fleet-vehicles':      return <LazyFleetVehicles />;
@@ -296,17 +328,24 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'iam-audit':           return <LazyIamAudit />;
     case 'iam-sessions':        return <LazyIamSessions />;
 
-    // ── Platform (SUPER_ADMIN) ─────────────────────────────────────────────
-    case 'tenants':             return <PageWip title={t('router.tenantMgmt')} />;
-    case 'platform-staff':      return <PageWip title={t('router.platformStaff')} />;
-    case 'impersonation':       return <PageWip title={t('router.impersonation')} />;
+    // ── Platform (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ───────────────────
+    case 'platform-dashboard':  return <LazyPlatformDashboard />;
+    case 'tenants':             return <LazyTenants />;
+    case 'platform-plans':      return <LazyPlatformPlans />;
+    case 'platform-billing':    return <LazyPlatformBilling />;
+    case 'platform-support':    return <LazyPlatformSupport />;
+    case 'platform-staff':      return <LazyPlatformStaff />;
+    case 'impersonation':       return <LazyImpersonation />;
 
-    // ── Debug ──────────────────────────────────────────────────────────────
-    case 'debug-workflow':      return <PageWip title={t('router.wfDebug')} />;
-    case 'debug-outbox':        return <PageWip title={t('router.outboxReplay')} />;
+    // ── Support tenant → plateforme (côté tenant) ──────────────────────────
+    case 'support':             return <LazyCustomerSupport />;
+
+    // ── Debug (SUPPORT_L2 + SUPER_ADMIN) ───────────────────────────────────
+    case 'debug-workflow':      return <LazyDebugWorkflow />;
+    case 'debug-outbox':        return <LazyDebugOutbox />;
 
     // ── Divers ─────────────────────────────────────────────────────────────
-    case 'notifications':       return <PageWip title={t('router.notifications')} />;
+    case 'notifications':       return <LazyNotifications />;
 
     default:                    return <PageDashboard />;
   }

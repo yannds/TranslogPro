@@ -136,7 +136,7 @@ export class AnalyticsService {
       }),
     ]);
 
-    const travelers = new Set(ticketBuyers.map(t => t.passengerId));
+    const travelers = new Set(ticketBuyers.map(t => t.passengerId).filter((s): s is string => !!s));
     const shippers  = new Set(parcelSenders.map(p => p.senderId).filter((s): s is string => !!s));
 
     let both = 0;

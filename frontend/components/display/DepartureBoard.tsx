@@ -387,8 +387,8 @@ function BoardRowItem({
     'grid items-center gap-x-3 px-4 xl:px-6 py-3 border-b',
     'border-slate-200/80 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-900/30 transition-colors',
     isAllStations
-      ? 'grid-cols-[4.5rem_1fr_1fr_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]'
-      : 'grid-cols-[4.5rem_1fr_minmax(0,7rem)_minmax(0,8rem)_3.5rem_minmax(0,9rem)_1fr]',
+      ? 'grid-cols-[4.5rem_1fr_1fr_minmax(0,10rem)_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]'
+      : 'grid-cols-[4.5rem_1fr_minmax(0,10rem)_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]',
     isTerminal && 'opacity-40',
     isBoarding && 'bg-amber-50/50 dark:bg-amber-950/20',
     cfg?.visual.rowCls,
@@ -473,6 +473,16 @@ function BoardRowItem({
         </div>
       )}
 
+      {/* Gare départ (mode DEPARTURES) / arrivée (mode ARRIVALS) */}
+      <div role="cell" className="hidden md:block min-w-0">
+        <span className={cn(
+          'text-xs xl:text-sm font-medium truncate block',
+          isTerminal ? 'text-slate-400 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300',
+        )}>
+          {mode === 'DEPARTURES' ? row.agencyOrigin : row.agencyDest}
+        </span>
+      </div>
+
       {/* Bus */}
       <div role="cell" className="hidden sm:block">
         <span className={cn(
@@ -482,18 +492,6 @@ function BoardRowItem({
           {row.busPlate}
         </span>
       </div>
-
-      {/* Agence (masquée en mode all — déjà sous Provenance/Destination) */}
-      {!isAllStations && (
-        <div role="cell" className="hidden md:block">
-          <span className={cn(
-            'text-xs xl:text-sm font-medium truncate block',
-            isTerminal ? 'text-slate-400 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300',
-          )}>
-            {mode === 'DEPARTURES' ? row.agencyOrigin : row.agencyDest}
-          </span>
-        </div>
-      )}
 
       {/* Quai */}
       <div role="cell" className="flex items-center justify-center">
@@ -682,8 +680,8 @@ export function DepartureBoard({
         className={cn(
           'grid gap-x-3 px-4 xl:px-6 py-2 shrink-0',
           isAllStations
-            ? 'grid-cols-[4.5rem_1fr_1fr_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]'
-            : 'grid-cols-[4.5rem_1fr_minmax(0,7rem)_minmax(0,8rem)_3.5rem_minmax(0,9rem)_1fr]',
+            ? 'grid-cols-[4.5rem_1fr_1fr_minmax(0,8rem)_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]'
+            : 'grid-cols-[4.5rem_1fr_minmax(0,8rem)_minmax(0,7rem)_3.5rem_minmax(0,9rem)_1fr]',
           'bg-[var(--color-primary)]/5 dark:bg-[var(--color-primary)]/10 border-b border-[var(--color-primary)]/20 dark:border-[var(--color-primary)]/30',
           'text-[var(--color-primary)] text-[10px] xl:text-xs font-bold uppercase tracking-widest',
         )}
@@ -697,12 +695,10 @@ export function DepartureBoard({
         ) : (
           <span>{mode === 'DEPARTURES' ? t('col.destination') : t('col.origin')}</span>
         )}
+        <span className="hidden md:block whitespace-nowrap">
+          {mode === 'DEPARTURES' ? t('col.agencyDeparture') : t('col.agencyArrival')}
+        </span>
         <span className="hidden sm:block">{t('col.bus')}</span>
-        {!isAllStations && (
-          <span className="hidden md:block">
-            {mode === 'DEPARTURES' ? t('col.agencyDeparture') : t('col.agencyArrival')}
-          </span>
-        )}
         <span className="text-center">{t('col.platform')}</span>
         <span>{t('col.status')}</span>
         <span className="hidden lg:block">{t('col.remarks')}</span>

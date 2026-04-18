@@ -11,9 +11,10 @@
  * Light mode par défaut, dark mode compatible via tokens .t-* / dark: .
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
 import {
-  Users2, Plus, Pencil, Archive, X, UserCircle, Star,
+  Users2, Plus, Pencil, Archive, X, UserCircle, Star, History,
+  Phone as PhoneIcon, Mail as MailIcon,
 } from 'lucide-react';
 import { useFetch }              from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
@@ -28,6 +29,7 @@ import { inputClass as inp }     from '../ui/inputClass';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import { DocumentAttachments } from '../document/DocumentAttachments';
 import { CustomerDetailModal } from '../crm/CustomerDetailModal';
+import { ContactHistoryModal } from '../crm/ContactHistoryModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,35 @@ interface ListResponse {
   limit: number;
   data:  CustomerRow[];
 }
+
+// ─── Modèle CRM unifié (nouveau) ────────────────────────────────────────────
+// Alimenté par GET /crm/contacts : inclut shadows (userId=null) + registered.
+interface ContactRow {
+  id:              string;
+  phoneE164:       string | null;
+  email:           string | null;
+  name:            string;
+  firstName:       string | null;
+  lastName:        string | null;
+  language:        string | null;
+  userId:          string | null;
+  segments:        string[];
+  totalTickets:    number;
+  totalParcels:    number;
+  totalSpentCents: number;
+  firstSeenAt:     string;
+  lastSeenAt:      string;
+  isShadow:        boolean;
+}
+
+interface ContactsResponse {
+  total: number;
+  page:  number;
+  limit: number;
+  data:  ContactRow[];
+}
+
+type Segment = 'all' | 'shadow' | 'registered';
 
 interface CreateForm {
   email: string;
@@ -308,6 +339,16 @@ export function PageCrm() {
 
   const customers = list?.data ?? [];
 
+  // ── Vue CRM unifiée (Customer, shadow + registered) ────────────────────────
+  const [segment, setSegment] = useState<Segment>('all');
+  const contactsUrl = tenantId
+    ? `${base}/contacts?segment=${segment}&limit=200`
+    : null;
+  const { data: contactsData, loading: contactsLoading, error: contactsError } =
+    useFetch<ContactsResponse>(contactsUrl, [tenantId, segment]);
+  const contacts = contactsData?.data ?? [];
+  const [historyTarget, setHistoryTarget] = useState<ContactRow | null>(null);
+
   const [showCreate,   setShowCreate]   = useState(false);
   const [detailTarget, setDetailTarget] = useState<CustomerRow | null>(null);
   const [editTarget,   setEditTarget]   = useState<CustomerRow | null>(null);
@@ -353,6 +394,114 @@ export function PageCrm() {
     finally { setBusy(false); }
   };
 
+  // Colonnes du tableau Contacts (Customer model unifié)
+  const contactColumns: Column<ContactRow>[] = useMemo(() => [
+    {
+      key: 'name',
+      header: t('crmPage.colClient'),
+      sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+            <UserCircle className="w-5 h-5 text-slate-400" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{row.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              {row.email ?? row.phoneE164 ?? '—'}
+            </p>
+          </div>
+        </div>
+      ),
+      csvValue: (_v, row) => row.name,
+    },
+    {
+      key: 'phoneE164',
+      header: t('crmPage.colPhone'),
+      sortable: false,
+      width: '160px',
+      cellRenderer: (_v, row) => row.phoneE164
+        ? (
+          <span className="inline-flex items-center gap-1 text-xs tabular-nums text-slate-600 dark:text-slate-300">
+            <PhoneIcon className="w-3 h-3" aria-hidden />
+            {row.phoneE164}
+          </span>
+        )
+        : <span className="text-xs text-slate-400">—</span>,
+      csvValue: (_v, row) => row.phoneE164 ?? '',
+    },
+    {
+      key: 'email',
+      header: t('common.email'),
+      sortable: false,
+      cellRenderer: (_v, row) => row.email
+        ? (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 truncate">
+            <MailIcon className="w-3 h-3" aria-hidden />
+            {row.email}
+          </span>
+        )
+        : <span className="text-xs text-slate-400">—</span>,
+      csvValue: (_v, row) => row.email ?? '',
+    },
+    {
+      key: 'isShadow',
+      header: t('crmContact.status'),
+      sortable: true,
+      width: '130px',
+      cellRenderer: (_v, row) => {
+        const recurrent = row.totalTickets + row.totalParcels >= 2;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {row.isShadow
+              ? <Badge variant="warning">{t('crmContact.shadow')}</Badge>
+              : <Badge variant="success">{t('crmContact.registered')}</Badge>}
+            {recurrent && <Badge variant="info">{t('crmContact.recurrent')}</Badge>}
+          </div>
+        );
+      },
+      csvValue: (_v, row) => row.isShadow ? 'SHADOW' : 'REGISTERED',
+    },
+    {
+      key: 'totalTickets',
+      header: t('crmContact.tickets'),
+      sortable: true,
+      width: '80px',
+      cellRenderer: (v) => (
+        <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300">{Number(v)}</span>
+      ),
+    },
+    {
+      key: 'totalParcels',
+      header: t('crmContact.parcels'),
+      sortable: true,
+      width: '80px',
+      cellRenderer: (v) => (
+        <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300">{Number(v)}</span>
+      ),
+    },
+    {
+      key: 'lastSeenAt',
+      header: t('crmContact.lastActivity'),
+      sortable: true,
+      width: '140px',
+      cellRenderer: (v) => (
+        <span className="text-xs text-slate-400">
+          {v ? new Date(String(v)).toLocaleDateString() : '—'}
+        </span>
+      ),
+      csvValue: (v) => v ? new Date(String(v)).toLocaleDateString() : '',
+    },
+  ], [t]);
+
+  const contactRowActions: RowAction<ContactRow>[] = [
+    {
+      label:   t('crmContact.openHistory'),
+      icon:    <History size={13} />,
+      onClick: (row) => setHistoryTarget(row),
+    },
+  ];
+
   const columns = buildColumns(t);
   const rowActions: RowAction<CustomerRow>[] = [
     {
@@ -396,6 +545,62 @@ export function PageCrm() {
       {/* KPIs */}
       <CrmKpis customers={customers} t={t} />
 
+      {/* ── Contacts CRM unifiés (Customer model, shadow + registered) ───── */}
+      <section
+        aria-labelledby="crm-contacts-heading"
+        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="crm-contacts-heading" className="text-sm font-semibold text-slate-900 dark:text-white">
+              {t('crmContact.sectionTitle')}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('crmContact.sectionDesc')}
+            </p>
+          </div>
+          <div
+            role="tablist"
+            aria-label={t('crmContact.segmentLabel')}
+            className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5"
+          >
+            {(['all', 'registered', 'shadow'] as const).map(seg => (
+              <button
+                key={seg}
+                type="button"
+                role="tab"
+                aria-selected={segment === seg}
+                onClick={() => setSegment(seg)}
+                className={[
+                  'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1',
+                  segment === seg
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+                ].join(' ')}
+              >
+                {t(`crmContact.segment_${seg}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <ErrorAlert error={contactsError} icon />
+
+        <DataTableMaster<ContactRow>
+          columns={contactColumns}
+          data={contacts}
+          loading={contactsLoading}
+          rowActions={contactRowActions}
+          defaultSort={{ key: 'lastSeenAt', dir: 'desc' }}
+          defaultPageSize={25}
+          searchPlaceholder={t('crmContact.searchPlaceholder')}
+          emptyMessage={t('crmContact.empty')}
+          onRowClick={(row) => setHistoryTarget(row)}
+          stickyHeader
+        />
+      </section>
+
       <ErrorAlert error={error ?? actionErr} icon />
 
       {/* Tableau */}
@@ -415,6 +620,14 @@ export function PageCrm() {
           stickyHeader
         />
       </div>
+
+      {/* Fiche historique CRM (Contacts unifiés) */}
+      <ContactHistoryModal
+        open={!!historyTarget}
+        onClose={() => setHistoryTarget(null)}
+        tenantId={tenantId}
+        customerId={historyTarget?.id ?? null}
+      />
 
       {/* Fiche détaillée */}
       <CustomerDetailModal

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsEnum, IsBoolean, IsArray, ValidateNested, Min, ArrayMinSize } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsEnum, IsBoolean, IsArray, IsEmail, ValidateNested, Min, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum FareClass {
@@ -17,6 +17,10 @@ export class IssueTicketDto {
 
   @IsString()
   passengerPhone: string;
+
+  @IsEmail()
+  @IsOptional()
+  passengerEmail?: string;   // optionnel — alimente le CRM si fourni
 
   @IsEnum(FareClass)
   fareClass: FareClass;
@@ -57,6 +61,10 @@ export class BatchPassengerDto {
 
   @IsString()
   passengerPhone: string;
+
+  @IsEmail()
+  @IsOptional()
+  passengerEmail?: string;   // optionnel — alimente le CRM si fourni
 
   @IsEnum(FareClass)
   fareClass: FareClass;

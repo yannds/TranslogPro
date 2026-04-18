@@ -517,6 +517,21 @@ export function PageIamRoles() {
         </Button>
       </div>
 
+      {/* Tenant plateforme : les 3 rôles système (SUPER_ADMIN, SUPPORT_L1,
+          SUPPORT_L2) sont figés. La création/édition doit passer par
+          PagePlatformStaff — cette page reste utile pour l'audit des perms. */}
+      {tenantId === '00000000-0000-0000-0000-000000000000' && (
+        <div role="note" className="rounded-lg bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 px-4 py-3 text-xs text-teal-900 dark:text-teal-200 flex items-start gap-2">
+          <Shield className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          <div>
+            <p className="font-medium">{t('iamRoles.platformHintTitle')}</p>
+            <p className="mt-0.5">{t('iamRoles.platformHintBody')}{' '}
+              <a href="/admin/platform/staff" className="underline font-medium">{t('iamRoles.platformHintLink')}</a>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <DataTableMaster<Role>
         columns={COLUMNS}

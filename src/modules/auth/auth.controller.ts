@@ -94,7 +94,19 @@ export class AuthController {
     // Pas de cache — un changement de rôle/perm doit être visible au prochain
     // refresh sans attendre l'expiration d'un cache HTTP intermédiaire.
     res.setHeader('Cache-Control', 'no-store');
-    return this.authService.me(token, extractIp(req));
+
+    const result = await this.authService.me(
+      token,
+      extractIp(req),
+      req.headers['user-agent'] ?? '',
+    );
+
+    // Rotation à mi-TTL : AuthService a généré un nouveau token, on repose le cookie.
+    if (result.rotatedToken) {
+      res.cookie(COOKIE_NAME, result.rotatedToken, COOKIE_OPTS);
+    }
+
+    return result.user;
   }
 
   /**

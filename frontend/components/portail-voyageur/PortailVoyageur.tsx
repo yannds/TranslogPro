@@ -13,7 +13,8 @@
  */
 
 import { useState, useEffect, useRef, useMemo, type FormEvent, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../lib/auth/auth.context';
 import { cn } from '../../lib/utils';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
@@ -823,45 +824,266 @@ function RecenterMap({ center, zoom }: { center: [number, number]; zoom: number 
 // Parcel Section
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ParcelSection({ t }: { t: (k: string) => string }) {
+interface ParcelTrackResult {
+  trackingCode: string;
+  status:       string;
+  fromCity:     string | null;
+  toCity:       string | null;
+  createdAt:    string;
+}
+
+interface ParcelPickupResult {
+  trackingCode: string;
+  status:       string;
+  destination:  { name: string; city: string };
+}
+
+const PARCEL_STATUS_LABEL: Record<string, string> = {
+  CREATED:    'portail.parcelStatusCreated',
+  AT_ORIGIN:  'portail.parcelStatusAtOrigin',
+  PACKED:     'portail.parcelStatusPacked',
+  LOADED:     'portail.parcelStatusLoaded',
+  IN_TRANSIT: 'portail.inTransit',
+  ARRIVED:    'portail.parcelStatusArrived',
+  DELIVERED:  'portail.parcelStatusDelivered',
+  DAMAGED:    'portail.parcelStatusDamaged',
+  LOST:       'portail.parcelStatusLost',
+  RETURNED:   'portail.parcelStatusReturned',
+};
+
+function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: string | null }) {
   const [tab, setTab] = useState<'track' | 'send'>('track');
+
+  // ── Track state ────────────────────────────────────────────────────────
   const [code, setCode] = useState('');
-  const [result, setResult] = useState<{ status: string; from: string; to: string; date: string } | null>(null);
-  const [tracked, setTracked] = useState(false);
-  const track = (e: FormEvent) => { e.preventDefault(); setResult({ status: 'IN_TRANSIT', from: 'Brazzaville', to: 'Pointe-Noire', date: new Date().toISOString() }); setTracked(true); };
+  const [trackResult, setTrackResult] = useState<ParcelTrackResult | null>(null);
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
+
+  async function handleTrack(e: FormEvent) {
+    e.preventDefault();
+    if (!apiBase || !code.trim()) return;
+    setTrackLoading(true);
+    setTrackError(null);
+    setTrackResult(null);
+    try {
+      const result = await apiFetch<ParcelTrackResult>(
+        `${apiBase}/parcels/${encodeURIComponent(code.trim())}/track`,
+        { skipRedirectOn401: true },
+      );
+      setTrackResult(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('portail.parcelNotFound');
+      setTrackError(msg || t('portail.parcelNotFound'));
+    } finally {
+      setTrackLoading(false);
+    }
+  }
+
+  // ── Send state ─────────────────────────────────────────────────────────
+  const [form, setForm] = useState({
+    senderName: '', senderPhone: '',
+    recipientName: '', recipientPhone: '',
+    fromCity: '', toCity: '',
+    description: '',
+    weightKg: '',
+  });
+  const setField = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }));
+  const [sendLoading, setSendLoading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendResult, setSendResult] = useState<ParcelPickupResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const formValid =
+    form.senderName.trim().length >= 2 &&
+    form.senderPhone.trim().length >= 6 &&
+    form.recipientName.trim().length >= 2 &&
+    form.recipientPhone.trim().length >= 6 &&
+    form.fromCity.trim().length >= 2 &&
+    form.toCity.trim().length >= 2 &&
+    form.description.trim().length >= 3;
+
+  async function handleSend() {
+    if (!apiBase || !formValid) return;
+    setSendLoading(true);
+    setSendError(null);
+    try {
+      const weightKg = form.weightKg.trim() ? Number(form.weightKg.replace(',', '.')) : undefined;
+      const result = await apiFetch<ParcelPickupResult>(`${apiBase}/parcel-pickup-request`, {
+        method: 'POST',
+        skipRedirectOn401: true,
+        body: {
+          senderName:    form.senderName.trim(),
+          senderPhone:   form.senderPhone.trim(),
+          recipientName: form.recipientName.trim(),
+          recipientPhone: form.recipientPhone.trim(),
+          fromCity:      form.fromCity.trim(),
+          toCity:        form.toCity.trim(),
+          description:   form.description.trim(),
+          ...(weightKg !== undefined && !isNaN(weightKg) ? { weightKg } : {}),
+        },
+      });
+      setSendResult(result);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : t('portail.parcelPickupError'));
+    } finally {
+      setSendLoading(false);
+    }
+  }
+
+  function resetSend() {
+    setForm({
+      senderName: '', senderPhone: '',
+      recipientName: '', recipientPhone: '',
+      fromCity: '', toCity: '',
+      description: '', weightKg: '',
+    });
+    setSendResult(null);
+    setSendError(null);
+    setCopied(false);
+  }
+
+  async function copyCode(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable — ignore */ }
+  }
+
+  const statusKey = trackResult ? PARCEL_STATUS_LABEL[trackResult.status] : null;
+  const statusLabel = statusKey ? t(statusKey) : trackResult?.status ?? '';
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6"><div className="w-1 h-6 bg-[image:linear-gradient(to_bottom,var(--portal-accent),var(--portal-accent-dark))] rounded-full" /><h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('portail.parcelTitle')}</h2></div>
       <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6 max-w-xs">
-        {(['track', 'send'] as const).map(tb => <button key={tb} onClick={() => { setTab(tb); setTracked(false); }} className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all', tab === tb ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}>{tb === 'track' ? t('portail.trackParcel') : t('portail.sendParcel')}</button>)}
+        {(['track', 'send'] as const).map(tb => (
+          <button
+            key={tb}
+            onClick={() => { setTab(tb); setTrackError(null); setTrackResult(null); }}
+            className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
+              tab === tb ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+          >
+            {tb === 'track' ? t('portail.trackParcel') : t('portail.sendParcel')}
+          </button>
+        ))}
       </div>
+
       {tab === 'track' && (
         <div className="max-w-lg">
-          <form onSubmit={track} className="flex flex-col sm:flex-row gap-3">
-            <input placeholder={t('portail.trackingPlaceholder')} value={code} onChange={e => setCode(e.target.value)} className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)]" />
-            <button type="submit" disabled={!code.trim()} className="px-6 py-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all">{t('portail.track')}</button>
+          <form onSubmit={handleTrack} className="flex flex-col sm:flex-row gap-3">
+            <input
+              placeholder={t('portail.trackingPlaceholder')}
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              disabled={trackLoading}
+              className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)] disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={!code.trim() || trackLoading || !apiBase}
+              className="px-6 py-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {trackLoading ? t('portail.tracking') : t('portail.track')}
+            </button>
           </form>
-          {tracked && result && (
+
+          {trackError && (
+            <div className="mt-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300" role="alert">
+              {trackError}
+            </div>
+          )}
+
+          {trackResult && (
             <div className="mt-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg></div>
-                <div><p className="font-bold text-slate-900 dark:text-white text-sm">{code}</p><span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-bold uppercase">{t('portail.inTransit')}</span></div>
+                <div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white text-sm">{trackResult.trackingCode}</p>
+                  <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-bold uppercase">{statusLabel}</span>
+                </div>
               </div>
-              <div className="space-y-2"><IRow l={t('portail.departure')} v={result.from} /><IRow l={t('portail.arrival')} v={result.to} /><IRow l={t('portail.dateLabel')} v={fmtDate(result.date)} /></div>
+              <div className="space-y-2">
+                {trackResult.fromCity && <IRow l={t('portail.departure')} v={trackResult.fromCity} />}
+                {trackResult.toCity && <IRow l={t('portail.arrival')} v={trackResult.toCity} />}
+                <IRow l={t('portail.dateLabel')} v={fmtDate(trackResult.createdAt)} />
+              </div>
             </div>
           )}
         </div>
       )}
-      {tab === 'send' && (
+
+      {tab === 'send' && !sendResult && (
         <div className="max-w-lg bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
           <p className="text-sm text-slate-500 mb-4">{t('portail.sendParcelDesc')}</p>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Inp label={t('portail.senderName')} ph="Jean Makaya" value="" set={() => {}} /><Inp label={t('portail.senderPhone')} ph="+242 06 000 00 00" value="" set={() => {}} /></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Inp label={t('portail.recipientName')} ph="Marie Mouanda" value="" set={() => {}} /><Inp label={t('portail.recipientPhone')} ph="+242 05 000 00 00" value="" set={() => {}} /></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Inp label={t('portail.fromCity')} ph="Brazzaville" value="" set={() => {}} /><Inp label={t('portail.toCity')} ph="Pointe-Noire" value="" set={() => {}} /></div>
-            <Inp label={t('portail.parcelDescription')} ph={t('portail.parcelDescPlaceholder')} value="" set={() => {}} />
-            <button className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-sm hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 transition-all">{t('portail.requestPickup')}</button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Inp label={t('portail.senderName')} ph="Jean Makaya" value={form.senderName} set={setField('senderName')} />
+              <Inp label={t('portail.senderPhone')} ph="+242 06 000 00 00" value={form.senderPhone} set={setField('senderPhone')} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Inp label={t('portail.recipientName')} ph="Marie Mouanda" value={form.recipientName} set={setField('recipientName')} />
+              <Inp label={t('portail.recipientPhone')} ph="+242 05 000 00 00" value={form.recipientPhone} set={setField('recipientPhone')} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Inp label={t('portail.fromCity')} ph="Brazzaville" value={form.fromCity} set={setField('fromCity')} />
+              <Inp label={t('portail.toCity')} ph="Pointe-Noire" value={form.toCity} set={setField('toCity')} />
+            </div>
+            <Inp label={t('portail.parcelDescription')} ph={t('portail.parcelDescPlaceholder')} value={form.description} set={setField('description')} />
+            <Inp label={t('portail.parcelWeightKg')} ph={t('portail.parcelWeightPlaceholder')} value={form.weightKg} set={setField('weightKg')} />
+
+            {sendError && (
+              <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300" role="alert">
+                {sendError}
+              </div>
+            )}
+
+            <button
+              onClick={handleSend}
+              disabled={!formValid || sendLoading || !apiBase}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-sm hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendLoading ? t('portail.sending') : t('portail.requestPickup')}
+            </button>
           </div>
+        </div>
+      )}
+
+      {tab === 'send' && sendResult && (
+        <div className="max-w-lg bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-600"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">{t('portail.parcelPickupSuccess')}</h3>
+              <p className="text-xs text-slate-500">{t('portail.parcelPickupSuccessMsg')}</p>
+            </div>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-4">
+            <p className="text-xs uppercase tracking-wide font-semibold text-slate-500 mb-1">{t('portail.trackingCodeLabel')}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-lg sm:text-xl font-mono font-black tracking-widest text-slate-900 dark:text-white flex-1">{sendResult.trackingCode}</p>
+              <button
+                onClick={() => copyCode(sendResult.trackingCode)}
+                className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all"
+              >
+                {copied ? t('portail.codeCopied') : t('portail.copyCode')}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2 mb-4">
+            <IRow l={t('portail.arrival')} v={`${sendResult.destination.city || sendResult.destination.name}`} />
+          </div>
+          <button
+            onClick={resetSend}
+            className="w-full py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+          >
+            {t('portail.newRequest')}
+          </button>
         </div>
       )}
     </div>
@@ -1246,6 +1468,29 @@ export function PortailVoyageur() {
   const handleSection = (key: string) => { setSection(key as Section); if (key !== 'booking') setSearched(false); };
   const handleHome = () => { setSection('booking'); setSearched(false); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
+  // ── Auth : bouton navbar contextuel ─────────────────────────────────────
+  //   - anonyme          → "Connexion" → /login (avec from = page courante)
+  //   - CUSTOMER connecté → "Mon compte" → /customer
+  //   - autre userType connecté (admin, driver…) → HomeRedirect à /
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const authLabel = user
+    ? (user.userType === 'CUSTOMER' ? t('portail.myAccount') : t('portail.dashboard'))
+    : t('portail.login');
+  const handleAuthClick = useCallback(() => {
+    if (!user) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
+    if (user.userType === 'CUSTOMER') {
+      navigate('/customer');
+      return;
+    }
+    // Autres profils : laisser HomeRedirect router vers leur portail.
+    navigate('/');
+  }, [user, navigate, location]);
+
   // Layout-aware section title
   const STitle = ({ title }: { title: string }) => {
     const p = { title, accent: portalTheme.accent, accentDark: portalTheme.accentDark };
@@ -1268,11 +1513,11 @@ export function PortailVoyageur() {
     >
       {/* ── Navbar (layout-variant) ────────────────────────────── */}
       {layout === 'horizon' ? (
-        <HorizonNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <HorizonNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={authLabel} onLogin={handleAuthClick} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
       ) : layout === 'vivid' ? (
-        <VividNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <VividNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={authLabel} onLogin={handleAuthClick} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
       ) : layout === 'prestige' ? (
-        <PrestigeNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={t('portail.login')} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
+        <PrestigeNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={authLabel} onLogin={handleAuthClick} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />
       ) : (
         /* Classic navbar (original) */
         <nav className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
@@ -1287,7 +1532,11 @@ export function PortailVoyageur() {
             <div className="flex items-center gap-0.5 shrink-0">
               <ThemeToggle />
               <LanguageSwitcher />
-              <button className="hidden sm:block text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm ml-1">{t('portail.login')}</button>
+              <button
+                type="button"
+                onClick={handleAuthClick}
+                className="hidden sm:block text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+              >{authLabel}</button>
               <button onClick={() => setMobileNav(v => !v)} className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1" aria-label={mobileNav ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileNav}>
                 {mobileNav ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>}
               </button>
@@ -1297,7 +1546,11 @@ export function PortailVoyageur() {
             <div className="md:hidden border-t border-slate-200/50 dark:border-slate-800/50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl animate-in slide-in-from-top-2 duration-150">
               <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
                 {NAV.map(n => <button key={n.key} onClick={() => { handleSection(n.key); setMobileNav(false); }} className={cn('w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors', section === n.key ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50')}>{n.label}</button>)}
-                <button className="sm:hidden w-full mt-2 text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm text-center">{t('portail.login')}</button>
+                <button
+                  type="button"
+                  onClick={() => { setMobileNav(false); handleAuthClick(); }}
+                  className="sm:hidden w-full mt-2 text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+                >{authLabel}</button>
               </div>
             </div>
           )}
@@ -1406,7 +1659,7 @@ export function PortailVoyageur() {
             </div>
           )}
         </>)}
-        {section === 'parcels' && <ParcelSection t={t} />}
+        {section === 'parcels' && <ParcelSection t={t} apiBase={apiBase} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
         {section === 'about' && (() => {
           const ICON_MAP: Record<string, string> = { shield: '\u2691', sparkles: '\u2726', target: '\u2316' };

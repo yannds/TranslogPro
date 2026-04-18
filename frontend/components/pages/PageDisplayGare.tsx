@@ -51,10 +51,12 @@ export function PageDisplayGare() {
   const displayRef = useRef<HTMLDivElement>(null);
 
   // ── Sync selectedStation when API data arrives ────────────────────────────
+  // "Toutes les gares" (__all__) est le défaut et reste toujours valide ;
+  // ne réinitialiser que si une gare spécifique sélectionnée a disparu.
   useEffect(() => {
-    if (stationsRes.data?.length) {
+    if (stationsRes.data?.length && selectedStation.id !== '__all__') {
       const still = stationsRes.data.find(s => s.id === selectedStation.id);
-      if (!still) setSelectedStation(stationsRes.data[0]);
+      if (!still) setSelectedStation(ALL_STATION);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationsRes.data]);

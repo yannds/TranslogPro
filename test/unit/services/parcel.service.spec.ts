@@ -85,7 +85,13 @@ function buildService(overrides: Partial<{
   const prisma   = overrides.prisma   ?? makePrisma();
   const workflow = overrides.workflow  ?? makeWorkflow();
   const eventBus = overrides.eventBus  ?? makeEventBus();
-  return { service: new ParcelService(prisma, workflow, eventBus), prisma, workflow, eventBus };
+  // Stubs minimaux pour les dépendances CRM — le register() n'appelle
+  // resolveOrCreate qu'avec phone/email ; les tests ParcelService ciblent
+  // le workflow et la persistance, pas le CRM. Stubs no-op suffisent.
+  const crmResolver = { resolveOrCreate: jest.fn().mockResolvedValue(null) } as any;
+  const crmClaim    = { issueToken:      jest.fn().mockResolvedValue(null) } as any;
+  const service = new ParcelService(prisma as any, workflow as any, crmResolver, crmClaim, eventBus as any);
+  return { service, prisma, workflow, eventBus };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

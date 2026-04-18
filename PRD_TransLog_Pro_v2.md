@@ -500,15 +500,212 @@ interface BaseEvent {
 
 **Entités DB :** Une seule table `TripEvent` avec colonne `type` comme discriminateur. Les incidents (`type IN ('SOS', 'MECHANICAL', 'ACCIDENT', 'SECURITY', 'CARGO_DAMAGED')`) ont une FK optionnelle vers `Claim`.
 
-### IV.12 CRM & Expérience Voyageur
+### IV.12 CRM & Expérience Voyageur (v3 — Customer unifié)
 
-- **Profil Voyageur Enrichi :** Histogramme des trajets, préférences de siège et de gare (JSONB), cumul des bagages, indice de fidélité calculé
-- **User.userType = CUSTOMER :** Les clients accèdent à leur profil via `data.crm.read.own`. Les admins tenant via `data.crm.read.tenant`
-- **Réclamations SAV :** `Claim` workflow — `OPEN → UNDER_INVESTIGATION → RESOLVED → CLOSED`. Ouverture automatique si note voyageur < 2/5 (side effect de `trip.completed`)
-- **Campagnes Marketing :** Entité `Campaign` — scoped tenant, lié aux groupes de voyageurs par critères. Permission `control.campaign.manage.tenant`
-- **Anti-données-fantômes :** Un profil voyageur est créé uniquement à la première réservation — pas à la création de compte. `User.voyagerProfile` est nullable jusqu'à ce moment
+> **Refonte Phase 1 + 2** (2026-04-18) : CRM unifié autour d'une entité `Customer` tenant-scoped **séparée de l'authentification**. Alimentation automatique depuis ticket/colis, magic link pour rattachement à posteriori.
 
-**Entités :** `Campaign`, champs enrichis sur `User` (préférences JSONB, loyaltyScore, userType)
+#### IV.12.1 Principe — Identité ≠ Authentification
+
+`Customer` représente **qui achète** (une identité CRM). `User` représente **qui se connecte** (compte authentifiable). Les deux sont liés par `Customer.userId` (one-to-one, nullable).
+
+- **Shadow profile** : `Customer` créé au 1er contact (ticket/colis) même si la personne n'a pas de compte. `userId = null`.
+- **Registered** : quand la personne se crée un compte (signup ou via magic link), `Customer.userId` pointe vers son `User`.
+- **Clef de matching primaire** : téléphone E.164 normalisé `(tenantId, phoneE164)`. Fallback email. Pas de collision cross-tenant.
+- **Invariants** : phone ET email nullable (au moins un présent) ; `@@unique([tenantId, phoneE164])` partiel ; soft-delete via `deletedAt` + `mergedIntoId` pour fusion.
+
+#### IV.12.2 Résolveur CRM (service central)
+
+À chaque création de ticket ou de colis, `CustomerResolverService.resolveOrCreate(tenantId, {phone, email, name})` :
+1. Normalise le téléphone via `phone.helper` (`country` du tenant → E.164).
+2. Lookup prioritaire par `phoneE164`, fallback par `email`.
+3. Si non trouvé → crée un shadow Customer (userId=null).
+4. Enrichit progressivement (email/name/language) si les infos arrivent par étapes.
+5. Upsert idempotent dans la même transaction que le ticket/colis.
+
+Hooks actifs : `TicketingService.issue()`, `issueBatch()`, `ParcelService.register()`.
+
+#### IV.12.3 Magic link "revendication" (CustomerClaimToken)
+
+À la fin de chaque création où `Customer.userId = null`, un token de revendication est généré :
+- **Cryptographie** : `crypto.randomBytes(32)` = 256 bits d'entropie. Seul `sha256(token)` est stocké en base.
+- **TTL 30 jours** par défaut, configurable. One-shot : `usedAt != null` rend irreutilisable.
+- **Canaux** : WhatsApp first → SMS fallback → Email. `NotificationPreference` respecté.
+- **URL** : `https://{portal}/claim?token=XXX` (page portail public).
+
+Flow :
+1. `POST /api/crm/claim/preview` body `{ token }` → renvoie infos masquées (`phoneMasked: '+242••••567'`, compteurs, expiresAt). Rate-limit 10/min/IP.
+2. L'utilisateur crée son compte (signup existant) → obtient son `userId`.
+3. `POST /api/crm/claim/complete` body `{ token, userId }` → lie `Customer.userId = userId`, marque `usedAt`. Rate-limit 5/min/IP.
+
+Sécurité : isolation tenant vérifiée (le `userId` doit appartenir au même tenantId que le token). Un user d'un autre tenant → `BadRequest` sans fuite.
+
+#### IV.12.4 Claim rétroactif — Phase 3 livrée (OTP obligatoire)
+
+**Livré 2026-04-18.** Un CUSTOMER authentifié qui retrouve un achat passé effectué anonymement peut le rattacher à son compte en 2 étapes :
+
+1. `POST /tenants/:tid/customer/claim/initiate` avec `{ target: TICKET|PARCEL, code, phone }`
+   - `code` = `Ticket.qrCode` ou `Parcel.trackingCode`.
+   - Résout la cible dans le tenant.
+   - Vérifie qu'un Customer shadow (userId=null) existe avec ce phone E.164.
+   - Rate-limit **3/h/IP** (Throttle) + **3/jour/phone** (DB count).
+   - Invalide les OTPs actifs précédents pour ce (phone, target).
+   - Génère un **OTP 6 chiffres** via `crypto.randomInt(0, 1_000_000)`, stocke `sha-256(otp)`.
+   - Dispatche WhatsApp first → SMS fallback. Réponse : `{ channel, expiresIn: 300 }`.
+2. `POST /tenants/:tid/customer/claim/confirm` avec `{ target, code, phone, otp }`
+   - Rate-limit **10/h/IP** (Throttle).
+   - Vérifie OTP non expiré, non utilisé, `attempts < 5`.
+   - Compare `sha256(otp_candidat) === storedHash` (équivalent timing-safe).
+   - Si OTP faux : `attempts++`. À 5 échecs, OTP invalidé (403).
+   - Si OTP juste : dans une transaction, `Customer.userId = actor.id` + `usedAt = now`.
+   - Vérifie que l'User `actor.id` appartient au même tenant que le token (isolation stricte).
+
+**Sécurité** :
+- OTP clair JAMAIS persisté.
+- Messages d'erreur génériques (`retro_claim_not_eligible`) pour empêcher l'énumération de numéros/cibles.
+- 5 tentatives max = anti brute-force (espace de 10⁶ avec invalidation après 5 = P(succès) < 5×10⁻⁶).
+- Expiration 5 min = fenêtre étroite.
+- Contrôle `FEEDBACK_SUBMIT_OWN` minimal (CUSTOMER authentifié).
+
+**Modèle Prisma** :
+```prisma
+model CustomerRetroClaimOtp {
+  id            String    @id @default(cuid())
+  tenantId      String
+  phoneE164     String
+  otpHash       String    // sha-256(otp)
+  targetType    String    // TICKET | PARCEL
+  targetId      String
+  attempts      Int       @default(0)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  invalidatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  createdByIp   String?
+}
+```
+
+**UI** : page `PageRetroClaim.tsx` dans le portail CUSTOMER, 3 étapes (saisie → OTP → succès), i18n 8 locales, WCAG AA (role=radiogroup, aria-current, inputmode=numeric, autoComplete=one-time-code).
+
+#### IV.12.5 Data model (Prisma)
+
+```prisma
+model Customer {
+  id               String    @id @default(cuid())
+  tenantId         String
+  phoneE164        String?
+  email            String?
+  name             String
+  firstName        String?
+  lastName         String?
+  language         String?
+  userId           String?   @unique   // null = shadow
+  preferences      Json      @default("{}")
+  segments         String[]  @default([])
+  totalTickets     Int       @default(0)
+  totalParcels     Int       @default(0)
+  totalSpentCents  BigInt    @default(0)   // JAMAIS Float sur un compteur monétaire
+  firstSeenAt      DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  deletedAt        DateTime?
+  mergedIntoId     String?
+
+  @@unique([tenantId, phoneE164])
+  @@unique([tenantId, email])
+}
+
+model CustomerClaimToken {
+  id            String    @id @default(cuid())
+  tenantId      String
+  customerId    String
+  tokenHash     String    @unique   // sha-256 — le clair n'est JAMAIS stocké
+  channel       String    // MAGIC_EMAIL | MAGIC_WHATSAPP | MAGIC_SMS
+  expiresAt     DateTime
+  usedAt        DateTime?
+  invalidatedAt DateTime?
+  createdByIp   String?
+}
+
+// Ticket : passengerId / agencyId deviennent nullable ; customerId ajouté
+// Parcel : senderId devient nullable ; senderCustomerId + recipientCustomerId ajoutés
+```
+
+#### IV.12.6 Permissions RBAC
+
+| Permission | Scope | Rôles par défaut |
+|---|---|---|
+| `data.crm.read.tenant` | Lecture CRM tenant-wide | TENANT_ADMIN |
+| `data.crm.read.agency` | Lecture CRM agence | TENANT_ADMIN, AGENCY_MANAGER |
+| `data.crm.write.tenant` | Création/édition Customer | TENANT_ADMIN |
+| `data.crm.write.agency` | Édition dans sa propre agence | TENANT_ADMIN, AGENCY_MANAGER |
+| `data.crm.merge.tenant` | Fusion de Customers (op destructive, audit log) | TENANT_ADMIN |
+| `data.crm.delete.tenant` | RGPD droit à l'oubli | TENANT_ADMIN |
+
+#### IV.12.7 UI — PageCrm v2
+
+- **Section "Contacts CRM"** : DataTableMaster avec segments (Tous / Enregistrés / Shadows), colonnes phone/email/statut/tickets/colis/dernière activité.
+- **Badges** : `Shadow` (warning), `Registered` (success), `Récurrent` (info, si totalTickets + totalParcels ≥ 2).
+- **Modale historique** (`ContactHistoryModal`) : 3 onglets Billets / Colis envoyés / Colis reçus, compteurs, coordonnées masquées.
+- **Contrat UX** : i18n 8 locales (clés `crmContact.*`), WCAG AA (role=tab, aria-selected, aria-live), responsive, dark + light.
+- **Page publique `/claim`** : lien magic link, preview masqué, bouton "Créer mon compte" → signup existant. Pas de fuite PII complète.
+
+#### IV.12.8 Campagnes Marketing
+
+- **Entité `Campaign`** : scoped tenant, lié aux groupes de Customers par critères extensibles JSONB :
+  - `segments: string[]`     — audience = Customers avec AU MOINS 1 des segments listés
+  - `minTotalSpentCents: BigInt` — seuil financier
+  - `minTransactions: number` — totalTickets + totalParcels >= seuil
+  - `onlyRegistered: boolean` — exclut les shadows
+  - `registeredSince: ISO`   — firstSeenAt >= date
+- **Estimation audience** : `CrmService.estimateAudience(tenantId, campaignId)` query `count(Customer)` avec les critères JSONB.
+- **Permission** : `control.campaign.manage.tenant`.
+
+#### IV.12.9 Recommandations automatiques (Phase 4)
+
+Dérivées à la volée depuis l'historique Ticket/Parcel (pas de persistance — toujours à jour).
+
+- **Service** : `CustomerRecommendationService.byCustomer(tenantId, customerId)` et `byPhone(tenantId, phone)`.
+- **Endpoints** :
+  - `GET /tenants/:tid/crm/contacts/:id/recommendations`
+  - `GET /tenants/:tid/crm/lookup?phone=…` (caisse : résolution par téléphone)
+- **Calculs** (top = mode de la valeur) :
+  - `topSeat`           — siège le plus réservé (exclut CANCELLED/EXPIRED)
+  - `topFareClass`      — classe tarifaire habituelle
+  - `topBoardingId` / `topAlightingId` — gares favorites
+  - `topDestinationId`  — destination la plus envoyée (colis)
+- **UI** : `CrmPhoneHint` dans PageSellTicket (debounce 500ms) → affiche badge `Récurrent`, compteurs, segments, et hints ("Siège préféré 3A · Classe habituelle VIP").
+
+#### IV.12.10 Segments automatiques (Phase 5)
+
+Segments calculés à partir des compteurs Customer. Les compteurs sont incrémentés dans la même transaction que la création Ticket/Parcel (`CustomerResolverService.bumpCounters`). Les segments sont recalculés hors-transaction (fire-and-forget).
+
+| Segment  | Règle |
+|---|---|
+| `VIP`      | `totalSpentCents >= 500_000` (seuil unité devise) |
+| `FREQUENT` | `totalTickets + totalParcels >= 5` |
+| `NEW`      | `firstSeenAt < 30 jours` |
+| `DORMANT`  | `lastSeenAt > 90 jours` |
+
+**Préservation des segments manuels** : `CORPORATE` et tout autre label libre posé par un manager ne sont pas écrasés. Seuls les 4 segments managés sont re-calculés.
+
+**Batch** : `POST /tenants/:tid/crm/segments/recompute` (permission `CRM_WRITE_TENANT`) pour recalcul global tenant-wide (migration, rattrapage).
+
+#### IV.12.9 Anti-régression & règles d'or
+
+- **Ne JAMAIS** créer d'User synthétique (shadow) avec email fabriqué. Créer un `Customer` shadow.
+- **Ne JAMAIS** stocker un magic link en clair. Uniquement `sha256(token)`.
+- **Ne JAMAIS** envoyer un email à un shadow — aucun User shadow n'existe, donc le risque n'existe pas.
+- **Ticket.passengerId / Parcel.senderId** restent FK User mais sont **nullable** — pas de sentinel `portal-anonymous`.
+- **Phone E.164 normalisé** : clef de matching stable, pas d'énumération par variante d'écriture.
+
+#### IV.12.10 Migration (backfill)
+
+- Script idempotent `prisma/seeds/crm-customer.backfill.ts` :
+  1. Pour chaque `User(userType=CUSTOMER)` → crée/lie un `Customer` (userId=user.id).
+  2. Pour chaque Ticket/Parcel existant → remplit customerId / senderCustomerId / recipientCustomerId via lookup phone.
+  3. Recalcule les compteurs `totalTickets`, `totalParcels`, `totalSpentCents`.
+- Exécutable en prod via `npx ts-node prisma/seeds/crm-customer.backfill.ts`.
+
+**Entités :** `Customer`, `CustomerClaimToken`, `Campaign`, champs enrichis sur `User` (préférences JSONB, loyaltyScore, `customerProfile` one-to-one).
 
 ### IV.13 Safety & Feedback
 

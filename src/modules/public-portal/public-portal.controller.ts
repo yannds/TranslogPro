@@ -17,6 +17,7 @@ import {
 import { PublicPortalService }   from './public-portal.service';
 import { SearchTripsDto }        from './dto/search-trips.dto';
 import { CreateBookingDto }      from './dto/create-booking.dto';
+import { CreateParcelPickupRequestDto } from './dto/create-parcel-pickup-request.dto';
 import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
 
 @Controller('public/:tenantSlug/portal')
@@ -204,6 +205,40 @@ export class PublicPortalController {
     @Body() dto: { phone: string; reason?: string },
   ) {
     return this.service.requestCancellation(slug, ticketRef, dto);
+  }
+
+  // ── Colis (envoi + suivi public) ───────────────────────────────────────
+
+  /**
+   * Demande d'enlèvement de colis (anonyme).
+   * Crée un Parcel en statut CREATED. Un agent appellera pour confirmer.
+   * Rate limit strict : 5/h/IP — même cadence que l'annulation self-service.
+   */
+  @Post('parcel-pickup-request')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 5, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_parcel_pickup',
+    message: 'Parcel pickup request limit reached (5/hour). Please try again later.',
+  })
+  createParcelPickupRequest(
+    @Param('tenantSlug') slug: string,
+    @Body() dto: CreateParcelPickupRequestDto,
+  ) {
+    return this.service.createParcelPickupRequest(slug, dto);
+  }
+
+  /** Suivi public d'un colis par code de suivi (tenant-scoped). */
+  @Get('parcels/:trackingCode/track')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 30, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_parcel_track',
+    message: 'Too many tracking requests. Please wait a moment.',
+  })
+  trackParcel(
+    @Param('tenantSlug') slug: string,
+    @Param('trackingCode') trackingCode: string,
+  ) {
+    return this.service.trackParcelByCode(slug, trackingCode);
   }
 
   /** Création de réservation (rate limit strict) */

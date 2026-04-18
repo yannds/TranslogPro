@@ -15,6 +15,7 @@ import { ADMIN_NAV }          from '../../lib/navigation/nav.config';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
+import { TenantScopeSelector } from '../platform/TenantScopeSelector';
 
 function PageLoadingFallback() {
   return (
@@ -198,6 +199,11 @@ export function AdminDashboard() {
           </button>
           {logo}
         </div>
+
+        {/* Bandeau staff plateforme — visible uniquement si tenantId === PLATFORM.
+            Permet de scoper les pages tenant-scoped (Trips, Fleet, Cashier, …)
+            sur un tenant client, au lieu de requêter le tenant plateforme (vide). */}
+        <TenantScopeSelector />
 
         {/* Scroll container */}
         <main className="flex-1 overflow-y-auto t-app" role="main">
