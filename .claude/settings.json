@@ -427,7 +427,11 @@
       "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://trans-express.translog.test/api/public/citybus-congo/portal/config)",
       "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://admin.translog.test/health/live)",
       "Bash(curl -sk \"https://__platform__.translog.test/api/auth/me\")",
-      "Bash(ping -c 1 __platform__.translog.test)"
+      "Bash(ping -c 1 __platform__.translog.test)",
+      "Bash(find /Users/dsyann/TranslogPro/frontend/lib/auth -name \"*.ts*\" -exec head -5 {} \\\\;)",
+      "Bash(grep -rn \"t\\('sellTicket\\\\..*',.*\\\\{\" /Users/dsyann/TranslogPro/frontend/components/pages/PageSellTicket.tsx)",
+      "Bash(awk 'NR==2984 || NR==695 || NR==2983' /Users/dsyann/TranslogPro/frontend/lib/i18n/locales/fr.ts)",
+      "Bash(python3 -c \"import json, sys; d=json.load\\(sys.stdin\\); print\\('deps:'\\); print\\('\\\\n'.join\\(sorted\\(d.get\\('dependencies', {}\\).keys\\(\\)\\)\\)\\); print\\('\\\\ndev:'\\); print\\('\\\\n'.join\\(sorted\\(d.get\\('devDependencies', {}\\).keys\\(\\)\\)\\)\\)\")"
     ],
     "additionalDirectories": [
       "/tmp",

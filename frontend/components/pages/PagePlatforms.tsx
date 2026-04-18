@@ -12,7 +12,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  MapPinned, Plus, Pencil, Trash2, LogIn, LogOut, X,
+  MapPinned, Plus, Pencil, Trash2, LogIn, LogOut, X, Link2,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';
@@ -43,6 +43,18 @@ interface PlatformRow {
 }
 
 interface StationRow { id: string; name: string; city: string; }
+
+interface TripLite {
+  id: string;
+  status: string;
+  departureScheduled?: string;
+  route?: {
+    origin?: { id: string; name: string; city?: string };
+    destination?: { id: string; name: string; city?: string };
+    originId?: string;
+  };
+  bus?: { plateNumber?: string | null };
+}
 
 const STATUS_VARIANT: Record<PlatformStatus, 'success' | 'warning' | 'danger' | 'default'> = {
   AVAILABLE:   'success',
@@ -98,8 +110,29 @@ export function PagePlatforms() {
 
   const [showCreate, setShowCreate]     = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PlatformRow | null>(null);
+  const [assignTarget, setAssignTarget] = useState<PlatformRow | null>(null);
   const [busy, setBusy]     = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
+
+  // Chargement paresseux des trajets candidats — uniquement quand le dialog assign est ouvert
+  const { data: assignableTrips } = useFetch<TripLite[]>(
+    assignTarget && tenantId
+      ? `/api/tenants/${tenantId}/trips?status=PLANNED&status=OPEN&status=BOARDING`
+      : null,
+    [assignTarget?.id, tenantId],
+  );
+
+  // Filtrer par station : on propose d'abord les trajets dont l'origine est la
+  // même que la station du quai (logique métier : un quai sert les départs
+  // depuis sa gare). Fallback : tous les trajets actifs si aucun match.
+  const tripsForTarget: TripLite[] = (() => {
+    if (!assignableTrips || !assignTarget) return [];
+    const sameStation = assignableTrips.filter(
+      t => t.route?.originId === assignTarget.stationId
+        || t.route?.origin?.id === assignTarget.stationId,
+    );
+    return sameStation.length > 0 ? sameStation : assignableTrips;
+  })();
 
   const handleCreate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -123,6 +156,17 @@ export function PagePlatforms() {
     catch (err) { setActionErr((err as Error).message); }
   };
 
+  const handleAssign = async (tripId: string) => {
+    if (!assignTarget) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPost(`${base}/${assignTarget.id}/assign`, { tripId });
+      setAssignTarget(null);
+      refetch();
+    } catch (err) { setActionErr((err as Error).message); }
+    finally { setBusy(false); }
+  };
+
   const handleStatusChange = async (row: PlatformRow, status: string) => {
     try { await apiPatch(`${base}/${row.id}`, { status }); refetch(); }
     catch (err) { setActionErr((err as Error).message); }
@@ -137,6 +181,11 @@ export function PagePlatforms() {
   };
 
   const rowActions: RowAction<PlatformRow>[] = [
+    {
+      label: t('platforms.assignTrip'), icon: <Link2 size={13} />,
+      onClick: (row) => { setAssignTarget(row); setActionErr(null); },
+      hidden: (row) => row.status === 'MAINTENANCE' || row.status === 'CLOSED' || row.status === 'OCCUPIED',
+    },
     {
       label: t('platforms.release'), icon: <LogOut size={13} />,
       onClick: (row) => handleRelease(row),
@@ -218,6 +267,50 @@ export function PagePlatforms() {
             onCancel={() => setShowCreate(false)}
           />
         </form>
+      </Dialog>
+
+      {/* Dialog assignation trajet */}
+      <Dialog
+        open={!!assignTarget}
+        onOpenChange={o => { if (!o) setAssignTarget(null); }}
+        title={assignTarget ? `${t('platforms.assignTrip')} — ${assignTarget.name}` : t('platforms.assignTrip')}
+        size="lg"
+      >
+        <div className="space-y-3">
+          <ErrorAlert error={actionErr} />
+          {tripsForTarget.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+              {t('platforms.noAssignableTrip')}
+            </p>
+          ) : (
+            <ul role="list" className="divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
+              {tripsForTarget.map(tr => {
+                const origin = tr.route?.origin?.city ?? tr.route?.origin?.name ?? '?';
+                const dest   = tr.route?.destination?.city ?? tr.route?.destination?.name ?? '?';
+                const dt = tr.departureScheduled
+                  ? new Date(tr.departureScheduled).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                  : '';
+                return (
+                  <li key={tr.id} className="flex items-center justify-between gap-3 py-3 px-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {origin} → {dest}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                        {dt}{tr.bus?.plateNumber ? ` · ${tr.bus.plateNumber}` : ''}
+                      </p>
+                    </div>
+                    <Badge size="sm" variant="default">{tr.status}</Badge>
+                    <Button size="sm" disabled={busy} onClick={() => handleAssign(tr.id)}>
+                      <Link2 className="w-3.5 h-3.5 mr-1" aria-hidden />
+                      {t('platforms.assignAction')}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </Dialog>
 
       {/* Dialog suppression */}

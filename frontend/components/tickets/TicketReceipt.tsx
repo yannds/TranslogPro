@@ -11,10 +11,11 @@
  *   - PageIssuedTickets : dialog détail + fenêtre d'impression
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useTenantConfig } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { buildTicketVerifyUrl } from '../../lib/document-verify-url';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,10 +77,14 @@ export function TicketReceipt({ ticket, innerRef }: TicketReceiptProps) {
 
   useEffect(() => {
     if (!ticket.qrCode) return;
-    QRCode.toDataURL(ticket.qrCode, { width: 160, margin: 1 })
+    // Le QR encode l'URL publique de vérification : scan par smartphone →
+    // affichage du document officiel signé (backend renderer avec fingerprint).
+    // Les scanners agent tolèrent aussi cette URL (extraction côté backend).
+    const verifyUrl = buildTicketVerifyUrl({ id: ticket.id, qrCode: ticket.qrCode });
+    QRCode.toDataURL(verifyUrl, { width: 160, margin: 1 })
       .then(setQrUrl)
       .catch(() => setQrUrl(''));
-  }, [ticket.qrCode]);
+  }, [ticket.id, ticket.qrCode]);
 
   const routeName   = ticket.trip?.route?.name ?? null;
   const departure   = ticket.boardingStation?.name ?? ticket.trip?.route?.origin?.name ?? '—';
@@ -251,29 +256,168 @@ export function TicketReceipt({ ticket, innerRef }: TicketReceiptProps) {
   );
 }
 
-// ─── Print helper ─────────────────────────────────────────────────────────────
+// ─── BoardingPass — carte d'embarquement (format compact A6 paysage) ──────────
 
 /**
- * Ouvre une fenêtre de print avec le rendu du ticket.
- * Appeler avec le HTML sérialisé du composant ou via un ref.
+ * BoardingPass — variante légère de TicketReceipt pour l'embarquement.
+ *
+ * Différences clés vs TicketReceipt :
+ *   - Format horizontal (490×190) optimisé impression A6/ticket coupon
+ *   - Focus : passager, siège, quai/porte, QR scan agent
+ *   - Masque : prix, détails commerciaux
+ *
+ * Partage la même interface TicketData pour zéro duplication de props.
  */
-export function printTicketHtml(html: string, brandName: string) {
-  const w = window.open('', '_blank', 'width=440,height=700');
+export function BoardingPass({ ticket, innerRef }: TicketReceiptProps) {
+  const { brand } = useTenantConfig();
+  const { t }     = useI18n();
+  const [qrUrl, setQrUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!ticket.qrCode) return;
+    const verifyUrl = buildTicketVerifyUrl({ id: ticket.id, qrCode: ticket.qrCode });
+    QRCode.toDataURL(verifyUrl, { width: 140, margin: 1 })
+      .then(setQrUrl)
+      .catch(() => setQrUrl(''));
+  }, [ticket.id, ticket.qrCode]);
+
+  const departure = ticket.boardingStation?.name ?? ticket.trip?.route?.origin?.name ?? '—';
+  const arrival   = ticket.alightingStation?.name ?? ticket.trip?.route?.destination?.name ?? '—';
+  const depTime   = fmtTime(ticket.trip?.departureScheduled);
+  const depDate   = fmtDate(ticket.trip?.departureScheduled);
+  const plate     = ticket.trip?.bus?.plateNumber ?? '—';
+
+  return (
+    <div
+      ref={innerRef}
+      className="boarding-pass"
+      style={{
+        width: '100%',
+        maxWidth: 490,
+        minHeight: 190,
+        margin: '0 auto',
+        fontFamily: brand.fontFamily,
+        color: '#1e293b',
+        background: '#fff',
+        border: '1px solid #cbd5e1',
+        borderRadius: 8,
+        overflow: 'hidden',
+        display: 'flex',
+      }}
+    >
+      {/* ── Bande latérale (branding) ───────────────────────────────────────── */}
+      <div style={{
+        background: brand.primaryColor, color: '#fff',
+        padding: '12px 10px', width: 70, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+          {t('issuedTickets.boardingPass')}
+        </div>
+        <div style={{ fontSize: 9, opacity: 0.9, textAlign: 'center' }}>{brand.brandName}</div>
+      </div>
+
+      {/* ── Corps ──────────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Passenger */}
+        <div>
+          <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {t('issuedTickets.passenger')}
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 1 }}>{ticket.passengerName}</div>
+        </div>
+
+        {/* Route + time */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{departure}</div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>{depTime}</div>
+          </div>
+          <svg width="24" height="12" viewBox="0 0 24 12" fill="none" style={{ color: '#cbd5e1' }} aria-hidden>
+            <path d="M0 6h20M16 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div style={{ flex: 1, textAlign: 'right' }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{arrival}</div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>{depDate}</div>
+          </div>
+        </div>
+
+        {/* Meta row */}
+        <div style={{ display: 'flex', gap: 12, fontSize: 10 }}>
+          {ticket.seatNumber && (
+            <div>
+              <div style={{ color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('issuedTickets.seat')}</div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{ticket.seatNumber}</div>
+            </div>
+          )}
+          <div>
+            <div style={{ color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('issuedTickets.bus')}</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{plate}</div>
+          </div>
+          <div>
+            <div style={{ color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('issuedTickets.fareClass')}</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{ticket.fareClass}</div>
+          </div>
+        </div>
+
+        {/* Reference */}
+        <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#94a3b8', marginTop: 'auto' }}>
+          {ticket.id}
+        </div>
+      </div>
+
+      {/* ── QR code ────────────────────────────────────────────────────────── */}
+      <div style={{
+        padding: '12px 10px', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        borderLeft: '2px dashed #e2e8f0',
+      }}>
+        {qrUrl && <img src={qrUrl} alt="QR" style={{ width: 110, height: 110 }} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── Print helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Ouvre une fenêtre de print avec un HTML arbitraire. Utilisé pour :
+ *   - 1 ticket (via printTicketHtml ci-dessous)
+ *   - N tickets / boarding passes en batch
+ *   - N talons de colis
+ *
+ * Le caller fournit le HTML complet (déjà sérialisé depuis le DOM React avec
+ * QR codes résolus en data-URL). Le style de page-break est appliqué par défaut
+ * sur `.ticket-receipt`, `.boarding-pass` et `.parcel-label` pour séparer les
+ * documents lors de l'impression.
+ */
+export function printHtmlBatch(html: string, brandName: string, title: string) {
+  const w = window.open('', '_blank', 'width=820,height=700');
   if (!w) return;
   w.document.write(`<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8"/>
-<title>${brandName} — Ticket</title>
+<title>${brandName} — ${title}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { display: flex; justify-content: center; padding: 20px; background: #f1f5f9; }
+  body { padding: 20px; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .ticket-receipt, .boarding-pass, .parcel-label { page-break-after: always; break-after: page; }
+  .ticket-receipt:last-child, .boarding-pass:last-child, .parcel-label:last-child {
+    page-break-after: auto; break-after: auto;
+  }
   @media print {
-    body { background: #fff; padding: 0; }
-    .ticket-receipt { box-shadow: none !important; border: none !important; }
+    body { background: #fff; padding: 0; gap: 0; }
+    .ticket-receipt, .boarding-pass, .parcel-label { box-shadow: none !important; border: none !important; }
   }
 </style>
 </head><body>${html}</body></html>`);
   w.document.close();
   w.focus();
-  setTimeout(() => w.print(), 300);
+  setTimeout(() => w.print(), 400);
+}
+
+/** Raccourci rétro-compat : print un seul ticket. */
+export function printTicketHtml(html: string, brandName: string) {
+  printHtmlBatch(html, brandName, 'Ticket');
 }

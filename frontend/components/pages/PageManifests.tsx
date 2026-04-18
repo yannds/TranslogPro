@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { FileText, CheckCircle, Download } from 'lucide-react';
 import { useAuth }                       from '../../lib/auth/auth.context';
 import { useI18n }                        from '../../lib/i18n/useI18n';
-import { useFetch }                      from '../../lib/hooks/useFetch';
+import { useOfflineList }                from '../../lib/hooks/useOfflineList';
 import { apiPost }                       from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }                         from '../ui/Badge';
@@ -54,8 +54,19 @@ export function PageManifests() {
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}`;
 
-  const { data: trips, loading: tripsLoading, error: tripsError } =
-    useFetch<TripRow[]>(tenantId ? `${base}/trips` : null, [tenantId]);
+  const {
+    items: tripsItems,
+    loading: tripsLoading,
+    error: tripsError,
+    fromCache: tripsFromCache,
+  } = useOfflineList<TripRow>({
+    table:    'trips',
+    tenantId,
+    url:      tenantId ? `${base}/trips` : null,
+    toRecord: (t) => ({ id: t.id }),
+    deps:     [tenantId],
+  });
+  const trips = tripsItems;
 
   const [tripId, setTripId]       = useState<string | null>(null);
   const [manifest, setManifest]   = useState<Manifest | null>(null);
@@ -106,6 +117,15 @@ export function PageManifests() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t('manifests.subtitle')}</p>
         </div>
       </div>
+
+      {tripsFromCache && (
+        <div
+          role="note"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+        >
+          {t('offline.cachedData')}
+        </div>
+      )}
 
       <ErrorAlert error={tripsError || error} icon />
 

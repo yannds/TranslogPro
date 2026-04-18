@@ -18,6 +18,8 @@
  *  11. Final CTA + formulaire early-access
  */
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { apiFetch, ApiError } from '../../lib/api';
 import {
   ArrowRight, PlayCircle, ChevronDown,
   Shield, Cloud, Activity,
@@ -84,13 +86,13 @@ function HeroSection() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#pricing"
+              <Link
+                to="/signup"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 text-base font-semibold text-white shadow-lg shadow-teal-600/20 transition-all hover:bg-teal-500 hover:shadow-teal-600/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
               >
                 {t('landing.hero.ctaPrimary')}
                 <ArrowRight className="h-4 w-4" aria-hidden />
-              </a>
+              </Link>
               <a
                 href="#deepdive"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 text-base font-semibold text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-950"
@@ -514,8 +516,8 @@ function PricingTeaser() {
                 </span>
               </p>
 
-              <a
-                href="#cta"
+              <Link
+                to={`/signup?plan=${planSlugFromKey(key)}`}
                 className={cn(
                   'mt-6 inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900',
                   featured
@@ -524,7 +526,7 @@ function PricingTeaser() {
                 )}
               >
                 {t(`landing.pricing.${key}.cta`)}
-              </a>
+              </Link>
             </li>
           ))}
         </ul>
@@ -594,19 +596,32 @@ function FAQItem({ qKey, aKey }: { qKey: string; aKey: string }) {
 // ─── Final CTA + Early access ────────────────────────────────────────────────
 
 function FinalCTA() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'success' | 'invalid'>('idle');
+  const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'invalid' | 'error'>('idle');
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     if (!valid) { setStatus('invalid'); return; }
-    // Phase 1 : capture locale uniquement — le backend /waitlist arrive en phase 2.
-    // On simule la soumission pour confirmer l'UX. La donnée sera perdue après refresh,
-    // ce qui est acceptable tant que l'endpoint n'existe pas encore.
-    setStatus('success');
-    setEmail('');
+
+    setStatus('pending');
+    try {
+      await apiFetch('/api/public/waitlist', {
+        method: 'POST',
+        body:   { email: email.trim().toLowerCase(), locale: lang, source: 'landing_cta' },
+        skipRedirectOn401: true,
+      });
+      setStatus('success');
+      setEmail('');
+    } catch (err) {
+      // Rate-limit (429) ou 400 → message générique d'erreur, on garde l'email pour retry.
+      if (err instanceof ApiError && err.status === 429) {
+        setStatus('error');
+      } else {
+        setStatus('error');
+      }
+    }
   }
 
   return (
@@ -632,26 +647,41 @@ function FinalCTA() {
 
         <form onSubmit={onSubmit} className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row" noValidate>
           <label htmlFor="early-email" className="sr-only">{t('landing.earlyAccess.placeholder')}</label>
+          {/* Honeypot anti-bot — invisible visuellement + aria-hidden */}
+          <input
+            type="text"
+            name="company_website"
+            autoComplete="off"
+            tabIndex={-1}
+            aria-hidden
+            className="absolute left-[-9999px] h-0 w-0 opacity-0"
+          />
           <div className="relative flex-1">
             <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
             <input
               id="early-email"
               type="email"
               value={email}
-              onChange={e => { setEmail(e.target.value); if (status !== 'idle') setStatus('idle'); }}
+              onChange={e => { setEmail(e.target.value); if (status !== 'idle' && status !== 'pending') setStatus('idle'); }}
               placeholder={t('landing.earlyAccess.placeholder')}
               aria-invalid={status === 'invalid'}
               aria-describedby="early-email-status"
-              className="h-12 w-full rounded-lg border border-slate-600 bg-slate-800/80 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/40"
+              disabled={status === 'pending' || status === 'success'}
+              className="h-12 w-full rounded-lg border border-slate-600 bg-slate-800/80 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/40 disabled:opacity-60"
               autoComplete="email"
               required
             />
           </div>
           <button
             type="submit"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-teal-500 px-6 text-sm font-semibold text-white shadow-lg shadow-teal-500/30 transition-colors hover:bg-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            disabled={status === 'pending' || status === 'success'}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-teal-500 px-6 text-sm font-semibold text-white shadow-lg shadow-teal-500/30 transition-colors hover:bg-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Send className="h-4 w-4" aria-hidden />
+            {status === 'pending' ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+            ) : (
+              <Send className="h-4 w-4" aria-hidden />
+            )}
             {t('landing.earlyAccess.submit')}
           </button>
         </form>
@@ -667,6 +697,12 @@ function FinalCTA() {
             <span className="inline-flex items-center gap-1.5 text-amber-300">
               <AlertTriangle className="h-4 w-4" aria-hidden />
               {t('landing.earlyAccess.invalid')}
+            </span>
+          )}
+          {status === 'error' && (
+            <span className="inline-flex items-center gap-1.5 text-amber-300">
+              <AlertTriangle className="h-4 w-4" aria-hidden />
+              {t('landing.earlyAccess.error')}
             </span>
           )}
         </p>
@@ -1168,6 +1204,21 @@ function RecoRow({ label, action, tone }: { label: string; action: string; tone:
 }
 
 // ─── Shared bits ─────────────────────────────────────────────────────────────
+
+/**
+ * Mapping des clés locales du teaser ("p1"|"p2"|"p3") vers les slugs de plans
+ * backend (catalogue DB-driven). Les slugs doivent exister dans la table Plan ;
+ * si un plan n'est pas trouvé côté /api/public/plans, le wizard fallback
+ * sur le premier plan public actif, donc un mauvais mapping reste fonctionnel.
+ */
+function planSlugFromKey(key: 'p1' | 'p2' | 'p3'): string {
+  const map: Record<typeof key, string> = {
+    p1: 'starter',
+    p2: 'growth',
+    p3: 'enterprise',
+  };
+  return map[key];
+}
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (

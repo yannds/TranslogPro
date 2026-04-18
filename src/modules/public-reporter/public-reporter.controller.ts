@@ -1,9 +1,17 @@
-import { Controller, Post, Get, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller, Post, Get, Body, Param, Query, Req, UseGuards, BadRequestException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { PublicReporterService, PublicReportDto } from './public-reporter.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
+
+function extractIp(req: Request): string {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim()
+       ?? req.socket.remoteAddress
+       ?? 'unknown';
+}
 
 /**
  * Routes publiques (POST /report) — pas d'auth.
@@ -34,10 +42,7 @@ export class PublicReporterController {
     @Body() dto: PublicReportDto,
     @Req() req: Request,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim()
-             ?? req.socket.remoteAddress
-             ?? 'unknown';
-    return this.publicReporterService.submit(tenantId, dto, ip);
+    return this.publicReporterService.submit(tenantId, dto, extractIp(req));
   }
 
   @Get('list')
@@ -47,5 +52,54 @@ export class PublicReporterController {
     @Query('status') status?: string,
   ) {
     return this.publicReporterService.listForDispatch(tenantId, status);
+  }
+}
+
+/**
+ * Portail citoyen — endpoint "no-slug" : tenantId résolu depuis le Host
+ * (TenantHostMiddleware pose `req.resolvedHostTenant`). Permet au frontend
+ * public d'appeler `POST /api/public/report` sans exposer l'UUID tenant.
+ */
+@Controller('public/report')
+export class PublicReporterHostController {
+  constructor(private readonly publicReporterService: PublicReporterService) {}
+
+  /** Même rate-limit que la version "par slug" : 5/h/IP. */
+  @Post()
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit:    5,
+    windowMs: 60 * 60 * 1_000,
+    keyBy:    'ip',
+    suffix:   'public_report',
+    message:  'Limite de signalements atteinte (5/heure). Vos données GPS seront supprimées sous 24h (RGPD).',
+  })
+  submit(
+    @Body() dto: PublicReportDto,
+    @Req() req: Request,
+  ) {
+    const tenantId = req.resolvedHostTenant?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException(
+        "Domaine non reconnu : le signalement doit être envoyé depuis le sous-domaine d'un transporteur.",
+      );
+    }
+    return this.publicReporterService.submit(tenantId, dto, extractIp(req));
+  }
+
+  /**
+   * Infos publiques du tenant courant (résolu depuis le Host) pour afficher
+   * le nom/marque sur la page de signalement sans exposer le tenantId.
+   */
+  @Get('tenant-info')
+  tenantInfo(@Req() req: Request) {
+    const host = req.resolvedHostTenant;
+    if (!host?.tenantId) {
+      throw new BadRequestException('Domaine non reconnu');
+    }
+    return {
+      tenantId: host.tenantId,
+      slug:     host.slug ?? null,
+    };
   }
 }

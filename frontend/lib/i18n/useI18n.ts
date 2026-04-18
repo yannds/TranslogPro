@@ -18,17 +18,38 @@ import type { Language, TranslationMap } from './types';
 import { TRANSLATIONS } from './translations';
 import { LANGUAGE_META } from './types';
 
+/**
+ * Params d'interpolation — substitue `{key}` dans la chaîne traduite par la valeur.
+ * Ex. t('x.countItems', { count: 3 }) sur "Vous avez {count} articles" → "Vous avez 3 articles".
+ */
+export type I18nParams = Record<string, string | number | undefined | null>;
+
 export interface I18nCtx {
   lang:       Language;
   setLang:    (l: Language) => void;
-  /** Traduit une clé 'namespace.key' ou un TranslationMap (backward compat) */
-  t:          (keyOrMap: string | Record<string, string | undefined>) => string;
+  /**
+   * Traduit une clé 'namespace.key' ou un TranslationMap (backward compat).
+   * Accepte un second argument optionnel de params d'interpolation (`{name}`).
+   */
+  t:          (keyOrMap: string | Record<string, string | undefined>, params?: I18nParams) => string;
   dir:        'ltr' | 'rtl';
   dateLocale: string;
   /** Accès direct au dictionnaire legacy (pour transition) */
   dict:       typeof TRANSLATIONS;
   /** Liste des langues disponibles avec métadonnées */
   languages:  typeof LANGUAGE_META;
+}
+
+/**
+ * Interpole `{key}` → `params[key]` dans la chaîne.
+ * Les clés manquantes ou null/undefined sont remplacées par ''.
+ */
+export function interpolate(str: string, params?: I18nParams): string {
+  if (!params) return str;
+  return str.replace(/\{(\w+)\}/g, (_m, k) => {
+    const v = params[k];
+    return v === undefined || v === null ? '' : String(v);
+  });
 }
 
 export const I18nContext = createContext<I18nCtx | null>(null);

@@ -12,9 +12,34 @@ import { RefundService } from '../sav/refund.service';
 import { RefundReason } from '../../common/constants/workflow-states';
 import { CustomerResolverService } from '../crm/customer-resolver.service';
 import { CustomerClaimService } from '../crm/customer-claim.service';
+import { CashierService } from '../cashier/cashier.service';
+import type {
+  CashierPaymentMethod,
+} from '../cashier/dto/record-transaction.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1_000; // 15 minutes
+
+/**
+ * Accepte soit un token HMAC brut, soit une URL de verify publique
+ *   (ex: https://app.example.com/verify/ticket/ID?q=TOKEN).
+ * Retourne le token HMAC à vérifier. Si l'input n'est pas une URL, il est
+ * retourné tel quel (rétro-compat avec les scanners qui captent le token nu).
+ */
+function extractQrToken(input: string): string {
+  if (!input) return input;
+  // Heuristique URL : commence par http(s):// ou contient "/verify/"
+  if (/^https?:\/\//i.test(input) || input.includes('/verify/')) {
+    try {
+      const url = new URL(input, 'http://_');
+      const q = url.searchParams.get('q');
+      if (q) return q;
+    } catch {
+      // Pas une URL parseable → on tombe sur la chaîne brute
+    }
+  }
+  return input;
+}
 
 interface SeatLayout {
   rows:        number;
@@ -35,6 +60,7 @@ export class TicketingService {
     private readonly refundService: RefundService,
     private readonly crmResolver: CustomerResolverService,
     private readonly crmClaim:    CustomerClaimService,
+    private readonly cashier:     CashierService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -416,6 +442,47 @@ export class TicketingService {
       const confirmed = await this.confirm(tenantId, ticketId, actor, idempotencyKey);
       results.push(confirmed);
     }
+
+    // ── Traçabilité caisse : une ligne par billet confirmé ─────────────────
+    // - Si dto.cashRegisterId === null → achat hors caisse (portail, paiement en ligne)
+    // - Si dto.cashRegisterId fourni  → vérifié côté service (scope own)
+    // - Sinon on retrouve la caisse ouverte de l'acteur (staff au guichet)
+    if (dto.cashRegisterId !== null) {
+      const registerId = dto.cashRegisterId
+        ?? (await this.cashier.getMyOpenRegister(tenantId, actor.id))?.id;
+
+      if (registerId) {
+        const method = (dto.paymentMethod ?? 'CASH') as CashierPaymentMethod;
+        for (const r of results) {
+          const ticket = r.entity;
+          try {
+            await this.cashier.recordTransaction(
+              tenantId,
+              registerId,
+              {
+                type:          'TICKET',
+                amount:        ticket.pricePaid ?? 0,
+                paymentMethod: method,
+                externalRef:   dto.externalRef
+                  ? `${dto.externalRef}:${ticket.id}`
+                  : `ticket:${ticket.id}`,
+                referenceType: 'TICKET',
+                referenceId:   ticket.id,
+              },
+              actor,
+              undefined,
+              { skipScopeCheck: false, actorId: actor.id },
+            );
+          } catch (err) {
+            // N'invalide pas la confirmation ticket ; l'opérateur peut corriger la caisse.
+            this.logger.warn(
+              `Auto-record cashier TX failed ticket=${ticket.id} register=${registerId}: ${(err as Error).message}`,
+            );
+          }
+        }
+      }
+    }
+
     return results;
   }
 
@@ -450,7 +517,12 @@ export class TicketingService {
     });
   }
 
-  async validate(tenantId: string, qrToken: string, actor: CurrentUserPayload) {
+  async validate(tenantId: string, qrInput: string, actor: CurrentUserPayload) {
+    // Tolérer token HMAC brut OU URL publique de verify (/verify/ticket/:id?q=TOKEN).
+    // Les billets récents encodent l'URL dans leur QR pour permettre au voyageur
+    // de voir son document officiel. Les apps agent scannent le QR → reçoivent
+    // l'URL → on doit extraire le token. La vérification HMAC filtre le reste.
+    const qrToken = extractQrToken(qrInput);
     const payload = await this.qr.verify(qrToken, tenantId);
     const ticket  = await this.findOne(tenantId, payload.ticketId);
 

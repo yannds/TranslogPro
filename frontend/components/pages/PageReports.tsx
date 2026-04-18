@@ -10,6 +10,9 @@ import { useMemo, useState } from 'react';
 import { FileBarChart, Download, Eye, Calendar } from 'lucide-react';
 import DataTableMaster from '../DataTableMaster';
 import type { Column, RowAction } from '../DataTableMaster';
+import { Dialog }  from '../ui/Dialog';
+import { Badge }   from '../ui/Badge';
+import { Button }  from '../ui/Button';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { cn }      from '../../lib/utils';
 
@@ -45,6 +48,7 @@ const REPORTS: Report[] = [
 export function PageReports() {
   const { t, dateLocale } = useI18n();
   const [periodFilter, setPeriodFilter] = useState<'all' | Period>('all');
+  const [selected, setSelected] = useState<Report | null>(null);
 
   const PERIOD_LABEL: Record<'all' | Period, string> = {
     all:     t('reports.filterAll'),
@@ -159,12 +163,60 @@ export function PageReports() {
         columns={columns}
         data={visibleReports}
         rowActions={rowActions}
+        onRowClick={(row) => setSelected(row)}
         defaultSort={{ key: 'date', dir: 'desc' }}
         exportFormats={['csv', 'json']}
         exportFilename="reports"
         searchPlaceholder={t('reports.searchPlaceholder')}
         emptyMessage={t('reports.empty')}
       />
+
+      {selected && (
+        <Dialog
+          open
+          onOpenChange={(o) => { if (!o) setSelected(null); }}
+          title={selected.title}
+          description={`${PERIOD_LABEL[selected.period]} · ${formatDate(selected.date)}`}
+          size="lg"
+        >
+          <div className="px-6 pb-6 space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className={cn('inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase', STATUS_BADGE[selected.status].classes)}>
+                {STATUS_BADGE[selected.status].label}
+              </span>
+              <Badge size="sm" variant="outline">{PERIOD_LABEL[selected.period]}</Badge>
+              <span className="text-xs t-text-3 tabular-nums font-mono ml-auto">{selected.size}</span>
+            </div>
+
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide t-text-3">{t('reports.colAuthor')}</dt>
+                <dd className="mt-1 text-sm font-medium t-text">{selected.author}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide t-text-3">{t('reports.colDate')}</dt>
+                <dd className="mt-1 text-sm font-medium t-text tabular-nums">{formatDate(selected.date)}</dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4">
+              <p className="text-sm t-text-2 italic">{t('reports.previewPlaceholder')}</p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => setSelected(null)}>
+                {t('reports.close')}
+              </Button>
+              {selected.status === 'ready' && (
+                <Button disabled>
+                  <Download className="w-4 h-4 mr-2" aria-hidden />
+                  {t('reports.actionDownload')}
+                </Button>
+              )}
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

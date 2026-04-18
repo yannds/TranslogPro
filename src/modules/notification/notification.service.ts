@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, NotFoundException, ForbiddenException } fro
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISmsService, IWhatsappService, SMS_SERVICE, WHATSAPP_SERVICE } from '../../infrastructure/notification/interfaces/sms.interface';
+import { IEmailService, EMAIL_SERVICE } from '../../infrastructure/notification/interfaces/email.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 
@@ -9,10 +10,14 @@ export interface SendNotificationDto {
   tenantId:    string;
   userId?:     string;
   phone?:      string;
+  /** Destinataire email — requis si canal = EMAIL. */
+  email?:      string;
   channel:     'SMS' | 'WHATSAPP' | 'PUSH' | 'EMAIL' | 'IN_APP';
   templateId:  string;
   title?:      string;
   body:        string;          // message déjà rendu (variables substituées par l'appelant)
+  /** HTML optionnel pour le canal EMAIL. Si absent, `body` est utilisé en text/plain. */
+  html?:       string;
   metadata?:   Record<string, string>;
 }
 
@@ -23,7 +28,7 @@ export interface SendNotificationDto {
  *   SMS     → TwilioSmsService      (via ISmsService)
  *   WHATSAPP→ TwilioWhatsappService (via IWhatsappService)
  *   PUSH    → stub (Firebase/OneSignal — à brancher en Phase 4)
- *   EMAIL   → stub (Resend/SendGrid — à brancher en Phase 3)
+ *   EMAIL   → IEmailService (provider console|o365|resend|smtp — EmailProviderFactory)
  *   IN_APP  → persist uniquement (lu via getUnread())
  *
  * Persistance : chaque notification est créée en DB au statut PENDING,
@@ -38,6 +43,7 @@ export class NotificationService {
     private readonly prisma: PrismaService,
     @Inject(SMS_SERVICE)      private readonly smsService:      ISmsService,
     @Inject(WHATSAPP_SERVICE) private readonly whatsappService: IWhatsappService,
+    @Inject(EMAIL_SERVICE)    private readonly emailService:    IEmailService,
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -235,10 +241,19 @@ export class NotificationService {
         this.logger.debug(`[PUSH] stub — userId=${dto.userId} template=${dto.templateId}`);
         break;
 
-      case 'EMAIL':
-        // Phase 3 : brancher Resend/SendGrid
-        this.logger.debug(`[EMAIL] stub — userId=${dto.userId} template=${dto.templateId}`);
+      case 'EMAIL': {
+        if (!dto.email) throw new Error('email requis pour canal EMAIL');
+        const hasHtml = typeof dto.html === 'string' && dto.html.length > 0;
+        await this.emailService.send({
+          to:       { email: dto.email },
+          subject:  dto.title ?? dto.templateId,
+          html:     hasHtml ? dto.html : undefined,
+          text:     hasHtml ? dto.body : dto.body,
+          category: 'transactional',
+          tenantId: dto.tenantId,
+        });
         break;
+      }
 
       case 'IN_APP':
         // Persisté en DB uniquement — pas d'envoi externe

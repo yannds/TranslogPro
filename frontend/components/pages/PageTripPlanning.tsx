@@ -33,6 +33,7 @@ import {
   routeLabelOf, startOfWeek, addDays, formatYmd, formatHm,
 } from './trips/shared';
 import { TripCreateForm, type TripCreatePayload } from './trips/TripCreateForm';
+import { TripQuickInfoDialog }                   from './trips/TripQuickInfoDialog';
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ export function PageTripPlanning() {
   const [busy, setBusy]   = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
 
   const base = `/api/tenants/${tenantId}`;
 
@@ -314,12 +316,17 @@ export function PageTripPlanning() {
                                   const isPlanned  = tr.status === 'PLANNED';
                                   return (
                                     <li key={tr.id}>
-                                      <div
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedTripId(tr.id)}
+                                        aria-label={`${t('tripQuickInfo.title')} · ${formatHm(new Date(tr.departureScheduled))} · ${routeLabelOf(tr)}`}
                                         className={cn(
-                                          'rounded-md border px-2 py-1.5 text-xs group relative',
+                                          'w-full text-left rounded-md border px-2 py-1.5 text-xs group relative cursor-pointer',
+                                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                                          'hover:shadow-sm transition-shadow',
                                           isConflict
-                                            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
-                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+                                            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-500',
                                           isDeleting && 'opacity-50',
                                         )}
                                       >
@@ -332,14 +339,17 @@ export function PageTripPlanning() {
                                               <AlertTriangle className="w-3 h-3 text-red-500" aria-label={t('tripPlanning.conflictLabel')} />
                                             )}
                                             {isPlanned && (
-                                              <button
-                                                onClick={() => handleDelete(tr.id)}
-                                                disabled={isDeleting}
-                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(tr.id); }}
+                                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleDelete(tr.id); } }}
+                                                aria-disabled={isDeleting}
                                                 aria-label={t('tripPlanning.deleteTrip')}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                                               >
                                                 <Trash2 className="w-3 h-3" aria-hidden />
-                                              </button>
+                                              </span>
                                             )}
                                           </div>
                                         </div>
@@ -347,7 +357,7 @@ export function PageTripPlanning() {
                                         <Badge variant={tripStatusBadgeVariant(tr.status)} size="sm">
                                           {tripStatusLabel(tr.status)}
                                         </Badge>
-                                      </div>
+                                      </button>
                                     </li>
                                   );
                                 })}
@@ -364,6 +374,15 @@ export function PageTripPlanning() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal détail trajet */}
+      {selectedTripId && (
+        <TripQuickInfoDialog
+          tripId={selectedTripId}
+          tenantId={tenantId}
+          onClose={() => setSelectedTripId(null)}
+        />
+      )}
 
       {/* Modal Nouveau trajet */}
       <Dialog

@@ -70,11 +70,16 @@ import { QhseModule }            from './modules/qhse/qhse.module';
 import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-guard.module';
 import { AuthModule }            from './modules/auth/auth.module';
 import { PasswordResetModule }   from './modules/password-reset/password-reset.module';
+import { DocumentVerifyModule }  from './modules/document-verify/document-verify.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
 import { PlatformIamModule }     from './modules/platform-iam/platform-iam.module';
 import { TenantSettingsModule }  from './modules/tenant-settings/tenant-settings.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
 import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
+import { PublicSignupModule }    from './modules/public-signup/public-signup.module';
+import { OnboardingWizardModule } from './modules/onboarding-wizard/onboarding-wizard.module';
+import { ActivationEmailsModule } from './modules/activation-emails/activation-emails.module';
+import { SubscriptionCheckoutModule } from './modules/subscription-checkout/subscription-checkout.module';
 import { PortalAdminModule }    from './modules/portal-admin/portal-admin.module';
 import { TariffModule }          from './modules/tariff/tariff.module';
 import { InvoiceModule }         from './modules/invoice/invoice.module';
@@ -193,6 +198,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     AuthModule,
     // Password reset — routes publiques /auth/password-reset/* + service admin
     PasswordResetModule,
+    // Vérification publique de documents — /verify/ticket/:id?q=, /verify/parcel/:code
+    DocumentVerifyModule,
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
     // IAM plateforme — audit cross-tenant, sessions globales, reset MFA, rôles plateforme
@@ -202,6 +209,14 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     MfaModule,
     // Portail public voyageur — endpoints sans auth, rate-limités
     PublicPortalModule,
+    // Signup SaaS public — waitlist, plans, création tenant (rate-limités, honeypot)
+    PublicSignupModule,
+    // Onboarding wizard post-signup — 5 étapes tenant admin (brand/agency/station/route/invite)
+    OnboardingWizardModule,
+    // Emails d'activation — drip J+1/J+3/J+7 via cron quotidien, IEmailService
+    ActivationEmailsModule,
+    // Checkout d'abonnement SaaS — PaymentOrchestrator SUBSCRIPTION intent
+    SubscriptionCheckoutModule,
     // CMS Admin portail — pages, posts, config portail (SETTINGS_MANAGE_TENANT)
     PortalAdminModule,
     // Tarification — grille tarifaire & promotions

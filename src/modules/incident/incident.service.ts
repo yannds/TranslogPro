@@ -99,4 +99,18 @@ export class IncidentService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  /** Scope "own" : retourne uniquement les incidents signalés par l'acteur. */
+  async findMine(tenantId: string, actorId: string) {
+    return this.prisma.incident.findMany({
+      where:   { tenantId, reportedById: actorId },
+      orderBy: { createdAt: 'desc' },
+      take:    100,
+      select: {
+        id: true, type: true, severity: true, status: true,
+        description: true, locationDescription: true, tripId: true,
+        busId: true, isSos: true, resolvedAt: true, createdAt: true,
+      },
+    });
+  }
 }

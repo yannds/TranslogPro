@@ -66,6 +66,7 @@ const P = {
   // Customer self-service
   TICKET_READ_OWN:       'data.ticket.read.own',
   SAV_REPORT_OWN:        'data.sav.report.own',
+  INCIDENT_REPORT_OWN:   'data.incident.report.own',
   // Fleet
   FLEET_MANAGE:          'control.fleet.manage.tenant',
   FLEET_LAYOUT:          'control.fleet.layout.tenant',
@@ -206,6 +207,7 @@ export const ADMIN_NAV: PortalNavConfig = {
             { kind: 'leaf', id: 'trips-list',     label: 'nav.today_s_trips',    href: '/admin/trips',          icon: 'List',        anyOf: [P.TRIP_UPDATE, P.TRIP_CREATE] },
             { kind: 'leaf', id: 'trips-planning', label: 'nav.weekly_planning', href: '/admin/trips/planning', icon: 'CalendarDays', anyOf: [P.TRIP_CREATE, P.ROUTE_MANAGE] },
             { kind: 'leaf', id: 'stations',       label: 'nav.stations',   href: '/admin/stations',       icon: 'MapPin',      anyOf: [P.STATION_MANAGE, P.STATION_READ] },
+            { kind: 'leaf', id: 'platforms',      label: 'nav.platform_management', href: '/admin/platforms',  icon: 'MapPinned', anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ] },
             { kind: 'leaf', id: 'routes',         label: 'nav.routes_lines',    href: '/admin/routes',         icon: 'Route',       anyOf: [P.ROUTE_MANAGE] },
             { kind: 'leaf', id: 'trips-delays',   label: 'nav.delays_alerts',  href: '/admin/trips/delays',   icon: 'AlertTriangle', anyOf: [P.TRIP_DELAY, P.TRIP_UPDATE] },
           ],
@@ -413,6 +415,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           moduleKey: 'CREW_BRIEFING',
           children: [
             { kind: 'leaf', id: 'crew-planning',   label: 'nav.crew_planning',  href: '/admin/crew/planning',  icon: 'CalendarRange',  anyOf: [P.CREW_MANAGE] },
+            { kind: 'leaf', id: 'driver-calendar', label: 'nav.driver_calendar', href: '/admin/crew/driver-calendar', icon: 'CalendarDays', anyOf: [P.TRIP_READ_TENANT, P.CREW_MANAGE, P.STAFF_READ] },
             { kind: 'leaf', id: 'crew-briefing',   label: 'nav.pre_departure_briefings', href: '/admin/crew/briefing', icon: 'ClipboardCheck', anyOf: [P.CREW_MANAGE] },
           ],
         },
@@ -496,7 +499,7 @@ export const ADMIN_NAV: PortalNavConfig = {
         {
           kind: 'leaf',
           id: 'display-quais',
-          label: 'nav.platform_management',
+          label: 'nav.platform_display',
           href: '/admin/display/quais',
           icon: 'MapPinned',
           anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ, P.TRIP_UPDATE, P.DISPLAY_UPDATE],
@@ -1088,6 +1091,14 @@ export const CUSTOMER_NAV: PortalNavConfig = {
       anyOf: [P.PARCEL_READ_OWN, P.PARCEL_TRACK_OWN],
       items: [
         { kind: 'leaf', id: 'cust-parcels', label: 'nav.track_parcels',  href: '/customer/parcels',   icon: 'Package', anyOf: [P.PARCEL_READ_OWN, P.PARCEL_TRACK_OWN] },
+      ],
+    },
+    {
+      id: 'cust-safety',
+      title: 'nav.my_incidents',
+      anyOf: [P.INCIDENT_REPORT_OWN],
+      items: [
+        { kind: 'leaf', id: 'cust-incidents', label: 'nav.my_incidents', href: '/customer/incidents', icon: 'AlertTriangle', anyOf: [P.INCIDENT_REPORT_OWN] },
       ],
     },
     {

@@ -15,7 +15,7 @@ import {
   Receipt, Plus, Eye, Trash2, Send, CreditCard, X, Ban,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
-import { useFetch }      from '../../lib/hooks/useFetch';
+import { useOfflineList } from '../../lib/hooks/useOfflineList';
 import { apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useI18n }       from '../../lib/i18n/useI18n';
 import { Badge }         from '../ui/Badge';
@@ -101,7 +101,18 @@ export function PageInvoices() {
   const tenantId     = me?.tenantId ?? '';
   const base         = `/api/v1/tenants/${tenantId}/invoices`;
 
-  const { data: invoices, loading, refetch } = useFetch<InvoiceRow[]>(tenantId ? base : null, [tenantId]);
+  const {
+    items: invoices,
+    loading,
+    fromCache: invoicesFromCache,
+    refetch,
+  } = useOfflineList<InvoiceRow>({
+    table:    'invoices',
+    tenantId,
+    url:      tenantId ? base : null,
+    toRecord: (row) => ({ id: row.id }),
+    deps:     [tenantId],
+  });
 
   const [showCreate, setShowCreate]     = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
@@ -168,6 +179,14 @@ export function PageInvoices() {
 
   return (
     <div className="p-6 space-y-6">
+      {invoicesFromCache && (
+        <div
+          role="note"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+        >
+          {t('offline.cachedData')}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{t('invoices.title')}</h1>
         <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>

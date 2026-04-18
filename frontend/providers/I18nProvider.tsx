@@ -19,7 +19,7 @@ import {
   useState, useEffect, useCallback, useRef,
   type ReactNode,
 } from 'react';
-import { I18nContext }    from '../lib/i18n/useI18n';
+import { I18nContext, interpolate, type I18nParams } from '../lib/i18n/useI18n';
 import type { Language }  from '../lib/i18n/types';
 import { LANGUAGE_META }  from '../lib/i18n/types';
 import { TRANSLATIONS }   from '../lib/i18n/translations';
@@ -97,13 +97,14 @@ export function I18nProvider({
   }, [lang]);
 
   const t = useCallback(
-    (keyOrMap: string | Record<string, string | undefined>): string => {
+    (keyOrMap: string | Record<string, string | undefined>, params?: I18nParams): string => {
       // String key: 'namespace.key' → lookup in locale files
       if (typeof keyOrMap === 'string') {
-        return resolveKey(keyOrMap, lang);
+        return interpolate(resolveKey(keyOrMap, lang), params);
       }
       // TranslationMap object (backward compat — sera supprimé)
-      return keyOrMap[lang] ?? keyOrMap['fr'] ?? Object.values(keyOrMap).find(v => v != null) ?? '';
+      const raw = keyOrMap[lang] ?? keyOrMap['fr'] ?? Object.values(keyOrMap).find(v => v != null) ?? '';
+      return interpolate(raw, params);
     },
     [lang],
   );

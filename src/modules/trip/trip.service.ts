@@ -85,7 +85,16 @@ export class TripService {
 
   async findAll(
     tenantId: string,
-    filters?: { agencyId?: string; status?: string | string[] },
+    filters?: {
+      agencyId?: string;
+      status?:   string | string[];
+      /** Filtre sur le chauffeur (Staff.id). Utilisé par la vue calendrier admin. */
+      driverId?: string;
+      /** Date début (ISO) — inclut les trajets avec departureScheduled >= from. */
+      from?:     string;
+      /** Date fin (ISO) — inclut les trajets avec departureScheduled <= to. */
+      to?:       string;
+    },
     scope?:   ScopeContext,
   ) {
     // scope 'own' : Trip.driverId est un Staff ID, pas un User ID.
@@ -101,7 +110,18 @@ export class TripService {
       ownerFilter = ownershipWhere(scope, 'driverId');
     }
 
-    return this.prisma.trip.findMany({
+    // Filtre fenêtre temporelle (utilisé par le calendrier chauffeur)
+    const dateRange: Record<string, Date> = {};
+    if (filters?.from) dateRange.gte = new Date(filters.from);
+    if (filters?.to)   dateRange.lte = new Date(filters.to);
+
+    // Filtre driverId explicite (admin/dispatcher). Se combine avec ownerFilter
+    // mais ownerFilter est vide pour un admin sans scope 'own'.
+    const explicitDriverFilter = filters?.driverId
+      ? { driverId: filters.driverId }
+      : {};
+
+    const trips = await this.prisma.trip.findMany({
       where: {
         tenantId,
         ...(filters?.status
@@ -110,24 +130,73 @@ export class TripService {
             : { status: filters.status }
           : {}),
         ...ownerFilter,
+        ...explicitDriverFilter,
+        ...(Object.keys(dateRange).length > 0
+          ? { departureScheduled: dateRange }
+          : {}),
       },
       include: {
-        route: { include: { origin: true, destination: true } },
+        route: {
+          include: {
+            origin:      { select: { id: true, name: true, city: true } },
+            destination: { select: { id: true, name: true, city: true } },
+            waypoints: {
+              orderBy: { order: 'asc' },
+              include: { station: { select: { id: true, name: true, city: true } } },
+            },
+          },
+        },
         bus: true,
       },
       orderBy: { departureScheduled: 'asc' },
     });
+
+    // Enrichissement driver (Staff → User) — Trip.driverId est scalaire, pas
+    // de relation Prisma objet. Batch via findMany pour éviter N+1 queries.
+    const driverIds = Array.from(new Set(
+      trips.map(t => t.driverId).filter((id): id is string => !!id),
+    ));
+    if (driverIds.length === 0) {
+      return trips.map(t => ({ ...t, driver: null }));
+    }
+    const drivers = await this.prisma.staff.findMany({
+      where:  { id: { in: driverIds }, tenantId },
+      select: { id: true, user: { select: { id: true, name: true, email: true } } },
+    });
+    const driverMap = new Map(drivers.map(d => [d.id, d]));
+    return trips.map(t => ({
+      ...t,
+      driver: t.driverId ? driverMap.get(t.driverId) ?? null : null,
+    }));
   }
 
   async findOne(tenantId: string, id: string, scope?: ScopeContext) {
     const trip = await this.prisma.trip.findFirst({
       where:   { id, tenantId },
-      include: { route: true, bus: true, travelers: true },
+      include: {
+        route:     { include: { origin: true, destination: true } },
+        bus:       true,
+        travelers: true,
+        _count:    { select: { shipments: true } },
+      },
     });
     if (!trip) throw new NotFoundException(`Trip ${id} not found`);
     // Enforcement scope : un chauffeur ne peut pas lire le trip d'un autre.
     if (scope) assertOwnership(scope, trip, 'driverId');
-    return trip;
+
+    // Driver est lié à Trip via driverId scalaire (pas de relation Prisma objet).
+    // On résout le Staff → User pour exposer le nom côté admin/dispatcher.
+    const driver = trip.driverId
+      ? await this.prisma.staff.findUnique({
+          where:  { id: trip.driverId },
+          select: {
+            id: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        })
+      : null;
+
+    return { ...trip, driver };
   }
 
   async update(tenantId: string, tripId: string, dto: {

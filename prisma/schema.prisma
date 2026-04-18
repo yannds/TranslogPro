@@ -54,6 +54,18 @@ model Tenant {
   activatedAt DateTime?
   suspendedAt DateTime?
 
+  // ── Onboarding wizard (Phase 3) ────────────────────────────────────────
+  // businessActivity      : TICKETING | PARCELS | MIXED — défini au signup public,
+  //                         pilote l'étape 4 du wizard (trajet vs tarif colis).
+  // onboardingCompletedAt : timestamp de fin du wizard. null = toujours rediriger
+  //                         l'admin vers /onboarding au login (reprise auto).
+  // activationEmailsSent  : dict { day1: ISO-date, day3: ISO-date, day7: ISO-date }
+  //                         pour idempotence du cron drip — un tenant reçoit
+  //                         AU MAX 3 emails d'activation, jamais doublon.
+  businessActivity      String?
+  onboardingCompletedAt DateTime?
+  activationEmailsSent  Json      @default("{}")
+
   // Registres fiscaux configurables par pays — affiché sur les documents
   // Format : [{ label: "NIU", value: "CG-NIU-2024-00142" }, { label: "RCCM", value: "..." }]
   // Chaque pays utilise ses propres identifiants (NIU Congo, NIF France, TIN USA…)
@@ -2884,7 +2896,25 @@ model PlatformSubscription {
   renewsAt           DateTime?
   cancelledAt        DateTime?
   cancelReason       String?
-  // meta free-form : ID Stripe, PayPal, etc. quand on branchera un PSP
+  // Si true, le renewal cron tente un prélèvement automatique avec la dernière
+  // méthode de paiement utilisée (SubscriptionRenewalService). Si le PSP exige
+  // une nouvelle saisie (carte non tokenisée), l'auto-renew dégrade vers un
+  // email de rappel avec lien de checkout. Défaut false — l'admin doit activer
+  // explicitement via /admin/billing.
+  autoRenew          Boolean   @default(false)
+  // Première entrée en PAST_DUE — point de départ des rappels dunning J+1/J+3/J+7.
+  // Remis à null quand la subscription repasse ACTIVE.
+  pastDueSince       DateTime?
+  // meta free-form : ID Stripe/PayPal + refs du dernier paiement réussi pour
+  // l'auto-renew :
+  //   {
+  //     lastIntentId:          string,
+  //     lastMethod:            'CARD'|'MOBILE_MONEY'|...,
+  //     lastCustomerRef:       string,   // ID client côté PSP si fourni
+  //     lastAttemptExternalRef:string,   // ID transaction PSP
+  //     lastSuccessAt:         ISO-date,
+  //     dunningSent:           { day1: ISO, day3: ISO, day7: ISO }
+  //   }
   externalRefs       Json      @default("{}")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -3303,4 +3333,30 @@ model PlatformPaymentConfig {
   updatedAt                     DateTime @updatedAt
 
   @@map("platform_payment_config")
+}
+
+// ─── Waitlist (early-access prospects) ──────────────────────────────────────
+// Captures les emails laissés sur la landing publique avant ouverture des
+// inscriptions. Aucun lien avec Tenant/User — c'est un prospect, pas un compte.
+// Unicité par email (une personne = une inscription) — on met à jour
+// lastAttemptAt à chaque re-soumission plutôt que de dupliquer.
+model Waitlist {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  locale        String?  // langue du visiteur au moment de l'inscription (fr/en/…)
+  source        String?  // "landing_cta" | "landing_hero" | "referral" | …
+  referrer      String?  // document.referrer — analytics (optionnel)
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  ipHash        String?  // SHA-256 de l'IP — anti-abus, pas identifiant PII
+  userAgentHash String?  // SHA-256 user-agent — anti-bot soft
+  createdAt     DateTime @default(now())
+  lastAttemptAt DateTime @default(now())
+  attempts      Int      @default(1)
+  // Converti en tenant ? (null tant que pas transformé)
+  convertedTenantId String?
+
+  @@index([createdAt])
+  @@map("waitlist")
 }

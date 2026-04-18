@@ -14,16 +14,16 @@
  *   POST /api/tenants/:tid/parcels/:id/report-damage     body: { description }
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useRef, useCallback, type FormEvent } from 'react';
 import {
   Package, Search, PackageCheck, PackageX, Truck, MapPin, ArrowDownToLine,
-  AlertOctagon, RotateCcw, Eye,
+  AlertOctagon, Eye, Printer,
 } from 'lucide-react';
 import { useAuth }                       from '../../lib/auth/auth.context';
 import { useI18n }                        from '../../lib/i18n/useI18n';
 import { useFetch }                      from '../../lib/hooks/useFetch';
 import { apiGet, apiPost }               from '../../lib/api';
-import { Card, CardHeader, CardContent } from '../ui/Card';
+import { useTenantConfig }               from '../../providers/TenantConfigProvider';
 import { Badge, statusToVariant }        from '../ui/Badge';
 import { Button }                        from '../ui/Button';
 import { Dialog }                        from '../ui/Dialog';
@@ -31,7 +31,9 @@ import { ErrorAlert }                    from '../ui/ErrorAlert';
 import { FormFooter }                    from '../ui/FormFooter';
 import { inputClass as inp }             from '../ui/inputClass';
 import DataTableMaster                   from '../DataTableMaster';
-import type { Column, RowAction }        from '../DataTableMaster';
+import type { Column, RowAction, BulkAction } from '../DataTableMaster';
+import { ParcelLabel }                   from '../parcels/ParcelLabel';
+import { printHtmlBatch }                from '../tickets/TicketReceipt';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,7 @@ const ACTION_MAP: Record<string, { action: string; labelKey: string; icon: React
 export function PageParcelsList() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { brand } = useTenantConfig();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}`;
 
@@ -117,6 +120,42 @@ export function PageParcelsList() {
     } catch (err) { setDamageErr((err as Error).message); }
     finally { setDamageBusy(false); }
   };
+
+  // ─── Print label (per-row + bulk) ────────────────────────────────────────
+  const singleLabelRef = useRef<HTMLDivElement>(null);
+  const bulkLabelsRef  = useRef<HTMLDivElement>(null);
+  const [labelTarget, setLabelTarget] = useState<Parcel | null>(null);
+  const [bulkLabelTargets, setBulkLabelTargets] = useState<Parcel[]>([]);
+
+  const handlePrintLabel = useCallback((row: Parcel) => {
+    setLabelTarget(row);
+    setTimeout(() => {
+      if (singleLabelRef.current) {
+        printHtmlBatch(
+          singleLabelRef.current.innerHTML,
+          brand.brandName,
+          t('parcelsList.parcelLabel'),
+        );
+      }
+      setLabelTarget(null);
+    }, 400);
+  }, [brand.brandName, t]);
+
+  const handleBulkPrintLabels = useCallback((rows: Parcel[]) => {
+    if (rows.length === 0) return;
+    setBulkLabelTargets(rows);
+    // Attend la génération des QR codes (async) avant de sérialiser.
+    setTimeout(() => {
+      if (bulkLabelsRef.current) {
+        printHtmlBatch(
+          bulkLabelsRef.current.innerHTML,
+          brand.brandName,
+          t('parcelsList.parcelLabel'),
+        );
+      }
+      setBulkLabelTargets([]);
+    }, 600);
+  }, [brand.brandName, t]);
 
   // ─── Tracking search ─────────────────────────────────────────────────────
   const [trackCode, setTrackCode]     = useState('');
@@ -173,6 +212,11 @@ export function PageParcelsList() {
       icon: <Eye className="w-3.5 h-3.5" />,
       onClick: (row) => openDetail(row),
     },
+    {
+      label: t('parcelsList.printLabel'),
+      icon: <Printer className="w-3.5 h-3.5" />,
+      onClick: (row) => handlePrintLabel(row),
+    },
     // Dynamic transition actions
     ...(['CREATED', 'PACKED', 'IN_TRANSIT', 'ARRIVED'] as const).flatMap(status =>
       (ACTION_MAP[status] ?? []).map(a => ({
@@ -195,6 +239,14 @@ export function PageParcelsList() {
       onClick: (row) => doTransition(row.id, 'DECLARE_LOST'),
       hidden: (row) => row.status !== 'IN_TRANSIT',
       danger: true,
+    },
+  ];
+
+  const bulkActions: BulkAction<Parcel>[] = [
+    {
+      icon:    <Printer className="w-4 h-4" />,
+      label:   t('parcelsList.bulkPrintLabels'),
+      onClick: handleBulkPrintLabels,
     },
   ];
 
@@ -225,6 +277,7 @@ export function PageParcelsList() {
         data={parcels ?? []}
         loading={loading}
         rowActions={rowActions}
+        bulkActions={bulkActions}
         onRowClick={openDetail}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         exportFormats={['csv', 'xls']}
@@ -324,6 +377,18 @@ export function PageParcelsList() {
           )}
         </div>
       </Dialog>
+
+      {/* Hidden print container — génération hors-viewport puis impression */}
+      <div style={{ position: 'fixed', left: -9999, top: 0, width: 560 }} aria-hidden>
+        <div ref={singleLabelRef}>
+          {labelTarget && <ParcelLabel parcel={labelTarget} />}
+        </div>
+        <div ref={bulkLabelsRef} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {bulkLabelTargets.map(p => (
+            <ParcelLabel key={p.id} parcel={p} />
+          ))}
+        </div>
+      </div>
 
       {/* Damage dialog */}
       <Dialog

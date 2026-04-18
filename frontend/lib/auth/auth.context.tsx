@@ -44,6 +44,8 @@ export interface AuthUser {
   userType:       string;
   /** Id Staff lié — null pour CUSTOMER / SUPER_ADMIN. Requis pour les endpoints :staffId. */
   staffId:        string | null;
+  /** Agence RH de l'acteur (Staff.agencyId). Null pour CUSTOMER ou Staff sans agence. */
+  agencyId:       string | null;
   /** moduleKey SaaS actifs pour le tenant (ex: 'TICKETING', 'QHSE'). */
   enabledModules: string[];
   /**

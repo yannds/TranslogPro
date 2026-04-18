@@ -171,4 +171,135 @@ export class DisplayService {
     });
     if (!exists) throw new NotFoundException(`Station ${stationId} introuvable pour ce tenant`);
   }
+
+  // ─── Affichage quai (Platform + current/next trip + pax + colis) ─────────────
+
+  /**
+   * Retourne les données enrichies d'un quai pour l'écran d'affichage QuaiScreen.
+   *
+   * Sélection du trajet affiché :
+   *   1. Si platform.currentTripId est défini → ce trajet (assigné explicitement)
+   *   2. Sinon → prochain trajet de la station (originId == stationId) en
+   *      statut PLANNED/BOARDING/IN_PROGRESS, trié par departureScheduled asc
+   *
+   * Agrégats temps réel :
+   *   - passengersConfirmed = tickets CONFIRMED/CHECKED_IN
+   *   - passengersOnBoard   = tickets CHECKED_IN
+   *   - parcelsLoaded       = parcels.count via shipments du trip
+   */
+  async getPlatformDisplay(tenantId: string, platformId: string) {
+    const platform = await this.prisma.platform.findFirst({
+      where:  { id: platformId, tenantId },
+      include: { station: { select: { id: true, name: true, city: true } } },
+    });
+    if (!platform) throw new NotFoundException(`Quai ${platformId} introuvable`);
+
+    // Résolution du trip affiché — priorité à currentTripId, sinon next departing
+    const tripWhereBase = {
+      tenantId,
+      status: { in: ['PLANNED', 'OPEN', 'BOARDING', 'IN_PROGRESS', 'IN_PROGRESS_DELAYED'] },
+    };
+    const trip = platform.currentTripId
+      ? await this.prisma.trip.findFirst({
+          where: { id: platform.currentTripId, tenantId },
+          include: {
+            route: {
+              include: {
+                origin:      { select: { id: true, name: true, city: true } },
+                destination: { select: { id: true, name: true, city: true } },
+                waypoints: {
+                  orderBy: { order: 'asc' },
+                  include: { station: { select: { name: true, city: true } } },
+                },
+              },
+            },
+            bus: { select: { id: true, plateNumber: true, model: true, capacity: true } },
+          },
+        })
+      : await this.prisma.trip.findFirst({
+          where: {
+            ...tripWhereBase,
+            route: { originId: platform.stationId },
+          },
+          include: {
+            route: {
+              include: {
+                origin:      { select: { id: true, name: true, city: true } },
+                destination: { select: { id: true, name: true, city: true } },
+                waypoints: {
+                  orderBy: { order: 'asc' },
+                  include: { station: { select: { name: true, city: true } } },
+                },
+              },
+            },
+            bus: { select: { id: true, plateNumber: true, model: true, capacity: true } },
+          },
+          orderBy: { departureScheduled: 'asc' },
+        });
+
+    // Driver (Staff → User) — driverId est scalaire sur Trip, pas de relation Prisma
+    const driver = trip?.driverId
+      ? await this.prisma.staff.findUnique({
+          where:  { id: trip.driverId },
+          select: { id: true, user: { select: { name: true, email: true } } },
+        })
+      : null;
+
+    // Agrégats passagers + colis — uniquement si un trip est affiché
+    const [passengersConfirmed, passengersOnBoard, parcelsLoaded] = trip
+      ? await Promise.all([
+          this.prisma.ticket.count({
+            where: { tenantId, tripId: trip.id, status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
+          }),
+          this.prisma.ticket.count({
+            where: { tenantId, tripId: trip.id, status: 'CHECKED_IN' },
+          }),
+          this.prisma.parcel.count({
+            where: { tenantId, shipment: { tripId: trip.id } },
+          }),
+        ])
+      : [0, 0, 0];
+
+    const via = trip?.route?.waypoints
+      ?.map(w => w.station.city || w.station.name)
+      .filter(Boolean)
+      .join(' · ') ?? '';
+
+    const destinationCity = trip?.route?.destination?.city
+      ?? trip?.route?.destination?.name
+      ?? '';
+    const destinationCode = destinationCity
+      ? destinationCity.slice(0, 3).toUpperCase()
+      : '—';
+
+    // statusId affiché = statut du trip si présent, sinon statut du quai
+    const statusId = trip?.status ?? platform.status;
+
+    return {
+      id:                    platform.id,
+      code:                  platform.code,
+      name:                  platform.name,
+      stationId:             platform.stationId,
+      stationName:           platform.station.name,
+      stationCity:           platform.station.city,
+      capacity:              trip?.bus?.capacity ?? platform.capacity,
+      statusId,
+      // ── Trip (null si aucun trajet affecté/à venir) ──
+      tripId:                trip?.id ?? null,
+      destination:           destinationCity,
+      destinationCode,
+      via,
+      departureTime:         trip?.departureScheduled
+        ? new Date(trip.departureScheduled).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '',
+      departAt:              trip?.departureScheduled?.toISOString() ?? null,
+      busPlate:              trip?.bus?.plateNumber ?? '—',
+      busModel:              trip?.bus?.model ?? '',
+      driverName:            driver?.user?.name ?? '',
+      agencyName:            '',
+      passengersConfirmed,
+      passengersOnBoard,
+      parcelsLoaded,
+    };
+  }
 }

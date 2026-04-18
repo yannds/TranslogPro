@@ -100,6 +100,23 @@ export class DisplayController {
     });
   }
 
+  // ─── Affichage quai (Platform + current trip + pax + colis) ───────────────────
+
+  /**
+   * GET /tenants/:tenantId/platforms/:platformId/display
+   *
+   * Retourne l'état enrichi d'un quai pour l'écran QuaiScreen : destination,
+   * heure de départ, véhicule, chauffeur, passagers confirmés/embarqués, colis
+   * chargés, statut trip ou quai. Isolation : platformId filtré par tenantId.
+   */
+  @Get('platforms/:platformId/display')
+  async platformDisplay(
+    @Param('tenantId')    tenantId:   string,
+    @Param('platformId')  platformId: string,
+  ) {
+    return this.display.getPlatformDisplay(tenantId, platformId);
+  }
+
   // ─── Tracking colis (public) ──────────────────────────────────────────────────
 
   /**

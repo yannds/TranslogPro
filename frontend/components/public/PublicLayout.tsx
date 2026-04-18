@@ -143,12 +143,12 @@ function PublicHeader({ active, mobileOpen, onMobileToggle }: PublicHeaderProps)
           >
             {t('landing.nav.login')}
           </Link>
-          <a
-            href="#pricing"
+          <Link
+            to="/signup"
             className="inline-flex h-9 items-center justify-center rounded-md bg-teal-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
           >
             {t('landing.nav.cta')}
-          </a>
+          </Link>
         </div>
 
         <button
@@ -190,13 +190,13 @@ function PublicHeader({ active, mobileOpen, onMobileToggle }: PublicHeaderProps)
             >
               {t('landing.nav.login')}
             </Link>
-            <a
-              href="#pricing"
+            <Link
+              to="/signup"
               className="mt-1 inline-flex h-10 items-center justify-center rounded-md bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-500"
               onClick={onMobileToggle}
             >
               {t('landing.nav.cta')}
-            </a>
+            </Link>
           </nav>
         </div>
       )}

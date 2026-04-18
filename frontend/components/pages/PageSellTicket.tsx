@@ -17,7 +17,6 @@ import {
   UserPlus, X, FileText,
 } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
-import { useFetch }   from '../../lib/hooks/useFetch';
 import { apiGet, apiPost, apiPatch } from '../../lib/api';
 import { Button }     from '../ui/Button';
 import { Card, CardHeader, CardContent } from '../ui/Card';
@@ -27,6 +26,14 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { CrmPhoneHint } from '../crm/CrmPhoneHint';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { SeatMapPicker } from '../tickets/SeatMapPicker';
+import { useCashierSession } from '../../lib/hooks/useCashierSession';
+import { CashierSessionBar } from '../cashier/CashierSessionBar';
+import { useOnline } from '../../lib/offline/online';
+import { enqueueMutation } from '../../lib/offline/outbox';
+import { useOfflineList } from '../../lib/hooks/useOfflineList';
+import { ProductTour, isTourDone } from '../tour/ProductTour';
+import { ContextualTip } from '../tour/ContextualTip';
+import { TICKETING_TOUR_ID, TICKETING_TOUR_STEPS } from '../../lib/tour/tours';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +125,21 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Normalise la chaîne libre de `paymentMethod` vers l'enum caisse.
+ * Les libellés UI (FR/EN) sont mappés ; tout le reste retombe sur CASH.
+ */
+function normalizePaymentMethod(raw: string): 'CASH' | 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'VOUCHER' | 'MIXED' {
+  const v = (raw || '').trim().toUpperCase();
+  if (!v) return 'CASH';
+  if (v.includes('MOBILE') || v.includes('MOMO') || v === 'MOMO') return 'MOBILE_MONEY';
+  if (v.includes('CARD') || v.includes('CARTE'))                 return 'CARD';
+  if (v.includes('BANK') || v.includes('VIREMENT'))              return 'BANK_TRANSFER';
+  if (v.includes('VOUCHER') || v.includes('BON'))                return 'VOUCHER';
+  if (v.includes('MIXED') || v.includes('MIXTE'))                return 'MIXED';
+  return 'CASH';
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 }
@@ -147,11 +169,28 @@ export function PageSellTicket() {
   const formatCurrency = useCurrencyFormatter();
   const tenantId = user?.tenantId ?? '';
 
-  // ── Trip list ──
-  const { data: trips, loading: loadingTrips, error: tripsError } = useFetch<TripItem[]>(
-    tenantId ? `/api/tenants/${tenantId}/trips?status=PLANNED&status=OPEN&status=BOARDING` : null,
-    [tenantId],
-  );
+  // Product tour — démarre automatiquement à la 1re visite (localStorage-backed).
+  // Esc ou croix ferme et persiste l'état "done" → ne re-joue pas tout seul.
+  const [tourOpen, setTourOpen] = useState(() => !isTourDone(TICKETING_TOUR_ID));
+
+  // ── Caisse courante (pour traçabilité paiement) ──
+  const { register: openRegister, refetch: refetchRegister } = useCashierSession(tenantId);
+  const online = useOnline();
+
+  // ── Trip list ── (read-through cache : survit aux coupures réseau courtes)
+  const {
+    items: tripsData,
+    loading: loadingTrips,
+    error: tripsError,
+    fromCache: tripsFromCache,
+  } = useOfflineList<TripItem>({
+    table:    'trips',
+    tenantId,
+    url:      tenantId ? `/api/tenants/${tenantId}/trips?status=PLANNED&status=OPEN&status=BOARDING` : null,
+    toRecord: (t) => ({ id: t.id }),
+    deps:     [tenantId],
+  });
+  const trips = tripsData;
 
   // ── Selected trip + route + seats ──
   const [selectedTripId, setSelectedTripId] = useState('');
@@ -329,7 +368,40 @@ export function PageSellTicket() {
     setError(null);
     try {
       const ticketIds = batchResult.tickets.map(t => t.id);
-      await apiPost(`/api/tenants/${tenantId}/tickets/batch/confirm`, { ticketIds });
+      // Méthode de règlement effective : mappée vers l'enum caisse (défaut CASH).
+      const method = normalizePaymentMethod(paymentMethod);
+      const body = {
+        ticketIds,
+        paymentMethod: method,
+        // Si une caisse est ouverte → tracer la vente dans la caisse courante.
+        // Sinon, passer null désactive explicitement l'enregistrement caisse (ex: vente portail).
+        cashRegisterId: openRegister?.id ?? null,
+      };
+
+      if (!online) {
+        // Mode offline : on met la confirmation en outbox. Idempotency-Key =
+        // hash stable (ticketIds triés) → rejeu sans risque de doublon.
+        const idempotencyKey = `sell:${[...ticketIds].sort().join(',')}`;
+        await enqueueMutation({
+          tenantId,
+          kind:   'sell.batch-confirm',
+          method: 'POST',
+          url:    `/api/tenants/${tenantId}/tickets/batch/confirm`,
+          body,
+          idempotencyKey,
+          context: {
+            ticketIds,
+            tripId:        selectedTripId,
+            passengerCount: ticketIds.length,
+            total:         batchResult.pricingSummary.grandTotal,
+          },
+        });
+        setConfirmed(true);
+        return;
+      }
+
+      await apiPost(`/api/tenants/${tenantId}/tickets/batch/confirm`, body);
+      refetchRegister();
       setConfirmed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('sellTicket.errorConfirm'));
@@ -357,6 +429,25 @@ export function PageSellTicket() {
 
   return (
     <div className="space-y-6">
+      {tourOpen && (
+        <ProductTour
+          tourId={TICKETING_TOUR_ID}
+          steps={TICKETING_TOUR_STEPS}
+          onFinish={() => setTourOpen(false)}
+        />
+      )}
+
+      {/* Astuce contextuelle — déclenchée après la 1re vente (flag `confirmed`
+          passe à true juste après `/tickets/batch/confirm`). Dismissable 24h. */}
+      <ContextualTip
+        id="sell:first-sale"
+        when={confirmed}
+        titleKey="tip.sell.firstSale.title"
+        bodyKey="tip.sell.firstSale.body"
+        ctaLabelKey="tip.sell.firstSale.cta"
+        ctaHref="/admin/tarifs/promotions"
+      />
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/40">
@@ -371,6 +462,18 @@ export function PageSellTicket() {
           </p>
         </div>
       </div>
+
+      {/* Statut caisse : indispensable pour la traçabilité du paiement */}
+      <CashierSessionBar compact onChange={refetchRegister} />
+
+      {tripsFromCache && (
+        <div
+          role="note"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+        >
+          {t('sellTicket.offlineTripsHint')}
+        </div>
+      )}
 
       <ErrorAlert error={error ?? tripsError} icon />
 

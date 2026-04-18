@@ -25,6 +25,12 @@ export interface OnboardTenantDto {
   country?:   string;
   /** Langue par défaut du tenant. Défaut : 'fr'. */
   language?:  TenantLanguage;
+  /**
+   * Type d'activité principal — pilote l'étape 4 du wizard d'onboarding
+   * (TICKETING → trajet, PARCELS → tarif colis, MIXED → les deux).
+   * Null si l'onboarding a été fait par un SA sans passer par le signup public.
+   */
+  businessActivity?: 'TICKETING' | 'PARCELS' | 'MIXED';
 }
 
 /** Defaults régionaux par pays — utilisés à l'onboarding pour auto-configurer timezone + devise. */
@@ -110,6 +116,7 @@ export class OnboardingService {
           country,
           timezone: regional.timezone,
           currency: regional.currency,
+          businessActivity: dto.businessActivity ?? null,
         },
       });
 

@@ -28,9 +28,12 @@ export class TripController {
   findAll(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
-    @Query('status') status?: string | string[],
+    @Query('status')   status?:   string | string[],
+    @Query('driverId') driverId?: string,
+    @Query('from')     from?:     string,
+    @Query('to')       to?:       string,
   ) {
-    return this.tripService.findAll(tenantId, { status }, scope);
+    return this.tripService.findAll(tenantId, { status, driverId, from, to }, scope);
   }
 
   @Get(':id')

@@ -59,6 +59,8 @@ const LazyTenantTaxes    = lazy(() => import('../pages/PageTenantTaxes').then(m 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIntegrations   = lazy(() => import('../pages/PageIntegrations').then(m => ({ default: m.PageIntegrations })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamUsers       = lazy(() => import('../pages/PageIamUsers').then(m => ({ default: m.PageIamUsers })));
@@ -79,7 +81,11 @@ const LazyAgencies       = lazy(() => import('../pages/PageAgencies').then(m => 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyStations       = lazy(() => import('../pages/PageStations').then(m => ({ default: m.PageStations })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatforms      = lazy(() => import('../pages/PagePlatforms').then(m => ({ default: m.PagePlatforms })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCrewPlanning   = lazy(() => import('../pages/PageCrewPlanning').then(m => ({ default: m.PageCrewPlanning })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverCalendar = lazy(() => import('../pages/PageDriverCalendar').then(m => ({ default: m.PageDriverCalendar })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTrips          = lazy(() => import('../pages/PageTrips').then(m => ({ default: m.PageTrips })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -299,6 +305,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'staff-list':
     case 'personnel':           return <LazyPersonnel />;
     case 'crew-planning':       return <LazyCrewPlanning />;
+    case 'driver-calendar':     return <LazyDriverCalendar />;
 
     // ── QHSE ───────────────────────────────────────────────────────────────
     case 'qhse':                return <LazyQhse />;
@@ -328,6 +335,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // ── Paramètres & White-label ───────────────────────────────────────────
     case 'agencies':            return <LazyAgencies />;
     case 'stations':            return <LazyStations />;
+    case 'platforms':           return <LazyPlatforms />;
     case 'modules':             return <LazyModules />;
     case 'white-label':         return <LazyBranding />;
     case 'portal-admin':        return <LazyPortalAdmin />;
@@ -338,6 +346,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'integrations':        return <LazyIntegrations />;
     case 'tenant-taxes':        return <LazyTenantTaxes />;
     case 'tenant-payment':      return <LazyTenantPayment />;
+    case 'tenant-billing':      return <LazyAdminBilling />;
     case 'documents-templates': return <LazyTemplateStudio />;
 
     // ── IAM ────────────────────────────────────────────────────────────────

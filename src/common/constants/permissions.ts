@@ -48,6 +48,10 @@ export const P_TRIP_READ_TENANT            = 'data.trip.read.tenant';
 export const P_TRIP_UPDATE_AGENCY          = 'data.trip.update.agency';
 export const P_TRIP_CHECK_OWN              = 'data.trip.check.own';
 export const P_TRIP_REPORT_OWN             = 'data.trip.report.own';
+// Signalement d'incident par le voyageur authentifié (CUSTOMER).
+// Distinct de P_TRIP_REPORT_OWN (chauffeur/staff) : scope "own" signifie
+// que le voyageur ne peut créer/voir que SES incidents (reportedById = userId).
+export const P_INCIDENT_REPORT_OWN          = 'data.incident.report.own';
 export const P_TRIP_DELAY_AGENCY           = 'control.trip.delay.agency';
 export const P_TRIP_DELETE_TENANT           = 'control.trip.delete.tenant';
 export const P_TRIP_CANCEL_TENANT          = 'control.trip.cancel.tenant';
@@ -285,6 +289,7 @@ export const Permission = {
   TRIP_UPDATE_AGENCY:         P_TRIP_UPDATE_AGENCY,
   TRIP_CHECK_OWN:             P_TRIP_CHECK_OWN,
   TRIP_REPORT_OWN:            P_TRIP_REPORT_OWN,
+  INCIDENT_REPORT_OWN:        P_INCIDENT_REPORT_OWN,
   TRIP_DELAY_AGENCY:          P_TRIP_DELAY_AGENCY,
   TRIP_DELETE_TENANT:          P_TRIP_DELETE_TENANT,
   TRIP_CANCEL_TENANT:         P_TRIP_CANCEL_TENANT,

@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn }                    from '../../lib/utils';
 import { useI18n }               from '../../lib/i18n/useI18n';
-import { useFetch }              from '../../lib/hooks/useFetch';
+import { useOfflineList }        from '../../lib/hooks/useOfflineList';
 import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
 import { useWeatherMulti }       from '../../lib/hooks/useWeather';
 import { WEATHER_ICONS }         from '../../lib/hooks/useWeather';
@@ -561,17 +561,24 @@ export function DepartureBoard({
   // ── Fetch live trip data from display API ────────────────────────────────
   const viewParam = mode === 'DEPARTURES' ? 'departures' : 'arrivals';
   const isAllStations = stationId === '__all__';
-  const tripsRes = useFetch<any[]>(
-    tenantId && tenantId !== 'demo'
-      ? (isAllStations
-          ? `/api/tenants/${tenantId}/display?view=${viewParam}`
-          : stationId
-            ? `/api/tenants/${tenantId}/stations/${stationId}/display?view=${viewParam}`
-            : null)
-      : null,
-    [tenantId, stationId, mode],
-    { skipRedirectOn401: true },
-  );
+  // Read-through cache : le tableau reste affichable sur coupure réseau courte.
+  const tripsUrl = tenantId && tenantId !== 'demo'
+    ? (isAllStations
+        ? `/api/tenants/${tenantId}/display?view=${viewParam}`
+        : stationId
+          ? `/api/tenants/${tenantId}/stations/${stationId}/display?view=${viewParam}`
+          : null)
+    : null;
+  const tripsOffline = useOfflineList<any>({
+    table:    'trips',
+    tenantId: tenantId ?? '',
+    url:      tripsUrl,
+    toRecord: (t) => ({ id: t.id ?? t.tripId ?? String(t) }),
+    // Filtre côté cache : garde les voyages "récents" (< 12 h).
+    cachedFilter: (r) => Date.now() - r.updatedAt < 12 * 3600 * 1_000,
+    deps:     [tenantId, stationId, mode],
+  });
+  const tripsRes = { data: tripsOffline.items, loading: tripsOffline.loading, error: tripsOffline.error };
   const apiRows = tripsRes.data?.map(t => tripToBoardRow(t, mode));
   // Données réelles si stationId fourni (mode connecté), démo uniquement en mode standalone
   const isLive = !!((stationId || isAllStations) && tenantId && tenantId !== 'demo');

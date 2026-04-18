@@ -42,6 +42,8 @@ import {
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaymentRouter } from './payment-router.service';
 import { PayloadEncryptor } from './payload-encryptor.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventTypes } from '../../common/types/domain-event.type';
 
 // ─── Types d'entrée ──────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ export class PaymentOrchestrator {
     private readonly router:    PaymentRouter,
     private readonly registry:  PaymentProviderRegistry,
     private readonly encryptor: PayloadEncryptor,
+    private readonly events:    EventEmitter2,
   ) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -453,6 +456,8 @@ export class PaymentOrchestrator {
     const attemptStatus = mapProviderStatusToAttempt(result.status);
     const intentStatus  = deriveIntentStatusFromProvider(result.status);
 
+    let transitionedTo: string | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.paymentIntent.findUnique({ where: { id: intentId }, select: { status: true } });
       if (!current) return;
@@ -479,8 +484,45 @@ export class PaymentOrchestrator {
             settledAt:  intentStatus === 'SUCCEEDED' ? new Date() : undefined,
           },
         });
+        transitionedTo = intentStatus;
       }
     });
+
+    // Post-transaction : émet un événement domaine si transition terminale atteinte.
+    // Les modules métier (subscription-checkout, ticketing, parcel) s'abonnent
+    // via @OnEvent pour réconcilier leur état (abonnement ACTIVE, ticket PAID…).
+    if (transitionedTo === 'SUCCEEDED' || transitionedTo === 'FAILED') {
+      await this.emitIntentTerminalEvent(intentId, transitionedTo);
+    }
+  }
+
+  private async emitIntentTerminalEvent(intentId: string, status: 'SUCCEEDED' | 'FAILED') {
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where:  { id: intentId },
+      select: {
+        id: true, tenantId: true, entityType: true, entityId: true,
+        amount: true, currency: true, metadata: true,
+      },
+    });
+    if (!intent) return;
+
+    const type = status === 'SUCCEEDED'
+      ? EventTypes.PAYMENT_INTENT_SUCCEEDED
+      : EventTypes.PAYMENT_INTENT_FAILED;
+
+    // EventEmitter2 en mode fire-and-forget — les handlers sont `@OnEvent`
+    // et n'interrompent JAMAIS le flux webhook. Un handler qui lève est logué
+    // mais l'orchestrator retourne 200 au provider (évite les retry inutiles).
+    this.events.emit(type, {
+      tenantId:   intent.tenantId,
+      intentId:   intent.id,
+      entityType: intent.entityType,
+      entityId:   intent.entityId,
+      amount:     intent.amount,
+      currency:   intent.currency,
+      metadata:   intent.metadata,
+    });
+    this.log.debug(`[events] emitted ${type} for intent=${intent.id}`);
   }
 }
 

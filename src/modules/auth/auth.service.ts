@@ -62,6 +62,12 @@ export interface AuthUserDto {
    * prennent :staffId (driver-profile, crew-briefing, qhse) — staff.id ≠ user.id.
    */
   staffId:         string | null;
+  /**
+   * Agence de rattachement RH de l'acteur (Staff.agencyId). Null pour
+   * CUSTOMER / SUPER_ADMIN / Staff sans agence. Le frontend l'utilise pour
+   * pré-remplir les formulaires scope .agency (ex. ouverture de caisse).
+   */
+  agencyId:        string | null;
   /** Liste des `moduleKey` SaaS actifs pour le tenant de l'utilisateur. */
   enabledModules:  string[];
   /**
@@ -71,6 +77,18 @@ export interface AuthUserDto {
    * ne servent qu'à masquer/afficher des éléments d'UI.
    */
   permissions:     string[];
+  /**
+   * Signal post-signup : tant que ce champ est null, l'admin est redirigé
+   * vers /onboarding au login (wizard 5 étapes). Le champ est toujours renvoyé
+   * pour permettre au frontend de décider sans appel supplémentaire.
+   */
+  onboardingCompletedAt: string | null;
+  /**
+   * Activité principale choisie au signup (TICKETING | PARCELS | MIXED).
+   * Null pour les tenants créés hors signup public. Sert au wizard à
+   * conditionner l'étape 4 (premier trajet vs premier tarif colis).
+   */
+  businessActivity: string | null;
   /**
    * Contexte d'impersonation — présent ssi la session courante a été
    * créée via exchange d'un token d'impersonation JIT (effectiveTenantId
@@ -531,11 +549,15 @@ export class AuthService {
     role?: { name: string; permissions?: { permission: string }[] } | null;
   }, sessionTenantId?: string): Promise<AuthUserDto> {
     const effectiveTenantId = sessionTenantId ?? user.tenantId;
-    const [enabledModules, staff] = await Promise.all([
+    const [enabledModules, staff, tenant] = await Promise.all([
       this.modules.listActiveKeys(effectiveTenantId),
       this.prisma.staff.findFirst({
         where:  { userId: user.id, tenantId: user.tenantId },
-        select: { id: true },
+        select: { id: true, agencyId: true },
+      }),
+      this.prisma.tenant.findUnique({
+        where:  { id: effectiveTenantId },
+        select: { onboardingCompletedAt: true, businessActivity: true },
       }),
     ]);
     return {
@@ -548,8 +570,11 @@ export class AuthService {
       roleName:         user.role?.name ?? null,
       userType:         user.userType,
       staffId:          staff?.id ?? null,
+      agencyId:         staff?.agencyId ?? null,
       enabledModules,
       permissions:      user.role?.permissions?.map(p => p.permission) ?? [],
+      onboardingCompletedAt: tenant?.onboardingCompletedAt ? tenant.onboardingCompletedAt.toISOString() : null,
+      businessActivity:      tenant?.businessActivity ?? null,
     };
   }
 

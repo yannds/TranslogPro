@@ -9,9 +9,10 @@
 import { useState, useRef, useCallback } from 'react';
 import {
   List, Eye, XCircle, Printer,
+  Ticket as TicketLucide, BookMarked,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
-import { useFetch }      from '../../lib/hooks/useFetch';
+import { useOfflineList } from '../../lib/hooks/useOfflineList';
 import { apiPost }       from '../../lib/api';
 import { useI18n }       from '../../lib/i18n/useI18n';
 import { useTenantConfig } from '../../providers/TenantConfigProvider';
@@ -19,8 +20,11 @@ import { Badge }         from '../ui/Badge';
 import { Button }        from '../ui/Button';
 import { ErrorAlert }    from '../ui/ErrorAlert';
 import { Dialog }        from '../ui/Dialog';
-import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
-import { TicketReceipt, printTicketHtml, type TicketData } from '../tickets/TicketReceipt';
+import DataTableMaster, { type Column, type RowAction, type BulkAction } from '../DataTableMaster';
+import {
+  TicketReceipt, BoardingPass, printTicketHtml, printHtmlBatch,
+  type TicketData,
+} from '../tickets/TicketReceipt';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,10 +95,21 @@ export function PageIssuedTickets() {
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}`;
 
-  const { data: tickets, loading, error, refetch } = useFetch<TicketRow[]>(
-    tenantId ? `${base}/tickets` : null,
-    [tenantId],
-  );
+  // Read-through cache : la liste passagers reste lisible hors ligne
+  // (essentiel pour l'agent gare qui pointe les montées).
+  const {
+    items: tickets,
+    loading,
+    error,
+    fromCache: ticketsFromCache,
+    refetch,
+  } = useOfflineList<TicketRow>({
+    table:    'passengers',
+    tenantId,
+    url:      tenantId ? `${base}/tickets` : null,
+    toRecord: (row) => ({ id: row.id, tripId: row.tripId ?? null }),
+    deps:     [tenantId],
+  });
 
   // ── Detail dialog ──────────────────────────────────────────────────────────
   const [detail, setDetail] = useState<TicketRow | null>(null);
@@ -113,6 +128,36 @@ export function PageIssuedTickets() {
       setPrintTarget(null);
     }, 400);
   }, [brand.brandName]);
+
+  // ── Bulk print — choix ticket ou carte d'embarquement ──────────────────────
+  const bulkPrintRef = useRef<HTMLDivElement>(null);
+  const [bulkTargets, setBulkTargets] = useState<TicketRow[]>([]);
+  const [bulkMode, setBulkMode] = useState<'ticket' | 'boarding' | null>(null);
+  const [bulkChoice, setBulkChoice] = useState<TicketRow[] | null>(null);
+
+  const handleBulkRequest = useCallback((rows: TicketRow[]) => {
+    // Ouvre la modal de choix du format
+    setBulkChoice(rows);
+  }, []);
+
+  const handleBulkPrint = useCallback((mode: 'ticket' | 'boarding') => {
+    if (!bulkChoice || bulkChoice.length === 0) return;
+    setBulkTargets(bulkChoice);
+    setBulkMode(mode);
+    setBulkChoice(null);
+    // Le useEffect du container caché rendra tous les docs ; on attend la
+    // génération des QR (async via qrcode.toDataURL) puis on print.
+    setTimeout(() => {
+      if (bulkPrintRef.current) {
+        const title = mode === 'ticket'
+          ? t('issuedTickets.bulkPrintTickets')
+          : t('issuedTickets.bulkPrintBoarding');
+        printHtmlBatch(bulkPrintRef.current.innerHTML, brand.brandName, title);
+      }
+      setBulkTargets([]);
+      setBulkMode(null);
+    }, 600);
+  }, [bulkChoice, brand.brandName, t]);
 
   // ── Cancel dialog ──────────────────────────────────────────────────────────
   const [cancelTarget, setCancelTarget] = useState<TicketRow | null>(null);
@@ -161,6 +206,14 @@ export function PageIssuedTickets() {
     },
   ];
 
+  const bulkActions: BulkAction<TicketRow>[] = [
+    {
+      icon:    <Printer className="w-4 h-4" />,
+      label:   t('issuedTickets.bulkPrint'),
+      onClick: handleBulkRequest,
+    },
+  ];
+
   return (
     <div className="p-6 min-w-0 space-y-6">
       {/* Header */}
@@ -178,12 +231,22 @@ export function PageIssuedTickets() {
         </div>
       </div>
 
+      {ticketsFromCache && (
+        <div
+          role="note"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+        >
+          {t('offline.cachedData')}
+        </div>
+      )}
+
       <ErrorAlert error={error} icon />
 
       <DataTableMaster
         data={tickets ?? []}
         columns={columns}
         rowActions={rowActions}
+        bulkActions={bulkActions}
         loading={loading}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         exportFormats={['csv', 'xls']}
@@ -264,10 +327,68 @@ export function PageIssuedTickets() {
         </div>
       </Dialog>
 
+      {/* ── Bulk print format choice dialog ─────────────────────────────────── */}
+      <Dialog
+        open={!!bulkChoice}
+        onOpenChange={(o) => { if (!o) setBulkChoice(null); }}
+        title={t('issuedTickets.bulkPrintChooseTitle')}
+        description={
+          bulkChoice
+            ? t('issuedTickets.bulkPrintChooseDesc').replace('{count}', String(bulkChoice.length))
+            : ''
+        }
+        size="md"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => handleBulkPrint('ticket')}
+            aria-label={t('issuedTickets.bulkPrintTickets')}
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 p-4 text-center transition-colors hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+              <TicketLucide className="w-5 h-5" aria-hidden />
+            </div>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {t('issuedTickets.bulkPrintTickets')}
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {t('issuedTickets.bulkPrintTicketsDesc')}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleBulkPrint('boarding')}
+            aria-label={t('issuedTickets.bulkPrintBoarding')}
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 p-4 text-center transition-colors hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+              <BookMarked className="w-5 h-5" aria-hidden />
+            </div>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {t('issuedTickets.bulkPrintBoarding')}
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {t('issuedTickets.bulkPrintBoardingDesc')}
+            </span>
+          </button>
+        </div>
+      </Dialog>
+
       {/* ── Hidden print container (render offscreen for serialization) ───── */}
-      <div style={{ position: 'fixed', left: -9999, top: 0, width: 420 }} aria-hidden>
+      <div style={{ position: 'fixed', left: -9999, top: 0, width: 820 }} aria-hidden>
+        {/* Single-ticket print */}
         <div ref={printContainerRef}>
           {printTarget && <TicketReceipt ticket={printTarget} />}
+        </div>
+        {/* Bulk print — rend tous les docs côte à côte avec page-break CSS */}
+        <div ref={bulkPrintRef} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {bulkMode === 'ticket' && bulkTargets.map(ticket => (
+            <TicketReceipt key={ticket.id} ticket={ticket} />
+          ))}
+          {bulkMode === 'boarding' && bulkTargets.map(ticket => (
+            <BoardingPass key={ticket.id} ticket={ticket} />
+          ))}
         </div>
       </div>
     </div>

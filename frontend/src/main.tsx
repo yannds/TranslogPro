@@ -9,7 +9,7 @@
  *           Routes         → /login | /admin/* | /
  */
 
-import { StrictMode } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -28,10 +28,32 @@ import { CustomerDashboard }    from '../components/customer/CustomerDashboard';
 import { DriverDashboard }      from '../components/driver/DriverDashboard';
 import { StationAgentDashboard } from '../components/station-agent/StationAgentDashboard';
 import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
-import { PortailVoyageur }      from '../components/portail-voyageur/PortailVoyageur';
 import { LegacyTenantRedirect } from '../components/legacy/LegacyTenantRedirect';
 import { PageClaim }            from '../components/pages/PageClaim';
-import { PublicLanding }        from '../components/public/PublicLanding';
+// Routes publiques lazy — réduit le bundle initial `index.js` (~2.3 MB → ~1.4 MB)
+// en sortant landing + signup + onboarding + welcome dans leurs propres chunks
+// chargés à la demande. Affichés derrière un Suspense pour éviter les flashs.
+const PublicLanding    = lazy(() => import('../components/public/PublicLanding').then(m => ({ default: m.PublicLanding })));
+const PublicSignup     = lazy(() => import('../components/public/PublicSignup').then(m => ({ default: m.PublicSignup })));
+const PublicReport     = lazy(() => import('../components/public/PublicReport').then(m => ({ default: m.PublicReport })));
+const OnboardingWizard = lazy(() => import('../components/onboarding/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
+const WelcomePage      = lazy(() => import('../components/onboarding/WelcomePage').then(m => ({ default: m.WelcomePage })));
+// Portail voyageur — gros composant (Leaflet, hero carousel, paiements) rendu
+// uniquement pour les visiteurs anonymes sur un sous-domaine tenant. On le
+// sort aussi du bundle initial pour décharger l'app admin.
+const PortailVoyageur  = lazy(() => import('../components/portail-voyageur/PortailVoyageur').then(m => ({ default: m.PortailVoyageur })));
+
+/**
+ * Fallback utilisé derrière Suspense pour les routes publiques lazy.
+ * Spinner discret, thème-agnostique (dark via classe html.dark).
+ */
+function PublicLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-white dark:bg-slate-950" role="status" aria-label="Chargement">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent motion-reduce:animate-none" aria-hidden />
+    </div>
+  );
+}
 import { useAuth }              from '../lib/auth/auth.context';
 import { resolvePortal }        from '../lib/navigation/resolvePortal';
 import type { PortalId }        from '../lib/navigation/resolvePortal';
@@ -61,9 +83,19 @@ function HomeRedirect() {
   // sur la landing marketing SaaS. Le /login reste accessible directement.
   if (!user) {
     const host = resolveHost();
-    if (host.slug) return <PortailVoyageur />;
+    if (host.slug) {
+      return (
+        <Suspense fallback={<PublicLoading />}>
+          <PortailVoyageur />
+        </Suspense>
+      );
+    }
     if (host.isAdmin) return <Navigate to="/login" replace />;
-    return <PublicLanding />;
+    return (
+      <Suspense fallback={<PublicLoading />}>
+        <PublicLanding />
+      </Suspense>
+    );
   }
 
   const portal = resolvePortal({ userType: user.userType, permissions: user.permissions });
@@ -72,6 +104,12 @@ function HomeRedirect() {
   // standard est vide pour lui (permissions globales ≠ scope tenant).
   if (portal === 'admin' && user.tenantId === PLATFORM_TENANT_ID) {
     return <Navigate to="/admin/platform/dashboard" replace />;
+  }
+  // Admin tenant qui n'a pas encore terminé l'onboarding → wizard obligatoire
+  // (reprise si interrompu). Les autres portails (cashier, driver, etc.) ne
+  // sont pas concernés — le wizard est réservé au TENANT_ADMIN via permissions.
+  if (portal === 'admin' && !(user as any).onboardingCompletedAt) {
+    return <Navigate to="/onboarding" replace />;
   }
   return <Navigate to={PORTAL_TO_PATH[portal]} replace />;
 }
@@ -85,6 +123,14 @@ import '@fontsource/inter/800.css';
 import '@fontsource/inter/900.css';
 import './index.css';
 
+// Démarre la boucle de synchronisation offline (replay de la outbox dès que
+// le browser est online). Le service worker PWA est enregistré automatiquement
+// par vite-plugin-pwa (au build + en prod).
+import { startSyncLoop } from '../lib/offline/outbox';
+startSyncLoop();
+
+import { OfflineBanner } from '../components/offline/OfflineBanner';
+
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable dans index.html');
 
@@ -97,6 +143,7 @@ createRoot(root).render(
           <AuthProvider>
             <TenantConfigBridge />
             <TenantScopeProvider>
+            <OfflineBanner />
             <Routes>
               {/* Authentification */}
               <Route path="/login" element={<LoginPage />} />
@@ -161,6 +208,52 @@ createRoot(root).render(
 
               {/* Claim CRM — magic link "revendication" d'historique shadow */}
               <Route path="/claim" element={<PageClaim />} />
+
+              {/* Signup SaaS public — wizard 3 étapes. Accessible partout (apex +
+                  sous-domaines réservés), le wizard configure lui-même le tenant. */}
+              <Route
+                path="/signup"
+                element={
+                  <Suspense fallback={<PublicLoading />}>
+                    <PublicSignup />
+                  </Suspense>
+                }
+              />
+
+              {/* Portail citoyen : signalement anonyme (pas d'auth). tenantId
+                  résolu côté backend depuis le Host (sous-domaine transporteur). */}
+              <Route
+                path="/report"
+                element={
+                  <Suspense fallback={<PublicLoading />}>
+                    <PublicReport />
+                  </Suspense>
+                }
+              />
+
+              {/* Onboarding wizard post-signup (tenant admin uniquement) —
+                  ProtectedRoute enforce la session, le wizard enforce la perm
+                  côté backend pour chaque endpoint. */}
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<PublicLoading />}>
+                      <OnboardingWizard />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/welcome"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<PublicLoading />}>
+                      <WelcomePage />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Racine → redirection contextuelle selon userType */}
               <Route path="/" element={<HomeRedirect />} />

@@ -76,4 +76,37 @@ export class IncidentController {
   ) {
     return this.incidentService.resolve(tenantId, id, resolution, actor);
   }
+
+  /**
+   * Signalement d'incident par le voyageur authentifié (CUSTOMER).
+   * Scope own — rate-limit 5/h/userId (moins strict que le SOS chauffeur,
+   * plus strict que le portail citoyen : intermédiaire volontaire).
+   */
+  @Post('mine')
+  @RequirePermission(Permission.INCIDENT_REPORT_OWN)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit:    5,
+    windowMs: 60 * 60 * 1_000,
+    keyBy:    'userId',
+    suffix:   'customer_incident',
+    message:  'Limite de 5 signalements par heure atteinte. Merci de réessayer plus tard.',
+  })
+  createMine(
+    @TenantId() tenantId: string,
+    @Body() dto: CreateIncidentDto,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.incidentService.create(tenantId, { ...dto, isSos: false }, actor);
+  }
+
+  /** Liste des incidents signalés par l'acteur — scope own. */
+  @Get('mine/list')
+  @RequirePermission(Permission.INCIDENT_REPORT_OWN)
+  findMine(
+    @TenantId() tenantId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.incidentService.findMine(tenantId, actor.id);
+  }
 }

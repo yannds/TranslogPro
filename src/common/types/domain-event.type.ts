@@ -83,6 +83,12 @@ export const EventTypes = {
   QHSE_PROCEDURE_COMPLETED:       'qhse.procedure.completed',
   DISPUTE_OPENED:                 'dispute.opened',
   DISPUTE_SETTLED:                'dispute.settled',
+
+  // Payment (PaymentOrchestrator → webhook success / failure)
+  // payload : { tenantId, intentId, entityType, entityId, amount, currency,
+  //            metadata } — voir PaymentOrchestrator.emitIntentTerminalEvent
+  PAYMENT_INTENT_SUCCEEDED:       'payment.intent.succeeded',
+  PAYMENT_INTENT_FAILED:          'payment.intent.failed',
 } as const;
 
 export type EventType = typeof EventTypes[keyof typeof EventTypes];

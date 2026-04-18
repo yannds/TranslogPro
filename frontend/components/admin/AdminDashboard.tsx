@@ -18,6 +18,7 @@ import { PageRouter }         from '../dashboard/PageRouter';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 import { TenantScopeSelector } from '../platform/TenantScopeSelector';
 import { ImpersonationBanner } from '../platform/ImpersonationBanner';
+import { TrialBanner }         from '../billing/TrialBanner';
 
 function PageLoadingFallback() {
   return (
@@ -210,6 +211,12 @@ export function AdminDashboard() {
             de user.impersonation dans /api/auth/me). Chrono persistant, bouton
             Terminer self-service, auto-revoke sur pagehide. */}
         <ImpersonationBanner />
+
+        {/* Bannière trial — visible seulement pour les tenants en phase
+            d'essai avec <= 14 jours restants. Masquée 24h au dismiss. */}
+        <div className="px-4 pt-3 sm:px-6">
+          <TrialBanner />
+        </div>
 
         {/* Bandeau staff plateforme — visible uniquement si tenantId === PLATFORM.
             Permet de scoper les pages tenant-scoped (Trips, Fleet, Cashier, …)

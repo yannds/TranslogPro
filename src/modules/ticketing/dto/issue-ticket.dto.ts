@@ -113,4 +113,27 @@ export class ConfirmBatchDto {
   @IsString({ each: true })
   @ArrayMinSize(1)
   ticketIds: string[];
+
+  /**
+   * Moyen de règlement effectif — alimente la Transaction caisse pour la
+   * traçabilité. Valeurs : CASH | MOBILE_MONEY | CARD | BANK_TRANSFER | VOUCHER | MIXED.
+   * Défaut CASH si non fourni (caisse physique).
+   */
+  @IsString() @IsOptional()
+  paymentMethod?: string;
+
+  /**
+   * Si présent : enregistre la vente dans la caisse ouverte indiquée.
+   * Sinon : on tente la caisse ouverte de l'acteur automatiquement.
+   * Passer explicitement `null` désactive l'enregistrement (achat portail/paiement en ligne).
+   */
+  @IsString() @IsOptional()
+  cashRegisterId?: string | null;
+
+  /**
+   * Référence externe (PaymentAttempt externalRef, reçu MoMo, bordereau…)
+   * — garantit l'idempotence au niveau Transaction.
+   */
+  @IsString() @IsOptional()
+  externalRef?: string;
 }

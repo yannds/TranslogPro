@@ -26,6 +26,7 @@ import { Dialog }                        from '../ui/Dialog';
 import { ErrorAlert }                    from '../ui/ErrorAlert';
 import { FormFooter }                    from '../ui/FormFooter';
 import { inputClass as inp }             from '../ui/inputClass';
+import { TripQuickInfoDialog }           from './trips/TripQuickInfoDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ export function PageShipments() {
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     if (!tripId && trips && trips.length > 0) setTripId(trips[0].id);
@@ -245,7 +247,14 @@ export function PageShipments() {
                   const station = stations?.find(st => st.id === s.destinationId);
                   return (
                     <li key={s.id} className="px-6 py-4">
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setDetailOpen(true)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailOpen(true); } }}
+                        aria-label={`${t('tripQuickInfo.title')} — ${station ? station.name : s.destinationId.slice(0, 8)}`}
+                        className="flex items-center gap-3 flex-wrap cursor-pointer rounded-md -mx-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 transition-colors"
+                      >
                         <Boxes className="w-4 h-4 text-purple-500" aria-hidden />
                         <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {station ? `${station.name} — ${station.city}` : s.destinationId.slice(0, 8)}
@@ -292,6 +301,15 @@ export function PageShipments() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Dialog — Détail trajet (bus, chauffeur, shipments, colis) */}
+      {detailOpen && tripId && (
+        <TripQuickInfoDialog
+          tripId={tripId}
+          tenantId={tenantId}
+          onClose={() => setDetailOpen(false)}
+        />
       )}
 
       {/* Dialog — Ajouter un colis au groupement */}
