@@ -31,6 +31,7 @@ import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboar
 import { PortailVoyageur }      from '../components/portail-voyageur/PortailVoyageur';
 import { LegacyTenantRedirect } from '../components/legacy/LegacyTenantRedirect';
 import { PageClaim }            from '../components/pages/PageClaim';
+import { PublicLanding }        from '../components/public/PublicLanding';
 import { useAuth }              from '../lib/auth/auth.context';
 import { resolvePortal }        from '../lib/navigation/resolvePortal';
 import type { PortalId }        from '../lib/navigation/resolvePortal';
@@ -55,13 +56,14 @@ function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
 
-  // Phase 1 multi-tenant : si le host est un sous-domaine tenant et l'utilisateur
-  // n'est pas connecté → afficher le portail public voyageur, pas la page login.
-  // Cela remplace l'ancien `/p/:tenantSlug/*` par une URL propre sur le sous-domaine.
+  // Phase 1 multi-tenant : sur un sous-domaine tenant, l'anonyme atterrit sur le
+  // portail voyageur. Sur l'apex (ou sous-domaine réservé non-admin), il atterrit
+  // sur la landing marketing SaaS. Le /login reste accessible directement.
   if (!user) {
     const host = resolveHost();
     if (host.slug) return <PortailVoyageur />;
-    return <Navigate to="/login" replace />;
+    if (host.isAdmin) return <Navigate to="/login" replace />;
+    return <PublicLanding />;
   }
 
   const portal = resolvePortal({ userType: user.userType, permissions: user.permissions });

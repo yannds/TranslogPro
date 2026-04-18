@@ -412,7 +412,22 @@
       "Read(//Users/dsyann/TranslogPro/**)",
       "Bash(sort -u comm -23 /tmp/page_tenantsPage.txt /tmp/fr_tenantsPage.txt)",
       "Bash(sort -u comm -23 /tmp/page_platformConfig.txt /tmp/fr_platformConfig.txt)",
-      "Bash(sort -u comm -23 /tmp/page_debugOutbox.txt /tmp/fr_debugOutbox.txt)"
+      "Bash(sort -u comm -23 /tmp/page_debugOutbox.txt /tmp/fr_debugOutbox.txt)",
+      "Bash(curl -s -o /dev/null -w \"API=%{http_code}\\\\n\" http://localhost:3000/health/live)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:3000/health/live)",
+      "Bash(curl -sk -o /dev/null -w \"  %{http_code}\\\\n\" https://trans-express.translog.test/api/tenants/11111111-1111-1111-1111-111111111111/display)",
+      "Bash(curl -sk -o /dev/null -w \"  %{http_code}\\\\n\" https://trans-express.translog.test/api/tenants/22222222-2222-2222-2222-222222222222/display)",
+      "Bash(git -C /Users/dsyann/TranslogPro log --oneline)",
+      "Bash(pkill -f \"nest start\")",
+      "Bash(curl -sk -X POST -H 'Content-Type: application/json' -H 'Host: trans-express.translog.test' -d '{\"email\":\"admin@tenant1.dev\",\"password\":\"Admin1234!\"}' https://trans-express.translog.test/api/auth/sign-in -w '\\\\nSTATUS: %{http_code}\\\\n')",
+      "Bash(curl -sk -w 'STATUS: %{http_code}\\\\n' https://trans-express.translog.test/api/tenants/22222222-2222-2222-2222-222222222222/display)",
+      "Bash(curl -skI -X POST -H 'Content-Type: application/json' -H 'Host: trans-express.translog.test' -d '{\"email\":\"admin@tenant1.dev\",\"password\":\"Admin1234!\"}' https://trans-express.translog.test/api/auth/sign-in -w 'STATUS: %{http_code}\\\\n')",
+      "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://trans-express.translog.test/api/tenants/22222222-2222-2222-2222-222222222222/display)",
+      "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://trans-express.translog.test/api/public/trans-express/portal/config)",
+      "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://trans-express.translog.test/api/public/citybus-congo/portal/config)",
+      "Bash(curl -sk -o /dev/null -w 'STATUS: %{http_code}\\\\n' https://admin.translog.test/health/live)",
+      "Bash(curl -sk \"https://__platform__.translog.test/api/auth/me\")",
+      "Bash(ping -c 1 __platform__.translog.test)"
     ],
     "additionalDirectories": [
       "/tmp",

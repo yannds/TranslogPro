@@ -239,6 +239,16 @@ export const P_PLATFORM_SUPPORT_READ_GLOBAL    = 'control.platform.support.read.
 export const P_PLATFORM_SUPPORT_WRITE_GLOBAL   = 'control.platform.support.write.global';
 export const P_PLATFORM_CONFIG_MANAGE_GLOBAL   = 'control.platform.config.manage.global';
 
+// ─── Portail plateforme — IAM global (audit, sessions, users, MFA) ──────────
+// Audit : lecture cross-tenant du journal d'accès (toutes les lignes AuditLog)
+// IAM  : lecture cross-tenant des users/rôles pour support/diagnostic
+// Session: révocation de n'importe quelle session active (hors plateforme)
+// MFA  : reset à distance d'un TOTP (escalade utilisateur verrouillé hors de son MFA)
+export const P_PLATFORM_AUDIT_READ_GLOBAL      = 'data.platform.audit.read.global';
+export const P_PLATFORM_IAM_READ_GLOBAL        = 'data.platform.iam.read.global';
+export const P_PLATFORM_SESSION_REVOKE_GLOBAL  = 'control.platform.session.revoke.global';
+export const P_PLATFORM_MFA_RESET_GLOBAL       = 'control.platform.mfa.reset.global';
+
 // ─── Support ticket (côté tenant client) ────────────────────────────────────
 // Un utilisateur tenant peut ouvrir un ticket vers la plateforme. La
 // permission tenant couvre aussi le read de ses propres tickets.
@@ -421,6 +431,10 @@ export const Permission = {
   PLATFORM_SUPPORT_READ_GLOBAL:   P_PLATFORM_SUPPORT_READ_GLOBAL,
   PLATFORM_SUPPORT_WRITE_GLOBAL:  P_PLATFORM_SUPPORT_WRITE_GLOBAL,
   PLATFORM_CONFIG_MANAGE_GLOBAL:  P_PLATFORM_CONFIG_MANAGE_GLOBAL,
+  PLATFORM_AUDIT_READ_GLOBAL:     P_PLATFORM_AUDIT_READ_GLOBAL,
+  PLATFORM_IAM_READ_GLOBAL:       P_PLATFORM_IAM_READ_GLOBAL,
+  PLATFORM_SESSION_REVOKE_GLOBAL: P_PLATFORM_SESSION_REVOKE_GLOBAL,
+  PLATFORM_MFA_RESET_GLOBAL:      P_PLATFORM_MFA_RESET_GLOBAL,
   // Support tenant (émetteur)
   SUPPORT_CREATE_TENANT:          P_SUPPORT_CREATE_TENANT,
   SUPPORT_READ_TENANT:            P_SUPPORT_READ_TENANT,

@@ -431,7 +431,7 @@ export class TicketingService {
       ticketId: ticket.id,
       tenantId,
       tripId:   ticket.tripId,
-      seatNumber: ticket.seatNumber ?? '',
+      seatNumber: ticket.seatNumber,
       issuedAt: Date.now(),
     });
 

@@ -71,6 +71,7 @@ import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-gua
 import { AuthModule }            from './modules/auth/auth.module';
 import { PasswordResetModule }   from './modules/password-reset/password-reset.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
+import { PlatformIamModule }     from './modules/platform-iam/platform-iam.module';
 import { TenantSettingsModule }  from './modules/tenant-settings/tenant-settings.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
 import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
@@ -194,6 +195,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     PasswordResetModule,
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
+    // IAM plateforme — audit cross-tenant, sessions globales, reset MFA, rôles plateforme
+    PlatformIamModule,
     // Settings tenant : taxes, payment config, intégrations API
     TenantSettingsModule,
     MfaModule,

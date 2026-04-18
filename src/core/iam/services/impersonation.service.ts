@@ -120,6 +120,40 @@ export class ImpersonationService {
       );
     }
 
+    // Auto-révocation des sessions actives précédentes du même acteur sur le
+    // même tenant cible. Règle UX : un acteur ne doit avoir qu'UNE session
+    // active par tenant. Générer une nouvelle session annule l'ancienne.
+    // Révoque également l'éventuelle Session (cookie) créée par un exchange
+    // antérieur afin que l'acteur soit effectivement déconnecté du tenant
+    // cible avant d'y rentrer avec un nouveau contexte.
+    const existing = await this.prisma.impersonationSession.findMany({
+      where: {
+        actorId,
+        targetTenantId,
+        status:    { in: ['ACTIVE', 'EXCHANGED'] },
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true, exchangedSessionToken: true },
+    });
+    if (existing.length > 0) {
+      await this.prisma.impersonationSession.updateMany({
+        where:   { id: { in: existing.map(e => e.id) } },
+        data:    { status: 'REVOKED', revokedAt: new Date(), revokedBy: actorId },
+      });
+      const cookieTokens = existing
+        .map(e => e.exchangedSessionToken)
+        .filter((t): t is string => typeof t === 'string' && t.length > 0);
+      if (cookieTokens.length > 0) {
+        await this.prisma.session.deleteMany({
+          where: { token: { in: cookieTokens } },
+        });
+      }
+      this.logger.warn(
+        `[IMPERSONATION] Auto-revoke ${existing.length} previous session(s) ` +
+        `for actor=${actorId} target=${targetTenantId} (new session requested)`,
+      );
+    }
+
     const sessionId = randomUUID();
     const now       = Date.now();
     const expiresAt = new Date(now + SESSION_TTL_MS);
@@ -330,6 +364,50 @@ export class ImpersonationService {
   }
 
   /**
+   * Termine sa propre session d'impersonation (self-service).
+   * Vérifie que l'acteur courant == l'acteur initial — sinon NotFound
+   * (on évite Forbidden pour ne pas révéler l'existence d'une session).
+   * Supprime aussi la Session (cookie) créée par l'exchange pour que
+   * l'acteur soit effectivement déconnecté du sous-domaine cible.
+   */
+  async terminateOwnSession(
+    sessionId: string,
+    actorId:   string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const session = await this.prisma.impersonationSession.findFirst({
+      where: { id: sessionId, actorId },
+    });
+    if (!session) {
+      throw new NotFoundException(`Session "${sessionId}" introuvable`);
+    }
+    if (session.status !== 'ACTIVE' && session.status !== 'EXCHANGED') {
+      return;
+    }
+    await this.prisma.impersonationSession.update({
+      where: { id: sessionId },
+      data:  { status: 'REVOKED', revokedAt: new Date(), revokedBy: actorId },
+    });
+    if (session.exchangedSessionToken) {
+      await this.prisma.session.deleteMany({
+        where: { token: session.exchangedSessionToken },
+      });
+    }
+    await this.writeAuditLog({
+      actorId,
+      targetTenantId: session.targetTenantId,
+      action:         'control.impersonation.terminate.self',
+      resource:       `ImpersonationSession:${sessionId}`,
+      level:          'critical',
+      ipAddress,
+      detail:         { sessionId, self: true },
+    });
+    this.logger.warn(
+      `[IMPERSONATION TERMINATE SELF] session=${sessionId} actor=${actorId}`,
+    );
+  }
+
+  /**
    * Révoque une session d'impersonation active.
    * Peut être appelé par l'acteur lui-même ou par un SUPER_ADMIN (L2+).
    */
@@ -359,6 +437,15 @@ export class ImpersonationService {
         revokedBy: revokedById,
       },
     });
+
+    // Supprimer la Session (cookie) posée par un exchange antérieur pour
+    // déconnecter immédiatement l'acteur du sous-domaine cible. Sans ça,
+    // le cookie resterait valide jusqu'à son propre TTL (15 min).
+    if (session.exchangedSessionToken) {
+      await this.prisma.session.deleteMany({
+        where: { token: session.exchangedSessionToken },
+      });
+    }
 
     await this.writeAuditLog({
       actorId:       revokedById,
@@ -396,6 +483,88 @@ export class ImpersonationService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Historique complet des sessions d'impersonation sur un tenant cible
+   * — tous statuts (ACTIVE, EXCHANGED, REVOKED, EXPIRED). Alimente la
+   * vue "historique par domaine" dans la console plateforme.
+   *
+   * Limité aux 200 entrées les plus récentes pour éviter un rendu massif
+   * côté client ; on pagine explicitement si besoin plus tard.
+   */
+  async listHistoryByTenant(targetTenantId: string, limit = 200) {
+    const rows = await this.prisma.impersonationSession.findMany({
+      where: { targetTenantId },
+      select: {
+        id:             true,
+        actorId:        true,
+        targetTenantId: true,
+        status:         true,
+        reason:         true,
+        ipAddress:      true,
+        createdAt:      true,
+        expiresAt:      true,
+        revokedAt:      true,
+        revokedBy:      true,
+        exchangedAt:    true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    Math.max(1, Math.min(limit, 500)),
+    });
+    if (rows.length === 0) return [];
+    // Joindre les acteurs (User) pour afficher email / nom au lieu de l'UUID.
+    const actorIds = [...new Set(rows.map(r => r.actorId))];
+    const actors = await this.prisma.user.findMany({
+      where:  { id: { in: actorIds } },
+      select: { id: true, email: true, name: true },
+    });
+    const byId = new Map(actors.map(u => [u.id, u]));
+    return rows.map(r => ({
+      ...r,
+      actor: byId.get(r.actorId) ?? null,
+    }));
+  }
+
+  /**
+   * Liste les sessions (ACTIVE ou EXCHANGED, non expirées) initiées par
+   * l'acteur. Utilisé par le dashboard plateforme pour afficher les tenants
+   * actuellement accessibles via impersonation et permettre la ré-entrée
+   * (cookie déjà posé sur le sous-domaine cible).
+   *
+   * Inclut le slug du tenant cible pour éviter un lookup supplémentaire
+   * côté frontend.
+   */
+  async listActiveByActor(actorId: string) {
+    const rows = await this.prisma.impersonationSession.findMany({
+      where: {
+        actorId,
+        status:    { in: ['ACTIVE', 'EXCHANGED'] },
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id:             true,
+        actorId:        true,
+        targetTenantId: true,
+        status:         true,
+        reason:         true,
+        ipAddress:      true,
+        createdAt:      true,
+        expiresAt:      true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (rows.length === 0) return [];
+
+    const tenants = await this.prisma.tenant.findMany({
+      where:  { id: { in: rows.map(r => r.targetTenantId) } },
+      select: { id: true, name: true, slug: true },
+    });
+    const byId = new Map(tenants.map(t => [t.id, t]));
+    return rows.map(r => ({
+      ...r,
+      targetTenant: byId.get(r.targetTenantId) ?? null,
+    }));
   }
 
   // ─── Token helpers ───────────────────────────────────────────────────────────

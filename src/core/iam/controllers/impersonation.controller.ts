@@ -123,6 +123,29 @@ export class ImpersonationController {
   }
 
   /**
+   * DELETE /iam/impersonate/:sessionId/self
+   *
+   * Termine sa PROPRE session d'impersonation (self-service). Permet à un
+   * SUPPORT_L1 — qui n'a pas la perm revoke.global — de quitter le tenant
+   * cible proprement via le bouton "Terminer" du banner. Côté backend, on
+   * vérifie que l'acteur courant est bien l'acteur initial de la session.
+   *
+   * Requiert seulement : control.impersonation.switch.global (que tout
+   * acteur habilité à créer une session possède).
+   */
+  @Delete(':sessionId/self')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(P_IMPERSONATION_SWITCH_GLOBAL)
+  async terminateOwnSession(
+    @Param('sessionId') sessionId: string,
+    @Req()              req:       AuthenticatedRequest,
+  ): Promise<void> {
+    const actorId = req.user?.id ?? req[SCOPE_CONTEXT_KEY]?.userId;
+    if (!actorId) throw new Error('Actor ID manquant après vérification du guard');
+    await this.impersonationService.terminateOwnSession(sessionId, actorId, req.ip);
+  }
+
+  /**
    * GET /iam/impersonate/:tenantId/active
    *
    * Liste les sessions d'impersonation actives sur un tenant (pour audit).
@@ -134,6 +157,44 @@ export class ImpersonationController {
     @Param('tenantId') tenantId: string,
   ) {
     const sessions = await this.impersonationService.listActiveSessions(tenantId);
+    return { sessions };
+  }
+
+  /**
+   * GET /iam/impersonate/:tenantId/history
+   *
+   * Historique complet (tous statuts) des sessions d'impersonation pour
+   * un tenant — audit, conformité, support. Limite 200 entrées par défaut.
+   * Requiert : control.impersonation.revoke.global (SA / SUPPORT_L2).
+   */
+  @Get(':tenantId/history')
+  @RequirePermission(P_IMPERSONATION_REVOKE_GLOBAL)
+  async listHistory(
+    @Param('tenantId') tenantId: string,
+  ) {
+    const sessions = await this.impersonationService.listHistoryByTenant(tenantId);
+    return { sessions };
+  }
+
+  /**
+   * GET /iam/impersonate/my-active
+   *
+   * Sessions d'impersonation actives initiées par l'acteur courant,
+   * tous tenants confondus. Alimente le dashboard plateforme pour
+   * permettre à l'utilisateur de rejoindre l'un de ses tenants cibles
+   * en cours de session (cookie déjà posé sur le sous-domaine cible).
+   *
+   * Requiert : control.impersonation.switch.global (déjà possédé par
+   * l'acteur pour avoir créé les sessions).
+   */
+  @Get('my-active')
+  @RequirePermission(P_IMPERSONATION_SWITCH_GLOBAL)
+  async listMyActiveSessions(
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const actorId = req.user?.id;
+    if (!actorId) throw new Error('Actor ID manquant après vérification du guard');
+    const sessions = await this.impersonationService.listActiveByActor(actorId);
     return { sessions };
   }
 }

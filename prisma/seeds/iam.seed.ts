@@ -55,6 +55,11 @@ const SUPER_ADMIN_PERMISSIONS = [
   // Impersonation — switch de session JIT
   'control.impersonation.switch.global',
   'control.impersonation.revoke.global',
+  // Platform IAM global (audit cross-tenant, sessions, users, MFA reset)
+  'data.platform.audit.read.global',
+  'data.platform.iam.read.global',
+  'control.platform.session.revoke.global',
+  'control.platform.mfa.reset.global',
   // Documents imprimables (accès global pour assistance)
   'data.ticket.print.agency',
   'data.manifest.print.global',
@@ -86,6 +91,9 @@ const SUPPORT_L1_PERMISSIONS = [
   'data.platform.metrics.read.global',
   'control.platform.support.read.global',
   'control.platform.support.write.global',
+  // Platform IAM — lecture audit + users pour diagnostic ticket support
+  'data.platform.audit.read.global',
+  'data.platform.iam.read.global',
 ];
 
 // ─── Permissions SUPPORT_L2 : L1 + debug technique ───────────────────────────
@@ -98,6 +106,9 @@ const SUPPORT_L2_PERMISSIONS = [
   'data.outbox.replay.global',
   // Révocation de session impersonation (escalade L2)
   'control.impersonation.revoke.global',
+  // Platform IAM — L2 peut révoquer sessions + reset MFA en escalade
+  'control.platform.session.revoke.global',
+  'control.platform.mfa.reset.global',
 ];
 
 // ─── Permissions par rôle tenant ──────────────────────────────────────────────

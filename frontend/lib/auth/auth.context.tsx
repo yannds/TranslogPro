@@ -17,11 +17,28 @@ import { apiFetch, ApiError } from '../api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface ImpersonationContextDto {
+  sessionId:      string;
+  targetTenantId: string;
+  targetSlug:     string;
+  actorTenantId:  string;
+  expiresAt:      string;   // ISO
+  reason:         string | null;
+}
+
 export interface AuthUser {
   id:             string;
   email:          string;
   name:           string | null;
+  /** Tenant natif de l'utilisateur (User.tenantId). Inchangé pendant impersonation. */
   tenantId:       string;
+  /**
+   * Tenant effectif de la session courante. Diffère de `tenantId` pendant
+   * une impersonation JIT (effectiveTenantId = target, tenantId = platform).
+   * Utiliser ce champ pour fetcher la config tenant et toutes décisions
+   * scopées au tenant courant.
+   */
+  effectiveTenantId: string;
   roleId:         string | null;
   roleName:       string | null;
   userType:       string;
@@ -35,6 +52,11 @@ export interface AuthUser {
    * fait foi pour l'affichage. La sécurité réelle reste sur PermissionGuard.
    */
   permissions:    string[];
+  /**
+   * Présent ssi la session est une impersonation JIT. Le frontend affiche
+   * un banner chrono tant que ce champ est présent.
+   */
+  impersonation?: ImpersonationContextDto;
 }
 
 interface AuthContextValue {

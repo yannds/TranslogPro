@@ -383,9 +383,20 @@ export class DocumentsService {
     });
     if (!parcel) throw new NotFoundException(`Colis ${parcelId} introuvable`);
 
-    const sender = parcel.senderId
+    // L'expéditeur peut venir d'un User lié (senderId) OU, pour les demandes
+    // déposées depuis le portail public anonyme, des champs capturés dans
+    // recipientInfo.sender (cf. PublicPortalService.createParcelPickupRequest).
+    const recipInfoRaw = (parcel.recipientInfo ?? {}) as Record<string, unknown>;
+    const portalSender = (recipInfoRaw.sender ?? null) as
+      | { name?: string; phone?: string; email?: string } | null;
+    const senderUser = parcel.senderId
       ? await this.prisma.user.findUnique({ where: { id: parcel.senderId } })
       : null;
+    const resolvedSender = {
+      name:  senderUser?.name  ?? portalSender?.name  ?? null,
+      email: senderUser?.email ?? portalSender?.email ?? null,
+      phone: portalSender?.phone ?? null,
+    };
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
     const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
 
@@ -398,7 +409,9 @@ export class DocumentsService {
         status:        parcel.status,
         createdAt:     parcel.createdAt,
         recipientInfo: parcel.recipientInfo as Record<string, unknown>,
-        sender:        sender ? { name: sender.name ?? null, email: sender.email } : null,
+        sender:        (resolvedSender.name || resolvedSender.email)
+          ? { name: resolvedSender.name, email: resolvedSender.email ?? '' }
+          : null,
         destination:   (parcel as any).destination ?? null,
       },
       tenantName:   tenant.name,
@@ -407,7 +420,7 @@ export class DocumentsService {
       scope,
     });
 
-    const recip = (parcel.recipientInfo ?? {}) as Record<string, unknown>;
+    const recip = recipInfoRaw;
     const cur   = displayCurrency(tenant.currency ?? 'XAF');
     const tenantLogo = await this.fetchTenantLogoDataUri(tenantId);
     const pdfmeData: Record<string, string> = {
@@ -431,10 +444,10 @@ export class DocumentsService {
       dimensions:       (parcel as any).dimensions ?? '',
       parcelCreatedAt:  parcel.createdAt.toLocaleString('fr-FR'),
       // ── Sender ──
-      senderName:       sender?.name ?? '',
-      senderEmail:      sender?.email ?? '',
+      senderName:       resolvedSender.name  ?? '',
+      senderEmail:      resolvedSender.email ?? '',
       senderAddress:    '',
-      senderPhone:      sender?.email ?? '',
+      senderPhone:      resolvedSender.phone ?? '',
       // ── Recipient ──
       recipientName:    (recip.name    as string) ?? '',
       recipientAddress: (recip.address as string) ?? '',

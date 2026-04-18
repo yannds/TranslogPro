@@ -15,7 +15,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth/auth.context';
 import { useTenantConfigApply } from './TenantConfigProvider';
 import { useI18n } from '../lib/i18n/useI18n';
-import { resolveHost, buildTenantUrl } from '../lib/tenancy/host';
+import { resolveHost, buildTenantUrl, buildAdminUrl } from '../lib/tenancy/host';
 import type { Language } from '../lib/i18n/types';
 
 interface CompanyInfoResponse {
@@ -56,22 +56,47 @@ export function TenantConfigBridge() {
   const applyConfig  = useTenantConfigApply();
   const { setLang }  = useI18n();
 
+  // Tenant effectif de la session courante : pendant une impersonation, c'est
+  // le tenant CIBLE (pas le tenant natif de l'utilisateur plateforme). C'est
+  // ce tenantId qui détermine la config/langue/branding à charger et qui doit
+  // matcher le sous-domaine courant.
+  const effectiveTenantId = user?.effectiveTenantId ?? user?.tenantId;
+
   useEffect(() => {
-    if (!user?.tenantId) return;
+    if (!effectiveTenantId) return;
     let cancelled = false;
 
-    apiFetch<TenantConfigResponse>(`/api/tenants/${user.tenantId}/config`, {
+    apiFetch<TenantConfigResponse>(`/api/tenants/${effectiveTenantId}/config`, {
       skipRedirectOn401: true,
     })
       .then(res => {
         if (cancelled) return;
 
-        // Defense in depth frontend : si le slug du tenant connecté ne
-        // correspond pas au sous-domaine courant, on ne charge PAS la config
-        // (évite d'afficher les branding/couleurs du tenantA sur le
+        // Defense in depth frontend : si le slug du tenant effectif de la
+        // session ne correspond pas au sous-domaine courant, on ne charge PAS
+        // la config (évite d'afficher les branding/couleurs du tenantA sur le
         // sous-domaine tenantB — scénario impossible en Phase 1+2 puisque
         // le cookie est scopé au sous-domaine, mais belt-and-suspenders).
+        //
+        // GUARD `__platform__` : le tenant plateforme n'a pas de sous-domaine
+        // public (__platform__.translog.test n'est PAS dans /etc/hosts ni en
+        // prod). Si on arrive ici avec ce slug, c'est qu'un vieux code /
+        // session orpheline pointe sur le tenant plateforme — on refuse de
+        // rediriger vers un host injoignable et on force le retour portail
+        // admin. Prévient le bug "404 ERR_NAME_NOT_RESOLVED en boucle".
+        const PLATFORM_SLUG = '__platform__';
         const host = resolveHost();
+        if (res.company.slug === PLATFORM_SLUG && host.slug) {
+          if (import.meta.env.DEV) {
+            console.warn(
+              `[TenantConfigBridge] Session pointe sur le tenant plateforme ` +
+              `depuis un sous-domaine tenant (${host.slug}). ` +
+              `Redirect vers /admin du portail plateforme.`,
+            );
+          }
+          window.location.replace(buildAdminUrl('/admin/platform/dashboard'));
+          return;
+        }
         if (host.slug && res.company.slug && host.slug !== res.company.slug && !host.isAdmin) {
           if (import.meta.env.DEV) {
             console.warn(
@@ -127,7 +152,7 @@ export function TenantConfigBridge() {
       });
 
     return () => { cancelled = true; };
-  }, [user?.tenantId, applyConfig, setLang]);
+  }, [effectiveTenantId, applyConfig, setLang]);
 
   return null;
 }

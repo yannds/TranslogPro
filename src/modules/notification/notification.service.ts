@@ -42,7 +42,7 @@ export class NotificationService {
 
   // ─── Public API ──────────────────────────────────────────────────────────────
 
-  async send(dto: SendNotificationDto): Promise<void> {
+  async send(dto: SendNotificationDto): Promise<boolean> {
     // 1. Vérifier les préférences utilisateur
     if (dto.userId) {
       const prefs = await this.prisma.notificationPreference.findUnique({
@@ -52,7 +52,7 @@ export class NotificationService {
         this.logger.debug(
           `Channel ${dto.channel} disabled for user ${dto.userId} — skipped`,
         );
-        return;
+        return false;
       }
     }
 
@@ -83,6 +83,7 @@ export class NotificationService {
           data:  { status: 'SENT', sentAt: new Date() },
         });
       }
+      return true;
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       this.logger.error(`[Notification] Send failed channel=${dto.channel}: ${reason}`);
@@ -98,7 +99,35 @@ export class NotificationService {
           },
         });
       }
+      return false;
     }
+  }
+
+  /**
+   * Envoie un message en essayant WhatsApp en premier, puis SMS en repli si
+   * l'envoi WhatsApp échoue. Pas d'erreur propagée — le caller peut faire du
+   * fire-and-forget. Retourne le canal utilisé (ou null si aucun n'a marché).
+   */
+  async sendWithChannelFallback(opts: {
+    tenantId:    string;
+    phone:       string;
+    templateId:  string;
+    body:        string;
+    title?:      string;
+    metadata?:   Record<string, string>;
+  }): Promise<'WHATSAPP' | 'SMS' | null> {
+    const base = {
+      tenantId:   opts.tenantId,
+      phone:      opts.phone,
+      templateId: opts.templateId,
+      body:       opts.body,
+      title:      opts.title,
+      metadata:   opts.metadata,
+    };
+    const whatsappOk = await this.send({ ...base, channel: 'WHATSAPP' });
+    if (whatsappOk) return 'WHATSAPP';
+    const smsOk = await this.send({ ...base, channel: 'SMS' });
+    return smsOk ? 'SMS' : null;
   }
 
   async getUnread(tenantId: string, userId: string) {

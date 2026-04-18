@@ -17,6 +17,7 @@ import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 import { TenantScopeSelector } from '../platform/TenantScopeSelector';
+import { ImpersonationBanner } from '../platform/ImpersonationBanner';
 
 function PageLoadingFallback() {
   return (
@@ -204,6 +205,11 @@ export function AdminDashboard() {
           </button>
           {logo}
         </div>
+
+        {/* Banner d'impersonation — présent ssi session JIT active (présence
+            de user.impersonation dans /api/auth/me). Chrono persistant, bouton
+            Terminer self-service, auto-revoke sur pagehide. */}
+        <ImpersonationBanner />
 
         {/* Bandeau staff plateforme — visible uniquement si tenantId === PLATFORM.
             Permet de scoper les pages tenant-scoped (Trips, Fleet, Cashier, …)

@@ -39,7 +39,20 @@ export interface AuthUserDto {
   id:              string;
   email:           string;
   name:            string | null;
+  /**
+   * Tenant natif de l'utilisateur (User.tenantId) — inchangé pendant
+   * une impersonation. Utilisé par l'audit et les vérifs d'identité.
+   */
   tenantId:        string;
+  /**
+   * Tenant effectif de la session courante (Session.tenantId) — diffère
+   * de `tenantId` pendant une impersonation (où Session.tenantId = target).
+   * C'est ce champ que le frontend doit utiliser pour :
+   *   - fetch config tenant (/api/tenants/:id/config)
+   *   - détecter un mismatch host/session
+   *   - afficher le tenant courant dans l'UI
+   */
+  effectiveTenantId: string;
   roleId:          string | null;
   roleName:        string | null;
   userType:        string;
@@ -58,6 +71,20 @@ export interface AuthUserDto {
    * ne servent qu'à masquer/afficher des éléments d'UI.
    */
   permissions:     string[];
+  /**
+   * Contexte d'impersonation — présent ssi la session courante a été
+   * créée via exchange d'un token d'impersonation JIT (effectiveTenantId
+   * ≠ tenantId). Le frontend affiche un banner + chrono tant que ce
+   * champ est présent.
+   */
+  impersonation?:  {
+    sessionId:      string;
+    targetTenantId: string;
+    targetSlug:     string;
+    actorTenantId:  string;
+    expiresAt:      string;   // ISO
+    reason:         string | null;
+  };
 }
 
 @Injectable()
@@ -229,7 +256,36 @@ export class AuthService {
       throw new ForbiddenException('Session invalidée (IP modifiée)');
     }
 
-    const user = await this.toDto(session.user);
+    const user = await this.toDto(session.user, session.tenantId);
+
+    // Si la session courante est sur un tenant ≠ tenant natif de l'utilisateur,
+    // il s'agit d'une impersonation JIT. On joint le contexte (expiresAt,
+    // reason, sessionId) pour que le frontend affiche un banner.
+    if (session.tenantId !== session.user.tenantId) {
+      const imp = await this.prisma.impersonationSession.findFirst({
+        where: {
+          actorId:        session.user.id,
+          targetTenantId: session.tenantId,
+          status:         { in: ['ACTIVE', 'EXCHANGED'] },
+          expiresAt:      { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (imp) {
+        const targetTenant = await this.prisma.tenant.findUnique({
+          where:  { id: imp.targetTenantId },
+          select: { slug: true },
+        });
+        user.impersonation = {
+          sessionId:      imp.id,
+          targetTenantId: imp.targetTenantId,
+          targetSlug:     targetTenant?.slug ?? '',
+          actorTenantId:  imp.actorTenantId,
+          expiresAt:      imp.expiresAt.toISOString(),
+          reason:         imp.reason,
+        };
+      }
+    }
 
     // Rotation à mi-TTL (15 jours) : on regénère un nouveau token pour réduire
     // la fenêtre d'exploitation en cas de vol. L'ancien est invalidé immédiatement.
@@ -473,25 +529,27 @@ export class AuthService {
     id: string; email: string; name: string | null;
     tenantId: string; roleId: string | null; userType: string;
     role?: { name: string; permissions?: { permission: string }[] } | null;
-  }): Promise<AuthUserDto> {
+  }, sessionTenantId?: string): Promise<AuthUserDto> {
+    const effectiveTenantId = sessionTenantId ?? user.tenantId;
     const [enabledModules, staff] = await Promise.all([
-      this.modules.listActiveKeys(user.tenantId),
+      this.modules.listActiveKeys(effectiveTenantId),
       this.prisma.staff.findFirst({
         where:  { userId: user.id, tenantId: user.tenantId },
         select: { id: true },
       }),
     ]);
     return {
-      id:             user.id,
-      email:          user.email,
-      name:           user.name,
-      tenantId:       user.tenantId,
-      roleId:         user.roleId,
-      roleName:       user.role?.name ?? null,
-      userType:       user.userType,
-      staffId:        staff?.id ?? null,
+      id:               user.id,
+      email:            user.email,
+      name:             user.name,
+      tenantId:         user.tenantId,
+      effectiveTenantId,
+      roleId:           user.roleId,
+      roleName:         user.role?.name ?? null,
+      userType:         user.userType,
+      staffId:          staff?.id ?? null,
       enabledModules,
-      permissions:    user.role?.permissions?.map(p => p.permission) ?? [],
+      permissions:      user.role?.permissions?.map(p => p.permission) ?? [],
     };
   }
 

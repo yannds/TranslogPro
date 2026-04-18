@@ -18,6 +18,7 @@ import { REDIS_CLIENT }     from '../../infrastructure/eventbus/redis-publisher.
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
+import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const PORTAL_CACHE_TTL = 300; // 5 min
@@ -36,6 +37,7 @@ export class PublicPortalService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
+    private readonly notification: NotificationService,
   ) {}
 
   // ─── Tenant resolution ────────────────────────────────────────────────────
@@ -549,10 +551,19 @@ export class PublicPortalService {
 
     // 1. Create all tickets in PENDING_PAYMENT (single transaction for atomicity)
     const tickets = await this.prisma.transact(async (tx) => {
+      // Filtre "billet actif" : exclut les statuts inactifs ET les PENDING_PAYMENT
+      // dont la fenêtre de paiement est expirée (ils ne peuvent plus être confirmés
+      // et ne doivent donc pas bloquer les retries après un échec technique).
+      const now = new Date();
+      const activeTicketWhere = {
+        tenantId: tenant.id,
+        tripId:   dto.tripId,
+        status:   { notIn: ['CANCELLED', 'EXPIRED'] as string[] },
+        NOT: { AND: [{ status: 'PENDING_PAYMENT' as const }, { expiresAt: { lte: now } }] },
+      };
+
       // ── Garde capacité globale (pour tous les passagers demandés) ────────
-      const bookedCount = await tx.ticket.count({
-        where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
-      });
+      const bookedCount = await tx.ticket.count({ where: activeTicketWhere });
       if (totalSeats > 0 && bookedCount + dto.passengers.length > totalSeats) {
         throw new BadRequestException(
           `Not enough seats: ${totalSeats - bookedCount} available, ${dto.passengers.length} requested`,
@@ -563,7 +574,7 @@ export class PublicPortalService {
       const occupiedSeats = new Set<string>();
       if (isNumbered) {
         const occupiedRows = await tx.ticket.findMany({
-          where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] }, seatNumber: { not: null } },
+          where:  { ...activeTicketWhere, seatNumber: { not: null } },
           select: { seatNumber: true },
         });
         for (const row of occupiedRows as Array<{ seatNumber: string | null }>) if (row.seatNumber) occupiedSeats.add(row.seatNumber);
@@ -571,7 +582,7 @@ export class PublicPortalService {
 
       // ── Charger les noms déjà bookés pour le contrôle de doublon ────────
       const existingNames = await tx.ticket.findMany({
-        where: { tenantId: tenant.id, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+        where:  activeTicketWhere,
         select: { passengerName: true },
       });
       const bookedNames = new Set((existingNames as Array<{ passengerName: string }>).map(r => r.passengerName.toLowerCase()));
@@ -687,7 +698,7 @@ export class PublicPortalService {
           ticketId:   tk.id,
           tenantId:   tenant.id,
           tripId:     dto.tripId,
-          seatNumber: tk.seatNumber ?? '',
+          seatNumber: tk.seatNumber,
           issuedAt:   Date.now(),
         });
 
@@ -887,11 +898,72 @@ export class PublicPortalService {
       `[Portal] Parcel pickup request created: ${parcel.id} tracking=${trackingCode} tenant=${tenant.slug}`,
     );
 
+    // Notification tracking — WhatsApp préféré, SMS en repli (fire-and-forget).
+    // On notifie l'expéditeur (qui vient de soumettre) et le destinataire.
+    const lang = (tenant.language as string | undefined) ?? 'fr';
+    const notify = (phone: string, name: string, role: 'sender' | 'recipient') => {
+      void this.notification.sendWithChannelFallback({
+        tenantId:   tenant.id,
+        phone,
+        templateId: 'parcel.tracking',
+        body:       this.renderParcelTrackingBody(lang, name, trackingCode, role),
+        metadata:   { trackingCode, role, source: 'portal' },
+      }).catch(err => this.logger.warn(
+        `[Portal Notif] ${role} tracking=${trackingCode}: ${(err as Error)?.message ?? err}`,
+      ));
+    };
+    if (dto.senderPhone)    notify(dto.senderPhone,    dto.senderName    || '', 'sender');
+    if (dto.recipientPhone) notify(dto.recipientPhone, dto.recipientName || '', 'recipient');
+
+    // Génération récépissé/label colis — fire-and-forget sur erreur.
+    // Le client peut télécharger le bordereau imprimable depuis la page de
+    // confirmation portail.
+    const systemActor = {
+      id:       'portal-system',
+      tenantId: tenant.id,
+      roleId:   'portal-system',
+      roleName: 'SYSTEM',
+      agencyId: '',
+      userType: 'ANONYMOUS',
+    } as any;
+    let labelUrl: string | null = null;
+    let documentsWarning: string | null = null;
+    try {
+      const label = await this.documentsService.printParcelLabel(
+        tenant.id, parcel.id, systemActor, undefined,
+      );
+      labelUrl = (label as any)?.downloadUrl ?? null;
+    } catch (err) {
+      this.logger.error(
+        `[Portal] Parcel label generation FAILED for ${parcel.id}: ${(err as Error)?.stack ?? err}`,
+      );
+      documentsWarning = `Document temporairement indisponible : ${(err as Error)?.message ?? 'erreur interne'}`;
+    }
+
     return {
       trackingCode: parcel.trackingCode,
       status:       parcel.status,
       destination:  { name: destination.name, city: destination.city },
+      labelUrl,
+      documentsWarning,
     };
+  }
+
+  private renderParcelTrackingBody(
+    lang:         string,
+    name:         string,
+    trackingCode: string,
+    role:         'sender' | 'recipient',
+  ): string {
+    const greeting = name ? (lang === 'en' ? `Hello ${name}, ` : `Bonjour ${name}, `) : '';
+    if (lang === 'en') {
+      return role === 'recipient'
+        ? `${greeting}a parcel is on its way for you. Tracking code: ${trackingCode}`
+        : `${greeting}your parcel pickup request has been registered. Tracking code: ${trackingCode}`;
+    }
+    return role === 'recipient'
+      ? `${greeting}un colis vous est destiné. Code de suivi : ${trackingCode}`
+      : `${greeting}votre demande d'enlèvement a été enregistrée. Code de suivi : ${trackingCode}`;
   }
 
   /**

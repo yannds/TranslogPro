@@ -70,6 +70,30 @@ resolve_hostnames() {
 command -v docker >/dev/null 2>&1 || fail "Docker Desktop requis (docker command manquante)."
 docker info >/dev/null 2>&1 || fail "Docker Desktop n'est pas lancé."
 
+# ─── 0. Nettoyage des anciens process Node (API + Vite) ──────────
+# Libère les ports 3000/3001 (API NestJS + WebSocket) et 5173 (Vite)
+# pour éviter EADDRINUSE au relancement. Idempotent — skippe si aucun
+# process trouvé. Aligné sur le BLOC 0 de scripts/dev.sh.
+for pidfile in /tmp/translog-api.pid /tmp/translog-frontend.pid; do
+  if [[ -f "$pidfile" ]]; then
+    old_pid=$(cat "$pidfile" 2>/dev/null || echo "")
+    if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+      info "Arrêt process précédent (PID $old_pid, $(basename "$pidfile" .pid))…"
+      kill "$old_pid" 2>/dev/null || true
+      sleep 1
+    fi
+    rm -f "$pidfile"
+  fi
+done
+for port in 3000 3001 5173; do
+  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    info "Port $port occupé — libération forcée (PIDs: $(echo "$pids" | tr '\n' ' '))…"
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+  fi
+done
+ok "Ports applicatifs libres (3000/3001/5173)"
+
 # ─── 1. mkcert ────────────────────────────────────────────────────
 if ! command -v mkcert >/dev/null 2>&1; then
   info "Installation de mkcert (via Homebrew)…"

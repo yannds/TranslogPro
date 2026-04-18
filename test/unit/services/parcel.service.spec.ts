@@ -90,7 +90,13 @@ function buildService(overrides: Partial<{
   // le workflow et la persistance, pas le CRM. Stubs no-op suffisent.
   const crmResolver = { resolveOrCreate: jest.fn().mockResolvedValue(null) } as any;
   const crmClaim    = { issueToken:      jest.fn().mockResolvedValue(null) } as any;
-  const service = new ParcelService(prisma as any, workflow as any, crmResolver, crmClaim, eventBus as any);
+  const notification = {
+    sendWithChannelFallback: jest.fn().mockResolvedValue('WHATSAPP'),
+    send:                    jest.fn().mockResolvedValue(true),
+  } as any;
+  const service = new ParcelService(
+    prisma as any, workflow as any, crmResolver, crmClaim, notification, eventBus as any,
+  );
   return { service, prisma, workflow, eventBus };
 }
 

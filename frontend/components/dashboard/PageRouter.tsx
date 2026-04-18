@@ -184,6 +184,14 @@ const LazyPlatformSupport     = lazy(() => import('../pages/PagePlatformSupport'
 const LazyCustomerSupport     = lazy(() => import('../pages/PageCustomerSupport').then(m => ({ default: m.PageCustomerSupport })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformSettings    = lazy(() => import('../pages/PagePlatformSettings').then(m => ({ default: m.PagePlatformSettings })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformAudit       = lazy(() => import('../pages/PagePlatformAudit').then(m => ({ default: m.PagePlatformAudit })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformSessions    = lazy(() => import('../pages/PagePlatformSessions').then(m => ({ default: m.PagePlatformSessions })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformUsers       = lazy(() => import('../pages/PagePlatformUsers').then(m => ({ default: m.PagePlatformUsers })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformRoles       = lazy(() => import('../pages/PagePlatformRoles').then(m => ({ default: m.PagePlatformRoles })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -346,6 +354,10 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-support':    return <LazyPlatformSupport />;
     case 'platform-staff':      return <LazyPlatformStaff />;
     case 'impersonation':       return <LazyImpersonation />;
+    case 'platform-audit':      return <LazyPlatformAudit />;
+    case 'platform-sessions':   return <LazyPlatformSessions />;
+    case 'platform-users':      return <LazyPlatformUsers />;
+    case 'platform-roles':      return <LazyPlatformRoles />;
     case 'platform-settings':   return <LazyPlatformSettings />;
 
     // ── Support tenant → plateforme (côté tenant) ──────────────────────────

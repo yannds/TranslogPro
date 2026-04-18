@@ -6,15 +6,16 @@ import { ISecretService, SECRET_SERVICE } from '../../../infrastructure/secret/i
  * QR payload — PRD §IV.1
  * Format signé : HMAC-SHA256(ticketId:tripId:seatNumber, tenant_hmac_key_vault)
  *
- * Le seatNumber est inclus dans la signature pour empêcher la réutilisation
- * d'un QR sur un siège différent (fraude de transfert de billet).
+ * Le seatNumber est inclus dans la signature quand il existe pour empêcher
+ * la réutilisation d'un QR sur un siège différent (fraude de transfert).
+ * Optionnel pour les trajets non-numérotés (seatingMode != NUMBERED).
  */
 export interface QrPayload {
-  ticketId:   string;
-  tenantId:   string;
-  tripId:     string;
-  seatNumber: string;   // obligatoire — partie de la signature
-  issuedAt:   number;   // unix ms
+  ticketId:    string;
+  tenantId:    string;
+  tripId:      string;
+  seatNumber?: string | null;   // optionnel — non-numéroté = null
+  issuedAt:    number;          // unix ms
 }
 
 /**
@@ -76,11 +77,6 @@ export class QrService {
       throw new UnauthorizedException('QR token tenant mismatch');
     }
 
-    // Vérification présence seatNumber — les tokens sans seatNumber sont rejetés
-    if (!payload.seatNumber) {
-      throw new UnauthorizedException('QR token incomplet — seatNumber manquant');
-    }
-
     return payload;
   }
 
@@ -91,7 +87,7 @@ export class QrService {
   }
 
   private assertPayloadComplete(payload: QrPayload): void {
-    const missing = (['ticketId', 'tenantId', 'tripId', 'seatNumber'] as const)
+    const missing = (['ticketId', 'tenantId', 'tripId'] as const)
       .filter(f => !payload[f]);
     if (missing.length > 0) {
       throw new Error(`QR payload incomplet — champs manquants: ${missing.join(', ')}`);

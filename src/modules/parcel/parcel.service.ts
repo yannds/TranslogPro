@@ -8,6 +8,7 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { CreateParcelDto } from './dto/create-parcel.dto';
 import { CustomerResolverService } from '../crm/customer-resolver.service';
 import { CustomerClaimService } from '../crm/customer-claim.service';
+import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class ParcelService {
     private readonly workflow: WorkflowEngine,
     private readonly crmResolver: CustomerResolverService,
     private readonly crmClaim:    CustomerClaimService,
+    private readonly notification: NotificationService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -112,7 +114,78 @@ export class ParcelService {
     postTx(parcel.senderCustomerId);
     postTx(parcel.recipientCustomerId);
 
+    // Notification tracking — WhatsApp préféré, SMS en repli (fire-and-forget).
+    // Envoyée à l'expéditeur ET au destinataire s'ils ont un phoneE164.
+    void this.dispatchTrackingNotifications(
+      tenantId,
+      parcel.trackingCode,
+      parcel.senderCustomerId,
+      parcel.recipientCustomerId,
+    );
+
     return parcel;
+  }
+
+  /**
+   * Notifie expéditeur + destinataire du code de suivi via WhatsApp (préféré)
+   * avec repli SMS. Fire-and-forget — n'affecte jamais le succès de la création.
+   */
+  private async dispatchTrackingNotifications(
+    tenantId:            string,
+    trackingCode:        string,
+    senderCustomerId:    string | null,
+    recipientCustomerId: string | null,
+  ): Promise<void> {
+    const ids = [senderCustomerId, recipientCustomerId].filter(
+      (v): v is string => !!v,
+    );
+    if (ids.length === 0) return;
+
+    const customers = await this.prisma.customer.findMany({
+      where:  { id: { in: Array.from(new Set(ids)) }, tenantId },
+      select: { id: true, phoneE164: true, name: true, language: true },
+    });
+
+    const isRecipient = (cid: string) => cid === recipientCustomerId;
+
+    for (const c of customers) {
+      if (!c.phoneE164) continue;
+      const body = this.renderTrackingBody(
+        c.language ?? 'fr',
+        c.name,
+        trackingCode,
+        isRecipient(c.id) ? 'recipient' : 'sender',
+      );
+      try {
+        await this.notification.sendWithChannelFallback({
+          tenantId,
+          phone:      c.phoneE164,
+          templateId: 'parcel.tracking',
+          body,
+          metadata:   { trackingCode, customerId: c.id },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `[Parcel Notif] customer=${c.id} tracking=${trackingCode}: ${(err as Error)?.message ?? err}`,
+        );
+      }
+    }
+  }
+
+  private renderTrackingBody(
+    lang:         string,
+    name:         string,
+    trackingCode: string,
+    role:         'sender' | 'recipient',
+  ): string {
+    if (lang === 'en') {
+      return role === 'recipient'
+        ? `Hello ${name}, a parcel is on its way for you. Tracking code: ${trackingCode}`
+        : `Hello ${name}, your parcel has been registered. Tracking code: ${trackingCode}`;
+    }
+    return role === 'recipient'
+      ? `Bonjour ${name}, un colis vous est destiné. Code de suivi : ${trackingCode}`
+      : `Bonjour ${name}, votre colis a été enregistré. Code de suivi : ${trackingCode}`;
   }
 
   async findAll(tenantId: string, filters?: { status?: string }) {

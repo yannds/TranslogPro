@@ -3,28 +3,28 @@
  *
  * Flux PRD §IV.12 :
  *   1. L'agent plateforme (SA / L1 / L2) sélectionne un tenant cible et une raison
- *   2. POST /iam/impersonate → reçoit un token HMAC-SHA256 (TTL 15 min, non-renouvelable)
- *   3. Le token est affiché UNE SEULE FOIS (audit) — l'agent le copie
- *   4. Les requêtes suivantes utilisent le header X-Impersonation-Token
+ *   2. POST /iam/impersonate → reçoit un token HMAC-SHA256 (TTL 15 min, one-shot)
+ *   3. Le token est échangé sur {target}.translog.test/api/auth/impersonate/exchange
+ *      qui pose un cookie session scopé → l'acteur reste connecté sur ce tenant
+ *      jusqu'au TTL ou jusqu'à révocation explicite/pagehide.
+ *   4. Une section "Mes sessions actives" liste les tenants accessibles
+ *      immédiatement (cookie déjà posé) — le bouton "Rejoindre" n'appelle PAS
+ *      l'API, il ouvre simplement {target}.translog.test/admin.
+ *   5. Création d'une session pour un tenant déjà actif → auto-révoque la
+ *      précédente (règle UX : une session active par tenant par acteur).
  *
  * Permissions :
  *   - switch  (P_IMPERSONATION_SWITCH_GLOBAL)  : SUPER_ADMIN, SUPPORT_L1, SUPPORT_L2
  *   - revoke  (P_IMPERSONATION_REVOKE_GLOBAL)  : SUPER_ADMIN, SUPPORT_L2 uniquement
- *
- * Les agents sans `revoke` voient la liste des sessions MAIS sans bouton révoquer.
- * Le backend renvoie 403 si la permission manque — on masque l'action côté UI
- * en défense en profondeur.
- *
- * Security :
- *   - Token jamais logué (console.log retiré)
- *   - Copy-to-clipboard respecte les permissions navigator.clipboard
- *   - Countdown visible pour avertir de l'expiration
+ *   - terminate-self : accessible à tout acteur sur sa PROPRE session (utilisé
+ *     par le bouton "Terminer" du banner) — guardé par switch.global + check
+ *     actorId serveur-side.
  */
 
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import {
   UserCheck, Building2, Clock, Copy, Check, AlertTriangle,
-  RefreshCw, Trash2, ShieldAlert, ExternalLink,
+  RefreshCw, Trash2, ShieldAlert, ExternalLink, LogIn,
 } from 'lucide-react';
 import { useFetch }                  from '../../lib/hooks/useFetch';
 import { apiPost, apiDelete }         from '../../lib/api';
@@ -68,10 +68,41 @@ interface ActiveSessionsResponse {
   sessions: ActiveSession[];
 }
 
+interface MyActiveSession extends ActiveSession {
+  status:       'ACTIVE' | 'EXCHANGED';
+  targetTenant: { id: string; name: string; slug: string } | null;
+}
+
+interface MyActiveResponse {
+  sessions: MyActiveSession[];
+}
+
+interface HistorySession {
+  id:             string;
+  actorId:        string;
+  targetTenantId: string;
+  status:         'ACTIVE' | 'EXCHANGED' | 'REVOKED' | 'EXPIRED';
+  reason:         string | null;
+  ipAddress:      string | null;
+  createdAt:      string;
+  expiresAt:      string;
+  revokedAt:      string | null;
+  revokedBy:      string | null;
+  exchangedAt:    string | null;
+  actor:          { id: string; email: string; name: string | null } | null;
+}
+
+interface HistoryResponse {
+  sessions: HistorySession[];
+}
+
 // ─── Permissions ─────────────────────────────────────────────────────────────
 
 const P_IMPERSONATION   = 'control.impersonation.switch.global';
 const P_IMPERSONATE_REV = 'control.impersonation.revoke.global';
+
+// Slug du tenant plateforme — jamais impersonable (règle backend + UX).
+const PLATFORM_SLUG = '__platform__';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -83,6 +114,19 @@ function formatRelative(expiresAtIso: string, now: number, t: (k: string) => str
   const m = Math.floor(delta / 60_000);
   const s = Math.floor((delta % 60_000) / 1000);
   return `${m}m ${String(s).padStart(2, '0')}s`;
+}
+
+function buildTenantAdminUrl(slug: string): string {
+  const host = typeof window !== 'undefined' ? window.location.host : '';
+  const hostname = host.split(':')[0] ?? '';
+  const port     = host.includes(':') ? `:${host.split(':')[1]}` : '';
+  // Remplace le premier label (admin / __platform__) par le slug cible.
+  const parts = hostname.split('.');
+  if (parts.length >= 2) {
+    parts[0] = slug;
+    return `${window.location.protocol}//${parts.join('.')}${port}/admin`;
+  }
+  return `${window.location.protocol}//${slug}.${hostname}${port}/admin`;
 }
 
 // ─── Countdown component (ré-affiche chaque seconde sans re-fetch) ──────────
@@ -147,8 +191,9 @@ export function PageImpersonation() {
   const canSwitch = (user?.permissions ?? []).includes(P_IMPERSONATION);
   const canRevoke = (user?.permissions ?? []).includes(P_IMPERSONATE_REV);
 
-  // Tenants disponibles (le backend retourne 403 si l'agent n'a pas tenant.manage ;
-  // on tente quand même et on retombe sur un input texte libre si liste indisponible).
+  // Tenants disponibles — on exclut le tenant plateforme lui-même (défense en
+  // profondeur : le backend renvoie 403 mais on masque l'option côté UI pour
+  // éviter les erreurs évitables).
   const { data: tenants, loading: lTenants, error: tErr } = useFetch<TenantSummary[]>(
     canSwitch ? '/api/tenants' : null,
   );
@@ -162,6 +207,7 @@ export function PageImpersonation() {
 
   const [revokeTarget,   setRevokeTarget]   = useState<ActiveSession | null>(null);
   const [revokeBusy,     setRevokeBusy]     = useState(false);
+  const [myRevoking,     setMyRevoking]     = useState<string | null>(null);
 
   // Token expired tick — désactive le bouton de bascule dès que le TTL est écoulé.
   const [tokenExpired,   setTokenExpired]   = useState(false);
@@ -174,15 +220,39 @@ export function PageImpersonation() {
     return () => clearInterval(id);
   }, [result]);
 
-  // Sessions actives du tenant en question (si sélectionné ET revoke perm)
+  // Mes sessions actives (tous tenants) — permet de rejoindre un tenant sur
+  // lequel un cookie est déjà posé sans regénérer un token. Refetch après
+  // chaque création / révocation.
+  const {
+    data: myActive,
+    loading: lMy,
+    refetch: refetchMy,
+  } = useFetch<MyActiveResponse>(
+    canSwitch ? '/api/iam/impersonate/my-active' : null,
+  );
+
+  // Sessions actives du tenant sélectionné (audit, L2/SA seulement)
   const { data: sessions, loading: lSess, refetch: refetchSess, error: sErr } =
     useFetch<ActiveSessionsResponse>(
       canRevoke && targetTenantId ? `/api/iam/impersonate/${targetTenantId}/active` : null,
       [targetTenantId],
     );
 
+  // Historique complet (tous statuts) du tenant sélectionné — même scope RBAC
+  // que la vue active (L2/SA). Affiche les 200 dernières entrées : ACTIVE,
+  // EXCHANGED, REVOKED, EXPIRED — avec acteur, IP, raison.
+  const { data: history, loading: lHist, refetch: refetchHist } =
+    useFetch<HistoryResponse>(
+      canRevoke && targetTenantId ? `/api/iam/impersonate/${targetTenantId}/history` : null,
+      [targetTenantId],
+    );
+
   const tenantOptions = useMemo(() =>
-    (tenants ?? []).filter(tnt => tnt.isActive && tnt.provisionStatus === 'ACTIVE'),
+    (tenants ?? []).filter(tnt =>
+      tnt.isActive &&
+      tnt.provisionStatus === 'ACTIVE' &&
+      tnt.slug !== PLATFORM_SLUG,
+    ),
     [tenants],
   );
 
@@ -197,6 +267,7 @@ export function PageImpersonation() {
       });
       setResult(res);
       refetchSess();
+      refetchMy();
     } catch (err) {
       setActionErr((err as Error).message);
     } finally {
@@ -222,10 +293,23 @@ export function PageImpersonation() {
       await apiDelete(`/api/iam/impersonate/${revokeTarget.id}`);
       setRevokeTarget(null);
       refetchSess();
+      refetchMy();
     } catch (err) {
       setActionErr((err as Error).message);
     } finally {
       setRevokeBusy(false);
+    }
+  };
+
+  const handleTerminateMine = async (s: MyActiveSession) => {
+    setMyRevoking(s.id);
+    try {
+      await apiDelete(`/api/iam/impersonate/${s.id}/self`);
+      refetchMy();
+    } catch (err) {
+      setActionErr((err as Error).message);
+    } finally {
+      setMyRevoking(null);
     }
   };
 
@@ -240,6 +324,8 @@ export function PageImpersonation() {
     );
   }
 
+  const mine = myActive?.sessions ?? [];
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* En-tête */}
@@ -252,6 +338,94 @@ export function PageImpersonation() {
           <p className="text-sm t-text-2">{t('impersonation.subtitle')}</p>
         </div>
       </header>
+
+      {/* ── Mes sessions actives ────────────────────────────────────── */}
+      <section
+        className="t-card-bordered rounded-2xl p-5 space-y-3"
+        aria-labelledby="imp-mine-title"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 id="imp-mine-title" className="text-base font-semibold t-text flex items-center gap-2">
+              <LogIn className="w-4 h-4 text-teal-700 dark:text-teal-300" aria-hidden />
+              {t('impersonation.mineTitle')}
+            </h2>
+            <p className="text-xs t-text-2 mt-0.5">{t('impersonation.mineDesc')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => refetchMy()}
+            className="p-1.5 rounded-md t-text-2 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            aria-label={t('common.refresh')}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${lMy ? 'animate-spin' : ''}`} aria-hidden />
+          </button>
+        </div>
+
+        {mine.length === 0 && !lMy && (
+          <p className="text-xs t-text-3 py-2">{t('impersonation.mineEmpty')}</p>
+        )}
+
+        {mine.length > 0 && (
+          <ul role="list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {mine.map(s => (
+              <li
+                key={s.id}
+                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold t-text truncate">
+                      {s.targetTenant?.name ?? s.targetTenantId}
+                    </p>
+                    <p className="text-[11px] font-mono t-text-3 truncate">
+                      {s.targetTenant?.slug ?? '—'}
+                    </p>
+                  </div>
+                  <Badge variant={s.status === 'EXCHANGED' ? 'success' : 'info'} size="sm">
+                    {s.status === 'EXCHANGED' ? t('impersonation.statusExchanged') : t('impersonation.statusReady')}
+                  </Badge>
+                </div>
+                {s.reason && (
+                  <p className="text-[11px] italic t-text-body break-words line-clamp-2">« {s.reason} »</p>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800">
+                  <Countdown expiresAt={s.expiresAt} />
+                  <span className="text-[10px] t-text-3">
+                    {new Date(s.createdAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {s.targetTenant?.slug && s.status === 'EXCHANGED' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => { window.location.href = buildTenantAdminUrl(s.targetTenant!.slug); }}
+                      aria-label={t('impersonation.rejoinAria').replace('{tenant}', s.targetTenant!.name)}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 mr-1" aria-hidden />
+                      {t('impersonation.rejoin')}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/30"
+                    onClick={() => void handleTerminateMine(s)}
+                    disabled={myRevoking === s.id}
+                    aria-label={t('impersonation.terminateMineAria')}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Grid 2 colonnes desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -463,6 +637,101 @@ export function PageImpersonation() {
           )}
         </aside>
       </div>
+
+      {/* ── Historique par tenant (tous statuts, L2/SA) ─────────────────── */}
+      {canRevoke && targetTenantId && (
+        <section
+          className="t-card-bordered rounded-2xl p-5 space-y-3"
+          aria-labelledby="imp-history-title"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 id="imp-history-title" className="text-base font-semibold t-text">
+                {t('impersonation.historyTitle')}
+              </h2>
+              <p className="text-xs t-text-2 mt-0.5">{t('impersonation.historyDesc')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => refetchHist()}
+              className="p-1.5 rounded-md t-text-2 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              aria-label={t('common.refresh')}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${lHist ? 'animate-spin' : ''}`} aria-hidden />
+            </button>
+          </div>
+
+          {(history?.sessions.length ?? 0) === 0 && !lHist && (
+            <p className="text-xs t-text-3 py-2">{t('impersonation.historyEmpty')}</p>
+          )}
+
+          {history && history.sessions.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left t-text-3 border-b border-slate-200 dark:border-slate-800">
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colStatus')}</th>
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colActor')}</th>
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colReason')}</th>
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colIp')}</th>
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colCreatedAt')}</th>
+                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colEndedAt')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.sessions.map(s => {
+                    const endedAt = s.revokedAt ?? (s.status === 'EXPIRED' ? s.expiresAt : null);
+                    return (
+                      <tr key={s.id} className="border-b border-slate-100 dark:border-slate-900">
+                        <td className="py-1.5 px-2">
+                          <Badge
+                            variant={
+                              s.status === 'ACTIVE' ? 'info' :
+                              s.status === 'EXCHANGED' ? 'success' :
+                              s.status === 'REVOKED' ? 'danger' : 'default'
+                            }
+                            size="sm"
+                          >
+                            {s.status}
+                          </Badge>
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <div className="min-w-0">
+                            <p className="t-text truncate max-w-[200px]">
+                              {s.actor?.name ?? s.actor?.email ?? '—'}
+                            </p>
+                            {s.actor?.email && s.actor.name && (
+                              <p className="text-[10px] t-text-3 truncate max-w-[200px]">{s.actor.email}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-2 italic t-text-body max-w-[250px] truncate">
+                          {s.reason ?? '—'}
+                        </td>
+                        <td className="py-1.5 px-2 font-mono t-text-3">{s.ipAddress ?? '—'}</td>
+                        <td className="py-1.5 px-2 t-text-3 whitespace-nowrap">
+                          {new Date(s.createdAt).toLocaleString(dateLocale, {
+                            day: '2-digit', month: '2-digit', year: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-1.5 px-2 t-text-3 whitespace-nowrap">
+                          {endedAt
+                            ? new Date(endedAt).toLocaleString(dateLocale, {
+                                day: '2-digit', month: '2-digit', year: '2-digit',
+                                hour: '2-digit', minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Dialog confirmation révocation */}
       <Dialog

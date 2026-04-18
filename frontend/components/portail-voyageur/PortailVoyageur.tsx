@@ -18,7 +18,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth/auth.context';
 import { resolveHost } from '../../lib/tenancy/host';
 import { cn } from '../../lib/utils';
-import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
+import { useCurrencyFormatter, useTenantConfig } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { apiFetch } from '../../lib/api';
@@ -699,6 +699,22 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
 function Inp({ label, ph, type = 'text', value, set }: { label: string; ph: string; type?: string; value: string; set: (v: string) => void }) {
   return <div><label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1.5">{label}</label><input type={type} placeholder={ph} value={value} onChange={e => set(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)] focus:border-amber-500 transition-all" /></div>;
 }
+function Sel({ label, value, set, options, placeholder, ariaLabel }: { label: string; value: string; set: (v: string) => void; options: { value: string; label: string }[]; placeholder: string; ariaLabel?: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1.5">{label}</label>
+      <select
+        value={value}
+        onChange={e => set(e.target.value)}
+        aria-label={ariaLabel ?? label}
+        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--portal-accent),transparent_50%)] focus:border-amber-500 transition-all"
+      >
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
 function IRow({ l, v, hl }: { l: string; v: string; hl?: boolean }) {
   return <div className="flex justify-between text-sm"><span className="text-slate-500">{l}</span><span className={cn('font-semibold', hl ? '[color:var(--portal-accent)]' : 'text-slate-800 dark:text-white')}>{v}</span></div>;
 }
@@ -838,9 +854,11 @@ interface ParcelTrackResult {
 }
 
 interface ParcelPickupResult {
-  trackingCode: string;
-  status:       string;
-  destination:  { name: string; city: string };
+  trackingCode:      string;
+  status:            string;
+  destination:       { name: string; city: string };
+  labelUrl:          string | null;
+  documentsWarning?: string | null;
 }
 
 const PARCEL_STATUS_LABEL: Record<string, string> = {
@@ -858,6 +876,11 @@ const PARCEL_STATUS_LABEL: Record<string, string> = {
 
 function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: string | null }) {
   const [tab, setTab] = useState<'track' | 'send'>('track');
+  const { cities } = useTenantConfig();
+  const cityOptions = useMemo(
+    () => cities.map(c => ({ value: c.name, label: c.name })),
+    [cities],
+  );
 
   // ── Track state ────────────────────────────────────────────────────────
   const [code, setCode] = useState('');
@@ -1034,8 +1057,8 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
               <Inp label={t('portail.recipientPhone')} ph="+242 05 000 00 00" value={form.recipientPhone} set={setField('recipientPhone')} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Inp label={t('portail.fromCity')} ph="Brazzaville" value={form.fromCity} set={setField('fromCity')} />
-              <Inp label={t('portail.toCity')} ph="Pointe-Noire" value={form.toCity} set={setField('toCity')} />
+              <Sel label={t('portail.fromCity')} value={form.fromCity} set={setField('fromCity')} options={cityOptions} placeholder={t('portail.searchCityPlaceholder')} />
+              <Sel label={t('portail.toCity')}   value={form.toCity}   set={setField('toCity')}   options={cityOptions} placeholder={t('portail.searchCityPlaceholder')} />
             </div>
             <Inp label={t('portail.parcelDescription')} ph={t('portail.parcelDescPlaceholder')} value={form.description} set={setField('description')} />
             <Inp label={t('portail.parcelWeightKg')} ph={t('portail.parcelWeightPlaceholder')} value={form.weightKg} set={setField('weightKg')} />
@@ -1083,6 +1106,28 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
           <div className="space-y-2 mb-4">
             <IRow l={t('portail.arrival')} v={`${sendResult.destination.city || sendResult.destination.name}`} />
           </div>
+
+          {sendResult.labelUrl && (
+            <a
+              href={sendResult.labelUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full mb-3 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-sm hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 transition-all"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              {t('portail.downloadParcelReceipt')}
+            </a>
+          )}
+          {sendResult.documentsWarning && !sendResult.labelUrl && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 mb-3">
+              {sendResult.documentsWarning}
+            </p>
+          )}
+
           <button
             onClick={resetSend}
             className="w-full py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
