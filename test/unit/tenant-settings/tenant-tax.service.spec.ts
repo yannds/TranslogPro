@@ -8,11 +8,13 @@ describe('TenantTaxService', () => {
   beforeEach(() => {
     prisma = {
       tenantTax: {
-        findMany:  jest.fn(),
-        findFirst: jest.fn(),
-        create:    jest.fn(),
-        update:    jest.fn(),
-        delete:    jest.fn(),
+        findMany:   jest.fn(),
+        findFirst:  jest.fn(),
+        create:     jest.fn(),
+        update:     jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        delete:     jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     svc = new TenantTaxService(prisma);
@@ -60,10 +62,10 @@ describe('TenantTaxService', () => {
 
   it('update n’envoie que les champs modifiés', async () => {
     prisma.tenantTax.findFirst.mockResolvedValue({ id: 'X', code: 'TVA', label: 'TVA', rate: 0.18, kind: 'PERCENT', base: 'SUBTOTAL' });
-    prisma.tenantTax.update.mockResolvedValue({});
     await svc.update('T1', 'X', { rate: 0.2 });
-    expect(prisma.tenantTax.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'X' },
+    // Post-audit sécu : updateMany avec tenantId en condition racine
+    expect(prisma.tenantTax.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'X', tenantId: 'T1' },
       data:  { rate: 0.2 },
     }));
   });
@@ -75,9 +77,9 @@ describe('TenantTaxService', () => {
 
   it('remove supprime la ligne', async () => {
     prisma.tenantTax.findFirst.mockResolvedValue({ id: 'X' });
-    prisma.tenantTax.delete.mockResolvedValue({});
     const res = await svc.remove('T1', 'X');
     expect(res).toEqual({ ok: true });
-    expect(prisma.tenantTax.delete).toHaveBeenCalledWith({ where: { id: 'X' } });
+    // Post-audit sécu : deleteMany avec tenantId en condition racine
+    expect(prisma.tenantTax.deleteMany).toHaveBeenCalledWith({ where: { id: 'X', tenantId: 'T1' } });
   });
 });

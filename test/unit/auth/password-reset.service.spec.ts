@@ -196,7 +196,7 @@ describe('PasswordResetService', () => {
           passwordResetExpiresAt: null,
         }),
       }));
-      expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'U1' } });
+      expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'U1', tenantId: 'T1' } });
       expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ action: 'auth.password_reset.admin.set', level: 'warn' }),
       }));

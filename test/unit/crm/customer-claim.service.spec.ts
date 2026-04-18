@@ -20,10 +20,11 @@ describe('CustomerClaimService', () => {
   beforeEach(() => {
     prismaMock = {
       customer: {
-        findFirst:      jest.fn(),
-        findUnique:     jest.fn(),
+        findFirst:         jest.fn(),
+        findUnique:        jest.fn(),
         findUniqueOrThrow: jest.fn(),
-        update:         jest.fn(),
+        findFirstOrThrow:  jest.fn(),
+        update:            jest.fn(),
       },
       customerClaimToken: {
         create:     jest.fn(),
@@ -138,7 +139,8 @@ describe('CustomerClaimService', () => {
         id: 'tk', tenantId: 'T1', customerId: 'c1', channel: 'MAGIC_WHATSAPP',
         expiresAt: new Date(Date.now() + 3600_000), usedAt: null, invalidatedAt: null,
       });
-      prismaMock.customer.findUniqueOrThrow.mockResolvedValue({
+      // Post-audit sécu : previewToken utilise findFirstOrThrow avec tenantId
+      prismaMock.customer.findFirstOrThrow.mockResolvedValue({
         firstName: 'Marie', name: 'Marie Ngouabi',
         phoneE164: '+242612345678', email: 'marie@example.com',
       });
