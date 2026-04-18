@@ -24,6 +24,7 @@ import { TenantDomainRepository } from './tenant-domain.repository';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantHostMiddleware } from './tenant-host.middleware';
 import { TenantIsolationGuard } from './tenant-isolation.guard';
+import { PathTenantMatchGuard } from './path-tenant-match.guard';
 
 @Global()
 @Module({
@@ -34,6 +35,7 @@ import { TenantIsolationGuard } from './tenant-isolation.guard';
     TenantResolverService,
     TenantHostMiddleware,
     TenantIsolationGuard,
+    PathTenantMatchGuard,
   ],
   exports: [
     HostConfigService,
@@ -41,6 +43,7 @@ import { TenantIsolationGuard } from './tenant-isolation.guard';
     TenantResolverService,
     TenantHostMiddleware,
     TenantIsolationGuard,
+    PathTenantMatchGuard,
   ],
 })
 export class TenancyModule {}

@@ -18,6 +18,7 @@ export {
 } from './tenant-domain.repository';
 export { TenantHostMiddleware } from './tenant-host.middleware';
 export { TenantIsolationGuard } from './tenant-isolation.guard';
+export { PathTenantMatchGuard } from './path-tenant-match.guard';
 export { TenancyModule } from './tenancy.module';
 export {
   getCurrentTenantId,

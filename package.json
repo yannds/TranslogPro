@@ -24,7 +24,12 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "test:e2e": "jest --config jest.e2e.config.ts --forceExit --runInBand",
-    "test:security": "jest --config jest.security.config.ts --forceExit --runInBand"
+    "test:security": "jest --config jest.security.config.ts --forceExit --runInBand",
+    "test:pw": "playwright test",
+    "test:pw:ui": "playwright test --ui",
+    "test:pw:headed": "playwright test --headed",
+    "test:pw:report": "playwright show-report test/playwright/.report",
+    "seed:e2e": "ts-node scripts/seed-e2e.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

@@ -119,7 +119,7 @@ function buildColumns(t: (k: string) => string): Column<PlanRow>[] {
       csvValue: (_v, row) => row.modules.map(m => m.moduleKey).join(','),
     },
     {
-      key: 'tenants',
+      key: '_count',
       header: t('platformPlans.colTenants'),
       sortable: false,
       width: '110px',

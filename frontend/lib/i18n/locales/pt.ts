@@ -2860,6 +2860,7 @@ const pt: Record<string, Record<string, string>> = {
     "platform_plans": "Planos SaaS",
     "platform_billing": "Faturamento da plataforma",
     "platform_support": "Fila de suporte",
+    "platform_settings": "Configurações da plataforma",
     "support": "Contatar o suporte",
     "tenant_management": "Gestão de Tenants",
     "platform_staff": "Equipe da Plataforma",
@@ -3853,6 +3854,35 @@ const pt: Record<string, Record<string, string>> = {
     "closedNotice": "Este ticket está fechado. Para qualquer nova solicitação relacionada, abra um novo ticket.",
     "agent": "Suporte TransLog",
     "you": "Você"
+  },
+
+  "platformConfig": {
+    "title": "Configurações da plataforma",
+    "subtitle": "Limites e valores operacionais — editáveis sem redeploy, com fallback automático para os valores padrão.",
+    "explain": "Cada chave é salva no banco e lida pelos serviços com um cache curto. Se o BD estiver indisponível, o serviço recai sobre o valor padrão — sem pânico. As mudanças entram em vigor em até 60 segundos.",
+    "saveAll": "Salvar",
+    "saved": "Salvo",
+    "pending": "alteração(ões)",
+    "dirty": "modificado",
+    "reset": "Restaurar",
+    "resetKey": "Restaurar esta chave",
+    "defaultValue": "Padrão",
+    "groupHealth": "Pontuação de saúde do tenant",
+    "groupBilling": "Faturamento",
+    "healthRiskThreshold": "Limite «em risco»",
+    "healthRiskThresholdHelp": "Tenants cuja pontuação está abaixo deste limite aparecem na lista «em risco» do dashboard.",
+    "healthThresholdIncidents": "Limite de incidentes (uptime 0)",
+    "healthThresholdIncidentsHelp": "Número de incidentes abertos a partir do qual o componente de uptime cai para 0.",
+    "healthThresholdTickets": "Limite de tickets de suporte",
+    "healthThresholdTicketsHelp": "Número de tickets OPEN/IN_PROGRESS a partir do qual o componente de suporte cai para 0.",
+    "healthThresholdDlq": "Limite DLQ",
+    "healthThresholdDlqHelp": "Número de eventos DLQ não resolvidos a partir do qual o componente DLQ cai para 0.",
+    "billingDueDays": "Prazo de pagamento (dias)",
+    "billingDueDaysHelp": "Número de dias após o fim do período para que uma fatura autogerada vença.",
+    "billingCustomCycleDays": "Ciclo CUSTOM (dias)",
+    "billingCustomCycleDaysHelp": "Duração padrão de um ciclo de plano marcado como CUSTOM.",
+    "errNotNumber": "Deve ser um número.",
+    "errOutOfRange": "Valor fora dos limites permitidos."
   }
 };
 

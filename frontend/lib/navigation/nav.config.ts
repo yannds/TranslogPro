@@ -118,6 +118,7 @@ const P = {
   PLATFORM_BILLING_MANAGE: 'control.platform.billing.manage.global',
   PLATFORM_METRICS_READ:   'data.platform.metrics.read.global',
   PLATFORM_SUPPORT_READ:   'control.platform.support.read.global',
+  PLATFORM_CONFIG_MANAGE:  'control.platform.config.manage.global',
   // Support (côté tenant)
   SUPPORT_CREATE_TENANT: 'data.support.create.tenant',
   SUPPORT_READ_TENANT:   'data.support.read.tenant',
@@ -687,6 +688,7 @@ export const ADMIN_NAV: PortalNavConfig = {
         P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
         P.PLATFORM_PLANS_MANAGE, P.PLATFORM_BILLING_MANAGE,
         P.PLATFORM_METRICS_READ, P.PLATFORM_SUPPORT_READ,
+        P.PLATFORM_CONFIG_MANAGE,
       ],
       items: [
         {
@@ -701,6 +703,7 @@ export const ADMIN_NAV: PortalNavConfig = {
             P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
             P.PLATFORM_PLANS_MANAGE, P.PLATFORM_BILLING_MANAGE,
             P.PLATFORM_METRICS_READ, P.PLATFORM_SUPPORT_READ,
+            P.PLATFORM_CONFIG_MANAGE,
           ],
         },
         {
@@ -752,6 +755,14 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.IMPERSONATION_SWITCH],
         },
         {
+          kind: 'leaf',
+          id: 'platform-settings',
+          label: 'nav.platform_settings',
+          href: '/admin/platform/settings',
+          icon: 'Settings',
+          anyOf: [P.PLATFORM_CONFIG_MANAGE],
+        },
+        {
           kind: 'group',
           id: 'debug',
           label: 'nav.technical_debug',
@@ -765,6 +776,103 @@ export const ADMIN_NAV: PortalNavConfig = {
       ],
     },
 
+  ],
+};
+
+// ─── Portail Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ──────────────
+// Utilisé par AdminDashboard quand resolveHost().isAdmin === true
+// (le host est admin.translog.test / admin.translogpro.com).
+// Contient uniquement les items Control Plane — pas de tenant-ops.
+// Pendant une impersonation, le host redevient celui du tenant donc ADMIN_NAV
+// est automatiquement re-sélectionné.
+
+export const PLATFORM_NAV: PortalNavConfig = {
+  portalId: 'admin',
+  sections: [
+    {
+      id: 'platform',
+      items: [
+        {
+          kind: 'leaf',
+          id: 'platform-dashboard',
+          label: 'nav.platform_dashboard',
+          href: '/admin/platform/dashboard',
+          icon: 'LayoutDashboard',
+          anyOf: [
+            P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH,
+            P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
+            P.PLATFORM_PLANS_MANAGE, P.PLATFORM_BILLING_MANAGE,
+            P.PLATFORM_METRICS_READ, P.PLATFORM_SUPPORT_READ,
+            P.PLATFORM_CONFIG_MANAGE,
+          ],
+        },
+        {
+          kind: 'leaf',
+          id: 'tenants',
+          label: 'nav.tenant_management',
+          href: '/admin/platform/tenants',
+          icon: 'Building2',
+          anyOf: [P.TENANT_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-plans',
+          label: 'nav.platform_plans',
+          href: '/admin/platform/plans',
+          icon: 'Wallet',
+          anyOf: [P.PLATFORM_PLANS_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-billing',
+          label: 'nav.platform_billing',
+          href: '/admin/platform/billing',
+          icon: 'CreditCard',
+          anyOf: [P.PLATFORM_BILLING_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-support',
+          label: 'nav.platform_support',
+          href: '/admin/platform/support',
+          icon: 'LifeBuoy',
+          anyOf: [P.PLATFORM_SUPPORT_READ],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-staff',
+          label: 'nav.platform_staff',
+          href: '/admin/platform/staff',
+          icon: 'UserCog',
+          anyOf: [P.PLATFORM_STAFF],
+        },
+        {
+          kind: 'leaf',
+          id: 'impersonation',
+          label: 'nav.jit_impersonation',
+          href: '/admin/platform/impersonation',
+          icon: 'UserCheck',
+          anyOf: [P.IMPERSONATION_SWITCH],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-settings',
+          label: 'nav.platform_settings',
+          href: '/admin/platform/settings',
+          icon: 'Settings',
+          anyOf: [P.PLATFORM_CONFIG_MANAGE],
+        },
+      ],
+    },
+    {
+      id: 'platform-debug',
+      title: 'nav.technical_debug',
+      anyOf: [P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY],
+      items: [
+        { kind: 'leaf', id: 'debug-workflow', label: 'nav.workflow_debug', href: '/admin/platform/debug/workflow', icon: 'Bug',       anyOf: [P.WORKFLOW_DEBUG] },
+        { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',  href: '/admin/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
+      ],
+    },
   ],
 };
 

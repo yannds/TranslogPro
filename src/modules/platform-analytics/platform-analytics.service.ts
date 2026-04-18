@@ -15,21 +15,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
+import { MS_PER_DAY } from '../../common/constants/time';
+import { HEALTH_SCORE, ACTIVITY_WINDOWS } from './platform-analytics.constants';
 
 @Injectable()
 export class PlatformAnalyticsService {
   private readonly logger = new Logger(PlatformAnalyticsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: PlatformConfigService,
+  ) {}
 
   // ─── Growth (tenants, revenus, churn) ──────────────────────────────────
 
   async getGrowth() {
     const now       = new Date();
     const startMTD  = new Date(now.getFullYear(), now.getMonth(), 1);
-    const start30d  = new Date(now.getTime() - 30 * 86_400_000);
-    const start90d  = new Date(now.getTime() - 90 * 86_400_000);
+    const start30d  = new Date(now.getTime() - ACTIVITY_WINDOWS.mauDays * MS_PER_DAY);
+    const start90d  = new Date(now.getTime() - 90 * MS_PER_DAY);
 
     const [total, byStatus, byPlan, newThisMonth, cancelled30d, top] = await Promise.all([
       this.prisma.tenant.count({ where: { id: { not: PLATFORM_TENANT_ID } } }),
@@ -104,9 +110,9 @@ export class PlatformAnalyticsService {
 
   async getAdoption() {
     const now      = new Date();
-    const start1d  = new Date(now.getTime() - 1 * 86_400_000);
-    const start7d  = new Date(now.getTime() - 7 * 86_400_000);
-    const start30d = new Date(now.getTime() - 30 * 86_400_000);
+    const start1d  = new Date(now.getTime() - ACTIVITY_WINDOWS.dauDays * MS_PER_DAY);
+    const start7d  = new Date(now.getTime() - ACTIVITY_WINDOWS.wauDays * MS_PER_DAY);
+    const start30d = new Date(now.getTime() - ACTIVITY_WINDOWS.mauDays * MS_PER_DAY);
 
     // DAU/WAU/MAU à partir de User.lastActiveAt pour les users non-plateforme.
     const [dau, wau, mau, totalActive] = await Promise.all([
@@ -162,7 +168,9 @@ export class PlatformAnalyticsService {
 
   async getHealth() {
     const today = startOfUtcDay(new Date());
-    const threshold = 60;
+    // Seuil DB-driven (config plateforme) ; fallback sur la constante.
+    const threshold = await this.config.getNumber('health.riskThreshold')
+      .catch(() => HEALTH_SCORE.riskThreshold);
 
     const [latest, dlq, openTickets, openIncidents, impersonationsOpen] = await Promise.all([
       // Dernier score par tenant (si agrégat calculé)
@@ -202,7 +210,7 @@ export class PlatformAnalyticsService {
 
   async getTenantOverview(tenantId: string) {
     const now = new Date();
-    const start30d = new Date(now.getTime() - 30 * 86_400_000);
+    const start30d = new Date(now.getTime() - 30 * MS_PER_DAY);
 
     const [tenant, sub, users, dau, mau, openTickets, incidents, dlq, lastScore] = await Promise.all([
       this.prisma.tenant.findUnique({
@@ -212,7 +220,7 @@ export class PlatformAnalyticsService {
       this.prisma.platformSubscription.findUnique({ where: { tenantId } }),
       this.prisma.user.count({ where: { tenantId, isActive: true } }),
       this.prisma.user.count({
-        where: { tenantId, lastActiveAt: { gte: new Date(now.getTime() - 86_400_000) } },
+        where: { tenantId, lastActiveAt: { gte: new Date(now.getTime() - MS_PER_DAY) } },
       }),
       this.prisma.user.count({
         where: { tenantId, lastActiveAt: { gte: start30d } },
@@ -243,8 +251,8 @@ export class PlatformAnalyticsService {
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async runDailyActiveUsersJob(): Promise<void> {
     const now       = new Date();
-    const yStart    = startOfUtcDay(new Date(now.getTime() - 86_400_000));
-    const yEnd      = new Date(yStart.getTime() + 86_400_000);
+    const yStart    = startOfUtcDay(new Date(now.getTime() - MS_PER_DAY));
+    const yEnd      = new Date(yStart.getTime() + MS_PER_DAY);
 
     // On lit les users actifs (utilisateurs non plateforme, activité hier).
     // Batch simple — OK pour ~100k users max.
@@ -282,12 +290,19 @@ export class PlatformAnalyticsService {
   @Cron('30 2 * * *')
   async runTenantHealthScoreJob(): Promise<void> {
     const today = startOfUtcDay(new Date());
-    const start30d = new Date(today.getTime() - 30 * 86_400_000);
+    const start30d = new Date(today.getTime() - 30 * MS_PER_DAY);
 
     const tenants = await this.prisma.tenant.findMany({
       where:  { id: { not: PLATFORM_TENANT_ID }, isActive: true },
       select: { id: true, slug: true },
     });
+
+    // Seuils DB-driven (fallback const si absents / indisponibles).
+    const [thIncidents, thTickets, thDlq] = await Promise.all([
+      this.config.getNumber('health.thresholds.incidents').catch(() => HEALTH_SCORE.thresholds.incidents),
+      this.config.getNumber('health.thresholds.tickets'  ).catch(() => HEALTH_SCORE.thresholds.tickets),
+      this.config.getNumber('health.thresholds.dlqEvents').catch(() => HEALTH_SCORE.thresholds.dlqEvents),
+    ]);
 
     for (const t of tenants) {
       try {
@@ -299,10 +314,10 @@ export class PlatformAnalyticsService {
           this.prisma.user.count({ where: { tenantId: t.id, isActive: true } }),
         ]);
 
-        const uptimeComp   = clamp01(1 - incidentsOpen / 10) * 40;
-        const supportComp  = clamp01(1 - ticketsOpen   / 5 ) * 20;
-        const dlqComp      = clamp01(1 - dlqOpen       / 5 ) * 20;
-        const engageComp   = (activeUsers > 0 ? clamp01(mau / activeUsers) : 0) * 20;
+        const uptimeComp   = clamp01(1 - incidentsOpen / thIncidents) * HEALTH_SCORE.weights.uptime;
+        const supportComp  = clamp01(1 - ticketsOpen   / thTickets  ) * HEALTH_SCORE.weights.support;
+        const dlqComp      = clamp01(1 - dlqOpen       / thDlq      ) * HEALTH_SCORE.weights.dlq;
+        const engageComp   = (activeUsers > 0 ? clamp01(mau / activeUsers) : 0) * HEALTH_SCORE.weights.engagement;
         const score        = Math.round(uptimeComp + supportComp + dlqComp + engageComp);
 
         await this.prisma.tenantHealthScore.upsert({

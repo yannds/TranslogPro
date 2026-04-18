@@ -11,7 +11,8 @@ import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation } from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
-import { ADMIN_NAV }          from '../../lib/navigation/nav.config';
+import { ADMIN_NAV, PLATFORM_NAV } from '../../lib/navigation/nav.config';
+import { resolveHost }         from '../../lib/tenancy/host';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
@@ -62,8 +63,12 @@ export function AdminDashboard() {
   // duplication frontend ↔ seed IAM).
   const permissions = authUser?.permissions ?? [];
 
+  // Sur admin.translog.test (portail plateforme) → nav Control Plane uniquement.
+  // Sur sous-domaine tenant (ou pendant une impersonation) → nav tenant complète.
+  const navConfig = resolveHost().isAdmin ? PLATFORM_NAV : ADMIN_NAV;
+
   const { sections, activeId } = useNavigation({
-    config:         ADMIN_NAV,
+    config:         navConfig,
     permissions,
     t,
     enabledModules: authUser?.enabledModules ?? [],

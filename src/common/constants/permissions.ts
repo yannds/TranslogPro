@@ -237,6 +237,7 @@ export const P_PLATFORM_BILLING_MANAGE_GLOBAL  = 'control.platform.billing.manag
 export const P_PLATFORM_METRICS_READ_GLOBAL    = 'data.platform.metrics.read.global';
 export const P_PLATFORM_SUPPORT_READ_GLOBAL    = 'control.platform.support.read.global';
 export const P_PLATFORM_SUPPORT_WRITE_GLOBAL   = 'control.platform.support.write.global';
+export const P_PLATFORM_CONFIG_MANAGE_GLOBAL   = 'control.platform.config.manage.global';
 
 // ─── Support ticket (côté tenant client) ────────────────────────────────────
 // Un utilisateur tenant peut ouvrir un ticket vers la plateforme. La
@@ -419,6 +420,7 @@ export const Permission = {
   PLATFORM_METRICS_READ_GLOBAL:   P_PLATFORM_METRICS_READ_GLOBAL,
   PLATFORM_SUPPORT_READ_GLOBAL:   P_PLATFORM_SUPPORT_READ_GLOBAL,
   PLATFORM_SUPPORT_WRITE_GLOBAL:  P_PLATFORM_SUPPORT_WRITE_GLOBAL,
+  PLATFORM_CONFIG_MANAGE_GLOBAL:  P_PLATFORM_CONFIG_MANAGE_GLOBAL,
   // Support tenant (émetteur)
   SUPPORT_CREATE_TENANT:          P_SUPPORT_CREATE_TENANT,
   SUPPORT_READ_TENANT:            P_SUPPORT_READ_TENANT,

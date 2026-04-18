@@ -54,3 +54,9 @@ test-results/
 Result_Secu_test.md
 infra/caddy/certs/
 secrets/
+
+# Playwright
+test/playwright/.auth/
+test/playwright/.report/
+test-results/
+playwright-report/

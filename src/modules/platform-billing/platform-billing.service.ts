@@ -28,6 +28,8 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
+import { MS_PER_DAY } from '../../common/constants/time';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import {
   ChangeSubscriptionPlanDto,
   CreateInvoiceDto,
@@ -36,11 +38,25 @@ import {
   UpdateSubscriptionStatusDto,
 } from './dto/billing.dto';
 
+/**
+ * Paramètres métier de facturation. Tous DB-driveables à terme via un
+ * `PlatformConfig` si besoin — pour l'instant valeurs nommées, pas magic.
+ */
+const BILLING = {
+  /** Jours avant échéance à partir de la fin de période. */
+  invoiceDueDays:      7,
+  /** Durée du cycle CUSTOM quand le plan n'en précise pas. */
+  customCycleDays:     30,
+} as const;
+
 @Injectable()
 export class PlatformBillingService {
   private readonly logger = new Logger(PlatformBillingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: PlatformConfigService,
+  ) {}
 
   // ─── Subscriptions ──────────────────────────────────────────────────────
 
@@ -73,13 +89,13 @@ export class PlatformBillingService {
     const trialEndsAt = dto.trialEndsAt
       ? new Date(dto.trialEndsAt)
       : plan.trialDays > 0
-        ? new Date(now.getTime() + plan.trialDays * 86_400_000)
+        ? new Date(now.getTime() + plan.trialDays * MS_PER_DAY)
         : null;
     const status = dto.status ?? (trialEndsAt && trialEndsAt > now ? 'TRIAL' : 'ACTIVE');
     const periodStart = dto.currentPeriodStart ? new Date(dto.currentPeriodStart) : now;
     const periodEnd   = dto.currentPeriodEnd
       ? new Date(dto.currentPeriodEnd)
-      : this.computePeriodEnd(periodStart, plan.billingCycle);
+      : await this.computePeriodEnd(periodStart, plan.billingCycle);
 
     const sub = await this.prisma.platformSubscription.upsert({
       where: { tenantId: dto.tenantId },
@@ -123,7 +139,7 @@ export class PlatformBillingService {
     if (!plan.isActive) throw new BadRequestException(`Plan ${plan.slug} inactif`);
 
     const now = new Date();
-    const periodEnd = this.computePeriodEnd(now, plan.billingCycle);
+    const periodEnd = await this.computePeriodEnd(now, plan.billingCycle);
 
     const updated = await this.prisma.platformSubscription.update({
       where: { id: subscriptionId },
@@ -269,10 +285,15 @@ export class PlatformBillingService {
     if (subs.length === 0) return;
     this.logger.log(`[Billing cron] ${subs.length} subscription(s) à renouveler`);
 
+    // Délai de grâce (jours avant échéance) — DB-driven via PlatformConfig,
+    // fallback sur la const BILLING si la clé est absente.
+    const defaultDueDays = await this.config.getNumber('billing.defaultInvoiceDueDays')
+      .catch(() => BILLING.invoiceDueDays);
+
     for (const sub of subs) {
       try {
         const periodStart = sub.currentPeriodEnd ?? now;
-        const periodEnd   = this.computePeriodEnd(periodStart, sub.plan.billingCycle);
+        const periodEnd   = await this.computePeriodEnd(periodStart, sub.plan.billingCycle);
         const invoiceNumber = await this.nextInvoiceNumber();
 
         await this.prisma.$transaction([
@@ -289,7 +310,7 @@ export class PlatformBillingService {
               totalAmount:    sub.plan.price,
               currency:       sub.plan.currency,
               status:         'DRAFT',
-              dueAt:          new Date(periodEnd.getTime() + 7 * 86_400_000),
+              dueAt:          new Date(periodEnd.getTime() + defaultDueDays * MS_PER_DAY),
               lineItems:      [{ description: `${sub.plan.name} — ${sub.plan.billingCycle}`, quantity: 1, unitPrice: sub.plan.price, total: sub.plan.price }] as object,
             },
           }),
@@ -311,7 +332,7 @@ export class PlatformBillingService {
 
   // ─── Helpers ───────────────────────────────────────────────────────────
 
-  private computePeriodEnd(start: Date, cycle: string): Date {
+  private async computePeriodEnd(start: Date, cycle: string): Promise<Date> {
     const d = new Date(start);
     switch (cycle) {
       case 'MONTHLY':  d.setMonth(d.getMonth() + 1); return d;
@@ -319,9 +340,12 @@ export class PlatformBillingService {
       case 'ONE_SHOT': return d;
       case 'CUSTOM':
       default: {
-        // Par défaut +30j. Les cycles CUSTOM devraient être gérés par config
-        // spécifique côté plan ; on ne hardcode pas de règle métier ici.
-        d.setDate(d.getDate() + 30);
+        // Cycle CUSTOM : lu depuis PlatformConfig (DB-driven) avec fallback
+        // sur la const BILLING.customCycleDays si la clé n'est pas définie.
+        const days = await this.config
+          .getNumber('billing.defaultCustomCycleDays')
+          .catch(() => BILLING.customCycleDays);
+        d.setDate(d.getDate() + days);
         return d;
       }
     }

@@ -2737,6 +2737,7 @@ const ar: Record<string, Record<string, string>> = {
     "platform_plans": "خطط SaaS",
     "platform_billing": "فوترة المنصة",
     "platform_support": "طابور الدعم",
+    "platform_settings": "إعدادات المنصة",
     "support": "التواصل مع الدعم",
     "tenant_management": "إدارة المستأجرين",
     "platform_staff": "موظفو المنصة",
@@ -3858,6 +3859,35 @@ const ar: Record<string, Record<string, string>> = {
     "closedNotice": "هذه التذكرة مغلقة. لأي طلب جديد متعلق، يُرجى فتح تذكرة جديدة.",
     "agent": "دعم TransLog",
     "you": "أنت"
+  },
+
+  "platformConfig": {
+    "title": "إعدادات المنصة",
+    "subtitle": "العتبات والقيم التشغيلية — قابلة للتعديل دون إعادة نشر، مع التراجع التلقائي إلى القيم الافتراضية.",
+    "explain": "يتم حفظ كل مفتاح في قاعدة البيانات وتقرأه الخدمات بذاكرة تخزين مؤقت قصيرة. إذا كانت قاعدة البيانات غير متاحة، تعود الخدمة إلى القيمة الافتراضية — دون ذعر. تسري التغييرات خلال 60 ثانية.",
+    "saveAll": "حفظ",
+    "saved": "تم الحفظ",
+    "pending": "تعديل",
+    "dirty": "معدّل",
+    "reset": "إعادة تعيين",
+    "resetKey": "إعادة تعيين هذا المفتاح",
+    "defaultValue": "الافتراضي",
+    "groupHealth": "درجة صحة المستأجر",
+    "groupBilling": "الفوترة",
+    "healthRiskThreshold": "عتبة «في خطر»",
+    "healthRiskThresholdHelp": "المستأجرون الذين تنخفض درجاتهم عن هذه العتبة يظهرون في قائمة «في خطر» في لوحة القيادة.",
+    "healthThresholdIncidents": "عتبة الحوادث (uptime 0)",
+    "healthThresholdIncidentsHelp": "عدد الحوادث المفتوحة الذي يُخفّض عنده مكوّن التشغيل إلى 0.",
+    "healthThresholdTickets": "عتبة تذاكر الدعم",
+    "healthThresholdTicketsHelp": "عدد تذاكر OPEN/IN_PROGRESS الذي يُخفّض عنده مكوّن الدعم إلى 0.",
+    "healthThresholdDlq": "عتبة DLQ",
+    "healthThresholdDlqHelp": "عدد أحداث DLQ غير المحلولة الذي يُخفّض عنده مكوّن DLQ إلى 0.",
+    "billingDueDays": "مهلة السداد (أيام)",
+    "billingDueDaysHelp": "عدد الأيام بعد نهاية الفترة حتى تستحقّ فاتورة مُنشأة تلقائياً.",
+    "billingCustomCycleDays": "دورة CUSTOM (أيام)",
+    "billingCustomCycleDaysHelp": "المدة الافتراضية لدورة خطة مُعلَّمة CUSTOM.",
+    "errNotNumber": "يجب أن يكون رقماً.",
+    "errOutOfRange": "القيمة خارج الحدود المسموح بها."
   }
 };
 

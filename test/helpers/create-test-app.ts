@@ -125,7 +125,11 @@ export async function createTestApp(): Promise<TestApp> {
     .overrideProvider(PrismaService)        .useValue(prisma)
     .overrideProvider(SECRET_SERVICE)       .useValue(secret)
     .overrideProvider(REDIS_CLIENT)         .useValue(redis)
-    .overrideProvider(EVENT_BUS)            .useValue({ publish: jest.fn().mockResolvedValue(undefined) })
+    .overrideProvider(EVENT_BUS)            .useValue({
+      publish:   jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(),
+      emit:      jest.fn().mockResolvedValue(undefined),
+    })
 
     // Prevent RedisPublisherService.onModuleInit() from creating a real Redis connection
     .overrideProvider(RedisPublisherService).useValue(redisPubMock)
@@ -158,15 +162,15 @@ export async function createTestApp(): Promise<TestApp> {
   app.use((req: Request & { user?: unknown; [k: string]: unknown }, res: Response, next: NextFunction) => {
     const raw = (req.headers as Record<string, string | undefined>)['x-test-user'];
     if (raw) {
-      const user = JSON.parse(raw) as Record<string, unknown>;
-      req['user'] = user;
+      const user = JSON.parse(raw) as { id: string; tenantId: string; [k: string]: unknown };
+      (req as unknown as { user: typeof user }).user = user;
       (req as Record<string, unknown>)[SCOPE_CONTEXT_KEY] = {
         scope:           'global',
-        tenantId:        user['tenantId'],
-        userId:          user['id'],
+        tenantId:        user.tenantId,
+        userId:          user.id,
         agencyId:        user['agencyId'],
         isImpersonating: false,
-        actorTenantId:   user['tenantId'],
+        actorTenantId:   user.tenantId,
       };
     }
     next();

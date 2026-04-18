@@ -55,6 +55,12 @@ const LazyCmsPosts       = lazy(() => import('../pages/PageCmsPosts').then(m => 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m => ({ default: m.PageCompanySetup })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTenantTaxes    = lazy(() => import('../pages/PageTenantTaxes').then(m => ({ default: m.PageTenantTaxes })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyIntegrations   = lazy(() => import('../pages/PageIntegrations').then(m => ({ default: m.PageIntegrations })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamUsers       = lazy(() => import('../pages/PageIamUsers').then(m => ({ default: m.PageIamUsers })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIamRoles       = lazy(() => import('../pages/PageIamRoles').then(m => ({ default: m.PageIamRoles })));
@@ -176,6 +182,8 @@ const LazyPlatformBilling     = lazy(() => import('../pages/PagePlatformBilling'
 const LazyPlatformSupport     = lazy(() => import('../pages/PagePlatformSupport').then(m => ({ default: m.PagePlatformSupport })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCustomerSupport     = lazy(() => import('../pages/PageCustomerSupport').then(m => ({ default: m.PageCustomerSupport })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformSettings    = lazy(() => import('../pages/PagePlatformSettings').then(m => ({ default: m.PagePlatformSettings })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -319,7 +327,9 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'cms-pages':           return <LazyCmsPages />;
     case 'cms-posts':           return <LazyCmsPosts />;
     case 'tenant-company':      return <LazyCompanySetup />;
-    case 'integrations':        return <PageWip title={t('router.apiIntegrations')} />;
+    case 'integrations':        return <LazyIntegrations />;
+    case 'tenant-taxes':        return <LazyTenantTaxes />;
+    case 'tenant-payment':      return <LazyTenantPayment />;
     case 'documents-templates': return <LazyTemplateStudio />;
 
     // ── IAM ────────────────────────────────────────────────────────────────
@@ -336,6 +346,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-support':    return <LazyPlatformSupport />;
     case 'platform-staff':      return <LazyPlatformStaff />;
     case 'impersonation':       return <LazyImpersonation />;
+    case 'platform-settings':   return <LazyPlatformSettings />;
 
     // ── Support tenant → plateforme (côté tenant) ──────────────────────────
     case 'support':             return <LazyCustomerSupport />;

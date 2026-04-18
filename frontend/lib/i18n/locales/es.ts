@@ -2845,6 +2845,7 @@ const es: Record<string, Record<string, string>> = {
     "platform_plans": "Planes SaaS",
     "platform_billing": "Facturación de plataforma",
     "platform_support": "Cola de soporte",
+    "platform_settings": "Ajustes de plataforma",
     "support": "Contactar con soporte",
     "tenant_management": "Gestión de inquilinos",
     "platform_staff": "Personal de plataforma",
@@ -3838,6 +3839,35 @@ const es: Record<string, Record<string, string>> = {
     "closedNotice": "Este ticket está cerrado. Para cualquier nueva solicitud relacionada, abra un nuevo ticket.",
     "agent": "Soporte TransLog",
     "you": "Usted"
+  },
+
+  "platformConfig": {
+    "title": "Configuración de la plataforma",
+    "subtitle": "Umbrales y valores operativos — editables sin redespliegue, con recurso automático a los valores predeterminados.",
+    "explain": "Cada clave se guarda en la base de datos y los servicios la leen con una caché corta. Si la BD no está disponible, el servicio recurre al valor predeterminado — sin pánico. Los cambios surten efecto en menos de 60 segundos.",
+    "saveAll": "Guardar",
+    "saved": "Guardado",
+    "pending": "cambio(s)",
+    "dirty": "modificado",
+    "reset": "Restablecer",
+    "resetKey": "Restablecer esta clave",
+    "defaultValue": "Predeterminado",
+    "groupHealth": "Puntuación de salud del tenant",
+    "groupBilling": "Facturación",
+    "healthRiskThreshold": "Umbral «en riesgo»",
+    "healthRiskThresholdHelp": "Los tenants cuya puntuación esté por debajo de este umbral aparecen en la lista «en riesgo» del dashboard.",
+    "healthThresholdIncidents": "Umbral de incidentes (uptime 0)",
+    "healthThresholdIncidentsHelp": "Número de incidentes abiertos a partir del cual el componente de uptime cae a 0.",
+    "healthThresholdTickets": "Umbral de tickets de soporte",
+    "healthThresholdTicketsHelp": "Número de tickets OPEN/IN_PROGRESS a partir del cual el componente de soporte cae a 0.",
+    "healthThresholdDlq": "Umbral DLQ",
+    "healthThresholdDlqHelp": "Número de eventos DLQ no resueltos a partir del cual el componente DLQ cae a 0.",
+    "billingDueDays": "Plazo de pago (días)",
+    "billingDueDaysHelp": "Número de días tras el fin del período para que venza una factura autogenerada.",
+    "billingCustomCycleDays": "Ciclo CUSTOM (días)",
+    "billingCustomCycleDaysHelp": "Duración predeterminada de un ciclo de plan marcado CUSTOM.",
+    "errNotNumber": "Debe ser un número.",
+    "errOutOfRange": "Valor fuera de los límites permitidos."
   }
 };
 

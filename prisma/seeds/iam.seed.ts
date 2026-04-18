@@ -38,12 +38,13 @@ const SUPER_ADMIN_PERMISSIONS = [
   'control.stats.read.tenant',
   // Platform staff management
   'control.platform.staff.global',
-  // Portail plateforme SaaS — plans / billing / metrics / support
+  // Portail plateforme SaaS — plans / billing / metrics / support / config
   'control.platform.plans.manage.global',
   'control.platform.billing.manage.global',
   'data.platform.metrics.read.global',
   'control.platform.support.read.global',
   'control.platform.support.write.global',
+  'control.platform.config.manage.global',
   // Data Plane — accès global en lecture
   'data.traveler.track.global',
   'data.parcel.track.global',

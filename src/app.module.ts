@@ -55,6 +55,7 @@ import { PlatformModule }   from './modules/platform/platform.module';
 import { PlatformPlansModule }     from './modules/platform-plans/platform-plans.module';
 import { PlatformBillingModule }   from './modules/platform-billing/platform-billing.module';
 import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module';
+import { PlatformConfigModule }    from './modules/platform-config/platform-config.module';
 import { SupportModule }           from './modules/support/support.module';
 import { DocumentsModule }      from './modules/documents/documents.module';
 import { TemplatesModule }       from './modules/templates/templates.module';
@@ -70,6 +71,7 @@ import { SchedulingGuardModule } from './modules/scheduling-guard/scheduling-gua
 import { AuthModule }            from './modules/auth/auth.module';
 import { PasswordResetModule }   from './modules/password-reset/password-reset.module';
 import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
+import { TenantSettingsModule }  from './modules/tenant-settings/tenant-settings.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
 import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
 import { PortalAdminModule }    from './modules/portal-admin/portal-admin.module';
@@ -88,7 +90,7 @@ import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
 import { SessionMiddleware }     from './core/iam/middleware/session.middleware';
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
-import { TenantHostMiddleware }  from './core/tenancy';
+import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
 
 @Module({
   imports: [
@@ -160,6 +162,8 @@ import { TenantHostMiddleware }  from './core/tenancy';
     PlatformBillingModule,
     // Analytics plateforme — growth/adoption/health + crons DAU/HealthScore
     PlatformAnalyticsModule,
+    // Config plateforme — seuils/paramètres DB-driven (SA settings)
+    PlatformConfigModule,
     // Support tenant → plateforme (tickets + thread)
     SupportModule,
     // Documents imprimables (billets, manifestes, colis, factures)
@@ -190,6 +194,8 @@ import { TenantHostMiddleware }  from './core/tenancy';
     PasswordResetModule,
     // IAM tenant — gestion utilisateurs, rôles, permissions, sessions, journal
     TenantIamModule,
+    // Settings tenant : taxes, payment config, intégrations API
+    TenantSettingsModule,
     MfaModule,
     // Portail public voyageur — endpoints sans auth, rate-limités
     PublicPortalModule,
@@ -205,6 +211,13 @@ import { TenantHostMiddleware }  from './core/tenancy';
     AnnouncementModule,
   ],
   providers: [
+    // PathTenantMatchGuard global — ferme la fuite cross-tenant sur les
+    // endpoints publics dont le tenantId/slug vient du path (display écrans,
+    // portail public, track colis). Si req.resolvedHostTenant est présent,
+    // path.tenantId/slug DOIT matcher host.tenantId/slug (sinon 403).
+    // Exception : super-admin plateforme (PLATFORM_TENANT_ID) ou pas de host
+    // résolu. Ordre : s'exécute AVANT PermissionGuard → rejet précoce.
+    { provide: APP_GUARD, useClass: PathTenantMatchGuard },
     // PermissionGuard global — protège TOUTES les routes
     // Routes sans @Permission() = 500 en dev, 403 en prod
     { provide: APP_GUARD, useClass: PermissionGuard },

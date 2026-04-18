@@ -22,9 +22,11 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
+import { MS_PER_MINUTE } from '../../common/constants/time';
 import {
   AddSupportMessageDto,
   CreateSupportTicketDto,
+  SUPPORT_PRIORITIES,
   SupportPriority,
   SupportStatus,
   UpdateSupportTicketDto,
@@ -256,14 +258,15 @@ export class SupportService {
     };
 
     // Priorité cappée par le plan si défini.
-    const maxOrder = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'] as const;
-    const capIndex = planSla.maxPriority ? maxOrder.indexOf(planSla.maxPriority) : 3;
-    const reqIndex = maxOrder.indexOf(requested);
+    // SUPPORT_PRIORITIES est trié du moins au plus critique — on réutilise
+    // cet ordre pour le capping par plan.
+    const capIndex = planSla.maxPriority ? SUPPORT_PRIORITIES.indexOf(planSla.maxPriority) : SUPPORT_PRIORITIES.length - 1;
+    const reqIndex = SUPPORT_PRIORITIES.indexOf(requested);
     const priority = (reqIndex <= capIndex ? requested : planSla.maxPriority) as SupportPriority;
 
     const minutes = planSla.firstResponseMinByPriority?.[priority]
       ?? DEFAULT_SLA_MINUTES[priority];
-    const slaDueAt = new Date(from.getTime() + minutes * 60_000);
+    const slaDueAt = new Date(from.getTime() + minutes * MS_PER_MINUTE);
     return { priority, slaDueAt };
   }
 }

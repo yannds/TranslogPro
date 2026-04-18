@@ -283,7 +283,7 @@ export function PagePlatformBilling() {
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
 
-  const planList = useMemo(() => (plans ?? []).filter(p => true), [plans]);
+  const planList = useMemo(() => plans ?? [], [plans]);
 
   // ── Handlers subscriptions ──
 

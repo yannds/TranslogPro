@@ -206,3 +206,49 @@ Ces données alimentent le module Stats pour générer les scores suivants :
 3.  Ajoute un endpoint POST /safety/report protégé par la permission data.feedback.submit.own qui émet un événement prioritaire sur **NATS** en cas de conduite dangereuse.
 
 4.  Développe le module **StatisticsService** qui effectue des jointures complexes pour ressortir la rentabilité par ligne et par gare, ainsi que l'état de santé de la flotte (Mechanical issues count)."
+
+---
+
+## 💳 MODULE : PAIEMENT & FACTURATION MULTI-PROVIDER
+
+Architecture hexagonale : le code métier ne dépend que de `PaymentOrchestrator`. Ajouter ou retirer un provider se fait en déposant un fichier dans `src/infrastructure/payment/providers/` et en le branchant dans `PaymentModule` — **zéro autre modification**.
+
+### Domaine canonique
+- `PaymentIntent` (1 par achat) — idempotent par `(tenantId, idempotencyKey)`.
+- `PaymentAttempt` (N) — chaque tentative provider, payload chiffré AES-256-GCM.
+- `PaymentEvent` (N, append-only) — journal audit immuable.
+- `PaymentProviderState` — toggle DISABLED / SANDBOX / LIVE par (tenant, provider). Activation LIVE requiert MFA step-up.
+- `TenantTax` — taxes empilables (TVA, timbre, taxe gare...), cascade `SUBTOTAL` ou `TOTAL_AFTER_PREVIOUS`, scoping `appliesTo`, versioning `validFrom/validTo`.
+- `TenantPaymentConfig` — TOUTES les constantes paiement par tenant (aucun magic number côté code).
+- `PlatformPaymentConfig` — singleton plateforme.
+
+### Providers livrés
+| Key | Méthodes | Pays | Sandbox | Live |
+|---|---|---|---|---|
+| `mtn_momo_cg` | MoMo push | CG | ✅ | toggle via UI |
+| `airtel_cg` | MoMo push | CG | ✅ | toggle via UI |
+| `wave` | Wave Business | SN/CI/ML/BF | ✅ | toggle via UI |
+| `flutterwave_agg` | MoMo + Card + USSD + Transfer | 11 pays | ✅ | toggle via UI |
+| `paystack_agg` | Card + MoMo | NG/GH/KE/ZA | ✅ | toggle via UI |
+| `stripe_cards` | Card hosted | FR/UE/US/CA/UK | câblé, non activable en Afrique | — |
+
+### Webhooks
+- Endpoint unique `POST /webhooks/payments/:providerKey`.
+- Raw-body HMAC temps constant, throttle 60/min/IP.
+- Réponse 200 après vérification pour éviter retries agressifs — orphans rattrapés par la réconciliation cron (10 min).
+
+### UI Intégrations API
+- Page unifiée `/integrations` : paiement + OAuth + (futur) SMS/email/storage.
+- Par provider : état effectif (DISABLED/SANDBOX/LIVE), healthcheck temps réel, empreinte du path Vault, date de dernière rotation.
+- **Aucune valeur de secret exposée** — seulement des indications "configuré ✓ / manquant ⚠".
+- Passage LIVE nécessite `mfaVerified=true` + permission `control.integration.setup.tenant`.
+
+### Frontend réutilisable
+- `PaymentMethodPicker` : radio-cards par type, WCAG AA, 8 locales, dark/light.
+- `PaymentFlowDialog` : parcours complet (méthode → détails → processing → success/error).
+- `usePaymentIntent` : hook polling /confirm avec timeout 5 min.
+
+### Flux CRUD taxes
+`/tenants/:id/settings/taxes` — TenantTax CRUD via `DataTableMaster`-friendly tableau.
+Le `TaxCalculatorService` consomme la liste filtrée/triée pour chaque Intent — la décomposition fiscale est figée dans `PaymentIntent.taxBreakdown` pour audit.
+

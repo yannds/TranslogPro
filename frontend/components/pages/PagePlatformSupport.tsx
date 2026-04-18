@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  LifeBuoy, AlertTriangle, X, Send, Clock, MessageSquare,
+  LifeBuoy, AlertTriangle, Send, Clock, MessageSquare,
   Lock, UserCog,
 } from 'lucide-react';
 import { useFetch }                        from '../../lib/hooks/useFetch';

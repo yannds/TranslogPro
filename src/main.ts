@@ -13,6 +13,9 @@ import helmet from 'helmet';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: false, // true perdrait les logs si crash avant listen()
+    // rawBody préservé pour la vérification HMAC des webhooks paiement
+    // (PaymentWebhookController lit req.rawBody pour calculer la signature).
+    rawBody: true,
   });
 
   // Redis adapter socket.io (doit être configuré avant listen())
