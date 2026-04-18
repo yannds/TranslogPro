@@ -69,8 +69,17 @@ vault write auth/approle/role/translog-api \
 # ─── Secrets de plateforme ────────────────────────────────────
 echo "🔒 Loading platform secrets..."
 
+# DATABASE_URL (runtime) — role app_runtime non-superuser NOBYPASSRLS.
+#   → RLS effectivement appliquée (un SUPERUSER bypasse toutes les policies).
+# DATABASE_URL_DIRECT — role app_user SUPERUSER réservé aux migrations Prisma.
+#   → JAMAIS utilisé par le backend en runtime. Si c'est le cas en prod,
+#     l'audit sécu signale un finding CRITIQUE (RLS inopérante).
+#
+# Dev : runtime = direct postgres (bypass pgbouncer qui ne gère qu'un user).
+# Prod : runtime = pgbouncer:5432 avec userlist.txt contenant app_runtime
+#        (voir runbook PROD_INITIALIZATION.md).
 vault kv put secret/platform/db \
-  DATABASE_URL="postgresql://app_user:app_password@pgbouncer:5432/translog?schema=public" \
+  DATABASE_URL="postgresql://app_runtime:app_runtime_password@postgres:5432/translog?schema=public" \
   DATABASE_URL_DIRECT="postgresql://app_user:app_password@postgres:5432/translog?schema=public"
 
 vault kv put secret/platform/redis \
