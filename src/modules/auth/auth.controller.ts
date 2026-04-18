@@ -157,11 +157,15 @@ export class AuthController {
       throw new UnauthorizedException('Code requis');
     }
 
+    // Defense in depth : passer le tenantId du Host pour que verifyMfa
+    // rejette un challenge issu d'un autre tenant que celui du sous-domaine.
+    const expectedTenantId = req.resolvedHostTenant?.tenantId;
     const { token, user } = await this.authService.verifyMfa(
       challengeToken,
       body.code,
       extractIp(req),
       req.headers['user-agent'] ?? '',
+      expectedTenantId,
     );
 
     res.clearCookie(MFA_COOKIE_NAME, { path: '/', sameSite: 'strict' });

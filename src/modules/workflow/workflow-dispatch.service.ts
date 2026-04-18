@@ -90,29 +90,54 @@ interface EntityResolver {
   persist: (prisma: PrismaService, entity: { id: string; status: string; tenantId: string; version: number }, toState: string) => Promise<{ id: string; status: string; tenantId: string; version: number }>;
 }
 
+// Helper générique : persist via updateMany({ where: id+tenantId }) + refetch.
+// Garantit qu'aucune entité cross-tenant ne peut être mutée, même si `e.id`
+// a été altéré par une race condition ou un event forgé.
+async function persistWithTenantGuard<T extends { id: string; status: string; tenantId: string; version: number }>(
+  model: {
+    updateMany: (args: any) => Promise<{ count: number }>;
+    findFirst:  (args: any) => Promise<T | null>;
+  },
+  e:      T,
+  toState: string,
+): Promise<T> {
+  const res = await model.updateMany({
+    where: { id: e.id, tenantId: e.tenantId },
+    data:  { status: toState, version: { increment: 1 } },
+  });
+  if (res.count === 0) {
+    throw new Error(`[WorkflowDispatch] Cross-tenant persist blocked: id=${e.id} tenant=${e.tenantId} state=${toState}`);
+  }
+  const fresh = await model.findFirst({ where: { id: e.id, tenantId: e.tenantId } });
+  if (!fresh) {
+    throw new Error(`[WorkflowDispatch] Entity disappeared after update: id=${e.id}`);
+  }
+  return fresh;
+}
+
 const ENTITY_RESOLVERS: Record<string, EntityResolver> = {
   Trip: {
     load:    (p, tenantId, id) => p.trip.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.trip.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.trip as any, e, s),
   },
   Ticket: {
     load:    (p, tenantId, id) => p.ticket.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.ticket.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.ticket as any, e, s),
   },
   Parcel: {
     load:    (p, tenantId, id) => p.parcel.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.parcel.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.parcel as any, e, s),
   },
   Bus: {
     load:    (p, tenantId, id) => p.bus.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.bus.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.bus as any, e, s),
   },
   Traveler: {
     load:    (p, tenantId, id) => p.traveler.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.traveler.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.traveler as any, e, s),
   },
   Shipment: {
     load:    (p, tenantId, id) => p.shipment.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
-    persist: (p, e, s) => p.shipment.update({ where: { id: e.id }, data: { status: s, version: { increment: 1 } } }) as Promise<{ id: string; status: string; tenantId: string; version: number }>,
+    persist: (p, e, s) => persistWithTenantGuard(p.shipment as any, e, s),
   },
 };

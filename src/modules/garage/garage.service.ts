@@ -46,10 +46,12 @@ export class GarageService {
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
     if (scope) assertOwnership(scope, report, 'createdById');
 
-    return this.prisma.maintenanceReport.update({
-      where: { id: reportId },
+    const res = await this.prisma.maintenanceReport.updateMany({
+      where: { id: reportId, tenantId },
       data:  { status: 'COMPLETED', completedAt: new Date(), notes, completedById: actor.id },
     });
+    if (res.count === 0) throw new NotFoundException(`Rapport ${reportId} introuvable`);
+    return this.prisma.maintenanceReport.findFirst({ where: { id: reportId, tenantId } });
   }
 
   /**
@@ -64,12 +66,12 @@ export class GarageService {
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
 
     return this.prisma.$transaction([
-      this.prisma.maintenanceReport.update({
-        where: { id: reportId },
+      this.prisma.maintenanceReport.updateMany({
+        where: { id: reportId, tenantId },
         data:  { status: 'APPROVED', approvedById: actor.id, approvedAt: new Date() },
       }),
-      this.prisma.bus.update({
-        where: { id: report.busId },
+      this.prisma.bus.updateMany({
+        where: { id: report.busId, tenantId },
         data:  { status: 'AVAILABLE' },
       }),
     ]);

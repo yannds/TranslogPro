@@ -89,13 +89,10 @@
         reverse_proxy host.docker.internal:3000
     }
 
-    # ── Tout le reste : Vite dev server (hot-reload, HMR, asset) ──────────
+    # ── Tout le reste : Vite dev server (hot-reload + HMR WebSocket)
+    # Caddy v2 propage Upgrade/Connection automatiquement pour WebSocket.
     handle {
-        reverse_proxy host.docker.internal:5173 {
-            # Vite WebSocket pour HMR
-            header_up Connection {>Connection}
-            header_up Upgrade    {>Upgrade}
-        }
+        reverse_proxy host.docker.internal:5173
     }
 
     # Log d'accès lisible

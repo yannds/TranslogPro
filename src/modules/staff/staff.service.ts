@@ -179,30 +179,30 @@ export class StaffService {
 
   async suspend(tenantId: string, userId: string) {
     const staff = await this.findOne(tenantId, userId);
-    const result = await this.prisma.staff.update({ where: { userId }, data: { status: 'SUSPENDED' } });
+    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'SUSPENDED' } });
     await this.prisma.staffAssignment.updateMany({
-      where: { staffId: staff.id, status: 'ACTIVE' },
+      where: { staffId: staff.id, staff: { tenantId }, status: 'ACTIVE' },
       data:  { status: 'SUSPENDED' },
     });
-    return result;
+    return this.findOne(tenantId, userId);
   }
 
   async reactivate(tenantId: string, userId: string) {
     const staff = await this.findOne(tenantId, userId);
-    const result = await this.prisma.staff.update({ where: { userId }, data: { status: 'ACTIVE' } });
+    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'ACTIVE' } });
     await this.prisma.staffAssignment.updateMany({
-      where: { staffId: staff.id, status: 'SUSPENDED' },
+      where: { staffId: staff.id, staff: { tenantId }, status: 'SUSPENDED' },
       data:  { status: 'ACTIVE' },
     });
-    return result;
+    return this.findOne(tenantId, userId);
   }
 
   async archive(tenantId: string, userId: string) {
     const staff = await this.findOne(tenantId, userId);
-    await this.prisma.staff.update({ where: { userId }, data: { status: 'ARCHIVED' } });
+    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'ARCHIVED' } });
     // Cascade : clore toutes les affectations ouvertes (invariant DESIGN §5.2)
     await this.prisma.staffAssignment.updateMany({
-      where: { staffId: staff.id, status: { in: ['ACTIVE', 'SUSPENDED'] } },
+      where: { staffId: staff.id, staff: { tenantId }, status: { in: ['ACTIVE', 'SUSPENDED'] } },
       data:  { status: 'CLOSED', endDate: new Date(), isAvailable: false },
     });
     return { archived: true };

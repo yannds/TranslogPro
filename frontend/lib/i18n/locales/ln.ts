@@ -3712,7 +3712,9 @@ const ln: Record<string, Record<string, string>> = {
     "formSlugHint": "Identifiant URL (minuscules, ba chiffres, tirets). Ekoki kobongwana te.",
     "formAdminEmail": "Email ya admin",
     "formAdminName": "Nkombo ya admin",
-    "formIrreversible": "Création esalaka tenant na agence ya défaut mpe utilisateur admin. Slug ekoki kobongwana lisusu te."
+    "formIrreversible": "Création esalaka tenant na agence ya défaut mpe utilisateur admin. Slug ekoki kobongwana lisusu te.",
+    "openPortal": "Fungola portail",
+    "impersonate": "Kobongwana lokola"
   },
 
   "platformStaff": {
@@ -3722,6 +3724,8 @@ const ln: Record<string, Record<string, string>> = {
     "newStaff": "Moto ya sika",
     "createDesc": "Bakisa agent ya kati na tenant plateforme.",
     "deleteStaff": "Kolongola moto",
+    "editStaff": "Kobongola mosala",
+    "lastSuperAdminLock": "SUPER_ADMIN ya nsuka — mosala ekoki kobongwana te.",
     "deleteWarning": "Okoki te kolongola SUPER_ADMIN ya nsuka to compte na yo moko. Action ekomami na audit log.",
     "deleting": "Kolongola…",
     "you": "yo",
@@ -3769,7 +3773,11 @@ const ln: Record<string, Record<string, string>> = {
     "confirmRevoke": "Révoquer session",
     "revokeWarning": "Session eboma mbala moko. Action ekomami na audit critique.",
     "expired": "Esili tango",
-    "notAllowed": "Ozali na droit te ya kofungula session ya impersonation."
+    "notAllowed": "Ozali na droit te ya kofungula session ya impersonation.",
+    "tokenExpiresIn": "Esili na",
+    "switchNow": "Kokatisa na",
+    "switchNowAria": "Kokatisa na sous-domaine ya tenant mpe kosalela jeton",
+    "switchNowHint": "Efungoli sous-domaine ya tenant mpe esali échange ya jeton na cookie ya session scopée."
   },
 
   "debugWf": {

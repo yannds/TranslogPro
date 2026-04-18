@@ -197,8 +197,10 @@ export class PasswordResetService {
           forcePasswordChange:    true,
         },
       });
-      // Invalider toutes les sessions actives du user
-      await this.prisma.session.deleteMany({ where: { userId: target.id } });
+      // Invalider toutes les sessions actives du user (scoped au tenant —
+      // un même userId ne doit jamais avoir de sessions cross-tenant, mais
+      // defense in depth).
+      await this.prisma.session.deleteMany({ where: { userId: target.id, tenantId: target.tenantId } });
 
       await this.writeAuditLog({
         tenantId: target.tenantId,
@@ -289,7 +291,7 @@ export class PasswordResetService {
         },
       }),
       // Purger toutes les sessions actives — l'utilisateur doit se reconnecter
-      this.prisma.session.deleteMany({ where: { userId: account.user.id } }),
+      this.prisma.session.deleteMany({ where: { userId: account.user.id, tenantId: account.user.tenantId } }),
     ]);
 
     await this.writeAuditLog({

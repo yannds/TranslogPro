@@ -89,7 +89,8 @@ export class AttachmentsService {
     const att = await this.prisma.attachment.findFirst({ where: { tenantId, id } });
     if (!att) throw new NotFoundException('Pièce jointe introuvable');
     await this.storage.deleteObject(tenantId, att.storageKey);
-    await this.prisma.attachment.delete({ where: { id: att.id } });
+    const res = await this.prisma.attachment.deleteMany({ where: { id: att.id, tenantId } });
+    if (res.count === 0) throw new NotFoundException('Pièce jointe introuvable');
     return { deleted: true };
   }
 }

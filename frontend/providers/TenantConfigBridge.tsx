@@ -91,6 +91,12 @@ export function TenantConfigBridge() {
             logoUrl:        res.brand.logoUrl        ?? undefined,
           } } : {}),
         });
+
+        // Titre onglet : "{tenantName} - {brandName}" (white-label friendly).
+        if (typeof document !== 'undefined' && res.company.name) {
+          const brandLabel = res.brand?.brandName ?? 'TranslogPro';
+          document.title = `${res.company.name} - ${brandLabel}`;
+        }
       })
       .catch(() => {
         // Silencieux : fallback sur DEFAULT_TENANT_CONFIG. Log dev uniquement.

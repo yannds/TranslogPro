@@ -732,16 +732,19 @@ export class DriverProfileService {
   async deleteRemediationRule(tenantId: string, id: string) {
     const rule = await this.prisma.driverRemediationRule.findFirst({ where: { id, tenantId } });
     if (!rule) throw new NotFoundException(`Règle ${id} introuvable`);
-    return this.prisma.driverRemediationRule.update({
-      where: { id },
+    const res = await this.prisma.driverRemediationRule.updateMany({
+      where: { id, tenantId },
       data:  { isActive: false },
     });
+    if (res.count === 0) throw new NotFoundException(`Règle ${id} introuvable`);
+    return this.prisma.driverRemediationRule.findFirst({ where: { id, tenantId } });
   }
 
   async deleteLicense(tenantId: string, id: string) {
     const lic = await this.prisma.driverLicense.findFirst({ where: { id, tenantId } });
     if (!lic) throw new NotFoundException(`Permis ${id} introuvable`);
-    await this.prisma.driverLicense.delete({ where: { id } });
+    const res = await this.prisma.driverLicense.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Permis ${id} introuvable`);
 
     // Write-through : sync vers StaffAssignment.licenseData (après suppression)
     await this._syncLicenseToAssignment(tenantId, lic.staffId);
@@ -755,7 +758,8 @@ export class DriverProfileService {
     if (training.status === TRAINING_STATUS.COMPLETED) {
       throw new BadRequestException('Une formation complétée ne peut pas être supprimée');
     }
-    await this.prisma.driverTraining.delete({ where: { id } });
+    const res = await this.prisma.driverTraining.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Formation ${id} introuvable`);
     return { ok: true };
   }
 

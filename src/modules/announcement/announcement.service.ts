@@ -67,18 +67,22 @@ export class AnnouncementService {
 
   async update(tenantId: string, id: string, dto: UpdateAnnouncementDto) {
     await this.findOne(tenantId, id);
-    return this.prisma.announcement.update({
-      where: { id },
+    const res = await this.prisma.announcement.updateMany({
+      where: { id, tenantId },
       data: {
         ...dto,
         startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
         endsAt:   dto.endsAt   ? new Date(dto.endsAt)   : undefined,
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Annonce ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   async remove(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
-    return this.prisma.announcement.delete({ where: { id } });
+    const res = await this.prisma.announcement.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Annonce ${id} introuvable`);
+    return { id, deleted: true };
   }
 }

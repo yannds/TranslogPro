@@ -188,13 +188,17 @@ export class TenantIamService {
       await this.findRole(tenantId, dto.roleId);
     }
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
+    const updRes = await this.prisma.user.updateMany({
+      where: { id: userId, tenantId },
       data: {
         ...(dto.name     !== undefined ? { name:     dto.name     } : {}),
         ...(dto.roleId   !== undefined ? { roleId:   dto.roleId   } : {}),
         ...(dto.agencyId !== undefined ? { agencyId: dto.agencyId } : {}),
       },
+    });
+    if (updRes.count === 0) throw new NotFoundException(`Utilisateur ${userId} introuvable`);
+    const updated = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
       select: {
         id: true, email: true, name: true, userType: true, isActive: true,
         roleId: true, agencyId: true, createdAt: true,
@@ -219,7 +223,8 @@ export class TenantIamService {
     }
     const user = await this.findUser(tenantId, userId);
 
-    await this.prisma.user.delete({ where: { id: userId } });
+    const res = await this.prisma.user.deleteMany({ where: { id: userId, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Utilisateur ${userId} introuvable`);
 
     await this.log({
       tenantId, actorId,
@@ -258,7 +263,11 @@ export class TenantIamService {
         continue;
       }
       try {
-        await this.prisma.user.delete({ where: { id: userId } });
+        const del = await this.prisma.user.deleteMany({ where: { id: userId, tenantId } });
+        if (del.count === 0) {
+          results.push({ userId, ok: false, reason: 'not_found' });
+          continue;
+        }
         await this.log({
           tenantId, actorId,
           action:   'control.iam.user.delete.tenant',
@@ -283,9 +292,13 @@ export class TenantIamService {
     const user = await this.findUser(tenantId, userId);
     const newActive = !(user as any).isActive;
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
+    const togRes = await this.prisma.user.updateMany({
+      where: { id: userId, tenantId },
       data:  { isActive: newActive },
+    });
+    if (togRes.count === 0) throw new NotFoundException(`Utilisateur ${userId} introuvable`);
+    const updated = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
       select: {
         id: true, email: true, name: true, isActive: true,
         role:   { select: { id: true, name: true } },
@@ -359,9 +372,13 @@ export class TenantIamService {
       throw new ForbiddenException('Les rôles système ne peuvent pas être renommés');
     }
 
-    const updated = await this.prisma.role.update({
-      where:  { id: roleId },
+    const updRoleRes = await this.prisma.role.updateMany({
+      where:  { id: roleId, tenantId },
       data:   { name: dto.name },
+    });
+    if (updRoleRes.count === 0) throw new NotFoundException(`Rôle ${roleId} introuvable`);
+    const updated = await this.prisma.role.findFirst({
+      where: { id: roleId, tenantId },
       select: {
         id: true, name: true, isSystem: true,
         permissions: { select: { permission: true } },
@@ -393,7 +410,8 @@ export class TenantIamService {
       );
     }
 
-    await this.prisma.role.delete({ where: { id: roleId } });
+    const res = await this.prisma.role.deleteMany({ where: { id: roleId, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Rôle ${roleId} introuvable`);
     await this.rbac.invalidateCache(roleId);
 
     await this.log({

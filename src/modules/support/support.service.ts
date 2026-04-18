@@ -151,6 +151,17 @@ export class SupportService {
   // ─── Côté plateforme : queue + assign + reply + transitions ─────────────
 
   async listPlatform(filters: { status?: SupportStatus; priority?: SupportPriority; tenantId?: string; assignedToPlatformUserId?: string }) {
+    // SUPER_ADMIN only (permission .global contrôle l'accès). Si aucun filtre
+    // tenantId n'est fourni, on log un warn pour tracer une vue cross-tenant
+    // large (anti-exfiltration accidentelle : un super-admin qui navigue la
+    // liste sans filtrer doit être audité).
+    if (!filters.tenantId) {
+      this.logger.warn(
+        `[SUPPORT] listPlatform called WITHOUT tenantId filter — cross-tenant view ` +
+        `(status=${filters.status ?? 'any'} priority=${filters.priority ?? 'any'} ` +
+        `assignedTo=${filters.assignedToPlatformUserId ?? 'any'})`,
+      );
+    }
     return this.prisma.supportTicket.findMany({
       where: {
         ...(filters.status                    ? { status: filters.status }                       : {}),

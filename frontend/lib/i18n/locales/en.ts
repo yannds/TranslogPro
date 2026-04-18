@@ -3833,7 +3833,9 @@ const en: Record<string, Record<string, string>> = {
     "formSlugHint": "URL identifier (lowercase, digits, dashes). Immutable.",
     "formAdminEmail": "Admin email",
     "formAdminName": "Admin name",
-    "formIrreversible": "Creation provisions a tenant with a default agency and admin user. The slug cannot be changed later."
+    "formIrreversible": "Creation provisions a tenant with a default agency and admin user. The slug cannot be changed later.",
+    "openPortal": "Open portal",
+    "impersonate": "Impersonate"
   },
 
   "platformStaff": {
@@ -3843,6 +3845,8 @@ const en: Record<string, Record<string, string>> = {
     "newStaff": "New member",
     "createDesc": "Add an internal agent to the platform tenant.",
     "deleteStaff": "Delete member",
+    "editStaff": "Edit role",
+    "lastSuperAdminLock": "Last SUPER_ADMIN — role cannot be changed.",
     "deleteWarning": "Cannot delete the last SUPER_ADMIN or your own account. The action is tracked in the audit log.",
     "deleting": "Deleting…",
     "you": "you",
@@ -3890,7 +3894,11 @@ const en: Record<string, Record<string, string>> = {
     "confirmRevoke": "Revoke session",
     "revokeWarning": "The session will be invalidated immediately. The action is logged as critical audit.",
     "expired": "Expired",
-    "notAllowed": "You are not allowed to open an impersonation session."
+    "notAllowed": "You are not allowed to open an impersonation session.",
+    "tokenExpiresIn": "Expires in",
+    "switchNow": "Switch to",
+    "switchNowAria": "Switch to the target tenant subdomain and consume the token",
+    "switchNowHint": "Opens the tenant subdomain and exchanges the token for a scoped session cookie."
   },
 
   "debugWf": {

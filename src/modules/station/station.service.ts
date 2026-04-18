@@ -83,8 +83,8 @@ export class StationService {
     await this.findOne(tenantId, id);
     const payload = this.validate(dto, /* partial */ true);
 
-    return this.prisma.station.update({
-      where: { id },
+    const res = await this.prisma.station.updateMany({
+      where: { id, tenantId },
       data: {
         ...(payload.name        !== undefined ? { name:        payload.name }        : {}),
         ...(payload.city        !== undefined ? { city:        payload.city }        : {}),
@@ -92,6 +92,8 @@ export class StationService {
         ...(payload.coordinates !== undefined ? { coordinates: payload.coordinates } : {}),
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Station ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   async remove(tenantId: string, id: string) {
@@ -117,7 +119,8 @@ export class StationService {
       );
     }
 
-    await this.prisma.station.delete({ where: { id } });
+    const res = await this.prisma.station.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Station ${id} introuvable`);
     return { deleted: true };
   }
 

@@ -12,6 +12,7 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@hookform/resolvers": "^3.9.0",
     "@pdfme/ui": "^6.0.6",
     "@radix-ui/react-checkbox": "^1.1.1",

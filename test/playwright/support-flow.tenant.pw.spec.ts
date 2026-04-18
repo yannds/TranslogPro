@@ -66,15 +66,13 @@ test.describe('[pw:tenant] Support tenant → plateforme', () => {
 
   test('liste mes tickets et je peux ouvrir un détail', async ({ page }) => {
     await page.goto('/admin/support');
-    // Si au moins un ticket existe (créé par le test précédent), on clique dessus
-    const rows = page.locator('table tr');
-    const count = await rows.count();
-    if (count <= 1) {
-      test.skip(true, 'Aucun ticket à consulter dans ce run');
-    }
-    // Clic sur la première data-row (hors header)
-    await rows.nth(1).click();
-    // Dialog détail s'ouvre
+
+    // Le ticket E2E seedé par scripts/seed-e2e.ts porte le préfixe "[E2E]"
+    const seededRow = page.getByText(/\[E2E\] Ticket de démonstration/i).first();
+    await expect(seededRow).toBeVisible();
+
+    // Clic sur la ligne → ouvre le dialog détail
+    await seededRow.click();
     await expect(page.getByRole('dialog')).toBeVisible();
   });
 });

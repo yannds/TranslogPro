@@ -1808,9 +1808,261 @@ Remplacent les `PageWip` stubs pour `pricing-yield` et `white-label`.
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v6.0*
+## 17. Portail Plateforme SaaS — v7.0 (2026-04-18)
+
+> Complète l'architecture IAM Transverse du PRD section V.4 avec les modules
+> backend et frontend livrés pour la gestion commerciale et opérationnelle
+> du produit par l'équipe interne TransLog Pro.
+>
+> Référence complète : [`DOCUMENTATION_MULTI_TENANT.md`](./DOCUMENTATION_MULTI_TENANT.md)
+
+### 17.1 Vue d'ensemble
+
+Le tenant plateforme `__platform__` (UUID nil `00000000-0000-0000-0000-000000000000`)
+héberge le staff interne qui :
+
+- **Onboarde** les tenants clients et gère leur cycle de vie
+- **Définit le catalogue** de plans SaaS (prix, cycle, modules inclus)
+- **Facture** les tenants (souscriptions + factures mensuelles/annuelles)
+- **Supervise** : growth (MRR, churn), adoption (DAU/MAU, modules), santé (score 0-100)
+- **Supporte** : tickets escaladés par les tenants avec SLA par plan
+- **Tune** les seuils opérationnels DB-driven (`PlatformConfig`) sans redéploiement
+- **Enquête** via impersonation JIT (cf. §V.4.3 du PRD)
+
+### 17.2 Modules backend ajoutés
+
+```
+src/modules/
+├── platform/                # Bootstrap SA + CRUD staff (existant)
+├── platform-plans/          # CRUD Plan + PlanModule + catalogue public [NEW]
+├── platform-billing/        # PlatformSubscription + PlatformInvoice + cron [NEW]
+├── platform-analytics/      # Growth/Adoption/Health + crons DAU/HealthScore [NEW]
+├── platform-config/         # KV store DB-driven + cache + registry [NEW]
+└── support/                 # SupportTicket + SupportMessage (tenant↔plateforme) [NEW]
+```
+
+### 17.3 Modèles Prisma ajoutés (8)
+
+```prisma
+model Plan {
+  id, slug @unique, name, description,
+  price, currency, billingCycle (MONTHLY|YEARLY|ONE_SHOT|CUSTOM),
+  trialDays, limits (JSON), sla (JSON), sortOrder,
+  isPublic, isActive
+  modules PlanModule[]
+}
+
+model PlanModule { planId, moduleKey  @@unique([planId, moduleKey]) }
+
+model PlatformSubscription {
+  tenantId @unique, planId,
+  status (TRIAL|ACTIVE|PAST_DUE|SUSPENDED|CANCELLED),
+  startedAt, trialEndsAt,
+  currentPeriodStart, currentPeriodEnd, renewsAt,
+  cancelledAt, cancelReason, externalRefs (JSON)
+}
+
+model PlatformInvoice {
+  invoiceNumber @unique,   // PF-YYYY-NNNNNN
+  subscriptionId, tenantId,
+  periodStart, periodEnd,
+  subtotal, taxRate, taxAmount, totalAmount, currency,
+  status (DRAFT|ISSUED|PAID|VOID|OVERDUE),
+  issuedAt, dueAt, paidAt,
+  paymentMethod, paymentRef, lineItems (JSON)
+}
+
+model SupportTicket {
+  tenantId, reporterUserId,
+  title, description,
+  category (BUG|QUESTION|FEATURE_REQUEST|INCIDENT|BILLING|OTHER),
+  priority (LOW|NORMAL|HIGH|CRITICAL),
+  status (OPEN|IN_PROGRESS|WAITING_CUSTOMER|RESOLVED|CLOSED),
+  assignedToPlatformUserId,
+  firstResponseAt, resolvedAt, closedAt, slaDueAt
+}
+
+model SupportMessage {
+  ticketId, authorId,
+  authorScope (TENANT|PLATFORM),
+  body, attachments (JSON),
+  isInternal   // note interne non-visible au tenant
+}
+
+model DailyActiveUser {
+  tenantId, userId, date @db.Date, sessionsCount
+  @@unique([userId, date])
+}
+
+model TenantHealthScore {
+  tenantId, date @db.Date, score (0-100),
+  components (JSON)
+  @@unique([tenantId, date])
+}
+
+model PlatformConfig {
+  key @id, value (JSON),
+  updatedBy, updatedAt, createdAt
+}
+```
+
+Champs ajoutés sur modèles existants :
+- `User.lastLoginAt`, `lastActiveAt`, `loginCount` — source DAU/MAU
+- `Tenant.planId`, `activatedAt`, `suspendedAt`
+- `InstalledModule.enabledAt`, `enabledBy`
+
+### 17.4 Endpoints ajoutés
+
+```
+# Plans (SA)
+GET    /platform/plans
+POST   /platform/plans
+PATCH  /platform/plans/:id
+DELETE /platform/plans/:id                   # soft si tenants rattachés, hard sinon
+POST   /platform/plans/:id/modules           # attach module
+DELETE /platform/plans/:id/modules/:moduleKey
+GET    /platform/plans/catalog               # public aux tenants (perm data.tenant.plan.read.tenant)
+
+# Billing (SA)
+GET    /platform/billing/subscriptions
+POST   /platform/billing/subscriptions
+PATCH  /platform/billing/subscriptions/:id/plan
+PATCH  /platform/billing/subscriptions/:id/status
+GET    /platform/billing/invoices?tenantId=&status=
+POST   /platform/billing/invoices
+POST   /platform/billing/invoices/:id/issue
+POST   /platform/billing/invoices/:id/mark-paid
+POST   /platform/billing/invoices/:id/void
+
+# Analytics (SA/L1/L2)
+GET    /platform/analytics/growth
+GET    /platform/analytics/adoption
+GET    /platform/analytics/health
+GET    /platform/analytics/tenant/:id
+
+# Support tenant
+POST   /support/tickets
+GET    /support/tickets
+GET    /support/tickets/:id
+POST   /support/tickets/:id/messages
+
+# Support plateforme
+GET    /platform/support/tickets?status=&priority=&tenantId=&assignee=
+GET    /platform/support/tickets/:id
+PATCH  /platform/support/tickets/:id
+POST   /platform/support/tickets/:id/messages
+
+# Config (SA)
+GET    /platform/config
+PATCH  /platform/config
+DELETE /platform/config/:key
+```
+
+### 17.5 Permissions ajoutées (9)
+
+| Permission | SA | L1 | L2 | TENANT_ADMIN | Autres tenant |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `control.platform.plans.manage.global` | ✓ | | | | |
+| `control.platform.billing.manage.global` | ✓ | | | | |
+| `data.platform.metrics.read.global` | ✓ | ✓ | ✓ | | |
+| `control.platform.support.read.global` | ✓ | ✓ | ✓ | | |
+| `control.platform.support.write.global` | ✓ | ✓ | ✓ | | |
+| `control.platform.config.manage.global` | ✓ | | | | |
+| `data.support.create.tenant` | | | | ✓ | ✓ |
+| `data.support.read.tenant` | | | | ✓ | (AGENCY_MGR) |
+| `data.tenant.plan.read.tenant` / `control.tenant.plan.change.tenant` | | | | ✓ | |
+
+### 17.6 Crons ajoutés
+
+| Nom | Cron | Service | Rôle |
+|---|---|---|---|
+| `runDailyActiveUsersJob` | `0 2 * * *` | `PlatformAnalyticsService` | Agrège `User.lastActiveAt` dans `DailyActiveUser` pour J-1 |
+| `runTenantHealthScoreJob` | `30 2 * * *` | `PlatformAnalyticsService` | Calcule score santé 0-100 par tenant (poids: uptime 40% + support 20% + DLQ 20% + engagement 20%) |
+| `runRenewalBatch` | `0 3 * * *` | `PlatformBillingService` | Génère factures DRAFT pour subscriptions arrivant à échéance + avance la période |
+
+### 17.7 Frontend — `TenantScopeProvider`
+
+Contexte React permettant au staff plateforme de scoper les pages tenant-scoped
+(Trips, Fleet, Cashier, Incidents…) sur un tenant spécifique **sans impersonation**.
+
+```tsx
+// Usage dans une page tenant-scoped
+import { useScopedTenantId } from '@/lib/platform-scope/TenantScopeProvider';
+import { NoTenantScope } from '@/components/platform/TenantScopeSelector';
+
+function PageTrips() {
+  const tenantId = useScopedTenantId();
+  if (!tenantId) return <NoTenantScope pageName="Trips" />;
+  const { data } = useFetch(`/api/tenants/${tenantId}/trips`);
+  // ...
+}
+```
+
+- Pour un user tenant client : `useScopedTenantId()` retourne toujours `user.tenantId`
+- Pour un SA : retourne le tenant sélectionné dans le bandeau sticky (ou `null`)
+- Persistance `sessionStorage`
+
+### 17.8 Frontend — Extensions
+
+- `HomeRedirect` (`frontend/src/main.tsx`) : SA atterrit directement sur `/admin/platform/dashboard` au login.
+- Bannière UX sur `PageIamUsers` et `PageIamRoles` qui oriente vers `/admin/platform/staff` quand le user est sur le tenant plateforme (pas de cache, juste orientation).
+- 8 nouvelles pages sous `/admin/platform/*` + 1 côté tenant (`/admin/support`).
+
+### 17.9 Configuration DB-driven (`PlatformConfig`)
+
+Clefs initiales supportées (registre dans `platform-config.registry.ts`) :
+
+| Clé | Type | Défaut | Bornes | Usage |
+|---|---|---|---|---|
+| `health.riskThreshold` | number | 60 | 0-100 | Seuil "tenant à risque" dans le dashboard |
+| `health.thresholds.incidents` | number | 10 | 1-1000 | Nb d'incidents → uptime = 0 dans le score |
+| `health.thresholds.tickets` | number | 5 | 1-1000 | Seuil tickets support |
+| `health.thresholds.dlqEvents` | number | 5 | 1-1000 | Seuil DLQ |
+| `billing.defaultInvoiceDueDays` | number | 7 | 0-365 | Délai échéance facture |
+| `billing.defaultCustomCycleDays` | number | 30 | 1-3650 | Durée cycle plan CUSTOM |
+
+Pattern d'ajout d'une clé :
+1. Entrée dans `PLATFORM_CONFIG_REGISTRY` (label, help, default, validate)
+2. Consommer via `config.getNumber('ma.cle').catch(() => DEFAULT)` — **ADR-43**
+3. L'UI `/admin/platform/settings` l'affiche automatiquement (form auto-généré)
+
+### 17.10 Nouvelles ADR (v7.0)
+
+| ADR | Titre | Décision |
+|---|---|---|
+| ADR-37 | Plans SaaS DB-driven | `Plan` + `PlanModule` — zéro hardcoding. Le SA crée/édite via UI. |
+| ADR-38 | Billing plateforme séparé de `Invoice` tenant | Modèles distincts pour séparer facturation SaaS (plateforme→tenant) de facturation client final (tenant→voyageur). |
+| ADR-39 | SLA capping par plan + fallback const | `plan.sla.maxPriority` + `plan.sla.firstResponseMinByPriority` ; `DEFAULT_SLA_MINUTES` filet de sécurité. |
+| ADR-40 | `PlatformConfig` KV store DB-driven | Seuils éditables sans redéploiement, cache in-memory 60s, fallback const si DB KO. |
+| ADR-41 | `TenantScopeProvider` plutôt que cacher la nav | Restructuration UX propre : items restent visibles, scope tenant choisi explicitement. |
+| ADR-42 | `lastActiveAt` throttlé 5 min dans SessionMiddleware | 1 update max / 5 min / user → DAU/MAU sans overhead. |
+| ADR-43 | Fallback const obligatoire sur chaque `PlatformConfigService.getNumber()` | Zéro panique si DB KO — services continuent de fonctionner. |
+| ADR-44 | Health score calculé en cron nocturne | Lecture O(1) depuis `TenantHealthScore` au lieu de calcul on-the-fly. |
+| ADR-45 | Playwright `--host-resolver-rules` plutôt que /etc/hosts | Tests E2E sans sudo — mapping dynamique `*.translog.test` → 127.0.0.1. |
+
+### 17.11 Stratégie de tests actualisée
+
+| Type | Tests portail plateforme | Total projet |
+|---|---|---|
+| **Unit** (`jest.unit.config.ts`) | 56 | 56+ (platform) + existants |
+| **Security** (`jest.security.config.ts`) | 13 nouveaux | **132** ✓ |
+| **E2E API** (`jest.e2e.config.ts`) | 20 nouveaux | **149** (144 pass + 5 failures pré-existantes app.e2e) |
+| **Playwright navigateur** (`playwright.config.ts`) | 37 | **37** ✓ |
+
+Conventions Playwright :
+- `*.sa.pw.spec.ts` → project `super-admin` (storageState pré-chargé)
+- `*.tenant.pw.spec.ts` → project `tenant-admin`
+- `*.public.pw.spec.ts` → project `public` (non-auth)
+- `*.api.spec.ts` → project `api` (HTTP direct, pré-existant)
+
+Pré-requis : `./scripts/dev.sh` up + `npx playwright install chromium`.
+
+---
+
+*Fin du Dossier Technique TransLog Pro v7.0*
 *Révision v2.0 : Avril 2026 — Architecture Validée*
 *Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*
 *Révision v4.0 : Avril 2026 — White Label · Profitabilité (ICostCalculator) · TenantBusinessConfig · Yield Management · ADR-23→27*
 *Révision v5.0 : Avril 2026 — FleetDocs · DriverProfile · CrewBriefing · QHSE · SchedulingGuard · ModuleGuard · Frontend QHSE/HR · ADR-28→33*
 *Révision v6.0 : Avril 2026 — Workflow Studio Frontend · API client centralisé · useFetch hook · Auth context · PageProfitability/PageBranding connectées · ADR-34→36*
+*Révision v7.0 : Avril 2026 — Portail Plateforme SaaS · Plans · Billing · Analytics · Support · Config DB-driven · TenantScopeProvider · Playwright E2E · ADR-37→45*

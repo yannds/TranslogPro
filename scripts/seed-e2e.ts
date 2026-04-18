@@ -160,13 +160,66 @@ async function ensureTenantAdmin(): Promise<{ userId: string; tenantId: string }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
+async function ensureE2EPlan(): Promise<void> {
+  // Plan E2E visible dans /admin/platform/plans — permet aux tests de vérifier
+  // la présence d'au moins 1 ligne. Slug fixé, idempotent.
+  const existing = await prisma.plan.findUnique({ where: { slug: 'e2e-starter' } });
+  if (existing) return;
+
+  await prisma.plan.create({
+    data: {
+      slug:         'e2e-starter',
+      name:         'E2E Starter',
+      description:  'Plan de démo utilisé par la suite Playwright.',
+      price:        19,
+      currency:     'EUR',
+      billingCycle: 'MONTHLY',
+      trialDays:    14,
+      limits:       { maxUsers: 10 },
+      sla:          { maxPriority: 'NORMAL' },
+      sortOrder:    999,
+      isPublic:     true,
+      isActive:     true,
+    },
+  });
+  console.log('[seed-e2e] Plan E2E créé : e2e-starter');
+}
+
+async function ensureE2ESupportTicket(tenantId: string, reporterUserId: string): Promise<void> {
+  // Ticket de démo côté tenant — permet aux tests "liste mes tickets" de
+  // trouver au moins une ligne cliquable.
+  const existing = await prisma.supportTicket.findFirst({
+    where: { tenantId, reporterUserId, title: { startsWith: '[E2E]' } },
+  });
+  if (existing) return;
+
+  await prisma.supportTicket.create({
+    data: {
+      tenantId,
+      reporterUserId,
+      title:       '[E2E] Ticket de démonstration Playwright',
+      description: 'Ce ticket est créé par scripts/seed-e2e.ts et sert de fixture pour la suite Playwright. Il peut être ignoré.',
+      category:    'QUESTION',
+      priority:    'NORMAL',
+      status:      'OPEN',
+    },
+  });
+  console.log('[seed-e2e] Ticket E2E créé dans tenant trans-express');
+}
+
 export async function seedE2E(): Promise<void> {
   console.log('[seed-e2e] Seed comptes E2E (idempotent)…');
   await ensurePlatformSuperAdmin();
-  await ensureTenantAdmin();
+  const tenantAdmin = await ensureTenantAdmin();
+
   // Utilitaire pour purger l'agence "principale" du tenant plateforme :
   // on force la présence de "Main" pour que le setup initial reste cohérent.
   await ensureDefaultAgency(prisma as unknown as never, PLATFORM_TENANT_ID, PLATFORM_AGENCY_NAME);
+
+  // Fixtures E2E supplémentaires (dé-skip les tests qui dépendent de données).
+  await ensureE2EPlan();
+  await ensureE2ESupportTicket(tenantAdmin.tenantId, tenantAdmin.userId);
+
   console.log('[seed-e2e] ✅ Prêt.');
 }
 

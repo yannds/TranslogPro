@@ -20,9 +20,12 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { IsEnum } from 'class-validator';
+import { PlatformRole } from './dto/create-platform-staff.dto';
 import { PlatformService }       from './platform.service';
 import { BootstrapGuard }        from './guards/bootstrap.guard';
 import { BootstrapDto }          from './dto/bootstrap.dto';
@@ -31,6 +34,11 @@ import { RequirePermission }     from '../../common/decorators/require-permissio
 import { CurrentUser }           from '../../common/decorators/current-user.decorator';
 import { CurrentUserPayload }    from '../../common/decorators/current-user.decorator';
 import { Permission }            from '../../common/constants/permissions';
+
+class UpdateStaffRoleDto {
+  @IsEnum(PlatformRole)
+  roleName!: PlatformRole;
+}
 
 @Controller('platform')
 export class PlatformController {
@@ -66,6 +74,16 @@ export class PlatformController {
   @RequirePermission(Permission.PLATFORM_STAFF_GLOBAL)
   listStaff() {
     return this.platform.listStaff();
+  }
+
+  @Patch('staff/:id/role')
+  @RequirePermission(Permission.PLATFORM_STAFF_GLOBAL)
+  updateStaffRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateStaffRoleDto,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.platform.updateStaffRole(id, dto.roleName, actor);
   }
 
   @Delete('staff/:id')

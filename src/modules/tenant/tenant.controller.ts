@@ -37,6 +37,12 @@ export class TenantController {
     return this.tenantService.suspend(id);
   }
 
+  @Patch(':id/reactivate')
+  @RequirePermission(Permission.TENANT_MANAGE)
+  reactivate(@Param('id') id: string) {
+    return this.tenantService.reactivate(id);
+  }
+
   // ── Informations société ───────────────────────────────────────────────────
   // Lecture PUBLIQUE volontairement — nécessaire au bootstrap i18n/branding
   // côté frontend avant l'authentification (identique au /brand endpoint).

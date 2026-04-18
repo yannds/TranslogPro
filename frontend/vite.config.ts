@@ -27,6 +27,14 @@ export default defineConfig({
     // tout *.translog.test + localhost/127.0.0.1 pour ne pas bloquer Caddy.
     allowedHosts: ['.translog.test', 'localhost', '127.0.0.1'],
 
+    // HMR : le browser charge la page via Caddy (HTTPS :443), donc la socket
+    // HMR doit aussi passer par Caddy en wss. Sans ça Vite tente `ws://host/`
+    // puis fallback `wss://localhost:5173` qui échoue (Vite ne sert pas TLS).
+    hmr: {
+      protocol:   'wss',
+      clientPort: 443,   // port côté browser — Caddy proxifie vers :5173
+    },
+
     // Proxy API → NestJS (évite CORS en dev quand on hit Vite directement
     // sur localhost:5173 sans passer par Caddy).
     proxy: {

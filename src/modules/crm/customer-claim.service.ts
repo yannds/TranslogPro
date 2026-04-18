@@ -130,14 +130,18 @@ export class CustomerClaimService {
   async previewToken(token: string): Promise<ClaimPreview> {
     const record = await this.findActiveToken(token);
 
+    // Defense in depth : counts tenant-scoped explicitement, même si
+    // customerId est unique globalement. Protège contre un scénario où le
+    // customerId serait par erreur partagé entre tenants (ex: restore
+    // partiel, import cross-tenant).
     const [tickets, parcelsSent, parcelsReceived] = await Promise.all([
-      this.prisma.ticket.count({ where: { customerId: record.customerId } }),
-      this.prisma.parcel.count({ where: { senderCustomerId: record.customerId } }),
-      this.prisma.parcel.count({ where: { recipientCustomerId: record.customerId } }),
+      this.prisma.ticket.count({ where: { customerId: record.customerId, tenantId: record.tenantId } }),
+      this.prisma.parcel.count({ where: { senderCustomerId: record.customerId, tenantId: record.tenantId } }),
+      this.prisma.parcel.count({ where: { recipientCustomerId: record.customerId, tenantId: record.tenantId } }),
     ]);
 
-    const customer = await this.prisma.customer.findUniqueOrThrow({
-      where: { id: record.customerId },
+    const customer = await this.prisma.customer.findFirstOrThrow({
+      where: { id: record.customerId, tenantId: record.tenantId },
     });
 
     return {

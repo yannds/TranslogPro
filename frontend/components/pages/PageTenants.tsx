@@ -20,7 +20,7 @@
 
 import { useState, useMemo, type FormEvent } from 'react';
 import {
-  Building2, Plus, ShieldOff, AlertTriangle, X, Check, Globe,
+  Building2, Plus, ShieldOff, ShieldCheck, AlertTriangle, X, Check, Globe, UserCheck, ExternalLink,
 } from 'lucide-react';
 import { useFetch }                     from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch }            from '../../lib/api';
@@ -244,6 +244,7 @@ export function PageTenants() {
 
   const [showCreate,     setShowCreate]     = useState(false);
   const [suspendTarget,  setSuspendTarget]  = useState<TenantRow | null>(null);
+  const [detailTarget,   setDetailTarget]   = useState<TenantRow | null>(null);
   const [busy,           setBusy]           = useState(false);
   const [actionErr,      setActionErr]      = useState<string | null>(null);
 
@@ -268,6 +269,7 @@ export function PageTenants() {
     try {
       await apiPatch(`/api/tenants/${suspendTarget.id}/suspend`);
       setSuspendTarget(null);
+      setDetailTarget(null);
       refetch();
     } catch (e) {
       setActionErr((e as Error).message);
@@ -276,13 +278,40 @@ export function PageTenants() {
     }
   };
 
+  const handleReactivate = async (row: TenantRow) => {
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`/api/tenants/${row.id}/reactivate`);
+      setDetailTarget(null);
+      refetch();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openTenantUrl = (row: TenantRow) => {
+    const base = window.location.hostname.split('.').slice(1).join('.');
+    const port = window.location.port ? `:${window.location.port}` : '';
+    window.open(`${window.location.protocol}//${row.slug}.${base}${port}`, '_blank', 'noopener');
+  };
+
   const columns = buildColumns(t, dateLocale);
   const rowActions: RowAction<TenantRow>[] = [
+    {
+      label:    t('common.reactivate'),
+      icon:     <ShieldCheck size={13} />,
+      hidden:   (row) => row.provisionStatus !== 'SUSPENDED',
+      disabled: (row) => row.id === PLATFORM_TENANT_ID,
+      onClick:  (row) => { void handleReactivate(row); },
+    },
     {
       label:    t('tenantsPage.suspend'),
       icon:     <ShieldOff size={13} />,
       danger:   true,
-      disabled: (row) => row.id === PLATFORM_TENANT_ID || row.provisionStatus === 'SUSPENDED',
+      hidden:   (row) => row.provisionStatus === 'SUSPENDED',
+      disabled: (row) => row.id === PLATFORM_TENANT_ID,
       onClick:  (row) => { setSuspendTarget(row); setActionErr(null); },
     },
   ];
@@ -321,6 +350,7 @@ export function PageTenants() {
         data={rows}
         loading={loading}
         rowActions={rowActions}
+        onRowClick={(row) => { setDetailTarget(row); setActionErr(null); }}
         defaultSort={{ key: 'createdAt', dir: 'desc' }}
         defaultPageSize={25}
         searchPlaceholder={t('tenantsPage.searchPlaceholder')}
@@ -344,6 +374,84 @@ export function PageTenants() {
           busy={busy}
           error={actionErr}
         />
+      </Dialog>
+
+      {/* Modal Détails + Actions */}
+      <Dialog
+        open={!!detailTarget}
+        onOpenChange={o => { if (!o) setDetailTarget(null); }}
+        title={detailTarget ? detailTarget.name : ''}
+        description={detailTarget ? `${detailTarget.slug} · ${detailTarget.country}` : ''}
+        size="lg"
+      >
+        {detailTarget && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-xs t-text-3">{t('tenantsPage.colStatus')}</dt>
+                <dd className="mt-0.5"><Badge variant={provisionVariant(detailTarget.provisionStatus)}>{detailTarget.provisionStatus}</Badge></dd>
+              </div>
+              <div>
+                <dt className="text-xs t-text-3">{t('tenantsPage.colLocation')}</dt>
+                <dd className="mt-0.5 t-text">{[detailTarget.city, detailTarget.country].filter(Boolean).join(', ') || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs t-text-3">{t('tenantsPage.colLocale')}</dt>
+                <dd className="mt-0.5 t-text font-mono">{detailTarget.language} · {detailTarget.currency}</dd>
+              </div>
+              <div>
+                <dt className="text-xs t-text-3">{t('tenantsPage.colCreatedAt')}</dt>
+                <dd className="mt-0.5 t-text">{new Date(detailTarget.createdAt).toLocaleDateString(dateLocale)}</dd>
+              </div>
+            </dl>
+
+            {actionErr && (
+              <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                {actionErr}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="outline"
+                onClick={() => openTenantUrl(detailTarget)}
+                disabled={detailTarget.id === PLATFORM_TENANT_ID}
+              >
+                <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden />
+                {t('tenantsPage.openPortal')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDetailTarget(null);
+                  window.location.href = `/admin/platform/impersonation?tenantId=${detailTarget.id}`;
+                }}
+                disabled={detailTarget.id === PLATFORM_TENANT_ID}
+              >
+                <UserCheck className="w-4 h-4 mr-1.5" aria-hidden />
+                {t('tenantsPage.impersonate')}
+              </Button>
+              {detailTarget.provisionStatus === 'SUSPENDED' ? (
+                <Button
+                  onClick={() => void handleReactivate(detailTarget)}
+                  disabled={busy || detailTarget.id === PLATFORM_TENANT_ID}
+                >
+                  <ShieldCheck className="w-4 h-4 mr-1.5" aria-hidden />
+                  {busy ? t('common.saving') : t('common.reactivate')}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => { setSuspendTarget(detailTarget); setDetailTarget(null); }}
+                  disabled={detailTarget.id === PLATFORM_TENANT_ID}
+                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                >
+                  <ShieldOff className="w-4 h-4 mr-1.5" aria-hidden />
+                  {t('tenantsPage.suspend')}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </Dialog>
 
       {/* Modal Suspendre */}

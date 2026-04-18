@@ -21,10 +21,9 @@ test.describe('[pw:sa] Platform Dashboard', () => {
   test('affiche le titre et les sections principales', async ({ page }) => {
     await page.goto('/admin/platform/dashboard');
 
-    // Titre : tolère soit la traduction FR soit la clé i18n brute
-    // (si le I18nProvider ne résout pas côté tenant plateforme).
+    // Titre i18n FR — doit résoudre via I18nProvider (fallback fr.ts garanti)
     await expect(page.getByRole('heading', { level: 1 }))
-      .toContainText(/Tableau de bord plateforme|platformDash\.title/i);
+      .toContainText(/Tableau de bord plateforme/i);
 
     // Badge rôle
     await expect(page.getByText('SUPER_ADMIN').first()).toBeVisible();

@@ -88,8 +88,9 @@ export class RouteService {
       throw new BadRequestException('L\'origine et la destination doivent être différentes');
     }
 
-    return this.prisma.route.update({
-      where: { id },
+    // updateMany ne supporte pas include → update + findUnique avec check strict tenant via where racine préalable
+    const routeRes = await this.prisma.route.updateMany({
+      where: { id, tenantId },
       data: {
         ...(payload.name          !== undefined ? { name:          payload.name }          : {}),
         ...(payload.originId      !== undefined ? { originId:      payload.originId }      : {}),
@@ -97,6 +98,10 @@ export class RouteService {
         ...(payload.distanceKm    !== undefined ? { distanceKm:    payload.distanceKm }    : {}),
         ...(payload.basePrice     !== undefined ? { basePrice:     payload.basePrice }     : {}),
       },
+    });
+    if (routeRes.count === 0) throw new NotFoundException(`Route ${id} introuvable`);
+    return this.prisma.route.findFirst({
+      where: { id, tenantId },
       include: {
         origin:      { select: { id: true, name: true, city: true } },
         destination: { select: { id: true, name: true, city: true } },
@@ -117,8 +122,11 @@ export class RouteService {
     }
 
     return this.prisma.transact(async (tx) => {
-      await tx.waypoint.deleteMany({ where: { routeId: id } });
-      await tx.route.delete({ where: { id } });
+      // Waypoints : supprimer UNIQUEMENT celles dont le parent route est du tenant.
+      // findOne() ci-dessus a déjà validé que route.id ∈ tenant ; ici defense-in-depth.
+      await tx.waypoint.deleteMany({ where: { routeId: id, route: { tenantId } } });
+      const res = await tx.route.deleteMany({ where: { id, tenantId } });
+      if (res.count === 0) throw new NotFoundException(`Route ${id} introuvable`);
       return { deleted: true };
     });
   }
@@ -151,9 +159,9 @@ export class RouteService {
       await this.assertStationBelongsToTenant(tenantId, wp.stationId);
     }
 
-    // Remplacer tous les waypoints (atomique)
+    // Remplacer tous les waypoints (atomique) — defense-in-depth via FK tenantId
     await this.prisma.transact(async (tx) => {
-      await tx.waypoint.deleteMany({ where: { routeId } });
+      await tx.waypoint.deleteMany({ where: { routeId, route: { tenantId } } });
       if (waypoints.length > 0) {
         await tx.waypoint.createMany({
           data: waypoints.map(wp => ({

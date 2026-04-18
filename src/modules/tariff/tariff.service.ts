@@ -57,19 +57,23 @@ export class TariffService {
 
   async updateGrid(tenantId: string, id: string, dto: UpdateTariffGridDto) {
     await this.findOneGrid(tenantId, id);
-    return this.prisma.tariffGrid.update({
-      where: { id },
+    const res = await this.prisma.tariffGrid.updateMany({
+      where: { id, tenantId },
       data: {
         ...dto,
         validFrom: dto.validFrom ? new Date(dto.validFrom) : undefined,
         validTo:   dto.validTo   ? new Date(dto.validTo)   : undefined,
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Grille tarifaire ${id} introuvable`);
+    return this.findOneGrid(tenantId, id);
   }
 
   async removeGrid(tenantId: string, id: string) {
     await this.findOneGrid(tenantId, id);
-    return this.prisma.tariffGrid.delete({ where: { id } });
+    const res = await this.prisma.tariffGrid.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Grille tarifaire ${id} introuvable`);
+    return { id, deleted: true };
   }
 
   // ── Promotions ────────────────────────────────────────────────────────────────
@@ -115,18 +119,22 @@ export class TariffService {
 
   async updatePromotion(tenantId: string, id: string, dto: UpdatePromotionDto) {
     await this.findOnePromotion(tenantId, id);
-    return this.prisma.promotion.update({
-      where: { id },
+    const res = await this.prisma.promotion.updateMany({
+      where: { id, tenantId },
       data: {
         ...dto,
         validFrom: dto.validFrom ? new Date(dto.validFrom) : undefined,
         validTo:   dto.validTo   ? new Date(dto.validTo)   : undefined,
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Promotion ${id} introuvable`);
+    return this.findOnePromotion(tenantId, id);
   }
 
   async removePromotion(tenantId: string, id: string) {
     await this.findOnePromotion(tenantId, id);
-    return this.prisma.promotion.delete({ where: { id } });
+    const res = await this.prisma.promotion.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Promotion ${id} introuvable`);
+    return { id, deleted: true };
   }
 }

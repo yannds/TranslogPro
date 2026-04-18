@@ -19,13 +19,13 @@
  * Le frontend n'envoie donc pas de password et affiche l'info.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import {
   UserCog, Plus, Trash2, X, Check, AlertTriangle, ShieldCheck, Bug,
-  UserCircle, Mail,
+  UserCircle, Mail, Pencil,
 } from 'lucide-react';
 import { useFetch }                   from '../../lib/hooks/useFetch';
-import { apiPost, apiDelete }          from '../../lib/api';
+import { apiPost, apiDelete, apiPatch } from '../../lib/api';
 import { useAuth }                    from '../../lib/auth/auth.context';
 import { useI18n }                     from '../../lib/i18n/useI18n';
 import { Button }                     from '../ui/Button';
@@ -222,8 +222,17 @@ export function PagePlatformStaff() {
 
   const [showCreate,    setShowCreate]    = useState(false);
   const [deleteTarget,  setDeleteTarget]  = useState<StaffRow | null>(null);
+  const [editTarget,    setEditTarget]    = useState<StaffRow | null>(null);
+  const [editRole,      setEditRole]      = useState<PlatformRole>('SUPPORT_L1');
   const [busy,          setBusy]          = useState(false);
   const [actionErr,     setActionErr]     = useState<string | null>(null);
+
+  useEffect(() => {
+    if (editTarget) {
+      setEditRole((editTarget.roleName as PlatformRole) ?? 'SUPPORT_L1');
+      setActionErr(null);
+    }
+  }, [editTarget]);
 
   const saCount = (staff ?? []).filter(s => s.roleName === 'SUPER_ADMIN').length;
 
@@ -254,8 +263,27 @@ export function PagePlatformStaff() {
     }
   };
 
+  const handleUpdateRole = async () => {
+    if (!editTarget) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`/api/platform/staff/${editTarget.id}/role`, { roleName: editRole });
+      setEditTarget(null);
+      refetch();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const columns = buildColumns(me?.id, t, dateLocale);
   const rowActions: RowAction<StaffRow>[] = [
+    {
+      label:    t('common.edit'),
+      icon:     <Pencil size={13} />,
+      onClick:  (row) => { setEditTarget(row); },
+    },
     {
       label:    t('common.delete'),
       icon:     <Trash2 size={13} />,
@@ -304,6 +332,7 @@ export function PagePlatformStaff() {
         data={staff ?? []}
         loading={loading}
         rowActions={rowActions}
+        onRowClick={(row) => setEditTarget(row)}
         defaultSort={{ key: 'createdAt', dir: 'asc' }}
         defaultPageSize={25}
         searchPlaceholder={t('platformStaff.searchPlaceholder')}
@@ -327,6 +356,75 @@ export function PagePlatformStaff() {
           busy={busy}
           error={actionErr}
         />
+      </Dialog>
+
+      {/* Modal Éditer rôle */}
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={o => { if (!o) setEditTarget(null); }}
+        title={t('platformStaff.editStaff')}
+        description={editTarget ? `${editTarget.name ?? editTarget.email}` : ''}
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={busy}>
+              <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleUpdateRole}
+              disabled={busy || !editTarget || editRole === editTarget.roleName}
+            >
+              <Check className="w-4 h-4 mr-1.5" aria-hidden />
+              {busy ? t('common.saving') : t('common.save')}
+            </Button>
+          </div>
+        }
+      >
+        {editTarget && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-xs t-text-3">{t('common.email')}</dt>
+                <dd className="mt-0.5 t-text flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 t-text-3" aria-hidden />
+                  {editTarget.email}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs t-text-3">{t('platformStaff.colCreatedAt')}</dt>
+                <dd className="mt-0.5 t-text">{new Date(editTarget.createdAt).toLocaleDateString(dateLocale)}</dd>
+              </div>
+            </dl>
+
+            <div className="space-y-1.5">
+              <label htmlFor="edit-role" className="block text-sm font-medium t-text">
+                {t('common.role')} <span aria-hidden className="text-red-500">*</span>
+              </label>
+              <select
+                id="edit-role"
+                value={editRole}
+                onChange={e => setEditRole(e.target.value as PlatformRole)}
+                className={inp}
+                disabled={busy || (editTarget.roleName === 'SUPER_ADMIN' && saCount <= 1)}
+              >
+                <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                <option value="SUPPORT_L1">SUPPORT_L1</option>
+                <option value="SUPPORT_L2">SUPPORT_L2</option>
+              </select>
+              {editTarget.roleName === 'SUPER_ADMIN' && saCount <= 1 && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  {t('platformStaff.lastSuperAdminLock')}
+                </p>
+              )}
+            </div>
+
+            {actionErr && (
+              <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                {actionErr}
+              </div>
+            )}
+          </div>
+        )}
       </Dialog>
 
       {/* Modal Supprimer */}

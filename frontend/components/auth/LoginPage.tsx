@@ -10,7 +10,7 @@
  * Thème : dark exclusif (pas de mode clair)
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
@@ -21,7 +21,7 @@ import { useI18n } from '../../lib/i18n/useI18n';
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const { t }     = useI18n();
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -29,6 +29,15 @@ export function LoginPage() {
   // Rediriger vers la page demandée avant la déconnexion, sinon laisser
   // HomeRedirect choisir le portail selon (userType, permissions).
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
+
+  // Session déjà active → sortir du formulaire de login.
+  // Cas : user navigue manuellement vers /login tout en étant authentifié,
+  // ou retour arrière navigateur après login réussi.
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(from === '/login' ? '/' : from, { replace: true });
+    }
+  }, [authLoading, user, navigate, from]);
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');

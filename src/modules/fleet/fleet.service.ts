@@ -55,8 +55,8 @@ export class FleetService {
 
   async updateBus(tenantId: string, id: string, dto: UpdateBusDto) {
     await this.findOne(tenantId, id);
-    return this.prisma.bus.update({
-      where: { id },
+    const res = await this.prisma.bus.updateMany({
+      where: { id, tenantId },
       data: {
         plateNumber:         dto.plateNumber,
         model:               dto.model,
@@ -80,6 +80,8 @@ export class FleetService {
         ...(dto.amenities !== undefined ? { amenities: dto.amenities } : {}),
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Bus ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   async deleteBus(tenantId: string, id: string) {
@@ -96,7 +98,8 @@ export class FleetService {
     for (const key of bus.photos ?? []) {
       try { await this.storage.deleteObject(tenantId, key); } catch { /* swallow */ }
     }
-    await this.prisma.bus.delete({ where: { id } });
+    const delRes = await this.prisma.bus.deleteMany({ where: { id, tenantId } });
+    if (delRes.count === 0) throw new NotFoundException(`Bus ${id} introuvable`);
     return { ok: true };
   }
 
@@ -113,7 +116,9 @@ export class FleetService {
     if (body.seatLayout !== undefined) data.seatLayout = body.seatLayout as any;
     if (body.isFullVip !== undefined)  data.isFullVip = body.isFullVip;
     if (body.vipSeats !== undefined)   data.vipSeats = body.vipSeats;
-    return this.prisma.bus.update({ where: { id }, data });
+    const updRes = await this.prisma.bus.updateMany({ where: { id, tenantId }, data });
+    if (updRes.count === 0) throw new NotFoundException(`Bus ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   async findAll(tenantId: string, _scope: ScopeContext) {
@@ -131,7 +136,9 @@ export class FleetService {
 
   async updateStatus(tenantId: string, id: string, status: string, _scope: ScopeContext) {
     await this.findOne(tenantId, id);
-    return this.prisma.bus.update({ where: { id }, data: { status } });
+    const res = await this.prisma.bus.updateMany({ where: { id, tenantId }, data: { status } });
+    if (res.count === 0) throw new NotFoundException(`Bus ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   // ─── Photos ─────────────────────────────────────────────────────────────────
@@ -165,10 +172,11 @@ export class FleetService {
       throw new BadRequestException('fileKey ne correspond pas à ce bus');
     }
     if (bus.photos.includes(fileKey)) return bus;
-    return this.prisma.bus.update({
-      where: { id: busId },
+    await this.prisma.bus.updateMany({
+      where: { id: busId, tenantId },
       data:  { photos: { set: [...bus.photos, fileKey] } },
     });
+    return this.findOne(tenantId, busId);
   }
 
   async removePhoto(tenantId: string, busId: string, fileKey: string) {
@@ -177,10 +185,11 @@ export class FleetService {
       throw new NotFoundException('Photo introuvable sur ce véhicule');
     }
     try { await this.storage.deleteObject(tenantId, fileKey); } catch { /* swallow */ }
-    return this.prisma.bus.update({
-      where: { id: busId },
+    await this.prisma.bus.updateMany({
+      where: { id: busId, tenantId },
       data:  { photos: { set: bus.photos.filter(k => k !== fileKey) } },
     });
+    return this.findOne(tenantId, busId);
   }
 
   /** Retourne les URLs présignées de téléchargement pour chaque photo (24h). */

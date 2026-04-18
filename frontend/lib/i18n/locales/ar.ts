@@ -3641,7 +3641,9 @@ const ar: Record<string, Record<string, string>> = {
     "formSlugHint": "معرف URL (أحرف صغيرة، أرقام، شرطات). غير قابل للتغيير.",
     "formAdminEmail": "بريد المسؤول",
     "formAdminName": "اسم المسؤول",
-    "formIrreversible": "الإنشاء يزوِّد مستأجرًا بوكالة افتراضية ومستخدم مسؤول. لا يمكن تعديل slug لاحقًا."
+    "formIrreversible": "الإنشاء يزوِّد مستأجرًا بوكالة افتراضية ومستخدم مسؤول. لا يمكن تعديل slug لاحقًا.",
+    "openPortal": "فتح البوابة",
+    "impersonate": "انتحال الشخصية"
   },
 
   "platformStaff": {
@@ -3651,6 +3653,8 @@ const ar: Record<string, Record<string, string>> = {
     "newStaff": "عضو جديد",
     "createDesc": "أضف وكيلًا داخليًا إلى مستأجر المنصة.",
     "deleteStaff": "حذف العضو",
+    "editStaff": "تعديل الدور",
+    "lastSuperAdminLock": "آخر SUPER_ADMIN — لا يمكن تعديل الدور.",
     "deleteWarning": "لا يمكن حذف آخر SUPER_ADMIN أو حسابك الخاص. الإجراء مُسجَّل في سجل التدقيق.",
     "deleting": "جارٍ الحذف…",
     "you": "أنت",
@@ -3698,7 +3702,11 @@ const ar: Record<string, Record<string, string>> = {
     "confirmRevoke": "إلغاء الجلسة",
     "revokeWarning": "سيتم إبطال الجلسة فورًا. الإجراء مُسجَّل كتدقيق حرج.",
     "expired": "منتهية الصلاحية",
-    "notAllowed": "لا تملك صلاحية فتح جلسة انتحال."
+    "notAllowed": "لا تملك صلاحية فتح جلسة انتحال.",
+    "tokenExpiresIn": "تنتهي خلال",
+    "switchNow": "التبديل إلى",
+    "switchNowAria": "التبديل إلى النطاق الفرعي للمستأجر المستهدف واستهلاك الرمز",
+    "switchNowHint": "يفتح النطاق الفرعي للمستأجر ويستبدل الرمز بملف تعريف ارتباط جلسة محصور."
   },
 
   "debugWf": {

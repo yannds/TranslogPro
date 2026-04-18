@@ -327,6 +327,7 @@ export class AuthService {
     code:           string,
     ipAddress:      string,
     userAgent:      string,
+    expectedTenantId?: string,
   ): Promise<{ token: string; user: AuthUserDto }> {
     const challenge = await this.prisma.mfaChallenge.findUnique({
       where:   { token: challengeToken },
@@ -337,6 +338,17 @@ export class AuthService {
 
     if (!challenge) {
       throw new UnauthorizedException('Challenge MFA invalide');
+    }
+
+    // Defense in depth : si le controller a résolu un tenant (via Host),
+    // le challenge DOIT appartenir à ce tenant. Empêche qu'un token issu
+    // sur tenantA soit utilisé depuis le sous-domaine tenantB.
+    if (expectedTenantId && challenge.tenantId !== expectedTenantId) {
+      this.logger.warn(
+        `[MFA] challenge tenant mismatch — expected=${expectedTenantId} ` +
+        `got=${challenge.tenantId} ip=${ipAddress}`,
+      );
+      throw new ForbiddenException('Challenge MFA destiné à un autre tenant');
     }
 
     if (challenge.expiresAt < new Date()) {

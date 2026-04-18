@@ -144,10 +144,12 @@ export class CrewService {
     });
     if (!assignment) throw new NotFoundException('Assignment introuvable');
 
-    return this.prisma.crewAssignment.update({
-      where: { tripId_staffId: { tripId, staffId } },
+    const res = await this.prisma.crewAssignment.updateMany({
+      where: { tripId, staffId, tenantId },
       data:  { briefedAt: new Date() },
     });
+    if (res.count === 0) throw new NotFoundException('Assignment introuvable');
+    return this.prisma.crewAssignment.findFirst({ where: { tripId, staffId, tenantId } });
   }
 
   /**
@@ -166,8 +168,10 @@ export class CrewService {
     });
     if (!assignment) throw new NotFoundException('Assignment introuvable');
 
-    return this.prisma.crewAssignment.delete({
-      where: { tripId_staffId: { tripId, staffId } },
+    const res = await this.prisma.crewAssignment.deleteMany({
+      where: { tripId, staffId, tenantId },
     });
+    if (res.count === 0) throw new NotFoundException('Assignment introuvable');
+    return { tripId, staffId, deleted: true };
   }
 }

@@ -114,6 +114,47 @@ export class PlatformService {
     }));
   }
 
+  async updateStaffRole(
+    targetId: string,
+    roleName: PlatformRole | 'SUPER_ADMIN',
+    actor: CurrentUserPayload,
+  ) {
+    this.assertPlatformActor(actor);
+
+    const target = await this.prisma.user.findFirst({
+      where:   { id: targetId, tenantId: PLATFORM_TENANT_ID },
+      include: { role: true },
+    });
+    if (!target) throw new NotFoundException(`Staff ${targetId} introuvable`);
+
+    if (target.role?.name === roleName) {
+      return { updated: false, userId: targetId, roleName };
+    }
+
+    // Garde : interdire de retirer le dernier SUPER_ADMIN
+    if (target.role?.name === 'SUPER_ADMIN' && roleName !== 'SUPER_ADMIN') {
+      const count = await this.prisma.user.count({
+        where: { tenantId: PLATFORM_TENANT_ID, role: { name: 'SUPER_ADMIN' } },
+      });
+      if (count <= 1) {
+        throw new ForbiddenException('Impossible de rétrograder le dernier SUPER_ADMIN');
+      }
+    }
+
+    const role = await this.resolvePlatformRole(roleName);
+
+    await this.prisma.user.update({
+      where: { id: targetId },
+      data:  { roleId: role.id },
+    });
+
+    this.logger.log(
+      `[Platform] Staff rôle modifié : ${targetId} → ${roleName} par actor=${actor.id}`,
+    );
+
+    return { updated: true, userId: targetId, roleName };
+  }
+
   async removeStaff(targetId: string, actor: CurrentUserPayload) {
     this.assertPlatformActor(actor);
 

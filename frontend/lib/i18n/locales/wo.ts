@@ -3708,7 +3708,9 @@ const wo: Record<string, Record<string, string>> = {
     "formSlugHint": "Identifiant URL (minuscules, chiffres, tirets). Du soppiku.",
     "formAdminEmail": "Email bu admin",
     "formAdminName": "Tur bu admin",
-    "formIrreversible": "Sos ci tenant ak agence bu défaut ak utilisateur admin. Slug du soppiku li dal."
+    "formIrreversible": "Sos ci tenant ak agence bu défaut ak utilisateur admin. Slug du soppiku li dal.",
+    "openPortal": "Ubbi portail bi",
+    "impersonate": "Sopp mbind"
   },
 
   "platformStaff": {
@@ -3718,6 +3720,8 @@ const wo: Record<string, Record<string, string>> = {
     "newStaff": "Membre bu bees",
     "createDesc": "Yokk agent bu biir ci tenant plateforme.",
     "deleteStaff": "Far membre",
+    "editStaff": "Soppi rôle bi",
+    "lastSuperAdminLock": "SUPER_ADMIN bi mujjub — rôle bi dina soppiku.",
     "deleteWarning": "Mënu ñu far SUPER_ADMIN bu muj walla sa bop. Action bi cungi ci audit log.",
     "deleting": "Di far…",
     "you": "yow",
@@ -3765,7 +3769,11 @@ const wo: Record<string, Record<string, string>> = {
     "confirmRevoke": "Révoquer session",
     "revokeWarning": "Session bi dafay fey ci saa bi. Action bi cungi ci audit critique.",
     "expired": "Jeex na",
-    "notAllowed": "Amu lo droit bu ubbi session bu impersonation."
+    "notAllowed": "Amu lo droit bu ubbi session bu impersonation.",
+    "tokenExpiresIn": "Jeex ci",
+    "switchNow": "Jublu ci",
+    "switchNowAria": "Jublu ci sous-domaine bu tenant ak jëfandikoo token bi",
+    "switchNowHint": "Muy ubbi sous-domaine bu tenant te séddale token bi ak cookie session bu scopé."
   },
 
   "debugWf": {

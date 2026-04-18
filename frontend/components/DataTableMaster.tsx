@@ -546,12 +546,13 @@ function DataTableMaster<T extends { id: string }>({
                     {hasBulkAct && (
                       <td
                         className="dtm-td dtm-td-check"
-                        onClick={e => { e.stopPropagation(); toggleRow(rowKey); }}
+                        onClick={e => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleRow(rowKey)}
+                          onClick={e => e.stopPropagation()}
                           aria-label={`${t('dataTable.selectRow')} ${rowIdx + 1}`}
                         />
                       </td>

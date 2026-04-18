@@ -1573,7 +1573,199 @@ export default function NotFound() {
 
 ---
 
-*Fin du PRD TransLog Pro v4.0*
+## X. Portail Plateforme SaaS — v5.0 (2026-04-18)
+
+> Ajouté à partir du PRD v4.0. Réfère à l'architecture IAM transverse §V.4.
+> Référence opérationnelle complète : [`DOCUMENTATION_MULTI_TENANT.md`](./DOCUMENTATION_MULTI_TENANT.md)
+> Détails techniques : [`TECHNICAL_ARCHITECTURE.md`](./TECHNICAL_ARCHITECTURE.md) §17.
+
+### X.1 Vision
+
+Le tenant plateforme `__platform__` n'héberge pas seulement le staff interne
+TransLog Pro : il devient la **console d'opération commerciale et produit**
+du SaaS. L'équipe interne doit pouvoir :
+
+1. **Définir le catalogue de plans** (Plans SaaS) — prix, cycle, modules inclus, SLA par plan, sans redéploiement.
+2. **Facturer les tenants** (Billing) — souscriptions, factures plateforme→tenant, cron de renouvellement automatique.
+3. **Superviser la santé globale** (Analytics) — MRR, churn, DAU/MAU, taux d'adoption par module, score de santé tenant 0-100.
+4. **Traiter les demandes de support** (Support) — les tenants ouvrent des tickets, la plateforme répond avec SLA adapté au plan.
+5. **Ajuster les seuils opérationnels** (PlatformConfig) — "tenant à risque" à 60 ou 70 ? Délai facture 7 ou 14 jours ? Configurable DB-driven.
+
+### X.2 Modules ajoutés au référentiel
+
+Intégration dans la liste des modules I.3 :
+
+| Code | Module | Description courte |
+|---|---|---|
+| **X** | **Plans SaaS** | Catalogue DB-driven des offres proposées aux tenants (prix, cycle, modules inclus, SLA) |
+| **Y** | **Billing Plateforme** | Souscriptions + factures plateforme→tenants + cron de renouvellement |
+| **Z** | **Platform Analytics** | Growth (MRR, churn) + Adoption (DAU/MAU) + Health (score 0-100) |
+| **AA** | **Support Cross-Tenant** | Tickets tenant→plateforme + thread + SLA capping par plan |
+| **AB** | **Platform Config** | KV store des seuils opérationnels DB-driven, éditables sans redéploiement |
+
+### X.3 Rôles plateforme — mise à jour permissions
+
+Permissions ajoutées aux rôles système (tenant `__platform__`) :
+
+**SUPER_ADMIN** (25 perms, +6 nouvelles) :
+- `control.platform.plans.manage.global`
+- `control.platform.billing.manage.global`
+- `control.platform.config.manage.global`
+- `control.platform.support.read.global` / `.write.global`
+- `data.platform.metrics.read.global`
+
+**SUPPORT_L1** (14 perms, +3 nouvelles) :
+- `data.platform.metrics.read.global`
+- `control.platform.support.read.global` / `.write.global`
+
+**SUPPORT_L2** (17 perms) : hérite L1 + debug workflow/outbox existant.
+
+Permissions ajoutées aux rôles **tenant client** :
+
+- `data.support.create.tenant` → tous les rôles tenant opérationnels (peuvent signaler un pb)
+- `data.support.read.tenant` → TENANT_ADMIN + AGENCY_MANAGER (consulter les tickets de leur tenant)
+- `data.tenant.plan.read.tenant` + `control.tenant.plan.change.tenant` → TENANT_ADMIN (consulter catalogue + changer de plan)
+
+### X.4 Modèles Prisma ajoutés
+
+8 nouveaux modèles (détails complets : TECHNICAL_ARCHITECTURE §17.3) :
+
+```
+Plan · PlanModule · PlatformSubscription · PlatformInvoice ·
+SupportTicket · SupportMessage · DailyActiveUser · TenantHealthScore ·
+PlatformConfig
+```
+
+Et 7 champs ajoutés sur modèles existants :
+
+- `User.lastLoginAt`, `lastActiveAt`, `loginCount` — alimentent DAU/MAU
+- `Tenant.planId`, `activatedAt`, `suspendedAt`
+- `InstalledModule.enabledAt`, `enabledBy`
+
+### X.5 Crons nocturnes
+
+| Cron | Fréquence | Service | Rôle |
+|---|---|---|---|
+| DAU Aggregation | 02:00 UTC | PlatformAnalyticsService | Agrège `User.lastActiveAt` dans `DailyActiveUser` |
+| HealthScore | 02:30 UTC | PlatformAnalyticsService | Calcule le score 0-100 par tenant (uptime 40% + support 20% + DLQ 20% + engagement 20%) |
+| Billing Renewal | 03:00 UTC | PlatformBillingService | Génère les factures DRAFT pour subscriptions à échéance + avance période |
+
+### X.6 SLA par plan (support)
+
+Chaque `Plan.sla` est un JSON contenant :
+
+```json
+{
+  "maxPriority": "HIGH",
+  "firstResponseMinByPriority": {
+    "LOW": 480,
+    "NORMAL": 240,
+    "HIGH": 60,
+    "CRITICAL": 15
+  }
+}
+```
+
+Sans `sla` sur le plan (ou tenant sans plan), fallback sur `DEFAULT_SLA_MINUTES` :
+LOW 5j / NORMAL 24h / HIGH 4h / CRITICAL 1h. Filet de sécurité — jamais de ticket bloqué.
+
+### X.7 Facturation plateforme — cycle
+
+```
+Création tenant → Subscription TRIAL (trialDays du plan) → TRIAL ends → ACTIVE
+                                                                        ↓
+                                                    Cron 03:00 UTC chaque jour
+                                                                        ↓
+                                                PlatformInvoice DRAFT (période N+1)
+                                                                        ↓
+                                        SA issue → ISSUED → paiement → PAID
+                                                                        ↓
+                                          OVERDUE si non-payé après dueAt
+```
+
+Numéro de facture : `PF-YYYY-NNNNNN` (séquence par année). Devise : héritée du plan.
+
+### X.8 UX portail plateforme
+
+8 pages frontend sous `/admin/platform/*` :
+
+| Page | Audience | Rôle |
+|---|---|---|
+| **Dashboard** | SA + L1 + L2 | Vue d'ensemble Growth + Adoption + Health + Support queue |
+| **Tenants** | SA | CRUD tenants (onboard, suspend) |
+| **Plans SaaS** | SA | CRUD plans + modules inclus |
+| **Billing** | SA | Subscriptions + factures + actions (issue, mark-paid, void, change plan) |
+| **Support** | SA/L1/L2 | Queue tickets + thread messages + assignation |
+| **Staff plateforme** | SA | CRUD staff interne (3 rôles système whitelist) |
+| **Impersonation JIT** | SA/L1 switch, SA/L2 revoke | Switch de session temporaire (15 min) |
+| **Settings** | SA | Édition PlatformConfig DB-driven |
+
+Pour le staff du tenant plateforme, un **TenantScopeSelector** sticky apparaît en
+haut de l'admin shell. Il permet de choisir un tenant pour consulter ses pages
+tenant-scoped (Trips, Fleet…) — les pages affichent `<NoTenantScope />` si rien
+n'est sélectionné. **Pas d'impersonation** (lecture seule via perms `.global` du SA),
+juste du scoping contextuel.
+
+### X.9 Règles d'or additionnelles
+
+Ajoutées aux règles d'or existantes (§VII.2) :
+
+1. **Zéro plan hardcodé** — tous les plans vivent en DB (modèle `Plan`), modifiables via UI.
+2. **Zéro seuil hardcodé métier** — les valeurs opérationnelles (health thresholds, billing due days…) vivent dans `PlatformConfig` ou `Plan.sla` (tous DB-driven).
+3. **Fallback const obligatoire** — chaque lecture `PlatformConfig.getNumber()` DOIT avoir un fallback sur une constante nommée : `.catch(() => DEFAULT)`. Zéro panique si la DB est KO.
+4. **Soft-delete plans référencés** — ne jamais `DELETE` un plan si des tenants ou subscriptions le référencent. Désactiver (`isActive=false`) pour préserver l'intégrité audit.
+5. **Jamais de facture plateforme sur `PLATFORM_TENANT_ID`** — le tenant plateforme ne s'auto-facture pas. Garde côté service.
+6. **SLA capping par plan** — la priorité d'un ticket demandée par le tenant est cappée par `plan.sla.maxPriority`. Affichage transparent (le ticket montre la priorité effective).
+
+### X.10 Tests livrés avec ce module
+
+- **Unit** : 56 tests (PlatformConfig 15 · Plans 11 · Billing 13 · Support 17)
+- **Security** : 13 tests (tenant isolation, permission boundaries, SLA capping, plan integrity, billing tenant plateforme lockdown)
+- **E2E API** : 20 tests (tous les endpoints `/platform/*` + `/support/tickets`)
+- **Playwright navigateur** : 37 tests (dashboard, plans, settings, support flow tenant→SA, scope selector, redirects)
+
+Bilan : **132 tests sécurité ✓ / 37 Playwright ✓** au 2026-04-18.
+
+### X.11 Roadmap d'implémentation (MAJ v5.0)
+
+Ajouté aux phases VII.1 :
+
+**Phase 9 — Portail Plateforme SaaS (2026-04) ✅ LIVRÉ**
+- [x] Modèles Prisma (Plan, PlanModule, PlatformSubscription, PlatformInvoice, SupportTicket, SupportMessage, DailyActiveUser, TenantHealthScore, PlatformConfig)
+- [x] 5 modules backend (PlatformPlans, PlatformBilling, PlatformAnalytics, PlatformConfig, Support)
+- [x] 9 permissions + seed aux 3 rôles plateforme + rôles tenant
+- [x] 3 crons (DAU, HealthScore, Renewal)
+- [x] 8 pages frontend + TenantScopeProvider
+- [x] i18n 8 locales
+- [x] 132 tests security + 37 Playwright
+
+**Phase 10 — Prod readiness (Q2 2026) — EN COURS**
+- [ ] CI/CD (GitHub Actions) : lint + test unit/integration/security/e2e + Playwright
+- [ ] `docker-compose.prod.yml` ou K8s manifests (Deployments, Services, HPA)
+- [ ] Grafana dashboards (Growth, Adoption, Health, API latency)
+- [ ] Alertmanager rules (DLQ > 1h, subscription renewal failed, health < 60 global)
+- [ ] Webhooks paiement (Flutterwave, Paystack) pour auto-mark-paid
+- [ ] Runbooks incidents + secret rotation
+
+### X.12 Nouvelles ADR (v5.0 PRD)
+
+| ADR | Titre | Décision |
+|---|---|---|
+| **ADR-28** | Portail plateforme en modules séparés | Un module par responsabilité (plans, billing, analytics, support, config) — isolation et testabilité. |
+| **ADR-29** | Plans SaaS DB-driven (table `Plan`) | Aucun plan hardcodé : le SA les crée via UI. Permet offres sur-mesure sans redéploiement. |
+| **ADR-30** | Facturation plateforme distincte de `Invoice` tenant | Deux préoccupations distinctes (SaaS facture tenant vs tenant facture voyageur). Modèles séparés = moins de couplage. |
+| **ADR-31** | SLA capping par `plan.sla.maxPriority` | Un plan low-cost ne peut pas prétendre à une réponse CRITICAL. Capping transparent côté backend. |
+| **ADR-32** | `PlatformConfig` KV store DB-driven | Seuils opérationnels modifiables sans redéploiement. Registry statique pour typage + UI auto-générée. |
+| **ADR-33** | Fallback const obligatoire | Chaque `config.getNumber().catch(() => CONST)` — résilience DB KO. |
+| **ADR-34** | `TenantScopeProvider` au lieu de cacher la nav | UX propre : items visibles, scope tenant choisi explicitement via bandeau sticky. |
+| **ADR-35** | Activity tracking throttlé (`lastActiveAt` 5 min) | 1 update max toutes les 5 min par user — pas de hot-spot DB. |
+| **ADR-36** | Health score en cron nocturne | Lecture O(1) au lieu de calcul on-the-fly. Stable, rééxécutable, auditable. |
+| **ADR-37** | Playwright navigateur pour tests UI | Complète les tests API (supertest) : détecte les bugs d'i18n, de rendu, de nav — livre réellement à l'utilisateur. |
+
+---
+
+*Fin du PRD TransLog Pro v5.0*
 *Révision v2.0 : Critique architecturale complète — Avril 2026*
 *Révision v3.0 : Intégration PRD-ADD (CRM, Safety, Crew, Public Reporter, IAM DB-driven) — Avril 2026*
 *Révision v4.0 : White Label · Profitabilité · ICostCalculator · TenantBusinessConfig · Templates · 404 — Avril 2026*
+*Révision v5.0 : Portail Plateforme SaaS — Plans · Billing · Analytics · Support · Config DB-driven · Playwright — Avril 2026*

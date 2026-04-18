@@ -60,8 +60,8 @@ export class TenantTaxService {
     const existing = await this.prisma.tenantTax.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException(`Taxe ${id} introuvable`);
     this.validate({ ...existing, ...dto } as CreateTenantTaxDto);
-    return this.prisma.tenantTax.update({
-      where: { id },
+    const res = await this.prisma.tenantTax.updateMany({
+      where: { id, tenantId },
       data: {
         ...('code'      in dto ? { code: dto.code!.trim().toUpperCase() } : {}),
         ...('label'     in dto ? { label: dto.label!.trim() } : {}),
@@ -76,12 +76,15 @@ export class TenantTaxService {
         ...('validTo'   in dto ? { validTo:   dto.validTo   ? new Date(dto.validTo)   : null } : {}),
       },
     });
+    if (res.count === 0) throw new NotFoundException(`Taxe ${id} introuvable`);
+    return this.prisma.tenantTax.findFirst({ where: { id, tenantId } });
   }
 
   async remove(tenantId: string, id: string) {
     const existing = await this.prisma.tenantTax.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException(`Taxe ${id} introuvable`);
-    await this.prisma.tenantTax.delete({ where: { id } });
+    const res = await this.prisma.tenantTax.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException(`Taxe ${id} introuvable`);
     return { ok: true };
   }
 

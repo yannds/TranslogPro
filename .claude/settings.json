@@ -401,7 +401,18 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/v1/webhooks/payments/flutterwave_agg -X POST -d '{}' -H 'content-type: application/json' --max-time 3)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/webhooks/payments/flutterwave_agg -X POST -d '{\"data\":{\"id\":\"1\",\"status\":\"successful\"}}' -H 'content-type: application/json' -H 'verif-hash: deadbeefdeadbeefdeadbeefdeadbeef' --max-time 3)",
       "Bash(grep -E \"^\\\\.env$|^\\\\.env\\\\.|secrets/|certs/\" .gitignore)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(npm i *)",
+      "Read(//etc/resolver/**)",
+      "Read(//opt/homebrew/etc/**)",
+      "Bash(awk '/^  \"platformDash\": \\\\{/,/^  \\\\}/' /Users/dsyann/TranslogPro/frontend/lib/i18n/locales/en.ts)",
+      "Bash(python3 /tmp/extract_keys.py /Users/dsyann/TranslogPro/frontend/components/pages/PagePlatformDashboard.tsx)",
+      "Read(//Users/dsyann/TranslogPro/**)",
+      "Bash(sort -u comm -23 /tmp/page_tenantsPage.txt /tmp/fr_tenantsPage.txt)",
+      "Bash(sort -u comm -23 /tmp/page_platformConfig.txt /tmp/fr_platformConfig.txt)",
+      "Bash(sort -u comm -23 /tmp/page_debugOutbox.txt /tmp/fr_debugOutbox.txt)"
     ],
     "additionalDirectories": [
       "/tmp",

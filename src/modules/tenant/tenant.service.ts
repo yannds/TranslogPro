@@ -92,6 +92,10 @@ export class TenantService {
     return this.prisma.tenant.update({ where: { id }, data: { provisionStatus: 'SUSPENDED' } });
   }
 
+  async reactivate(id: string) {
+    return this.prisma.tenant.update({ where: { id }, data: { provisionStatus: 'ACTIVE' } });
+  }
+
   /**
    * Informations société du tenant — lecture publique (pas d'authentification
    * requise) car utilisée par le bootstrap i18n frontend et les portails SSR.

@@ -101,9 +101,6 @@
   box-sizing: border-box;
 }
 
-/* Import police Inter depuis Google Fonts — en prod remplacer par self-hosted */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
 body {
   font-family: var(--font-family, Inter, 'Segoe UI', system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;

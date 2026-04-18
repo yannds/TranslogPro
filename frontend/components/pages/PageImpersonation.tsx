@@ -24,7 +24,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import {
   UserCheck, Building2, Clock, Copy, Check, AlertTriangle,
-  RefreshCw, Trash2, ShieldAlert,
+  RefreshCw, Trash2, ShieldAlert, ExternalLink,
 } from 'lucide-react';
 import { useFetch }                  from '../../lib/hooks/useFetch';
 import { apiPost, apiDelete }         from '../../lib/api';
@@ -46,10 +46,12 @@ interface TenantSummary {
 }
 
 interface SwitchResponse {
-  token:     string;
-  sessionId: string;
-  expiresAt: string;   // ISO
-  message:   string;
+  token:       string;
+  sessionId:   string;
+  expiresAt:   string;   // ISO
+  redirectUrl: string;
+  targetSlug:  string;
+  message:     string;
 }
 
 interface ActiveSession {
@@ -105,6 +107,37 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
   );
 }
 
+// ─── TokenCountdown — variante proéminente pour le bloc token émis ─────────
+
+function TokenCountdown({ expiresAt }: { expiresAt: string }) {
+  const { t } = useI18n();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remaining = formatRelative(expiresAt, now, t);
+  const deltaMs   = new Date(expiresAt).getTime() - now;
+  const expired   = deltaMs <= 0;
+  const critical  = !expired && deltaMs <= 60_000;
+  const color = expired
+    ? 'text-red-600 dark:text-red-400'
+    : critical
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-teal-700 dark:text-teal-200';
+  return (
+    <div
+      role="timer"
+      aria-live="polite"
+      aria-label={t('impersonation.tokenExpiresIn')}
+      className={`inline-flex items-center gap-1.5 text-lg font-mono font-semibold tabular-nums ${color}`}
+    >
+      <Clock className="w-4 h-4" aria-hidden />
+      {remaining}
+    </div>
+  );
+}
+
 // ─── Composant principal ─────────────────────────────────────────────────────
 
 export function PageImpersonation() {
@@ -129,6 +162,17 @@ export function PageImpersonation() {
 
   const [revokeTarget,   setRevokeTarget]   = useState<ActiveSession | null>(null);
   const [revokeBusy,     setRevokeBusy]     = useState(false);
+
+  // Token expired tick — désactive le bouton de bascule dès que le TTL est écoulé.
+  const [tokenExpired,   setTokenExpired]   = useState(false);
+  useEffect(() => {
+    if (!result) { setTokenExpired(false); return; }
+    const expiresAt = new Date(result.expiresAt).getTime();
+    const check = () => setTokenExpired(Date.now() >= expiresAt);
+    check();
+    const id = setInterval(check, 1000);
+    return () => clearInterval(id);
+  }, [result]);
 
   // Sessions actives du tenant en question (si sélectionné ET revoke perm)
   const { data: sessions, loading: lSess, refetch: refetchSess, error: sErr } =
@@ -305,7 +349,12 @@ export function PageImpersonation() {
                   </h3>
                   <p className="text-xs text-teal-800 dark:text-teal-300 mt-0.5">{result.message}</p>
                 </div>
-                <Countdown expiresAt={result.expiresAt} />
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] uppercase tracking-wide text-teal-700 dark:text-teal-400 font-semibold">
+                    {t('impersonation.tokenExpiresIn')}
+                  </div>
+                  <TokenCountdown expiresAt={result.expiresAt} />
+                </div>
               </div>
               <div className="rounded-md bg-white dark:bg-slate-900 border border-teal-200 dark:border-teal-900 p-2 flex items-center gap-2">
                 <code className="flex-1 text-[11px] font-mono break-all text-slate-700 dark:text-slate-200">
@@ -316,6 +365,21 @@ export function PageImpersonation() {
                     ? <><Check className="w-3.5 h-3.5 mr-1" aria-hidden />{t('impersonation.copied')}</>
                     : <><Copy className="w-3.5 h-3.5 mr-1" aria-hidden />{t('impersonation.copy')}</>}
                 </Button>
+              </div>
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  onClick={() => { window.location.href = result.redirectUrl; }}
+                  disabled={tokenExpired}
+                  className="w-full justify-center bg-teal-600 hover:bg-teal-700 text-white border-teal-600 disabled:opacity-50"
+                  aria-label={t('impersonation.switchNowAria')}
+                >
+                  <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden />
+                  {t('impersonation.switchNow')} <span className="font-mono ml-1.5 opacity-90">{result.targetSlug}</span>
+                </Button>
+                <p className="text-[11px] text-teal-700 dark:text-teal-300 mt-1.5">
+                  {t('impersonation.switchNowHint')}
+                </p>
               </div>
               <p className="text-[11px] text-teal-700 dark:text-teal-300">
                 {t('impersonation.tokenNotice')}

@@ -41,12 +41,15 @@ function usePortalTheme() { return useContext(PortalThemeCtx); }
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import markerIconUrl from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png';
 
-// Fix Leaflet default marker icon in bundlers
+// Fix Leaflet default marker icon in bundlers (assets locaux, zéro CDN)
 const defaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl: markerIconUrl,
+  iconRetinaUrl: markerIconRetinaUrl,
+  shadowUrl: markerShadowUrl,
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
 });
 L.Marker.prototype.options.icon = defaultIcon;

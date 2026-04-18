@@ -68,7 +68,12 @@ export class InvoiceService {
       throw new BadRequestException('Impossible d\'annuler une facture déjà payée');
     }
 
-    return this.prisma.invoice.update({ where: { id }, data });
+    // Défense en profondeur : tenantId dans le where final pour éliminer
+    // le TOCTOU entre findOne() et update() (un id existant dans tenantA
+    // pourrait théoriquement passer un race interleaving cross-tenant).
+    const result = await this.prisma.invoice.updateMany({ where: { id, tenantId }, data });
+    if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
+    return this.findOne(tenantId, id);
   }
 
   async remove(tenantId: string, id: string) {
@@ -76,7 +81,9 @@ export class InvoiceService {
     if (invoice.status !== 'DRAFT') {
       throw new BadRequestException('Seules les factures en brouillon peuvent être supprimées');
     }
-    return this.prisma.invoice.delete({ where: { id } });
+    const result = await this.prisma.invoice.deleteMany({ where: { id, tenantId } });
+    if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
+    return { id, deleted: true };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────

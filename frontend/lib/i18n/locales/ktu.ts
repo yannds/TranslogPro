@@ -3694,7 +3694,9 @@ const ktu: Record<string, Record<string, string>> = {
     "formSlugHint": "Identifiant URL (minuscules, ba chiffres, tirets). Yi lenda kubongwana ve.",
     "formAdminEmail": "Email ya admin",
     "formAdminName": "Zina ya admin",
-    "formIrreversible": "Création ke pesa tenant ti agence ya défaut mpi utilisateur admin. Slug ke lenda kubongwana diaka ve."
+    "formIrreversible": "Création ke pesa tenant ti agence ya défaut mpi utilisateur admin. Slug ke lenda kubongwana diaka ve.",
+    "openPortal": "Kangula portail",
+    "impersonate": "Kubaluka bonso"
   },
 
   "platformStaff": {
@@ -3704,6 +3706,8 @@ const ktu: Record<string, Record<string, string>> = {
     "newStaff": "Muntu ya ntete",
     "createDesc": "Yika agent ya kati na tenant plateforme.",
     "deleteStaff": "Kulongola muntu",
+    "editStaff": "Kubongola mosala",
+    "lastSuperAdminLock": "SUPER_ADMIN ya nsuka — mosala lenda kubongwana ve.",
     "deleteWarning": "Yu lenda kulongola ve SUPER_ADMIN ya nsuka to compte na nge. Action ke sonikana na audit log.",
     "deleting": "Kulongola…",
     "you": "nge",
@@ -3751,7 +3755,11 @@ const ktu: Record<string, Record<string, string>> = {
     "confirmRevoke": "Révoquer session",
     "revokeWarning": "Session ke boma na ntangu mosi. Action ke sonikana na audit critique.",
     "expired": "Ntangu yina silaka",
-    "notAllowed": "Nge kele na droit ve ya kufungula session ya impersonation."
+    "notAllowed": "Nge kele na droit ve ya kufungula session ya impersonation.",
+    "tokenExpiresIn": "Ke silaka na",
+    "switchNow": "Kukatuka na",
+    "switchNowAria": "Kukatuka na sous-domaine ya tenant mpe kusalisa jeton",
+    "switchNowHint": "Yo ke kufungula sous-domaine ya tenant mpe kuchange jeton na cookie ya session scopée."
   },
 
   "debugWf": {
