@@ -4963,6 +4963,16 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Sign out"
   },
 
+  "tripActions": {
+    "sectionLabel":       "Trip actions",
+    "sectionHint":        "The active button matches the next allowed step. Order is enforced by the workflow engine.",
+    "openBoarding":       "Open boarding",
+    "startTrip":          "Start trip",
+    "arriveDestination":  "Arrived at destination",
+    "signManifest":       "Sign manifest",
+    "checkInPassengers":  "Check-in passengers"
+  },
+
   "account": {
     "title":              "My account",
     "subtitle":           "Manage your personal info, security and preferences.",

@@ -28,6 +28,7 @@ import { Skeleton }   from '../ui/Skeleton';
 import { inputClass } from '../ui/inputClass';
 import { cn }         from '../../lib/utils';
 import DataTableMaster, { type Column } from '../DataTableMaster';
+import { TripWorkflowActions } from '../driver/TripWorkflowActions';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ function TripDetailDialog({
   const { t } = useI18n();
   const navigate = useNavigate();
 
-  const { data: trip, loading, error } = useFetch<TripDetail>(
+  const { data: trip, loading, error, refetch: refetchDetail } = useFetch<TripDetail>(
     tenantId ? `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/detail` : null,
     [tenantId, tripId],
   );
@@ -417,19 +418,33 @@ function TripDetailDialog({
               )}
             </section>
 
-            {/* ── Status + action ── */}
+            {/* ── Status + lien raccourci ── */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-slate-500 dark:text-slate-400">{t('driverSchedule.statusLabel')}:</span>
                 <ScheduleStatusCell value={trip.status} />
               </div>
               {active && (
-                <Button onClick={() => { onClose(); navigate('/driver'); }}>
+                <Button variant="ghost" size="sm"
+                  onClick={() => { onClose(); navigate('/driver'); }}>
                   <Eye className="w-4 h-4 mr-1.5" aria-hidden />
                   {t('driverSchedule.goToTrip')}
                 </Button>
               )}
             </div>
+
+            {/* ── Actions workflow — boutons mobile-friendly ──
+                 Affiche les transitions contextuelles (Ouvrir embarquement,
+                 Démarrer, Arrivé à destination) pilotées par le status courant.
+                 Le backend fait autorité sur les transitions autorisées. */}
+            <TripWorkflowActions
+              tenantId={tenantId}
+              tripId={trip.id}
+              status={trip.status}
+              role="driver"
+              showManifest
+              onTransitioned={() => { refetchDetail(); }}
+            />
           </>
         )}
       </div>

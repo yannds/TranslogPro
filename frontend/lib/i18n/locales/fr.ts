@@ -4980,6 +4980,17 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Se déconnecter"
   },
 
+  // ─── Actions workflow sur un trajet (driver + agent) ─────────────────────
+  "tripActions": {
+    "sectionLabel":       "Actions sur le trajet",
+    "sectionHint":        "Le bouton actif correspond à la prochaine étape autorisée. L'ordre est imposé par le moteur de workflow.",
+    "openBoarding":       "Ouvrir l'embarquement",
+    "startTrip":          "Démarrer le voyage",
+    "arriveDestination":  "Arrivé à destination",
+    "signManifest":       "Signer le manifeste",
+    "checkInPassengers":  "Embarquer les passagers"
+  },
+
   // ─── Self-service compte (PageAccount) ─────────────────────────────────────
   "account": {
     "title":              "Mon compte",
