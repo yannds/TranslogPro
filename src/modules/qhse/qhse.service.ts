@@ -38,6 +38,14 @@ import {
 } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes }          from '../../common/types/domain-event.type';
 import { v4 as uuidv4 }        from 'uuid';
+import { WorkflowEngine }      from '../../core/workflow/workflow.engine';
+import { CurrentUserPayload }  from '../../common/decorators/current-user.decorator';
+
+const SYSTEM_ACTOR: CurrentUserPayload = {
+  id:       'SYSTEM',
+  tenantId: 'SYSTEM',
+  roleId:   'SYSTEM',
+} as CurrentUserPayload;
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -153,6 +161,7 @@ export class QhseService {
     private readonly prisma:   PrismaService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
+    private readonly workflow: WorkflowEngine,
   ) {}
 
   // ─── Accident Severity Types ──────────────────────────────────────────────
@@ -705,10 +714,20 @@ export class QhseService {
     const allDone = allStepIds.every(id => executedStepIds.includes(id));
 
     if (allDone) {
-      await this.prisma.qhseProcedureExecution.update({
-        where: { id: executionId },
-        data:  { status: 'COMPLETED', completedAt: new Date() },
-      });
+      // Migration 2026-04-19 : transition blueprint-driven (IN_PROGRESS → COMPLETED).
+      await this.workflow.transition(
+        execution as Parameters<typeof this.workflow.transition>[0],
+        { action: 'complete', actor: SYSTEM_ACTOR },
+        {
+          aggregateType: 'QhseExecution',
+          persist: async (entity, state, p) => {
+            return p.qhseProcedureExecution.update({
+              where: { id: entity.id },
+              data:  { status: state, completedAt: new Date(), version: { increment: 1 } },
+            }) as Promise<typeof entity>;
+          },
+        },
+      );
       await this._publishEvent(tenantId, execution.reportId, EventTypes.QHSE_PROCEDURE_COMPLETED, {
         executionId,
         procedureId: execution.procedureId,

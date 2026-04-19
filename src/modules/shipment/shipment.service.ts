@@ -3,7 +3,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
-import { ShipmentState } from '../../common/constants/workflow-states';
+import { ShipmentState, ParcelAction } from '../../common/constants/workflow-states';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -72,30 +72,49 @@ export class ShipmentService {
       throw new BadRequestException(`Shipment ${shipmentId} n'est plus ouvert (status: ${shipment.status})`);
     }
 
-    return this.prisma.transact(async (tx) => {
-      await tx.parcel.update({
-        where: { id: parcelId },
-        data:  { shipmentId, status: 'PACKED', version: { increment: 1 } },
-      });
-
-      const updated = await tx.shipment.update({
-        where: { id: shipmentId },
-        data:  { remainingWeight: { decrement: weight } },
-      });
-
-      const event: DomainEvent = {
-        id:            uuidv4(),
-        type:          'parcel.assigned_to_shipment',
-        tenantId,
-        aggregateId:   parcelId,
+    // Migration 2026-04-19 → blueprint-driven : la transition du parcel passe
+    // par `WorkflowEngine.transition()` (action ADD_TO_SHIPMENT). L'engine
+    // ouvre sa propre transaction — on y injecte le décrément du shipment
+    // via la persist callback (même transaction atomique). L'événement est
+    // publié post-commit via sideEffects.
+    await this.workflow.transition(
+      parcel as Parameters<typeof this.workflow.transition>[0],
+      { action: ParcelAction.ADD_TO_SHIPMENT, actor, idempotencyKey },
+      {
         aggregateType: 'Parcel',
-        payload:       { parcelId, shipmentId, weight },
-        occurredAt:    new Date(),
-      };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+        persist: async (entity, state, tx) => {
+          // Décrément atomique du shipment dans la même tx que l'update parcel.
+          await tx.shipment.update({
+            where: { id: shipmentId },
+            data:  { remainingWeight: { decrement: weight } },
+          });
+          return tx.parcel.update({
+            where: { id: entity.id },
+            data:  { shipmentId, status: state, version: { increment: 1 } },
+          }) as Promise<typeof entity>;
+        },
+        sideEffects: [
+          {
+            name: 'publish_parcel_assigned_to_shipment',
+            fn: async () => {
+              const event: DomainEvent = {
+                id:            uuidv4(),
+                type:          'parcel.assigned_to_shipment',
+                tenantId,
+                aggregateId:   parcelId,
+                aggregateType: 'Parcel',
+                payload:       { parcelId, shipmentId, weight },
+                occurredAt:    new Date(),
+              };
+              await this.eventBus.publish(event, null);
+            },
+          },
+        ],
+      },
+    );
 
-      return updated;
-    });
+    // Retourne le shipment à jour (tel que l'ancien contrat de retour).
+    return this.prisma.shipment.findFirstOrThrow({ where: { id: shipmentId, tenantId } });
   }
 
   async findOne(tenantId: string, id: string) {

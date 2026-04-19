@@ -2,6 +2,14 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IIdentityManager, IDENTITY_SERVICE } from '../../infrastructure/identity/interfaces/identity.interface';
 import { Inject } from '@nestjs/common';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+
+const SYSTEM_ACTOR: CurrentUserPayload = {
+  id:       'SYSTEM',
+  tenantId: 'SYSTEM',
+  roleId:   'SYSTEM',
+} as CurrentUserPayload;
 
 export interface CreateStaffDto {
   email:    string;
@@ -21,6 +29,7 @@ export class StaffService {
   constructor(
     private readonly prisma:    PrismaService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IIdentityManager,
+    private readonly workflow: WorkflowEngine,
   ) {}
 
   async create(tenantId: string, dto: CreateStaffDto) {
@@ -177,35 +186,118 @@ export class StaffService {
     });
   }
 
-  async suspend(tenantId: string, userId: string) {
+  async suspend(tenantId: string, userId: string, actor?: CurrentUserPayload) {
     const staff = await this.findOne(tenantId, userId);
-    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'SUSPENDED' } });
-    await this.prisma.staffAssignment.updateMany({
-      where: { staffId: staff.id, staff: { tenantId }, status: 'ACTIVE' },
-      data:  { status: 'SUSPENDED' },
-    });
+    await this.transitionStaffAndAssignments(
+      tenantId, staff.id, 'suspend', 'SUSPENDED',
+      /* cascadeFrom */['ACTIVE'], 'suspend', actor,
+    );
     return this.findOne(tenantId, userId);
   }
 
-  async reactivate(tenantId: string, userId: string) {
+  async reactivate(tenantId: string, userId: string, actor?: CurrentUserPayload) {
     const staff = await this.findOne(tenantId, userId);
-    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'ACTIVE' } });
-    await this.prisma.staffAssignment.updateMany({
-      where: { staffId: staff.id, staff: { tenantId }, status: 'SUSPENDED' },
-      data:  { status: 'ACTIVE' },
-    });
+    await this.transitionStaffAndAssignments(
+      tenantId, staff.id, 'reactivate', 'ACTIVE',
+      ['SUSPENDED'], 'reactivate', actor,
+    );
     return this.findOne(tenantId, userId);
   }
 
-  async archive(tenantId: string, userId: string) {
+  async archive(tenantId: string, userId: string, actor?: CurrentUserPayload) {
     const staff = await this.findOne(tenantId, userId);
-    await this.prisma.staff.updateMany({ where: { userId, tenantId }, data: { status: 'ARCHIVED' } });
-    // Cascade : clore toutes les affectations ouvertes (invariant DESIGN §5.2)
-    await this.prisma.staffAssignment.updateMany({
+    // Engine transition Staff → ARCHIVED
+    await this.workflow.transition(
+      staff as Parameters<typeof this.workflow.transition>[0],
+      { action: 'archive', actor: actor ?? SYSTEM_ACTOR },
+      {
+        aggregateType: 'Staff',
+        persist: async (entity, state, p) => {
+          return p.staff.update({
+            where: { id: entity.id },
+            data:  { status: state, version: { increment: 1 } },
+          }) as Promise<typeof entity>;
+        },
+      },
+    );
+    // Cascade : clore toutes les affectations ouvertes — transitionner chacune
+    // individuellement via l'engine (invariant DESIGN §5.2 préservé).
+    const openAssignments = await this.prisma.staffAssignment.findMany({
       where: { staffId: staff.id, staff: { tenantId }, status: { in: ['ACTIVE', 'SUSPENDED'] } },
-      data:  { status: 'CLOSED', endDate: new Date(), isAvailable: false },
     });
+    for (const assignment of openAssignments) {
+      await this.workflow.transition(
+        { ...assignment, tenantId } as unknown as Parameters<typeof this.workflow.transition>[0],
+        { action: 'close', actor: actor ?? SYSTEM_ACTOR },
+        {
+          aggregateType: 'StaffAssignment',
+          persist: async (entity, state, p) => {
+            return p.staffAssignment.update({
+              where: { id: entity.id },
+              data:  {
+                status:      state,
+                endDate:     new Date(),
+                isAvailable: false,
+                version:     { increment: 1 },
+              },
+            }) as unknown as Promise<typeof entity>;
+          },
+        },
+      );
+    }
     return { archived: true };
+  }
+
+  /**
+   * Helper : transitionne le Staff via l'engine, puis propage la même transition
+   * à toutes les StaffAssignment actives du staff (cascade blueprint-driven).
+   * @param fromAssignmentStates État(s) d'origine des affectations à basculer.
+   * @param assignmentAction Action blueprint à exécuter sur chaque affectation.
+   */
+  private async transitionStaffAndAssignments(
+    tenantId: string,
+    staffId: string,
+    staffAction: string,
+    _expectedStaffState: string,
+    fromAssignmentStates: string[],
+    assignmentAction: string,
+    actor?: CurrentUserPayload,
+  ) {
+    const staff = await this.prisma.staff.findFirst({ where: { id: staffId, tenantId } });
+    if (!staff) throw new NotFoundException(`Staff ${staffId} introuvable`);
+
+    await this.workflow.transition(
+      staff as Parameters<typeof this.workflow.transition>[0],
+      { action: staffAction, actor: actor ?? SYSTEM_ACTOR },
+      {
+        aggregateType: 'Staff',
+        persist: async (entity, state, p) => {
+          return p.staff.update({
+            where: { id: entity.id },
+            data:  { status: state, version: { increment: 1 } },
+          }) as Promise<typeof entity>;
+        },
+      },
+    );
+
+    const assignments = await this.prisma.staffAssignment.findMany({
+      where: { staffId: staff.id, staff: { tenantId }, status: { in: fromAssignmentStates } },
+    });
+    for (const assignment of assignments) {
+      await this.workflow.transition(
+        { ...assignment, tenantId } as unknown as Parameters<typeof this.workflow.transition>[0],
+        { action: assignmentAction, actor: actor ?? SYSTEM_ACTOR },
+        {
+          aggregateType: 'StaffAssignment',
+          persist: async (entity, state, p) => {
+            return p.staffAssignment.update({
+              where: { id: entity.id },
+              data:  { status: state, version: { increment: 1 } },
+            }) as unknown as Promise<typeof entity>;
+          },
+        },
+      );
+    }
   }
 
   private generateTemporaryPassword(): string {

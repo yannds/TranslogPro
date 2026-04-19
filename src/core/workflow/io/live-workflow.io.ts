@@ -25,14 +25,38 @@ import {
  * dans le SELECT FOR UPDATE NOWAIT. Valeur identique à l'ancien workflow.engine.ts.
  */
 const AGGREGATE_TABLE_MAP: Record<string, string> = {
-  Trip:     'trips',
-  Ticket:   'tickets',
-  Traveler: 'travelers',
-  Parcel:   'parcels',
-  Shipment: 'shipments',
-  Bus:      'buses',
-  Claim:    'claims',
-  Refund:   'refunds',
+  Trip:              'trips',
+  Ticket:            'tickets',
+  Traveler:          'travelers',
+  Parcel:            'parcels',
+  Shipment:          'shipments',
+  Bus:               'buses',
+  Claim:             'claims',
+  Refund:            'refunds',
+  // Ajoutés 2026-04-19 : tous les aggregateType invoqués par les services
+  // (manifest.service, incident.service, etc.) doivent être whitelistés ici
+  // sinon WorkflowEngine.transition() throw 400 "non reconnu" avant même
+  // de toucher à WorkflowConfig.
+  Manifest:          'manifests',
+  Checklist:         'checklists',
+  Incident:          'incidents',
+  MaintenanceReport: 'maintenance_reports',
+  CashRegister:      'cash_registers',
+  SafetyAlert:       'safety_alerts',
+  CrewAssignment:    'crew_assignments',
+  PublicReport:      'public_reports',
+  AccidentReport:    'accident_reports',
+  // Driver utilise le table 'staff' via Staff model — pas de model Driver
+  // séparé, à ajouter si un service explicite le requiert.
+  // Ajoutés 2026-04-19 pour les migrations hardcoded → engine + nouveaux scénarios
+  Invoice:           'invoices',
+  Staff:             'staff',
+  StaffAssignment:   'staff_assignments',
+  SupportTicket:     'support_tickets',
+  DriverTraining:    'driver_trainings',
+  QhseExecution:     'qhse_procedure_executions',
+  Voucher:           'vouchers',
+  CompensationItem:  'compensation_items',
 };
 
 // ─── Transactional IO ─────────────────────────────────────────────────────────

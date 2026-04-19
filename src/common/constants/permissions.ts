@@ -119,6 +119,38 @@ export const P_REFUND_APPROVE_TENANT   = 'data.refund.approve.tenant';
 export const P_REFUND_APPROVE_AGENCY   = 'data.refund.approve.agency';
 export const P_REFUND_PROCESS_TENANT   = 'data.refund.process.tenant';
 export const P_REFUND_REQUEST_OWN      = 'data.refund.request.own';
+// Exempter la pénalité d'annulation (staff haute responsabilité, tracé en audit)
+export const P_REFUND_WAIVE_PENALTY_TENANT = 'control.refund.waive_penalty.tenant';
+
+// ─── Ticket — scénarios no-show, rebook, compensation (2026-04-19) ──────────
+export const P_TICKET_REBOOK_AGENCY        = 'data.ticket.rebook.agency';
+export const P_TICKET_REBOOK_TENANT        = 'data.ticket.rebook.tenant';
+export const P_TICKET_REBOOK_OWN           = 'data.ticket.rebook.own';        // Self-service voyageur
+export const P_TICKET_NOSHOW_MARK_AGENCY   = 'data.ticket.noshow_mark.agency';// Staff marque no-show
+export const P_TICKET_NOSHOW_WAIVE_TENANT  = 'control.ticket.noshow_waive.tenant'; // Dispense pénalité no-show
+
+// ─── Trip — scénarios incident en route (2026-04-19) ────────────────────────
+export const P_TRIP_SUSPEND_AGENCY         = 'control.trip.suspend.agency';   // Bus en panne, attente décision
+export const P_TRIP_CANCEL_IN_TRANSIT_TENANT = 'control.trip.cancel_in_transit.tenant'; // Annulation post-départ (prorata)
+export const P_TRIP_DECLARE_MAJOR_DELAY_AGENCY = 'control.trip.declare_major_delay.agency'; // Déclenche compensation
+export const P_TRIP_OVERRIDE_POLICY_TENANT = 'control.trip.override_policy.tenant'; // Override politique pénalité/compensation par trip
+
+// ─── Parcel — hubs / retrait / retour (2026-04-19) ──────────────────────────
+export const P_PARCEL_HUB_MOVE_AGENCY      = 'data.parcel.hub_move.agency';   // Actions hub (arrive/store/load_outbound)
+export const P_PARCEL_PICKUP_AGENCY        = 'data.parcel.pickup.agency';     // Valider retrait destinataire
+export const P_PARCEL_DISPUTE_OWN          = 'data.parcel.dispute.own';       // Destinataire/expéditeur conteste
+export const P_PARCEL_RETURN_INIT_TENANT   = 'control.parcel.return_init.tenant'; // Initier retour après TTL
+
+// ─── Compensation / Voucher (2026-04-19) ────────────────────────────────────
+export const P_COMPENSATION_ISSUE_AGENCY   = 'data.compensation.issue.agency'; // Émettre snack/voucher à passager
+export const P_COMPENSATION_ISSUE_TENANT   = 'data.compensation.issue.tenant';
+export const P_COMPENSATION_READ_AGENCY    = 'data.compensation.read.agency';
+export const P_VOUCHER_ISSUE_TENANT        = 'control.voucher.issue.tenant';
+export const P_VOUCHER_ISSUE_AGENCY        = 'data.voucher.issue.agency';
+export const P_VOUCHER_REDEEM_AGENCY       = 'data.voucher.redeem.agency';
+export const P_VOUCHER_CANCEL_TENANT       = 'control.voucher.cancel.tenant';
+export const P_VOUCHER_READ_OWN            = 'data.voucher.read.own';         // Voyageur liste ses bons
+export const P_VOUCHER_READ_TENANT         = 'data.voucher.read.tenant';
 
 // ─── Staff & Tenant ───────────────────────────────────────────────────────────
 export const P_STAFF_MANAGE_TENANT         = 'control.staff.manage.tenant';
@@ -460,6 +492,30 @@ export const Permission = {
   // Plan tenant (auto-service)
   TENANT_PLAN_READ_TENANT:        P_TENANT_PLAN_READ_TENANT,
   TENANT_PLAN_CHANGE_TENANT:      P_TENANT_PLAN_CHANGE_TENANT,
+  // Refund waive / Ticket rebook / Trip suspend / Parcel hub / Voucher (2026-04-19)
+  REFUND_WAIVE_PENALTY_TENANT:    P_REFUND_WAIVE_PENALTY_TENANT,
+  TICKET_REBOOK_AGENCY:           P_TICKET_REBOOK_AGENCY,
+  TICKET_REBOOK_TENANT:           P_TICKET_REBOOK_TENANT,
+  TICKET_REBOOK_OWN:              P_TICKET_REBOOK_OWN,
+  TICKET_NOSHOW_MARK_AGENCY:      P_TICKET_NOSHOW_MARK_AGENCY,
+  TICKET_NOSHOW_WAIVE_TENANT:     P_TICKET_NOSHOW_WAIVE_TENANT,
+  TRIP_SUSPEND_AGENCY:            P_TRIP_SUSPEND_AGENCY,
+  TRIP_CANCEL_IN_TRANSIT_TENANT:  P_TRIP_CANCEL_IN_TRANSIT_TENANT,
+  TRIP_DECLARE_MAJOR_DELAY_AGENCY: P_TRIP_DECLARE_MAJOR_DELAY_AGENCY,
+  TRIP_OVERRIDE_POLICY_TENANT:    P_TRIP_OVERRIDE_POLICY_TENANT,
+  PARCEL_HUB_MOVE_AGENCY:         P_PARCEL_HUB_MOVE_AGENCY,
+  PARCEL_PICKUP_AGENCY:           P_PARCEL_PICKUP_AGENCY,
+  PARCEL_DISPUTE_OWN:             P_PARCEL_DISPUTE_OWN,
+  PARCEL_RETURN_INIT_TENANT:      P_PARCEL_RETURN_INIT_TENANT,
+  COMPENSATION_ISSUE_AGENCY:      P_COMPENSATION_ISSUE_AGENCY,
+  COMPENSATION_ISSUE_TENANT:      P_COMPENSATION_ISSUE_TENANT,
+  COMPENSATION_READ_AGENCY:       P_COMPENSATION_READ_AGENCY,
+  VOUCHER_ISSUE_TENANT:           P_VOUCHER_ISSUE_TENANT,
+  VOUCHER_ISSUE_AGENCY:           P_VOUCHER_ISSUE_AGENCY,
+  VOUCHER_REDEEM_AGENCY:          P_VOUCHER_REDEEM_AGENCY,
+  VOUCHER_CANCEL_TENANT:          P_VOUCHER_CANCEL_TENANT,
+  VOUCHER_READ_OWN:               P_VOUCHER_READ_OWN,
+  VOUCHER_READ_TENANT:            P_VOUCHER_READ_TENANT,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];

@@ -15,6 +15,7 @@ import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto, UpdateInvoiceDto } from './dto/create-invoice.dto';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 @Controller({ version: '1', path: 'tenants/:tenantId' })
 export class InvoiceController {
@@ -53,8 +54,9 @@ export class InvoiceController {
     @Param('tenantId') tenantId: string,
     @Param('id')       id:       string,
     @Body() dto: UpdateInvoiceDto,
+    @CurrentUser() actor: CurrentUserPayload,
   ) {
-    return this.invoices.update(tenantId, id, dto);
+    return this.invoices.update(tenantId, id, dto, actor);
   }
 
   @Delete('invoices/:id')

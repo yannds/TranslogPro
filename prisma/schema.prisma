@@ -245,7 +245,9 @@ model TenantBusinessConfig {
   // Exprimé dans la devise du tenant (Tenant.currency).
   seatSelectionFee Float @default(0)
 
-  // ── Politique d'annulation / remboursement ──────────────────────────────
+  // ── Politique d'annulation / remboursement (legacy 2 paliers) ───────────
+  // Conservés pour rétro-compat (CancellationPolicyService.calculateRefundAmount
+  // historique). Nouveau code → préférer `cancellationPenaltyTiers` (JSON N paliers).
   // Palier 1 : remboursement intégral si annulation ≥ cancellationFullRefundMinutes
   // avant le départ (ex: 1440 = 24 h).
   cancellationFullRefundMinutes    Int     @default(1440)
@@ -264,6 +266,62 @@ model TenantBusinessConfig {
   // Si true, annulation de trajet (TRIP_CANCELLED) → remboursement 100 %
   // auto-approuvé quel que soit le montant.
   autoApproveTripCancelled         Boolean @default(true)
+
+  // ── Politique d'annulation N-paliers (2026-04-19) ───────────────────────
+  // Remplace progressivement cancellationFullRefundMinutes / cancellationPartialRefundMinutes.
+  // Structure : [{ hoursBeforeDeparture: number, penaltyPct: number }]
+  // penaltyPct fraction [0, 1]. Ordre décroissant par hoursBeforeDeparture.
+  // Exemple : [{h:48,pct:0},{h:24,pct:0.1},{h:2,pct:0.3},{h:0,pct:0.5}]
+  //   → ≥48h = 0% pénalité (full refund), 24-48h = 10%, 2-24h = 30%, <2h = 50%.
+  // Si null/vide → fallback sur les 3 champs legacy ci-dessus (2 paliers).
+  cancellationPenaltyTiers     Json @default("[]")
+  // Rôles auxquels la pénalité s'applique. Défaut = tous pour éviter qu'un
+  // admin contourne par oubli. Un user avec la perm `control.refund.waive_penalty.tenant`
+  // peut manuellement la dispenser (waiver tracé en audit).
+  // Exemple : ["CUSTOMER", "AGENT", "ADMIN"]  (SYSTEM = toujours 0%)
+  cancellationPenaltyAppliesTo Json @default("[\"CUSTOMER\",\"AGENT\",\"ADMIN\"]")
+
+  // ── No-show : politique (2026-04-19) ────────────────────────────────────
+  // Délai après l'heure de départ avant de marquer automatiquement NO_SHOW.
+  noShowGraceMinutes      Int     @default(15)
+  // TTL du billet en heures après l'heure de départ initiale. Au-delà →
+  // auto-FORFEIT : le billet est perdu, ni rebook ni refund possible.
+  ticketTtlHours          Int     @default(48)
+  // Pénalité no-show activée ? Sinon : aucune pénalité, rebook/refund normal.
+  noShowPenaltyEnabled    Boolean @default(false)
+  // Pénalité en pourcentage (fraction, ex: 0.20 = 20 % retenus sur refund).
+  noShowPenaltyPct        Float   @default(0)
+  // Pénalité forfaitaire (devise tenant). Si > 0, appliquée en plus (ou à la place
+  // selon la logique : on prend le max entre pct*amount et flat pour éviter double-dip).
+  noShowPenaltyFlatAmount Float   @default(0)
+
+  // ── Incident en route : compensation (2026-04-19) ───────────────────────
+  incidentCompensationEnabled     Boolean @default(false)
+  // Paliers délai → compensation. [{delayMinutes, compensationPct, snackBundle?}]
+  // Exemple : [{d:30,p:0},{d:60,p:0.1,s:"SNACK_LIGHT"},{d:120,p:0.25,s:"SNACK_FULL"},{d:240,p:0.5,s:"MEAL"}]
+  //   → retard ≥60min = 10 % + collation light, ≥120min = 25 % + collation full, etc.
+  incidentCompensationDelayTiers  Json    @default("[]")
+  // Forme de compensation par défaut : "MONETARY" | "VOUCHER" | "SNACK" | "MIXED"
+  incidentCompensationFormDefault String  @default("VOUCHER")
+  // Validité (jours) d'un bon de réduction émis en compensation.
+  incidentVoucherValidityDays     Int     @default(180)
+  // Portée d'utilisation : "ANY_TRIP" | "SAME_ROUTE" | "SAME_COMPANY"
+  incidentVoucherUsageScope       String  @default("SAME_COMPANY")
+  // Si true, cancel in-transit → refund prorata km parcourus sur km totaux.
+  // Si false, cancel in-transit → refund 100 % (politique standard par défaut).
+  incidentRefundProrataEnabled    Boolean @default(true)
+
+  // ── Parcel : hubs / retrait / retour (2026-04-19) ───────────────────────
+  // Durée max de stockage dans un hub avant alerte / réassignation.
+  parcelHubMaxStorageDays         Int    @default(7)
+  // Durée max avant retrait par destinataire à la station de destination.
+  // Au-delà → initiation auto du retour à l'expéditeur (ou autre action).
+  parcelPickupMaxDaysBeforeReturn Int    @default(14)
+  // Action auto si destinataire ne retire pas avant TTL :
+  //   "return"  → RETURN_TO_SENDER
+  //   "dispose" → DISPUTED (admin tranchera)
+  //   "hold"    → garder sur place (notifier l'expéditeur)
+  parcelPickupNoShowAction        String @default("return")
 
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -913,6 +971,8 @@ model Staff {
   userId    String   @unique
   status    String   @default("ACTIVE") // ACTIVE | SUSPENDED | ARCHIVED
   hireDate  DateTime @default(now()) // date d'embauche (RH)
+  // Lock optimiste — requis par WorkflowEngine (migration 2026-04-19).
+  version   Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -943,6 +1003,8 @@ model StaffAssignment {
   licenseData         Json      @default("{}")
   isAvailable         Boolean   @default(true)
   totalDriveTimeToday Float     @default(0) // pertinent si role=DRIVER — reset par scheduler minuit
+  // Lock optimiste — requis par WorkflowEngine (migration 2026-04-19).
+  version             Int       @default(1)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -983,7 +1045,8 @@ model Trip {
   driverId           String
   status             String    @default("PLANNED")
   // PLANNED | OPEN | BOARDING | IN_PROGRESS | IN_PROGRESS_PAUSED
-  // IN_PROGRESS_DELAYED | COMPLETED | CANCELLED
+  // IN_PROGRESS_DELAYED | SUSPENDED (panne majeure, attente décision)
+  // COMPLETED | CANCELLED | CANCELLED_IN_TRANSIT (annulé post-départ, prorata)
   seatingMode        String    @default("FREE")
   // FREE = placement libre (pas de choix de siège, mais capacité respectée)
   // NUMBERED = places numérotées (siège attribué auto ou choisi via option payante)
@@ -996,7 +1059,42 @@ model Trip {
   lastGpsAt          DateTime?
   displayNote        String? // texte court pour écrans d'affichage gare
   displayColor       String? // code couleur hex (#FF9800 = ambre retard)
-  version            Int       @default(1)
+  // Verrou métier "Clôturer le fret" — quand l'agent quai/chauffeur déclare le
+  // chargement terminé, on stamp ce champ. Le scan colis (action LOAD) refuse
+  // alors toute nouvelle prise en charge sur ce trajet (BadRequestException).
+  // Réversible côté admin (set NULL via tenant manager) si besoin.
+  freightClosedAt    DateTime?
+  freightClosedById  String?
+
+  // ── Overrides politique pénalité/compensation par trip (2026-04-19) ─────
+  // Permet à la compagnie de déroger à la config tenant au cas par cas
+  // (ex : trip VIP → pénalité no-show plus faible, trip spécial → compensation
+  // pré-négociée, etc.). Si null → fallback `TenantBusinessConfig` du tenant.
+  // Permission : `control.trip.override_policy.tenant`.
+  noShowPenaltyEnabledOverride     Boolean?
+  noShowPenaltyPctOverride         Float?
+  noShowPenaltyFlatAmountOverride  Float?
+  // Array [{hoursBeforeDeparture, penaltyPct}] override — même format que
+  // TenantBusinessConfig.cancellationPenaltyTiers.
+  cancellationPenaltyTiersOverride Json?
+  // Array [{delayMinutes, compensationPct, snackBundle?}] override.
+  compensationPolicyOverride       Json?
+  // "MONETARY" | "VOUCHER" | "SNACK" | "MIXED" — override par trip.
+  compensationFormOverride         String?
+
+  // ── Stamping décisions incident en route (audit trail) ──────────────────
+  suspendedAt            DateTime? // Quand le trip est passé en SUSPENDED
+  suspendedById          String? // Acteur qui a suspendu
+  suspendedReason        String? // Raison libre (ex: "panne mécanique", "accident")
+  resumedAt              DateTime? // Quand il est revenu en IN_PROGRESS
+  cancelledInTransitAt   DateTime?
+  cancelledInTransitById String?
+  distanceTraveledKm     Float? // Km parcourus au moment du cancel (prorata refund)
+  totalDistanceKm        Float? // Km totaux du trajet (dénominateur prorata)
+  majorDelayDeclaredAt   DateTime? // Déclaration retard majeur (trigger compensation)
+  majorDelayMinutes      Int? // Délai en minutes au moment de la déclaration
+
+  version Int @default(1)
 
   tenant          Tenant            @relation(fields: [tenantId], references: [id])
   route           Route             @relation(fields: [routeId], references: [id])
@@ -1073,7 +1171,7 @@ model Manifest {
 
 model Checklist {
   id          String   @id @default(cuid())
-  tenantId    String?  // nullable rétro-compat legacy rows ; nouveau code écrit toujours le tenantId
+  tenantId    String? // nullable rétro-compat legacy rows ; nouveau code écrit toujours le tenantId
   tripId      String
   userId      String
   type        String
@@ -1159,34 +1257,42 @@ model MaintenanceReport {
 // ─────────────────────────────────────────────────────────────
 
 model Ticket {
-  id                 String    @id @default(cuid())
-  tenantId           String
-  tripId             String
+  id                   String    @id @default(cuid())
+  tenantId             String
+  tripId               String
   // Nullable : un billet peut être émis pour un client non authentifié
   // (caisse, guichet, portail anonyme). La traçabilité CRM se fait via
   // customerId ; passengerId reste la FK "user logué/connecté" si présent.
-  passengerId        String?
-  passengerName      String
+  passengerId          String?
+  passengerName        String
   // Contacts dénormalisés — permettent la recherche rapide et le backfill CRM
   // (source de vérité = Customer via customerId quand disponible).
-  passengerPhone     String?
-  passengerEmail     String?
+  passengerPhone       String?
+  passengerEmail       String?
   // FK vers l'entité CRM canonique (présente dès que phone ou email sont fournis).
-  customerId         String?
-  seatNumber         String?
-  boardingStationId  String // Gare de montée (défaut = route.originId)
-  alightingStationId String // Gare de descente (défaut = route.destinationId)
-  fareClass          String    @default("STANDARD") // STANDARD | CONFORT | VIP | STANDING
-  pricePaid          Float
-  status             String    @default("CREATED")
+  customerId           String?
+  seatNumber           String?
+  boardingStationId    String // Gare de montée (défaut = route.originId)
+  alightingStationId   String // Gare de descente (défaut = route.destinationId)
+  fareClass            String    @default("STANDARD") // STANDARD | CONFORT | VIP | STANDING
+  pricePaid            Float
+  status               String    @default("CREATED")
   // CREATED | PENDING_PAYMENT | CONFIRMED | CHECKED_IN | BOARDED | COMPLETED
   // CANCELLED | EXPIRED
-  expiresAt          DateTime?
-  qrCode             String    @unique
+  // Scénarios no-show / rebook (2026-04-19) :
+  // NO_SHOW | LATE_ARRIVED | REBOOKED | FORFEITED
+  // Workflow remboursement : REFUND_PENDING | REFUND_PROCESSING | REFUNDED | REFUND_FAILED
+  // ── Stamping no-show / rebook (audit + TTL) ──
+  noShowMarkedAt       DateTime? // marquage MISS_BOARDING (grace dépassée)
+  noShowMarkedById     String? // qui a marqué (agent quai, système scheduler, etc.)
+  rebookedFromTicketId String? // si ce ticket a été émis en remplacement → ancienneté
+  forfeitedAt          DateTime? // auto FORFEIT après ticketTtlHours
+  expiresAt            DateTime?
+  qrCode               String    @unique
   // Format: base64url(payload).HMAC-SHA256(payload, tenant_hmac_key)
-  agencyId           String?
-  version            Int       @default(1)
-  createdAt          DateTime  @default(now())
+  agencyId             String?
+  version              Int       @default(1)
+  createdAt            DateTime  @default(now())
 
   boardingStation  Station   @relation("TicketBoarding", fields: [boardingStationId], references: [id])
   alightingStation Station   @relation("TicketAlighting", fields: [alightingStationId], references: [id])
@@ -1236,12 +1342,12 @@ model Baggage {
 // ─────────────────────────────────────────────────────────────
 
 model Parcel {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   tenantId            String
   // Nullable : un colis peut être enregistré pour un expéditeur non
   // authentifié. La traçabilité CRM passe par senderCustomerId.
   senderId            String?
-  trackingCode        String   @unique
+  trackingCode        String    @unique
   weight              Float
   price               Float
   destinationId       String // FK Station (plus un String libre)
@@ -1251,12 +1357,23 @@ model Parcel {
   senderCustomerId    String?
   recipientCustomerId String?
   shipmentId          String?
-  status              String   @default("CREATED")
-  // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED
-  history             Json     @default("[]")
+  status              String    @default("CREATED")
+  // CREATED | AT_ORIGIN | PACKED | LOADED | IN_TRANSIT | ARRIVED | DELIVERED | DAMAGED | LOST | RETURNED
+  // Scénarios hub (2026-04-19) :
+  // AT_HUB_INBOUND (arrivé hub intermédiaire) | STORED_AT_HUB (entrepôt) |
+  // AT_HUB_OUTBOUND (chargé sortant hub) | AVAILABLE_FOR_PICKUP (prêt retrait) |
+  // DISPUTED (contestation destinataire) | RETURN_TO_SENDER (en cours retour)
+  // ── Stamping hub / pickup ──
+  hubStationId        String? // Station hub actuelle (si au hub)
+  hubArrivedAt        DateTime? // Horodatage ARRIVE_AT_HUB
+  hubStoredAt         DateTime? // Horodatage STORE_AT_HUB (début TTL storage)
+  pickupAvailableAt   DateTime? // NOTIFY_FOR_PICKUP (début TTL avant retour auto)
+  pickedUpAt          DateTime? // PICKUP (destinataire a retiré)
+  returnInitiatedAt   DateTime? // INITIATE_RETURN (expiré ou demande explicite)
+  history             Json      @default("[]")
   // [{ timestamp, agentId, stationId, action }]
-  version             Int      @default(1)
-  createdAt           DateTime @default(now())
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now())
 
   tenant            Tenant    @relation(fields: [tenantId], references: [id])
   destination       Station   @relation("ParcelDestination", fields: [destinationId], references: [id])
@@ -1538,6 +1655,105 @@ model Refund {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SECTION 12.bis : VOUCHER + COMPENSATION (ajout 2026-04-19)
+// ─────────────────────────────────────────────────────────────
+// Bon de réduction émis en compensation d'un incident (retard majeur,
+// annulation post-départ, gestuelle commerciale) ou en promotion.
+// - Workflow blueprint-driven (blueprint `voucher-standard`).
+// - One-shot : une fois REDEEMED, ne peut plus être réutilisé.
+// - Tenant-scoped + optionnel FK ticket source (traçabilité compensation).
+// - Devise implicite = devise tenant (Tenant.currency).
+model Voucher {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  // Code unique (lisible humain, ex: "VCHR-9F3K-2M1X") — affiché sur les reçus.
+  code               String    @unique
+  // Bénéficiaire du bon. Customer.id ou email/phone si pas encore enregistré.
+  customerId         String?
+  recipientEmail     String?
+  recipientPhone     String?
+  // Valeur (devise tenant). 0 est interdit — voucher = toujours valeur > 0.
+  amount             Float
+  currency           String
+  // Portée d'utilisation : ANY_TRIP | SAME_ROUTE | SAME_COMPANY
+  usageScope         String    @default("SAME_COMPANY")
+  // Si scope = SAME_ROUTE, la route sur laquelle le bon est valide.
+  routeId            String?
+  // Validité : dates d'usage autorisées. Un bon créé maintenant avec
+  // validityStart=null démarre immédiatement ; validityEnd est obligatoire.
+  validityStart      DateTime?
+  validityEnd        DateTime
+  // État : ISSUED | REDEEMED | EXPIRED | CANCELLED
+  status             String    @default("ISSUED")
+  // Origine : "INCIDENT" | "MAJOR_DELAY" | "PROMO" | "MANUAL" | "GESTURE"
+  origin             String
+  // FK traçabilité (si origine incident/delay) : trip concerné + ticket d'origine.
+  sourceTripId       String?
+  sourceTicketId     String?
+  // FK emploi (si REDEEMED) : ticket où le bon a été appliqué.
+  redeemedOnTicketId String?
+  redeemedAt         DateTime?
+  redeemedById       String? // user qui a appliqué au guichet (ou SYSTEM si auto)
+  // Métadonnées libres (ex : raison détaillée, montant compensation original).
+  metadata           Json      @default("{}")
+  issuedBy           String? // user émetteur ou 'SYSTEM' (auto par workflow incident)
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancelledReason    String?
+  notes              String?
+  // Lock optimiste — requis par le WorkflowEngine.
+  version            Int       @default(1)
+  createdAt          DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, sourceTripId])
+  @@index([code])
+  @@map("vouchers")
+}
+
+// CompensationItem — item non-monétaire offert au passager (snack, repas,
+// hébergement). Émis lors d'un incident/retard par staff habilité (hôtesse,
+// agent quai). Trace pour audit et reporting coûts.
+// Pas de workflow complexe : OFFERED → DELIVERED (ou DECLINED). One-shot.
+model CompensationItem {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tripId          String?
+  ticketId        String?
+  // Bénéficiaire (si identifié via ticket, sinon nom libre)
+  customerId      String?
+  beneficiaryName String?
+  // Type d'item : SNACK_LIGHT | SNACK_FULL | MEAL | CUSTOM
+  itemType        String
+  // Description libre (utile pour CUSTOM ou détail snack)
+  description     String?
+  // Valeur indicative en devise tenant (pour reporting coûts)
+  estimatedValue  Float?
+  currency        String
+  // État : OFFERED | DELIVERED | DECLINED
+  status          String    @default("OFFERED")
+  offeredAt       DateTime  @default(now())
+  offeredById     String
+  deliveredAt     DateTime?
+  deliveredById   String?
+  // Preuve de remise : signature base64 (data URL), photo MinIO key, etc.
+  proofType       String? // "signature" | "photo" | "scan"
+  proofValue      String?
+  declinedAt      DateTime?
+  declinedReason  String?
+  notes           String?
+  // Lock optimiste
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, tripId])
+  @@index([tenantId, ticketId])
+  @@map("compensation_items")
+}
+
+// ─────────────────────────────────────────────────────────────
 // SECTION 13 : TRIP EVENTS (pauses, checkpoints, délais — PRD §IV.11)
 // ─────────────────────────────────────────────────────────────
 
@@ -1581,6 +1797,8 @@ model SafetyAlert {
   verificationScore Float    @default(0) // 0..1 — corrélation GPS bus/déclarant
   status            String   @default("PENDING")
   // PENDING | VERIFIED | UNVERIFIED | DISMISSED
+  // Lock optimiste WorkflowEngine (SafetyAlert dans AGGREGATE_TABLE_MAP).
+  version           Int      @default(1)
   source            String   @default("IN_APP") // IN_APP | PUBLIC_REPORT
   createdAt         DateTime @default(now())
 
@@ -1671,6 +1889,8 @@ model PublicReport {
   verificationScore   Float     @default(0)
   status              String    @default("PENDING")
   // PENDING | VERIFIED | UNVERIFIED | DISMISSED
+  // Lock optimiste WorkflowEngine (PublicReport dans AGGREGATE_TABLE_MAP).
+  version             Int       @default(1)
   correlatedBusId     String?
   photoUrl            String?
   reporterIp          String // pour rate limiting audit
@@ -2196,6 +2416,8 @@ model DriverTraining {
   locationName String?
   fileKey      String? // Attestation MinIO
   notes        String?
+  // Lock optimiste — requis par WorkflowEngine (migration 2026-04-19).
+  version      Int       @default(1)
   createdAt    DateTime  @default(now())
 
   type DriverTrainingType @relation(fields: [typeId], references: [id])
@@ -2338,6 +2560,8 @@ model AccidentReport {
   photoKeys      Json      @default("[]") // string[] clés MinIO photos
   status         String    @default("OPEN")
   // OPEN | UNDER_INVESTIGATION | LEGAL | SETTLED | CLOSED
+  // Lock optimiste WorkflowEngine (AccidentReport dans AGGREGATE_TABLE_MAP).
+  version        Int       @default(1)
   assignedQhseId String? // QHSE responsible assigned
   closedAt       DateTime?
   closedById     String?
@@ -2536,6 +2760,8 @@ model QhseProcedureExecution {
   completedAt DateTime?
   status      String    @default("IN_PROGRESS")
   // IN_PROGRESS | COMPLETED | ABORTED
+  // Lock optimiste — requis par WorkflowEngine (migration 2026-04-19).
+  version     Int       @default(1)
 
   report    AccidentReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
   procedure QhseProcedure       @relation(fields: [procedureId], references: [id])
@@ -2805,6 +3031,10 @@ model Invoice {
   lineItems     Json      @default("[]")
   // [{ description, quantity, unitPrice, total }]
   notes         String?
+  // Stamping cycle de vie (2026-04-19, aligné workflow blueprint-driven).
+  cancelledAt   DateTime?
+  // Lock optimiste — requis par WorkflowEngine.
+  version       Int       @default(1)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -3060,6 +3290,8 @@ model SupportTicket {
   resolvedAt               DateTime?
   closedAt                 DateTime?
   slaDueAt                 DateTime? // calculé depuis plan.sla + priority
+  // Lock optimiste — requis par WorkflowEngine (migration 2026-04-19).
+  version                  Int       @default(1)
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 

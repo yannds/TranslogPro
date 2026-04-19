@@ -64,7 +64,7 @@ describe('SupportService', () => {
     it('rejette un actor du tenant plateforme', async () => {
       const prisma = createPrismaMock();
       prisma.__tenants.set(PLATFORM_TENANT_ID, { id: PLATFORM_TENANT_ID, plan: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await expect(svc.createByTenant(
         { id: 'u', tenantId: PLATFORM_TENANT_ID },
@@ -75,7 +75,7 @@ describe('SupportService', () => {
     it('crée le ticket + un premier message TENANT', async () => {
       const prisma = createPrismaMock();
       prisma.__tenants.set(TENANT_A, { id: TENANT_A, plan: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.createByTenant(
         { id: 'user-1', tenantId: TENANT_A },
@@ -91,7 +91,7 @@ describe('SupportService', () => {
     it('calcule un slaDueAt pour priorité NORMAL (fallback DEFAULT_SLA_MINUTES)', async () => {
       const prisma = createPrismaMock();
       prisma.__tenants.set(TENANT_A, { id: TENANT_A, plan: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       const before = Date.now();
       await svc.createByTenant(
@@ -115,7 +115,7 @@ describe('SupportService', () => {
         id: TENANT_A,
         plan: { sla: { maxPriority: 'HIGH' } },
       });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.createByTenant(
         { id: 'u', tenantId: TENANT_A },
@@ -132,7 +132,7 @@ describe('SupportService', () => {
         id: TENANT_A,
         plan: { sla: { maxPriority: 'CRITICAL' } },
       });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.createByTenant(
         { id: 'u', tenantId: TENANT_A },
@@ -149,7 +149,7 @@ describe('SupportService', () => {
         id: TENANT_A,
         plan: { sla: { firstResponseMinByPriority: { NORMAL: 15 } } }, // 15 min
       });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       const before = Date.now();
       await svc.createByTenant(
@@ -169,7 +169,7 @@ describe('SupportService', () => {
     it('rejette si ticket appartient à un autre tenant', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_B, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await expect(svc.findByTenant(TENANT_A, 'tk-1')).rejects.toThrow(ForbiddenException);
     });
@@ -177,7 +177,7 @@ describe('SupportService', () => {
     it('retourne le ticket si le tenantId matche', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       const tk = await svc.findByTenant(TENANT_A, 'tk-1');
       expect(tk).toBeDefined();
@@ -186,7 +186,7 @@ describe('SupportService', () => {
 
     it('404 si le ticket n\'existe pas', async () => {
       const prisma = createPrismaMock();
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
       await expect(svc.findByTenant(TENANT_A, 'ghost')).rejects.toThrow(NotFoundException);
     });
   });
@@ -195,7 +195,7 @@ describe('SupportService', () => {
     it('rejette si le ticket est RESOLVED/CLOSED', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'CLOSED' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await expect(svc.addMessageByTenant(
         { id: 'u', tenantId: TENANT_A },
@@ -207,7 +207,7 @@ describe('SupportService', () => {
     it('WAITING_CUSTOMER → IN_PROGRESS quand le tenant répond', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'WAITING_CUSTOMER' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.addMessageByTenant(
         { id: 'u', tenantId: TENANT_A },
@@ -223,7 +223,7 @@ describe('SupportService', () => {
     it('rejette un actor non-plateforme', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await expect(svc.addMessageByPlatform(
         { id: 'u', tenantId: TENANT_A },
@@ -235,7 +235,7 @@ describe('SupportService', () => {
     it('trace firstResponseAt au 1er message externe', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'OPEN', firstResponseAt: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.addMessageByPlatform(
         { id: 'sa', tenantId: PLATFORM_TENANT_ID },
@@ -251,7 +251,7 @@ describe('SupportService', () => {
     it('note interne ne change PAS le status ni firstResponseAt', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'OPEN', firstResponseAt: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.addMessageByPlatform(
         { id: 'sa', tenantId: PLATFORM_TENANT_ID },
@@ -267,7 +267,7 @@ describe('SupportService', () => {
     it('IN_PROGRESS → WAITING_CUSTOMER quand plateforme répond', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'IN_PROGRESS', firstResponseAt: new Date() });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.addMessageByPlatform(
         { id: 'sa', tenantId: PLATFORM_TENANT_ID },
@@ -287,7 +287,7 @@ describe('SupportService', () => {
         priority: 'NORMAL', firstResponseAt: null, createdAt: new Date(),
       });
       prisma.__tenants.set(TENANT_A, { id: TENANT_A, plan: null });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.updateByPlatform('tk-1', { priority: 'CRITICAL' });
 
@@ -299,7 +299,7 @@ describe('SupportService', () => {
     it('status = RESOLVED pose resolvedAt', async () => {
       const prisma = createPrismaMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'IN_PROGRESS' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, i.action === "resolve" ? "RESOLVED" : i.action === "close" ? "CLOSED" : i.action === "start" ? "IN_PROGRESS" : i.action === "await" ? "WAITING_CUSTOMER" : i.action === "resume" ? "IN_PROGRESS" : i.action === "reopen" ? "IN_PROGRESS" : e.status, prisma)) } as never);
 
       await svc.updateByPlatform('tk-1', { status: 'RESOLVED' });
       expect(prisma.__tickets.get('tk-1')!.resolvedAt).toBeInstanceOf(Date);

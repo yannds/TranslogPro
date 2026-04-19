@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { TripState, TravelerAction } from '../../common/constants/workflow-states';
+import { TripState, TripAction, TravelerAction } from '../../common/constants/workflow-states';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { assertTripOwnership } from '../../common/helpers/scope-filter';
@@ -349,6 +349,38 @@ export class FlightDeckService {
   }
 
   /**
+   * Liste des colis enrichie pour les manifestes / écrans quai / BusScreen.
+   *
+   * Pourquoi un endpoint dédié plutôt que `trip.findOne().include.shipments.parcels` :
+   *   - Le `findOne` du trip est appelé partout (détail, briefing, checkin, manifeste…)
+   *     et gonflerait la payload pour les callers qui n'ont pas besoin des colis.
+   *   - Ici on ne charge QUE ce que les écrans live ont besoin : id, code, statut,
+   *     destination, poids. Tri stable (non-chargés en haut pour workflow). Polling
+   *     côté client sans payload gigantesque.
+   *
+   * Filtre : exclut les `CANCELLED` (annulés ne comptent pas dans le manifeste
+   * vivant). Les `LOST/DAMAGED` sont conservés pour traçabilité.
+   */
+  async getParcelList(tenantId: string, tripId: string) {
+    const parcels = await this.prisma.parcel.findMany({
+      where: {
+        tenantId,
+        shipment: { tripId },
+        status:   { notIn: ['CANCELLED'] },
+      },
+      select: {
+        id:           true,
+        trackingCode: true,
+        status:       true,
+        weight:       true,
+        destination:  { select: { id: true, name: true, city: true } },
+      },
+      orderBy: { trackingCode: 'asc' },
+    });
+    return parcels;
+  }
+
+  /**
    * Check-in d'un passager à l'entrée de la gare.
    *
    * Façade orientée BusScreen / PageDriverCheckin (accès par ticketId plutôt
@@ -436,28 +468,31 @@ export class FlightDeckService {
   /**
    * Transition d'état déclenchée par le chauffeur depuis son portail.
    *
-   * Defense in depth : on vérifie systématiquement que le trajet est assigné
-   * au chauffeur authentifié (driverId === staffId) avant d'autoriser la
-   * transition, même si le permission guard a déjà accepté TRIP_LOG_EVENT_OWN.
-   * Cela protège contre un éventuel IDOR si un user manipule `tripId`.
+   * Depuis 2026-04-19 : passe par `WorkflowEngine.transition()` (blueprint-driven,
+   * ADR-15/16 — zéro hardcode). L'ancien map `allowed` statique est supprimé.
+   * Le blueprint tenant (DEFAULT_WORKFLOW_CONFIGS) définit les transitions :
+   *   PLANNED → START_BOARDING → OPEN
+   *   OPEN    → BEGIN_BOARDING → BOARDING
+   *   BOARDING→ DEPART         → IN_PROGRESS
+   *   IN_PROGRESS → END_TRIP   → COMPLETED
    *
-   * Transitions autorisées (state graph du driver uniquement) :
-   *   PLANNED|OPEN → BOARDING
-   *   BOARDING     → IN_PROGRESS
-   *   IN_PROGRESS  → COMPLETED
+   * Pour conserver l'UX driver (1 bouton = 1 cible), on mappe `nextStatus` →
+   * séquence d'actions à exécuter (max 2 pour le cas PLANNED→BOARDING qui
+   * traverse OPEN de façon transparente). Chaque action passe par l'engine :
+   * permissions, guards, idempotence, audit — tout reste homogène.
    *
-   * Toute autre transition est rejetée en 400 — les retards, annulations ou
-   * réouvertures doivent passer par les endpoints manager (scope .agency).
+   * Defense in depth : on vérifie ownership chauffeur avant même la 1re transition.
    */
   async transitionTripStatus(
     tenantId: string,
     tripId:   string,
     userId:   string,
     nextStatus: 'BOARDING' | 'IN_PROGRESS' | 'COMPLETED',
+    actor?: CurrentUserPayload,
   ) {
     const trip = await this.prisma.trip.findFirst({
       where:  { id: tripId, tenantId },
-      select: { id: true, status: true, driverId: true },
+      select: { id: true, status: true, driverId: true, tenantId: true, version: true },
     });
     if (!trip) throw new NotFoundException(`Trip ${tripId} introuvable dans ce tenant`);
 
@@ -466,30 +501,112 @@ export class FlightDeckService {
       throw new ForbiddenException('Ce trajet n\'est pas assigné à ce chauffeur');
     }
 
-    // State graph strict pour le flow driver. Toute autre transition = 400.
-    const allowed: Record<string, typeof nextStatus | undefined> = {
-      PLANNED:     'BOARDING',
-      OPEN:        'BOARDING',
-      BOARDING:    'IN_PROGRESS',
-      IN_PROGRESS: 'COMPLETED',
-    };
-    if (allowed[trip.status] !== nextStatus) {
+    // Mappage cible → séquence d'actions (blueprint-compatible).
+    // Si l'état courant n'a aucun chemin vers la cible, on rejette 400.
+    const plan = this.planDriverActionSequence(trip.status, nextStatus);
+    if (plan.length === 0) {
       throw new BadRequestException(
-        `Transition interdite : ${trip.status} → ${nextStatus}. ` +
-        `Attendu : ${trip.status} → ${allowed[trip.status] ?? '(aucune transition driver disponible)'}`,
+        `Transition interdite depuis l'état ${trip.status} vers ${nextStatus} ` +
+        `(aucune séquence d'actions driver disponible dans le blueprint).`,
       );
     }
 
-    // Transition pure sur `status`. Les horodatages de départ/arrivée effectifs
-    // ne sont pas stockés directement sur Trip (le schema a seulement
-    // departureScheduled / arrivalScheduled) — l'AuditLog et les DomainEvents
-    // (TRIP_STARTED / TRIP_COMPLETED) servent de source de vérité historique.
-    const updated = await this.prisma.trip.update({
-      where:  { id: trip.id },
-      data:   { status: nextStatus },
-      select: { id: true, status: true },
+    // Acteur synthétique si actor absent (rétro-compat — le controller devrait
+    // désormais passer user). La perm requise par le blueprint sera vérifiée
+    // côté engine (data.trip.update.agency / data.trip.report.own).
+    const effectiveActor: CurrentUserPayload = actor ?? ({
+      id:       userId,
+      roleId:   '',
+      tenantId,
+    } as CurrentUserPayload);
+
+    let currentTrip = trip;
+    for (const action of plan) {
+      const result = await this.workflow.transition(
+        currentTrip as Parameters<typeof this.workflow.transition>[0],
+        { action, actor: effectiveActor },
+        {
+          aggregateType: 'Trip',
+          persist: async (entity, state, p) => {
+            return p.trip.update({
+              where: { id: entity.id },
+              data:  { status: state, version: { increment: 1 } },
+            }) as Promise<typeof entity>;
+          },
+        },
+      );
+      currentTrip = result.entity as typeof currentTrip;
+    }
+
+    return { id: currentTrip.id, status: currentTrip.status };
+  }
+
+  /**
+   * Calcule la séquence d'actions blueprint pour amener un trip à `target`
+   * depuis son `from` courant. Au plus 2 actions (PLANNED → BOARDING traverse
+   * OPEN en interne). Retourne [] si aucun chemin n'existe.
+   *
+   * Les transitions source sont alignées sur `DEFAULT_WORKFLOW_CONFIGS`
+   * (prisma/seeds/iam.seed.ts) — en cas de divergence, priorité au blueprint DB :
+   * l'engine refusera la 2e action si le blueprint du tenant est différent,
+   * et on recevra une BadRequestException explicite.
+   */
+  private planDriverActionSequence(
+    from:   string,
+    target: 'BOARDING' | 'IN_PROGRESS' | 'COMPLETED',
+  ): string[] {
+    if (target === 'BOARDING') {
+      if (from === TripState.PLANNED)  return [TripAction.START_BOARDING, TripAction.BEGIN_BOARDING];
+      if (from === TripState.OPEN)     return [TripAction.BEGIN_BOARDING];
+      return [];
+    }
+    if (target === 'IN_PROGRESS') {
+      if (from === TripState.BOARDING) return [TripAction.DEPART];
+      return [];
+    }
+    if (target === 'COMPLETED') {
+      if (from === TripState.IN_PROGRESS) return [TripAction.END_TRIP];
+      return [];
+    }
+    return [];
+  }
+
+  /**
+   * Clôt le chargement du fret pour un trajet.
+   *
+   * Stamp `freightClosedAt` (+ acteur) sur Trip. Une fois posé, toute action
+   * `LOAD` sur un colis lié au trajet sera refusée par `ParcelService.scan`
+   * (cf. guard freightClosedAt). Les actions ARRIVE/DELIVER restent permises
+   * (le verrou ne concerne que la phase chargement avant départ).
+   *
+   * Idempotent : un 2e appel ne change pas le timestamp existant — on retourne
+   * juste l'état courant. C'est important pour les retries offline.
+   *
+   * Permission : appelée depuis le portail chauffeur ou agent quai (cf.
+   * controller). Defense in depth : on vérifie ownership uniquement si l'acteur
+   * est driver (rôle agent quai a un scope tenant + vérifie via permission).
+   */
+  async closeFreight(tenantId: string, tripId: string, actorUserId: string) {
+    const trip = await this.prisma.trip.findFirst({
+      where:  { id: tripId, tenantId },
+      select: { id: true, status: true, driverId: true, freightClosedAt: true, freightClosedById: true },
     });
-    return updated;
+    if (!trip) throw new NotFoundException(`Trip ${tripId} introuvable dans ce tenant`);
+
+    if (trip.freightClosedAt) {
+      // Idempotent — déjà clôt, on retourne juste l'état actuel.
+      return {
+        id: trip.id,
+        freightClosedAt: trip.freightClosedAt,
+        freightClosedById: trip.freightClosedById,
+      };
+    }
+
+    return this.prisma.trip.update({
+      where:  { id: trip.id },
+      data:   { freightClosedAt: new Date(), freightClosedById: actorUserId },
+      select: { id: true, freightClosedAt: true, freightClosedById: true },
+    });
   }
 
   async getDriverSchedule(tenantId: string, userId: string, from: Date, to: Date) {

@@ -38,6 +38,14 @@ import {
 } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
 import { v4 as uuidv4 } from 'uuid';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+
+const SYSTEM_ACTOR: CurrentUserPayload = {
+  id:       'SYSTEM',
+  tenantId: 'SYSTEM',
+  roleId:   'SYSTEM',
+} as CurrentUserPayload;
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -139,6 +147,7 @@ export class DriverProfileService {
     private readonly prisma:   PrismaService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
+    private readonly workflow: WorkflowEngine,
   ) {}
 
   // ─── Scope helpers ────────────────────────────────────────────────────────
@@ -586,24 +595,43 @@ export class DriverProfileService {
     });
   }
 
-  async completeTraining(tenantId: string, trainingId: string, dto: CompleteTrainingDto) {
+  async completeTraining(
+    tenantId: string,
+    trainingId: string,
+    dto: CompleteTrainingDto,
+    actor?: CurrentUserPayload,
+  ) {
     const training = await this.prisma.driverTraining.findFirst({
       where:   { id: trainingId, tenantId },
       include: { type: true },
     });
     if (!training) throw new NotFoundException(`Formation ${trainingId} introuvable`);
 
-    const completed = await this.prisma.driverTraining.update({
-      where: { id: trainingId },
-      data: {
-        status:      TRAINING_STATUS.COMPLETED,
-        completedAt: new Date(dto.completedAt),
-        trainerName: dto.trainerName ?? training.trainerName ?? undefined,
-        notes:       dto.notes,
+    // Transition blueprint-driven : PLANNED → COMPLETED (action `complete`).
+    // Le blueprint couvre aussi IN_PROGRESS → COMPLETED pour les formations qui
+    // ont été démarrées explicitement (action `start`).
+    await this.workflow.transition(
+      training as Parameters<typeof this.workflow.transition>[0],
+      { action: 'complete', actor: actor ?? SYSTEM_ACTOR },
+      {
+        aggregateType: 'DriverTraining',
+        persist: async (entity, state, p) => {
+          return p.driverTraining.update({
+            where: { id: entity.id },
+            data: {
+              status:      state,
+              completedAt: new Date(dto.completedAt),
+              trainerName: dto.trainerName ?? training.trainerName ?? undefined,
+              notes:       dto.notes,
+              version:     { increment: 1 },
+            },
+          }) as Promise<typeof entity>;
+        },
       },
-    });
+    );
 
     // Planifier automatiquement la prochaine session selon frequencyDays
+    const completed = await this.prisma.driverTraining.findUniqueOrThrow({ where: { id: trainingId } });
     const nextDate = new Date(completed.completedAt!);
     nextDate.setDate(nextDate.getDate() + training.type.frequencyDays);
 

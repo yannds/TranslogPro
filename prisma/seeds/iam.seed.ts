@@ -248,6 +248,27 @@ const TENANT_ROLES: Array<{
       'data.support.read.tenant',
       'data.tenant.plan.read.tenant',
       'control.tenant.plan.change.tenant',
+      // ── Scénarios no-show / rebook / incident / compensation (2026-04-19) ──
+      'control.refund.waive_penalty.tenant',
+      'data.ticket.rebook.tenant',
+      'data.ticket.rebook.agency',
+      'data.ticket.noshow_mark.agency',
+      'control.ticket.noshow_waive.tenant',
+      'control.trip.suspend.agency',
+      'control.trip.cancel_in_transit.tenant',
+      'control.trip.declare_major_delay.agency',
+      'control.trip.override_policy.tenant',
+      'data.parcel.hub_move.agency',
+      'data.parcel.pickup.agency',
+      'control.parcel.return_init.tenant',
+      'data.compensation.issue.tenant',
+      'data.compensation.issue.agency',
+      'data.compensation.read.agency',
+      'control.voucher.issue.tenant',
+      'data.voucher.issue.agency',
+      'data.voucher.redeem.agency',
+      'control.voucher.cancel.tenant',
+      'data.voucher.read.tenant',
     ],
   },
   {
@@ -309,6 +330,17 @@ const TENANT_ROLES: Array<{
       // Support — peut ouvrir un ticket et voir ceux du tenant
       'data.support.create.tenant',
       'data.support.read.tenant',
+      // ── Scénarios no-show / rebook / incident / compensation (2026-04-19) ──
+      'data.ticket.rebook.agency',
+      'data.ticket.noshow_mark.agency',
+      'control.trip.suspend.agency',
+      'control.trip.declare_major_delay.agency',
+      'data.parcel.hub_move.agency',
+      'data.parcel.pickup.agency',
+      'data.compensation.issue.agency',
+      'data.compensation.read.agency',
+      'data.voucher.issue.agency',
+      'data.voucher.redeem.agency',
     ],
   },
   {
@@ -337,6 +369,9 @@ const TENANT_ROLES: Array<{
       'data.invoice.read.agency',
       // Support — peut ouvrir un ticket plateforme
       'data.support.create.tenant',
+      // ── Rebook/voucher au guichet (2026-04-19) ──
+      'data.ticket.rebook.agency',
+      'data.voucher.redeem.agency',
     ],
   },
   {
@@ -383,6 +418,10 @@ const TENANT_ROLES: Array<{
       'data.maintenance.update.own',   // signalement de panne depuis le terrain
       'data.feedback.submit.own',      // retours voyageur post-trajet
       'data.support.create.tenant',    // ouvrir ticket support vers la plateforme
+      // ── Incident en route (2026-04-19) ──
+      'control.trip.suspend.agency',         // chauffeur déclare panne → SUSPENDED
+      'control.trip.declare_major_delay.agency', // déclenche compensation
+      'data.compensation.issue.agency',      // distribuer snacks à bord
     ],
   },
   {
@@ -399,6 +438,8 @@ const TENANT_ROLES: Array<{
       'data.session.revoke.own',
       'data.manifest.print.agency',
       'data.support.create.tenant',
+      // ── Compensation à bord (2026-04-19) ──
+      'data.compensation.issue.agency', // hôtesse distribue snacks en cabine
     ],
   },
   {
@@ -452,6 +493,12 @@ const TENANT_ROLES: Array<{
       'data.notification.read.own',
       'data.session.revoke.own',
       'data.support.create.tenant',
+      // ── Hub / no-show / compensation / voucher (2026-04-19) ──
+      'data.ticket.noshow_mark.agency',  // marquer un passager no-show au moment du départ
+      'data.parcel.hub_move.agency',     // ARRIVE_AT_HUB / STORE / LOAD_OUTBOUND / DEPART_FROM_HUB
+      'data.parcel.pickup.agency',       // valider retrait destinataire
+      'data.compensation.issue.agency',  // snacks / voucher handout
+      'data.voucher.redeem.agency',      // appliquer un bon au guichet quai
     ],
   },
   {
@@ -474,6 +521,10 @@ const TENANT_ROLES: Array<{
       'data.shipment.read.own',
       // Remboursement : demande d'annulation self-service (portail voyageur)
       'data.refund.request.own',
+      // ── Self-service voyageur (2026-04-19) ──
+      'data.ticket.rebook.own',     // rebook son propre ticket (next available / later)
+      'data.parcel.dispute.own',    // contester un colis (destinataire ou expéditeur)
+      'data.voucher.read.own',      // liste ses bons de réduction (Mes bons)
     ],
   },
   {
@@ -926,6 +977,112 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Incident', fromState: 'OPEN',        action: 'resolve',     toState: 'RESOLVED',    requiredPerm: 'data.trip.report.own'      }, // fast-track incidents triviaux
   { entityType: 'Incident', fromState: 'RESOLVED',    action: 'close',       toState: 'CLOSED',      requiredPerm: 'data.trip.update.agency'   },
   { entityType: 'Incident', fromState: 'RESOLVED',    action: 'reopen',      toState: 'IN_PROGRESS', requiredPerm: 'data.trip.update.agency'   },
+
+  // ─── Scénarios nouveaux — 2026-04-19 ─────────────────────────────────────
+  // Trip — incidents en route (SUSPEND, CANCEL_IN_TRANSIT, DECLARE_MAJOR_DELAY)
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'SUSPEND',             toState: 'SUSPENDED',            requiredPerm: 'control.trip.suspend.agency'             },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED',  action: 'SUSPEND',             toState: 'SUSPENDED',            requiredPerm: 'control.trip.suspend.agency'             },
+  { entityType: 'Trip', fromState: 'SUSPENDED',            action: 'RESUME_FROM_SUSPEND', toState: 'IN_PROGRESS',          requiredPerm: 'control.trip.suspend.agency'             },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'CANCEL_IN_TRANSIT',   toState: 'CANCELLED_IN_TRANSIT', requiredPerm: 'control.trip.cancel_in_transit.tenant'   },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED',  action: 'CANCEL_IN_TRANSIT',   toState: 'CANCELLED_IN_TRANSIT', requiredPerm: 'control.trip.cancel_in_transit.tenant'   },
+  { entityType: 'Trip', fromState: 'SUSPENDED',            action: 'CANCEL_IN_TRANSIT',   toState: 'CANCELLED_IN_TRANSIT', requiredPerm: 'control.trip.cancel_in_transit.tenant'   },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS',          action: 'DECLARE_MAJOR_DELAY', toState: 'IN_PROGRESS_DELAYED',  requiredPerm: 'control.trip.declare_major_delay.agency' },
+  { entityType: 'Trip', fromState: 'IN_PROGRESS_DELAYED',  action: 'DECLARE_MAJOR_DELAY', toState: 'IN_PROGRESS_DELAYED',  requiredPerm: 'control.trip.declare_major_delay.agency' }, // re-déclaration (palier supérieur)
+  { entityType: 'Trip', fromState: 'SUSPENDED',            action: 'DECLARE_MAJOR_DELAY', toState: 'SUSPENDED',            requiredPerm: 'control.trip.declare_major_delay.agency' },
+
+  // Ticket — no-show, rebook, compensation
+  { entityType: 'Ticket', fromState: 'CONFIRMED',      action: 'MISS_BOARDING',         toState: 'NO_SHOW',        requiredPerm: 'data.ticket.noshow_mark.agency' },
+  { entityType: 'Ticket', fromState: 'CHECKED_IN',     action: 'MISS_BOARDING',         toState: 'NO_SHOW',        requiredPerm: 'data.ticket.noshow_mark.agency' },
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'MARK_LATE_ARRIVED',     toState: 'LATE_ARRIVED',   requiredPerm: 'data.ticket.noshow_mark.agency' },
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'REBOOK_NEXT_AVAILABLE', toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      },
+  { entityType: 'Ticket', fromState: 'LATE_ARRIVED',   action: 'REBOOK_NEXT_AVAILABLE', toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',      action: 'REBOOK_NEXT_AVAILABLE', toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      }, // rebook anticipé
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'REBOOK_LATER',          toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      },
+  { entityType: 'Ticket', fromState: 'LATE_ARRIVED',   action: 'REBOOK_LATER',          toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',      action: 'REBOOK_LATER',          toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.agency'      },
+  // Self-service voyageur : rebook depuis portail (perm .own, vérifiée côté guard)
+  { entityType: 'Ticket', fromState: 'CONFIRMED',      action: 'REBOOK_NEXT_AVAILABLE', toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.own'         },
+  { entityType: 'Ticket', fromState: 'CONFIRMED',      action: 'REBOOK_LATER',          toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.own'         },
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'REBOOK_NEXT_AVAILABLE', toState: 'REBOOKED',       requiredPerm: 'data.ticket.rebook.own'         },
+  // Request refund depuis NO_SHOW / LATE_ARRIVED
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'REQUEST_REFUND',        toState: 'REFUND_PENDING', requiredPerm: 'data.refund.request.own'        },
+  { entityType: 'Ticket', fromState: 'LATE_ARRIVED',   action: 'REQUEST_REFUND',        toState: 'REFUND_PENDING', requiredPerm: 'data.refund.request.own'        },
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'REQUEST_REFUND',        toState: 'REFUND_PENDING', requiredPerm: 'data.ticket.cancel.agency'      }, // via agent
+  // FORFEIT auto (scheduler) après TTL — perm interne system
+  { entityType: 'Ticket', fromState: 'NO_SHOW',        action: 'FORFEIT',               toState: 'FORFEITED',      requiredPerm: 'data.ticket.noshow_mark.agency' },
+  { entityType: 'Ticket', fromState: 'LATE_ARRIVED',   action: 'FORFEIT',               toState: 'FORFEITED',      requiredPerm: 'data.ticket.noshow_mark.agency' },
+
+  // Parcel — hubs / pickup / retour (2026-04-19)
+  { entityType: 'Parcel', fromState: 'IN_TRANSIT',            action: 'ARRIVE_AT_HUB',    toState: 'AT_HUB_INBOUND',       requiredPerm: 'data.parcel.hub_move.agency' },
+  { entityType: 'Parcel', fromState: 'AT_HUB_INBOUND',        action: 'STORE_AT_HUB',     toState: 'STORED_AT_HUB',        requiredPerm: 'data.parcel.hub_move.agency' },
+  { entityType: 'Parcel', fromState: 'AT_HUB_INBOUND',        action: 'LOAD_OUTBOUND',    toState: 'AT_HUB_OUTBOUND',      requiredPerm: 'data.parcel.hub_move.agency' }, // transfer direct
+  { entityType: 'Parcel', fromState: 'STORED_AT_HUB',         action: 'LOAD_OUTBOUND',    toState: 'AT_HUB_OUTBOUND',      requiredPerm: 'data.parcel.hub_move.agency' },
+  { entityType: 'Parcel', fromState: 'AT_HUB_OUTBOUND',       action: 'DEPART_FROM_HUB',  toState: 'IN_TRANSIT',           requiredPerm: 'data.parcel.hub_move.agency' },
+  // Retrait destinataire
+  { entityType: 'Parcel', fromState: 'ARRIVED',               action: 'NOTIFY_FOR_PICKUP',toState: 'AVAILABLE_FOR_PICKUP', requiredPerm: 'data.parcel.update.agency'   },
+  { entityType: 'Parcel', fromState: 'AVAILABLE_FOR_PICKUP',  action: 'PICKUP',           toState: 'DELIVERED',            requiredPerm: 'data.parcel.pickup.agency'   },
+  // Contestation destinataire ou expéditeur
+  { entityType: 'Parcel', fromState: 'DELIVERED',             action: 'DISPUTE',          toState: 'DISPUTED',             requiredPerm: 'data.parcel.dispute.own'     },
+  { entityType: 'Parcel', fromState: 'AVAILABLE_FOR_PICKUP',  action: 'DISPUTE',          toState: 'DISPUTED',             requiredPerm: 'data.parcel.dispute.own'     },
+  // Retour automatique (TTL retrait dépassé)
+  { entityType: 'Parcel', fromState: 'AVAILABLE_FOR_PICKUP',  action: 'INITIATE_RETURN',  toState: 'RETURN_TO_SENDER',     requiredPerm: 'control.parcel.return_init.tenant' },
+  { entityType: 'Parcel', fromState: 'STORED_AT_HUB',         action: 'INITIATE_RETURN',  toState: 'RETURN_TO_SENDER',     requiredPerm: 'control.parcel.return_init.tenant' }, // colis bloqué hub
+  { entityType: 'Parcel', fromState: 'RETURN_TO_SENDER',      action: 'COMPLETE_RETURN',  toState: 'RETURNED',             requiredPerm: 'data.parcel.update.agency'   },
+
+  // Voucher — bon de réduction
+  // ISSUE crée l'entité (pas de fromState cible — émission = création).
+  // On modélise les transitions après émission.
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'REDEEM', toState: 'REDEEMED',  requiredPerm: 'data.voucher.redeem.agency' },
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'EXPIRE', toState: 'EXPIRED',   requiredPerm: 'data.voucher.redeem.agency' }, // scheduler (via perm technique)
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'CANCEL', toState: 'CANCELLED', requiredPerm: 'control.voucher.cancel.tenant' },
+
+  // CompensationItem — snacks/repas
+  { entityType: 'CompensationItem', fromState: 'OFFERED',   action: 'DELIVER', toState: 'DELIVERED', requiredPerm: 'data.compensation.issue.agency' },
+  { entityType: 'CompensationItem', fromState: 'OFFERED',   action: 'DECLINE', toState: 'DECLINED',  requiredPerm: 'data.compensation.issue.agency' },
+
+  // Refund — nouvelles raisons couvertes (pas de nouvelle transition, mais les reasons
+  // NO_SHOW / INCIDENT_IN_TRANSIT / MAJOR_DELAY / PARCEL_UNDELIVERED passent par les
+  // transitions existantes `approve` / `auto_approve` / `process` / `reject`).
+
+  // ─── Invoice — cycle de vie (migration hardcoded → engine, 2026-04-19) ──
+  { entityType: 'Invoice', fromState: 'DRAFT',  action: 'issue',     toState: 'ISSUED',    requiredPerm: 'data.invoice.create.agency' },
+  { entityType: 'Invoice', fromState: 'ISSUED', action: 'mark_paid', toState: 'PAID',      requiredPerm: 'data.invoice.create.agency' },
+  { entityType: 'Invoice', fromState: 'DRAFT',  action: 'mark_paid', toState: 'PAID',      requiredPerm: 'data.invoice.create.agency' }, // fast-track cash
+  { entityType: 'Invoice', fromState: 'DRAFT',  action: 'cancel',    toState: 'CANCELLED', requiredPerm: 'control.invoice.manage.tenant' },
+  { entityType: 'Invoice', fromState: 'ISSUED', action: 'cancel',    toState: 'CANCELLED', requiredPerm: 'control.invoice.manage.tenant' },
+
+  // ─── Staff — suspension/réactivation/archivage (migration hardcoded → engine) ──
+  { entityType: 'Staff', fromState: 'ACTIVE',    action: 'suspend',    toState: 'SUSPENDED', requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'Staff', fromState: 'SUSPENDED', action: 'reactivate', toState: 'ACTIVE',    requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'Staff', fromState: 'ACTIVE',    action: 'archive',    toState: 'ARCHIVED',  requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'Staff', fromState: 'SUSPENDED', action: 'archive',    toState: 'ARCHIVED',  requiredPerm: 'control.staff.manage.tenant' },
+
+  // ─── StaffAssignment — cycle (aligné cascade staff) ──────────────────────
+  { entityType: 'StaffAssignment', fromState: 'ACTIVE',    action: 'suspend',    toState: 'SUSPENDED', requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'StaffAssignment', fromState: 'SUSPENDED', action: 'reactivate', toState: 'ACTIVE',    requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'StaffAssignment', fromState: 'ACTIVE',    action: 'close',      toState: 'CLOSED',    requiredPerm: 'control.staff.manage.tenant' },
+  { entityType: 'StaffAssignment', fromState: 'SUSPENDED', action: 'close',      toState: 'CLOSED',    requiredPerm: 'control.staff.manage.tenant' },
+
+  // ─── SupportTicket — cycle (migration hardcoded → engine) ────────────────
+  { entityType: 'SupportTicket', fromState: 'OPEN',              action: 'start',      toState: 'IN_PROGRESS',      requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'IN_PROGRESS',       action: 'await',      toState: 'WAITING_CUSTOMER', requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'WAITING_CUSTOMER',  action: 'resume',     toState: 'IN_PROGRESS',      requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'IN_PROGRESS',       action: 'resolve',    toState: 'RESOLVED',         requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'WAITING_CUSTOMER',  action: 'resolve',    toState: 'RESOLVED',         requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'OPEN',              action: 'resolve',    toState: 'RESOLVED',         requiredPerm: 'control.platform.support.write.global' }, // fast-track
+  { entityType: 'SupportTicket', fromState: 'RESOLVED',          action: 'close',      toState: 'CLOSED',           requiredPerm: 'control.platform.support.write.global' },
+  { entityType: 'SupportTicket', fromState: 'RESOLVED',          action: 'reopen',     toState: 'IN_PROGRESS',      requiredPerm: 'control.platform.support.write.global' },
+
+  // ─── DriverTraining — cycle formation ────────────────────────────────────
+  { entityType: 'DriverTraining', fromState: 'PLANNED',     action: 'start',    toState: 'IN_PROGRESS', requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'DriverTraining', fromState: 'IN_PROGRESS', action: 'complete', toState: 'COMPLETED',   requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'DriverTraining', fromState: 'PLANNED',     action: 'complete', toState: 'COMPLETED',   requiredPerm: 'control.driver.manage.tenant' }, // fast-track quand déjà faite
+  { entityType: 'DriverTraining', fromState: 'PLANNED',     action: 'miss',     toState: 'MISSED',      requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'DriverTraining', fromState: 'PLANNED',     action: 'cancel',   toState: 'CANCELLED',   requiredPerm: 'control.driver.manage.tenant' },
+
+  // ─── QhseProcedureExecution — cycle exécution procédure ──────────────────
+  { entityType: 'QhseExecution', fromState: 'IN_PROGRESS', action: 'complete', toState: 'COMPLETED', requiredPerm: 'control.qhse.manage.tenant' },
+  { entityType: 'QhseExecution', fromState: 'IN_PROGRESS', action: 'abort',    toState: 'ABORTED',   requiredPerm: 'control.qhse.manage.tenant' },
 ];
 
 // ─── Types de documents véhicule par défaut ──────────────────────────────────

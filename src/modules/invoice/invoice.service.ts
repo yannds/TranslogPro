@@ -2,14 +2,29 @@
  * InvoiceService — CRUD factures + génération numéro séquentiel.
  *
  * Isolation multi-tenant : tenantId en condition racine.
+ * Transitions d'état (DRAFT → ISSUED → PAID / CANCELLED) : blueprint-driven via
+ * WorkflowEngine (ADR-15/16, migration 2026-04-19). Un update() qui ne touche
+ * pas le status reste un update direct (champs libres : notes, dueDate, etc.).
  */
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CreateInvoiceDto, UpdateInvoiceDto } from './dto/create-invoice.dto';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+
+/** Acteur système synthétique (transitions déclenchées par webhook paiement, cron, etc.) */
+const SYSTEM_ACTOR: CurrentUserPayload = {
+  id:       'SYSTEM',
+  tenantId: 'SYSTEM',
+  roleId:   'SYSTEM',
+} as CurrentUserPayload;
 
 @Injectable()
 export class InvoiceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
+  ) {}
 
   async findAll(tenantId: string, status?: string) {
     return this.prisma.invoice.findMany({
@@ -53,27 +68,65 @@ export class InvoiceService {
     });
   }
 
-  async update(tenantId: string, id: string, dto: UpdateInvoiceDto) {
+  /**
+   * Mise à jour d'une facture.
+   * - Si `dto.status` est fourni ET diffère de l'état courant → transition via
+   *   WorkflowEngine (DRAFT→ISSUED→PAID / CANCELLED). L'engine applique le
+   *   blueprint du tenant + audit.
+   * - Les autres champs (notes, dueDate, lineItems…) sont patchés directement.
+   */
+  async update(tenantId: string, id: string, dto: UpdateInvoiceDto, actor?: CurrentUserPayload) {
     const invoice = await this.findOne(tenantId, id);
 
-    const data: Record<string, unknown> = { ...dto };
+    const { status: targetStatus, ...otherFields } = dto;
 
-    if (dto.status === 'ISSUED' && invoice.status === 'DRAFT') {
-      data.issuedAt = new Date();
-    }
-    if (dto.status === 'PAID' && (invoice.status === 'ISSUED' || invoice.status === 'DRAFT')) {
-      data.paidAt = new Date();
-    }
-    if (dto.status === 'CANCELLED' && invoice.status === 'PAID') {
-      throw new BadRequestException('Impossible d\'annuler une facture déjà payée');
+    // 1) Patch des champs non-status (si présents) — hors workflow.
+    if (Object.keys(otherFields).length > 0) {
+      const result = await this.prisma.invoice.updateMany({
+        where: { id, tenantId },
+        data:  otherFields as Record<string, unknown>,
+      });
+      if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
     }
 
-    // Défense en profondeur : tenantId dans le where final pour éliminer
-    // le TOCTOU entre findOne() et update() (un id existant dans tenantA
-    // pourrait théoriquement passer un race interleaving cross-tenant).
-    const result = await this.prisma.invoice.updateMany({ where: { id, tenantId }, data });
-    if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
+    // 2) Transition d'état si demandée et différente de l'état courant.
+    if (targetStatus && targetStatus !== invoice.status) {
+      const action = this.resolveInvoiceAction(invoice.status, targetStatus);
+      if (!action) {
+        throw new BadRequestException(
+          `Transition interdite : ${invoice.status} → ${targetStatus}`,
+        );
+      }
+      await this.workflow.transition(
+        invoice as Parameters<typeof this.workflow.transition>[0],
+        { action, actor: actor ?? SYSTEM_ACTOR },
+        {
+          aggregateType: 'Invoice',
+          persist: async (entity, state, p) => {
+            const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+            if (state === 'ISSUED')    data.issuedAt = new Date();
+            if (state === 'PAID')      data.paidAt   = new Date();
+            if (state === 'CANCELLED') data.cancelledAt = new Date();
+            return p.invoice.update({ where: { id: entity.id }, data }) as Promise<typeof entity>;
+          },
+        },
+      );
+    }
+
     return this.findOne(tenantId, id);
+  }
+
+  /**
+   * Mappe (fromState, targetState) → action blueprint (snake_case, aligné
+   * DEFAULT_WORKFLOW_CONFIGS Invoice). null si la cible n'est pas atteignable.
+   */
+  private resolveInvoiceAction(from: string, target: string): string | null {
+    if (from === 'DRAFT'  && target === 'ISSUED')    return 'issue';
+    if (from === 'ISSUED' && target === 'PAID')      return 'mark_paid';
+    if (from === 'DRAFT'  && target === 'PAID')      return 'mark_paid'; // fast-track facture payée à l'émission
+    if (from === 'DRAFT'  && target === 'CANCELLED') return 'cancel';
+    if (from === 'ISSUED' && target === 'CANCELLED') return 'cancel';
+    return null;
   }
 
   async remove(tenantId: string, id: string) {

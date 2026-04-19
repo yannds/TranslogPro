@@ -21,8 +21,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
 import { MS_PER_MINUTE } from '../../common/constants/time';
+
+const SYSTEM_ACTOR: CurrentUserPayload = {
+  id:       'SYSTEM',
+  tenantId: 'SYSTEM',
+  roleId:   'SYSTEM',
+} as CurrentUserPayload;
 import {
   AddSupportMessageDto,
   CreateSupportTicketDto,
@@ -52,7 +60,10 @@ const DEFAULT_SLA_MINUTES: Record<SupportPriority, number> = {
 export class SupportService {
   private readonly logger = new Logger(SupportService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
+  ) {}
 
   // ─── Côté tenant : créer / lire / répondre à ses tickets ────────────────
 
@@ -189,28 +200,70 @@ export class SupportService {
     return t;
   }
 
-  async updateByPlatform(ticketId: string, dto: UpdateSupportTicketDto) {
+  async updateByPlatform(
+    ticketId: string,
+    dto: UpdateSupportTicketDto,
+    actor?: CurrentUserPayload,
+  ) {
     const t = await this.prisma.supportTicket.findUnique({ where: { id: ticketId } });
     if (!t) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
 
-    const data: Record<string, unknown> = {};
-    if (dto.status) {
-      data.status = dto.status;
-      if (dto.status === 'RESOLVED' && !t.resolvedAt) data.resolvedAt = new Date();
-      if (dto.status === 'CLOSED')   data.closedAt   = new Date();
-    }
+    // 1) Patch des champs non-status (priority, assignedTo…) — hors workflow.
+    const dataNonStatus: Record<string, unknown> = {};
     if (dto.priority) {
-      data.priority = dto.priority;
+      dataNonStatus.priority = dto.priority;
       // Recalcul du SLA si changement de priorité et pas encore de first response
       if (!t.firstResponseAt) {
         const { slaDueAt } = await this.resolveSla(t.tenantId, dto.priority, t.createdAt);
-        data.slaDueAt = slaDueAt;
+        dataNonStatus.slaDueAt = slaDueAt;
       }
     }
     if (dto.assignedToPlatformUserId !== undefined) {
-      data.assignedToPlatformUserId = dto.assignedToPlatformUserId;
+      dataNonStatus.assignedToPlatformUserId = dto.assignedToPlatformUserId;
     }
-    return this.prisma.supportTicket.update({ where: { id: ticketId }, data });
+    if (Object.keys(dataNonStatus).length > 0) {
+      await this.prisma.supportTicket.update({ where: { id: ticketId }, data: dataNonStatus });
+    }
+
+    // 2) Transition de status via WorkflowEngine (migration 2026-04-19, blueprint-driven).
+    if (dto.status && dto.status !== t.status) {
+      const action = this.resolveSupportAction(t.status, dto.status);
+      if (!action) {
+        throw new BadRequestException(
+          `Transition interdite : ${t.status} → ${dto.status}`,
+        );
+      }
+      await this.workflow.transition(
+        t as Parameters<typeof this.workflow.transition>[0],
+        { action, actor: actor ?? SYSTEM_ACTOR },
+        {
+          aggregateType: 'SupportTicket',
+          persist: async (entity, state, p) => {
+            const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+            if (state === 'RESOLVED' && !t.resolvedAt) data.resolvedAt = new Date();
+            if (state === 'CLOSED')                    data.closedAt   = new Date();
+            return p.supportTicket.update({ where: { id: entity.id }, data }) as Promise<typeof entity>;
+          },
+        },
+      );
+    }
+
+    const updated = await this.prisma.supportTicket.findUnique({ where: { id: ticketId } });
+    if (!updated) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
+    return updated;
+  }
+
+  /** Mappe (from,target) → action blueprint SupportTicket (snake_case). null si interdit. */
+  private resolveSupportAction(from: string, target: string): string | null {
+    if (from === 'OPEN'              && target === 'IN_PROGRESS')      return 'start';
+    if (from === 'IN_PROGRESS'       && target === 'WAITING_CUSTOMER') return 'await';
+    if (from === 'WAITING_CUSTOMER'  && target === 'IN_PROGRESS')      return 'resume';
+    if (from === 'IN_PROGRESS'       && target === 'RESOLVED')         return 'resolve';
+    if (from === 'WAITING_CUSTOMER'  && target === 'RESOLVED')         return 'resolve';
+    if (from === 'OPEN'              && target === 'RESOLVED')         return 'resolve';
+    if (from === 'RESOLVED'          && target === 'CLOSED')           return 'close';
+    if (from === 'RESOLVED'          && target === 'IN_PROGRESS')      return 'reopen';
+    return null;
   }
 
   async addMessageByPlatform(
@@ -235,13 +288,30 @@ export class SupportService {
       },
     });
 
-    // Premier response externe → met à jour firstResponseAt + status.
-    const update: Record<string, unknown> = {};
-    if (!msg.isInternal && !ticket.firstResponseAt) update.firstResponseAt = new Date();
-    if (!msg.isInternal && ticket.status === 'OPEN') update.status = 'IN_PROGRESS';
-    if (!msg.isInternal && ticket.status === 'IN_PROGRESS') update.status = 'WAITING_CUSTOMER';
-    if (Object.keys(update).length > 0) {
-      await this.prisma.supportTicket.update({ where: { id: ticketId }, data: update });
+    // Premier response externe → stamp firstResponseAt + transition via engine.
+    // La cascade OPEN→IN_PROGRESS et IN_PROGRESS→WAITING_CUSTOMER passe désormais
+    // par le blueprint SupportTicket (actions `start` / `await`) — audit homogène.
+    if (!msg.isInternal && !ticket.firstResponseAt) {
+      await this.prisma.supportTicket.update({
+        where: { id: ticketId },
+        data:  { firstResponseAt: new Date() },
+      });
+    }
+    if (!msg.isInternal && (ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS')) {
+      const action = ticket.status === 'OPEN' ? 'start' : 'await';
+      await this.workflow.transition(
+        ticket as Parameters<typeof this.workflow.transition>[0],
+        { action, actor: { id: actor.id, tenantId: actor.tenantId, roleId: '' } as CurrentUserPayload },
+        {
+          aggregateType: 'SupportTicket',
+          persist: async (entity, state, p) => {
+            return p.supportTicket.update({
+              where: { id: entity.id },
+              data:  { status: state, version: { increment: 1 } },
+            }) as Promise<typeof entity>;
+          },
+        },
+      );
     }
     return msg;
   }

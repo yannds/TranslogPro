@@ -95,6 +95,7 @@ export class FlightDeckController {
       tripId,
       user.id,
       body.status as DriverAllowedStatus,
+      user,
     );
   }
 
@@ -102,6 +103,22 @@ export class FlightDeckController {
   @RequirePermission([Permission.TICKET_READ_AGENCY, Permission.TRIP_CHECK_OWN, Permission.MANIFEST_READ_OWN])
   getPassengers(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
     return this.flightDeckService.getPassengerList(tenantId, tripId);
+  }
+
+  /**
+   * Liste des colis d'un trajet, enrichie pour les manifestes live. Même
+   * permission que passengers (lecture manifeste) plus parcel.scan pour
+   * l'agent quai/driver qui scanne.
+   */
+  @Get('trips/:tripId/parcels')
+  @RequirePermission([
+    Permission.TICKET_READ_AGENCY,
+    Permission.TRIP_CHECK_OWN,
+    Permission.MANIFEST_READ_OWN,
+    Permission.PARCEL_SCAN_AGENCY,
+  ])
+  getParcels(@TenantId() tenantId: string, @Param('tripId') tripId: string) {
+    return this.flightDeckService.getParcelList(tenantId, tripId);
   }
 
   /**
@@ -180,6 +197,26 @@ export class FlightDeckController {
     @Body() body: { weightKg: number },
   ) {
     return this.flightDeckService.setLuggageWeight(tenantId, ticketId, body.weightKg);
+  }
+
+  /**
+   * Clôt le chargement du fret pour un trajet — utilisable par le chauffeur
+   * (TRIP_LOG_EVENT_OWN) ou un agent quai (PARCEL_UPDATE_AGENCY) selon qui
+   * supervise le chargement. Bloque les `LOAD` colis suivants côté
+   * ParcelService. Idempotent.
+   */
+  @Post('trips/:tripId/freight/close')
+  @RequirePermission([
+    Permission.TRIP_LOG_EVENT_OWN,
+    Permission.TRIP_UPDATE_AGENCY,
+    Permission.PARCEL_UPDATE_AGENCY,
+  ])
+  closeFreight(
+    @TenantId() tenantId: string,
+    @Param('tripId') tripId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.flightDeckService.closeFreight(tenantId, tripId, actor.id);
   }
 
   @Get('schedule')
