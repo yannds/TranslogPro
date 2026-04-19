@@ -140,4 +140,34 @@ const ENTITY_RESOLVERS: Record<string, EntityResolver> = {
     load:    (p, tenantId, id) => p.shipment.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
     persist: (p, e, s) => persistWithTenantGuard(p.shipment as any, e, s),
   },
+  Manifest: {
+    load:    (p, tenantId, id) => p.manifest.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.manifest as any, e, s),
+  },
+  Incident: {
+    load:    (p, tenantId, id) => p.incident.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.incident as any, e, s),
+  },
+  MaintenanceReport: {
+    load:    (p, tenantId, id) => p.maintenanceReport.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.maintenanceReport as any, e, s),
+  },
+  Claim: {
+    load:    (p, tenantId, id) => p.claim.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.claim as any, e, s),
+  },
+  CashRegister: {
+    load:    (p, tenantId, id) => p.cashRegister.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.cashRegister as any, e, s),
+  },
+  Checklist: {
+    // Checklist.tenantId est nullable (rétro-compat legacy rows). On filtre sur
+    // id seul ici — le tenant est vérifié en amont dans le service caller.
+    load:    (p, _tenantId, id) => p.checklist.findFirst({ where: { id } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.checklist as any, e, s),
+  },
+  CrewAssignment: {
+    load:    (p, tenantId, id) => p.crewAssignment.findFirst({ where: { id, tenantId } }) as Promise<{ id: string; status: string; tenantId: string; version: number } | null>,
+    persist: (p, e, s) => persistWithTenantGuard(p.crewAssignment as any, e, s),
+  },
 };

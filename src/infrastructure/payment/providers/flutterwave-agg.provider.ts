@@ -130,6 +130,12 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
       headers: { Authorization: `Bearer ${key}` },
     });
     const tx = data.data;
+    // Tokenisation Flutterwave :
+    //   - tx.customer.id            → customerRef (durable)
+    //   - tx.card.token             → methodToken (réutilisable pour re-charge)
+    //   - tx.card.last_4digits      → methodLast4 (UI)
+    //   - tx.card.type              → methodBrand ("VISA", "MASTERCARD"…)
+    // Les 3 derniers sont absents si la méthode n'est pas CARD.
     return {
       txRef:        tx.tx_ref,
       externalRef,
@@ -138,6 +144,10 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
       currency:     tx.currency,
       providerName: this.meta.key,
       processedAt:  tx.created_at ? new Date(tx.created_at) : undefined,
+      customerRef:  tx.customer?.id ? String(tx.customer.id) : undefined,
+      methodToken:  tx.card?.token  ? String(tx.card.token)  : undefined,
+      methodLast4:  tx.card?.last_4digits,
+      methodBrand:  tx.card?.type,
     };
   }
 
@@ -152,6 +162,8 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
     }
     const body = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
     const tx   = body['data'] as Record<string, unknown>;
+    const customer = tx['customer'] as Record<string, unknown> | undefined;
+    const card     = tx['card']     as Record<string, unknown> | undefined;
     return {
       isValid:     true,
       txRef:       String(tx['tx_ref'] ?? ''),
@@ -160,6 +172,12 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
       amount:      Number(tx['charged_amount'] ?? 0),
       currency:    String(tx['currency'] ?? 'XOF') as WebhookVerificationResult['currency'],
       meta:        (tx['meta'] ?? {}) as Record<string, unknown>,
+      // Mêmes sources que verify() — Flutterwave envoie ces champs quand la
+      // transaction succeed avec une carte ou un customer id connu.
+      customerRef: customer?.['id'] ? String(customer['id']) : undefined,
+      methodToken: card?.['token']  ? String(card['token'])  : undefined,
+      methodLast4: card?.['last_4digits'] ? String(card['last_4digits']) : undefined,
+      methodBrand: card?.['type']   ? String(card['type'])   : undefined,
     };
   }
 

@@ -24,7 +24,7 @@ export class TripController {
   }
 
   @Get()
-  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_AGENCY, Permission.TRIP_READ_OWN])
   findAll(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
@@ -37,7 +37,7 @@ export class TripController {
   }
 
   @Get(':id')
-  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_AGENCY, Permission.TRIP_READ_OWN])
   findOne(
     @TenantId() tenantId: string,
     @Param('id') id: string,
@@ -57,7 +57,7 @@ export class TripController {
   }
 
   @Get(':id/seats')
-  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_OWN])
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_AGENCY, Permission.TRIP_READ_OWN])
   getSeats(
     @TenantId() tenantId: string,
     @Param('id') id: string,

@@ -114,6 +114,10 @@ model Tenant {
   paymentConfig         TenantPaymentConfig?
   paymentIntents        PaymentIntent[]
   paymentProviderStates PaymentProviderState[]
+  oauthProviderStates   OAuthProviderState[]
+
+  // Manifest = document récapitulatif d'un trajet — workflow manifest-standard
+  manifests Manifest[]
 
   @@map("tenants")
 }
@@ -176,27 +180,33 @@ model TenantConfig {
 // ── Marque Blanche (White Label) — configuration visuelle par tenant ──────────
 // Chargée en cache Redis TTL 5 min pour ne pas pénaliser chaque requête.
 model TenantBrand {
-  id              String   @id @default(cuid())
-  tenantId        String   @unique
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
   // Identité
-  brandName       String
-  logoUrl         String?
-  faviconUrl      String?
+  brandName        String
+  logoUrl          String?
+  faviconUrl       String?
   // Palette CSS (variables injectées dans le layout)
-  primaryColor    String   @default("#2563eb")
-  secondaryColor  String   @default("#1a3a5c")
-  accentColor     String   @default("#f59e0b")
-  textColor       String   @default("#111827")
-  bgColor         String   @default("#ffffff")
-  fontFamily      String   @default("Inter, sans-serif")
+  primaryColor     String   @default("#2563eb")
+  secondaryColor   String   @default("#1a3a5c")
+  accentColor      String   @default("#f59e0b")
+  textColor        String   @default("#111827")
+  bgColor          String   @default("#ffffff")
+  fontFamily       String   @default("Inter, sans-serif")
   // CSS additionnel (non-sanitisé en DB, sanitisé à l'injection)
-  customCss       String?  @db.Text
+  customCss        String?  @db.Text
   // SEO / support
-  metaTitle       String?
-  metaDescription String?
-  supportEmail    String?
-  supportPhone    String?
-  updatedAt       DateTime @updatedAt
+  metaTitle        String?
+  metaDescription  String?
+  supportEmail     String?
+  supportPhone     String?
+  // Identité d'envoi email transactionnel (from/reply-to affichés au
+  // destinataire). Si null, fallback sur la config plateforme au runtime.
+  // Ces champs ne sont PAS des secrets — uniquement de l'affichage.
+  emailFromName    String?
+  emailFromAddress String?
+  emailReplyTo     String?
+  updatedAt        DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -336,6 +346,8 @@ model User {
   feedbacks              Feedback[]
   safetyAlerts           SafetyAlert[]
   customerProfile        Customer?               @relation("UserCustomerProfile")
+  generatedManifests     Manifest[]              @relation("ManifestGenerator")
+  signedManifests        Manifest[]              @relation("ManifestSigner")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -997,26 +1009,87 @@ model Trip {
   feedbacks       Feedback[]
   travelers       Traveler[]        @relation("TripTravelers")
   costSnapshot    TripCostSnapshot?
+  manifests       Manifest[]
 
   @@index([tenantId, status])
   @@index([tenantId, departureScheduled])
   @@map("trips")
 }
 
+// Manifest = document récapitulatif d'un trajet (passagers ET/OU colis).
+//
+// Depuis 2026-04-19 : chaque kind (ALL | PASSENGERS | PARCELS) a sa propre
+// entité Manifest, signée indépendamment. La signature déclenche la génération
+// du PDF figé (signedPdfStorageKey) qui est la source de vérité du contenu
+// à l'instant T.
+//
+// Cycle de vie — blueprint `manifest-standard` (cf. prisma/seed/seed.ts:220) :
+//   DRAFT → submit → SUBMITTED → sign → SIGNED → archive → ARCHIVED
+//                                  → reject → REJECTED → revise → DRAFT
+//
+// Les transitions DOIVENT passer par WorkflowEngine.transition() pour
+// respecter le contrat permissions/guards/audit. Voir ManifestService.
+model Manifest {
+  id       String @id @default(cuid())
+  tenantId String
+  tripId   String
+  kind     String @default("ALL")
+  // ALL | PASSENGERS | PARCELS — pilote le contenu du PDF figé
+  status   String @default("DRAFT")
+  // DRAFT | SUBMITTED | SIGNED | REJECTED | ARCHIVED — aligné blueprint manifest-standard
+  version  Int    @default(1)
+
+  // PDF placeholder (upload direct mobile optionnel) + PDF figé généré à la signature
+  storageKey          String?
+  signedPdfStorageKey String?
+
+  // Compteurs figés à la génération — utilisés pour reporting et affichage cockpit
+  passengerCount Int @default(0)
+  parcelCount    Int @default(0)
+
+  // Signature SVG (taille bornée 256 KB côté service — chain of custody audit)
+  signatureSvg String?
+  signedAt     DateTime?
+  signedById   String?
+
+  generatedAt   DateTime @default(now())
+  generatedById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trip        Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  generatedBy User   @relation("ManifestGenerator", fields: [generatedById], references: [id])
+  signedBy    User?  @relation("ManifestSigner", fields: [signedById], references: [id])
+
+  // Un seul manifeste par (trip, kind) — pas de duplication
+  @@unique([tenantId, tripId, kind])
+  @@index([tenantId, status])
+  @@index([tenantId, tripId])
+  @@index([tenantId, signedAt])
+  @@map("manifests")
+}
+
 model Checklist {
   id          String   @id @default(cuid())
+  tenantId    String?  // nullable rétro-compat legacy rows ; nouveau code écrit toujours le tenantId
   tripId      String
   userId      String
   type        String
   // PRE_DEPARTURE | BOARDING_READY | POST_TRIP | MAINTENANCE
   content     Json     @default("{}")
   isCompliant Boolean  @default(false)
+  status      String   @default("PENDING")
+  // PENDING | TECH_CHECK | SAFETY_CHECK | DOCS_CHECK | APPROVED | BLOCKED — aligné blueprint checklist-departure
+  version     Int      @default(1)
   createdAt   DateTime @default(now())
 
   trip Trip @relation(fields: [tripId], references: [id])
   user User @relation(fields: [userId], references: [id])
 
   @@index([tripId, type])
+  @@index([tenantId, status])
   @@map("checklists")
 }
 
@@ -1035,7 +1108,8 @@ model Incident {
   metadata            Json      @default("{}")
   isSos               Boolean   @default(false)
   status              String    @default("OPEN")
-  // OPEN | ASSIGNED | IN_PROGRESS | RESOLVED | CLOSED
+  // OPEN | ASSIGNED | IN_PROGRESS | RESOLVED | CLOSED — aligné blueprint incident-response
+  version             Int       @default(1)
   assigneeId          String?
   resolution          String?
   resolvedAt          DateTime?
@@ -1061,7 +1135,8 @@ model MaintenanceReport {
   odometer      Float?
   partsUsed     Json      @default("[]")
   status        String    @default("SCHEDULED")
-  // SCHEDULED | IN_PROGRESS | COMPLETED | APPROVED
+  // SCHEDULED | IN_PROGRESS | COMPLETED | APPROVED — aligné blueprint maintenance-standard
+  version       Int       @default(1)
   notes         String?
   createdById   String
   completedAt   DateTime?
@@ -1350,13 +1425,14 @@ model CashRegister {
   closedAt       DateTime?
   initialBalance Float
   finalBalance   Float?
-  auditStatus    String    @default("OPEN")
-  // OPEN | CLOSED | DISCREPANCY
+  status         String    @default("OPEN")
+  // OPEN | CLOSED | DISCREPANCY — aligné blueprint cash-register-cycle
+  version        Int       @default(1)
 
   agency       Agency        @relation(fields: [agencyId], references: [id])
   transactions Transaction[]
 
-  @@index([tenantId, agencyId, auditStatus])
+  @@index([tenantId, agencyId, status])
   @@map("cash_registers")
 }
 
@@ -1409,7 +1485,8 @@ model Claim {
   entityType  String // PARCEL | TICKET | INCIDENT
   description String
   status      String    @default("OPEN")
-  // OPEN | UNDER_INVESTIGATION | RESOLVED | REJECTED | CLOSED
+  // OPEN | UNDER_INVESTIGATION | RESOLVED | REJECTED | CLOSED — aligné blueprint claim-sav
+  version     Int       @default(1)
   resolvedAt  DateTime?
   resolvedBy  String?
   createdAt   DateTime  @default(now())
@@ -1564,6 +1641,9 @@ model CrewAssignment {
   staffId   String
   crewRole  String // CO_PILOT | HOSTESS | SECURITY | MECHANIC_ON_BOARD
   briefedAt DateTime? // null = pas encore briefé (guard CREW_BRIEFED)
+  status    String    @default("STANDBY")
+  // STANDBY | BRIEFING | ON_DUTY | DEBRIEFING | REST | SUSPENDED — aligné blueprint crew-assignment
+  version   Int       @default(1)
   createdAt DateTime  @default(now())
 
   trip           Trip                @relation(fields: [tripId], references: [id])
@@ -1571,6 +1651,7 @@ model CrewAssignment {
 
   @@unique([tripId, staffId])
   @@index([tenantId, tripId])
+  @@index([tenantId, status])
   @@map("crew_assignments")
 }
 
@@ -3230,6 +3311,58 @@ model PaymentProviderState {
   @@map("payment_provider_states")
 }
 
+// ── OAuthProviderState : état d'activation des providers OAuth par tenant ────
+// Mirror de PaymentProviderState (même pattern : nullable tenantId, mode DISABLED|SANDBOX|LIVE,
+// audit trail activatedBy/activatedAt). Credentials côté Vault au chemin
+// `platform/auth/<providerKey>` — jamais en DB ni en env var.
+model OAuthProviderState {
+  id                    String    @id @default(cuid())
+  tenantId              String? // null = défaut plateforme
+  providerKey           String // 'google', 'microsoft', 'facebook'
+  displayName           String
+  mode                  String    @default("DISABLED") // DISABLED | SANDBOX | LIVE
+  // Chemin Vault des secrets (ex: "platform/auth/google")
+  vaultPath             String
+  // Santé (résultat du dernier healthcheck — validation creds)
+  lastHealthCheckAt     DateTime?
+  lastHealthCheckStatus String? // UP | DOWN | DEGRADED
+  lastHealthCheckError  String?
+  // Activation (LIVE nécessite MFA step-up + audit)
+  activatedBy           String?
+  activatedAt           DateTime?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, providerKey])
+  @@index([tenantId, mode])
+  @@index([providerKey])
+  @@map("oauth_provider_states")
+}
+
+// ── EmailProviderState : état des providers email côté plateforme ───────────
+// Contrairement aux autres, l'email est plateforme-global (pas tenant-scoped).
+// Un seul provider est actif à la fois (choisi via env var EMAIL_PROVIDER).
+// Cette table sert à stocker les résultats de healthcheck + métadonnées UI
+// (activatedAt, dernier test, dernier échec). tenantId est TOUJOURS null.
+model EmailProviderState {
+  id                    String    @id @default(cuid())
+  providerKey           String    @unique // 'console' | 'smtp' | 'resend' | 'o365'
+  displayName           String
+  // Chemin Vault des secrets (ex: "platform/email/smtp"). null pour console.
+  vaultPath             String?
+  lastHealthCheckAt     DateTime?
+  lastHealthCheckStatus String? // UP | DOWN | DEGRADED
+  lastHealthCheckError  String?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("email_provider_states")
+}
+
 // ── TenantTax : taxes multiples empilables (remplace tvaEnabled/tvaRate) ─────
 // Seed-migration depuis TenantBusinessConfig au provisioning.
 // base = SUBTOTAL  → taxe appliquée au HT (classique)
@@ -3341,19 +3474,19 @@ model PlatformPaymentConfig {
 // Unicité par email (une personne = une inscription) — on met à jour
 // lastAttemptAt à chaque re-soumission plutôt que de dupliquer.
 model Waitlist {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  locale        String?  // langue du visiteur au moment de l'inscription (fr/en/…)
-  source        String?  // "landing_cta" | "landing_hero" | "referral" | …
-  referrer      String?  // document.referrer — analytics (optionnel)
-  utmSource     String?
-  utmMedium     String?
-  utmCampaign   String?
-  ipHash        String?  // SHA-256 de l'IP — anti-abus, pas identifiant PII
-  userAgentHash String?  // SHA-256 user-agent — anti-bot soft
-  createdAt     DateTime @default(now())
-  lastAttemptAt DateTime @default(now())
-  attempts      Int      @default(1)
+  id                String   @id @default(cuid())
+  email             String   @unique
+  locale            String? // langue du visiteur au moment de l'inscription (fr/en/…)
+  source            String? // "landing_cta" | "landing_hero" | "referral" | …
+  referrer          String? // document.referrer — analytics (optionnel)
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  ipHash            String? // SHA-256 de l'IP — anti-abus, pas identifiant PII
+  userAgentHash     String? // SHA-256 user-agent — anti-bot soft
+  createdAt         DateTime @default(now())
+  lastAttemptAt     DateTime @default(now())
+  attempts          Int      @default(1)
   // Converti en tenant ? (null tant que pas transformé)
   convertedTenantId String?
 

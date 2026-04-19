@@ -1,22 +1,29 @@
-import { Injectable } from '@nestjs/common';
-import type {
-  IOAuthProvider, NormalizedOAuthProfile, OAuthProviderMetadata,
-} from '../types';
+import { Inject, Injectable } from '@nestjs/common';
+import type { NormalizedOAuthProfile, OAuthProviderMetadata } from '../types';
 import { OAuthError } from '../types';
+import { BaseOAuthProvider } from './base-oauth.provider';
+import { SECRET_SERVICE, type ISecretService } from '../../../infrastructure/secret/interfaces/secret.interface';
 
 /**
  * Google OAuth 2.0 + OpenID Connect.
  *
- * Activation : setter GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET dans l'env.
- * Sans ces variables, `isEnabled` est false → le provider est ignoré par
- * le registry, aucun bouton n'apparaît côté UI, les routes répondent 404.
+ * Credentials Vault : `platform/auth/google`
+ *   {
+ *     CLIENT_ID:     "xxx.apps.googleusercontent.com",
+ *     CLIENT_SECRET: "GOCSPX-yyy",
+ *   }
  *
  * Doc :
  *   https://developers.google.com/identity/protocols/oauth2/web-server
  *   https://developers.google.com/identity/openid-connect/openid-connect
  */
+interface GoogleCredentials {
+  CLIENT_ID:     string;
+  CLIENT_SECRET: string;
+}
+
 @Injectable()
-export class GoogleOAuthProvider implements IOAuthProvider {
+export class GoogleOAuthProvider extends BaseOAuthProvider<GoogleCredentials> {
   readonly meta: OAuthProviderMetadata = {
     key:         'google',
     displayName: 'Google',
@@ -24,15 +31,20 @@ export class GoogleOAuthProvider implements IOAuthProvider {
     scopes:      ['openid', 'email', 'profile'],
   };
 
-  get isEnabled(): boolean {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
+  constructor(@Inject(SECRET_SERVICE) secretService: ISecretService) {
+    super(secretService);
   }
 
-  buildAuthorizeUrl(params: {
+  protected requiredKeys(): readonly string[] {
+    return ['CLIENT_ID', 'CLIENT_SECRET'] as const;
+  }
+
+  async buildAuthorizeUrl(params: {
     state: string; redirectUri: string; tenantSlug?: string;
-  }): string {
+  }): Promise<string> {
+    const creds = await this.getCredentials();
     const q = new URLSearchParams({
-      client_id:     process.env.GOOGLE_CLIENT_ID!,
+      client_id:     creds.CLIENT_ID,
       redirect_uri:  params.redirectUri,
       response_type: 'code',
       scope:         this.meta.scopes.join(' '),
@@ -47,14 +59,16 @@ export class GoogleOAuthProvider implements IOAuthProvider {
   async exchangeCodeForProfile(params: {
     code: string; state: string; redirectUri: string;
   }): Promise<NormalizedOAuthProfile> {
+    const creds = await this.getCredentials();
+
     // 1) Échanger le code contre des tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code:          params.code,
-        client_id:     process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        client_id:     creds.CLIENT_ID,
+        client_secret: creds.CLIENT_SECRET,
         redirect_uri:  params.redirectUri,
         grant_type:    'authorization_code',
       }).toString(),

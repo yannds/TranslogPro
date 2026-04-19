@@ -311,12 +311,17 @@ function DataTableMaster<T extends { id: string }>({
   const pageData     = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSort = useCallback((key: string) => {
-    setSortKey(prev => {
-      if (prev === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return key; }
+    // NE JAMAIS imbriquer un setState dans l'updater d'un autre setState.
+    // React 18 StrictMode double-invoque les updaters pour détecter les effets
+    // de bord, ce qui provoquait un toggle asc→desc→asc invisible et laissait
+    // la direction inchangée. Les deux setState séparés sont batched par React.
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
       setSortDir('asc');
-      return key;
-    });
-  }, []);
+    }
+  }, [sortKey]);
 
   // ── Sélection ───────────────────────────────────────────────────────────────
   const pageKeys      = pageData.map(r => String(getNestedValue(r, keyField)));

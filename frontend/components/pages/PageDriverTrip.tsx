@@ -15,11 +15,12 @@ import { useState } from 'react';
 import {
   MapPin, Bus, Users, Package, Clock, CheckCircle2,
   Circle, ArrowRight, Route as RouteIcon,
+  Play, DoorOpen, Flag,
 } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch }   from '../../lib/hooks/useFetch';
-import { apiPatch }   from '../../lib/api';
+import { apiPatch, apiPost }   from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }      from '../ui/Badge';
 import { Skeleton }   from '../ui/Skeleton';
@@ -95,7 +96,7 @@ export function PageDriverTrip() {
 
   const base = `/api/tenants/${tenantId}/flight-deck`;
 
-  const { data: trip, loading, error } = useFetch<ActiveTrip | null>(
+  const { data: trip, loading, error, refetch: refetchTrip } = useFetch<ActiveTrip | null>(
     tenantId ? `${base}/active-trip` : null,
     [tenantId],
   );
@@ -108,6 +109,7 @@ export function PageDriverTrip() {
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [transitionBusy, setTransitionBusy] = useState(false);
 
   // ── Complete checklist item ───────────────────────────────────────────────
   const handleComplete = async (item: ChecklistItem) => {
@@ -120,6 +122,24 @@ export function PageDriverTrip() {
       setActionError(e instanceof Error ? e.message : t('driverTrip.errorComplete'));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // ── Transition d'état ─────────────────────────────────────────────────────
+  // POST /flight-deck/trips/:id/status — le backend vérifie que le trajet
+  // appartient au chauffeur + que la transition est autorisée dans le state
+  // graph driver (OPEN→BOARDING→IN_PROGRESS→COMPLETED).
+  const transitionTo = async (next: 'BOARDING' | 'IN_PROGRESS' | 'COMPLETED') => {
+    if (!trip) return;
+    setTransitionBusy(true);
+    setActionError(null);
+    try {
+      await apiPost(`${base}/trips/${trip.id}/status`, { status: next });
+      refetchTrip();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t('driverTrip.errorTransition'));
+    } finally {
+      setTransitionBusy(false);
     }
   };
 
@@ -200,6 +220,38 @@ export function PageDriverTrip() {
               icon={<Package className="w-5 h-5" />}
               tone="neutral"
             />
+          </section>
+
+          {/* Actions de transition d'état — 3 boutons séquentiels piloté par
+              le state graph driver (PLANNED|OPEN → BOARDING → IN_PROGRESS →
+              COMPLETED). Seule l'action "suivante" est affichée activement
+              pour éviter la confusion ; les précédentes restent visibles en
+              état désactivé pour montrer la progression. */}
+          <section aria-label={t('driverTrip.actionsLabel')} className="flex flex-wrap gap-2">
+            <Button
+              variant={(trip.status === 'PLANNED' || trip.status === 'OPEN') ? 'default' : 'outline'}
+              disabled={transitionBusy || !(trip.status === 'PLANNED' || trip.status === 'OPEN')}
+              onClick={() => transitionTo('BOARDING')}
+              leftIcon={<DoorOpen className="w-4 h-4" aria-hidden />}
+            >
+              {t('driverTrip.openBoarding')}
+            </Button>
+            <Button
+              variant={trip.status === 'BOARDING' ? 'default' : 'outline'}
+              disabled={transitionBusy || trip.status !== 'BOARDING'}
+              onClick={() => transitionTo('IN_PROGRESS')}
+              leftIcon={<Play className="w-4 h-4" aria-hidden />}
+            >
+              {t('driverTrip.startTrip')}
+            </Button>
+            <Button
+              variant={trip.status === 'IN_PROGRESS' ? 'default' : 'outline'}
+              disabled={transitionBusy || (trip.status !== 'IN_PROGRESS' && trip.status !== 'IN_PROGRESS_DELAYED')}
+              onClick={() => transitionTo('COMPLETED')}
+              leftIcon={<Flag className="w-4 h-4" aria-hidden />}
+            >
+              {t('driverTrip.completeTrip')}
+            </Button>
           </section>
 
           {/* Route & bus info */}

@@ -4,6 +4,7 @@ import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus
 import { EventTypes } from '../../common/types/domain-event.type';
 import { IncidentState } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class IncidentService {
   constructor(
     private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -53,34 +55,78 @@ export class IncidentService {
     });
   }
 
+  /**
+   * Transition d'affectation — action `assign` du blueprint incident-response.
+   * Le champ `assigneeId` est persisté en plus du changement de statut via la
+   * persist callback du moteur (même transaction).
+   */
   async assign(tenantId: string, id: string, assigneeId: string, actor: CurrentUserPayload) {
     const incident = await this.findOne(tenantId, id);
-    return this.prisma.incident.update({
-      where: { id },
-      data:  { assigneeId, status: IncidentState.ASSIGNED },
-    });
+    const result = await this.workflow.transition(
+      incident as Parameters<typeof this.workflow.transition>[0],
+      { action: 'assign', actor },
+      {
+        aggregateType: 'Incident',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.incident.update({
+            where: { id: entity.id },
+            data:  { status: toState, version: { increment: 1 }, assigneeId },
+          });
+          const event: DomainEvent = {
+            id:            uuidv4(),
+            type:          'incident.assigned',
+            tenantId,
+            aggregateId:   entity.id,
+            aggregateType: 'Incident',
+            payload:       { incidentId: entity.id, assigneeId, fromState: entity.status, toState },
+            occurredAt:    new Date(),
+          };
+          await this.eventBus.publish(event, prisma as unknown as Parameters<typeof this.eventBus.publish>[1]);
+          return updated as typeof entity;
+        },
+      },
+    );
+    return result.entity;
   }
 
+  /**
+   * Transition de résolution — action `resolve` du blueprint incident-response.
+   * Les champs `resolution` + `resolvedAt` sont persistés via la persist callback.
+   */
   async resolve(tenantId: string, id: string, resolution: string, actor: CurrentUserPayload) {
-    await this.findOne(tenantId, id);
-    return this.prisma.transact(async (tx) => {
-      const updated = await tx.incident.update({
-        where: { id },
-        data:  { status: IncidentState.RESOLVED, resolution, resolvedAt: new Date() },
-      });
-      const event: DomainEvent = {
-        id:            uuidv4(),
-        type:          EventTypes.INCIDENT_RESOLVED,
-        tenantId,
-        aggregateId:   id,
+    const incident = await this.findOne(tenantId, id);
+    const result = await this.workflow.transition(
+      incident as Parameters<typeof this.workflow.transition>[0],
+      { action: 'resolve', actor },
+      {
         aggregateType: 'Incident',
-        payload:       { incidentId: id },
-        occurredAt:    new Date(),
-      };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
-      return updated;
-    });
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.incident.update({
+            where: { id: entity.id },
+            data:  {
+              status:    toState,
+              version:   { increment: 1 },
+              resolution,
+              resolvedAt: new Date(),
+            },
+          });
+          const event: DomainEvent = {
+            id:            uuidv4(),
+            type:          EventTypes.INCIDENT_RESOLVED,
+            tenantId,
+            aggregateId:   entity.id,
+            aggregateType: 'Incident',
+            payload:       { incidentId: entity.id, fromState: entity.status, toState },
+            occurredAt:    new Date(),
+          };
+          await this.eventBus.publish(event, prisma as unknown as Parameters<typeof this.eventBus.publish>[1]);
+          return updated as typeof entity;
+        },
+      },
+    );
+    return result.entity;
   }
+
 
   async findOne(tenantId: string, id: string) {
     const incident = await this.prisma.incident.findFirst({ where: { id, tenantId } });

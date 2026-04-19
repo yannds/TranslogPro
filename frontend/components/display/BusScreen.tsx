@@ -12,7 +12,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { cn }                  from '../../lib/utils';
+import { cn, fmtDelay }        from '../../lib/utils';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
 import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
@@ -43,24 +43,21 @@ interface BusScreenProps {
   driverName?:    string;
   agencyName?:    string;
   capacity?:      number;
+  passengersConfirmed?: number;
   passengersOnBoard?: number;
   parcelsOnBoard?: number;
+  /** Retard en minutes (calculé côté backend). 0 = à l'heure. */
+  delayMinutes?:  number;
+  /** Heure de départ prévue (HH:MM) — utilisée dans l'annonce de retard. */
+  scheduledDeparture?: string;
   tenantId?:      string;
   /** Active rotation automatique des langues */
   autoRotateLang?: boolean;
 }
 
-// ─── Données démo (Congo-Brazzaville) ─────────────────────────────────────────
-
-const DEMO_STOPS: RouteStop[] = [
-  { id: 's1', cityCode: 'BZV', cityName: 'Brazzaville', scheduledAt: '07:00', distanceKm: 0,   status: 'PASSED'  },
-  { id: 's2', cityCode: 'KIN', cityName: 'Kinkala',      scheduledAt: '08:00', distanceKm: 70,  status: 'PASSED'  },
-  { id: 's3', cityCode: 'MAD', cityName: 'Madingou',     scheduledAt: '09:30', distanceKm: 155, status: 'PASSED'  },
-  { id: 's4', cityCode: 'SIB', cityName: 'Sibiti',       scheduledAt: '11:00', distanceKm: 280, status: 'CURRENT' },
-  { id: 's5', cityCode: 'MOS', cityName: 'Mossendjo',    scheduledAt: '12:30', distanceKm: 370, status: 'UPCOMING' },
-  { id: 's6', cityCode: 'DOL', cityName: 'Dolisie',      scheduledAt: '13:45', distanceKm: 440, status: 'UPCOMING' },
-  { id: 's7', cityCode: 'PNR', cityName: 'Pointe-Noire', scheduledAt: '16:00', distanceKm: 560, status: 'UPCOMING' },
-];
+// DEMO_STOPS retiré — ne plus injecter d'itinéraire fictif quand `stops` est
+// vide. Le composant affiche désormais un écran vide propre tant que PageDisplayBus
+// n'a pas hydraté `stops` depuis l'API. Voir BusScreen props defaults plus bas.
 
 // ─── Config visuelle des stops ────────────────────────────────────────────────
 
@@ -290,19 +287,31 @@ function BusTicker({
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
+/**
+ * Les defaults ci-dessous sont des valeurs **neutres** (zéros / tirets) qui
+ * évitent d'afficher des données fictives quand un parent oublie de passer
+ * une prop. Historiquement des défauts "démo" (Brazzaville→Pointe-Noire, 38
+ * passagers, bus BZV 4321 GH, chauffeur Mavoungou) apparaissaient dès qu'une
+ * prop était `undefined` — ce qui était confondant en prod : un tenant voyait
+ * ces valeurs fictives se mélanger à ses vrais trajets si une prop tombait à
+ * `undefined` (ex: bus.capacity manquant). Désormais on ne trompe plus l'œil.
+ */
 export function BusScreen({
-  tripRef          = 'TRP-20260414-004',
-  routeLabel       = 'Brazzaville → Pointe-Noire',
-  destinationCode  = 'PNR',
-  stops            = DEMO_STOPS,
-  busPlate         = 'BZV 4321 GH',
-  busModel         = 'Mercedes-Benz Actros',
-  driverName       = 'Jean-Baptiste Mavoungou',
-  agencyName       = 'Transco',
-  capacity         = 50,
-  passengersOnBoard = 38,
-  parcelsOnBoard   = 14,
-  tenantId         = 'demo',
+  tripRef          = '—',
+  routeLabel       = '—',
+  destinationCode  = '—',
+  stops            = [],
+  busPlate         = '—',
+  busModel         = '',
+  driverName       = '',
+  agencyName       = '',
+  capacity         = 0,
+  passengersConfirmed = 0,
+  passengersOnBoard = 0,
+  parcelsOnBoard   = 0,
+  delayMinutes     = 0,
+  scheduledDeparture = '',
+  tenantId         = '',
   autoRotateLang   = true,
 }: BusScreenProps) {
   const { lang, setLang, t, dir, dateLocale, dict } = useI18n();
@@ -315,6 +324,30 @@ export function BusScreen({
   const progress = current
     ? Math.round((current.distanceKm / stops[stops.length - 1].distanceKm) * 100)
     : 0;
+
+  const lateMinutes = Math.max(0, delayMinutes);
+  // Injecte un message de retard en tête du ticker si lateMinutes > 0. Même
+  // mécanisme que QuaiScreen — synthétisé côté client pour rester cohérent
+  // avec les autres notifications qui arrivent via WebSocket.
+  const delayNotifications = lateMinutes > 0
+    ? [{
+        id: `local-delay-${tripRef}`,
+        type: 'DELAY_ALERT' as const,
+        priority: 1 as const,
+        createdAt: new Date(),
+        message: {
+          fr:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          en:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          es:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          pt:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          ar:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} د`,
+          wo:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          ln:  `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+          ktu: `${t(dict.notifications.delay)} — ${routeLabel}${scheduledDeparture ? ` ${scheduledDeparture}` : ''} · +${lateMinutes} min`,
+        },
+      }]
+    : [];
+  const tickerNotifications = [...delayNotifications, ...notifications];
 
   // Rotation auto lang
   useEffect(() => {
@@ -364,6 +397,23 @@ export function BusScreen({
           <span className="text-sm" title={LANGUAGE_META[lang].label}>{LANGUAGE_META[lang].flag}</span>
           <span className="text-xs text-slate-500 dark:text-slate-500">{LANGUAGE_META[lang].label}</span>
         </div>
+
+        {/* Badge retard — ne s'affiche que si lateMinutes > 0 */}
+        {lateMinutes > 0 && (
+          <span
+            role="status"
+            aria-label={`${t(dict.notifications.delay)} ${lateMinutes} min`}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-lg px-3 py-1 shrink-0',
+              'text-sm xl:text-base font-black uppercase tracking-wide',
+              'bg-red-500/15 text-red-500 dark:bg-red-500/20 dark:text-red-400',
+              'border border-red-500/40 animate-pulse',
+            )}
+          >
+            <span aria-hidden>⏱</span>
+            <span className="tabular-nums">{fmtDelay(lateMinutes)}</span>
+          </span>
+        )}
 
         <LiveClock dateLocale={dateLocale} />
       </header>
@@ -451,7 +501,11 @@ export function BusScreen({
               icon="👥"
               label={t('col.passengers')}
               value={String(passengersOnBoard)}
-              sub={`/ ${capacity}`}
+              // Sub = confirmés (ceux qui ont effectivement un billet), pas la
+              // capacité du bus. Afficher "/60" (capacité) au-dessous de "38" à
+              // bord fait croire qu'on attend 60 personnes alors que seulement
+              // 39 ont payé — confusion classique capacity ≠ confirmed.
+              sub={`${t('ui.confirmed').toLowerCase()} ${passengersConfirmed}`}
             />
             <StatCard
               icon="📦"
@@ -485,7 +539,11 @@ export function BusScreen({
                 { label: 'Modèle',             value: busModel },
                 { label: t('col.bus'),      value: busPlate },
                 { label: t('col.agency'),   value: agencyName },
-                { label: t('col.passengers'), value: `${capacity}` },
+                // Ce champ décrit la CAPACITÉ du véhicule (propriété du bus),
+                // pas un compteur de passagers. Précédemment libellé "Passagers"
+                // il faisait croire que 60 personnes voyageaient, d'où la
+                // confusion signalée sur les écrans embarqués.
+                { label: t('ui.capacity'),  value: `${capacity} ${t('ui.places')}` },
                 { label: 'Réf',               value: tripRef },
               ].map(({ label, value }) => (
                 <div key={label}>
@@ -499,7 +557,7 @@ export function BusScreen({
       </div>
 
       {/* ── Ticker ──────────────────────────────────────────────────── */}
-      <BusTicker notifications={notifications} lang={lang} dict={dict} t={t} />
+      <BusTicker notifications={tickerNotifications} lang={lang} dict={dict} t={t} />
 
       <style>{`
         @keyframes board-ticker {

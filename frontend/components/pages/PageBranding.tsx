@@ -27,19 +27,23 @@ import { cn } from '../../lib/utils';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BrandConfig {
-  brandName:       string;
-  logoUrl?:        string;
-  faviconUrl?:     string;
-  primaryColor?:   string;
-  secondaryColor?: string;
-  accentColor?:    string;
-  textColor?:      string;
-  bgColor?:        string;
-  fontFamily?:     string;
-  metaTitle?:      string;
+  brandName:        string;
+  logoUrl?:         string;
+  faviconUrl?:      string;
+  primaryColor?:    string;
+  secondaryColor?:  string;
+  accentColor?:     string;
+  textColor?:       string;
+  bgColor?:         string;
+  fontFamily?:      string;
+  metaTitle?:       string;
   metaDescription?: string;
-  supportEmail?:   string;
-  supportPhone?:   string;
+  supportEmail?:    string;
+  supportPhone?:    string;
+  // Identité d'envoi email transactionnel — null/empty = fallback plateforme.
+  emailFromName?:    string;
+  emailFromAddress?: string;
+  emailReplyTo?:     string;
 }
 
 // ─── Champ de couleur ─────────────────────────────────────────────────────────
@@ -301,6 +305,81 @@ export function PageBranding() {
                       />
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Emails transactionnels — identité d'envoi tenant */}
+              <Card>
+                <CardHeader
+                  heading={t('branding.transactionalEmails')}
+                  description={t('branding.transactionalEmailsHint')}
+                />
+                <CardContent className="pt-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="brand-email-from-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {t('branding.emailFromName')}
+                      </label>
+                      <input
+                        id="brand-email-from-name"
+                        type="text"
+                        value={form.emailFromName ?? ''}
+                        onChange={e => handleText('emailFromName', e.target.value)}
+                        placeholder={form.brandName ?? 'TransExpress'}
+                        maxLength={120}
+                        className={fieldClass}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="brand-email-from-address" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {t('branding.emailFromAddress')}
+                      </label>
+                      <input
+                        id="brand-email-from-address"
+                        type="email"
+                        value={form.emailFromAddress ?? ''}
+                        onChange={e => handleText('emailFromAddress', e.target.value)}
+                        placeholder="noreply@votredomaine.com"
+                        maxLength={200}
+                        className={fieldClass}
+                        disabled={saving}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="brand-email-reply-to" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('branding.emailReplyTo')}
+                      <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+                        {t('common.optional')}
+                      </span>
+                    </label>
+                    <input
+                      id="brand-email-reply-to"
+                      type="email"
+                      value={form.emailReplyTo ?? ''}
+                      onChange={e => handleText('emailReplyTo', e.target.value)}
+                      placeholder="support@votredomaine.com"
+                      maxLength={200}
+                      className={fieldClass}
+                      disabled={saving}
+                    />
+                  </div>
+                  {/* Preview de l'identité d'envoi */}
+                  {(form.emailFromAddress || form.emailFromName) && (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                        {t('branding.emailPreview')}
+                      </p>
+                      <p className="text-sm font-mono text-slate-700 dark:text-slate-200">
+                        {form.emailFromName || form.brandName || 'TransLog Pro'}
+                        {' <'}{form.emailFromAddress || 'noreply@translogpro.io'}{'>'}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                    {t('branding.emailDkimWarning')}
+                  </p>
                 </CardContent>
               </Card>
 

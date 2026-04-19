@@ -1,4 +1,4 @@
-import { IsHexColor, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsEmail, IsHexColor, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 
 export class UpsertBrandDto {
   @IsString()
@@ -61,4 +61,22 @@ export class UpsertBrandDto {
   @IsOptional()
   @IsString()
   supportPhone?: string;
+
+  // ─── Identité d'envoi email transactionnel ────────────────────────────────
+  // Affiché au destinataire. Pas un secret. Si null, fallback au default
+  // plateforme (FROM_EMAIL / FROM_NAME des services email).
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  emailFromName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(200)
+  emailFromAddress?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(200)
+  emailReplyTo?: string;
 }

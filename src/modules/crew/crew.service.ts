@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService }              from '../../infrastructure/database/prisma.service';
 import { SchedulingGuardService }     from '../scheduling-guard/scheduling-guard.service';
+import { WorkflowEngine }             from '../../core/workflow/workflow.engine';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { assertTripOwnership } from '../../common/helpers/scope-filter';
 
 export interface AssignCrewDto {
@@ -14,6 +16,7 @@ export class CrewService {
   constructor(
     private readonly prisma:          PrismaService,
     private readonly schedulingGuard: SchedulingGuardService,
+    private readonly workflow:        WorkflowEngine,
   ) {}
 
   async assign(tenantId: string, tripId: string, dto: AssignCrewDto) {
@@ -134,6 +137,16 @@ export class CrewService {
     });
   }
 
+  /**
+   * Marque un membre d'équipage comme briefé — transition STANDBY → BRIEFING
+   * via le blueprint `crew-assignment` (action `assign_briefing`).
+   *
+   * Idempotent : si déjà BRIEFING/ON_DUTY, met à jour `briefedAt` si manquant
+   * puis retourne l'entité sans nouvelle transition.
+   *
+   * Le champ legacy `briefedAt` est conservé pour rétro-compat (consommé par
+   * `isFullyBriefed()` + UI). Il est toujours posé au moment du briefing.
+   */
   async markBriefed(tenantId: string, tripId: string, staffId: string, scope?: ScopeContext) {
     // Scope own : un membre d'équipage ne peut marquer briefé QUE lui-même.
     if (scope?.scope === 'own' && staffId !== scope.userId) {
@@ -144,12 +157,37 @@ export class CrewService {
     });
     if (!assignment) throw new NotFoundException('Assignment introuvable');
 
-    const res = await this.prisma.crewAssignment.updateMany({
-      where: { tripId, staffId, tenantId },
-      data:  { briefedAt: new Date() },
-    });
-    if (res.count === 0) throw new NotFoundException('Assignment introuvable');
-    return this.prisma.crewAssignment.findFirst({ where: { tripId, staffId, tenantId } });
+    // Idempotent — déjà briefé ou au-delà
+    if (assignment.status !== 'STANDBY') {
+      if (!assignment.briefedAt) {
+        return this.prisma.crewAssignment.update({
+          where: { id: assignment.id },
+          data:  { briefedAt: new Date() },
+        });
+      }
+      return assignment;
+    }
+
+    const actor = { id: staffId, tenantId } as CurrentUserPayload;
+    const result = await this.workflow.transition(
+      assignment as { id: string; status: string; tenantId: string; version: number },
+      { action: 'assign_briefing', actor },
+      {
+        aggregateType: 'CrewAssignment',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.crewAssignment.update({
+            where: { id: entity.id },
+            data:  {
+              status:    toState,
+              version:   { increment: 1 },
+              briefedAt: new Date(),
+            },
+          });
+          return updated as typeof entity;
+        },
+      },
+    );
+    return result.entity;
   }
 
   /**

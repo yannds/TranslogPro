@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react';
 import {
   CreditCard, Clock, AlertTriangle, CheckCircle2, XCircle, Loader2,
-  RefreshCw, Ban, ExternalLink,
+  RefreshCw, Ban,
 } from 'lucide-react';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useI18n } from '../../lib/i18n/useI18n';
@@ -34,29 +34,42 @@ interface BillingDetails {
   summary: BillingSummary;
   intents: Array<{ id: string; status: string; amount: number; currency: string; createdAt: string; settledAt: string | null }>;
   invoices: Array<{ id: string; number: string; status: string; totalAmount: number; currency: string; createdAt: string; paidAt: string | null }>;
-  savedMethod: null | { method: string; provider: string | null; lastSuccessAt: string | null };
+  savedMethod: null | {
+    method:        string;
+    provider:      string | null;
+    lastSuccessAt: string | null;
+    brand:         string | null;
+    last4:         string | null;
+    tokenized:     boolean;
+  };
 }
 
 export function PageAdminBilling() {
   const { t, lang } = useI18n();
-  const [data,     setData]     = useState<BillingDetails | null>(null);
+  // État sentinel en 3 temps : `undefined` = chargement initial, `null` = le
+  // backend a répondu sans souscription (tenant non-onboardé / pas encore
+  // provisionné), `BillingDetails` = OK. Sans cette distinction, une réponse
+  // `null` valide fige la page sur un spinner infini (régression observée).
+  const [data,     setData]     = useState<BillingDetails | null | undefined>(undefined);
   const [loadErr,  setLoadErr]  = useState(false);
   const [busy,     setBusy]     = useState<null | 'checkout' | 'toggle' | 'cancel' | 'resume'>(null);
   const [msg,      setMsg]      = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   async function reload() {
     setLoadErr(false);
+    setData(undefined);
     try {
-      const r = await apiFetch<BillingDetails>('/api/v1/subscription/billing', { skipRedirectOn401: true });
-      setData(r);
+      const r = await apiFetch<BillingDetails | null>('/api/v1/subscription/billing', { skipRedirectOn401: true });
+      setData(r ?? null);
     } catch {
       setLoadErr(true);
     }
   }
   useEffect(() => { void reload(); }, []);
 
-  if (loadErr) return <FullError onRetry={reload} />;
-  if (!data)   return <FullLoading />;
+  if (loadErr)        return <FullError onRetry={reload} />;
+  if (data === undefined) return <FullLoading />;
+  if (data === null)  return <NoSubscription onRetry={reload} />;
 
   const s = data.summary;
   const numberFmt = new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR', { maximumFractionDigits: 0 });
@@ -188,12 +201,8 @@ export function PageAdminBilling() {
             <InfoBlock
               icon={CreditCard}
               label={t('adminBilling.method.saved')}
-              value={data.savedMethod
-                ? `${t('billing.method.' + data.savedMethod.method as any)} · ${data.savedMethod.provider ?? ''}`
-                : t('adminBilling.method.none')}
-              hint={data.savedMethod?.lastSuccessAt
-                ? `${t('adminBilling.method.lastUsed')} ${dateFmt.format(new Date(data.savedMethod.lastSuccessAt))}`
-                : undefined}
+              value={formatSavedMethod(data.savedMethod, t)}
+              hint={savedMethodHint(data.savedMethod, dateFmt, t)}
             />
           </div>
 
@@ -429,6 +438,42 @@ function FullLoading() {
     </div>
   );
 }
+function NoSubscription({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="p-4 sm:p-6">
+      <header className="flex items-center gap-3 mb-6">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400">
+          <CreditCard className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{t('adminBilling.title')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('adminBilling.subtitle')}</p>
+        </div>
+      </header>
+      <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
+        <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <CreditCard className="h-6 w-6" aria-hidden />
+        </span>
+        <div className="max-w-md">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            {t('adminBilling.noSubscription.title')}
+          </h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            {t('adminBilling.noSubscription.body')}
+          </p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden />
+          {t('adminBilling.retry')}
+        </button>
+      </div>
+    </div>
+  );
+}
 function FullError({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (
@@ -454,4 +499,31 @@ function billingCycleLabel(cycle: string, t: (k: string) => string): string {
   if (cycle === 'MONTHLY') return t('adminBilling.cycle.monthly');
   if (cycle === 'YEARLY')  return t('adminBilling.cycle.yearly');
   return '';
+}
+
+/**
+ * Formate le moyen de paiement pour affichage. Priorité à la représentation
+ * "marque •••• last4" si le provider nous a donné la tokenisation, sinon on
+ * retombe sur le libellé générique du canal + provider.
+ */
+function formatSavedMethod(
+  m: BillingDetails['savedMethod'],
+  t: (k: string) => string,
+): string {
+  if (!m) return t('adminBilling.method.none');
+  if (m.brand && m.last4) return `${m.brand} •••• ${m.last4}`;
+  const label = t(('billing.method.' + m.method) as any);
+  return m.provider ? `${label} · ${m.provider}` : label;
+}
+
+function savedMethodHint(
+  m: BillingDetails['savedMethod'],
+  dateFmt: Intl.DateTimeFormat,
+  t: (k: string) => string,
+): string | undefined {
+  if (!m) return undefined;
+  const parts: string[] = [];
+  if (m.tokenized) parts.push(t('adminBilling.method.tokenized'));
+  if (m.lastSuccessAt) parts.push(`${t('adminBilling.method.lastUsed')} ${dateFmt.format(new Date(m.lastSuccessAt))}`);
+  return parts.length ? parts.join(' · ') : undefined;
 }

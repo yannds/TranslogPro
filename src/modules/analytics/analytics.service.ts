@@ -1,9 +1,129 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
+/**
+ * Fenêtre glissante (ms) utilisée pour compter les clôtures caisse avec écart
+ * exposées au KPI admin. 30 jours par défaut — aligné sur l'horizon rétention
+ * que la plupart des transporteurs exigent pour un audit mensuel.
+ */
+const DISCREPANCY_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000;
+
+/**
+ * Échappe une valeur pour insertion dans une ligne CSV RFC 4180.
+ * Guillemets doublés + encadrement si virgule / newline / guillemet.
+ */
+function csvEscape(s: string | null | undefined): string {
+  if (s === null || s === undefined) return '';
+  const needsQuote = /[",\n\r]/.test(s);
+  const escaped = s.replace(/"/g, '""');
+  return needsQuote ? `"${escaped}"` : escaped;
+}
+
 @Injectable()
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * KPIs lean du jour — consommé par l'app mobile admin.
+   * Payload minimal pour un affichage rapide (pas de historique, pas de séries).
+   *
+   * Security : filtrage strict par tenantId. Scope .agency déjà géré côté
+   * controller (injecte agencyId de l'acteur si scope='agency').
+   */
+  async getKpis(tenantId: string, agencyId?: string) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const ticketFilter = {
+      tenantId,
+      createdAt: { gte: startOfDay, lte: endOfDay },
+      ...(agencyId ? { agencyId } : {}),
+    };
+    const parcelFilter = {
+      tenantId,
+      createdAt: { gte: startOfDay, lte: endOfDay },
+      ...(agencyId ? { agencyId } : {}),
+    };
+    const registerFilter = {
+      tenantId,
+      status: 'OPEN' as const,
+      ...(agencyId ? { agencyId } : {}),
+    };
+    const discrepancyFilter = {
+      tenantId,
+      status: 'DISCREPANCY' as const,
+      closedAt: {
+        gte: new Date(Date.now() - DISCREPANCY_WINDOW_MS),
+      },
+      ...(agencyId ? { agencyId } : {}),
+    };
+
+    const [ticketsToday, parcelsToday, openIncidents, openRegisters, discrepancyCount] = await Promise.all([
+      this.prisma.ticket.count({ where: ticketFilter }),
+      this.prisma.parcel.count({ where: parcelFilter }),
+      this.prisma.incident.count({ where: { tenantId, status: { in: ['OPEN', 'ASSIGNED'] } } }),
+      this.prisma.cashRegister.count({ where: registerFilter }),
+      this.prisma.cashRegister.count({ where: discrepancyFilter }),
+    ]);
+
+    return { ticketsToday, parcelsToday, openIncidents, openRegisters, discrepancyCount };
+  }
+
+  /**
+   * Export CSV des ventes billets sur une période.
+   *
+   * Sécurité :
+   *   - Filtrage WHERE strict : tenantId + agencyId si scope.agency.
+   *   - Fenêtre plafonnée (configurable) pour éviter un dump dégénéré.
+   *   - Pas de PII du CRM : on exporte le passengerName (présent sur le billet
+   *     et déjà connu de l'acteur) mais pas l'email/téléphone.
+   *
+   * Retour : CSV string (le controller ajoute le Content-Disposition).
+   */
+  async exportTicketsCsv(
+    tenantId: string,
+    agencyId: string | undefined,
+    from: Date,
+    to: Date,
+    maxRows: number,
+  ): Promise<string> {
+    const rows = await this.prisma.ticket.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: from, lte: to },
+        ...(agencyId ? { agencyId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    maxRows,
+      select: {
+        id: true, status: true, fareClass: true, seatNumber: true,
+        pricePaid: true, agencyId: true, createdAt: true,
+        passengerName: true, tripId: true,
+      },
+    });
+
+    const header = [
+      'id', 'createdAt', 'status', 'fareClass', 'seatNumber',
+      'pricePaid', 'agencyId', 'tripId', 'passengerName',
+    ];
+    const lines = [header.join(',')];
+    for (const r of rows) {
+      lines.push([
+        r.id,
+        r.createdAt.toISOString(),
+        r.status,
+        r.fareClass,
+        r.seatNumber ?? '',
+        String(r.pricePaid),
+        r.agencyId ?? '',
+        r.tripId,
+        csvEscape(r.passengerName),
+      ].join(','));
+    }
+    return lines.join('\n');
+  }
 
   /**
    * Dashboard agrégé.

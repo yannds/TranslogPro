@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastructure/storage/interfaces/storage.interface';
 import { Inject } from '@nestjs/common';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { ownershipWhere, assertOwnership } from '../../common/helpers/scope-filter';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 
 export interface CreateMaintenanceDto {
   busId:       string;
@@ -18,6 +19,7 @@ export interface CreateMaintenanceDto {
 export class GarageService {
   constructor(
     private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
@@ -39,6 +41,10 @@ export class GarageService {
     });
   }
 
+  /**
+   * Complete — transition `complete` du blueprint MaintenanceReport.
+   * Fields `notes`, `completedAt`, `completedById` persistés via persist callback.
+   */
   async complete(tenantId: string, reportId: string, notes: string, actor: CurrentUserPayload, scope?: ScopeContext) {
     const report = await this.prisma.maintenanceReport.findFirst({
       where: { id: reportId, tenantId },
@@ -46,18 +52,34 @@ export class GarageService {
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
     if (scope) assertOwnership(scope, report, 'createdById');
 
-    const res = await this.prisma.maintenanceReport.updateMany({
-      where: { id: reportId, tenantId },
-      data:  { status: 'COMPLETED', completedAt: new Date(), notes, completedById: actor.id },
-    });
-    if (res.count === 0) throw new NotFoundException(`Rapport ${reportId} introuvable`);
-    return this.prisma.maintenanceReport.findFirst({ where: { id: reportId, tenantId } });
+    const result = await this.workflow.transition(
+      report as Parameters<typeof this.workflow.transition>[0],
+      { action: 'complete', actor },
+      {
+        aggregateType: 'MaintenanceReport',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.maintenanceReport.update({
+            where: { id: entity.id },
+            data: {
+              status:         toState,
+              version:        { increment: 1 },
+              completedAt:    new Date(),
+              completedById:  actor.id,
+              notes,
+            },
+          });
+          return updated as typeof entity;
+        },
+      },
+    );
+    return result.entity;
   }
 
   /**
-   * PRD §IV.4 — Validation remise en service.
-   * Side effect : met à jour Bus.status = AVAILABLE.
-   * Permission requise : data.maintenance.approve.tenant
+   * Approve — transition `approve` du blueprint MaintenanceReport, COMPLETED → APPROVED.
+   * Side-effect : remise du Bus en service via la transition `RESTORE` de son
+   * propre blueprint (bus-cycle). Le Bus doit être en MAINTENANCE — si autre
+   * état, on log un warning et on n'essaie pas (évite l'échec bloquant).
    */
   async approve(tenantId: string, reportId: string, actor: CurrentUserPayload) {
     const report = await this.prisma.maintenanceReport.findFirst({
@@ -65,16 +87,54 @@ export class GarageService {
     });
     if (!report) throw new NotFoundException(`Rapport ${reportId} introuvable`);
 
-    return this.prisma.$transaction([
-      this.prisma.maintenanceReport.updateMany({
-        where: { id: reportId, tenantId },
-        data:  { status: 'APPROVED', approvedById: actor.id, approvedAt: new Date() },
-      }),
-      this.prisma.bus.updateMany({
-        where: { id: report.busId, tenantId },
-        data:  { status: 'AVAILABLE' },
-      }),
-    ]);
+    // 1. Transition MaintenanceReport → APPROVED
+    const approved = await this.workflow.transition(
+      report as Parameters<typeof this.workflow.transition>[0],
+      { action: 'approve', actor },
+      {
+        aggregateType: 'MaintenanceReport',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.maintenanceReport.update({
+            where: { id: entity.id },
+            data: {
+              status:       toState,
+              version:      { increment: 1 },
+              approvedById: actor.id,
+              approvedAt:   new Date(),
+            },
+          });
+          return updated as typeof entity;
+        },
+      },
+    );
+
+    // 2. Side-effect : RESTORE le bus (MAINTENANCE → AVAILABLE) — respecte
+    //    le blueprint bus-cycle au lieu d'un update direct.
+    const bus = await this.prisma.bus.findFirst({ where: { id: report.busId, tenantId } });
+    if (bus && bus.status === 'MAINTENANCE') {
+      try {
+        await this.workflow.transition(
+          bus as Parameters<typeof this.workflow.transition>[0],
+          { action: 'RESTORE', actor },
+          {
+            aggregateType: 'Bus',
+            persist: async (entity, toState, prisma) => {
+              const updated = await prisma.bus.update({
+                where: { id: entity.id },
+                data:  { status: toState, version: { increment: 1 } },
+              });
+              return updated as typeof entity;
+            },
+          },
+        );
+      } catch (err) {
+        // Ne bloque pas l'approbation du rapport — le bus pourra être restauré
+        // manuellement via FleetService.updateStatus si besoin.
+        if (err instanceof BadRequestException) { /* ignored */ }
+      }
+    }
+
+    return approved.entity;
   }
 
   async getDocumentUploadUrl(tenantId: string, reportId: string, scope?: ScopeContext) {

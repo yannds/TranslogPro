@@ -1,0 +1,27 @@
+appId: com.translogpro.mobile
+---
+- launchApp:
+    clearState: false
+- runFlow: login.yaml
+
+# Bascule sur l'onglet Incident (toujours présent quel que soit le rôle).
+- tapOn: "Incident"
+- assertVisible:
+    text: "Signaler|Report|customerIncidents"
+    optional: true
+
+# Description — au moins 10 chars pour passer la validation serveur.
+- tapOn:
+    text: "Description"
+    index: 0
+    optional: true
+- inputText: "Test automatisé Maestro — signalement de démonstration."
+- hideKeyboard
+
+# Envoi
+- tapOn:
+    text: "Envoyer|Send|Mettre en file"
+- extendedWaitUntil:
+    visible:
+      text: "OK|merci|thank"
+    timeout: 10000

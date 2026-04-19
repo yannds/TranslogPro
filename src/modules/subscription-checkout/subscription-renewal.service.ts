@@ -2,8 +2,11 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { PaymentOrchestrator } from '../../infrastructure/payment/payment-orchestrator.service';
 import type { PaymentMethod, PaymentCurrency } from '../../infrastructure/payment/interfaces/payment.interface';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * SubscriptionRenewalService — J-3 avant fin de période.
@@ -37,11 +40,12 @@ export class SubscriptionRenewalService {
 
   constructor(
     private readonly prisma:       PrismaService,
+    private readonly config:       PlatformConfigService,
     private readonly orchestrator: PaymentOrchestrator,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
-  @Cron('0 10 * * *') // 10:00 chaque jour
+  @Cron('0 10 * * *') // 10:00 — convention scheduling
   async runRenewalReminders(): Promise<void> {
     if (process.env.RENEWAL_REMINDERS_ENABLED === 'false') {
       this.logger.log('Skipped — RENEWAL_REMINDERS_ENABLED=false');
@@ -49,11 +53,12 @@ export class SubscriptionRenewalService {
     }
 
     const now = Date.now();
-    const DAY = 24 * 60 * 60 * 1000;
-    // Fenêtre J-3 : trouve les subs dont `currentPeriodEnd` tombe dans [3, 4[ jours.
-    // La borne [3, 4[ évite le doublon si le cron tourne plusieurs fois dans la journée.
-    const windowStart = new Date(now + 3 * DAY);
-    const windowEnd   = new Date(now + 4 * DAY);
+    const leadDays = await this.config.getNumber('renewal.leadDays');
+    // Fenêtre J-leadDays : trouve les subs dont `currentPeriodEnd` tombe dans
+    // [leadDays, leadDays+1[ jours. Borne stricte → pas de doublon si le cron
+    // tourne plusieurs fois dans la journée.
+    const windowStart = new Date(now + leadDays     * MS_PER_DAY);
+    const windowEnd   = new Date(now + (leadDays+1) * MS_PER_DAY);
 
     const subs = await this.prisma.platformSubscription.findMany({
       where: {
@@ -92,15 +97,23 @@ export class SubscriptionRenewalService {
       const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
       const billingUrl = `https://${sub.tenant.slug}.${baseDomain}/admin/billing`;
 
-      // Si auto-renew activé ET qu'on a la méthode du dernier paiement,
-      // on tente un checkout one-click (Intent créé, paymentUrl envoyé).
-      // Sinon → rappel classique avec lien vers /admin/billing.
+      // Si auto-renew activé ET qu'on a la méthode du dernier paiement :
+      //   - methodToken présent  → Intent créé avec token, provider peut
+      //     prélever silencieusement (paymentUrl souvent absent). On envoie
+      //     un email "Votre prélèvement a été initié" (informatif).
+      //   - methodToken absent   → Intent créé, paymentUrl revient, on envoie
+      //     "1-click confirmer" pour que l'admin complete.
+      // Sans `autoRenew` → rappel classique avec lien vers /admin/billing.
       let confirmUrl: string | undefined;
+      const tokenized = Boolean(refs.methodToken);
       if (sub.autoRenew && refs.lastMethod) {
-        confirmUrl = await this.tryCreateRenewalIntent(sub.tenantId, sub, refs.lastMethod).catch(err => {
+        confirmUrl = await this.tryCreateRenewalIntent(sub.tenantId, sub, refs.lastMethod, refs).catch(err => {
           this.logger.warn(`[renewal] auto-renew intent failed tenant=${sub.tenant!.slug}: ${(err as Error).message}`);
           return undefined;
         });
+        // Auto-charge silencieuse : pas d'URL à renvoyer, mais il faut quand
+        // même notifier — on pointe sur /admin/billing pour que l'admin vérifie.
+        if (tokenized && !confirmUrl) confirmUrl = billingUrl;
       }
 
       try {
@@ -160,6 +173,7 @@ export class SubscriptionRenewalService {
     tenantId: string,
     sub: { id: string; plan?: { price: number; currency: string; name: string } | null; currentPeriodEnd: Date | null },
     method: string,
+    refs: Record<string, any>,
   ): Promise<string | undefined> {
     if (!sub.plan) return undefined;
     const supported = ['XAF', 'XOF', 'NGN', 'GHS', 'KES', 'USD'];
@@ -168,6 +182,11 @@ export class SubscriptionRenewalService {
       : 'XAF') as PaymentCurrency;
 
     const periodKey = sub.currentPeriodEnd?.toISOString().slice(0, 10) ?? Date.now();
+    // Quand on a customerRef/methodToken du PSP, on les passe dans metadata.
+    // Le provider concret (Stripe, Flutterwave…) les lira et tentera un
+    // prélèvement direct sans interaction — retour SUCCEEDED synchrone.
+    // Si le provider ne supporte pas la tokenisation, il fallback sur
+    // paymentUrl (comportement actuel sans token).
     const result = await this.orchestrator.createIntent(tenantId, {
       entityType:     'SUBSCRIPTION',
       entityId:       sub.id,
@@ -176,7 +195,13 @@ export class SubscriptionRenewalService {
       currency,
       idempotencyKey: `sub-${sub.id}-renewal-${periodKey}`,
       description:    `Renouvellement ${sub.plan.name}`,
-      metadata:       { subscriptionId: sub.id, renewal: true },
+      metadata:       {
+        subscriptionId: sub.id,
+        renewal:        true,
+        // Passés au provider pour auto-charge silencieuse si supporté :
+        customerRef:    refs.customerRef,
+        methodToken:    refs.methodToken,
+      },
     });
 
     return result.paymentUrl;

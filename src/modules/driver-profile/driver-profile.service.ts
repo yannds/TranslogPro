@@ -276,7 +276,8 @@ export class DriverProfileService {
     return updated;
   }
 
-  async getLicensesForDriver(tenantId: string, staffId: string) {
+  async getLicensesForDriver(tenantId: string, staffId: string, scope?: ScopeContext) {
+    await this._assertStaffOwnership(tenantId, staffId, scope);
     return this.prisma.driverLicense.findMany({
       where:   { tenantId, staffId },
       orderBy: { expiresAt: 'asc' },
@@ -630,7 +631,8 @@ export class DriverProfileService {
     return { uploadUrl: url, fileKey: key };
   }
 
-  async getTrainingsForDriver(tenantId: string, staffId: string) {
+  async getTrainingsForDriver(tenantId: string, staffId: string, scope?: ScopeContext) {
+    await this._assertStaffOwnership(tenantId, staffId, scope);
     return this.prisma.driverTraining.findMany({
       where:   { tenantId, staffId },
       include: { type: true },

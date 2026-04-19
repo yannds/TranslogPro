@@ -31,6 +31,7 @@ import {
   ChangeSubscriptionPlanDto,
   CreateInvoiceDto,
   CreateSubscriptionDto,
+  ExtendTrialDto,
   MarkInvoicePaidDto,
   UpdateSubscriptionStatusDto,
 } from './dto/billing.dto';
@@ -67,6 +68,11 @@ export class PlatformBillingController {
   @Patch('subscriptions/:id/status')
   changeStatus(@Param('id') id: string, @Body() dto: UpdateSubscriptionStatusDto) {
     return this.billing.updateStatus(id, dto);
+  }
+
+  @Patch('subscriptions/:id/extend-trial')
+  extendTrial(@Param('id') id: string, @Body() dto: ExtendTrialDto) {
+    return this.billing.extendTrial(id, dto);
   }
 
   // ── Invoices ────────────────────────────────────────────────────────────

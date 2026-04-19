@@ -289,6 +289,9 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'drv-home':            return <LazyDriverTrip />;
     case 'drv-manifest':        return <LazyDriverManifest />;
     case 'drv-checkin':         return <LazyDriverCheckin />;
+    // Même composant que l'agent quai (PageQuaiScan). Les modes disponibles
+    // sont décidés runtime par /scan/capabilities selon les perms du DRIVER.
+    case 'drv-scan':            return <LazyQuaiScan />;
     case 'drv-freight':         return <LazyDriverFreight />;
     case 'drv-events':          return <LazyDriverEvents />;
     case 'drv-report':          return <LazyDriverReport />;

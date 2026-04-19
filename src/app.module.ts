@@ -49,6 +49,7 @@ import { RouteModule } from './modules/route/route.module';
 import { StationModule } from './modules/station/station.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { TravelerModule } from './modules/traveler/traveler.module';
+import { ScanModule } from './modules/scan/scan.module';
 import { DlqModule } from './modules/dlq/dlq.module';
 import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.module';
 import { PlatformModule }   from './modules/platform/platform.module';
@@ -56,6 +57,7 @@ import { PlatformPlansModule }     from './modules/platform-plans/platform-plans
 import { PlatformBillingModule }   from './modules/platform-billing/platform-billing.module';
 import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module';
 import { PlatformConfigModule }    from './modules/platform-config/platform-config.module';
+import { PlatformEmailModule }     from './modules/platform-email/platform-email.module';
 import { SupportModule }           from './modules/support/support.module';
 import { DocumentsModule }      from './modules/documents/documents.module';
 import { TemplatesModule }       from './modules/templates/templates.module';
@@ -158,6 +160,7 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     StationModule,
     GeoModule,
     TravelerModule,
+    ScanModule,
     DlqModule,
     WorkflowDispatchModule,
     // Platform SaaS (bootstrap + staff interne)
@@ -170,6 +173,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     PlatformAnalyticsModule,
     // Config plateforme — seuils/paramètres DB-driven (SA settings)
     PlatformConfigModule,
+    // Email plateforme — liste providers + healthcheck (read-only sur le choix)
+    PlatformEmailModule,
     // Support tenant → plateforme (tickets + thread)
     SupportModule,
     // Documents imprimables (billets, manifestes, colis, factures)

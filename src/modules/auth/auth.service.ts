@@ -63,6 +63,11 @@ export interface AuthUserDto {
    *   - afficher le tenant courant dans l'UI
    */
   effectiveTenantId: string;
+  /**
+   * Slug du tenant effectif — utilisé par le mobile pour appeler
+   * /public/:tenantSlug/portal/* (endpoints portail voyageur, pas d'auth).
+   */
+  tenantSlug:      string | null;
   roleId:          string | null;
   roleName:        string | null;
   userType:        string;
@@ -727,7 +732,7 @@ export class AuthService {
       }),
       this.prisma.tenant.findUnique({
         where:  { id: effectiveTenantId },
-        select: { onboardingCompletedAt: true, businessActivity: true },
+        select: { onboardingCompletedAt: true, businessActivity: true, slug: true },
       }),
       this.prisma.platformSubscription.findUnique({
         where:  { tenantId: effectiveTenantId },
@@ -756,6 +761,7 @@ export class AuthService {
       name:             user.name,
       tenantId:         user.tenantId,
       effectiveTenantId,
+      tenantSlug:       tenant?.slug ?? null,
       roleId:           user.roleId,
       roleName:         user.role?.name ?? null,
       userType:         user.userType,

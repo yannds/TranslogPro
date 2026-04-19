@@ -1,10 +1,14 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import {
   buildActivationEmail, type ActivationDay, type ActivationLocale,
 } from './emails/activation.templates';
+
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY  = 24 * MS_PER_HOUR;
 
 /**
  * ActivationEmailService — drip post-signup en 3 emails maximum.
@@ -26,10 +30,11 @@ export class ActivationEmailsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: PlatformConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
-  @Cron('0 9 * * *') // 09:00 chaque jour
+  @Cron('0 9 * * *') // 09:00 chaque jour — convention de scheduling, pas une valeur métier
   async runDailyDrip(): Promise<void> {
     if (process.env.ACTIVATION_EMAILS_ENABLED === 'false') {
       this.logger.log('Skipped — ACTIVATION_EMAILS_ENABLED=false');
@@ -38,27 +43,35 @@ export class ActivationEmailsService {
     this.logger.log('▶ Activation drip started');
 
     const now = Date.now();
-    const DAY  = 24 * 60 * 60 * 1000;
 
-    // Critères de fenêtre : un tenant créé il y a [1-2[ jours reçoit day1 ;
-    // [3-7[ jours → day3 ; [7-60[ jours → day7. Au-delà de 60 jours, plus
-    // d'email d'activation (comportement standard SaaS).
+    // Fenêtres de tir pilotées par PlatformConfig — zéro magic number.
+    const [day1Hrs, day3Hrs, day7Hrs, maxAgeDays] = await Promise.all([
+      this.config.getNumber('activation.day1.ageHours'),
+      this.config.getNumber('activation.day3.ageHours'),
+      this.config.getNumber('activation.day7.ageHours'),
+      this.config.getNumber('activation.maxAgeDays'),
+    ]);
+    const maxAgeMs = maxAgeDays * MS_PER_DAY;
+
+    // day1 tombe dans [day1Hrs, day3Hrs[ ; day3 dans [day3Hrs, day7Hrs[ ;
+    // day7 dans [day7Hrs, maxAgeDays[. Bornes strictes pour éviter les doublons
+    // quand les bornes chevauchent avec le jour suivant.
     const day1Candidates = await this.prisma.tenant.findMany({
       where: {
-        createdAt: { lt: new Date(now - 1 * DAY), gte: new Date(now - 2 * DAY) },
+        createdAt: { lt: new Date(now - day1Hrs * MS_PER_HOUR), gte: new Date(now - day3Hrs * MS_PER_HOUR) },
         onboardingCompletedAt: null,
       },
       include: this.tenantInclude(),
     });
     const day3Candidates = await this.prisma.tenant.findMany({
       where: {
-        createdAt: { lt: new Date(now - 3 * DAY), gte: new Date(now - 7 * DAY) },
+        createdAt: { lt: new Date(now - day3Hrs * MS_PER_HOUR), gte: new Date(now - day7Hrs * MS_PER_HOUR) },
       },
       include: this.tenantInclude(),
     });
     const day7Candidates = await this.prisma.tenant.findMany({
       where: {
-        createdAt: { lt: new Date(now - 7 * DAY), gte: new Date(now - 60 * DAY) },
+        createdAt: { lt: new Date(now - day7Hrs * MS_PER_HOUR), gte: new Date(now - maxAgeMs) },
       },
       include: this.tenantInclude(),
     });

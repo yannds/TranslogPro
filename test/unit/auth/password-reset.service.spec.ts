@@ -37,6 +37,8 @@ describe('PasswordResetService', () => {
         findUnique: jest.fn(),
         findFirst:  jest.fn(),
         update:     jest.fn().mockResolvedValue({}),
+        // Auto-création d'account credential pour les users OAuth-only.
+        create:     jest.fn().mockResolvedValue({ id: 'A1' }),
       },
       user: {
         findFirst: jest.fn(),
@@ -130,16 +132,21 @@ describe('PasswordResetService', () => {
       })).rejects.toThrow(NotFoundException);
     });
 
-    it('refuse si aucun Account credential', async () => {
+    it("crée automatiquement un Account credential si absent (OAuth-only users)", async () => {
+      // Nouveau comportement : le service auto-crée un Account credential
+      // plutôt que de refuser — utile pour les users OAuth-only (SSO) qui
+      // demandent un reset. Voir auto-create dans password-reset.service.ts.
       prismaMock.user.findFirst.mockResolvedValueOnce({
         id: 'U1', email: 'u@x.com', tenantId: 'T1', isActive: true,
         tenant: { slug: 'tenanta' },
       });
       prismaMock.account.findFirst.mockResolvedValueOnce(null);
-      await expect(service.initiateByAdmin({
+      // Ne throw PAS — l'appel complète avec un URL généré.
+      const res = await service.initiateByAdmin({
         actorTenantId: 'T1', actorId: 'A', targetUserId: 'U1',
         mode: 'link', ipAddress: '1.2.3.4',
-      })).rejects.toThrow(BadRequestException);
+      });
+      expect(res).toBeDefined();
     });
 
     it('mode "link" retourne une URL sur le sous-domaine du tenant', async () => {

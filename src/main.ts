@@ -36,9 +36,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // HTTP Security headers (CSP, X-Frame-Options, HSTS, etc.)
+  // Dev : pas de HSTS — sinon le navigateur upgrade http→https sur les
+  // sous-domaines .translog.test et l'API NestJS (qui ne sert pas TLS)
+  // se retrouve appelée en https, casse les preflights CORS.
   app.use(helmet({
     contentSecurityPolicy: process.env.NODE_ENV === 'production',
     crossOriginEmbedderPolicy: false, // Vite assets en dev
+    hsts:                      process.env.NODE_ENV === 'production',
   }));
 
   // Cookie parser (lecture du cookie translog_session sur /api/auth/me, etc.)
@@ -59,9 +63,20 @@ async function bootstrap() {
   app.useGlobalInterceptors(new RequestIdInterceptor(), new LoggingInterceptor(), new PrismaExceptionInterceptor());
 
   // CORS (configuré par tenant en production via Kong)
+  const isDev = process.env.NODE_ENV === 'development';
   app.enableCors({
-    origin:      process.env.NODE_ENV === 'development'
-      ? ['http://localhost:5173', 'http://localhost:5174']
+    origin: isDev
+      ? (origin, cb) => {
+          // Dev : autorise les sources connues — Vite (5173/5174), Expo web (8081),
+          // et tout sous-domaine .translog.test:PORT (tenant subdomains locaux).
+          if (!origin) return cb(null, true); // requêtes same-origin / curl
+          const allowed =
+            origin === 'http://localhost:5173' ||
+            origin === 'http://localhost:5174' ||
+            origin === 'http://localhost:8081' ||
+            /^https?:\/\/[^/]+\.translog\.test(?::\d+)?$/.test(origin);
+          cb(null, allowed);
+        }
       : false,
     credentials: true,
   });

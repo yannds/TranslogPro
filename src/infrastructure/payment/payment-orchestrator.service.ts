@@ -491,12 +491,26 @@ export class PaymentOrchestrator {
     // Post-transaction : émet un événement domaine si transition terminale atteinte.
     // Les modules métier (subscription-checkout, ticketing, parcel) s'abonnent
     // via @OnEvent pour réconcilier leur état (abonnement ACTIVE, ticket PAID…).
+    // On propage les champs de tokenisation (customerRef, methodToken, last4,
+    // brand) quand le provider les a fournis — cruciale pour l'auto-renew.
     if (transitionedTo === 'SUCCEEDED' || transitionedTo === 'FAILED') {
-      await this.emitIntentTerminalEvent(intentId, transitionedTo);
+      await this.emitIntentTerminalEvent(intentId, transitionedTo, {
+        customerRef: result.customerRef,
+        methodToken: result.methodToken,
+        methodLast4: result.methodLast4,
+        methodBrand: result.methodBrand,
+      });
     }
   }
 
-  private async emitIntentTerminalEvent(intentId: string, status: 'SUCCEEDED' | 'FAILED') {
+  private async emitIntentTerminalEvent(
+    intentId: string,
+    status: 'SUCCEEDED' | 'FAILED',
+    tokenization?: {
+      customerRef?: string; methodToken?: string;
+      methodLast4?: string; methodBrand?: string;
+    },
+  ) {
     const intent = await this.prisma.paymentIntent.findUnique({
       where:  { id: intentId },
       select: {
@@ -514,15 +528,19 @@ export class PaymentOrchestrator {
     // et n'interrompent JAMAIS le flux webhook. Un handler qui lève est logué
     // mais l'orchestrator retourne 200 au provider (évite les retry inutiles).
     this.events.emit(type, {
-      tenantId:   intent.tenantId,
-      intentId:   intent.id,
-      entityType: intent.entityType,
-      entityId:   intent.entityId,
-      amount:     intent.amount,
-      currency:   intent.currency,
-      metadata:   intent.metadata,
+      tenantId:     intent.tenantId,
+      intentId:     intent.id,
+      entityType:   intent.entityType,
+      entityId:     intent.entityId,
+      amount:       intent.amount,
+      currency:     intent.currency,
+      metadata:     intent.metadata,
+      // Tokenisation provider — vide si le PSP ne l'a pas fourni
+      tokenization: tokenization && (
+        tokenization.customerRef || tokenization.methodToken
+      ) ? tokenization : undefined,
     });
-    this.log.debug(`[events] emitted ${type} for intent=${intent.id}`);
+    this.log.debug(`[events] emitted ${type} for intent=${intent.id}${tokenization?.methodToken ? ' (tokenized)' : ''}`);
   }
 }
 

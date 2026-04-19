@@ -98,15 +98,24 @@ export class CrewBriefingService {
     if (scope?.scope === 'own' && dto.conductedById !== scope.userId) {
       throw new ForbiddenException(`Scope 'own' violation — conductedById ≠ actor.id`);
     }
+
+    // Résolution d'assignment — accepte les IDs synthétiques "driver-<tripId>"
+    // générés par CrewService.getMineUpcoming() pour les chauffeurs principaux
+    // (Trip.driverId) n'ayant pas de CrewAssignment réel en DB. Dans ce cas,
+    // on upsert le CrewAssignment à la volée avant de créer le briefing.
+    const resolvedAssignmentId = await this.resolveOrCreateAssignment(
+      tenantId, dto.assignmentId, dto.conductedById,
+    );
+
     // Vérifier que l'assignment existe et appartient à ce tenant
     const assignment = await this.prisma.crewAssignment.findFirst({
-      where: { id: dto.assignmentId, tenantId },
+      where: { id: resolvedAssignmentId, tenantId },
     });
-    if (!assignment) throw new NotFoundException(`Assignment ${dto.assignmentId} introuvable`);
+    if (!assignment) throw new NotFoundException(`Assignment ${resolvedAssignmentId} introuvable`);
 
     // Un seul briefing par assignment
     const existing = await this.prisma.crewBriefingRecord.findFirst({
-      where: { assignmentId: dto.assignmentId },
+      where: { assignmentId: resolvedAssignmentId },
     });
     if (existing) throw new BadRequestException('Un briefing existe déjà pour cette assignment');
 
@@ -128,7 +137,7 @@ export class CrewBriefingService {
     const record = await this.prisma.crewBriefingRecord.create({
       data: {
         tenantId,
-        assignmentId:  dto.assignmentId,
+        assignmentId:  resolvedAssignmentId,
         conductedById: dto.conductedById,
         checkedItems:  dto.checkedItems as object[],
         allEquipmentOk,
@@ -143,7 +152,7 @@ export class CrewBriefingService {
       ? EventTypes.CREW_BRIEFING_COMPLETED
       : EventTypes.CREW_BRIEFING_EQUIPMENT_MISSING;
 
-    await this._publishBriefingEvent(tenantId, dto.assignmentId, eventType, {
+    await this._publishBriefingEvent(tenantId, resolvedAssignmentId, eventType, {
       briefingId:    record.id,
       conductedById: dto.conductedById,
       allEquipmentOk,
@@ -151,6 +160,67 @@ export class CrewBriefingService {
     });
 
     return { ...record, missingEquipmentCodes: missing };
+  }
+
+  /**
+   * Résout l'assignmentId envoyé par le frontend en un vrai CrewAssignment.id.
+   *
+   * Cas standard : l'ID est un cuid → on le retourne tel quel.
+   *
+   * Cas synthétique : l'ID commence par `driver-<tripId>` (pattern produit par
+   * `CrewService.getMineUpcoming` pour les chauffeurs principaux sans
+   * CrewAssignment réel). On vérifie que :
+   *   - Le trip existe et appartient au tenant.
+   *   - Le Staff du `conductedById` est bien le driver du trip (sécurité).
+   * Puis on upsert un CrewAssignment(crewRole='DRIVER') et on retourne son id.
+   *
+   * Cette mise à niveau est idempotente — un second appel retombera sur le même
+   * CrewAssignment et sera rejeté par le check "un briefing par assignment".
+   */
+  private async resolveOrCreateAssignment(
+    tenantId:      string,
+    rawAssignmentId: string,
+    conductedById:   string,
+  ): Promise<string> {
+    const SYNTHETIC_PREFIX = 'driver-';
+    if (!rawAssignmentId.startsWith(SYNTHETIC_PREFIX)) {
+      return rawAssignmentId;
+    }
+    const tripId = rawAssignmentId.slice(SYNTHETIC_PREFIX.length);
+
+    const trip = await this.prisma.trip.findFirst({
+      where:  { id: tripId, tenantId },
+      select: { id: true, driverId: true },
+    });
+    if (!trip) {
+      throw new NotFoundException(`Trip ${tripId} introuvable pour ce tenant`);
+    }
+
+    const conductingStaff = await this.prisma.staff.findFirst({
+      where:  { userId: conductedById, tenantId },
+      select: { id: true },
+    });
+    if (!conductingStaff) {
+      throw new NotFoundException(`Staff introuvable pour l'utilisateur ${conductedById}`);
+    }
+    if (conductingStaff.id !== trip.driverId) {
+      throw new ForbiddenException(
+        'Seul le chauffeur principal assigné au trajet peut créer ce briefing',
+      );
+    }
+
+    // Upsert — idempotent sur (tripId, staffId)
+    const assignment = await this.prisma.crewAssignment.upsert({
+      where:  { tripId_staffId: { tripId, staffId: conductingStaff.id } },
+      update: {},
+      create: {
+        tenantId,
+        tripId,
+        staffId:  conductingStaff.id,
+        crewRole: 'DRIVER',
+      },
+    });
+    return assignment.id;
   }
 
   async getBriefingForAssignment(tenantId: string, assignmentId: string) {

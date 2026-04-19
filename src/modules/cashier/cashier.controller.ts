@@ -116,4 +116,28 @@ export class CashierController {
     const agency = scope.scope === 'agency' ? scope.agencyId! : agencyId;
     return this.cashierService.getDailyReport(tenantId, agency!, new Date(date ?? Date.now()));
   }
+
+  /**
+   * Liste des clôtures avec écart (audit admin) — filtre optionnel par agence,
+   * scope agency forcé si l'acteur est AGENCY_MANAGER.
+   */
+  @Get('discrepancies')
+  @RequirePermission(Permission.CASHIER_CLOSE_AGENCY)
+  discrepancies(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
+    @Query('sinceDays') sinceDays?: string,
+  ) {
+    const agency = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    const DEFAULT_WINDOW_DAYS = 30;
+    const MAX_WINDOW_DAYS     = 365;
+    const parsed = sinceDays ? Number(sinceDays) : DEFAULT_WINDOW_DAYS;
+    const safeWindow = Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_WINDOW_DAYS
+      ? parsed : DEFAULT_WINDOW_DAYS;
+    return this.cashierService.listDiscrepancies(tenantId, {
+      agencyId: agency,
+      sinceDays: safeWindow,
+    });
+  }
 }

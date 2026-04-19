@@ -63,36 +63,48 @@ export interface OAuthProviderMetadata {
  */
 export type LinkingStrategy = 'AUTO_LINK_VERIFIED' | 'PROMPT' | 'DENY';
 
+/** Chemin Vault par défaut pour un provider OAuth donné. */
+export function defaultOAuthVaultPath(providerKey: OAuthProviderKey): string {
+  return `platform/auth/${providerKey}`;
+}
+
 /**
  * Interface que tout provider DOIT implémenter.
  *
  * Pour ajouter un nouveau provider : créer une classe @Injectable, exposer
- * `meta`, `isEnabled`, `buildAuthorizeUrl`, `exchangeCodeForProfile`, puis
- * la déclarer dans OAuthModule.providers + OAUTH_PROVIDERS array.
- * Le registry ne retiendra que ceux dont `isEnabled === true`.
+ * `meta`, `isConfigured()`, `buildAuthorizeUrl`, `exchangeCodeForProfile`,
+ * puis la déclarer dans OAuthModule.providers + OAUTH_PROVIDERS array.
+ *
+ * Le registry référence TOUS les providers déclarés — même non configurés —
+ * pour que l'UI puisse les afficher grisés. Le filtrage effectif se fait à
+ * l'appel (buildAuthorizeUrl/exchange) : si les credentials manquent, le
+ * provider lève OAuthError('PROVIDER_ERROR').
  */
 export interface IOAuthProvider {
   readonly meta: OAuthProviderMetadata;
 
   /**
-   * True si les credentials du provider sont configurés (env vars).
-   * Si false : le registry ignore ce provider, le frontend ne le propose
-   * pas et les routes correspondantes répondent 404. Zéro ajustement de
-   * code requis pour activer/désactiver — uniquement l'environnement.
+   * True si les credentials du provider sont présents dans Vault.
+   * Résultat mis en cache 5 minutes côté provider pour éviter un appel
+   * Vault à chaque navigation UI. Retourne false sur n'importe quelle
+   * erreur Vault (secret absent, réseau, permissions) — la liste UI
+   * reste disponible, le provider est juste affiché grisé.
    */
-  readonly isEnabled: boolean;
+  isConfigured(): Promise<boolean>;
 
   /**
    * Construit l'URL d'autorisation (redirection navigateur étape 1).
    * `state` est un nonce signé émis par OAuthStateService ; il DOIT être
    * transmis tel quel et vérifié au callback.
+   *
+   * Lève OAuthError('PROVIDER_ERROR') si les credentials Vault sont absents.
    */
   buildAuthorizeUrl(params: {
     state:        string;
     redirectUri:  string;
     /** Slug tenant optionnel — encodé via state, pas via URL directe. */
     tenantSlug?:  string;
-  }): string;
+  }): Promise<string>;
 
   /**
    * Étape 2 : échange code → access_token → userinfo → profil normalisé.

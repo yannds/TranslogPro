@@ -76,7 +76,7 @@ export class OAuthController {
       returnTo:   this.sanitizeReturnTo(returnTo),
     });
 
-    const url = provider.buildAuthorizeUrl({
+    const url = await provider.buildAuthorizeUrl({
       state,
       redirectUri: this.oauth.callbackUrl(providerKey),
       tenantSlug:  tenant,

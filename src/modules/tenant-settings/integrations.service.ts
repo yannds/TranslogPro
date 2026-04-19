@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaymentProviderRegistry } from '../../infrastructure/payment/payment-provider.registry';
 import { OAuthProviderRegistry } from '../oauth/providers/oauth-provider.registry';
+import { defaultOAuthVaultPath } from '../oauth/types';
 
 /**
  * IntegrationsService — vue agrégée des intégrations API du tenant.
@@ -59,7 +60,7 @@ export class IntegrationsService {
   async list(tenantId: string): Promise<IntegrationItem[]> {
     const [payment, auth] = await Promise.all([
       this.listPaymentHydrated(tenantId),
-      Promise.resolve(this.listOAuth()),
+      this.listOAuthHydrated(tenantId),
     ]);
     return [...payment, ...auth];
   }
@@ -93,24 +94,42 @@ export class IntegrationsService {
     });
   }
 
-  private listOAuth(): IntegrationItem[] {
-    return this.oauthReg.list().map(meta => ({
-      category:          'AUTH',
-      key:               meta.key,
-      displayName:       meta.displayName ?? meta.key,
-      mode:              'LIVE',   // si présent dans le registry OAuth → actif
-      methods:           [],
-      countries:         [],
-      currencies:        [],
-      healthStatus:      'UNKNOWN',
-      lastHealthCheckAt: null,
-      secretsConfigured: true,
-      vaultPathPreview:  `auth/oauth/${meta.key}`,
-      activatedAt:       null,
-      activatedBy:       null,
-      scopedToTenant:    false,
-      notes:             null,
-    }));
+  /**
+   * Enrichit les providers OAuth avec :
+   *   - leur statut de configuration Vault (`secretsConfigured`)
+   *   - leur mode effectif en DB (fallback DISABLED)
+   *   - leur dernier healthcheck
+   *
+   * Tous les providers déclarés sont toujours retournés — même non configurés,
+   * pour affichage grisé dans l'UI avec une invitation à provisionner Vault.
+   */
+  async listOAuthHydrated(tenantId: string): Promise<IntegrationItem[]> {
+    const providersWithStatus = await this.oauthReg.listWithStatus();
+    const rows = await this.prisma.oAuthProviderState.findMany({
+      where: { OR: [{ tenantId }, { tenantId: null }] },
+    });
+
+    return providersWithStatus.map(({ meta, configured }) => {
+      const dbRow = rows.find(r => r.tenantId === tenantId && r.providerKey === meta.key)
+                 ?? rows.find(r => r.tenantId === null     && r.providerKey === meta.key);
+      return {
+        category:          'AUTH' as const,
+        key:               meta.key,
+        displayName:       meta.displayName ?? meta.key,
+        mode:              (dbRow?.mode as IntegrationItem['mode']) ?? 'DISABLED',
+        methods:           [],
+        countries:         [],
+        currencies:        [],
+        healthStatus:      (dbRow?.lastHealthCheckStatus as IntegrationItem['healthStatus']) ?? 'UNKNOWN',
+        lastHealthCheckAt: dbRow?.lastHealthCheckAt?.toISOString() ?? null,
+        secretsConfigured: configured,
+        vaultPathPreview:  this.previewVaultPath(defaultOAuthVaultPath(meta.key)),
+        activatedAt:       dbRow?.activatedAt?.toISOString() ?? null,
+        activatedBy:       dbRow?.activatedBy ?? null,
+        scopedToTenant:    false,
+        notes:             dbRow?.notes ?? null,
+      };
+    });
   }
 
   /** Change le mode effectif d'un provider paiement pour un tenant. */
@@ -165,6 +184,111 @@ export class IntegrationsService {
     const item = hydrated.find(i => i.key === providerKey);
     if (!item) throw new NotFoundException(`Provider ${providerKey} introuvable après update`);
     return item;
+  }
+
+  /**
+   * Change le mode effectif d'un provider OAuth pour un tenant.
+   * Symétrique à `updatePaymentMode` — mêmes règles (MFA step-up pour LIVE,
+   * trace activatedBy/activatedAt).
+   */
+  async updateOAuthMode(
+    tenantId: string,
+    providerKey: string,
+    dto: UpdateIntegrationModeDto,
+    actorUserId: string,
+  ): Promise<IntegrationItem> {
+    if (dto.mode === 'LIVE' && !dto.mfaVerified) {
+      throw new ConflictException('MFA step-up required for LIVE activation');
+    }
+
+    const provider = this.oauthReg.get(providerKey);
+    if (!provider) throw new NotFoundException(`OAuth provider ${providerKey} inconnu`);
+
+    // On refuse d'activer un provider dont Vault n'a pas les secrets —
+    // éviterait une erreur opaque au premier clic utilisateur.
+    if (dto.mode !== 'DISABLED') {
+      const configured = await provider.isConfigured();
+      if (!configured) {
+        throw new BadRequestException(
+          `OAuth provider ${providerKey} non configuré — provisionner Vault (${defaultOAuthVaultPath(providerKey)}) avant activation`,
+        );
+      }
+    }
+
+    const existing = await this.prisma.oAuthProviderState.findFirst({
+      where: { tenantId, providerKey },
+    });
+
+    const payload = {
+      mode:        dto.mode,
+      notes:       dto.notes,
+      activatedAt: dto.mode === 'LIVE' ? new Date() : existing?.activatedAt ?? null,
+      activatedBy: dto.mode === 'LIVE' ? actorUserId : existing?.activatedBy ?? null,
+    };
+
+    if (existing) {
+      await this.prisma.oAuthProviderState.update({
+        where: { id: existing.id }, data: payload,
+      });
+    } else {
+      await this.prisma.oAuthProviderState.create({
+        data: {
+          tenantId,
+          providerKey,
+          displayName: provider.meta.displayName,
+          vaultPath:   defaultOAuthVaultPath(providerKey),
+          ...payload,
+        },
+      });
+    }
+    this.log.log(`[Integrations/OAuth] ${providerKey} tenant=${tenantId} → ${dto.mode} by ${actorUserId}`);
+    const hydrated = await this.listOAuthHydrated(tenantId);
+    const item = hydrated.find(i => i.key === providerKey);
+    if (!item) throw new NotFoundException(`OAuth provider ${providerKey} introuvable après update`);
+    return item;
+  }
+
+  /**
+   * Exécute un healthcheck "live" sur un provider OAuth — tente de lire les
+   * credentials Vault et de valider leur présence (pas de test effectif
+   * d'appel vers Google/Microsoft/Facebook, qui exigerait un utilisateur).
+   * Persiste le résultat dans `oauth_provider_states`.
+   */
+  async runOAuthHealthcheck(
+    tenantId: string,
+    providerKey: string,
+  ): Promise<{ status: string; error?: string }> {
+    const provider = this.oauthReg.get(providerKey);
+    if (!provider) throw new NotFoundException(`OAuth provider ${providerKey} inconnu`);
+
+    const configured = await provider.isConfigured();
+    const status = configured ? 'UP' : 'DOWN';
+    const error  = configured ? undefined : 'Credentials Vault absents ou incomplets';
+    const checkedAt = new Date();
+
+    const existing = await this.prisma.oAuthProviderState.findFirst({
+      where: { OR: [{ tenantId, providerKey }, { tenantId: null, providerKey }] },
+      orderBy: { tenantId: 'desc' },
+    });
+    if (existing) {
+      await this.prisma.oAuthProviderState.update({
+        where: { id: existing.id },
+        data:  { lastHealthCheckAt: checkedAt, lastHealthCheckStatus: status, lastHealthCheckError: error ?? null },
+      });
+    } else {
+      await this.prisma.oAuthProviderState.create({
+        data: {
+          tenantId,
+          providerKey,
+          displayName:           provider.meta.displayName,
+          vaultPath:             defaultOAuthVaultPath(providerKey),
+          lastHealthCheckAt:     checkedAt,
+          lastHealthCheckStatus: status,
+          lastHealthCheckError:  error ?? null,
+        },
+      });
+    }
+    return { status, error };
   }
 
   /** Exécute un healthcheck live sur un provider paiement (UI "tester la connexion"). */

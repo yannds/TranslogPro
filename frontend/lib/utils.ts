@@ -42,3 +42,17 @@ export function uid(): string {
 export function getOr<T>(obj: Record<string, T>, key: string, fallback: T): T {
   return key in obj ? obj[key] : fallback;
 }
+
+/**
+ * Format un retard en minutes pour l'affichage. Sous 60 minutes → "+Xmin".
+ * À partir de 60 → "+XhYY" (ex 91 → "+1h31"), car afficher "+91min" est peu
+ * lisible et fait paraître le retard plus abstrait qu'il ne l'est.
+ */
+export function fmtDelay(min: number): string {
+  const m = Math.max(0, Math.floor(min));
+  if (m === 0) return '';
+  if (m < 60) return `+${m}min`;
+  const h  = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm === 0 ? `+${h}h` : `+${h}h${String(mm).padStart(2, '0')}`;
+}

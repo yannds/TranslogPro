@@ -105,8 +105,9 @@ export class DriverProfileController {
   getLicensesForDriver(
     @TenantId() tenantId: string,
     @Param('staffId') staffId: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.getLicensesForDriver(tenantId, staffId);
+    return this.svc.getLicensesForDriver(tenantId, staffId, scope);
   }
 
   @Post('licenses/:id/upload-url')
@@ -242,12 +243,16 @@ export class DriverProfileController {
   }
 
   @Get('drivers/:staffId/trainings')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  // .agency en 1er (managers) ; .own en 2e (le chauffeur lit ses propres
+  // formations depuis l'app mobile). Le service reçoit scope et rejette le
+  // cross-user quand scope=own.
+  @RequirePermission([Permission.DRIVER_PROFILE_AGENCY, Permission.DRIVER_REST_OWN])
   getTrainingsForDriver(
     @TenantId() tenantId: string,
     @Param('staffId') staffId: string,
+    @ScopeCtx() scope: ScopeContext,
   ) {
-    return this.svc.getTrainingsForDriver(tenantId, staffId);
+    return this.svc.getTrainingsForDriver(tenantId, staffId, scope);
   }
 
   @Get('trainings/overdue')

@@ -4,6 +4,7 @@ import type {
   IEmailService, SendEmailDto, SendEmailResult, EmailProviderName,
 } from '../interfaces/email.interface';
 import { ISecretService, SECRET_SERVICE } from '../../secret/interfaces/secret.interface';
+import { WhiteLabelService } from '../../../modules/white-label/white-label.service';
 import {
   toAddressArray, toAddress, generateLocalMessageId, maskEmail,
 } from './email.helpers';
@@ -61,6 +62,7 @@ export class O365EmailService implements IEmailService {
 
   constructor(
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    private readonly brand:                       WhiteLabelService,
   ) {}
 
   async send(dto: SendEmailDto): Promise<SendEmailResult> {
@@ -70,11 +72,18 @@ export class O365EmailService implements IEmailService {
     const toList  = toAddressArray(dto.to);
     const ccList  = toAddressArray(dto.cc);
     const bccList = toAddressArray(dto.bcc);
-    const from    = toAddress(dto.from) ?? {
-      email: creds.SENDER_EMAIL,
-      name:  creds.SENDER_NAME,
-    };
-    const replyTo = toAddress(dto.replyTo);
+    // Résolution from/replyTo — priorité au dto.from explicite, puis identité
+    // tenant via WhiteLabelService, puis fallback plateforme (Vault SENDER_*).
+    const explicitFrom = toAddress(dto.from);
+    const resolved = explicitFrom
+      ? { from: explicitFrom, replyTo: toAddress(dto.replyTo) }
+      : await this.brand.resolveFromForTenant(dto.tenantId ?? null, {
+          fromName:    creds.SENDER_NAME ?? '',
+          fromAddress: creds.SENDER_EMAIL,
+          replyTo:     toAddress(dto.replyTo)?.email,
+        });
+    const from    = resolved.from;
+    const replyTo = resolved.replyTo;
 
     if (!dto.html && !dto.text) {
       throw new Error('O365EmailService.send: au moins html ou text doit être fourni');

@@ -125,9 +125,16 @@ function buildService(overrides: Partial<{
   const refund      = { createPolicyBasedRefund: jest.fn().mockResolvedValue({ id: 'r1' }) } as any;
   const crmResolver = { resolveOrCreate: jest.fn().mockResolvedValue(null) } as any;
   const crmClaim    = { issueToken:      jest.fn().mockResolvedValue(null) } as any;
+  // CashierService stub — les tests existants ne passent pas de caisse, on vérifie seulement
+  // que confirmBatch ne plante pas quand aucune caisse ouverte n'est trouvée.
+  const cashier     = {
+    getMyOpenRegister: jest.fn().mockResolvedValue(null),
+    recordTransaction: jest.fn().mockResolvedValue({ id: 'cashier-tx-1' }),
+  } as any;
   const service  = new TicketingService(
     prisma as any, workflow as any, pricing as any, qr as any,
     refund, crmResolver, crmClaim,
+    cashier,
     eventBus as any,
   );
   return { service, prisma, workflow, pricing, qr, eventBus };

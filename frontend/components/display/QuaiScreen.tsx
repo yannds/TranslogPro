@@ -12,7 +12,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { cn }                  from '../../lib/utils';
+import { cn, fmtDelay }        from '../../lib/utils';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useWeather, WEATHER_ICONS } from '../../lib/hooks/useWeather';
 import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
@@ -33,21 +33,34 @@ interface QuaiScreenProps {
   busModel:          string;
   driverName:        string;
   passengersConfirmed: number;
+  /** Passagers scannés à l'entrée gare (CHECKED_IN + BOARDED). ≥ passengersOnBoard. */
+  passengersCheckedIn?: number;
   passengersOnBoard:  number;
   capacity:          number;
   parcelsLoaded:     number;
+  /** Total attendu de colis (loaded + pending). Permet de refléter "chargement terminé" quand loaded = total. */
+  parcelsTotal?:     number;
   statusId:          string;
   departAt:          Date;
+  /** Retard en minutes (calculé côté backend). 0 = à l'heure. */
+  delayMinutes?:     number;
   tenantId?:         string;
   autoRotateLang?:   boolean;
 }
 
+// Statuts "pré-départ" : l'affichage passager mise sur les confirmés (jauge
+// d'embarquement), pas sur les à-bord. Dès qu'on passe IN_PROGRESS, l'écran
+// bascule sur les à-bord (jauge de capacité bus).
+const PRE_DEPARTURE_STATUSES = new Set(['PLANNED', 'OPEN', 'BOARDING', 'BOARDING_COMPLETE']);
+const IN_MOTION_STATUSES     = new Set(['IN_PROGRESS', 'IN_PROGRESS_PAUSED', 'IN_PROGRESS_DELAYED', 'IN_TRANSIT']);
+
 // ─── Countdown ────────────────────────────────────────────────────────────────
 
-function Countdown({ targetDate, t, dict }: {
-  targetDate: Date;
+function Countdown({ targetDate, statusId, delayMinutes, t }: {
+  targetDate:   Date;
+  statusId:     string;
+  delayMinutes: number;
   t:   (m: string | TranslationMap) => string;
-  dict: ReturnType<typeof useI18n>['dict'];
 }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -61,10 +74,30 @@ function Countdown({ targetDate, t, dict }: {
   const s    = Math.floor((diff % 60_000) / 1_000);
   const pad  = (n: number) => String(n).padStart(2, '0');
 
+  // Quand le compte est à zéro, le label "imminent" ne doit surtout pas
+  // apparaître si on a accumulé du retard — sinon l'écran dit "DÉPART IMMINENT"
+  // à côté d'un "+93min" qui se contredit. Hiérarchie :
+  //   1. Trajet réellement parti  → "Parti"
+  //   2. Retard accumulé           → "Retardé" (le badge porte le chiffre)
+  //   3. Sinon                     → "Départ imminent"
   if (diff === 0) {
+    if (IN_MOTION_STATUSES.has(statusId) || statusId === 'COMPLETED' || statusId === 'ARRIVED') {
+      return (
+        <span className="text-emerald-400 text-5xl xl:text-6xl font-black animate-pulse">
+          {t('status.DEPARTED')}
+        </span>
+      );
+    }
+    if (delayMinutes > 0) {
+      return (
+        <span className="text-red-500 text-2xl xl:text-3xl font-black uppercase tracking-wide" aria-live="polite">
+          {t('ui.delayed')}
+        </span>
+      );
+    }
     return (
-      <span className="text-emerald-400 text-5xl xl:text-6xl font-black animate-pulse">
-        {t('status.DEPARTED')}
+      <span className="text-amber-500 text-2xl xl:text-3xl font-black uppercase tracking-wide" aria-live="polite">
+        {t('ui.imminent_departure')}
       </span>
     );
   }
@@ -76,6 +109,26 @@ function Countdown({ targetDate, t, dict }: {
       <span className="text-slate-500 text-2xl xl:text-3xl">m</span>
       <span className="text-4xl xl:text-5xl font-black">{pad(s)}</span>
       <span className="text-slate-500 text-2xl xl:text-3xl">s</span>
+    </span>
+  );
+}
+
+// ─── Delay badge ──────────────────────────────────────────────────────────────
+
+function DelayBadge({ minutes, t, dict }: {
+  minutes: number;
+  t:       (m: string | TranslationMap) => string;
+  dict:    ReturnType<typeof useI18n>['dict'];
+}) {
+  if (minutes <= 0) return null;
+  return (
+    <span
+      role="status"
+      aria-label={`${t(dict.notifications.delay)} ${minutes} min`}
+      className="inline-flex items-center gap-1 rounded-lg px-3 py-1 text-base xl:text-lg font-black uppercase tracking-wide bg-red-500/15 text-red-500 dark:bg-red-500/20 dark:text-red-400 border border-red-500/40 animate-pulse tabular-nums"
+    >
+      <span aria-hidden>⏱</span>
+      <span>{fmtDelay(minutes)}</span>
     </span>
   );
 }
@@ -162,11 +215,14 @@ const DEMO_PROPS: QuaiScreenProps = {
   busModel:            'Mercedes-Benz Actros',
   driverName:          'Jean-Baptiste Mavoungou',
   passengersConfirmed: 47,
+  passengersCheckedIn: 42,
   passengersOnBoard:   31,
   capacity:            50,
   parcelsLoaded:       18,
+  parcelsTotal:        20,
   statusId:            'BOARDING',
   departAt:            (() => { const d = new Date(); d.setHours(8, 0, 0, 0); return d; })(),
+  delayMinutes:        0,
 };
 
 export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
@@ -177,6 +233,63 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
   const { weather }    = useWeather(p.destinationCode);
 
   const statusCfg = tenantConfig.statuses[p.statusId];
+  const delayMinutes = Math.max(0, p.delayMinutes ?? 0);
+  const isPreDeparture = PRE_DEPARTURE_STATUSES.has(p.statusId);
+  // Pendant l'embarquement, la "valeur forte" c'est le nombre de confirmés
+  // qui ont un billet actif — c'est la cible à atteindre. Les à-bord sont
+  // secondaires (progression d'embarquement). En roulant, c'est l'inverse.
+  const bigValue    = isPreDeparture ? p.passengersConfirmed : p.passengersOnBoard;
+  // Pendant l'embarquement on affiche les deux étapes du parcours passager :
+  // "en gare" (checked-in) pour anticiper les absents, "à bord" pour l'état
+  // courant. Sans le check-in on se retrouvait dans le cas réel du tenant :
+  // 0 à bord juste avant le départ alors que tout le monde est déjà passé.
+  const checkedIn   = Math.max(p.passengersCheckedIn ?? p.passengersOnBoard, p.passengersOnBoard);
+  const smallLabel  = isPreDeparture
+    ? `${checkedIn} ${t('ui.in_station').toLowerCase()} · ${p.passengersOnBoard} ${t('ui.on_board').toLowerCase()}`
+    : `${p.passengersConfirmed} ${t('ui.confirmed').toLowerCase()}`;
+  // La jauge se lit "combien ont déjà embarqué parmi les confirmés" — la
+  // capacité du bus n'est jamais la référence ici : un bus de 60 places avec
+  // 39 confirmés doit montrer 0/39 → 39/39 à l'embarquement, pas 0/60.
+  const gaugeMax    = Math.max(p.passengersConfirmed, 1);
+  const gaugeValue  = p.passengersOnBoard;
+
+  // ── Bullet véhicule ────────────────────────────────────────────────────
+  const busReady = Boolean(p.busPlate && p.busPlate !== '—');
+
+  // ── Bullet colis ───────────────────────────────────────────────────────
+  // Si parcelsTotal est inconnu (ancienne API) on retombe sur une vue "en
+  // cours" par défaut. Sinon on distingue 3 états pour que l'écran reflète
+  // l'état réel du chargement au lieu d'afficher "Chargement" en permanence.
+  const parcelsTotal = p.parcelsTotal ?? 0;
+  type ParcelState = { labelKey: string; dotCls: string; textCls: string };
+  const parcelState: ParcelState = parcelsTotal === 0
+    ? { labelKey: 'ui.no_parcels',         dotCls: 'bg-slate-400',   textCls: 'text-slate-400' }
+    : p.parcelsLoaded >= parcelsTotal
+      ? { labelKey: 'ui.loading_complete',   dotCls: 'bg-emerald-400', textCls: 'text-emerald-400' }
+      : { labelKey: 'ui.loading_in_progress', dotCls: 'bg-amber-400',   textCls: 'text-amber-400' };
+
+  // Injecte un message de retard en tête du ticker si delayMinutes > 0. On
+  // fabrique une Notification synthétique avec les 8 locales pour rester
+  // cohérent avec le flux WebSocket (pas de chaîne hardcodée côté ticker).
+  const delayNotifications = delayMinutes > 0
+    ? [{
+        id: `local-delay-${p.statusId}`,
+        type: 'DELAY_ALERT' as const,
+        priority: 1 as const,
+        createdAt: new Date(),
+        message: {
+          fr:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          en:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          es:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          pt:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          ar:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} د`,
+          wo:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          ln:  `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+          ktu: `${t(dict.notifications.delay)} — ${p.destination} ${p.departureTime} · +${delayMinutes} min`,
+        },
+      }]
+    : [];
+  const tickerNotifications = [...delayNotifications, ...notifications];
 
   // Rotation auto lang
   useEffect(() => {
@@ -233,10 +346,18 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
                 {statusCfg.label[lang] ?? statusCfg.label['fr']}
               </span>
             )}
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-              {t('ui.departure_in')}&nbsp;
-              <Countdown targetDate={p.departAt} t={t} dict={dict} />
-            </p>
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                {t('ui.departure_in')}&nbsp;
+                <Countdown
+                  targetDate={p.departAt}
+                  statusId={p.statusId}
+                  delayMinutes={delayMinutes}
+                  t={t}
+                />
+              </p>
+              <DelayBadge minutes={delayMinutes} t={t} dict={dict} />
+            </div>
           </div>
         </div>
 
@@ -316,8 +437,10 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{p.busModel}</p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-emerald-400 font-semibold">En position</span>
+            <div className={cn('w-2 h-2 rounded-full', busReady ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400')} />
+            <span className={cn('text-xs font-semibold', busReady ? 'text-emerald-400' : 'text-slate-400')}>
+              {t(busReady ? 'ui.in_position' : 'ui.awaiting_bus')}
+            </span>
           </div>
         </div>
 
@@ -325,17 +448,17 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.passengers')}</p>
-            <div className="flex items-end gap-1">
-              <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">{p.passengersOnBoard}</p>
-              <p className="text-xl text-slate-400 dark:text-slate-500 mb-1">/{p.capacity}</p>
-            </div>
+            {/* Pas de "/capacité" ici : afficher 39/60 entretient la confusion
+                entre le nombre de confirmés et la capacité du bus (60 places).
+                La jauge montre l'avancement d'embarquement côté confirmés. */}
+            <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">{bigValue}</p>
           </div>
           <div>
             <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-              <span>{p.passengersConfirmed} confirmés</span>
-              <span>{Math.round((p.passengersOnBoard / p.capacity) * 100)}%</span>
+              <span>{smallLabel}</span>
+              <span>{Math.round((gaugeValue / gaugeMax) * 100)}%</span>
             </div>
-            <OccupancyBar value={p.passengersOnBoard} max={p.capacity} />
+            <OccupancyBar value={gaugeValue} max={gaugeMax} />
           </div>
         </div>
 
@@ -343,12 +466,15 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
         <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 xl:p-5 flex flex-col justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">{t('col.parcels')}</p>
-            <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">{p.parcelsLoaded}</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">chargés</p>
+            <p className="text-4xl xl:text-5xl font-black text-slate-900 dark:text-white tabular-nums">
+              {p.parcelsLoaded}{parcelsTotal > 0 && <span className="text-xl text-slate-400 dark:text-slate-500">/{parcelsTotal}</span>}
+            </p>
           </div>
           <div className="flex items-center gap-1.5 mt-3">
-            <div className="w-2 h-2 rounded-full bg-purple-400" />
-            <span className="text-xs text-purple-400 font-semibold">Chargement</span>
+            <div className={cn('w-2 h-2 rounded-full', parcelState.dotCls)} />
+            <span className={cn('text-xs font-semibold', parcelState.textCls)}>
+              {t(parcelState.labelKey)}
+            </span>
           </div>
         </div>
 
@@ -369,7 +495,7 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
       </div>
 
       {/* ── Ticker ──────────────────────────────────────────────── */}
-      <Ticker notifications={notifications} lang={lang} t={t} dict={dict} />
+      <Ticker notifications={tickerNotifications} lang={lang} t={t} dict={dict} />
 
       <style>{`
         @keyframes board-ticker {

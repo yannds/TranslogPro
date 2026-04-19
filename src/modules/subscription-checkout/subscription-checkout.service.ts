@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaymentOrchestrator } from '../../infrastructure/payment/payment-orchestrator.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import type { PaymentMethod, PaymentCurrency } from '../../infrastructure/payment/interfaces/payment.interface';
 import { StartSubscriptionCheckoutDto, UpdateAutoRenewDto, CancelSubscriptionDto } from './dto/subscription-checkout.dto';
 
@@ -32,6 +33,7 @@ export class SubscriptionCheckoutService {
   constructor(
     private readonly prisma:       PrismaService,
     private readonly orchestrator: PaymentOrchestrator,
+    private readonly config:       PlatformConfigService,
   ) {}
 
   async startCheckout(tenantId: string, dto: StartSubscriptionCheckoutDto) {
@@ -116,87 +118,118 @@ export class SubscriptionCheckoutService {
   // ─── Résumé billing (pour le banner trial) ──────────────────────────────────
 
   async getBillingSummary(tenantId: string) {
-    const sub = await this.prisma.platformSubscription.findUnique({
-      where:   { tenantId },
-      include: { plan: { select: { slug: true, name: true, price: true, currency: true, billingCycle: true } } },
-    });
-    if (!sub) return null;
+    // Garde défensive — un tenantId absent (platform admin sans tenant, session
+    // expirée, etc.) faisait lever une PrismaClientValidationError → 500 opaque.
+    // On renvoie null (pas d'abonnement connu) pour un comportement UX propre.
+    if (!tenantId) return null;
 
-    const now = Date.now();
-    const daysLeft = sub.trialEndsAt
-      ? Math.max(0, Math.ceil((sub.trialEndsAt.getTime() - now) / (24 * 60 * 60 * 1000)))
-      : null;
+    try {
+      const sub = await this.prisma.platformSubscription.findUnique({
+        where:   { tenantId },
+        include: { plan: { select: { slug: true, name: true, price: true, currency: true, billingCycle: true } } },
+      });
+      if (!sub) return null;
 
-    return {
-      status:             sub.status,
-      trialEndsAt:        sub.trialEndsAt?.toISOString() ?? null,
-      trialDaysLeft:      daysLeft,
-      currentPeriodEnd:   sub.currentPeriodEnd?.toISOString() ?? null,
-      cancelledAt:        sub.cancelledAt?.toISOString() ?? null,
-      autoRenew:          sub.autoRenew,
-      plan:               sub.plan
-        ? {
-            slug:         sub.plan.slug,
-            name:         sub.plan.name,
-            price:        sub.plan.price,
-            currency:     sub.plan.currency,
-            billingCycle: sub.plan.billingCycle,
-          }
-        : null,
-    };
+      const now = Date.now();
+      const daysLeft = sub.trialEndsAt
+        ? Math.max(0, Math.ceil((sub.trialEndsAt.getTime() - now) / (24 * 60 * 60 * 1000)))
+        : null;
+
+      // Seuil d'apparition du TrialBanner lu depuis PlatformConfig — pilotable
+      // sans redéploiement (par défaut 14 jours).
+      const trialBannerMaxDaysLeft = await this.config.getNumber('trial.banner.maxDaysLeft')
+        .catch(() => 14); // défaut prudent si le service config est indisponible
+      return {
+        status:             sub.status,
+        trialEndsAt:        sub.trialEndsAt?.toISOString() ?? null,
+        trialDaysLeft:      daysLeft,
+        currentPeriodEnd:   sub.currentPeriodEnd?.toISOString() ?? null,
+        cancelledAt:        sub.cancelledAt?.toISOString() ?? null,
+        autoRenew:          sub.autoRenew,
+        trialBannerMaxDaysLeft,
+        plan:               sub.plan
+          ? {
+              slug:         sub.plan.slug,
+              name:         sub.plan.name,
+              price:        sub.plan.price,
+              currency:     sub.plan.currency,
+              billingCycle: sub.plan.billingCycle,
+            }
+          : null,
+      };
+    } catch (err) {
+      this.logger.error(
+        `[SubscriptionCheckout] getBillingSummary failed for tenant=${tenantId}: ${(err as Error)?.stack ?? err}`,
+      );
+      return null;
+    }
   }
 
   // ─── Page billing dédiée (historique + méthode sauvée) ──────────────────────
 
   async getBillingDetails(tenantId: string) {
-    const sub = await this.prisma.platformSubscription.findUnique({
-      where:   { tenantId },
-      include: {
-        plan:     { select: { slug: true, name: true, price: true, currency: true, billingCycle: true } },
-        invoices: { orderBy: { createdAt: 'desc' }, take: 12 },
-      },
-    });
-    if (!sub) return null;
+    if (!tenantId) return null;
 
-    // Derniers PaymentIntent type SUBSCRIPTION pour ce tenant.
-    const intents = await this.prisma.paymentIntent.findMany({
-      where:   { tenantId, entityType: 'SUBSCRIPTION' },
-      orderBy: { createdAt: 'desc' },
-      take:    10,
-      select:  {
-        id: true, status: true, amount: true, currency: true,
-        createdAt: true, settledAt: true,
-      },
-    });
+    try {
+      const sub = await this.prisma.platformSubscription.findUnique({
+        where:   { tenantId },
+        include: {
+          plan:     { select: { slug: true, name: true, price: true, currency: true, billingCycle: true } },
+          invoices: { orderBy: { createdAt: 'desc' }, take: 12 },
+        },
+      });
+      if (!sub) return null;
 
-    const refs = (sub.externalRefs ?? {}) as Record<string, any>;
-    const savedMethod = refs.lastMethod ? {
-      method:        refs.lastMethod as string,
-      provider:      (refs.lastProvider as string) ?? null,
-      lastSuccessAt: (refs.lastSuccessAt as string) ?? null,
-    } : null;
+      // Derniers PaymentIntent type SUBSCRIPTION pour ce tenant.
+      const intents = await this.prisma.paymentIntent.findMany({
+        where:   { tenantId, entityType: 'SUBSCRIPTION' },
+        orderBy: { createdAt: 'desc' },
+        take:    10,
+        select:  {
+          id: true, status: true, amount: true, currency: true,
+          createdAt: true, settledAt: true,
+        },
+      });
 
-    return {
-      summary: await this.getBillingSummary(tenantId),
-      intents: intents.map(i => ({
-        id:         i.id,
-        status:     i.status,
-        amount:     i.amount,
-        currency:   i.currency,
-        createdAt:  i.createdAt.toISOString(),
-        settledAt:  i.settledAt?.toISOString() ?? null,
-      })),
-      invoices: sub.invoices.map(i => ({
-        id:          i.id,
-        number:      i.invoiceNumber,
-        status:      i.status,
-        totalAmount: i.totalAmount,
-        currency:    i.currency,
-        createdAt:   i.createdAt.toISOString(),
-        paidAt:      i.paidAt?.toISOString() ?? null,
-      })),
-      savedMethod,
-    };
+      const refs = (sub.externalRefs ?? {}) as Record<string, any>;
+      const savedMethod = refs.lastMethod ? {
+        method:        refs.lastMethod as string,
+        provider:      (refs.lastProvider as string) ?? null,
+        lastSuccessAt: (refs.lastSuccessAt as string) ?? null,
+        // Tokenisation — affichage UI "Visa •••• 4242" si dispo.
+        brand:         (refs.methodBrand  as string) ?? null,
+        last4:         (refs.methodLast4  as string) ?? null,
+        /** True si le provider a fourni un token réutilisable → auto-charge possible. */
+        tokenized:     Boolean(refs.methodToken),
+      } : null;
+
+      return {
+        summary: await this.getBillingSummary(tenantId),
+        intents: intents.map(i => ({
+          id:         i.id,
+          status:     i.status,
+          amount:     i.amount,
+          currency:   i.currency,
+          createdAt:  i.createdAt.toISOString(),
+          settledAt:  i.settledAt?.toISOString() ?? null,
+        })),
+        invoices: sub.invoices.map(i => ({
+          id:          i.id,
+          number:      i.invoiceNumber,
+          status:      i.status,
+          totalAmount: i.totalAmount,
+          currency:    i.currency,
+          createdAt:   i.createdAt.toISOString(),
+          paidAt:      i.paidAt?.toISOString() ?? null,
+        })),
+        savedMethod,
+      };
+    } catch (err) {
+      this.logger.error(
+        `[SubscriptionCheckout] getBillingDetails failed for tenant=${tenantId}: ${(err as Error)?.stack ?? err}`,
+      );
+      return null;
+    }
   }
 
   // ─── Toggle auto-renew ──────────────────────────────────────────────────────

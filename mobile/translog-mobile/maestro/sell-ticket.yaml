@@ -1,0 +1,37 @@
+# Flow vente billet — exécute après login (ou en dépendance).
+# Pré-requis seed : 1 trip PLANNED du jour côté tenant E2E + caisse ouverte.
+appId: com.translogpro.mobile
+---
+- launchApp:
+    clearState: false
+- runFlow: login.yaml
+
+# Depuis CashierTabs, navigue vers l'onglet "Vente".
+- tapOn: "Vente"
+- assertVisible: "Vendre un billet"
+
+# Step 1 — sélection du trajet (prend le premier proposé par le seed).
+- tapOn:
+    index: 0
+    id: "trip-card"   # si on ajoute testID dans le composant ; sinon supprimer et utiliser text:
+- tapOn: "Suivant"
+
+# Step 2 — passager
+- tapOn: "Nom du passager *"
+- inputText: "Maestro Test"
+- hideKeyboard
+- tapOn: "Téléphone *"
+- inputText: "+242066000000"
+- hideKeyboard
+- tapOn: "Suivant"
+
+# Step 3 — paiement CASH
+- assertVisible: "Espèces"
+- tapOn: "Espèces"
+- tapOn: "Confirmer"
+
+# Popup confirmation
+- extendedWaitUntil:
+    visible: "Billet confirmé"
+    timeout: 15000
+- tapOn: "OK"

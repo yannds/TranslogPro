@@ -3,6 +3,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import {
@@ -20,7 +22,8 @@ const ALLOWED_PHOTO_EXT = ['jpg', 'jpeg', 'png', 'webp'];
 @Injectable()
 export class FleetService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
@@ -134,11 +137,59 @@ export class FleetService {
     return bus;
   }
 
-  async updateStatus(tenantId: string, id: string, status: string, _scope: ScopeContext) {
-    await this.findOne(tenantId, id);
-    const res = await this.prisma.bus.updateMany({ where: { id, tenantId }, data: { status } });
-    if (res.count === 0) throw new NotFoundException(`Bus ${id} introuvable`);
-    return this.findOne(tenantId, id);
+  /**
+   * Transition de statut pilotée par le blueprint `bus-cycle`.
+   *
+   * L'UI envoie un statut cible (dropdown). Le service traduit
+   *   (tenantId, entityType='Bus', fromState=bus.status, toState=target)
+   *     → action via WorkflowConfig, puis délègue à WorkflowEngine.
+   *
+   * Le blueprint peut varier par tenant (chaque tenant peut activer/désactiver
+   * ou renommer ses actions) — on lit donc la table `workflow_configs` plutôt
+   * que de hardcoder le mapping.
+   *
+   * Idempotent : target == current → retour sans transition.
+   */
+  async updateStatus(
+    tenantId: string,
+    id: string,
+    target: string,
+    _scope: ScopeContext,
+    actor: CurrentUserPayload,
+  ) {
+    const bus = await this.findOne(tenantId, id);
+    if (bus.status === target) return bus;
+
+    const config = await this.prisma.workflowConfig.findFirst({
+      where: {
+        tenantId,
+        entityType: 'Bus',
+        fromState:  bus.status,
+        toState:    target,
+        isActive:   true,
+      },
+    });
+    if (!config) {
+      throw new BadRequestException(
+        `Transition non autorisée pour ce tenant : Bus ${bus.status} → ${target}`,
+      );
+    }
+
+    const result = await this.workflow.transition(
+      bus as Parameters<typeof this.workflow.transition>[0],
+      { action: config.action, actor },
+      {
+        aggregateType: 'Bus',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.bus.update({
+            where: { id: entity.id },
+            data:  { status: toState, version: { increment: 1 } },
+          });
+          return updated as typeof entity;
+        },
+      },
+    );
+    return result.entity;
   }
 
   // ─── Photos ─────────────────────────────────────────────────────────────────

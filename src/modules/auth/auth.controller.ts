@@ -15,10 +15,26 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
 
 const COOKIE_NAME = 'translog_session';
 
+// ── SameSite : strict en prod, none en dev ──────────────────────────────────
+// Prod : `strict` — portail admin sur le même origin que l'API derrière Kong,
+//        pas de cross-origin, protection CSRF maximale.
+// Dev  : `none` — on a plusieurs frontends qui tapent le backend en cross-site
+//        POST : Vite (5173/5174), Expo Web (8081), mobile native, plus les
+//        sous-domaines tenant (.translog.test). `lax` bloquait les POST
+//        cross-site → 401 sur verify-qr, scan, check-in, board, etc. depuis
+//        ces frontends. Avec `none` le cookie est publié partout ; le browser
+//        exige `Secure=true`, que Chrome/Firefox acceptent sur localhost sans
+//        HTTPS réel (exemption secure-context). Aucun impact prod : la branche
+//        `'strict' + secure:true` reste intacte.
+const SAMESITE_DEV = process.env.NODE_ENV === 'production' ? 'strict' as const : 'none' as const;
+// `secure:true` est requis quand SameSite=None ; Chrome l'autorise sur
+// localhost en HTTP. `true` en prod de toute façon (cookies HTTPS only).
+const SECURE_COOKIE = process.env.NODE_ENV === 'production' || SAMESITE_DEV === 'none';
+
 const COOKIE_OPTS = {
   httpOnly:  true,
-  sameSite:  'strict' as const,   // CSRF: strict > lax pour un portail admin
-  secure:    process.env.NODE_ENV === 'production',
+  sameSite:  SAMESITE_DEV,
+  secure:    SECURE_COOKIE,
   maxAge:    30 * 24 * 3600 * 1_000,
   path:      '/',
 };
@@ -29,8 +45,8 @@ const COOKIE_OPTS = {
 const MFA_COOKIE_NAME = 'translog_mfa_challenge';
 const MFA_COOKIE_OPTS = {
   httpOnly:  true,
-  sameSite:  'strict' as const,
-  secure:    process.env.NODE_ENV === 'production',
+  sameSite:  SAMESITE_DEV,
+  secure:    SECURE_COOKIE,
   maxAge:    5 * 60 * 1_000,
   path:      '/',
 };
@@ -60,13 +76,19 @@ export class AuthController {
   /**
    * POST /api/auth/sign-in
    *
-   * Rate-limit : 5 tentatives / 15 minutes par IP (PRD §IV.6)
+   * Rate-limit : 5 tentatives / 15 minutes par IP (PRD §IV.6) en prod.
+   * En dev : 1000/15min — évite de se bloquer pendant l'itération sur le form login.
    * DTO : validation stricte email + password (whitelist + forbidNonWhitelisted)
    */
   @Post('sign-in')
   @HttpCode(200)
   @UseGuards(RedisRateLimitGuard)
-  @RateLimit({ limit: 5, windowMs: 15 * 60_000, keyBy: 'ip', suffix: 'auth_signin' })
+  @RateLimit({
+    limit:    process.env.NODE_ENV === 'production' ? 5 : 1000,
+    windowMs: 15 * 60_000,
+    keyBy:    'ip',
+    suffix:   'auth_signin',
+  })
   async signIn(
     @Body() dto:  SignInDto,
     @Req()  req:  Request,
@@ -177,7 +199,7 @@ export class AuthController {
       expectedTenantId,
     );
 
-    res.clearCookie(MFA_COOKIE_NAME, { path: '/', sameSite: 'strict' });
+    res.clearCookie(MFA_COOKIE_NAME, { path: '/', sameSite: SAMESITE_DEV, secure: SECURE_COOKIE });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
     return user;
   }
@@ -215,7 +237,7 @@ export class AuthController {
     );
     // Toutes les sessions (y compris courante) ont été invalidées — on
     // purge aussi le cookie côté client pour cohérence UX.
-    res.clearCookie(COOKIE_NAME, { path: '/', sameSite: 'strict' });
+    res.clearCookie(COOKIE_NAME, { path: '/', sameSite: SAMESITE_DEV, secure: SECURE_COOKIE });
     return { ok: true };
   }
 
@@ -260,7 +282,7 @@ export class AuthController {
     const token = this.extractToken(req);
     if (token) await this.authService.signOut(token);
 
-    res.clearCookie(COOKIE_NAME, { path: '/', sameSite: 'strict' });
+    res.clearCookie(COOKIE_NAME, { path: '/', sameSite: SAMESITE_DEV, secure: SECURE_COOKIE });
     return { ok: true };
   }
 

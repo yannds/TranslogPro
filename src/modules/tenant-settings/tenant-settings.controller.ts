@@ -17,7 +17,7 @@ import { IntegrationsService, UpdateIntegrationModeDto } from './integrations.se
  *
  * Les secrets ne transitent JAMAIS par ces endpoints — uniquement via Vault.
  */
-@Controller('tenants/:tenantId/settings')
+@Controller({ version: '1', path: 'tenants/:tenantId/settings' })
 export class TenantSettingsController {
   constructor(
     private readonly taxes:         TenantTaxService,
@@ -74,6 +74,8 @@ export class TenantSettingsController {
     return this.integrations.list(tenantId);
   }
 
+  // Les routes PAYMENT restent sur le chemin historique (rétrocompatibilité
+  // avec le frontend existant pour les providers paiement).
   @Patch('integrations/:providerKey')
   @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
   updateIntegrationMode(
@@ -92,5 +94,28 @@ export class TenantSettingsController {
     @Param('providerKey') providerKey: string,
   ) {
     return this.integrations.runPaymentHealthcheck(tenantId, providerKey);
+  }
+
+  // Routes OAuth dédiées — séparation claire car la logique d'activation diffère
+  // (pas de supportedCurrencies/methods/countries, credentials Vault obligatoires
+  // avant activation, healthcheck = présence Vault).
+  @Patch('integrations/oauth/:providerKey')
+  @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
+  updateOAuthIntegrationMode(
+    @Param('tenantId')    tenantId:    string,
+    @Param('providerKey') providerKey: string,
+    @Body()               dto:         UpdateIntegrationModeDto,
+    @CurrentUser()        user:        CurrentUserPayload,
+  ) {
+    return this.integrations.updateOAuthMode(tenantId, providerKey, dto, user.id);
+  }
+
+  @Post('integrations/oauth/:providerKey/healthcheck')
+  @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
+  runOAuthHealthcheckRoute(
+    @Param('tenantId')    tenantId:    string,
+    @Param('providerKey') providerKey: string,
+  ) {
+    return this.integrations.runOAuthHealthcheck(tenantId, providerKey);
   }
 }

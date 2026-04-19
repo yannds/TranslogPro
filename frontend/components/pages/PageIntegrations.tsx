@@ -9,11 +9,12 @@
  *   et la date de dernière rotation.
  */
 import { useMemo, useState } from 'react';
-import { ShieldCheck, ShieldAlert, Wifi, WifiOff, KeyRound, RefreshCw } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Wifi, WifiOff, KeyRound, RefreshCw, Lock } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPatch, apiPost } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ErrorAlert } from '../ui/ErrorAlert';
@@ -60,27 +61,35 @@ export function PageIntegrations() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busyKey,   setBusyKey]   = useState<string | null>(null);
 
-  const changeMode = async (key: string, mode: Integration['mode']) => {
-    setBusyKey(key); setActionErr(null);
+  // Routage backend : PAYMENT sur /integrations/:key, OAuth sur /integrations/oauth/:key
+  const endpointFor = (item: Integration): string => {
+    const prefix = `/api/v1/tenants/${tenantId}/settings/integrations`;
+    return item.category === 'AUTH'
+      ? `${prefix}/oauth/${item.key}`
+      : `${prefix}/${item.key}`;
+  };
+
+  const changeMode = async (item: Integration, mode: Integration['mode']) => {
+    setBusyKey(item.key); setActionErr(null);
     try {
-      const body: any = { mode };
+      const body: { mode: Integration['mode']; mfaVerified?: boolean } = { mode };
       if (mode === 'LIVE') {
         // Step-up MFA : en prod, appeler l'API MFA d'abord puis envoyer mfaVerified=true
         // Ici on exige une confirmation explicite côté UI.
         if (!confirm(t('integrations.confirmLive'))) return;
         body.mfaVerified = true;
       }
-      await apiPatch(`/api/v1/tenants/${tenantId}/settings/integrations/${key}`, body);
+      await apiPatch(endpointFor(item), body);
       refetch();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : 'Erreur');
     } finally { setBusyKey(null); }
   };
 
-  const runHealth = async (key: string) => {
-    setBusyKey(key); setActionErr(null);
+  const runHealth = async (item: Integration) => {
+    setBusyKey(item.key); setActionErr(null);
     try {
-      await apiPost(`/api/v1/tenants/${tenantId}/settings/integrations/${key}/healthcheck`, {});
+      await apiPost(`${endpointFor(item)}/healthcheck`, {});
       refetch();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : 'Erreur');
@@ -124,53 +133,78 @@ function IntegrationList({
 }: {
   items: Integration[];
   busyKey: string | null;
-  onChangeMode: (key: string, mode: Integration['mode']) => void;
-  onHealth:     (key: string) => void;
+  onChangeMode: (item: Integration, mode: Integration['mode']) => void;
+  onHealth:     (item: Integration) => void;
 }) {
   const { t } = useI18n();
   if (items.length === 0) return <div className="py-10 text-center text-gray-500">{t('integrations.empty')}</div>;
   return (
     <ul className="space-y-3">
-      {items.map(item => (
-        <li key={item.key} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-          <div className="flex-1 min-w-0 space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-gray-900 dark:text-gray-100">{item.displayName}</span>
-              <ModeBadge mode={item.mode} />
-              <HealthBadge status={item.healthStatus} />
-              {item.scopedToTenant && <Badge variant="outline">{t('integrations.scopedTenant')}</Badge>}
+      {items.map(item => {
+        // Un provider non-configuré (Vault vide) n'est pas activable. On garde
+        // la ligne visible mais on grise les actions et on affiche un message
+        // explicite pour l'admin tenant.
+        const notConfigured = !item.secretsConfigured;
+        const actionsLocked = notConfigured || busyKey === item.key;
+        return (
+          <li key={item.key} className={cn(
+            'border rounded-lg p-4 flex flex-col lg:flex-row gap-4 items-start lg:items-center',
+            notConfigured
+              ? 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 opacity-75'
+              : 'border-gray-200 dark:border-gray-700',
+          )}>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-gray-900 dark:text-gray-100">{item.displayName}</span>
+                <ModeBadge mode={item.mode} />
+                <HealthBadge status={item.healthStatus} />
+                {item.scopedToTenant && <Badge variant="outline">{t('integrations.scopedTenant')}</Badge>}
+                {notConfigured && (
+                  <Badge variant="outline" className="border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
+                    <Lock className="w-3 h-3 mr-1" aria-hidden />
+                    {t('integrations.notConfigured')}
+                  </Badge>
+                )}
+              </div>
+              {item.methods.length > 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {item.methods.join(' · ')} {item.countries.length > 0 && `· ${item.countries.join(', ')}`}
+                </div>
+              )}
+              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 flex-wrap">
+                <KeyRound className="w-3 h-3" aria-hidden />
+                <span className="font-mono">{item.vaultPathPreview}</span>
+                {item.secretsConfigured && <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" aria-hidden />}
+                {!item.secretsConfigured && <ShieldAlert className="w-3 h-3 text-orange-500" aria-hidden />}
+                {item.lastHealthCheckAt && <span>· {t('integrations.lastCheck')}: {new Date(item.lastHealthCheckAt).toLocaleString()}</span>}
+              </div>
+              {notConfigured && (
+                <p className="text-xs italic text-orange-700 dark:text-orange-300 pt-1">
+                  {t('integrations.configPrompt')}
+                </p>
+              )}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {item.methods.join(' · ')} {item.countries.length > 0 && `· ${item.countries.join(', ')}`}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant={item.mode === 'DISABLED' ? 'default' : 'outline'} disabled={busyKey === item.key}
+                onClick={() => onChangeMode(item, 'DISABLED')}>
+                {t('integrations.modeDisabled')}
+              </Button>
+              <Button size="sm" variant={item.mode === 'SANDBOX' ? 'default' : 'outline'} disabled={actionsLocked}
+                onClick={() => onChangeMode(item, 'SANDBOX')}>
+                {t('integrations.modeSandbox')}
+              </Button>
+              <Button size="sm" variant={item.mode === 'LIVE' ? 'default' : 'outline'} disabled={actionsLocked}
+                onClick={() => onChangeMode(item, 'LIVE')}>
+                {t('integrations.modeLive')}
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busyKey === item.key} onClick={() => onHealth(item)}
+                aria-label={t('integrations.testConnection')}>
+                <RefreshCw className="w-4 h-4" aria-hidden />
+              </Button>
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-              <KeyRound className="w-3 h-3" aria-hidden />
-              <span className="font-mono">{item.vaultPathPreview}</span>
-              {item.secretsConfigured && <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" aria-hidden />}
-              {!item.secretsConfigured && <ShieldAlert className="w-3 h-3 text-orange-500" aria-hidden />}
-              {item.lastHealthCheckAt && <span>· {t('integrations.lastCheck')}: {new Date(item.lastHealthCheckAt).toLocaleString()}</span>}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant={item.mode === 'DISABLED' ? 'default' : 'outline'} disabled={busyKey === item.key}
-              onClick={() => onChangeMode(item.key, 'DISABLED')}>
-              {t('integrations.modeDisabled')}
-            </Button>
-            <Button size="sm" variant={item.mode === 'SANDBOX' ? 'default' : 'outline'} disabled={busyKey === item.key}
-              onClick={() => onChangeMode(item.key, 'SANDBOX')}>
-              {t('integrations.modeSandbox')}
-            </Button>
-            <Button size="sm" variant={item.mode === 'LIVE' ? 'default' : 'outline'} disabled={busyKey === item.key}
-              onClick={() => onChangeMode(item.key, 'LIVE')}>
-              {t('integrations.modeLive')}
-            </Button>
-            <Button size="sm" variant="ghost" disabled={busyKey === item.key} onClick={() => onHealth(item.key)}
-              aria-label={t('integrations.testConnection')}>
-              <RefreshCw className="w-4 h-4" aria-hidden />
-            </Button>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -50,6 +50,26 @@ export interface PaymentResult {
   /** URL de paiement à rediriger le client (paiement asynchrone) */
   paymentUrl?:    string;
   processedAt?:   Date;
+
+  // ─── Tokenisation provider (abonnements récurrents) ────────────────────────
+  // Quand le provider renvoie des identifiants réutilisables pour facturer à
+  // nouveau sans interaction utilisateur (Stripe `customer_id` + `payment_method`,
+  // Flutterwave `customer.id`, Paystack `authorization.authorization_code`…),
+  // on les propage ici. Consommés par SubscriptionReconciliationService pour
+  // peupler `PlatformSubscription.externalRefs.{customerRef, methodToken}`,
+  // qui sont ensuite utilisés par SubscriptionRenewalService pour l'auto-charge.
+  //
+  // Les deux champs sont optionnels : certains providers ne tokenisent pas,
+  // d'autres ne renvoient ces valeurs que lors d'un webhook ultérieur.
+
+  /** ID client durable côté PSP — ex: Stripe `cus_...`, Flutterwave `customer.id`. */
+  customerRef?:     string;
+  /** Token du moyen de paiement ré-utilisable — ex: Stripe `pm_...`, Paystack `authorization_code`. */
+  methodToken?:     string;
+  /** 4 derniers chiffres de la carte (si dispo) — affichage UI seulement, non PII lourd. */
+  methodLast4?:     string;
+  /** Label marque (Visa, Mastercard, MTN, Airtel…) — affichage UI seulement. */
+  methodBrand?:     string;
 }
 
 export interface WebhookVerificationResult {
@@ -60,6 +80,12 @@ export interface WebhookVerificationResult {
   amount:         number;
   currency:       PaymentCurrency;
   meta?:          Record<string, unknown>;
+  // Mêmes champs optionnels que PaymentResult — certains providers ne
+  // révèlent le token qu'au webhook success.
+  customerRef?:   string;
+  methodToken?:   string;
+  methodLast4?:   string;
+  methodBrand?:   string;
 }
 
 export interface RefundDto {

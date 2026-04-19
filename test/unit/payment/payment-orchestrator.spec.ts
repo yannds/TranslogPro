@@ -81,7 +81,9 @@ describe('Orchestrator — validations amont', () => {
     router    = { resolve: jest.fn() };
     encryptor = { encryptJson: jest.fn().mockResolvedValue(null), decryptJson: jest.fn() };
 
-    orchestrator = new PaymentOrchestrator(prisma, router, registry, encryptor);
+    // Nouveau : EventEmitter2 ajouté en 5e dépendance (event bus domaine pour PaymentSucceeded etc.)
+    const events = { emit: jest.fn(), emitAsync: jest.fn() };
+    orchestrator = new PaymentOrchestrator(prisma, router, registry, encryptor, events as any);
   });
 
   it('createIntent rejette si idempotencyKey manquant', async () => {

@@ -73,7 +73,11 @@ describe('GeoService.search', () => {
 
     const out = await svc(r).search('Brazzaville');
 
-    expect(out).toEqual([{ displayName: 'Brazzaville, Congo', lat: -4.2634, lng: 15.2429 }]);
+    // Le service expose désormais aussi countryCode (utile pour filtrage amont).
+    expect(out).toEqual([{
+      displayName: 'Brazzaville, Congo', lat: -4.2634, lng: 15.2429,
+      countryCode: expect.any(String),
+    }]);
     const call = (global.fetch as jest.Mock).mock.calls[0];
     expect(String(call[0])).toContain('nominatim.openstreetmap.org/search');
     expect(call[1].headers['User-Agent']).toMatch(/TransLogPro/);

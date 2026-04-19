@@ -97,6 +97,132 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     group:    'platformConfig.groupBilling',
     validate: numberInRange(1, 3650),
   },
+
+  // ── Activation drip post-signup ─────────────────────────────────────────
+  // Âge du tenant (en heures) à partir duquel chaque email du drip part.
+  // L'envoi effectif dépend aussi des conditions métier (onboarding incomplet,
+  // pas d'équipe, pas de vente) — ces seuils pilotent juste la fenêtre de tir.
+  {
+    key:      'activation.day1.ageHours',
+    type:     'number',
+    default:  24,
+    label:    'platformConfig.activationDay1',
+    help:     'platformConfig.activationDay1Help',
+    group:    'platformConfig.groupActivation',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'activation.day3.ageHours',
+    type:     'number',
+    default:  72,
+    label:    'platformConfig.activationDay3',
+    help:     'platformConfig.activationDay3Help',
+    group:    'platformConfig.groupActivation',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'activation.day7.ageHours',
+    type:     'number',
+    default:  168,
+    label:    'platformConfig.activationDay7',
+    help:     'platformConfig.activationDay7Help',
+    group:    'platformConfig.groupActivation',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'activation.maxAgeDays',
+    type:     'number',
+    default:  60,
+    label:    'platformConfig.activationMaxAgeDays',
+    help:     'platformConfig.activationMaxAgeDaysHelp',
+    group:    'platformConfig.groupActivation',
+    validate: numberInRange(1, 365),
+  },
+
+  // ── Renewal & dunning ───────────────────────────────────────────────────
+  {
+    key:      'renewal.leadDays',
+    type:     'number',
+    default:  3,
+    label:    'platformConfig.renewalLeadDays',
+    help:     'platformConfig.renewalLeadDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(0, 30),
+  },
+  {
+    key:      'dunning.day1.hours',
+    type:     'number',
+    default:  24,
+    label:    'platformConfig.dunningDay1',
+    help:     'platformConfig.dunningDay1Help',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'dunning.day3.hours',
+    type:     'number',
+    default:  72,
+    label:    'platformConfig.dunningDay3',
+    help:     'platformConfig.dunningDay3Help',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'dunning.day7.hours',
+    type:     'number',
+    default:  168,
+    label:    'platformConfig.dunningDay7',
+    help:     'platformConfig.dunningDay7Help',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 720),
+  },
+  {
+    key:      'dunning.suspendAfterDays',
+    type:     'number',
+    default:  10,
+    label:    'platformConfig.dunningSuspendAfterDays',
+    help:     'platformConfig.dunningSuspendAfterDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 365),
+  },
+
+  // ── Trial UX ────────────────────────────────────────────────────────────
+  {
+    key:      'trial.banner.maxDaysLeft',
+    type:     'number',
+    default:  14,
+    label:    'platformConfig.trialBannerMaxDays',
+    help:     'platformConfig.trialBannerMaxDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 90),
+  },
+
+  // ── Subscription defaults ───────────────────────────────────────────────
+  // Plan attribué par défaut aux tenants sans souscription (backfill +
+  // onboarding). Doit matcher un Plan.slug existant et actif. Le backfill
+  // retombe sur 'starter' si la clé n'est pas setée et que le plan existe.
+  {
+    key:      'subscription.defaultPlanSlug',
+    type:     'string',
+    default:  'starter',
+    label:    'platformConfig.subscriptionDefaultPlanSlug',
+    help:     'platformConfig.subscriptionDefaultPlanSlugHelp',
+    group:    'platformConfig.groupBilling',
+    validate: (v) => (typeof v === 'string' && v.trim().length > 0)
+      ? null
+      : 'platformConfig.errNotString',
+  },
+
+  // ── Waitlist anti-spam ──────────────────────────────────────────────────
+  {
+    key:      'waitlist.maxAttemptsPerEmail',
+    type:     'number',
+    default:  10,
+    label:    'platformConfig.waitlistMaxAttempts',
+    help:     'platformConfig.waitlistMaxAttemptsHelp',
+    group:    'platformConfig.groupSecurity',
+    validate: numberInRange(1, 1000),
+  },
 ];
 
 export function findDef(key: string): PlatformConfigDef<unknown> | undefined {

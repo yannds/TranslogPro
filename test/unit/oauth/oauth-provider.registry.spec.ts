@@ -19,8 +19,8 @@ function mkProvider(opts: {
   };
   return {
     meta,
-    get isEnabled() { return opts.enabled; },
-    buildAuthorizeUrl: () => `https://x/${opts.key}`,
+    isConfigured: async () => opts.enabled,
+    buildAuthorizeUrl: async () => `https://x/${opts.key}`,
     exchangeCodeForProfile: async (): Promise<NormalizedOAuthProfile> => ({
       providerKey:        opts.key,
       providerAccountId:  'acc1',
@@ -35,29 +35,30 @@ function mkProvider(opts: {
 }
 
 describe('OAuthProviderRegistry', () => {
-  it('ignore silencieusement un provider isEnabled=false', () => {
+  // Note contrat : depuis le refactor "UI grise les non-configurés", la registry
+  // référence TOUS les providers déclarés. Le filtrage isConfigured() se fait
+  // au moment d'initier un flow (buildAuthorizeUrl lève PROVIDER_ERROR si
+  // les credentials Vault manquent).
+
+  it('expose tous les providers déclarés (UI les grise si non configurés)', () => {
     const reg = new OAuthProviderRegistry([
       mkProvider({ key: 'google',  enabled: false }),
       mkProvider({ key: 'microsoft', enabled: true }),
     ]);
-    reg.onModuleInit();
-
-    expect(reg.count()).toBe(1);
-    expect(reg.get('google')).toBeUndefined();
+    expect(reg.count()).toBe(2);
+    expect(reg.get('google')).toBeDefined();
     expect(reg.get('microsoft')).toBeDefined();
   });
 
-  it('list() retourne uniquement les métadonnées des providers actifs', () => {
+  it('list() retourne les métadonnées publiques pour chaque provider', () => {
     const reg = new OAuthProviderRegistry([
       mkProvider({ key: 'google',   enabled: true,  displayName: 'Google' }),
       mkProvider({ key: 'facebook', enabled: false }),
       mkProvider({ key: 'microsoft', enabled: true, displayName: 'Microsoft' }),
     ]);
-    reg.onModuleInit();
-
     const list = reg.list();
-    expect(list).toHaveLength(2);
-    expect(list.map(m => m.key).sort()).toEqual(['google', 'microsoft']);
+    expect(list).toHaveLength(3);
+    expect(list.map(m => m.key).sort()).toEqual(['facebook', 'google', 'microsoft']);
     // Pas de fuite d'infos sensibles — seuls les champs meta publiés
     for (const m of list) {
       expect(Object.keys(m).every(k => ['key', 'displayName', 'icon', 'scopes'].includes(k))).toBe(true);
@@ -69,20 +70,19 @@ describe('OAuthProviderRegistry', () => {
       mkProvider({ key: 'google', enabled: true, displayName: 'GoogleA' }),
       mkProvider({ key: 'google', enabled: true, displayName: 'GoogleB' }),
     ]);
-    reg.onModuleInit();
+    // Init depuis le constructor — pas besoin d'appeler onModuleInit.
 
     expect(reg.count()).toBe(1);
     expect(reg.get('google')?.meta.displayName).toBe('GoogleA');
   });
 
-  it('registry vide quand tous les providers sont désactivés', () => {
+  it('registry conserve tous les providers même non configurés (filtrage à l\'appel)', () => {
     const reg = new OAuthProviderRegistry([
       mkProvider({ key: 'google',   enabled: false }),
       mkProvider({ key: 'microsoft', enabled: false }),
     ]);
-    reg.onModuleInit();
-    expect(reg.count()).toBe(0);
-    expect(reg.list()).toEqual([]);
+    expect(reg.count()).toBe(2);
+    expect(reg.list()).toHaveLength(2);
   });
 
   it('ajout d\'un nouveau provider — même forme IOAuthProvider, zéro autre changement', () => {
@@ -92,7 +92,7 @@ describe('OAuthProviderRegistry', () => {
       mkProvider({ key: 'google', enabled: true }),
       apple, // Ajout trivial
     ]);
-    reg.onModuleInit();
+    // Init depuis le constructor — pas besoin d'appeler onModuleInit.
 
     expect(reg.get('apple')).toBe(apple);
     expect(reg.list().map(m => m.key).sort()).toEqual(['apple', 'google']);

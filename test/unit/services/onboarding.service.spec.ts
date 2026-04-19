@@ -18,6 +18,8 @@ jest.mock('../../../prisma/seeds/iam.seed', () => ({
   DEFAULT_AGENCY_NAME:             { fr: 'Agence principale', en: 'Main Agency' },
   DEFAULT_WORKFLOW_CONFIGS:        [],
   installSystemBlueprintsForTenant: jest.fn().mockResolvedValue(0),
+  // Seed documents véhicule par défaut — ajouté en même temps qu'Assurance/Carte grise.
+  seedDefaultVehicleDocumentTypes:  jest.fn().mockResolvedValue(5),
 }));
 
 import { ConflictException } from '@nestjs/common';

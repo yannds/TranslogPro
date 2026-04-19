@@ -168,6 +168,7 @@ const TENANT_ROLES: Array<{
       'data.manifest.generate.agency',
       'data.manifest.sign.agency',
       'data.manifest.read.own',
+      'data.manifest.read.agency',
       'data.cashier.open.own',
       'data.cashier.transaction.own',
       'data.cashier.close.agency',
@@ -270,6 +271,7 @@ const TENANT_ROLES: Array<{
       'data.manifest.generate.agency',
       'data.manifest.sign.agency',
       'data.manifest.read.own',
+      'data.manifest.read.agency',
       'data.cashier.open.own',
       'data.cashier.transaction.own',
       'data.cashier.close.agency',
@@ -438,8 +440,10 @@ const TENANT_ROLES: Array<{
       'data.luggage.weigh.agency',
       // Visibilité opérationnelle
       'data.trip.read.own',
+      'data.trip.read.agency',         // liste des trajets de son agence — manifestes, scan, tableau de bord quai
       'data.trip.update.agency',       // marquer départ après chargement OK (endpoint scope-filtré par agence)
       'data.manifest.read.own',
+      'data.manifest.read.agency',     // lecture de tous les manifestes de l'agence (scope-filtré par assertTripOwnership)
       'data.manifest.generate.agency', // l'agent quai prépare le manifeste avant signature chauffeur
       'data.manifest.sign.agency',     // signature au nom de l'agence quand le chauffeur n'est pas encore là
       'data.manifest.print.agency',
@@ -839,24 +843,24 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   // blueprints) — c'est volontaire, la cohérence avec le blueprint importe
   // plus que l'uniformité avec Trip/Ticket (UPPERCASE historique).
 
-  // Maintenance — cycle intervention mécanicien (blueprint maintenance-ticket)
-  { entityType: 'Maintenance', fromState: 'OPEN',          action: 'assign',        toState: 'ASSIGNED',     requiredPerm: 'data.maintenance.approve.tenant' },
-  { entityType: 'Maintenance', fromState: 'ASSIGNED',      action: 'start_work',    toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.update.own'     },
-  { entityType: 'Maintenance', fromState: 'ASSIGNED',      action: 'cancel',        toState: 'CANCELLED',    requiredPerm: 'data.maintenance.approve.tenant' },
-  { entityType: 'Maintenance', fromState: 'IN_PROGRESS',   action: 'wait_parts',    toState: 'PENDING_PARTS',requiredPerm: 'data.maintenance.update.own'     },
-  { entityType: 'Maintenance', fromState: 'IN_PROGRESS',   action: 'complete',      toState: 'DONE',         requiredPerm: 'data.maintenance.update.own'     },
-  { entityType: 'Maintenance', fromState: 'PENDING_PARTS', action: 'parts_arrived', toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.update.own'     },
-  { entityType: 'Maintenance', fromState: 'DONE',          action: 'validate',      toState: 'VALIDATED',    requiredPerm: 'data.maintenance.approve.tenant' },
-  { entityType: 'Maintenance', fromState: 'DONE',          action: 'reopen',        toState: 'IN_PROGRESS',  requiredPerm: 'data.maintenance.approve.tenant' },
+  // MaintenanceReport — cycle intervention mécanicien (aligné model `maintenance_reports`)
+  // States model : SCHEDULED | IN_PROGRESS | COMPLETED | APPROVED
+  { entityType: 'MaintenanceReport', fromState: 'SCHEDULED',   action: 'start_work', toState: 'IN_PROGRESS', requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'MaintenanceReport', fromState: 'IN_PROGRESS', action: 'complete',   toState: 'COMPLETED',   requiredPerm: 'data.maintenance.update.own'     },
+  { entityType: 'MaintenanceReport', fromState: 'COMPLETED',   action: 'approve',    toState: 'APPROVED',    requiredPerm: 'data.maintenance.approve.tenant' },
+  { entityType: 'MaintenanceReport', fromState: 'COMPLETED',   action: 'reopen',     toState: 'IN_PROGRESS', requiredPerm: 'data.maintenance.approve.tenant' },
 
-  // Claim — SAV réclamation (blueprint claim-sav)
-  { entityType: 'Claim', fromState: 'OPEN',          action: 'assign',      toState: 'ASSIGNED',      requiredPerm: 'data.sav.report.agency'   },
-  { entityType: 'Claim', fromState: 'ASSIGNED',      action: 'investigate', toState: 'INVESTIGATING', requiredPerm: 'data.sav.deliver.agency'  },
-  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'resolve',     toState: 'RESOLVED',      requiredPerm: 'data.sav.claim.tenant'    },
-  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
-  { entityType: 'Claim', fromState: 'INVESTIGATING', action: 'escalate',    toState: 'ESCALATED',     requiredPerm: 'data.sav.claim.tenant'    },
-  { entityType: 'Claim', fromState: 'ESCALATED',     action: 'resolve',     toState: 'RESOLVED',      requiredPerm: 'data.sav.claim.tenant'    },
-  { entityType: 'Claim', fromState: 'ESCALATED',     action: 'reject',      toState: 'REJECTED',      requiredPerm: 'data.sav.claim.tenant'    },
+  // Claim — SAV réclamation (aligné model `claims`)
+  // States model : OPEN | ASSIGNED | UNDER_INVESTIGATION | RESOLVED | REJECTED | CLOSED
+  { entityType: 'Claim', fromState: 'OPEN',                action: 'assign',      toState: 'ASSIGNED',            requiredPerm: 'data.sav.report.agency'  },
+  { entityType: 'Claim', fromState: 'ASSIGNED',            action: 'investigate', toState: 'UNDER_INVESTIGATION', requiredPerm: 'data.sav.deliver.agency' },
+  { entityType: 'Claim', fromState: 'UNDER_INVESTIGATION', action: 'resolve',     toState: 'RESOLVED',            requiredPerm: 'data.sav.claim.tenant'   },
+  { entityType: 'Claim', fromState: 'UNDER_INVESTIGATION', action: 'reject',      toState: 'REJECTED',            requiredPerm: 'data.sav.claim.tenant'   },
+  { entityType: 'Claim', fromState: 'OPEN',                action: 'resolve',     toState: 'RESOLVED',            requiredPerm: 'data.sav.claim.tenant'   }, // fast-track si diagnostic immédiat
+  { entityType: 'Claim', fromState: 'OPEN',                action: 'reject',      toState: 'REJECTED',            requiredPerm: 'data.sav.claim.tenant'   }, // fast-track si rejet immédiat
+  { entityType: 'Claim', fromState: 'ASSIGNED',            action: 'resolve',     toState: 'RESOLVED',            requiredPerm: 'data.sav.claim.tenant'   },
+  { entityType: 'Claim', fromState: 'ASSIGNED',            action: 'reject',      toState: 'REJECTED',            requiredPerm: 'data.sav.claim.tenant'   },
+  { entityType: 'Claim', fromState: 'RESOLVED',            action: 'close',       toState: 'CLOSED',              requiredPerm: 'data.sav.claim.tenant'   },
 
   // Refund — remboursement billet (blueprint refund-standard)
   // Approbation tenant-admin (sans seuil)
@@ -885,16 +889,18 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Checklist', fromState: 'DOCS_CHECK',   action: 'approve_all',   toState: 'APPROVED',     requiredPerm: 'data.manifest.sign.agency'       },
   { entityType: 'Checklist', fromState: 'DOCS_CHECK',   action: 'docs_missing',  toState: 'BLOCKED',      requiredPerm: 'data.manifest.sign.agency'       },
   { entityType: 'Checklist', fromState: 'BLOCKED',      action: 'fix_and_retry', toState: 'PENDING',      requiredPerm: 'data.maintenance.approve.tenant' },
+  // Fast-track : validation en un clic depuis UI flight-deck (bypass chain TECH/SAFETY/DOCS)
+  { entityType: 'Checklist', fromState: 'PENDING',      action: 'complete',      toState: 'APPROVED',     requiredPerm: 'data.maintenance.update.own'     },
 
-  // Crew — affectation & briefing équipage (blueprint crew-assignment)
-  { entityType: 'Crew', fromState: 'STANDBY',    action: 'assign_briefing', toState: 'BRIEFING',   requiredPerm: 'control.driver.manage.tenant' },
-  { entityType: 'Crew', fromState: 'BRIEFING',   action: 'start_duty',      toState: 'ON_DUTY',    requiredPerm: 'data.trip.update.agency'      },
-  { entityType: 'Crew', fromState: 'BRIEFING',   action: 'cancel',          toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
-  { entityType: 'Crew', fromState: 'ON_DUTY',    action: 'end_duty',        toState: 'DEBRIEFING', requiredPerm: 'control.trip.log_event.own'   },
-  { entityType: 'Crew', fromState: 'ON_DUTY',    action: 'emergency_off',   toState: 'SUSPENDED',  requiredPerm: 'control.driver.manage.tenant' },
-  { entityType: 'Crew', fromState: 'DEBRIEFING', action: 'start_rest',      toState: 'REST',       requiredPerm: 'data.driver.rest.own'         },
-  { entityType: 'Crew', fromState: 'REST',       action: 'rest_complete',   toState: 'STANDBY',    requiredPerm: 'data.driver.rest.own'         },
-  { entityType: 'Crew', fromState: 'SUSPENDED',  action: 'reinstate',       toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
+  // CrewAssignment — affectation & briefing équipage (blueprint crew-assignment, aligné model)
+  { entityType: 'CrewAssignment', fromState: 'STANDBY',    action: 'assign_briefing', toState: 'BRIEFING',   requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'CrewAssignment', fromState: 'BRIEFING',   action: 'start_duty',      toState: 'ON_DUTY',    requiredPerm: 'data.trip.update.agency'      },
+  { entityType: 'CrewAssignment', fromState: 'BRIEFING',   action: 'cancel',          toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'CrewAssignment', fromState: 'ON_DUTY',    action: 'end_duty',        toState: 'DEBRIEFING', requiredPerm: 'control.trip.log_event.own'   },
+  { entityType: 'CrewAssignment', fromState: 'ON_DUTY',    action: 'emergency_off',   toState: 'SUSPENDED',  requiredPerm: 'control.driver.manage.tenant' },
+  { entityType: 'CrewAssignment', fromState: 'DEBRIEFING', action: 'start_rest',      toState: 'REST',       requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'CrewAssignment', fromState: 'REST',       action: 'rest_complete',   toState: 'STANDBY',    requiredPerm: 'data.driver.rest.own'         },
+  { entityType: 'CrewAssignment', fromState: 'SUSPENDED',  action: 'reinstate',       toState: 'STANDBY',    requiredPerm: 'control.driver.manage.tenant' },
 
   // Driver — disponibilité & repos (blueprint driver-availability)
   { entityType: 'Driver', fromState: 'AVAILABLE',     action: 'assign',        toState: 'ASSIGNED',      requiredPerm: 'control.driver.manage.tenant' },
@@ -916,6 +922,8 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   { entityType: 'Incident', fromState: 'OPEN',        action: 'assign',      toState: 'ASSIGNED',    requiredPerm: 'data.trip.update.agency'   },
   { entityType: 'Incident', fromState: 'ASSIGNED',    action: 'start_work',  toState: 'IN_PROGRESS', requiredPerm: 'data.trip.report.own'      },
   { entityType: 'Incident', fromState: 'IN_PROGRESS', action: 'resolve',     toState: 'RESOLVED',    requiredPerm: 'data.trip.report.own'      },
+  { entityType: 'Incident', fromState: 'ASSIGNED',    action: 'resolve',     toState: 'RESOLVED',    requiredPerm: 'data.trip.report.own'      }, // fast-track résolution sans start_work explicite
+  { entityType: 'Incident', fromState: 'OPEN',        action: 'resolve',     toState: 'RESOLVED',    requiredPerm: 'data.trip.report.own'      }, // fast-track incidents triviaux
   { entityType: 'Incident', fromState: 'RESOLVED',    action: 'close',       toState: 'CLOSED',      requiredPerm: 'data.trip.update.agency'   },
   { entityType: 'Incident', fromState: 'RESOLVED',    action: 'reopen',      toState: 'IN_PROGRESS', requiredPerm: 'data.trip.update.agency'   },
 ];

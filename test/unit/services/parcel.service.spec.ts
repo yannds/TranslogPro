@@ -236,12 +236,12 @@ describe('ParcelService', () => {
   // ── reportDamage() ─────────────────────────────────────────────────────────
 
   describe('reportDamage()', () => {
-    it('déclenche une transition avec action=REPORT_DAMAGE', async () => {
+    it('déclenche une transition avec action=DAMAGE (renommé depuis REPORT_DAMAGE)', async () => {
       const { service, workflow } = buildService();
       await service.reportDamage(TENANT, 'parcel-001', 'boîte écrasée', ACTOR as any);
       expect(workflow.transition).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ action: 'REPORT_DAMAGE' }),
+        expect.objectContaining({ action: 'DAMAGE' }),
         expect.anything(),
       );
     });

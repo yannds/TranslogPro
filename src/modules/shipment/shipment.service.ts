@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Inject } from '@nes
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { ShipmentState } from '../../common/constants/workflow-states';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class ShipmentService {
   constructor(
     private readonly prisma:   PrismaService,
+    private readonly workflow: WorkflowEngine,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -145,32 +147,41 @@ export class ShipmentService {
       );
     }
 
-    // Transition + émission du domain event dans la même transaction —
-    // pattern Outbox identique à addParcel. Un listener dans un module séparé
-    // (audit, notifications, trip-readiness) pourra consommer l'événement.
-    return this.prisma.transact(async (tx) => {
-      const updated = await tx.shipment.update({
-        where: { id: shipmentId },
-        data:  { status: ShipmentState.LOADED },
-      });
-
-      const event: DomainEvent = {
-        id:            uuidv4(),
-        type:          'shipment.closed',
-        tenantId,
-        aggregateId:   shipmentId,
+    // Transition via WorkflowEngine — action `LOAD` résolue contre le
+    // WorkflowConfig(tenantId, 'Shipment', fromState, 'LOAD'). Le moteur
+    // applique permissions, guards, audit log. Event outbox publié dans la
+    // même transaction via la persist callback.
+    const result = await this.workflow.transition(
+      shipment as Parameters<typeof this.workflow.transition>[0],
+      { action: 'LOAD', actor },
+      {
         aggregateType: 'Shipment',
-        payload:       {
-          shipmentId,
-          tripId:      shipment.tripId,
-          parcelCount: shipment.parcels.length,
-          closedBy:    actor.id,
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.shipment.update({
+            where: { id: entity.id },
+            data:  { status: toState, version: { increment: 1 } },
+          });
+          const event: DomainEvent = {
+            id:            uuidv4(),
+            type:          'shipment.closed',
+            tenantId,
+            aggregateId:   shipmentId,
+            aggregateType: 'Shipment',
+            payload: {
+              shipmentId,
+              tripId:      shipment.tripId,
+              parcelCount: shipment.parcels.length,
+              closedBy:    actor.id,
+              fromState:   entity.status,
+              toState,
+            },
+            occurredAt: new Date(),
+          };
+          await this.eventBus.publish(event, prisma as unknown as Parameters<typeof this.eventBus.publish>[1]);
+          return updated as typeof entity;
         },
-        occurredAt:    new Date(),
-      };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
-
-      return updated;
-    });
+      },
+    );
+    return result.entity;
   }
 }

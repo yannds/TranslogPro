@@ -1,0 +1,24 @@
+# Flow login — doit démarrer depuis l'app fraîchement installée (state propre).
+# Use:  maestro test maestro/login.yaml --env-file maestro/env.ci
+# Les creds sont lus depuis l'env pour éviter de les committer.
+appId: com.translogpro.mobile
+---
+# Lance l'app proprement (clear state pour repartir d'un login vierge).
+- launchApp:
+    clearState: true
+    clearKeychain: false
+- assertVisible: "TransLog Pro"
+
+# Saisie credentials.
+- tapOn: "Email"
+- inputText: ${E2E_EMAIL}
+- hideKeyboard
+- tapOn: "Password"
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn: "Se connecter"
+
+# Après login, selon le rôle (E2E seed fournit un CASHIER), on atterrit sur Caisse.
+- extendedWaitUntil:
+    visible: "Caisse"
+    timeout: 10000

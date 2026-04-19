@@ -23,6 +23,9 @@ interface BillingSummary {
   trialEndsAt:        string | null;
   trialDaysLeft:      number | null;
   currentPeriodEnd:   string | null;
+  /** Seuil (en jours) au-dessus duquel on n'affiche pas le banner — piloté par
+   *  PlatformConfig côté backend, remonté ici pour éviter le magic number UI. */
+  trialBannerMaxDaysLeft?: number;
   plan: null | {
     slug:         string;
     name:         string;
@@ -51,12 +54,19 @@ export function TrialBanner() {
   if (data.plan.price <= 0) return null; // plan gratuit ou devis → pas de banner
 
   const daysLeft = data.trialDaysLeft ?? 30;
-  // Show seulement si <= 14 jours (pas la peine d'être anxiogène trop tôt).
-  if (daysLeft > 14) return null;
+  // Seuil d'affichage pilotée par PlatformConfig (`trial.banner.maxDaysLeft`,
+  // défaut 14). Pas de valeur en dur côté UI.
+  const maxDaysLeft = data.trialBannerMaxDaysLeft ?? 14;
+  if (daysLeft > maxDaysLeft) return null;
 
+  // Paliers info/warning/critical calculés à partir du seuil max — gardent
+  // toujours la même proportion quelle que soit la config (p.ex. 7 j si max=14,
+  // 10 j si max=21). Évite de multiplier les clés config pour peu d'agilité.
+  const warnAt = Math.ceil(maxDaysLeft / 2);
+  const critAt = Math.max(3, Math.ceil(maxDaysLeft / 5));
   const severity: 'info' | 'warning' | 'critical' =
-    daysLeft >= 7 ? 'info' :
-    daysLeft >= 3 ? 'warning' : 'critical';
+    daysLeft >= warnAt ? 'info' :
+    daysLeft >= critAt ? 'warning' : 'critical';
 
   const toneCls = {
     info:     'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-100',

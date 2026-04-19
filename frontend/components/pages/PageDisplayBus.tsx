@@ -40,8 +40,11 @@ interface DemoTrip {
   driverName:         string;
   agencyName:         string;
   capacity:           number;
+  passengersConfirmed: number;
   passengersOnBoard:  number;
   parcelsOnBoard:     number;
+  delayMinutes:       number;
+  tripStatus:         string;
   departureScheduled: string | null;
   arrivalScheduled:   string | null;
   stops:              RouteStop[];
@@ -158,11 +161,17 @@ function apiTripToDemoTrip(trip: any): DemoTrip {
     driverName:         trip.driver?.user?.name ?? '',
     agencyName:         '',
     capacity:           trip.bus?.capacity ?? 0,
-    passengersOnBoard:  trip.passengersOnBoard ?? 0,
-    parcelsOnBoard:     trip.parcelsOnBoard ?? 0,
-    departureScheduled: trip.departureScheduled ?? null,
-    arrivalScheduled:   trip.arrivalScheduled   ?? null,
-    stops:              buildStops(trip),
+    // Compteurs live : remplacés par le fetch /live-stats côté composant.
+    // On met 0 par défaut pour éviter que les defaults démo de BusScreen
+    // s'affichent via prop undefined (ex: 38 passagers fictifs).
+    passengersConfirmed: 0,
+    passengersOnBoard:   0,
+    parcelsOnBoard:      0,
+    delayMinutes:        0,
+    tripStatus:          trip.status ?? '',
+    departureScheduled:  trip.departureScheduled ?? null,
+    arrivalScheduled:    trip.arrivalScheduled   ?? null,
+    stops:               buildStops(trip),
   };
 }
 
@@ -181,7 +190,7 @@ export function PageDisplayBus() {
 
   const trips: DemoTrip[] = (tripsRes.data ?? []).map(apiTripToDemoTrip);
 
-  // Auto-refresh toutes les 30 s pour refléter les changements de statut/pax
+  // Refresh liste trajets toutes les 30 s (changements de statut, nouveau départ).
   useEffect(() => {
     if (!tripsUrl) return;
     const id = setInterval(() => tripsRes.refetch(), 30_000);
@@ -189,7 +198,44 @@ export function PageDisplayBus() {
   }, [tripsUrl, tripsRes]);
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
-  const selectedTrip = trips.find(tr => tr.id === selectedTripId) ?? trips[0] ?? null;
+  const selectedTripRaw = trips.find(tr => tr.id === selectedTripId) ?? trips[0] ?? null;
+
+  // ── Fetch live stats pour le trajet sélectionné (polling 10s) ─────────────
+  // Source de vérité UNIQUE pour passengersOnBoard / parcelsOnBoard — même
+  // endpoint que QuaiScreen utilise (indirectement via display.service), donc
+  // les deux écrans affichent toujours les mêmes compteurs pour le même trip.
+  const liveStatsUrl = tenantId && selectedTripRaw?.id
+    ? `/api/tenants/${tenantId}/flight-deck/trips/${selectedTripRaw.id}/live-stats`
+    : null;
+  const liveStatsRes = useFetch<{
+    passengersOnBoard:   number;
+    passengersConfirmed: number;
+    parcelsLoaded:       number;
+    busCapacity:         number;
+    delayMinutes:        number;
+    tripStatus:          string;
+    scheduledDeparture:  string | null;
+    updatedAt:           string;
+  } | null>(liveStatsUrl, [liveStatsUrl]);
+
+  useEffect(() => {
+    if (!liveStatsUrl) return;
+    const id = setInterval(() => liveStatsRes.refetch(), 10_000);
+    return () => clearInterval(id);
+  }, [liveStatsUrl, liveStatsRes]);
+
+  // Fusionne les compteurs live dans le trajet affiché.
+  const selectedTrip: DemoTrip | null = selectedTripRaw
+    ? {
+        ...selectedTripRaw,
+        passengersOnBoard:   liveStatsRes.data?.passengersOnBoard   ?? 0,
+        passengersConfirmed: liveStatsRes.data?.passengersConfirmed ?? 0,
+        parcelsOnBoard:      liveStatsRes.data?.parcelsLoaded       ?? 0,
+        capacity:            liveStatsRes.data?.busCapacity         ?? selectedTripRaw.capacity,
+        delayMinutes:        liveStatsRes.data?.delayMinutes        ?? 0,
+        tripStatus:          liveStatsRes.data?.tripStatus          ?? selectedTripRaw.tripStatus,
+      }
+    : null;
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showToolbar, setShowToolbar]   = useState(true);
@@ -362,8 +408,15 @@ export function PageDisplayBus() {
             driverName={selectedTrip.driverName}
             agencyName={selectedTrip.agencyName}
             capacity={selectedTrip.capacity}
+            passengersConfirmed={selectedTrip.passengersConfirmed}
             passengersOnBoard={selectedTrip.passengersOnBoard}
             parcelsOnBoard={selectedTrip.parcelsOnBoard}
+            delayMinutes={selectedTrip.delayMinutes}
+            scheduledDeparture={
+              selectedTrip.departureScheduled
+                ? new Date(selectedTrip.departureScheduled).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                : undefined
+            }
             tenantId={user?.tenantId ?? 'demo'}
             autoRotateLang={isFullscreen}
           />

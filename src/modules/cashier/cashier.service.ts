@@ -11,6 +11,7 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { assertOwnership } from '../../common/helpers/scope-filter';
 import { AuditService } from '../../core/workflow/audit.service';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { OpenRegisterDto } from './dto/open-register.dto';
 import { RecordTransactionDto } from './dto/record-transaction.dto';
 import { CloseRegisterDto } from './dto/close-register.dto';
@@ -25,8 +26,9 @@ type RecordTxOptions = {
 @Injectable()
 export class CashierService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly prisma:   PrismaService,
+    private readonly audit:    AuditService,
+    private readonly workflow: WorkflowEngine,
   ) {}
 
   // ── Open ────────────────────────────────────────────────────────────────────
@@ -37,8 +39,25 @@ export class CashierService {
     actor: CurrentUserPayload,
     ipAddress?: string,
   ) {
+    // Résolution agencyId : priorité au DTO, sinon lookup Staff.agencyId de
+    // l'acteur (mobile n'a pas toujours l'info en session). Si toujours
+    // indéfini → BadRequest explicite pour que l'UI remonte le message.
+    let agencyId = dto.agencyId;
+    if (!agencyId) {
+      const staff = await this.prisma.staff.findFirst({
+        where:  { userId: actor.id, tenantId },
+        select: { agencyId: true },
+      });
+      agencyId = staff?.agencyId ?? undefined;
+    }
+    if (!agencyId) {
+      throw new BadRequestException(
+        'Impossible d\'ouvrir la caisse : agence non rattachée. Contactez votre administrateur.',
+      );
+    }
+
     const existing = await this.prisma.cashRegister.findFirst({
-      where: { tenantId, agentId: actor.id, auditStatus: 'OPEN' },
+      where: { tenantId, agentId: actor.id, status: 'OPEN' },
     });
     if (existing) {
       throw new ConflictException('Vous avez déjà une caisse ouverte');
@@ -47,7 +66,7 @@ export class CashierService {
     const register = await this.prisma.cashRegister.create({
       data: {
         tenantId,
-        agencyId:       dto.agencyId,
+        agencyId,
         agentId:        actor.id,
         initialBalance: dto.openingBalance,
       },
@@ -82,7 +101,7 @@ export class CashierService {
     ipAddress?: string,
   ) {
     const register = await this.prisma.cashRegister.findFirst({
-      where: { id: registerId, tenantId, auditStatus: 'OPEN' },
+      where: { id: registerId, tenantId, status: 'OPEN' },
     });
     if (!register) throw new NotFoundException('Caisse ouverte introuvable');
 
@@ -99,16 +118,33 @@ export class CashierService {
     const theoreticalBalance = register.initialBalance + (totals._sum.amount ?? 0);
     const counted = dto.countedBalance ?? theoreticalBalance;
     const discrepancy = counted - theoreticalBalance;
-    const status = Math.abs(discrepancy) < 0.01 ? 'CLOSED' : 'DISCREPANCY';
+    // Discrepancy < 0.01 → action `close` (OPEN → CLOSED).
+    // Sinon → action `flag` (OPEN → DISCREPANCY). Mapping blueprint-driven.
+    const action = Math.abs(discrepancy) < 0.01 ? 'close' : 'flag';
 
-    const closed = await this.prisma.cashRegister.update({
-      where: { id: registerId },
-      data:  {
-        auditStatus:  status,
-        closedAt:     new Date(),
-        finalBalance: counted,
+    // Transition via WorkflowEngine — fields `closedAt` + `finalBalance` persistés
+    // dans la même transaction via persist callback.
+    const result = await this.workflow.transition(
+      register as Parameters<typeof this.workflow.transition>[0],
+      { action, actor },
+      {
+        aggregateType: 'CashRegister',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.cashRegister.update({
+            where: { id: entity.id },
+            data:  {
+              status:       toState,
+              version:      { increment: 1 },
+              closedAt:     new Date(),
+              finalBalance: counted,
+            },
+          });
+          return updated as typeof entity;
+        },
       },
-    });
+    );
+    const closed = result.entity;
+    const status = closed.status;
 
     await this.audit.record({
       tenantId,
@@ -148,7 +184,7 @@ export class CashierService {
   /** Récupère la caisse ouverte de l'acteur (null si aucune). */
   async getMyOpenRegister(tenantId: string, actorId: string) {
     return this.prisma.cashRegister.findFirst({
-      where: { tenantId, agentId: actorId, auditStatus: 'OPEN' },
+      where: { tenantId, agentId: actorId, status: 'OPEN' },
       include: {
         _count: { select: { transactions: true } },
       },
@@ -207,26 +243,25 @@ export class CashierService {
   ) {
     const client = opts.tx ?? this.prisma;
 
-    if (!opts.skipScopeCheck && scope?.scope === 'own') {
-      const reg = await client.cashRegister.findFirst({
-        where: { id: registerId, tenantId },
-        select: { agentId: true, auditStatus: true },
-      });
-      if (!reg) throw new NotFoundException(`Register ${registerId} not found`);
-      if (reg.agentId !== scope.userId) {
+    // ── Vérification TENANT ISOLATION (toujours exécutée, quel que soit le scope).
+    //   Si registerId appartient à un autre tenant → NotFound (pas de leak).
+    //   Si la caisse n'est pas ouverte → BadRequest.
+    const reg = await client.cashRegister.findFirst({
+      where:  { id: registerId, tenantId },
+      select: { id: true, agentId: true, agencyId: true, status: true, tenantId: true },
+    });
+    if (!reg) throw new NotFoundException(`Register ${registerId} not found`);
+    if (reg.status !== 'OPEN') {
+      throw new BadRequestException(`Caisse non ouverte (status=${reg.status})`);
+    }
+
+    // ── Vérifications de scope (en plus du tenant check ci-dessus).
+    if (!opts.skipScopeCheck && scope) {
+      if (scope.scope === 'own' && reg.agentId !== scope.userId) {
         throw new ForbiddenException("Scope 'own' violation — register not owned by actor");
       }
-      if (reg.auditStatus !== 'OPEN') {
-        throw new BadRequestException(`Caisse non ouverte (status=${reg.auditStatus})`);
-      }
-    } else if (opts.skipScopeCheck) {
-      const reg = await client.cashRegister.findFirst({
-        where: { id: registerId, tenantId },
-        select: { auditStatus: true },
-      });
-      if (!reg) throw new NotFoundException(`Register ${registerId} not found`);
-      if (reg.auditStatus !== 'OPEN') {
-        throw new BadRequestException(`Caisse non ouverte (status=${reg.auditStatus})`);
+      if (scope.scope === 'agency' && reg.agencyId !== scope.agencyId) {
+        throw new ForbiddenException("Scope 'agency' violation — register hors agence");
       }
     }
 
@@ -279,6 +314,59 @@ export class CashierService {
   }
 
   // ── Rapports ────────────────────────────────────────────────────────────────
+
+  /**
+   * Liste des caisses clôturées avec écart (DISCREPANCY) sur une fenêtre
+   * glissante. Utilisé par le dashboard admin pour l'audit.
+   *
+   * Sécurité : WHERE tenantId strict + filtre agencyId côté controller
+   * selon le scope (scope=agency → forcé).
+   */
+  async listDiscrepancies(
+    tenantId: string,
+    filters: { agencyId?: string; sinceDays: number },
+  ) {
+    const since = new Date(Date.now() - filters.sinceDays * 24 * 60 * 60 * 1_000);
+    const rows = await this.prisma.cashRegister.findMany({
+      where: {
+        tenantId,
+        status: 'DISCREPANCY',
+        closedAt:    { gte: since },
+        ...(filters.agencyId ? { agencyId: filters.agencyId } : {}),
+      },
+      include: {
+        _count: { select: { transactions: true } },
+        agency: { select: { id: true, name: true } },
+      },
+      orderBy: { closedAt: 'desc' },
+      take:    500,
+    });
+
+    // Calcule l'écart en parallèle. On aurait pu dénormaliser sur la table,
+    // mais le calcul est léger et reste cohérent avec closeRegister().
+    const withDelta = await Promise.all(rows.map(async (r) => {
+      const totals = await this.prisma.transaction.aggregate({
+        where: { tenantId, cashRegisterId: r.id },
+        _sum:  { amount: true },
+      });
+      const theoretical = r.initialBalance + (totals._sum.amount ?? 0);
+      const discrepancy = (r.finalBalance ?? 0) - theoretical;
+      return {
+        id:           r.id,
+        agencyId:     r.agencyId,
+        agencyName:   r.agency?.name ?? null,
+        agentId:      r.agentId,
+        openedAt:     r.openedAt,
+        closedAt:     r.closedAt,
+        initialBalance: r.initialBalance,
+        finalBalance:   r.finalBalance,
+        theoretical,
+        discrepancy,
+        txCount:      r._count.transactions,
+      };
+    }));
+    return withDelta;
+  }
 
   async getDailyReport(tenantId: string, agencyId: string, date: Date) {
     const start = new Date(date);

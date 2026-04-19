@@ -222,6 +222,12 @@ export class DocumentsService {
     tripId:   string,
     actor:    CurrentUserPayload,
     scope:    ScopeContext | undefined,
+    /**
+     * Nature du manifeste : 'ALL' (legacy, passagers + colis), 'PASSENGERS'
+     * (passagers seuls), 'PARCELS' (colis seuls). Le subPath MinIO diffère
+     * pour que les PDFs ne s'écrasent pas. Default 'ALL' pour rétro-compat.
+     */
+    kind:    'ALL' | 'PASSENGERS' | 'PARCELS' = 'ALL',
   ) {
     const trip = await this.prisma.trip.findFirst({
       where:   { id: tripId, tenantId },
@@ -254,27 +260,35 @@ export class DocumentsService {
 
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
 
-    const travelers = (trip.travelers as any[]).map(t => ({
-      id:               t.id,
-      passengerName:    ticketMap.get(t.ticketId)?.passengerName ?? '—',
-      seatNumber:       (ticketMap.get(t.ticketId) as any)?.seatNumber ?? null,
-      status:           t.status,
-      dropOffStationId: t.dropOffStationId ?? null,
-    }));
+    // Filtrage selon `kind` — PASSENGERS omet les colis, PARCELS omet les pax.
+    const showPassengers = kind === 'ALL' || kind === 'PASSENGERS';
+    const showParcels    = kind === 'ALL' || kind === 'PARCELS';
 
-    const shipments = (trip.shipments as any[]).map(s => ({
-      id:            s.id,
-      destinationId: s.destinationId,
-      totalWeight:   s.totalWeight,
-      status:        s.status,
-      parcels:       (s.parcels as any[]).map((p: any) => ({
-        id:            p.id,
-        trackingCode:  p.trackingCode,
-        weight:        p.weight,
-        status:        p.status,
-        destinationId: p.destinationId,
-      })),
-    }));
+    const travelers = showPassengers
+      ? (trip.travelers as any[]).map(t => ({
+          id:               t.id,
+          passengerName:    ticketMap.get(t.ticketId)?.passengerName ?? '—',
+          seatNumber:       (ticketMap.get(t.ticketId) as any)?.seatNumber ?? null,
+          status:           t.status,
+          dropOffStationId: t.dropOffStationId ?? null,
+        }))
+      : [];
+
+    const shipments = showParcels
+      ? (trip.shipments as any[]).map(s => ({
+          id:            s.id,
+          destinationId: s.destinationId,
+          totalWeight:   s.totalWeight,
+          status:        s.status,
+          parcels:       (s.parcels as any[]).map((p: any) => ({
+            id:            p.id,
+            trackingCode:  p.trackingCode,
+            weight:        p.weight,
+            status:        p.status,
+            destinationId: p.destinationId,
+          })),
+        }))
+      : [];
 
     const html = renderManifest({
       trip: {
@@ -361,11 +375,14 @@ export class DocumentsService {
       generatedAt:    new Date().toLocaleString('fr-FR'),
     };
 
+    // SubPath distinct par kind pour ne pas écraser les PDFs (un trajet mixte
+    // a 2 manifestes signés : passengers et parcels).
+    const subPath = `manifests/${tripId}/${kind.toLowerCase()}`;
     const manifestSlug = await this.templates.resolveDefaultSlug(tenantId, 'MANIFEST', 'manifest-a4');
     return this.storeWithPdfmeFallback(
       tenantId, manifestSlug, pdfmeData,
       async () => html,
-      `manifests/${tripId}`, DocumentType.MANIFEST_HTML, actor, 'A4',
+      subPath, DocumentType.MANIFEST_HTML, actor, 'A4',
     );
   }
 

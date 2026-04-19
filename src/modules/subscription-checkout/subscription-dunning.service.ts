@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { EventTypes } from '../../common/types/domain-event.type';
 
 type DunningDay = 'day1' | 'day3' | 'day7';
@@ -39,6 +40,7 @@ export class SubscriptionDunningService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: PlatformConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
@@ -92,7 +94,7 @@ export class SubscriptionDunningService {
 
   // ─── Cron : 3 rappels + escalade SUSPENDED ──────────────────────────────────
 
-  @Cron('0 11 * * *') // 11:00 chaque jour
+  @Cron('0 11 * * *') // 11:00 — convention scheduling
   async runDailyDunning(): Promise<void> {
     if (process.env.DUNNING_EMAILS_ENABLED === 'false') {
       this.logger.log('Skipped — DUNNING_EMAILS_ENABLED=false');
@@ -100,6 +102,12 @@ export class SubscriptionDunningService {
     }
     const now = Date.now();
     const DAY = 24 * 60 * 60 * 1000;
+    const [day1Hrs, day3Hrs, day7Hrs, suspendAfterDays] = await Promise.all([
+      this.config.getNumber('dunning.day1.hours'),
+      this.config.getNumber('dunning.day3.hours'),
+      this.config.getNumber('dunning.day7.hours'),
+      this.config.getNumber('dunning.suspendAfterDays'),
+    ]);
 
     const subs = await this.prisma.platformSubscription.findMany({
       where: { status: 'PAST_DUE', pastDueSince: { not: null } },
@@ -133,12 +141,12 @@ export class SubscriptionDunningService {
 
       // Détermine quel email envoyer (le plus avancé non encore envoyé).
       let day: DunningDay | null = null;
-      if (hours >= 168 && !dunningSent.day7) day = 'day7';
-      else if (hours >= 72  && !dunningSent.day3) day = 'day3';
-      else if (hours >= 24  && !dunningSent.day1) day = 'day1';
+      if (hours >= day7Hrs && !dunningSent.day7) day = 'day7';
+      else if (hours >= day3Hrs && !dunningSent.day3) day = 'day3';
+      else if (hours >= day1Hrs && !dunningSent.day1) day = 'day1';
 
-      // Escalade SUSPENDED : > 10 jours en PAST_DUE + day7 déjà envoyé.
-      if (!day && hours >= 10 * 24 && dunningSent.day7) {
+      // Escalade SUSPENDED après `suspendAfterDays` en PAST_DUE + day7 envoyé.
+      if (!day && hours >= suspendAfterDays * 24 && dunningSent.day7) {
         await this.prisma.platformSubscription.update({
           where: { id: sub.id },
           data:  { status: 'SUSPENDED' },

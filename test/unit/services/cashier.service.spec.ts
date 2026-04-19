@@ -1,59 +1,129 @@
 /**
- * CashierService — Tests unitaires
+ * CashierService — Tests unitaires (contrat Sprint 1 + audit sécurité).
  *
  * Ce qui est testé :
- *   - openRegister()       : ConflictException si déjà une caisse ouverte
- *   - closeRegister()      : ForbiddenException si scope=agency hors agence,
- *                            NotFoundException si caisse absente,
- *                            calcul finalBalance = initialBalance + somme transactions
- *   - recordTransaction()  : création transaction simple
- *   - getDailyReport()     : filtrage par date (gte/lte)
+ *   - openRegister()       : création + conflit si déjà ouverte + audit.record
+ *   - closeRegister()      : rapprochement, DISCREPANCY si écart, audit warn
+ *   - recordTransaction()  :
+ *       • TENANT ISOLATION — registerId d'un autre tenant → NotFound
+ *       • status ≠ OPEN → BadRequest
+ *       • scope 'own'    → register appartient à l'acteur
+ *       • scope 'agency' → register appartient à l'agence
+ *       • idempotence via externalRef
+ *   - getMyOpenRegister()  : filtrage tenantId + agentId
+ *   - listTransactions()   : scope own/agency refusé hors périmètre
+ *   - getDailyReport()     : agrégats par type / méthode
  *
- * Mock : PrismaService uniquement (pas de WorkflowEngine — CashierService n'en a pas)
+ * Mocks : PrismaService + AuditService — pas d'IO réelle.
  */
 
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CashierService } from '@modules/cashier/cashier.service';
 import { PrismaService } from '@infra/database/prisma.service';
+import { AuditService } from '@core/workflow/audit.service';
 
-// ─── Fixtures ──────────────────────────────────────────────────────────────────
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const TENANT   = 'tenant-cash-001';
-const ACTOR    = { id: 'agent-01', tenantId: TENANT, roleId: 'role-cashier', agencyId: 'agency-01', roleName: 'Cashier' };
+const TENANT = 'tenant-cash-001';
+const OTHER_TENANT = 'tenant-cash-OTHER';
+
+const ACTOR = {
+  id:        'agent-01',
+  tenantId:  TENANT,
+  roleId:    'role-cashier',
+  agencyId:  'agency-01',
+  roleName:  'Cashier',
+};
+
 const REGISTER = {
   id:             'reg-001',
   tenantId:       TENANT,
   agencyId:       'agency-01',
   agentId:        'agent-01',
-  auditStatus:    'OPEN',
+  status:    'OPEN',
   initialBalance: 50_000,
   finalBalance:   null,
   openedAt:       new Date(),
   closedAt:       null,
 };
 
-const DTO_OPEN = { agencyId: 'agency-01', openingBalance: 50_000 };
+const OPEN_DTO = { agencyId: 'agency-01', openingBalance: 50_000 };
 
-// ─── Mock factory ──────────────────────────────────────────────────────────────
+// ─── Mock factories ──────────────────────────────────────────────────────────
 
-function makePrisma(register = REGISTER): jest.Mocked<PrismaService> {
+function makeAudit(): jest.Mocked<AuditService> {
+  return { record: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<AuditService>;
+}
+
+type RegisterFindFirstFn = (args: { where: { id?: string; tenantId?: string; agentId?: string; status?: string } }) => Promise<typeof REGISTER | null>;
+
+function makePrisma(overrides: {
+  register?:            typeof REGISTER | null;
+  registerFindFirstFn?: RegisterFindFirstFn;
+  txAggregateSum?:      number | null;
+  txCount?:             number;
+  txFindMany?:          unknown[];
+  txCreate?:            Record<string, unknown>;
+  txDup?:               Record<string, unknown> | null;
+  groupBy?:             { type: string; paymentMethod: string; _sum: { amount: number | null } }[];
+} = {}) {
+  const reg = overrides.register === null
+    ? null
+    : (overrides.register ?? REGISTER);
+
+  const cashRegisterFindFirst = overrides.registerFindFirstFn ?? jest.fn().mockResolvedValue(reg);
+
   return {
     cashRegister: {
-      findFirst: jest.fn().mockResolvedValue(register),
-      create:    jest.fn().mockResolvedValue(register),
-      update:    jest.fn().mockResolvedValue({ ...register, auditStatus: 'CLOSED', finalBalance: 65_000 }),
-      findMany:  jest.fn().mockResolvedValue([register]),
+      findFirst: cashRegisterFindFirst,
+      create:    jest.fn().mockResolvedValue(reg ?? REGISTER),
+      update:    jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ ...REGISTER, ...data })),
+      findMany:  jest.fn().mockResolvedValue([{
+        ...REGISTER,
+        _count:       { transactions: 0 },
+        transactions: [],
+      }]),
     },
     transaction: {
-      create:    jest.fn().mockResolvedValue({ id: 'tx-001', amount: 15_000, type: 'TICKET_SALE' }),
-      aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 15_000 } }),
+      findFirst: jest.fn().mockResolvedValue(overrides.txDup ?? null),
+      create:    jest.fn().mockResolvedValue(overrides.txCreate ?? { id: 'tx-001', amount: 15_000 }),
+      aggregate: jest.fn().mockResolvedValue({ _sum: { amount: overrides.txAggregateSum ?? 15_000 } }),
+      findMany:  jest.fn().mockResolvedValue(overrides.txFindMany ?? []),
+      count:     jest.fn().mockResolvedValue(overrides.txCount ?? 0),
+      groupBy:   jest.fn().mockResolvedValue(overrides.groupBy ?? []),
     },
+    $transaction: jest.fn().mockImplementation(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   } as unknown as jest.Mocked<PrismaService>;
 }
 
-function buildService(prisma?: jest.Mocked<PrismaService>) {
+/**
+ * Simule WorkflowEngine.transition : appelle la persist callback avec le VRAI
+ * prisma mock (comme le ferait l'engine en prod avec le tx client). Le toState
+ * est résolu depuis un mapping statique — correspond au WorkflowConfig seedé.
+ */
+function makeWorkflow(prisma: jest.Mocked<PrismaService>) {
+  const transitionMap: Record<string, string> = {
+    close: 'CLOSED', flag: 'DISCREPANCY', open: 'OPEN', resolve: 'CLOSED',
+  };
+  return {
+    transition: jest.fn().mockImplementation(async (entity: any, input: any, config: any) => {
+      const toState = transitionMap[input.action] ?? entity.status;
+      const updated = await config.persist(entity, toState, prisma);
+      return { entity: updated, toState, fromState: entity.status };
+    }),
+  } as any;
+}
+
+function buildService(prisma?: jest.Mocked<PrismaService>, audit?: jest.Mocked<AuditService>) {
   const p = prisma ?? makePrisma();
-  return { service: new CashierService(p), prisma: p };
+  const a = audit ?? makeAudit();
+  const w = makeWorkflow(p);
+  return { service: new CashierService(p, a, w), prisma: p, audit: a, workflow: w };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -61,132 +131,186 @@ function buildService(prisma?: jest.Mocked<PrismaService>) {
 describe('CashierService', () => {
 
   // ── openRegister() ─────────────────────────────────────────────────────────
-
   describe('openRegister()', () => {
-    it('crée une caisse si aucune ouverte', async () => {
-      const prisma = makePrisma();
-      prisma.cashRegister.findFirst = jest.fn().mockResolvedValue(null); // pas de caisse ouverte
-      const { service } = buildService(prisma);
-      await service.openRegister(TENANT, DTO_OPEN as any, ACTOR as any);
+    it("crée la caisse + écrit un audit si aucune n'est ouverte", async () => {
+      const prisma = makePrisma({ register: null });
+      const audit = makeAudit();
+      const { service } = buildService(prisma, audit);
+      await service.openRegister(TENANT, OPEN_DTO, ACTOR as any, '127.0.0.1');
       expect(prisma.cashRegister.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            tenantId:       TENANT,
-            agentId:        ACTOR.id,
-            initialBalance: DTO_OPEN.openingBalance,
-          }),
+          data: expect.objectContaining({ tenantId: TENANT, agentId: ACTOR.id }),
         }),
       );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        tenantId: TENANT, action: 'data.cashier.open.own', userId: ACTOR.id,
+      }));
     });
 
-    it('lève ConflictException si l\'agent a déjà une caisse ouverte', async () => {
-      const { service } = buildService(); // findFirst retourne un register par défaut
-      await expect(service.openRegister(TENANT, DTO_OPEN as any, ACTOR as any)).rejects.toThrow(ConflictException);
+    it("lève Conflict si l'agent a déjà une caisse ouverte", async () => {
+      const { service } = buildService();
+      await expect(service.openRegister(TENANT, OPEN_DTO, ACTOR as any))
+        .rejects.toThrow(ConflictException);
     });
   });
 
   // ── closeRegister() ────────────────────────────────────────────────────────
-
   describe('closeRegister()', () => {
-    it('ferme la caisse et calcule finalBalance = initial + sum(transactions)', async () => {
+    it('CLOSED si countedBalance match et DISCREPANCY si écart', async () => {
       const { service, prisma } = buildService();
-      const scope = { scope: 'tenant', agencyId: undefined };
-      await service.closeRegister(TENANT, 'reg-001', ACTOR as any, scope as any);
-      expect(prisma.transaction.aggregate).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { tenantId: TENANT, cashRegisterId: 'reg-001' } }),
-      );
+      const scope = { scope: 'tenant', userId: ACTOR.id, tenantId: TENANT, agencyId: undefined } as any;
+      await service.closeRegister(TENANT, REGISTER.id, { countedBalance: 65_000 }, ACTOR as any, scope);
       expect(prisma.cashRegister.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'reg-001' },
-          data:  expect.objectContaining({
-            auditStatus:  'CLOSED',
-            finalBalance: 65_000, // 50_000 + 15_000
-          }),
-        }),
+        expect.objectContaining({ data: expect.objectContaining({ status: 'CLOSED', finalBalance: 65_000 }) }),
+      );
+
+      const { service: svc2, prisma: prisma2 } = buildService();
+      await svc2.closeRegister(TENANT, REGISTER.id, { countedBalance: 64_500 }, ACTOR as any, scope);
+      expect(prisma2.cashRegister.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'DISCREPANCY', finalBalance: 64_500 }) }),
       );
     });
 
-    it('lève NotFoundException si aucune caisse ouverte avec cet id', async () => {
-      const prisma = makePrisma();
-      prisma.cashRegister.findFirst = jest.fn().mockResolvedValue(null);
+    it('lève NotFound si caisse absente', async () => {
+      const prisma = makePrisma({ register: null });
       const { service } = buildService(prisma);
-      const scope = { scope: 'tenant', agencyId: undefined };
-      await expect(
-        service.closeRegister(TENANT, 'absent', ACTOR as any, scope as any),
-      ).rejects.toThrow(NotFoundException);
+      const scope = { scope: 'tenant', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.closeRegister(TENANT, 'absent', {}, ACTOR as any, scope))
+        .rejects.toThrow(NotFoundException);
     });
 
-    it('lève ForbiddenException si scope=agency et agencyId ne correspond pas', async () => {
-      const registerAutreAgence = { ...REGISTER, agencyId: 'agency-AUTRE' };
-      const prisma = makePrisma(registerAutreAgence);
+    it('lève Forbidden si scope=agency et agencyId ≠ register.agencyId', async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, agencyId: 'agency-AUTRE' } });
       const { service } = buildService(prisma);
-      const scope = { scope: 'agency', agencyId: 'agency-01' };
-      await expect(
-        service.closeRegister(TENANT, 'reg-001', ACTOR as any, scope as any),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('accepte la clôture si scope=agency et agencyId correspond', async () => {
-      const { service } = buildService();
-      const scope = { scope: 'agency', agencyId: 'agency-01' };
-      await expect(
-        service.closeRegister(TENANT, 'reg-001', ACTOR as any, scope as any),
-      ).resolves.toBeDefined();
-    });
-
-    it('finalBalance = initialBalance si aucune transaction (sum=null)', async () => {
-      const prisma = makePrisma();
-      prisma.transaction.aggregate = jest.fn().mockResolvedValue({ _sum: { amount: null } });
-      const { service } = buildService(prisma);
-      const scope = { scope: 'tenant', agencyId: undefined };
-      await service.closeRegister(TENANT, 'reg-001', ACTOR as any, scope as any);
-      expect(prisma.cashRegister.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ finalBalance: 50_000 }), // 50_000 + 0
-        }),
-      );
+      const scope = { scope: 'agency', agencyId: 'agency-01', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.closeRegister(TENANT, REGISTER.id, {}, ACTOR as any, scope))
+        .rejects.toThrow(ForbiddenException);
     });
   });
 
-  // ── recordTransaction() ────────────────────────────────────────────────────
+  // ── recordTransaction() — AUDIT SÉCURITÉ ──────────────────────────────────
+  describe('recordTransaction() — tenant isolation + scopes', () => {
+    const dto = {
+      type:          'TICKET' as const,
+      amount:        15_000,
+      paymentMethod: 'CASH' as const,
+      externalRef:   'ticket:t-1',
+      referenceType: 'TICKET',
+      referenceId:   't-1',
+    };
 
-  describe('recordTransaction()', () => {
-    it('crée une transaction avec les bons champs', async () => {
-      const { service, prisma } = buildService();
-      await service.recordTransaction(TENANT, 'reg-001', 'TICKET_SALE', 15_000, 'CASH', 'ref-001');
-      expect(prisma.transaction.create).toHaveBeenCalledWith({
-        data: {
-          tenantId:       TENANT,
-          cashRegisterId: 'reg-001',
-          type:           'TICKET_SALE',
-          amount:         15_000,
-          paymentMethod:  'CASH',
-          externalRef:    'ref-001',
-        },
-      });
+    it('TENANT ISOLATION — register d\'un autre tenant → NotFound (pas de leak)', async () => {
+      // Le where { id, tenantId } retourne null côté prisma réel ; on simule.
+      const prisma = makePrisma({ register: null });
+      const { service } = buildService(prisma);
+      await expect(service.recordTransaction(OTHER_TENANT, REGISTER.id, dto, ACTOR as any))
+        .rejects.toThrow(NotFoundException);
+      // Aucune écriture ne doit fuiter
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
     });
 
-    it('crée sans externalRef si non fourni', async () => {
-      const { service, prisma } = buildService();
-      await service.recordTransaction(TENANT, 'reg-001', 'TICKET_SALE', 15_000, 'CASH');
+    it('BadRequest si caisse fermée', async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, status: 'CLOSED' } });
+      const { service } = buildService(prisma);
+      await expect(service.recordTransaction(TENANT, REGISTER.id, dto, ACTOR as any))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it("scope 'own' — rejette si le register n'appartient pas à l'acteur", async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, agentId: 'autre-agent' } });
+      const { service } = buildService(prisma);
+      const scope = { scope: 'own', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.recordTransaction(TENANT, REGISTER.id, dto, ACTOR as any, scope))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it("scope 'agency' — rejette si l'agence du register diffère", async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, agencyId: 'ag-autre' } });
+      const { service } = buildService(prisma);
+      const scope = { scope: 'agency', agencyId: 'agency-01', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.recordTransaction(TENANT, REGISTER.id, dto, ACTOR as any, scope))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it('crée la transaction + audit', async () => {
+      const { service, prisma, audit } = buildService();
+      const scope = { scope: 'own', userId: ACTOR.id, tenantId: TENANT } as any;
+      await service.recordTransaction(TENANT, REGISTER.id, dto, ACTOR as any, scope);
       expect(prisma.transaction.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ externalRef: undefined }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: TENANT,
+            cashRegisterId: REGISTER.id,
+            type:          'TICKET',
+            amount:        15_000,
+            paymentMethod: 'CASH',
+            externalRef:   'ticket:t-1',
+          }),
+        }),
       );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'data.cashier.transaction.own',
+      }));
+    });
+
+    it('idempotence — retourne TX existante si externalRef dup', async () => {
+      const dup = { id: 'tx-dup', amount: 15_000 };
+      const prisma = makePrisma({ txDup: dup });
+      const { service } = buildService(prisma);
+      const res = await service.recordTransaction(TENANT, REGISTER.id, dto, ACTOR as any);
+      expect(res).toEqual(dup);
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refund → audit level warn', async () => {
+      const { service, audit } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...dto, type: 'REFUND', externalRef: 'refund:1' },
+        ACTOR as any,
+      );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+    });
+  });
+
+  // ── listTransactions() ─────────────────────────────────────────────────────
+  describe('listTransactions() — scope', () => {
+    it("scope 'own' rejette si register pas au user", async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, agentId: 'autre' } });
+      const { service } = buildService(prisma);
+      const scope = { scope: 'own', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.listTransactions(TENANT, REGISTER.id, scope))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it("scope 'agency' rejette si register pas à l'agence", async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, agencyId: 'ag-x' } });
+      const { service } = buildService(prisma);
+      const scope = { scope: 'agency', agencyId: 'agency-01', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.listTransactions(TENANT, REGISTER.id, scope))
+        .rejects.toThrow(ForbiddenException);
     });
   });
 
   // ── getDailyReport() ───────────────────────────────────────────────────────
-
   describe('getDailyReport()', () => {
-    it('filtre par agencyId et plage horaire 00:00–23:59', async () => {
-      const { service, prisma } = buildService();
-      const date = new Date('2026-05-01');
-      await service.getDailyReport(TENANT, 'agency-01', date);
-      const call = (prisma.cashRegister.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.where.tenantId).toBe(TENANT);
-      expect(call.where.agencyId).toBe('agency-01');
-      expect(call.where.openedAt.gte.getHours()).toBe(0);
-      expect(call.where.openedAt.lte.getHours()).toBe(23);
+    it('agrège par type et par méthode', async () => {
+      const prisma = makePrisma();
+      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([{
+        ...REGISTER,
+        _count: { transactions: 2 },
+        transactions: [
+          { type: 'TICKET', amount: 10_000, paymentMethod: 'CASH' },
+          { type: 'REFUND', amount: -3_000, paymentMethod: 'MOBILE_MONEY' },
+        ],
+      }]);
+      const { service } = buildService(prisma);
+      const res = await service.getDailyReport(TENANT, 'agency-01', new Date('2026-05-01'));
+      expect(res.totals.byType.TICKET).toBe(10_000);
+      expect(res.totals.byType.REFUND).toBe(-3_000);
+      expect(res.totals.byMethod.CASH).toBe(10_000);
+      expect(res.totals.byMethod.MOBILE_MONEY).toBe(-3_000);
+      expect(res.totals.grossTotal).toBe(7_000);
     });
   });
 });

@@ -101,6 +101,11 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
       headers: { Authorization: `Bearer ${key}` },
     });
     const tx = data.data;
+    // Tokenisation Paystack :
+    //   - tx.customer.customer_code      → customerRef (durable, format "CUS_xxx")
+    //   - tx.authorization.authorization_code → methodToken (pour charge_authorization)
+    //   - tx.authorization.last4          → methodLast4
+    //   - tx.authorization.card_type      → methodBrand ("visa", "mastercard"…)
     return {
       txRef:        tx.reference,
       externalRef,
@@ -109,6 +114,10 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
       currency:     tx.currency,
       providerName: this.meta.key,
       processedAt:  tx.paid_at ? new Date(tx.paid_at) : undefined,
+      customerRef:  tx.customer?.customer_code,
+      methodToken:  tx.authorization?.authorization_code,
+      methodLast4:  tx.authorization?.last4,
+      methodBrand:  tx.authorization?.card_type,
     };
   }
 
@@ -122,6 +131,8 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
     }
     const body = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
     const tx   = body['data'] as Record<string, unknown>;
+    const customer = tx['customer']      as Record<string, unknown> | undefined;
+    const auth     = tx['authorization'] as Record<string, unknown> | undefined;
     return {
       isValid:     true,
       txRef:       String(tx['reference'] ?? ''),
@@ -129,6 +140,10 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
       status:      (tx['status'] === 'success') ? 'SUCCESSFUL' : 'FAILED',
       amount:      Number(tx['amount'] ?? 0) / AMOUNT_SUBUNIT_MULTIPLIER,
       currency:    String(tx['currency'] ?? 'NGN') as WebhookVerificationResult['currency'],
+      customerRef: customer?.['customer_code']       ? String(customer['customer_code']) : undefined,
+      methodToken: auth?.['authorization_code']      ? String(auth['authorization_code']) : undefined,
+      methodLast4: auth?.['last4']                   ? String(auth['last4']) : undefined,
+      methodBrand: auth?.['card_type']               ? String(auth['card_type']) : undefined,
     };
   }
 

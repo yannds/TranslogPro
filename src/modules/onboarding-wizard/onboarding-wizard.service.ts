@@ -2,6 +2,8 @@ import {
   Injectable, Logger, Inject, BadRequestException,
   ConflictException, NotFoundException, ForbiddenException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import {
@@ -248,6 +250,24 @@ export class OnboardingWizardService {
             userType: 'STAFF',
             roleId:   roleByName.get(inv.roleSlug.toUpperCase())!,
             agencyId: defaultAgency?.id ?? null,
+          },
+        });
+
+        // Account credential placeholder : password aléatoire invalide +
+        // `forcePasswordChange=true`. Indispensable pour que l'invité puisse :
+        //   1. Utiliser "mot de passe oublié" sur la page login (flow self).
+        //   2. Recevoir un reset admin-initié depuis /admin/iam/users.
+        // Sans cette row, le flow reset tombait sur 400 "Ce compte ne possède
+        // pas d'identifiants" — fixé aussi en self-heal côté PasswordResetService.
+        const randomHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
+        await this.prisma.account.create({
+          data: {
+            tenantId,
+            userId:              user.id,
+            providerId:          'credential',
+            accountId:           inv.email,
+            password:            randomHash,
+            forcePasswordChange: true,
           },
         });
 

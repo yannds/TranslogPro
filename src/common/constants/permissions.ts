@@ -44,6 +44,7 @@ export const P_SETTINGS_MANAGE_TENANT      = 'control.settings.manage.tenant';
 export const P_ROUTE_MANAGE_TENANT         = 'control.route.manage.tenant';
 export const P_TRIP_CREATE_TENANT          = 'data.trip.create.tenant';
 export const P_TRIP_READ_OWN               = 'data.trip.read.own';
+export const P_TRIP_READ_AGENCY            = 'data.trip.read.agency';
 export const P_TRIP_READ_TENANT            = 'data.trip.read.tenant';
 export const P_TRIP_UPDATE_AGENCY          = 'data.trip.update.agency';
 export const P_TRIP_CHECK_OWN              = 'data.trip.check.own';
@@ -88,6 +89,7 @@ export const P_FLEET_STATUS_AGENCY         = 'data.fleet.status.agency';
 export const P_MAINTENANCE_UPDATE_OWN      = 'data.maintenance.update.own';
 export const P_MAINTENANCE_APPROVE_TENANT  = 'data.maintenance.approve.tenant';
 export const P_MANIFEST_READ_OWN           = 'data.manifest.read.own';
+export const P_MANIFEST_READ_AGENCY        = 'data.manifest.read.agency';
 export const P_MANIFEST_GENERATE_AGENCY    = 'data.manifest.generate.agency';
 export const P_MANIFEST_SIGN_AGENCY        = 'data.manifest.sign.agency';
 export const P_NOTIFICATION_READ_OWN       = 'data.notification.read.own';
@@ -293,6 +295,7 @@ export const Permission = {
   ROUTE_MANAGE_TENANT:        P_ROUTE_MANAGE_TENANT,
   TRIP_CREATE_TENANT:         P_TRIP_CREATE_TENANT,
   TRIP_READ_OWN:              P_TRIP_READ_OWN,
+  TRIP_READ_AGENCY:           P_TRIP_READ_AGENCY,
   TRIP_READ_TENANT:           P_TRIP_READ_TENANT,
   TRIP_UPDATE_AGENCY:         P_TRIP_UPDATE_AGENCY,
   TRIP_CHECK_OWN:             P_TRIP_CHECK_OWN,
@@ -331,6 +334,7 @@ export const Permission = {
   MAINTENANCE_UPDATE_OWN:     P_MAINTENANCE_UPDATE_OWN,
   MAINTENANCE_APPROVE_TENANT: P_MAINTENANCE_APPROVE_TENANT,
   MANIFEST_READ_OWN:          P_MANIFEST_READ_OWN,
+  MANIFEST_READ_AGENCY:       P_MANIFEST_READ_AGENCY,
   MANIFEST_GENERATE_AGENCY:   P_MANIFEST_GENERATE_AGENCY,
   MANIFEST_SIGN_AGENCY:       P_MANIFEST_SIGN_AGENCY,
   NOTIFICATION_READ_OWN:      P_NOTIFICATION_READ_OWN,

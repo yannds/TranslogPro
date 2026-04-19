@@ -16,7 +16,9 @@ export function toAddressArray(
 /** Normalise une adresse simple (from, replyTo). */
 export function toAddress(input: SendEmailDto['from'] | SendEmailDto['replyTo']): EmailAddress | undefined {
   if (!input) return undefined;
-  if (typeof input === 'string') return { email: input };
+  // Cast explicite vers `EmailAddress` pour que TS préserve la forme
+  // { email, name? } côté caller (sinon le `name` optionnel est narrowed-out).
+  if (typeof input === 'string') return { email: input } as EmailAddress;
   return input;
 }
 

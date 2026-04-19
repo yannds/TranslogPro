@@ -49,12 +49,33 @@ const DTO_CREATE = {
 // ─── Mock factories ────────────────────────────────────────────────────────────
 
 function makePrisma(trip = TRIP_BASE): jest.Mocked<PrismaService> {
+  // Le service fait plusieurs findFirst distincts :
+  //   - overlap check (where contient { OR: [{ busId }, { driverId }] }) → doit rendre null
+  //   - findOne (where: { id, tenantId }) → doit rendre le trip
+  // Pour respecter les deux comportements, on inspecte le where.
+  const findFirst = jest.fn().mockImplementation((args: { where: Record<string, unknown> }) => {
+    const hasOverlap = Array.isArray(args?.where?.OR);
+    if (hasOverlap) return Promise.resolve(null);
+    return Promise.resolve(trip);
+  });
   return {
     trip: {
       create:    jest.fn().mockResolvedValue(trip),
       findMany:  jest.fn().mockResolvedValue([trip]),
-      findFirst: jest.fn().mockResolvedValue(trip),
+      findFirst,
       update:    jest.fn().mockResolvedValue({ ...trip, status: TripState.BOARDING, version: 2 }),
+    },
+    // findOne() et findAll() hydrate les données RH du chauffeur → stub staff.
+    staff: {
+      findUnique: jest.fn().mockResolvedValue({
+        id:     'driver-01',
+        userId: 'user-drv-01',
+        user:   { id: 'user-drv-01', name: 'Chauffeur Test', email: 'drv@example.com' },
+      }),
+      findMany: jest.fn().mockResolvedValue([{
+        id:   'driver-01',
+        user: { id: 'user-drv-01', name: 'Chauffeur Test', email: 'drv@example.com' },
+      }]),
     },
   } as unknown as jest.Mocked<PrismaService>;
 }
@@ -120,12 +141,14 @@ describe('TripService', () => {
       expect(call.data.departureScheduled).toBeInstanceOf(Date);
     });
 
-    it('utilise departureTime comme arrivalScheduled si estimatedArrivalTime absent', async () => {
+    it('ajoute +1h par défaut pour arrivalScheduled si estimatedArrivalTime absent (chevauchement detection)', async () => {
       const { service, prisma } = buildService();
       const dto = { ...DTO_CREATE, estimatedArrivalTime: undefined };
       await service.create(TENANT, dto as any);
       const call = (prisma.trip.create as jest.Mock).mock.calls[0][0];
-      expect(call.data.arrivalScheduled.toISOString()).toBe(call.data.departureScheduled.toISOString());
+      const oneHourMs = 60 * 60 * 1_000;
+      const delta = call.data.arrivalScheduled.getTime() - call.data.departureScheduled.getTime();
+      expect(delta).toBe(oneHourMs);
     });
   });
 

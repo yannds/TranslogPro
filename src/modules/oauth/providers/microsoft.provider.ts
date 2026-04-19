@@ -1,20 +1,31 @@
-import { Injectable } from '@nestjs/common';
-import type {
-  IOAuthProvider, NormalizedOAuthProfile, OAuthProviderMetadata,
-} from '../types';
+import { Inject, Injectable } from '@nestjs/common';
+import type { NormalizedOAuthProfile, OAuthProviderMetadata } from '../types';
 import { OAuthError } from '../types';
+import { BaseOAuthProvider } from './base-oauth.provider';
+import { SECRET_SERVICE, type ISecretService } from '../../../infrastructure/secret/interfaces/secret.interface';
 
 /**
  * Microsoft Identity Platform (Azure AD / Entra ID) — OAuth 2.0 + OIDC.
  *
- * Activation : MICROSOFT_CLIENT_ID + MICROSOFT_CLIENT_SECRET + MICROSOFT_TENANT
- * (valeurs : "common" pour multi-tenant, "consumers", "organizations", ou un
- * GUID Azure AD spécifique). "common" par défaut.
+ * Credentials Vault : `platform/auth/microsoft`
+ *   {
+ *     CLIENT_ID:     "azure-app-client-id",
+ *     CLIENT_SECRET: "azure-app-client-secret",
+ *     TENANT_SEGMENT: "common"  // optionnel ; "common" | "consumers" | "organizations" | GUID
+ *   }
  *
  * Doc : https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow
  */
+interface MicrosoftCredentials {
+  CLIENT_ID:      string;
+  CLIENT_SECRET:  string;
+  TENANT_SEGMENT?: string;
+}
+
+const DEFAULT_TENANT_SEGMENT = 'common';
+
 @Injectable()
-export class MicrosoftOAuthProvider implements IOAuthProvider {
+export class MicrosoftOAuthProvider extends BaseOAuthProvider<MicrosoftCredentials> {
   readonly meta: OAuthProviderMetadata = {
     key:         'microsoft',
     displayName: 'Microsoft',
@@ -22,19 +33,21 @@ export class MicrosoftOAuthProvider implements IOAuthProvider {
     scopes:      ['openid', 'email', 'profile', 'User.Read'],
   };
 
-  get isEnabled(): boolean {
-    return !!process.env.MICROSOFT_CLIENT_ID && !!process.env.MICROSOFT_CLIENT_SECRET;
+  constructor(@Inject(SECRET_SERVICE) secretService: ISecretService) {
+    super(secretService);
   }
 
-  private get tenantSegment(): string {
-    return process.env.MICROSOFT_TENANT ?? 'common';
+  protected requiredKeys(): readonly string[] {
+    return ['CLIENT_ID', 'CLIENT_SECRET'] as const;
   }
 
-  buildAuthorizeUrl(params: {
+  async buildAuthorizeUrl(params: {
     state: string; redirectUri: string; tenantSlug?: string;
-  }): string {
+  }): Promise<string> {
+    const creds         = await this.getCredentials();
+    const tenantSegment = creds.TENANT_SEGMENT ?? DEFAULT_TENANT_SEGMENT;
     const q = new URLSearchParams({
-      client_id:     process.env.MICROSOFT_CLIENT_ID!,
+      client_id:     creds.CLIENT_ID,
       redirect_uri:  params.redirectUri,
       response_type: 'code',
       scope:         this.meta.scopes.join(' '),
@@ -42,21 +55,24 @@ export class MicrosoftOAuthProvider implements IOAuthProvider {
       response_mode: 'query',
       prompt:        'select_account',
     });
-    return `https://login.microsoftonline.com/${this.tenantSegment}/oauth2/v2.0/authorize?${q}`;
+    return `https://login.microsoftonline.com/${tenantSegment}/oauth2/v2.0/authorize?${q}`;
   }
 
   async exchangeCodeForProfile(params: {
     code: string; state: string; redirectUri: string;
   }): Promise<NormalizedOAuthProfile> {
+    const creds         = await this.getCredentials();
+    const tenantSegment = creds.TENANT_SEGMENT ?? DEFAULT_TENANT_SEGMENT;
+
     const tokenRes = await fetch(
-      `https://login.microsoftonline.com/${this.tenantSegment}/oauth2/v2.0/token`,
+      `https://login.microsoftonline.com/${tenantSegment}/oauth2/v2.0/token`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           code:          params.code,
-          client_id:     process.env.MICROSOFT_CLIENT_ID!,
-          client_secret: process.env.MICROSOFT_CLIENT_SECRET!,
+          client_id:     creds.CLIENT_ID,
+          client_secret: creds.CLIENT_SECRET,
           redirect_uri:  params.redirectUri,
           grant_type:    'authorization_code',
           scope:         this.meta.scopes.join(' '),

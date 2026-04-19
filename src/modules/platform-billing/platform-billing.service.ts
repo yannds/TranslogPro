@@ -34,6 +34,7 @@ import {
   ChangeSubscriptionPlanDto,
   CreateInvoiceDto,
   CreateSubscriptionDto,
+  ExtendTrialDto,
   MarkInvoicePaidDto,
   UpdateSubscriptionStatusDto,
 } from './dto/billing.dto';
@@ -153,6 +154,66 @@ export class PlatformBillingService {
     });
     await this.prisma.tenant.update({ where: { id: sub.tenantId }, data: { planId: plan.id } });
     this.logger.log(`Plan change tenant=${sub.tenantId} → ${plan.slug}`);
+    return updated;
+  }
+
+  /**
+   * Prolonge la période d'essai d'une souscription.
+   *
+   * Deux modes supportés (exclusifs) :
+   *   - `days` : ajoute N jours à la date d'expiration courante (ou à `now`
+   *              si le trial est déjà expiré ou absent).
+   *   - `trialEndsAt` : fixe explicitement une nouvelle date d'expiration.
+   *
+   * Effets :
+   *   - Met à jour `trialEndsAt`.
+   *   - Si la souscription n'était pas en TRIAL (CANCELLED/SUSPENDED/PAST_DUE),
+   *     on repasse en TRIAL car accorder un trial rétroactif a du sens
+   *     (ex: geste commercial vers un tenant dont l'abonnement a expiré).
+   *   - Loggé avec la raison optionnelle (audit trail).
+   */
+  async extendTrial(subscriptionId: string, dto: ExtendTrialDto) {
+    if ((dto.days === undefined) === (dto.trialEndsAt === undefined)) {
+      throw new BadRequestException(
+        'Fournir exactement `days` OU `trialEndsAt`, pas les deux ni aucun des deux.',
+      );
+    }
+
+    const sub = await this.prisma.platformSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+    if (!sub) throw new NotFoundException(`Subscription ${subscriptionId} introuvable`);
+
+    const now = new Date();
+    let newTrialEndsAt: Date;
+
+    if (dto.days !== undefined) {
+      // Ancre au max(trialEndsAt actuel, now) pour éviter d'ajouter des jours
+      // à une date déjà passée (ce qui consommerait le geste commercial).
+      const anchor = sub.trialEndsAt && sub.trialEndsAt > now ? sub.trialEndsAt : now;
+      newTrialEndsAt = new Date(anchor.getTime() + dto.days * MS_PER_DAY);
+    } else {
+      newTrialEndsAt = new Date(dto.trialEndsAt!);
+      if (newTrialEndsAt <= now) {
+        throw new BadRequestException('La nouvelle date doit être dans le futur.');
+      }
+    }
+
+    const updated = await this.prisma.platformSubscription.update({
+      where: { id: subscriptionId },
+      data:  {
+        trialEndsAt:  newTrialEndsAt,
+        status:       'TRIAL',
+        cancelledAt:  null,
+        cancelReason: null,
+      },
+      include: { plan: true, tenant: { select: { id: true, slug: true, name: true } } },
+    });
+
+    this.logger.log(
+      `[extendTrial] tenant=${sub.tenantId} sub=${subscriptionId} → ${newTrialEndsAt.toISOString()}` +
+      (dto.reason ? ` reason="${dto.reason}"` : ''),
+    );
     return updated;
   }
 

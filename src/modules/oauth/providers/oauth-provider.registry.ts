@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { IOAuthProvider, OAuthProviderMetadata } from '../types';
 
 /**
@@ -10,53 +10,73 @@ import type { IOAuthProvider, OAuthProviderMetadata } from '../types';
 export const OAUTH_PROVIDERS = Symbol('OAUTH_PROVIDERS');
 
 /**
- * Registry des providers OAuth effectivement actifs.
+ * Registry des providers OAuth déclarés.
  *
- * Règle unique : un provider est retenu si et seulement si `isEnabled` est
- * true au démarrage (typiquement : ses env vars sont setées). Sinon il est
- * ignoré silencieusement. Aucune erreur ne remonte — un admin qui oublie
- * une variable voit juste le bouton disparaître.
+ * **Nouveauté (migration Vault)** — le registre référence TOUS les providers
+ * déclarés, même ceux dont les credentials Vault sont absents. Le filtrage
+ * "configuré / non configuré" est fait à l'appel via `isConfigured()` :
+ *
+ *   - `list()` / `listWithStatus()` retourne tous les providers pour l'UI
+ *     (qui les affiche grisés si non configurés)
+ *   - `get(key)` retourne le provider même si non configuré ; c'est
+ *     `buildAuthorizeUrl()` / `exchangeCodeForProfile()` qui lèvent
+ *     `OAuthError('PROVIDER_ERROR')` tant que Vault n'a pas les secrets.
  *
  * Le registry NE FAIT AUCUNE hypothèse sur le provider concret : il traite
  * Google, Microsoft, Facebook, Apple, GitHub ou tout futur ajout de la
  * même manière via l'interface IOAuthProvider.
  */
 @Injectable()
-export class OAuthProviderRegistry implements OnModuleInit {
+export class OAuthProviderRegistry {
   private readonly log = new Logger(OAuthProviderRegistry.name);
-  private readonly active = new Map<string, IOAuthProvider>();
+  private readonly providers = new Map<string, IOAuthProvider>();
 
   constructor(
     @Inject(OAUTH_PROVIDERS) private readonly all: IOAuthProvider[],
-  ) {}
-
-  onModuleInit(): void {
-    for (const provider of this.all) {
-      if (!provider.isEnabled) {
-        this.log.debug(`[OAuth] provider "${provider.meta.key}" disabled (missing env) — skipped`);
+  ) {
+    // Indexation par key au boot — un seul provider par clé (first wins).
+    for (const p of all) {
+      if (this.providers.has(p.meta.key)) {
+        this.log.warn(`[OAuth] duplicate provider key "${p.meta.key}" — keeping first`);
         continue;
       }
-      if (this.active.has(provider.meta.key)) {
-        this.log.warn(`[OAuth] duplicate provider key "${provider.meta.key}" — keeping first`);
-        continue;
-      }
-      this.active.set(provider.meta.key, provider);
-      this.log.log(`[OAuth] provider "${provider.meta.key}" registered`);
+      this.providers.set(p.meta.key, p);
     }
+    this.log.log(`[OAuth] ${this.providers.size} provider(s) declared : ${Array.from(this.providers.keys()).join(', ')}`);
   }
 
-  /** Retourne le provider actif pour une clé, ou undefined. */
+  /** Retourne le provider pour une clé, ou undefined si non déclaré. */
   get(key: string): IOAuthProvider | undefined {
-    return this.active.get(key);
+    return this.providers.get(key);
   }
 
-  /** Liste des métadonnées publiques — consommée par `GET /auth/oauth/providers`. */
+  /**
+   * Liste des métadonnées publiques de tous les providers déclarés.
+   * Consommée par `GET /auth/oauth/providers`.
+   */
   list(): OAuthProviderMetadata[] {
-    return Array.from(this.active.values()).map(p => p.meta);
+    return Array.from(this.providers.values()).map(p => p.meta);
   }
 
-  /** Nombre de providers actifs — utile pour tests/monitoring. */
+  /**
+   * Liste enrichie avec statut de configuration (appelle `isConfigured()`
+   * sur chaque provider). Consommée par la page Intégrations pour afficher
+   * les providers grisés quand Vault n'a pas leurs secrets.
+   */
+  async listWithStatus(): Promise<Array<{
+    meta: OAuthProviderMetadata;
+    configured: boolean;
+  }>> {
+    return Promise.all(
+      Array.from(this.providers.values()).map(async p => ({
+        meta:       p.meta,
+        configured: await p.isConfigured(),
+      })),
+    );
+  }
+
+  /** Nombre de providers déclarés — utile pour tests/monitoring. */
   count(): number {
-    return this.active.size;
+    return this.providers.size;
   }
 }

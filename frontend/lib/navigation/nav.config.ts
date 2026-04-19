@@ -182,7 +182,7 @@ export const ADMIN_NAV: PortalNavConfig = {
         {
           kind: 'leaf',
           id: 'support',
-          label: 'nav.support',
+          label: 'nav.contact_support',
           href: '/admin/support',
           icon: 'LifeBuoy',
           // Tout staff tenant avec au moins la perm "créer ticket" voit l'item.
@@ -658,6 +658,17 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.INTEGRATION_SETUP],
         },
         {
+          // Abonnement SaaS — page self-service (plan, factures, auto-renew,
+          // résiliation). Visible uniquement pour le tenant admin via
+          // SETTINGS_MANAGE (même gate que les autres réglages plateforme).
+          kind: 'leaf',
+          id: 'tenant-billing',
+          label: 'nav.billing',
+          href: '/admin/billing',
+          icon: 'CreditCard',
+          anyOf: [P.SETTINGS_MANAGE],
+        },
+        {
           kind: 'leaf',
           id: 'documents-templates',
           label: 'nav.document_templates',
@@ -799,6 +810,14 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.platform_settings',
           href: '/admin/platform/settings',
           icon: 'Settings',
+          anyOf: [P.PLATFORM_CONFIG_MANAGE],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-email',
+          label: 'nav.platform_email',
+          href: '/admin/platform/email',
+          icon: 'Mail',
           anyOf: [P.PLATFORM_CONFIG_MANAGE],
         },
         {
@@ -1038,6 +1057,10 @@ export const DRIVER_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'drv-home',     label: 'nav.my_trip',       href: '/driver',              icon: 'MapPin',        anyOf: [P.TRIP_READ_OWN, P.TRIP_CHECK_OWN] },
         { kind: 'leaf', id: 'drv-manifest', label: 'nav.manifest',        href: '/driver/manifest',     icon: 'ClipboardList', anyOf: [P.MANIFEST_READ_OWN] },
         { kind: 'leaf', id: 'drv-checkin',  label: 'nav.passenger_check',  href: '/driver/checkin',      icon: 'Users',         anyOf: [P.TRIP_CHECK_OWN] },
+        // Scan billets/colis — entrée visible uniquement si l'une des perms
+        // scan est présente. Le blueprint + perms décident via /scan/capabilities
+        // quels modes (check-in / board) sont offerts dans l'UI.
+        { kind: 'leaf', id: 'drv-scan',     label: 'nav.scan',            href: '/driver/scan',         icon: 'ScanLine',      anyOf: [P.TICKET_SCAN, P.TRAVELER_VERIFY, P.PARCEL_SCAN] },
         { kind: 'leaf', id: 'drv-freight',  label: 'nav.freight_loading', href: '/driver/freight',     icon: 'Package',       anyOf: [P.PARCEL_SCAN, P.PARCEL_UPDATE_AGENCY] },
         { kind: 'leaf', id: 'drv-events',   label: 'nav.logbook',  href: '/driver/events',       icon: 'ScrollText',    anyOf: [P.TRIP_LOG_EVENT] },
         { kind: 'leaf', id: 'drv-briefing', label: 'nav.pre_departure_briefing', href: '/driver/briefing',  icon: 'ClipboardCheck', anyOf: [P.DRIVER_REST_OWN], moduleKey: 'CREW_BRIEFING' },

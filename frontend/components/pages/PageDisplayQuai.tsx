@@ -45,6 +45,7 @@ interface PlatformDisplayData {
   stationCity?:        string;
   capacity:            number;
   statusId:            string;
+  delayMinutes?:       number;
   tripId:              string | null;
   destination:         string;
   destinationCode:     string;
@@ -56,8 +57,10 @@ interface PlatformDisplayData {
   driverName:          string;
   agencyName:          string;
   passengersConfirmed: number;
+  passengersCheckedIn?: number;
   passengersOnBoard:   number;
   parcelsLoaded:       number;
+  parcelsTotal?:       number;
 }
 
 // ─── Composant ───────────────────────────────────────────────────────────────
@@ -94,10 +97,13 @@ export function PageDisplayQuai() {
     [displayUrl],
   );
 
-  // Auto-refresh toutes les 30 s (MVP sans WebSocket)
+  // Auto-refresh polling 10s — compromis temps réel perçu / charge backend.
+  // Les comptages sont Prisma.count() donc O(1) avec index (tripId, status),
+  // ~5-10ms/appel. Cadence s'aligne sur BusScreen (même périodicité perçue
+  // sur les deux écrans). WebSocket/SSE prévu en phase 2 pour le <1s latence.
   useEffect(() => {
     if (!displayUrl) return;
-    const id = setInterval(() => displayRes.refetch(), 30_000);
+    const id = setInterval(() => displayRes.refetch(), 10_000);
     return () => clearInterval(id);
   }, [displayUrl, displayRes]);
 
@@ -293,11 +299,14 @@ export function PageDisplayQuai() {
             busModel={data.busModel}
             driverName={data.driverName}
             passengersConfirmed={data.passengersConfirmed}
+            passengersCheckedIn={data.passengersCheckedIn}
             passengersOnBoard={data.passengersOnBoard}
             capacity={data.capacity}
             parcelsLoaded={data.parcelsLoaded}
+            parcelsTotal={data.parcelsTotal}
             statusId={data.statusId}
             departAt={departAt}
+            delayMinutes={data.delayMinutes ?? 0}
             tenantId={user?.tenantId ?? 'demo'}
             autoRotateLang={isFullscreen}
           />

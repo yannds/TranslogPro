@@ -7,6 +7,7 @@ import { O365EmailService }    from './email/o365-email.service';
 import { ResendEmailService }  from './email/resend-email.service';
 import { SmtpEmailService }    from './email/smtp-email.service';
 import { EMAIL_SERVICE_PROVIDER } from './email/email-provider.factory';
+import { WhiteLabelModule } from '../../modules/white-label/white-label.module';
 
 /**
  * NotificationProviderModule — fournit ISmsService, IWhatsappService
@@ -25,6 +26,9 @@ import { EMAIL_SERVICE_PROVIDER } from './email/email-provider.factory';
  */
 @Global()
 @Module({
+  // Import WhiteLabelModule pour que les services email puissent résoudre
+  // l'identité d'envoi (from/reply-to) par tenant via WhiteLabelService.
+  imports: [WhiteLabelModule],
   providers: [
     { provide: SMS_SERVICE,      useClass: TwilioSmsService      },
     { provide: WHATSAPP_SERVICE, useClass: TwilioWhatsappService },
@@ -35,6 +39,18 @@ import { EMAIL_SERVICE_PROVIDER } from './email/email-provider.factory';
     SmtpEmailService,
     EMAIL_SERVICE_PROVIDER,
   ],
-  exports: [SMS_SERVICE, WHATSAPP_SERVICE, EMAIL_SERVICE],
+  exports: [
+    SMS_SERVICE,
+    WHATSAPP_SERVICE,
+    EMAIL_SERVICE,
+    // Exporter les 4 implémentations email pour que PlatformEmailModule puisse
+    // exposer une vue admin (liste + healthcheck). Le provider "actif" reste
+    // résolu via EMAIL_SERVICE ; ces classes concrètes sont juste un moyen
+    // d'introspection, pas une invitation à les utiliser pour send().
+    ConsoleEmailService,
+    O365EmailService,
+    ResendEmailService,
+    SmtpEmailService,
+  ],
 })
 export class NotificationProviderModule {}

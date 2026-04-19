@@ -8,12 +8,14 @@ import { PlatformBillingService } from '../platform-billing/platform-billing.ser
 import { PlatformPlansService } from '../platform-plans/platform-plans.service';
 import { AuthService } from '../auth/auth.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { WaitlistSubmitDto } from './dto/waitlist.dto';
 import { PublicSignupDto } from './dto/signup.dto';
 import { buildWelcomeEmail, type SignupLocale } from './emails/welcome.template';
 import { buildWaitlistEmail } from './emails/waitlist.template';
 
-const MAX_WAITLIST_ATTEMPTS = 10;
+// `waitlist.maxAttemptsPerEmail` vit désormais dans PlatformConfig — voir
+// platform-config.registry.ts. Lu dynamiquement à chaque soumission.
 
 /**
  * Routes publiques d'inscription SaaS :
@@ -37,15 +39,17 @@ export class PublicSignupService {
     private readonly billing:  PlatformBillingService,
     private readonly plans:    PlatformPlansService,
     private readonly auth:     AuthService,
+    private readonly config:   PlatformConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
   // ─── Waitlist ──────────────────────────────────────────────────────────────
 
   async submitWaitlist(dto: WaitlistSubmitDto, meta: { ip: string; ua: string }) {
+    const maxAttempts = await this.config.getNumber('waitlist.maxAttemptsPerEmail');
     const existing = await this.prisma.waitlist.findUnique({ where: { email: dto.email } });
 
-    if (existing && existing.attempts >= MAX_WAITLIST_ATTEMPTS) {
+    if (existing && existing.attempts >= maxAttempts) {
       // Protection basique contre le spam répété sur le même email.
       this.logger.warn(`Waitlist max attempts reached for ${mask(dto.email)}`);
       // Réponse idempotente — on ne révèle pas l'état.

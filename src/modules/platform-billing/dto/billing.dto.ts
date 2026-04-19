@@ -36,6 +36,27 @@ export class ChangeSubscriptionPlanDto {
   planId!: string;
 }
 
+/**
+ * Prolongation de période d'essai — soit ajouter N jours à la date d'expiration
+ * actuelle (ou `now` si expirée/absente), soit fixer explicitement une nouvelle
+ * date. Exactement UN des deux champs doit être fourni (validation applicative).
+ */
+export class ExtendTrialDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  days?: number;
+
+  @IsOptional()
+  @IsDateString()
+  trialEndsAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
 export class UpdateSubscriptionStatusDto {
   @IsString()
   status!: string; // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED

@@ -23,7 +23,7 @@ export interface CashRegister {
   closedAt:       string | null;
   initialBalance: number;
   finalBalance:   number | null;
-  auditStatus:    'OPEN' | 'CLOSED' | 'DISCREPANCY';
+  status:         'OPEN' | 'CLOSED' | 'DISCREPANCY';
   _count?:        { transactions: number };
 }
 

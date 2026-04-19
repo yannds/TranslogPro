@@ -6,6 +6,7 @@ import { PaymentRouter } from './payment-router.service';
 import { PaymentOrchestrator } from './payment-orchestrator.service';
 import { PayloadEncryptor } from './payload-encryptor.service';
 import { PaymentWebhookController } from './payment-webhook.controller';
+import { PaymentController } from './payment.controller';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { PAYMENT_PROVIDERS } from './providers/types';
 import { FlutterwaveAggregatorProvider } from './providers/flutterwave-agg.provider';
@@ -13,6 +14,7 @@ import { PaystackAggregatorProvider } from './providers/paystack-agg.provider';
 import { MtnMomoCgProvider } from './providers/mtn-momo-cg.provider';
 import { AirtelMoneyCgProvider } from './providers/airtel-cg.provider';
 import { WaveProvider } from './providers/wave.provider';
+import { StripeProvider } from './providers/stripe.provider';
 
 /**
  * PaymentModule — hub d'accès aux providers de paiement.
@@ -29,13 +31,14 @@ import { WaveProvider } from './providers/wave.provider';
 @Global()
 @Module({
   imports: [DatabaseModule, SecretModule],
-  controllers: [PaymentWebhookController],
+  controllers: [PaymentWebhookController, PaymentController],
   providers: [
     FlutterwaveAggregatorProvider,
     PaystackAggregatorProvider,
     MtnMomoCgProvider,
     AirtelMoneyCgProvider,
     WaveProvider,
+    StripeProvider,
     {
       provide: PAYMENT_PROVIDERS,
       useFactory: (
@@ -44,10 +47,11 @@ import { WaveProvider } from './providers/wave.provider';
         mtn: MtnMomoCgProvider,
         air: AirtelMoneyCgProvider,
         wv:  WaveProvider,
-      ) => [fw, ps, mtn, air, wv],
+        st:  StripeProvider,
+      ) => [fw, ps, mtn, air, wv, st],
       inject: [
         FlutterwaveAggregatorProvider, PaystackAggregatorProvider,
-        MtnMomoCgProvider, AirtelMoneyCgProvider, WaveProvider,
+        MtnMomoCgProvider, AirtelMoneyCgProvider, WaveProvider, StripeProvider,
       ],
     },
     PayloadEncryptor,

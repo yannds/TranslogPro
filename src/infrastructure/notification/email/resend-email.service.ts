@@ -4,6 +4,7 @@ import type {
   IEmailService, SendEmailDto, SendEmailResult, EmailProviderName,
 } from '../interfaces/email.interface';
 import { ISecretService, SECRET_SERVICE } from '../../secret/interfaces/secret.interface';
+import { WhiteLabelService } from '../../../modules/white-label/white-label.service';
 import {
   toAddressArray, toAddress, formatAddress, maskEmail,
 } from './email.helpers';
@@ -39,6 +40,7 @@ export class ResendEmailService implements IEmailService {
 
   constructor(
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    private readonly brand:                       WhiteLabelService,
   ) {}
 
   async send(dto: SendEmailDto): Promise<SendEmailResult> {
@@ -48,11 +50,19 @@ export class ResendEmailService implements IEmailService {
     const ccList  = toAddressArray(dto.cc).map(formatAddress);
     const bccList = toAddressArray(dto.bcc).map(formatAddress);
 
-    const from = toAddress(dto.from) ?? {
-      email: creds.FROM_EMAIL,
-      name:  creds.FROM_NAME,
-    };
-    const replyTo = toAddress(dto.replyTo);
+    // Résolution from/replyTo — identique à SmtpEmailService (priorité au
+    // dto.from explicite, puis identité tenant via WhiteLabelService, puis
+    // fallback plateforme depuis Vault).
+    const explicitFrom = toAddress(dto.from);
+    const resolved = explicitFrom
+      ? { from: explicitFrom, replyTo: toAddress(dto.replyTo) }
+      : await this.brand.resolveFromForTenant(dto.tenantId ?? null, {
+          fromName:    creds.FROM_NAME ?? '',
+          fromAddress: creds.FROM_EMAIL,
+          replyTo:     toAddress(dto.replyTo)?.email,
+        });
+    const from    = resolved.from;
+    const replyTo = resolved.replyTo;
 
     if (!dto.html && !dto.text) {
       throw new Error('ResendEmailService.send: au moins html ou text doit être fourni');

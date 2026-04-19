@@ -28,7 +28,19 @@ export class TenantHostMiddleware implements NestMiddleware {
   constructor(private readonly resolver: TenantResolverService) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
-    const hostname = typeof req.headers.host === 'string' ? req.headers.host : '';
+    // En DEV uniquement, on autorise le client à surcharger le host via
+    // X-Tenant-Host. Utile pour :
+    //   - les apps mobile qui tapent localhost:3000 (HSTS/TLS-safe)
+    //   - les tests Playwright sans Caddy
+    // En prod, Kong/Caddy DOIT strip ce header côté edge — sinon injection
+    // tenant triviale. Cf. infra/kong/config.yaml `request-transformer`.
+    const headerHost =
+      process.env.NODE_ENV === 'development' && typeof req.headers['x-tenant-host'] === 'string'
+        ? (req.headers['x-tenant-host'] as string)
+        : null;
+
+    const hostname = headerHost
+      ?? (typeof req.headers.host === 'string' ? req.headers.host : '');
 
     if (!hostname) {
       // Requête sans Host header (HTTP/0.9, curl --http1.0 -H "Host:", health

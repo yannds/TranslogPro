@@ -4,6 +4,7 @@ import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 
@@ -50,7 +51,7 @@ export class FleetController {
     return this.fleetService.setSeatLayout(tenantId, id, body);
   }
 
-  /** Modifier statut bus — scope agency (un agent ne touche que son agence) */
+  /** Modifier statut bus — scope agency. Transition blueprint-driven. */
   @Patch('buses/:id/status')
   @RequirePermission(Permission.FLEET_STATUS_AGENCY)
   updateStatus(
@@ -58,8 +59,9 @@ export class FleetController {
     @Param('id') id: string,
     @Body('status') status: string,
     @ScopeCtx() scope: ScopeContext,
+    @CurrentUser() actor: CurrentUserPayload,
   ) {
-    return this.fleetService.updateStatus(tenantId, id, status, scope);
+    return this.fleetService.updateStatus(tenantId, id, status, scope, actor);
   }
 
   @Get('buses')

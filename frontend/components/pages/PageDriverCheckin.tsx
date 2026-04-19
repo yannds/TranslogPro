@@ -11,11 +11,11 @@
  */
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, UserCheck, Users } from 'lucide-react';
+import { AlertCircle, UserCheck, TicketCheck, Users } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
-import { apiPatch } from '../../lib/api';
+import { apiPatch, apiPost } from '../../lib/api';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
@@ -111,6 +111,26 @@ export function PageDriverCheckin() {
     }
   };
 
+  // Check-in en gare — étape intermédiaire avant embarquement bus. L'action
+  // est idempotente côté backend : pas de régression si déjà CHECKED_IN, et
+  // no-op si déjà BOARDED.
+  const handleCheckIn = async (pax: Passenger) => {
+    if (!activeTrip) return;
+    setBusyId(pax.id);
+    setError(null);
+    try {
+      await apiPost(
+        `/api/tenants/${tenantId}/flight-deck/trips/${activeTrip.id}/passengers/${pax.id}/check-in`,
+        {},
+      );
+      refetch();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('driverCheckin.errorCheckIn'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const paxList = passengers ?? [];
   const boardedCount = paxList.filter(p => p.status === 'BOARDED').length;
   const loading = loadingTrip || loadingPax;
@@ -165,6 +185,22 @@ export function PageDriverCheckin() {
           exportFormats={['csv', 'pdf']}
           exportFilename="check-passagers"
           rowActions={[
+            // Étape 1 — check-in gare. Cachée dès que le passager a dépassé
+            // cette étape (CHECKED_IN ou BOARDED) ou si son billet est annulé.
+            {
+              label: t('driverCheckin.checkInAction'),
+              icon: <TicketCheck className="w-4 h-4" />,
+              onClick: (pax) => handleCheckIn(pax),
+              hidden: (pax) =>
+                pax.status === 'CHECKED_IN' ||
+                pax.status === 'BOARDED' ||
+                pax.status === 'CANCELLED',
+              disabled: (pax) => busyId === pax.id,
+            },
+            // Étape 2 — embarquement bus. Toujours visible tant que pas
+            // BOARDED (on autorise le chauffeur à court-circuiter le
+            // check-in si besoin — le backend crée le Traveler BOARDED
+            // directement).
             {
               label: t('driverCheckin.boardAction'),
               icon: <UserCheck className="w-4 h-4" />,

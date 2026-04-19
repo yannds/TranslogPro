@@ -33,6 +33,11 @@ export class SubscriptionReconciliationService {
     amount:     number;
     currency:   string;
     metadata:   unknown;
+    /** Tokenisation provider (si fournie) — activée l'auto-renew sans interaction. */
+    tokenization?: {
+      customerRef?: string; methodToken?: string;
+      methodLast4?: string; methodBrand?: string;
+    };
   }) {
     if (payload.entityType !== 'SUBSCRIPTION') return;
     if (!payload.entityId) {
@@ -87,6 +92,7 @@ export class SubscriptionReconciliationService {
         }),
       ]);
       const prevRefs = (sub.externalRefs ?? {}) as Record<string, unknown>;
+      const tk = payload.tokenization;
       const nextRefs = {
         ...prevRefs,
         lastIntentId:           payload.intentId,
@@ -94,6 +100,14 @@ export class SubscriptionReconciliationService {
         lastAttemptExternalRef: lastAttempt?.externalRef ?? (prevRefs as any).lastAttemptExternalRef,
         lastProvider:           lastAttempt?.providerKey ?? (prevRefs as any).lastProvider,
         lastSuccessAt:          new Date().toISOString(),
+        // Tokenisation — on ne conserve que les refs réutilisables (customerRef,
+        // methodToken). Le last4/brand servent uniquement l'affichage UI. Un
+        // null `methodToken` signifie : auto-renew via Intent avec paymentUrl
+        // (l'admin clique pour confirmer), pas de prélèvement silencieux.
+        customerRef:            tk?.customerRef    ?? (prevRefs as any).customerRef,
+        methodToken:            tk?.methodToken    ?? (prevRefs as any).methodToken,
+        methodLast4:            tk?.methodLast4    ?? (prevRefs as any).methodLast4,
+        methodBrand:            tk?.methodBrand    ?? (prevRefs as any).methodBrand,
         // Reset dunning history après un paiement réussi — la prochaine
         // occurrence de PAST_DUE repartira de zéro sur les rappels.
         dunningSent:            {},

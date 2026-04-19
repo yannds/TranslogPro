@@ -18,7 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  View, Text, Modal, Pressable, StyleSheet, ActivityIndicator, Linking, Platform,
+  View, Text, Modal, Pressable, StyleSheet, ActivityIndicator, Linking, Platform, TextInput,
 } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useTheme } from '../theme/ThemeProvider';
@@ -44,10 +44,18 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
   const { colors } = useTheme();
   const { t } = useI18n();
   const [permission, requestPermission] = useCameraPermissions();
-  const [locked, setLocked] = useState(false);
+  const [locked, setLocked]           = useState(false);
+  const [manualMode, setManualMode]   = useState(false);
+  const [manualCode, setManualCode]   = useState('');
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!visible) setLocked(false);
+    if (!visible) {
+      setLocked(false);
+      setManualMode(false);
+      setManualCode('');
+      setCameraError(null);
+    }
   }, [visible]);
 
   useEffect(() => {
@@ -69,6 +77,13 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
     // décide de ne pas fermer la modale (cf. onScanned).
     setTimeout(() => setLocked(false), SCAN_RESET_DELAY_MS);
     onScanned(value);
+  }
+
+  function submitManual() {
+    const code = manualCode.trim();
+    if (!code) return;
+    onScanned(code);
+    setManualCode('');
   }
 
   // persistent est uniquement informationnel pour le consumer : il sait qu'il
@@ -131,7 +146,7 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
           </View>
         )}
 
-        {permission?.granted && (
+        {permission?.granted && !manualMode && (
           <>
             <CameraView
               style={StyleSheet.absoluteFill}
@@ -141,6 +156,12 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
                 barcodeTypes: ['qr', 'code128', 'pdf417', 'datamatrix'],
               }}
               onBarcodeScanned={handleBarcode}
+              onMountError={(e) => {
+                // Remonte à l'UI toute erreur native (module manquant, lentille
+                // inaccessible, conflit de session caméra…). Sans ça l'agent
+                // voit juste un écran noir sans comprendre pourquoi ça ne scanne pas.
+                setCameraError(e?.message ?? 'Caméra indisponible');
+              }}
             />
             {/* `pointerEvents` est déprécié en prop côté react-native-web —
                 on passe via le style. 'box-none' permet les clicks dans les
@@ -150,6 +171,23 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
               <Text style={styles.hint}>
                 {t('qr.hint') ?? 'Centrez le QR code dans le cadre'}
               </Text>
+              {cameraError && (
+                <View style={[styles.errorBanner, { pointerEvents: 'none' }]}>
+                  <Text style={styles.errorText}>⚠ {cameraError}</Text>
+                </View>
+              )}
+              {/* Bouton saisie manuelle — toujours accessible, utile quand le
+                  QR est abîmé ou que la caméra a du mal à faire la mise au point. */}
+              <Pressable
+                onPress={() => setManualMode(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t('qr.switchManual') ?? 'Saisir manuellement'}
+                style={[styles.manualBtn, { backgroundColor: colors.surface }]}
+              >
+                <Text style={{ color: colors.text, fontWeight: '600' }}>
+                  ⌨  {t('qr.switchManual') ?? 'Saisir manuellement'}
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={onClose}
                 accessibilityRole="button"
@@ -160,6 +198,71 @@ export function QrScanner({ visible, onScanned, onClose, persistent }: QrScanner
               </Pressable>
             </View>
           </>
+        )}
+
+        {manualMode && (
+          <View style={styles.center}>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {t('qr.manualTitle') ?? 'Saisir le code du billet ou colis'}
+            </Text>
+            <Text style={[styles.body, { color: colors.textMuted }]}>
+              {t('qr.manualBody') ?? 'Tapez ou collez le code imprimé sous le QR (ex. cmo... ou TRK-...).'}
+            </Text>
+            <TextInput
+              value={manualCode}
+              onChangeText={setManualCode}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={t('qr.manualPlaceholder') ?? 'Code ticket ou colis'}
+              placeholderTextColor={colors.textMuted}
+              onSubmitEditing={submitManual}
+              style={{
+                width: '100%',
+                maxWidth: 360,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                color: colors.text,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                fontSize: 15,
+                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+              }}
+            />
+            <Pressable
+              onPress={submitManual}
+              disabled={!manualCode.trim()}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.btn,
+                { backgroundColor: colors.primary, opacity: !manualCode.trim() || pressed ? 0.5 : 1 },
+              ]}
+            >
+              <Text style={{ color: colors.primaryFg, fontWeight: '700' }}>
+                {t('qr.validateManual') ?? 'Valider'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setManualMode(false)}
+              accessibilityRole="button"
+              style={[styles.btnGhost, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.text }}>
+                {t('qr.backToCamera') ?? 'Revenir au scanner'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              style={[styles.btnGhost, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.textMuted }}>
+                {t('common.cancel') ?? 'Annuler'}
+              </Text>
+            </Pressable>
+          </View>
         )}
       </View>
     </Modal>
@@ -184,5 +287,32 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center', justifyContent: 'center',
+  },
+  manualBtn: {
+    position: 'absolute',
+    bottom:   Platform.OS === 'ios' ? 48 : 32,
+    paddingHorizontal: 20,
+    paddingVertical:   12,
+    borderRadius:      24,
+    shadowOpacity:     0.25,
+    shadowRadius:      8,
+    shadowOffset:      { width: 0, height: 2 },
+    elevation:         4,
+  },
+  errorBanner: {
+    position:      'absolute',
+    top:           Platform.OS === 'ios' ? 100 : 60,
+    left:          16,
+    right:         16,
+    backgroundColor: 'rgba(220,38,38,0.92)',
+    paddingVertical:   10,
+    paddingHorizontal: 14,
+    borderRadius:   10,
+  },
+  errorText: {
+    color:   '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+    textAlign: 'center',
   },
 });

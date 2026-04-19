@@ -73,15 +73,15 @@ Cinq providers implémentés à ce jour :
 
 Trois providers implémentés :
 
-| Key | Display name | Implémentation | Credentials |
+| Key | Display name | Implémentation | Vault path |
 |---|---|---|---|
-| `google` | Google | [google.provider.ts](../src/modules/oauth/providers/google.provider.ts) | Env var `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-| `microsoft` | Microsoft | [microsoft.provider.ts](../src/modules/oauth/providers/microsoft.provider.ts) | Env var `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` |
-| `facebook` | Facebook | [facebook.provider.ts](../src/modules/oauth/providers/facebook.provider.ts) | Env var `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` |
+| `google` | Google | [google.provider.ts](../src/modules/oauth/providers/google.provider.ts) | `platform/auth/google` |
+| `microsoft` | Microsoft | [microsoft.provider.ts](../src/modules/oauth/providers/microsoft.provider.ts) | `platform/auth/microsoft` |
+| `facebook` | Facebook | [facebook.provider.ts](../src/modules/oauth/providers/facebook.provider.ts) | `platform/auth/facebook` |
 
 À quoi ça sert : bouton « Se connecter avec Google » sur la page de login tenant et le portail voyageur.
 
-**Différence notable avec PAYMENT** : les providers OAuth sont configurés **par variable d'environnement** (pas Vault). C'est historique et tient au fait que ce sont des credentials plateforme globaux, pas tenant-scoped. Sans ces env vars, `isEnabled = false` → le provider est **silencieusement ignoré** → n'apparaît pas dans la liste.
+**Alignement sur PAYMENT** (migration 19/04/2026) — les providers OAuth lisent désormais leurs credentials **depuis Vault** (plus d'env vars). Même cache 5 min que Twilio/payments. Un provider non configuré reste visible dans l'UI mais grisé avec un badge « Non configuré » et un message « Demandez à l'admin plateforme de provisionner Vault ». Les actions SANDBOX/LIVE sont verrouillées tant que les secrets manquent — évite une erreur opaque au premier clic. Voir §9.
 
 ---
 
@@ -181,7 +181,7 @@ Ce que l'utilisateur voit : `platform/payments/•••_cg` (empreinte du path)
 
 ## 9. Activer les providers OAuth (Google/Microsoft/Facebook)
 
-**Pourquoi l'onglet AUTH est vide** : les providers OAuth sont filtrés par `isEnabled`, qui est `true` **uniquement** si les variables d'environnement correspondantes sont setées. Sans elles, le registre n'enregistre rien → l'UI reçoit une liste vide pour la catégorie `AUTH`.
+**Depuis la migration du 19/04/2026, les credentials OAuth vivent dans Vault** (comme PAYMENT). Les 3 providers sont **toujours visibles** dans l'onglet AUTH ; ils apparaissent grisés avec badge « Non configuré » tant que Vault n'a pas leurs secrets. Les boutons SANDBOX/LIVE sont verrouillés dans cet état.
 
 ### Activer Google en dev
 
@@ -189,20 +189,35 @@ Ce que l'utilisateur voit : `platform/payments/•••_cg` (empreinte du path)
 2. Ajoute les URIs de redirection, au minimum :
    - `https://trans-express.translog.test/api/auth/oauth/google/callback`
    - `https://citybus-congo.translog.test/api/auth/oauth/google/callback`
-3. Copie le Client ID et Client Secret dans l'`.env` de l'API :
+3. Provisionne Vault :
    ```bash
-   GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=GOCSPX-yyy
+   vault kv put secret/platform/auth/google \
+     CLIENT_ID="xxx.apps.googleusercontent.com" \
+     CLIENT_SECRET="GOCSPX-yyy"
    ```
-4. Redémarre l'API (`./scripts/stop.sh --app && npm run start:dev`).
-5. Au démarrage tu dois voir dans les logs : `[OAuth] provider "google" registered`. Si tu lis `provider "google" disabled (missing env) — skipped`, c'est que les vars ne sont pas correctement chargées.
-6. Recharge `/admin/integrations` → Google apparaît dans l'onglet AUTH avec mode `LIVE` (les providers OAuth n'ont pas de mode SANDBOX côté registre — ils sont soit enregistrés soit pas).
+   En UI Vault (`http://localhost:8200`, token `dev-root-token`) : secret/ → platform/auth/google → deux clés `CLIENT_ID` et `CLIENT_SECRET`.
+4. Recharge `/admin/integrations` → Google perd le badge « Non configuré » et les boutons DISABLED/SANDBOX/LIVE deviennent cliquables.
+5. Clique l'icône refresh (healthcheck) → vérifie que les credentials sont bien présents et accessibles.
+6. Bascule en **SANDBOX** → le tenant peut tester « Se connecter avec Google » sans risque prod. Puis **LIVE** avec confirmation MFA.
 
 ### Microsoft / Facebook
 
-Même principe :
-- Microsoft : https://entra.microsoft.com/ → App registrations → ajouter l'app, récupérer client ID + secret → env vars `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`.
-- Facebook : https://developers.facebook.com/ → Create App → env vars `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`.
+Même principe, chemins Vault respectifs :
+- **Microsoft** : https://entra.microsoft.com/ → App registrations. Chemin Vault `platform/auth/microsoft` :
+  ```bash
+  vault kv put secret/platform/auth/microsoft \
+    CLIENT_ID="..." CLIENT_SECRET="..." TENANT_SEGMENT="common"
+  ```
+  `TENANT_SEGMENT` est optionnel (défaut `common`). Valeurs possibles : `common` (multi-tenant Azure), `consumers`, `organizations`, ou un GUID Azure AD pour un tenant spécifique.
+- **Facebook** : https://developers.facebook.com/ → Create App. Chemin Vault `platform/auth/facebook` :
+  ```bash
+  vault kv put secret/platform/auth/facebook \
+    CLIENT_ID="facebook-app-id" CLIENT_SECRET="facebook-app-secret"
+  ```
+
+### Mode SANDBOX pour OAuth — comment ça marche
+
+Contrairement à PAYMENT, Google/Microsoft/Facebook n'ont pas d'endpoint sandbox natif — tu crées soit une app « test » soit une app « prod » chez eux. Dans notre modèle, `SANDBOX` côté base = « provider activable pour tenant mais reconnu comme environnement de test » : même endpoint public, juste un flag sémantique. Concrètement tu peux créer **2 apps OAuth distinctes** chez Google (`translogpro-sandbox` + `translogpro-prod`) et provisionner deux Vault paths (`platform/auth/google-sandbox` + `platform/auth/google`) si tu veux une vraie isolation. À ce stade, on garde le modèle simple : un seul Vault path par provider, et `SANDBOX` / `LIVE` sont des indicateurs métier enregistrés en DB (`oauth_provider_states.mode`).
 
 ---
 
@@ -213,9 +228,11 @@ Même principe :
 | [src/modules/tenant-settings/tenant-settings.controller.ts](../src/modules/tenant-settings/tenant-settings.controller.ts) | Endpoints REST `/api/v1/tenants/:tid/settings/integrations`. |
 | [src/modules/tenant-settings/integrations.service.ts](../src/modules/tenant-settings/integrations.service.ts) | Logique métier : agrégation PAYMENT + AUTH, changement de mode, healthcheck. |
 | [src/infrastructure/payment/payment-provider.registry.ts](../src/infrastructure/payment/payment-provider.registry.ts) | Registre plateforme des providers PAYMENT avec lecture du mode effectif par tenant. |
-| [src/modules/oauth/providers/oauth-provider.registry.ts](../src/modules/oauth/providers/oauth-provider.registry.ts) | Registre OAuth, filtré par `isEnabled` à l'init du module. |
-| Table `payment_provider_states` | État d'activation : (tenantId|null, providerKey, mode, lastHealthCheckAt, activatedBy). |
-| [frontend/components/pages/PageIntegrations.tsx](../frontend/components/pages/PageIntegrations.tsx) | Page UI avec onglets PAYMENT / AUTH. |
+| [src/modules/oauth/providers/oauth-provider.registry.ts](../src/modules/oauth/providers/oauth-provider.registry.ts) | Registre OAuth — tous providers visibles, filtrage à l'appel via `isConfigured()`. |
+| [src/modules/oauth/providers/base-oauth.provider.ts](../src/modules/oauth/providers/base-oauth.provider.ts) | Base class abstraite : cache Vault 5 min, `isConfigured()`, exécution des credentials. |
+| Table `payment_provider_states` | État d'activation PAYMENT : (tenantId\|null, providerKey, mode, lastHealthCheckAt, activatedBy). |
+| Table `oauth_provider_states` | État d'activation OAuth : même schéma que PAYMENT, tenant-scopable. |
+| [frontend/components/pages/PageIntegrations.tsx](../frontend/components/pages/PageIntegrations.tsx) | Page UI avec onglets PAYMENT / AUTH, providers grisés si non configurés. |
 
 ---
 
@@ -225,4 +242,9 @@ Même principe :
 - Table d'audit dédiée `integration_audit_log` (actuellement seul `activatedBy` + timestamp sont conservés).
 - UI de rotation de credentials (aujourd'hui il faut passer par Vault CLI).
 - Catégories NOTIFICATION (Twilio, Brevo) et STORAGE (S3, Cloudflare R2).
-- Providers OAuth configurables par tenant (aujourd'hui plateforme-global).
+- Providers OAuth configurables par tenant avec Vault paths tenant-scopés (aujourd'hui plateforme-global, la table `oauth_provider_states` supporte déjà `tenantId`).
+- Apps OAuth distinctes sandbox/prod pour Google/Microsoft/Facebook si vrai besoin d'isolation test/prod (cf. §9).
+
+## 12. Email transactionnel
+
+La partie email (envoi de billets, rappels, magic links) n'est **pas** dans la page Intégrations. C'est par design — l'email est un canal technique plateforme-global, pas un service tenant-activable. Voir la documentation dédiée : [EMAIL.md](./EMAIL.md).

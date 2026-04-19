@@ -18,6 +18,7 @@ import { useNavigation }      from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
 import { CUSTOMER_NAV }       from '../../lib/navigation/nav.config';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
+import { SuspendedScreen }    from '../billing/SuspendedScreen';
 import { PageCustomerHome }   from './PageCustomerHome';
 import { PageMyTickets }      from './PageMyTickets';
 import { PageMyParcels }      from './PageMyParcels';
@@ -151,6 +152,12 @@ export function CustomerDashboard() {
       <main className="flex-1 overflow-y-auto" role="main">
         <CustomerPageRouter activeId={activeId} />
       </main>
+
+      {/* Verrou SUSPENDED — même gate que l'admin. Les clients finaux (USERTYPE
+          CUSTOMER) ne sont normalement jamais SUSPENDED en leur nom propre ;
+          ce cas n'arrive que si le portail client est monté sur un tenant
+          lui-même suspendu. Pour l'instant on bloque par sécurité. */}
+      <SuspendedScreen />
     </div>
   );
 }

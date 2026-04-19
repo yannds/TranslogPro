@@ -1,40 +1,42 @@
 /**
  * PageQuaiBoarding — embarquement passagers au quai (agent de quai).
  *
- * Cycle :
- *   CONFIRMED    → SCAN_IN   → CHECKED_IN  (perm ticket.scan.agency)
- *   CHECKED_IN   → SCAN_BOARD → BOARDED    (perm ticket.scan.agency)
+ * Cycle blueprint (Traveler) :
+ *   CONFIRMED (ticket)  → CHECK_IN  (perm ticket.scan.agency)    → CHECKED_IN
+ *   CHECKED_IN          → SCAN_BOARD (perm traveler.verify.agency) → BOARDED
  *
  * Flow :
- *   1. Agent choisit la date + le trajet via TripPickerForDay
- *   2. Liste des voyageurs du trajet affichée via /travelers/trips/:tripId
+ *   1. Agent choisit la date + le trajet (TripPickerForDay)
+ *   2. Liste des tickets du trajet (enrichie avec le statut Traveler) via
+ *      `/flight-deck/trips/:tripId/passengers` — même endpoint que la BusScreen.
+ *      Important : on liste les tickets, PAS les Travelers — sinon on ne voit
+ *      que les passagers déjà scannés. Un ticket CONFIRMED sans Traveler est
+ *      visible avec status='CONFIRMED' (statut fallback).
  *   3. Action contextuelle par ligne :
- *        status CONFIRMED → « Enregistrer » (scan-in)
- *        status CHECKED_IN → « Embarquer »  (scan-board)
+ *        status CONFIRMED  → « Enregistrer » (check-in façade → SCAN_IN blueprint)
+ *        status CHECKED_IN → « Embarquer »  (board façade   → SCAN_BOARD)
  *        status BOARDED    → badge read-only
  *
- * Accepte aussi un query param ?tripId=... (lien depuis PageQuaiHome)
- * ou ?code=... (depuis PageQuaiScan — ce code sera résolu en un ticket lookup
- * dans une itération ultérieure ; pour l'instant on ouvre la page et l'agent
- * repère visuellement le passager dans la liste).
+ * Accepte `?tripId=...` dans l'URL (lien depuis PageQuaiHome / PageQuaiScan
+ * après un scan réussi). La page poll toutes les 10s pour refléter les
+ * scans faits en parallèle depuis un autre onglet ou par le chauffeur.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Users, UserCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth }   from '../../lib/auth/auth.context';
 import { useI18n }  from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
-import { apiPost, ApiError } from '../../lib/api';
+import { apiPost, apiPatch, ApiError } from '../../lib/api';
 import { Badge }      from '../ui/Badge';
-import { Button }     from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { Skeleton }   from '../ui/Skeleton';
 import { TripPickerForDay } from '../agent/TripPickerForDay';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 interface Traveler {
-  id:            string;
+  id:            string;   // ticketId (côté backend c'est `id` du ticket, pas du traveler)
   passengerName: string;
   seatNumber:    string | null;
   fareClass:     string | null;
@@ -58,25 +60,51 @@ export function PageQuaiBoarding() {
   const [tripId, setTripId] = useState<string | null>(initialTripId);
   useEffect(() => { if (initialTripId) setTripId(initialTripId); }, [initialTripId]);
 
+  // Endpoint `flight-deck/.../passengers` = liste tickets (tous statuts non
+  // annulés) enrichie avec le statut Traveler. Même source que la BusScreen,
+  // donc aucune divergence entre les écrans.
+  const passengersUrl = tenantId && tripId
+    ? `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/passengers`
+    : null;
   const { data: travelers, loading, refetch } = useFetch<Traveler[]>(
-    tenantId && tripId ? `/api/tenants/${tenantId}/travelers/trips/${tripId}` : null,
-    [tenantId, tripId],
+    passengersUrl,
+    [passengersUrl],
   );
+
+  // Polling 10s — permet de voir en direct les scans faits par le chauffeur
+  // (mobile) ou par un autre agent quai sur un autre poste.
+  useEffect(() => {
+    if (!passengersUrl) return;
+    const id = setInterval(() => refetch(), 10_000);
+    return () => clearInterval(id);
+  }, [passengersUrl, refetch]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError]   = useState<string | null>(null);
 
-  async function action(id: string, kind: 'scan-in' | 'scan-board') {
-    setBusyId(id); setError(null);
+  /**
+   * Action = transition blueprint. On passe par la facade flight-deck qui
+   * délègue à TravelerService + WorkflowEngine — même chemin que le scan QR.
+   * check-in est POST, board est PATCH (convention REST du back).
+   */
+  const runAction = useCallback(async (ticketId: string, kind: 'check-in' | 'board') => {
+    if (!tenantId || !tripId) return;
+    setBusyId(ticketId); setError(null);
     try {
-      await apiPost(`/api/tenants/${tenantId}/travelers/${id}/${kind}`, {});
+      const url = `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/passengers/${ticketId}/${kind}`;
+      const headers = { 'Idempotency-Key': `${kind}:${ticketId}` };
+      if (kind === 'check-in') {
+        await apiPost(url, {}, { headers });
+      } else {
+        await apiPatch(url, {}, { headers });
+      }
       refetch();
     } catch (e) {
       setError(e instanceof ApiError
         ? String((e.body as { message?: string })?.message ?? e.message)
         : String(e));
     } finally { setBusyId(null); }
-  }
+  }, [tenantId, tripId, refetch]);
 
   const columns: Column<Traveler>[] = useMemo(() => [
     { key: 'seatNumber', header: t('quaiBoarding.colSeat'), width: '80px', cellRenderer: v => v ?? '—' },
@@ -94,14 +122,14 @@ export function PageQuaiBoarding() {
       icon:    <UserCheck size={13} />,
       hidden:  (r) => r.status !== 'CONFIRMED',
       disabled:(r) => busyId === r.id,
-      onClick: (r) => action(r.id, 'scan-in'),
+      onClick: (r) => runAction(r.id, 'check-in'),
     },
     {
       label:   t('quaiBoarding.board'),
       icon:    <CheckCircle2 size={13} />,
       hidden:  (r) => r.status !== 'CHECKED_IN',
       disabled:(r) => busyId === r.id,
-      onClick: (r) => action(r.id, 'scan-board'),
+      onClick: (r) => runAction(r.id, 'board'),
     },
   ];
 

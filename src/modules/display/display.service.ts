@@ -245,20 +245,51 @@ export class DisplayService {
         })
       : null;
 
-    // Agrégats passagers + colis — uniquement si un trip est affiché
-    const [passengersConfirmed, passengersOnBoard, parcelsLoaded] = trip
+    // Agrégats passagers + colis — uniquement si un trip est affiché.
+    //
+    // Sources volontairement alignées sur `flight-deck.getTripLiveStats` pour
+    // que QuaiScreen et BusScreen affichent les mêmes chiffres pour un même
+    // trip :
+    //   - passengersOnBoard   = Traveler.BOARDED  (acte d'embarquement bus)
+    //   - passengersCheckedIn = Traveler.CHECKED_IN + BOARDED (présence gare)
+    //   - passengersConfirmed = Ticket.CONFIRMED + CHECKED_IN (billets payés)
+    //
+    // Avant le correctif, `passengersOnBoard` lisait Ticket.CHECKED_IN alors
+    // que l'action "Embarquer" écrit sur Traveler — les écrans quai
+    // restaient bloqués à 0 même après 38 embarquements réels.
+    //
+    // `parcelsTotal` = colis attendus sur ce trip (hors CANCELLED), utile pour
+    // que l'UI affiche "chargement terminé" quand loaded === total.
+    const [
+      passengersConfirmed, passengersOnBoard, passengersCheckedIn,
+      parcelsLoaded, parcelsTotal,
+    ] = trip
       ? await Promise.all([
           this.prisma.ticket.count({
             where: { tenantId, tripId: trip.id, status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
           }),
-          this.prisma.ticket.count({
-            where: { tenantId, tripId: trip.id, status: 'CHECKED_IN' },
+          this.prisma.traveler.count({
+            where: { tenantId, tripId: trip.id, status: 'BOARDED' },
+          }),
+          this.prisma.traveler.count({
+            where: { tenantId, tripId: trip.id, status: { in: ['CHECKED_IN', 'BOARDED'] } },
           }),
           this.prisma.parcel.count({
-            where: { tenantId, shipment: { tripId: trip.id } },
+            where: {
+              tenantId,
+              shipment: { tripId: trip.id },
+              status: { in: ['LOADED', 'IN_TRANSIT'] },
+            },
+          }),
+          this.prisma.parcel.count({
+            where: {
+              tenantId,
+              shipment: { tripId: trip.id },
+              status: { notIn: ['CANCELLED'] },
+            },
           }),
         ])
-      : [0, 0, 0];
+      : [0, 0, 0, 0, 0];
 
     const via = trip?.route?.waypoints
       ?.map(w => w.station.city || w.station.name)
@@ -275,6 +306,15 @@ export class DisplayService {
     // statusId affiché = statut du trip si présent, sinon statut du quai
     const statusId = trip?.status ?? platform.status;
 
+    // Retard en minutes — basé sur l'écart now vs departureScheduled dès que
+    // l'heure est dépassée et tant que le trajet n'est pas terminé. QuaiScreen
+    // affiche un badge rouge et pousse un message dans le ticker si > 0.
+    const scheduled = trip?.departureScheduled ? trip.departureScheduled.getTime() : null;
+    const isTerminal = statusId === 'COMPLETED' || statusId === 'CANCELLED';
+    const delayMinutes = scheduled && !isTerminal && Date.now() > scheduled
+      ? Math.floor((Date.now() - scheduled) / 60_000)
+      : 0;
+
     return {
       id:                    platform.id,
       code:                  platform.code,
@@ -284,6 +324,7 @@ export class DisplayService {
       stationCity:           platform.station.city,
       capacity:              trip?.bus?.capacity ?? platform.capacity,
       statusId,
+      delayMinutes,
       // ── Trip (null si aucun trajet affecté/à venir) ──
       tripId:                trip?.id ?? null,
       destination:           destinationCity,
@@ -299,7 +340,9 @@ export class DisplayService {
       agencyName:            '',
       passengersConfirmed,
       passengersOnBoard,
+      passengersCheckedIn,
       parcelsLoaded,
+      parcelsTotal,
     };
   }
 }

@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "TransLog Pro",
+    "slug": "translog-pro",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "translog",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.translogpro.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TransLog Pro utilise votre position lorsque vous signalez un incident, uniquement si vous y consentez.",
+        "NSCameraUsageDescription": "Utilisée pour scanner les QR codes des billets à l'embarquement.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.translogpro.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f766e"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-secure-store",
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TransLog Pro utilise la caméra pour scanner les QR codes des billets et colis à l'embarquement.",
+          "recordAudioAndroid": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000",
+      "comment_apiBaseUrl": "Dev local — backend NestJS sur localhost:3000. Le tenant est résolu via le header X-Forwarded-Host côté middleware (cf. TenantHostMiddleware). En prod le build cible https://app.translogpro.com."
+    }
+  }
+}

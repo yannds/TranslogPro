@@ -1,13 +1,25 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import type { Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { AuditService } from '../../core/workflow/audit.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
+import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
+
+// Pas de magic number inline — plafonds d'export explicites.
+const MAX_EXPORT_DAYS = 92;
+const MAX_EXPORT_ROWS = 50_000;
+const ONE_DAY_MS      = 24 * 60 * 60 * 1_000;
 
 @Controller('tenants/:tenantId/analytics')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(
+    private readonly analyticsService: AnalyticsService,
+    private readonly audit:             AuditService,
+  ) {}
 
   @Get('dashboard')
   @RequirePermission(Permission.STATS_READ_TENANT)
@@ -19,6 +31,21 @@ export class AnalyticsController {
     // scope.scope='agency' → l'acteur ne voit que son agence, peu importe le query param
     const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
     return this.analyticsService.getDashboard(tenantId, effectiveAgencyId);
+  }
+
+  /**
+   * KPIs lean du jour — consommé par l'app mobile admin (payload <1 KB).
+   * Scope .agency forcé si l'acteur est AGENCY_MANAGER (vue restreinte).
+   */
+  @Get('kpis')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  kpis(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
+  ) {
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getKpis(tenantId, effectiveAgencyId);
   }
 
   @Get('trips')
@@ -78,5 +105,58 @@ export class AnalyticsController {
     return this.analyticsService.getTopRoutes(
       tenantId, new Date(from), new Date(to), limit ? parseInt(limit, 10) : 10,
     );
+  }
+
+  /**
+   * Export CSV tickets — plafonné (fenêtre + nb lignes) et audité.
+   * Rate-limit 10/h/userId pour éviter les scripts de dump.
+   */
+  @Get('export/tickets')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit:    10,
+    windowMs: 60 * 60 * 1_000,
+    keyBy:    'userId',
+    suffix:   'analytics_export_tickets',
+    message:  'Limite d\'exports atteinte (10/h). Réessayez plus tard.',
+  })
+  async exportTickets(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Res() res: Response,
+    @Query('from') from: string,
+    @Query('to')   to: string,
+    @Query('agencyId') agencyId?: string,
+  ) {
+    if (!from || !to) throw new BadRequestException('from/to obligatoires');
+    const f = new Date(from);
+    const t = new Date(to);
+    if (isNaN(f.getTime()) || isNaN(t.getTime())) throw new BadRequestException('Dates invalides');
+    if (t.getTime() <= f.getTime())              throw new BadRequestException('to doit être > from');
+    const days = Math.ceil((t.getTime() - f.getTime()) / ONE_DAY_MS);
+    if (days > MAX_EXPORT_DAYS) throw new BadRequestException(`Fenêtre max = ${MAX_EXPORT_DAYS} jours`);
+
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+
+    const csv = await this.analyticsService.exportTicketsCsv(
+      tenantId, effectiveAgencyId, f, t, MAX_EXPORT_ROWS,
+    );
+
+    // Audit : export tracé (valeur + fenêtre + scope) — obligatoire RGPD.
+    await this.audit.record({
+      tenantId,
+      userId:   actor.id,
+      action:   'data.analytics.export.tenant',
+      resource: `TicketsCsv:${f.toISOString()}..${t.toISOString()}`,
+      newValue: { days, agencyId: effectiveAgencyId ?? null, bytes: csv.length },
+      plane: 'data', level: 'warn',
+    });
+
+    const filename = `tickets-${f.toISOString().slice(0, 10)}-${t.toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type',        'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   }
 }

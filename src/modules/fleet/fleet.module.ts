@@ -4,9 +4,10 @@ import { FleetController } from './fleet.controller';
 import { FleetTrackingService } from './fleet-tracking.service';
 import { FleetTrackingController } from './fleet-tracking.controller';
 import { StorageModule } from '../../infrastructure/storage/storage.module';
+import { WorkflowModule } from '../../core/workflow/workflow.module';
 
 @Module({
-  imports:     [StorageModule],
+  imports:     [StorageModule, WorkflowModule],
   controllers: [FleetController, FleetTrackingController],
   providers:   [FleetService, FleetTrackingService],
   exports:     [FleetService, FleetTrackingService],

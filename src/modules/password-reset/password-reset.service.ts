@@ -42,6 +42,53 @@ export class PasswordResetService {
   }
 
   /**
+   * Résout l'Account credential d'un user, ou en crée un si absent.
+   *
+   * Pourquoi : certains flows créent un User sans Account (notamment le wizard
+   * d'onboarding `inviteTeam` historique). Un admin qui cliquait « Reset » sur
+   * ces users recevait un 400 "Ce compte ne possède pas d'identifiants" et
+   * devait bricoler en SQL. Le reset est désormais self-healing :
+   *
+   *   1. Si l'Account existe → on l'utilise.
+   *   2. Sinon on crée une row credential avec un hash aléatoire (invalide,
+   *      impossible à deviner par brute-force) + `forcePasswordChange=true`.
+   *      Le flow reset continue normalement : il pose ensuite le token (mode
+   *      'link') ou le nouveau mot de passe (mode 'set').
+   *
+   * Aucun effet de bord visible pour le user — il définira son mot de passe
+   * via le lien reset comme prévu.
+   */
+  private async ensureCredentialAccount(
+    userId:   string,
+    tenantId: string,
+    email:    string,
+  ): Promise<{ id: string }> {
+    const existing = await this.prisma.account.findFirst({
+      where:  { userId, providerId: 'credential' },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    const randomHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
+    const created = await this.prisma.account.create({
+      data: {
+        tenantId,
+        userId,
+        providerId:          'credential',
+        accountId:           email,
+        password:            randomHash,
+        forcePasswordChange: true,
+      },
+      select: { id: true },
+    });
+    this.logger.log(
+      `[PasswordReset] auto-created credential account for user=${userId} email=${email} ` +
+      `— reset will set the real password`,
+    );
+    return created;
+  }
+
+  /**
    * Construit l'URL de reset password scopée au sous-domaine tenant.
    * En Phase 1+, chaque tenant reçoit un lien qui pointe vers SON sous-domaine :
    *   https://{slug}.translogpro.com/auth/reset?token=...
@@ -212,15 +259,7 @@ export class PasswordResetService {
     });
     if (!target) throw new NotFoundException('Utilisateur introuvable');
 
-    const account = await this.prisma.account.findFirst({
-      where:  { userId: target.id, providerId: 'credential' },
-      select: { id: true },
-    });
-    if (!account) {
-      throw new BadRequestException(
-        'Ce compte ne possède pas d\'identifiants — impossible de réinitialiser',
-      );
-    }
+    const account = await this.ensureCredentialAccount(target.id, target.tenantId, target.email);
 
     if (params.mode === 'set') {
       if (!params.newPassword) throw new BadRequestException('Mot de passe requis en mode "set"');
@@ -292,15 +331,7 @@ export class PasswordResetService {
       throw new NotFoundException('Utilisateur introuvable dans ce tenant');
     }
 
-    const account = await this.prisma.account.findFirst({
-      where:  { userId: target.id, providerId: 'credential' },
-      select: { id: true },
-    });
-    if (!account) {
-      throw new BadRequestException(
-        'Ce compte ne possède pas d\'identifiants — impossible de réinitialiser',
-      );
-    }
+    const account = await this.ensureCredentialAccount(target.id, target.tenantId, target.email);
 
     // ── Mode "set" : application immédiate d'un mot de passe ──────────────
     if (params.mode === 'set') {

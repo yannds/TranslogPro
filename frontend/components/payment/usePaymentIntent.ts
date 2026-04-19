@@ -59,7 +59,9 @@ export function usePaymentIntent(tenantId: string | null) {
     if (!tenantId) { setError('Tenant inconnu'); return null; }
     setLoading(true); setError(null);
     try {
-      const res = await apiPost<CreateIntentResult>(`/api/v1/tenants/${tenantId}/payments/intents`, dto);
+      // Endpoint officiel : POST /api/tenants/:tenantId/payments/intents
+      // (PaymentController — Sprint 10).
+      const res = await apiPost<CreateIntentResult>(`/api/tenants/${tenantId}/payments/intents`, dto);
       setIntent(res); setStatus(res.status);
       startPolling(res.intentId);
       return res;
@@ -71,15 +73,21 @@ export function usePaymentIntent(tenantId: string | null) {
     }
   }, [tenantId]);
 
+  // Statuts non-terminaux : on continue le polling. Les autres sont finaux.
+  const NON_TERMINAL_STATUSES = ['CREATED', 'PROCESSING'];
+
   const startPolling = useCallback((intentId: string) => {
     clearPoll();
     pollStartedAt.current = Date.now();
     pollTimer.current = setInterval(async () => {
       if (Date.now() - pollStartedAt.current > POLL_MAX_MS) { clearPoll(); return; }
       try {
-        const res = await apiPost<{ status: string }>(`/api/v1/tenants/${tenantId}/payments/intents/${intentId}/confirm`, {});
+        // GET /intents/:id — lecture read-only, côté serveur on vérifie tenantId.
+        const res = await apiGet<{ status: string }>(
+          `/api/tenants/${tenantId}/payments/intents/${intentId}`,
+        );
         setStatus(res.status);
-        if (!['CREATED', 'PROCESSING'].includes(res.status)) clearPoll();
+        if (!NON_TERMINAL_STATUSES.includes(res.status)) clearPoll();
       } catch (err) {
         /* on retente jusqu'au max */
       }

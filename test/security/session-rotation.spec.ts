@@ -62,6 +62,28 @@ describe('[SECURITY] Session Token Rotation (P3)', () => {
       staff: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      // Tenant lookup utilisé par toDto() pour exposer businessActivity + onboardingCompletedAt.
+      tenant: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'tenant-x', slug: 'tenant-x', name: 'Tenant X',
+          onboardingCompletedAt: new Date(), businessActivity: 'TICKETING',
+        }),
+      },
+      // Subscription lookup utilisé par toDto() pour le gate SUSPENDED.
+      platformSubscription: {
+        findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }),
+      },
+      // Account lookup — forcePasswordChange flag côté toDto().
+      account: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      // User lookup — préférences locale/timezone côté toDto().
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          locale:   null,
+          timezone: null,
+        }),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({}),
       },

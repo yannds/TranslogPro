@@ -1,13 +1,17 @@
-import { Injectable } from '@nestjs/common';
-import type {
-  IOAuthProvider, NormalizedOAuthProfile, OAuthProviderMetadata,
-} from '../types';
+import { Inject, Injectable } from '@nestjs/common';
+import type { NormalizedOAuthProfile, OAuthProviderMetadata } from '../types';
 import { OAuthError } from '../types';
+import { BaseOAuthProvider } from './base-oauth.provider';
+import { SECRET_SERVICE, type ISecretService } from '../../../infrastructure/secret/interfaces/secret.interface';
 
 /**
  * Facebook Login — OAuth 2.0 (non OIDC).
  *
- * Activation : FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET dans l'env.
+ * Credentials Vault : `platform/auth/facebook`
+ *   {
+ *     CLIENT_ID:     "facebook-app-id",
+ *     CLIENT_SECRET: "facebook-app-secret",
+ *   }
  *
  * ATTENTION : Facebook ne retourne un email QUE si l'utilisateur a une
  * adresse vérifiée associée à son compte Facebook ET accepte le scope
@@ -16,8 +20,13 @@ import { OAuthError } from '../types';
  *
  * Doc : https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/
  */
+interface FacebookCredentials {
+  CLIENT_ID:     string;
+  CLIENT_SECRET: string;
+}
+
 @Injectable()
-export class FacebookOAuthProvider implements IOAuthProvider {
+export class FacebookOAuthProvider extends BaseOAuthProvider<FacebookCredentials> {
   readonly meta: OAuthProviderMetadata = {
     key:         'facebook',
     displayName: 'Facebook',
@@ -25,15 +34,20 @@ export class FacebookOAuthProvider implements IOAuthProvider {
     scopes:      ['email', 'public_profile'],
   };
 
-  get isEnabled(): boolean {
-    return !!process.env.FACEBOOK_CLIENT_ID && !!process.env.FACEBOOK_CLIENT_SECRET;
+  constructor(@Inject(SECRET_SERVICE) secretService: ISecretService) {
+    super(secretService);
   }
 
-  buildAuthorizeUrl(params: {
+  protected requiredKeys(): readonly string[] {
+    return ['CLIENT_ID', 'CLIENT_SECRET'] as const;
+  }
+
+  async buildAuthorizeUrl(params: {
     state: string; redirectUri: string; tenantSlug?: string;
-  }): string {
+  }): Promise<string> {
+    const creds = await this.getCredentials();
     const q = new URLSearchParams({
-      client_id:     process.env.FACEBOOK_CLIENT_ID!,
+      client_id:     creds.CLIENT_ID,
       redirect_uri:  params.redirectUri,
       response_type: 'code',
       scope:         this.meta.scopes.join(','),
@@ -46,10 +60,12 @@ export class FacebookOAuthProvider implements IOAuthProvider {
   async exchangeCodeForProfile(params: {
     code: string; state: string; redirectUri: string;
   }): Promise<NormalizedOAuthProfile> {
+    const creds = await this.getCredentials();
+
     // 1) Token exchange
     const tokenUrl = `https://graph.facebook.com/v18.0/oauth/access_token?${new URLSearchParams({
-      client_id:     process.env.FACEBOOK_CLIENT_ID!,
-      client_secret: process.env.FACEBOOK_CLIENT_SECRET!,
+      client_id:     creds.CLIENT_ID,
+      client_secret: creds.CLIENT_SECRET,
       redirect_uri:  params.redirectUri,
       code:          params.code,
     })}`;
