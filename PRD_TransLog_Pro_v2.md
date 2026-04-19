@@ -1764,8 +1764,119 @@ Ajouté aux phases VII.1 :
 
 ---
 
-*Fin du PRD TransLog Pro v5.0*
+## XI. Self-Service Compte + MFA + Platform UX — v6.0 (2026-04-19)
+
+### XI.1 Vision
+
+Chaque utilisateur TransLog Pro (STAFF, CUSTOMER, DRIVER, etc.) doit pouvoir
+gérer son compte sans dépendre d'un admin pour les opérations courantes :
+changer son mot de passe, activer le TOTP, choisir sa langue d'interface et
+son fuseau horaire. En parallèle, le staff plateforme (SA, SUPPORT_L2) reçoit
+l'action **« Réinitialiser mot de passe »** cross-tenant pour débloquer un
+utilisateur d'un tenant client sans passer par l'impersonation JIT.
+
+### XI.2 PageAccount — self-service utilisateur
+
+Route : `/account` (tous rôles authentifiés, `<ProtectedRoute>` — pas de permission supplémentaire).
+Trois onglets :
+
+| Onglet | Contenu | Endpoint |
+|---|---|---|
+| **Profil** | Lecture : email, nom, rôle RBAC, `userType`. Géré par l'admin tenant via IAM. | `GET /auth/me` |
+| **Sécurité** | Carte « Changer mot de passe » (current + new + confirm) + Carte MFA (activer / voir codes de secours / désactiver). Bannière `mustChangePassword` si rotation forcée. | `POST /auth/change-password` · `POST /v1/mfa/setup|enable|disable` |
+| **Préférences** | `locale` (8 langues) + `timezone` (IANA, 9 valeurs par défaut dont Afrique centrale/ouest + Europe + UTC). Merge partiel dans `User.preferences` JSON. | `PATCH /auth/me/preferences` |
+
+Accès : icône `UserCircle2` dans la topbar admin (à côté de logout).
+
+### XI.3 MFA/TOTP câblé dans le flow de connexion
+
+Le scaffold MFA (service, controller, schéma `User.mfaEnabled`, `MfaChallenge`)
+existait depuis v5.0 mais **n'était pas câblé dans `signIn`**. Depuis la v6.0 :
+
+1. `AuthService.signIn` retourne un type discriminé :
+   `SignInResult = { kind: 'session'; token; user } | { kind: 'mfaChallenge'; challengeToken; expiresAt }`
+2. Si `user.mfaEnabled=true` après `bcrypt.compare` OK, `signIn` appelle `issueMfaChallenge()`
+   au lieu de créer une `Session`.
+3. `AuthController` pose le cookie **`translog_mfa_challenge`** (TTL 5 min, distinct
+   du cookie session) et renvoie `{ mfaRequired: true, expiresAt }` au frontend.
+4. `LoginPage` bascule sur un écran « code à 6 chiffres » — appelle
+   `POST /auth/mfa/verify` qui valide le code TOTP (ou un backup code) puis crée
+   enfin la vraie `Session`.
+
+Défense en profondeur : challenge `tenantId` comparé au Host résolu — un challenge
+émis sur tenantA ne peut pas être finalisé via tenantB. IP binding conservé.
+5 tentatives max par challenge avant invalidation.
+
+Optionnel par défaut : aucun tenant ne force l'activation. Les utilisateurs qui
+le souhaitent peuvent activer depuis `/account`. Le toggle « MFA requis »
+par rôle/tenant est différé à une itération ultérieure.
+
+### XI.4 Reset password cross-tenant (platform)
+
+Endpoint : `POST /platform/iam/users/:userId/reset-password`
+Permission : `control.platform.user.reset-password.global` (accordée à `SUPER_ADMIN` + `SUPPORT_L2`).
+
+Deux modes :
+
+| Mode | Effet | Usage recommandé |
+|---|---|---|
+| **link** | Génère un reset token sha-256 hashé (TTL 30 min), retourne un `resetUrl` scope sous-domaine target à transmettre hors-bande. Aucune session purgée. | Défaut — préserve l'expérience utilisateur et donne une trace email lisible. |
+| **set** | Applique immédiatement le mot de passe fourni (`forcePasswordChange=true`), purge **toutes** les sessions actives du target, audit critique. | Escalade critique uniquement (utilisateur verrouillé, incident sécurité). |
+
+Invariants de sécurité (tests S1-S7 dans `test/security/platform-reset-password.spec.ts`) :
+
+- Self-reset interdit (actor = target → 403, utiliser « mot de passe oublié »)
+- Target introuvable → 404 (pas de timing leak cross-tenant)
+- Mode `set` sans `newPassword` → 400
+- Token raw JAMAIS persisté — seul `sha256(raw)` en DB
+- Mode `set` = `Session.deleteMany({ userId })` + `forcePasswordChange=true`
+- Audit `tenantId = target.tenantId`, `userId = actor.id`, `resource = User:{targetId}`,
+  `newValue.crossTenant = true` — imputabilité + filtrage natif
+
+### XI.5 UX plateforme — corrections
+
+3 irritants remontés sur le portail plateforme, corrigés :
+
+| Page | Problème | Fix |
+|---|---|---|
+| **Plans SaaS** | Lignes de la table non cliquables | `DataTableMaster.onRowClick` → ouvre l'éditeur de plan |
+| **Tenants** | UUID tenant difficile à trouver (nécessaire pour « Nouvelle souscription ») | Dialog détail : encart `code` + bouton `CopyButton` (feedback « Copié ! » 1.5s) |
+| **Billing → Nouvelle souscription** | Input UUID brut (pattern 36 caractères) impossible à remplir sans impersonation | `<ComboboxEditable>` recherche par nom/slug ; sélection auto-remplit l'ID ET pré-charge le plan courant (modifiable) |
+
+### XI.6 Stockage self-service — pourquoi JSON vs colonnes ?
+
+Décision : `User.preferences.locale` / `.timezone` stockés dans le JSON déjà
+existant, **pas** de nouvelles colonnes. Rationale :
+
+- Zéro migration de schéma (déploiement immédiat sur les bases de prod)
+- Le JSON contient déjà d'autres clés utilisateur (ex. `favoriteSeat`) — cohérence
+- Pas de requête filtrée sur `locale`/`timezone` prévue — index non nécessaire
+
+Le merge partiel de `AuthService.updateMyPreferences` préserve les clés non-i18n.
+
+Le flag `mustChangePassword` réutilise `Account.forcePasswordChange` (colonne
+existante) — pas de nouveau champ sur `User`.
+
+### XI.7 Tests livrés avec v6.0
+
+- **Unit** : 16 tests ajoutés sous `test/unit/auth/` (change-password · mfa-signin · preferences · password-reset.platform-admin). Suite `test/unit/auth/` = **33/33 PASS**.
+- **Security** : 6 tests (`platform-reset-password.spec.ts`, invariants S1-S7). Total security **138/138 PASS**.
+- **E2E API** : 3 scénarios Playwright (`account-self-service.api.spec.ts`).
+
+### XI.8 Nouvelles ADR (v6.0 PRD)
+
+| ADR | Titre | Décision |
+|---|---|---|
+| **ADR-38** | Préférences user dans `User.preferences` JSON | Zéro migration pour ajouter locale/timezone ; merge partiel préserve les autres clés. |
+| **ADR-39** | `SignInResult` discriminée pour le câblage MFA | Typage fort du retour de `signIn` évite les branches oubliées ; le controller dispatche sur `kind` pour poser le bon cookie. |
+| **ADR-40** | Reset cross-tenant avec méthode privée partagée | `initiateByAdminCrossTenant` factorise la logique entre `initiateByAdmin` (same-tenant) et `initiateByPlatformAdmin` (cross-tenant). Même code, check de permission en amont HTTP. |
+| **ADR-41** | i18n fallback automatique sur `fr.ts` | Les 6 locales non-master (wo, ln, ktu, ar, pt, es) peuvent omettre des clés ; le loader retombe sur `fr.ts`. Permet des itérations rapides sans bloquer sur un passage de traduction. |
+
+---
+
+*Fin du PRD TransLog Pro v6.0*
 *Révision v2.0 : Critique architecturale complète — Avril 2026*
 *Révision v3.0 : Intégration PRD-ADD (CRM, Safety, Crew, Public Reporter, IAM DB-driven) — Avril 2026*
 *Révision v4.0 : White Label · Profitabilité · ICostCalculator · TenantBusinessConfig · Templates · 404 — Avril 2026*
 *Révision v5.0 : Portail Plateforme SaaS — Plans · Billing · Analytics · Support · Config DB-driven · Playwright — Avril 2026*
+*Révision v6.0 : Self-service compte (PageAccount) · MFA wire dans signIn · Reset-password cross-tenant · UX corrections plateforme — 2026-04-19*

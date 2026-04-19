@@ -1,7 +1,39 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-15.
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-19.
+
+### Ajouts 2026-04-19 — Self-service compte + MFA wire + reset-password cross-tenant
+
+Nouvelles suites autour du portail plateforme et du self-service utilisateur :
+
+- `test/unit/auth/auth.service.change-password.spec.ts` — 6 tests :
+  · rejet `newPassword` < 8 caractères (400)
+  · rejet `newPassword` identique à l'actuel (400)
+  · user introuvable (404)
+  · compte OAuth-only sans `Account.password` (400)
+  · `currentPassword` faux via bcrypt compare (401)
+  · succès : hash bcrypt(12) + `forcePasswordChange=false` + purge toutes sessions
+- `test/unit/auth/auth.service.mfa-signin.spec.ts` — 2 tests :
+  · `user.mfaEnabled=true` → retour `{ kind: 'mfaChallenge', ... }`, **aucune** session créée
+  · `user.mfaEnabled=false` → flow standard (session + tracking `loginCount`)
+- `test/unit/auth/auth.service.preferences.spec.ts` — 3 tests :
+  · user introuvable (404)
+  · merge partiel (timezone préservée quand seul `locale` est fourni, clés non-i18n comme `favoriteSeat` préservées)
+  · preferences vides → création des clés fournies uniquement
+- `test/unit/auth/password-reset.platform-admin.spec.ts` — 5 tests :
+  · refuse self-reset (actor = target) → 403
+  · target introuvable → 404
+  · mode `set` sans `newPassword` → 400
+  · mode `set` cross-tenant : hash bcrypt + `forcePasswordChange=true` + sessions purgées + audit `auth.password_reset.platform.set`
+  · mode `link` cross-tenant : `tokenHash = sha256(rawToken)`, URL scoped au sous-domaine target, audit `auth.password_reset.platform.link`
+
+**Résultat** : 16 tests ajoutés, suite `test/unit/auth/` passe à **33/33 PASS** (les 17 tests `password-reset.service.spec.ts` restent verts — aucune régression).
+
+- `test/playwright/account-self-service.api.spec.ts` — 3 scénarios API (live backend :3000) :
+  · `PATCH /auth/me/preferences` persiste `locale + timezone` et apparaît dans `/auth/me`
+  · `POST /auth/change-password` avec mauvais `currentPassword` → 401
+  · `POST /auth/change-password` succès → toutes les sessions invalidées + nouveau login possible avec le nouveau mdp + restauration du mdp initial en fin de test pour ne pas casser la suite
 
 ### Ajouts 2026-04-15 — Refonte Personnel (Staff + StaffAssignment)
 - `test/unit/services/staff-assignment.service.spec.ts` — 13 tests couvrant les invariants DESIGN §4.3 / §5 :
@@ -31,7 +63,7 @@
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
 | **Unit — Engine** (src/) | `npm test` | 11 | 129 | ⚠️ 127 PASS / 2 pre-existing failures (WorkflowEngine audit) |
-| **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 12 | 172 | ✅ PASS |
+| **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 16 | 188 | ✅ PASS (incl. 4 nouvelles suites auth 2026-04-19) |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS |
 

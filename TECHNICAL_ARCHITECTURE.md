@@ -2059,10 +2059,174 @@ Pré-requis : `./scripts/dev.sh` up + `npx playwright install chromium`.
 
 ---
 
-*Fin du Dossier Technique TransLog Pro v7.0*
+## 18. Self-service compte + MFA wire — v8.0 (2026-04-19)
+
+### 18.1 Vue d'ensemble
+
+Livré en une passe :
+
+- **PageAccount** (`frontend/components/pages/PageAccount.tsx`) — 3 onglets
+  Profil / Sécurité / Préférences accessibles à tous les rôles authentifiés.
+- **`AuthService.changePassword` + `updateMyPreferences`** — self-service backend
+  sans dépendre de `PasswordResetService` (pas de token).
+- **`AuthService.signIn` câblé MFA** — branche `SignInResult.kind = 'mfaChallenge'`
+  quand `user.mfaEnabled` ; le scaffold `MfaChallenge` existant est enfin utilisé.
+- **`POST /platform/iam/users/:userId/reset-password`** — reset cross-tenant
+  (modes `link` / `set`) via nouvelle méthode `initiateByPlatformAdmin` dans
+  `PasswordResetService`.
+- **UX plateforme** — Plans onRowClick, Tenants UUID copiable, NewSub combobox
+  tenant avec auto-chargement du plan courant.
+
+### 18.2 `SignInResult` — type discriminé pour la réponse de signIn
+
+```ts
+// src/modules/auth/auth.service.ts
+export type SignInResult =
+  | { kind: 'session';      token:          string; user:      AuthUserDto }
+  | { kind: 'mfaChallenge'; challengeToken: string; expiresAt: Date };
+```
+
+Le `AuthController.signIn` dispatche sur `kind` :
+
+- `'session'` → cookie `translog_session` (30j) + retour `AuthUserDto`
+- `'mfaChallenge'` → cookie `translog_mfa_challenge` (5 min) + retour `{ mfaRequired: true, expiresAt }`
+
+Le frontend `auth.context.tsx` projette la réponse dans un `LoginResult` également
+discriminé pour que `LoginPage` puisse basculer sur l'écran code à 6 chiffres.
+
+### 18.3 Flow MFA complet (séquence)
+
+```
+Client                  AuthController               AuthService               DB
+  |                          |                           |                      |
+  | POST /auth/sign-in       |                           |                      |
+  |------------------------->|                           |                      |
+  |                          | signIn(email, pwd)        |                      |
+  |                          |-------------------------->|                      |
+  |                          |                           | bcrypt compare       |
+  |                          |                           | if user.mfaEnabled:  |
+  |                          |                           |   issueMfaChallenge  |
+  |                          |                           |--------------------->|
+  |                          |                           |                      |
+  |                          |<--{ kind:'mfaChallenge' } |                      |
+  |                          | Set-Cookie: translog_mfa_challenge               |
+  |<--{ mfaRequired: true }--|                           |                      |
+  |                          |                           |                      |
+  | POST /auth/mfa/verify    |                           |                      |
+  | Cookie: translog_mfa...  |                           |                      |
+  |------------------------->|                           |                      |
+  |                          | verifyMfa(token, code)    |                      |
+  |                          |-------------------------->|                      |
+  |                          |                           | TOTP verify          |
+  |                          |                           | create Session       |
+  |                          |<--{ token, user }         |                      |
+  |<--AuthUserDto, Set-Cookie: translog_session          |                      |
+```
+
+Invariants :
+- Le cookie MFA (`translog_mfa_challenge`) est distinct du cookie session —
+  `/auth/me` ne le lit jamais, donc aucun accès API pré-verify possible.
+- `expectedTenantId` passé de `verifyMfa` côté controller (Host header) pour
+  rejeter un challenge issu sur tenantA finalisé sur tenantB.
+- 5 tentatives max par challenge (`MFA_MAX_ATTEMPTS`), TTL 5 min, IP binding.
+
+### 18.4 `AuthUserDto` — champs ajoutés
+
+```ts
+interface AuthUserDto {
+  // ...existants...
+  locale:             string | null;   // depuis User.preferences
+  timezone:           string | null;   // depuis User.preferences
+  mfaEnabled:         boolean;         // depuis User.mfaEnabled
+  mustChangePassword: boolean;         // depuis Account.forcePasswordChange
+}
+```
+
+Remplissage dans `toDto` :
+- `locale` et `timezone` lus dans `User.preferences` JSON — zéro nouvelle colonne.
+- `mustChangePassword` lu dans `Account.forcePasswordChange` (colonne existante
+  utilisée par le flow reset-password admin).
+- `mfaEnabled` déjà dans le modèle `User`.
+
+### 18.5 Cross-tenant password reset — méthode partagée privée
+
+```ts
+// src/modules/password-reset/password-reset.service.ts
+async initiateByPlatformAdmin(params) {
+  // self-check + resolve target.tenantId
+  return this.initiateByAdminCrossTenant({ ...params, targetUserTenantId });
+}
+
+async initiateByAdmin(params) {
+  // check actor.tenantId === target.tenantId
+  return this.initiateByAdminCrossTenant({ ...params, targetUserTenantId: actorTenantId });
+}
+
+private async initiateByAdminCrossTenant(params) { /* logique partagée */ }
+```
+
+Rationale : la logique métier (génération de token sha256, purge sessions en
+mode 'set', audit) est strictement identique — seul le check tenant change
+selon la permission en amont (`USER_RESET_PASSWORD_TENANT` vs
+`PLATFORM_USER_RESET_PWD_GLOBAL`). Le `PermissionGuard` HTTP fait autorité.
+
+### 18.6 Route `/account` dans `main.tsx`
+
+```tsx
+<Route
+  path="/account"
+  element={
+    <ProtectedRoute>
+      <PageAccount />
+    </ProtectedRoute>
+  }
+/>
+```
+
+Accessible pour TOUS les `userType` — pas de permission supplémentaire. La
+`ProtectedRoute` vérifie uniquement la présence d'une session. Icône
+`UserCircle2` dans la topbar `AdminDashboard` ; les autres dashboards
+(customer/driver/agent/quai) pointent aussi sur `/account` via le lien
+href simple (route top-level).
+
+### 18.7 Nouvelles permissions
+
+| Permission | Accordée à | Description |
+|---|---|---|
+| `control.platform.user.reset-password.global` | SUPER_ADMIN, SUPPORT_L2 | Reset mot de passe cross-tenant (modes link/set) |
+
+Ajoutée dans `src/common/constants/permissions.ts` et seedée dans
+`prisma/seeds/iam.seed.ts`. Relancer le seed après déploiement :
+`npx ts-node prisma/seeds/iam.seed.ts`.
+
+### 18.8 Nouvelles ADR (v8.0)
+
+| ADR | Titre | Décision |
+|---|---|---|
+| **ADR-46** | Préférences user dans `User.preferences` JSON | Zéro migration, merge partiel, préservation des clés non-i18n. |
+| **ADR-47** | `SignInResult` discriminée | Typage fort du retour de `signIn` ; le controller dispatche sur `kind` pour poser le bon cookie. |
+| **ADR-48** | Reset cross-tenant = méthode privée partagée | `initiateByAdminCrossTenant` factorisée ; le check tenant reste côté caller public. |
+| **ADR-49** | i18n fallback automatique vers `fr.ts` | Les 6 locales non-master (wo, ln, ktu, ar, pt, es) peuvent omettre des clés sans crasher. Permet des livraisons rapides sans passage traduction. |
+
+### 18.9 Stratégie de tests actualisée (v8.0)
+
+| Type | Tests ajoutés v8.0 | Total |
+|---|---|---|
+| **Unit auth** (`test/unit/auth/`) | 16 (change-pwd 6 + mfa-signin 2 + prefs 3 + platform-reset 5) | **33/33 PASS** |
+| **Security** | 6 (`platform-reset-password.spec.ts` — S1-S7) | **138/138 PASS** |
+| **E2E API Playwright** | 3 (`account-self-service.api.spec.ts`) | exécution live sur :3000 requise |
+| **Integration Testcontainers** | 0 — reporté prochaine itération | — |
+
+TypeScript `tsc --noEmit -p tsconfig.json` clean (hors erreurs pré-existantes
+`mobile/` / `server/poc/` hors scope).
+
+---
+
+*Fin du Dossier Technique TransLog Pro v8.0*
 *Révision v2.0 : Avril 2026 — Architecture Validée*
 *Révision v3.0 : Avril 2026 — Intégration PRD-ADD (CRM, Safety, Crew, PublicReporter, IAM DB-driven, RGPD, PostGIS optionnel)*
 *Révision v4.0 : Avril 2026 — White Label · Profitabilité (ICostCalculator) · TenantBusinessConfig · Yield Management · ADR-23→27*
 *Révision v5.0 : Avril 2026 — FleetDocs · DriverProfile · CrewBriefing · QHSE · SchedulingGuard · ModuleGuard · Frontend QHSE/HR · ADR-28→33*
 *Révision v6.0 : Avril 2026 — Workflow Studio Frontend · API client centralisé · useFetch hook · Auth context · PageProfitability/PageBranding connectées · ADR-34→36*
 *Révision v7.0 : Avril 2026 — Portail Plateforme SaaS · Plans · Billing · Analytics · Support · Config DB-driven · TenantScopeProvider · Playwright E2E · ADR-37→45*
+*Révision v8.0 : 2026-04-19 — Self-service compte (PageAccount) · MFA wire dans signIn (SignInResult discriminée) · Reset-password cross-tenant · UX corrections plateforme (Plans onRowClick, UUID tenants, NewSub combobox) · ADR-46→49*
