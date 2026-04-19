@@ -17,8 +17,9 @@
 import { useState, useRef, useCallback, type FormEvent } from 'react';
 import {
   Package, Search, PackageCheck, PackageX, Truck, MapPin, ArrowDownToLine,
-  AlertOctagon, Eye, Printer,
+  AlertOctagon, Eye, Printer, Warehouse,
 } from 'lucide-react';
+import { ParcelHubActionsDialog } from '../parcels/ParcelHubActionsDialog';
 import { useAuth }                       from '../../lib/auth/auth.context';
 import { useI18n }                        from '../../lib/i18n/useI18n';
 import { useFetch }                      from '../../lib/hooks/useFetch';
@@ -76,6 +77,7 @@ export function PageParcelsList() {
   // ─── Detail dialog ────────────────────────────────────────────────────────
   const [detail, setDetail]       = useState<Parcel | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [hubTarget, setHubTarget] = useState<Parcel | null>(null);
 
   const openDetail = (p: Parcel) => {
     setDetail(p);
@@ -239,6 +241,15 @@ export function PageParcelsList() {
       onClick: (row) => doTransition(row.id, 'DECLARE_LOST'),
       hidden: (row) => row.status !== 'IN_TRANSIT',
       danger: true,
+    },
+    {
+      label: t('parcelHub.openMenu'),
+      icon: <Warehouse className="w-3.5 h-3.5" />,
+      onClick: (row) => setHubTarget(row),
+      hidden: (row) => ![
+        'IN_TRANSIT', 'AT_HUB_INBOUND', 'STORED_AT_HUB', 'AT_HUB_OUTBOUND',
+        'ARRIVED', 'AVAILABLE_FOR_PICKUP', 'DELIVERED', 'RETURN_TO_SENDER',
+      ].includes(row.status),
     },
   ];
 
@@ -412,6 +423,18 @@ export function PageParcelsList() {
             submitLabel={t('parcelsList.report')} pendingLabel={t('parcelsList.sending')} />
         </form>
       </Dialog>
+
+      <ParcelHubActionsDialog
+        open={!!hubTarget}
+        onClose={() => setHubTarget(null)}
+        onDone={refetch}
+        tenantId={tenantId}
+        parcel={hubTarget ? {
+          id: hubTarget.id,
+          trackingCode: hubTarget.trackingCode,
+          status: hubTarget.status,
+        } : null}
+      />
     </main>
   );
 }

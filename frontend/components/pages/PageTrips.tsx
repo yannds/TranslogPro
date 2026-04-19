@@ -15,7 +15,9 @@
 import { useMemo, useState } from 'react';
 import {
   Route as RouteIcon, Plus, Search, Bus, Clock, MapPin, AlertTriangle, CheckCircle2,
+  Siren,
 } from 'lucide-react';
+import { TripIncidentDialog } from '../trips/TripIncidentDialog';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useI18n }        from '../../lib/i18n/useI18n';
 import { useFetch }      from '../../lib/hooks/useFetch';
@@ -60,6 +62,7 @@ export function PageTrips() {
   const [editMode,     setEditMode]     = useState<'FREE' | 'NUMBERED'>('FREE');
   const [busy,         setBusy]         = useState(false);
   const [actionError,  setActionError]  = useState<string | null>(null);
+  const [incidentTrip, setIncidentTrip] = useState<TripRow | null>(null);
 
   const base = `/api/tenants/${tenantId}`;
 
@@ -306,11 +309,21 @@ export function PageTrips() {
                           </Badge>
                         )}
                       </div>
-                      <div role="cell" className="text-right">
+                      <div role="cell" className="text-right flex items-center justify-end gap-2">
                         {delayed
                           ? <Badge variant="danger" size="sm">+{mn} min</Badge>
                           : <span className="text-xs text-slate-400">—</span>
                         }
+                        {['IN_PROGRESS', 'IN_PROGRESS_DELAYED', 'SUSPENDED'].includes(t2.status) && (
+                          <button
+                            type="button"
+                            aria-label={t('tripIncident.openMenu')}
+                            onClick={e => { e.stopPropagation(); setIncidentTrip(t2); }}
+                            className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                          >
+                            <Siren className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                     </li>
                   );
@@ -414,6 +427,21 @@ export function PageTrips() {
           </div>
         )}
       </Dialog>
+
+      <TripIncidentDialog
+        open={!!incidentTrip}
+        onClose={() => setIncidentTrip(null)}
+        onDone={refetch}
+        tenantId={tenantId}
+        trip={incidentTrip ? {
+          id: incidentTrip.id,
+          status: incidentTrip.status,
+          route: incidentTrip.route ? {
+            name: incidentTrip.route.name,
+            distanceKm: incidentTrip.route.distanceKm ?? null,
+          } : undefined,
+        } : null}
+      />
     </main>
   );
 }

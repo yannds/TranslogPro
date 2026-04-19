@@ -204,6 +204,21 @@ export function QuaiHomeScreen() {
         </Pressable>
       </View>
 
+      {/* Actions colis — hub, retrait, dispute (2026-04-19) */}
+      <View style={[styles.quickRow, { marginTop: -4 }]}>
+        <Pressable
+          onPress={() => navigation.navigate('QuaiParcelActions')}
+          accessibilityRole="button"
+          accessibilityLabel="Actions colis — hub, retrait, contestation"
+          style={({ pressed }) => [
+            styles.quickBtn,
+            { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Text style={{ color: colors.text, fontWeight: '700' }}>📦 Actions colis</Text>
+        </Pressable>
+      </View>
+
       <View style={[styles.card, { margin: 16, borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={[styles.label, { color: colors.text }]}>Valider un billet (scan unique)</Text>
 

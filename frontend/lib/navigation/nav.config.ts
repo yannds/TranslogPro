@@ -1142,6 +1142,14 @@ export const CUSTOMER_NAV: PortalNavConfig = {
       ],
     },
     {
+      id: 'cust-vouchers-section',
+      title: 'nav.my_vouchers',
+      anyOf: [P.VOUCHER_READ_OWN],
+      items: [
+        { kind: 'leaf', id: 'cust-vouchers', label: 'nav.my_vouchers', href: '/customer/vouchers', icon: 'Gift', anyOf: [P.VOUCHER_READ_OWN] },
+      ],
+    },
+    {
       id: 'cust-safety',
       title: 'nav.my_incidents',
       anyOf: [P.INCIDENT_REPORT_OWN],

@@ -5,11 +5,13 @@
  * et affiche la liste des billets du client connecté avec leur trip associé.
  */
 
-import { Ticket, Calendar, MapPin, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Ticket, Calendar, MapPin, Loader2, AlertTriangle } from 'lucide-react';
 import { useFetch }  from '../../lib/hooks/useFetch';
 import { useAuth }   from '../../lib/auth/auth.context';
 import { useI18n }   from '../../lib/i18n/useI18n';
 import { DEFAULT_TICKET_STATUS_REGISTRY, lookupStatus } from '../../lib/config/status.config';
+import { TicketIncidentDialog } from '../tickets/TicketIncidentDialog';
 
 interface MyTicket {
   id:           string;
@@ -38,9 +40,10 @@ export function PageMyTickets() {
   const { user }  = useAuth();
   const { t }     = useI18n();
   const url = user?.tenantId ? `/api/tenants/${user.tenantId}/tickets/my` : null;
-  const { data, loading, error } = useFetch<MyTicket[]>(url, [user?.tenantId]);
+  const { data, loading, error, refetch } = useFetch<MyTicket[]>(url, [user?.tenantId]);
 
   const tickets = data ?? [];
+  const [incidentTarget, setIncidentTarget] = useState<MyTicket | null>(null);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -120,11 +123,37 @@ export function PageMyTickets() {
                     {ticket.pricePaid.toLocaleString('fr-FR')} XAF
                   </span>
                 </div>
+                {['CONFIRMED', 'NO_SHOW', 'LATE_ARRIVED'].includes(ticket.status) && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIncidentTarget(ticket)}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-300 hover:text-teal-900 dark:hover:text-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded px-2 py-1"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                      {t('ticketIncident.openMenu')}
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       )}
+
+      <TicketIncidentDialog
+        open={!!incidentTarget}
+        onClose={() => setIncidentTarget(null)}
+        onDone={refetch}
+        tenantId={user?.tenantId ?? ''}
+        mode="self-service"
+        ticket={incidentTarget ? {
+          id:            incidentTarget.id,
+          status:        incidentTarget.status,
+          tripId:        incidentTarget.trip?.id ?? '',
+          pricePaid:     incidentTarget.pricePaid,
+        } : null}
+      />
     </div>
   );
 }

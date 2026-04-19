@@ -8,9 +8,10 @@
 
 import { useState, useRef, useCallback } from 'react';
 import {
-  List, Eye, XCircle, Printer,
+  List, Eye, XCircle, Printer, AlertTriangle,
   Ticket as TicketLucide, BookMarked,
 } from 'lucide-react';
+import { TicketIncidentDialog } from '../tickets/TicketIncidentDialog';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useOfflineList } from '../../lib/hooks/useOfflineList';
 import { apiPost }       from '../../lib/api';
@@ -164,6 +165,8 @@ export function PageIssuedTickets() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling]     = useState(false);
   const [cancelErr, setCancelErr]       = useState<string | null>(null);
+  // ── Incident dialog (no-show / rebook / refund) ────────────────────────────
+  const [incidentTarget, setIncidentTarget] = useState<TicketRow | null>(null);
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
@@ -203,6 +206,12 @@ export function PageIssuedTickets() {
       onClick: (row) => { setCancelTarget(row); setCancelErr(null); setCancelReason(''); },
       hidden: (row) => !CANCELLABLE.includes(row.status),
       danger: true,
+    },
+    {
+      icon: <AlertTriangle className="w-4 h-4" />,
+      label: t('ticketIncident.openMenu'),
+      onClick: (row) => setIncidentTarget(row),
+      hidden: (row) => !['CONFIRMED', 'CHECKED_IN', 'NO_SHOW', 'LATE_ARRIVED'].includes(row.status),
     },
   ];
 
@@ -391,6 +400,21 @@ export function PageIssuedTickets() {
           ))}
         </div>
       </div>
+
+      <TicketIncidentDialog
+        open={!!incidentTarget}
+        onClose={() => setIncidentTarget(null)}
+        onDone={refetch}
+        tenantId={tenantId}
+        mode="admin"
+        ticket={incidentTarget ? {
+          id: incidentTarget.id,
+          status: incidentTarget.status,
+          passengerName: incidentTarget.passengerName,
+          tripId: incidentTarget.tripId,
+          pricePaid: incidentTarget.pricePaid,
+        } : null}
+      />
     </div>
   );
 }

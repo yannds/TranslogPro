@@ -22,6 +22,7 @@ import { StationBoardScreen } from '../station/StationBoardScreen';
 import { QuaiHomeScreen } from '../quai/QuaiHomeScreen';
 import { QuaiBulkScanScreen } from '../quai/QuaiBulkScanScreen';
 import { QuaiManifestScreen } from '../quai/QuaiManifestScreen';
+import { QuaiParcelActionsScreen } from '../quai/QuaiParcelActionsScreen';
 import { AdminHomeScreen } from '../admin/AdminHomeScreen';
 import { AdminChartsScreen } from '../admin/AdminChartsScreen';
 import { AdminSavScreen } from '../admin/AdminSavScreen';
@@ -44,6 +45,11 @@ function DriverBottomTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Trajets"  component={DriverHomeScreen} />
+      {/* Manifest : on réutilise QuaiManifestScreen (sélection trip + génération
+          + signature géo-stampée). Permission backend : MANIFEST_GENERATE/SIGN
+          déjà accordées au DRIVER ; le composant est trip-driven, pas
+          rôle-spécifique. Évite duplication d'UI. */}
+      <Tab.Screen name="Manifest" component={QuaiManifestScreen} />
       <Tab.Screen name="Incident" component={IncidentReportScreen} />
     </Tab.Navigator>
   );
@@ -103,6 +109,10 @@ function StationBottomTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Gare"     component={StationHomeScreen} />
+      {/* Manifest : agent gare doit aussi générer + signer (manifest_generate
+          + manifest_sign accordées par défaut au STATION_AGENT). Même composant
+          que Quai/Driver — trip-driven, perm-gated server-side. */}
+      <Tab.Screen name="Manifest" component={QuaiManifestScreen} />
       <Tab.Screen name="Incident" component={IncidentReportScreen} />
     </Tab.Navigator>
   );
@@ -135,9 +145,10 @@ function QuaiBottomTabs() {
 function QuaiNav() {
   return (
     <QuaiStack.Navigator screenOptions={{ headerShown: false }}>
-      <QuaiStack.Screen name="QuaiHome"     component={QuaiBottomTabs} />
-      <QuaiStack.Screen name="QuaiBulkScan" component={QuaiBulkScanScreen} />
-      <QuaiStack.Screen name="QuaiManifest" component={QuaiManifestScreen} />
+      <QuaiStack.Screen name="QuaiHome"          component={QuaiBottomTabs} />
+      <QuaiStack.Screen name="QuaiBulkScan"      component={QuaiBulkScanScreen} />
+      <QuaiStack.Screen name="QuaiManifest"     component={QuaiManifestScreen} />
+      <QuaiStack.Screen name="QuaiParcelActions" component={QuaiParcelActionsScreen} />
     </QuaiStack.Navigator>
   );
 }

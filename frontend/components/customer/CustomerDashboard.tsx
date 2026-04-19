@@ -22,6 +22,7 @@ import { SuspendedScreen }    from '../billing/SuspendedScreen';
 import { PageCustomerHome }   from './PageCustomerHome';
 import { PageMyTickets }      from './PageMyTickets';
 import { PageMyParcels }      from './PageMyParcels';
+import { PageMyVouchers }     from './PageMyVouchers';
 import { PageRetroClaim }     from './PageRetroClaim';
 import { PageCustomerIncidents } from './PageCustomerIncidents';
 import type { ResolvedNavItem, ResolvedNavSection } from '../../lib/navigation/nav.types';
@@ -42,6 +43,7 @@ function CustomerPageRouter({ activeId }: { activeId: string | null }) {
     case 'cust-home':     return <PageCustomerHome />;
     case 'cust-trips':    return <PageMyTickets />;
     case 'cust-parcels':  return <PageMyParcels />;
+    case 'cust-vouchers': return <PageMyVouchers />;
     case 'cust-retro':    return <PageRetroClaim />;
     case 'cust-claim':    return <PageCustomerWip title="Réclamation" />;
     case 'cust-feedback': return <PageCustomerWip title="Donner un avis" />;
@@ -84,7 +86,7 @@ export function CustomerDashboard() {
     permissions:    user?.permissions ?? [],
     t,
     enabledModules: user?.enabledModules ?? [],
-    currentHref:    location.pathname,
+    currentHref:    location.pathname + location.search,
   });
 
   const sidebarContent = useMemo(() => (
@@ -94,11 +96,11 @@ export function CustomerDashboard() {
           key={section.id}
           title={section.title}
           items={section.items}
-          activeHref={location.pathname}
+          activeHref={location.pathname + location.search}
         />
       ))}
     </nav>
-  ), [sections, location.pathname]);
+  ), [sections, location.pathname + location.search]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
