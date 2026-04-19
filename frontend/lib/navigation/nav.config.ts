@@ -601,6 +601,16 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.SETTINGS_MANAGE],
         },
         {
+          // Règles métier tenant — politique annulation, no-show, compensation
+          // incident, colis hubs. Tous les paramètres pilotables via UI.
+          kind: 'leaf',
+          id: 'tenant-rules',
+          label: 'nav.business_rules',
+          href: '/admin/settings/rules',
+          icon: 'ScrollText',
+          anyOf: [P.SETTINGS_MANAGE],
+        },
+        {
           kind: 'leaf',
           id: 'white-label',
           label: 'nav.white_label_theme',
@@ -1019,7 +1029,11 @@ export const QUAI_AGENT_NAV: PortalNavConfig = {
       id: 'qa-main',
       items: [
         { kind: 'leaf', id: 'qa-home',     label: 'nav.my_platform',        href: '/quai',           icon: 'LayoutDashboard', anyOf: [P.TRIP_UPDATE, P.MANIFEST_SIGN] },
-        { kind: 'leaf', id: 'qa-scan',     label: 'nav.scan_ticket',  href: '/quai/scan',      icon: 'ScanLine',        anyOf: [P.TICKET_SCAN] },
+        // Même composant PageQuaiScan, pré-routé via `?type=` pour que l'agent
+        // sache ce qu'il scanne (évite le "oups j'ai scanné un colis comme billet").
+        // L'auto-détection reste possible via l'URL QR publique (/verify/ticket/... ou /verify/parcel/...).
+        { kind: 'leaf', id: 'qa-scan',         label: 'nav.scan_ticket',  href: '/quai/scan?type=ticket',  icon: 'ScanLine',      anyOf: [P.TICKET_SCAN] },
+        { kind: 'leaf', id: 'qa-scan-parcel',  label: 'nav.scan_parcel',  href: '/quai/scan?type=parcel',  icon: 'PackageSearch', anyOf: [P.PARCEL_SCAN] },
         { kind: 'leaf', id: 'qa-boarding', label: 'nav.boarding',    href: '/quai/boarding',  icon: 'Users',           anyOf: [P.TRIP_UPDATE, P.TICKET_SCAN] },
         { kind: 'leaf', id: 'qa-freight',  label: 'nav.freight_loading', href: '/quai/freight',  icon: 'Package',       anyOf: [P.PARCEL_SCAN, P.PARCEL_UPDATE_AGENCY] },
         { kind: 'leaf', id: 'qa-manifest', label: 'nav.manifest',       href: '/quai/manifest',  icon: 'ClipboardList',   anyOf: [P.MANIFEST_SIGN, P.MANIFEST_GENERATE] },
@@ -1057,10 +1071,12 @@ export const DRIVER_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'drv-home',     label: 'nav.my_trip',       href: '/driver',              icon: 'MapPin',        anyOf: [P.TRIP_READ_OWN, P.TRIP_CHECK_OWN] },
         { kind: 'leaf', id: 'drv-manifest', label: 'nav.manifest',        href: '/driver/manifest',     icon: 'ClipboardList', anyOf: [P.MANIFEST_READ_OWN] },
         { kind: 'leaf', id: 'drv-checkin',  label: 'nav.passenger_check',  href: '/driver/checkin',      icon: 'Users',         anyOf: [P.TRIP_CHECK_OWN] },
-        // Scan billets/colis — entrée visible uniquement si l'une des perms
-        // scan est présente. Le blueprint + perms décident via /scan/capabilities
-        // quels modes (check-in / board) sont offerts dans l'UI.
-        { kind: 'leaf', id: 'drv-scan',     label: 'nav.scan',            href: '/driver/scan',         icon: 'ScanLine',      anyOf: [P.TICKET_SCAN, P.TRAVELER_VERIFY, P.PARCEL_SCAN] },
+        // Scan billets — route unifiée avec query param `type=ticket` pour
+        // faire comprendre au scanner quel endpoint essayer en premier.
+        { kind: 'leaf', id: 'drv-scan',        label: 'nav.scan_ticket',  href: '/driver/scan?type=ticket',  icon: 'ScanLine', anyOf: [P.TICKET_SCAN, P.TRAVELER_VERIFY] },
+        // Scan colis — même composant, type=parcel. Visible seulement si
+        // la perm parcel scan est là.
+        { kind: 'leaf', id: 'drv-scan-parcel', label: 'nav.scan_parcel',  href: '/driver/scan?type=parcel',  icon: 'PackageSearch', anyOf: [P.PARCEL_SCAN] },
         { kind: 'leaf', id: 'drv-freight',  label: 'nav.freight_loading', href: '/driver/freight',     icon: 'Package',       anyOf: [P.PARCEL_SCAN, P.PARCEL_UPDATE_AGENCY] },
         { kind: 'leaf', id: 'drv-events',   label: 'nav.logbook',  href: '/driver/events',       icon: 'ScrollText',    anyOf: [P.TRIP_LOG_EVENT] },
         { kind: 'leaf', id: 'drv-briefing', label: 'nav.pre_departure_briefing', href: '/driver/briefing',  icon: 'ClipboardCheck', anyOf: [P.DRIVER_REST_OWN], moduleKey: 'CREW_BRIEFING' },

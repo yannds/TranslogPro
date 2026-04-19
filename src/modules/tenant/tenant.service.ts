@@ -23,6 +23,32 @@ export interface UpdateBusinessConfigDto {
   agencyCommissionRate?:   number;
   stationFeePerDeparture?: number;
   seatSelectionFee?:       number;
+  // ── Annulation / remboursement ─────────────────────────────────────────
+  cancellationFullRefundMinutes?:    number;
+  cancellationPartialRefundMinutes?: number;
+  cancellationPartialRefundPct?:     number;
+  refundApprovalThreshold?:          number;
+  refundAutoApproveMax?:             number;
+  autoApproveTripCancelled?:         boolean;
+  cancellationPenaltyTiers?:         unknown; // JSON array
+  cancellationPenaltyAppliesTo?:     unknown; // JSON string[]
+  // ── No-show / TTL ──────────────────────────────────────────────────────
+  noShowGraceMinutes?:       number;
+  ticketTtlHours?:           number;
+  noShowPenaltyEnabled?:     boolean;
+  noShowPenaltyPct?:         number;
+  noShowPenaltyFlatAmount?:  number;
+  // ── Incident / compensation ────────────────────────────────────────────
+  incidentCompensationEnabled?:     boolean;
+  incidentCompensationDelayTiers?:  unknown; // JSON array
+  incidentCompensationFormDefault?: string;  // MONETARY | VOUCHER | MIXED | SNACK
+  incidentVoucherValidityDays?:     number;
+  incidentVoucherUsageScope?:       string;
+  incidentRefundProrataEnabled?:    boolean;
+  // ── Parcel hubs / retrait ──────────────────────────────────────────────
+  parcelHubMaxStorageDays?:         number;
+  parcelPickupMaxDaysBeforeReturn?: number;
+  parcelPickupNoShowAction?:        string;  // return | dispose | hold
 }
 
 export interface UpdateCompanyInfoDto {
@@ -186,45 +212,58 @@ export class TenantService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
 
-    // Upsert-on-read: guarantee a row always exists
+    // Upsert-on-read: guarantee a row always exists. Retourne tous les champs
+    // (schema Prisma complet) — plus simple que de maintenir une select list.
     return this.prisma.tenantBusinessConfig.upsert({
       where:  { tenantId },
       create: { tenantId },
       update: {},
-      select: {
-        id: true, tenantId: true,
-        daysPerYear: true, defaultTripsPerMonth: true,
-        breakEvenThresholdPct: true, agencyCommissionRate: true,
-        stationFeePerDeparture: true,
-        seatSelectionFee: true,
-      },
     });
   }
+
+  /**
+   * Liste des champs autorisés à l'édition. Source unique de vérité pour
+   * éviter les écritures non-intentionnelles sur id/tenantId/updatedAt.
+   */
+  private static readonly EDITABLE_BUSINESS_CONFIG_KEYS = [
+    // Base
+    'daysPerYear', 'defaultTripsPerMonth',
+    'breakEvenThresholdPct', 'agencyCommissionRate', 'stationFeePerDeparture',
+    'seatSelectionFee',
+    // Fiscalité
+    'tvaEnabled', 'tvaRate',
+    // Annulation legacy + N-tiers
+    'cancellationFullRefundMinutes', 'cancellationPartialRefundMinutes',
+    'cancellationPartialRefundPct',
+    'refundApprovalThreshold', 'refundAutoApproveMax', 'autoApproveTripCancelled',
+    'cancellationPenaltyTiers', 'cancellationPenaltyAppliesTo',
+    // No-show
+    'noShowGraceMinutes', 'ticketTtlHours',
+    'noShowPenaltyEnabled', 'noShowPenaltyPct', 'noShowPenaltyFlatAmount',
+    // Incident / compensation
+    'incidentCompensationEnabled', 'incidentCompensationDelayTiers',
+    'incidentCompensationFormDefault',
+    'incidentVoucherValidityDays', 'incidentVoucherUsageScope',
+    'incidentRefundProrataEnabled',
+    // Parcel hub
+    'parcelHubMaxStorageDays', 'parcelPickupMaxDaysBeforeReturn',
+    'parcelPickupNoShowAction',
+  ] as const;
 
   async updateBusinessConfig(tenantId: string, dto: UpdateBusinessConfigDto) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
 
     const data: Record<string, unknown> = {};
-    for (const key of [
-      'daysPerYear', 'defaultTripsPerMonth',
-      'breakEvenThresholdPct', 'agencyCommissionRate', 'stationFeePerDeparture',
-      'seatSelectionFee',
-    ] as const) {
-      if (dto[key] !== undefined) data[key] = dto[key];
+    for (const key of TenantService.EDITABLE_BUSINESS_CONFIG_KEYS) {
+      const value = (dto as Record<string, unknown>)[key];
+      if (value !== undefined) data[key] = value;
     }
 
     return this.prisma.tenantBusinessConfig.upsert({
       where:  { tenantId },
       create: { tenantId, ...data },
       update: data,
-      select: {
-        id: true, tenantId: true,
-        daysPerYear: true, defaultTripsPerMonth: true,
-        breakEvenThresholdPct: true, agencyCommissionRate: true,
-        stationFeePerDeparture: true,
-        seatSelectionFee: true,
-      },
     });
   }
 

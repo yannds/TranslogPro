@@ -57,6 +57,8 @@ const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantTaxes    = lazy(() => import('../pages/PageTenantTaxes').then(m => ({ default: m.PageTenantTaxes })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
@@ -292,6 +294,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // Même composant que l'agent quai (PageQuaiScan). Les modes disponibles
     // sont décidés runtime par /scan/capabilities selon les perms du DRIVER.
     case 'drv-scan':            return <LazyQuaiScan />;
+    case 'drv-scan-parcel':     return <LazyQuaiScan />;
     case 'drv-freight':         return <LazyDriverFreight />;
     case 'drv-events':          return <LazyDriverEvents />;
     case 'drv-report':          return <LazyDriverReport />;
@@ -307,7 +310,11 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'sa-checkin':          return <PageWip title={t('router.saCheckin')} />;
     case 'sa-luggage':          return <PageWip title={t('router.saLuggage')} />;
     case 'sa-parcel':           return <PageWip title={t('router.saParcel')} />;
-    case 'sa-manifest':         return <PageWip title={t('router.saManifest')} />;
+    // Agent de gare doit pouvoir générer + signer les manifestes au même
+    // titre que l'agent de quai. Le composant LazyQuaiManifest est trip-driven
+    // et gated server-side par MANIFEST_GENERATE/SIGN — il fonctionne pour
+    // les 2 rôles sans modification.
+    case 'sa-manifest':         return <LazyQuaiManifest />;
     case 'sa-cashier':          return <PageCashier />;
     case 'sa-receipts':         return <PageWip title={t('router.saReceipts')} />;
     case 'sa-display':          return <LazyDisplayGare />;
@@ -366,6 +373,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <LazyIntegrations />;
     case 'tenant-taxes':        return <LazyTenantTaxes />;
+    case 'tenant-rules':        return <LazyTenantBusinessRules />;
     case 'tenant-payment':      return <LazyTenantPayment />;
     case 'tenant-billing':      return <LazyAdminBilling />;
     case 'documents-templates': return <LazyTemplateStudio />;
