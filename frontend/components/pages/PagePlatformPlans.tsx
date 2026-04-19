@@ -429,6 +429,7 @@ export function PagePlatformPlans() {
         data={plans ?? []}
         loading={loading}
         rowActions={rowActions}
+        onRowClick={(row) => { setEditTarget(row); setActionErr(null); }}
         defaultSort={{ key: 'sortOrder', dir: 'asc' }}
         defaultPageSize={25}
         searchPlaceholder={t('platformPlans.searchPlaceholder')}

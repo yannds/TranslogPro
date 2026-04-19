@@ -19,7 +19,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import {
   Wallet, AlertTriangle, X, Check, FileText, CreditCard, Ban,
-  RefreshCw, Plus,
+  RefreshCw, Plus, CalendarClock,
 } from 'lucide-react';
 import { useFetch }                        from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch }                from '../../lib/api';
@@ -27,6 +27,7 @@ import { useI18n }                          from '../../lib/i18n/useI18n';
 import { Button }                          from '../ui/Button';
 import { Badge }                           from '../ui/Badge';
 import { Dialog }                          from '../ui/Dialog';
+import { ComboboxEditable }                 from '../ui/ComboboxEditable';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -46,6 +47,15 @@ interface SubscriptionRow {
   cancelledAt:     string | null;
   tenant:          { id: string; name: string; slug: string; country: string; isActive: boolean; provisionStatus: string };
   plan:            PlanSummary;
+}
+
+interface TenantOption {
+  id:       string;
+  name:     string;
+  slug:     string;
+  country?: string;
+  /** Plan actuellement assigné au tenant (nullable — tenant neuf sans plan). */
+  planId?:  string | null;
 }
 
 interface InvoiceRow {
@@ -212,14 +222,43 @@ function StatusDialog({
 // ─── New subscription dialog ────────────────────────────────────────────────
 
 function NewSubDialog({
-  open, plans, busy, error, onClose, onSubmit,
+  open, plans, tenants, busy, error, onClose, onSubmit,
 }: {
-  open: boolean; plans: PlanSummary[]; busy: boolean; error: string | null;
+  open: boolean; plans: PlanSummary[]; tenants: TenantOption[];
+  busy: boolean; error: string | null;
   onClose: () => void; onSubmit: (body: { tenantId: string; planId: string }) => void;
 }) {
   const { t } = useI18n();
   const [tenantId, setTenantId] = useState('');
   const [planId, setPlanId]     = useState('');
+  const [planTouched, setPlanTouched] = useState(false);
+
+  // Reset interne à chaque ouverture — évite de conserver un état périmé.
+  useMemo(() => {
+    if (!open) { setTenantId(''); setPlanId(''); setPlanTouched(false); }
+  }, [open]);
+
+  const tenantOptions = useMemo(
+    () => tenants.map(tn => ({
+      value: tn.id,
+      label: tn.name,
+      hint:  `${tn.slug}${tn.country ? ' · ' + tn.country : ''}`,
+    })),
+    [tenants],
+  );
+
+  const selectedTenant = tenants.find(tn => tn.id === tenantId);
+
+  /** Quand l'utilisateur choisit un tenant, on pré-charge son plan courant
+   *  (s'il en a un). L'admin peut toujours le changer via le select ci-dessous
+   *  — on marque alors planTouched pour ne plus écraser à une re-sélection. */
+  function handleTenantPick(id: string) {
+    setTenantId(id);
+    if (!planTouched) {
+      const tn = tenants.find(x => x.id === id);
+      if (tn?.planId) setPlanId(tn.planId);
+    }
+  }
 
   return (
     <Dialog
@@ -233,30 +272,202 @@ function NewSubDialog({
         {error && (
           <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium t-text">
-            {t('platformBilling.tenantIdLabel')} <span className="text-red-500" aria-hidden>*</span>
-          </label>
-          <input type="text" value={tenantId}
-            onChange={e => setTenantId(e.target.value.trim())}
-            required pattern="[0-9a-fA-F-]{36}"
-            className={`${inp} font-mono`} disabled={busy} />
-        </div>
+
+        <ComboboxEditable
+          label={t('platformBilling.tenantPickLabel')}
+          required
+          placeholder={t('platformBilling.tenantPickPh')}
+          options={tenantOptions}
+          value={tenantId}
+          onChange={handleTenantPick}
+          disabled={busy}
+        />
+
+        {selectedTenant && (
+          <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs flex items-center gap-2">
+            <span className="t-text-3 shrink-0">{t('platformBilling.tenantIdLabel')}</span>
+            <code className="font-mono t-text truncate">{selectedTenant.id}</code>
+            {selectedTenant.planId && (
+              <Badge variant="info" size="sm" className="ml-auto">
+                {t('platformBilling.currentPlanTag')}
+              </Badge>
+            )}
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <label className="block text-sm font-medium t-text">
             {t('platformBilling.plan')} <span className="text-red-500" aria-hidden>*</span>
           </label>
-          <select value={planId} required onChange={e => setPlanId(e.target.value)} className={inp} disabled={busy}>
+          <select value={planId} required
+            onChange={e => { setPlanId(e.target.value); setPlanTouched(true); }}
+            className={inp} disabled={busy}>
             <option value="">—</option>
             {plans.map(p => (
               <option key={p.id} value={p.id}>{p.name} — {formatMoney(p.price, p.currency)} / {p.billingCycle}</option>
             ))}
           </select>
+          {selectedTenant?.planId && selectedTenant.planId === planId && (
+            <p className="text-[11px] t-text-3">{t('platformBilling.planPrefilledHint')}</p>
+          )}
         </div>
+
         <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" disabled={busy || !tenantId || !planId}>
             {busy ? t('common.creating') : t('common.create')}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+// ─── Extend trial dialog ────────────────────────────────────────────────────
+// Raccourcis jours proposés — pas de magic numbers enfouis dans le JSX.
+// L'admin peut toujours saisir une valeur personnalisée via le champ nombre.
+const EXTEND_TRIAL_PRESETS = [7, 14, 30] as const;
+
+function ExtendTrialDialog({
+  open, sub, busy, error, onClose, onSubmit,
+}: {
+  open: boolean; sub: SubscriptionRow | null; busy: boolean; error: string | null;
+  onClose: () => void;
+  onSubmit: (body: { days?: number; trialEndsAt?: string; reason?: string }) => void;
+}) {
+  const { t, dateLocale } = useI18n();
+  const [mode, setMode]   = useState<'days' | 'date'>('days');
+  const [days, setDays]   = useState<number>(EXTEND_TRIAL_PRESETS[0]);
+  const [date, setDate]   = useState<string>('');
+  const [reason, setReason] = useState<string>('');
+
+  const currentEndDate = sub?.trialEndsAt
+    ? new Date(sub.trialEndsAt).toLocaleDateString(dateLocale)
+    : t('platformBilling.extendTrial.noCurrentEnd');
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (mode === 'days') {
+      onSubmit({ days, reason: reason || undefined });
+    } else if (date) {
+      onSubmit({ trialEndsAt: new Date(date).toISOString(), reason: reason || undefined });
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={o => { if (!o) onClose(); }}
+      title={t('platformBilling.extendTrial.title')}
+      description={sub ? `${sub.tenant.name} · ${t('platformBilling.extendTrial.currentEnd')} ${currentEndDate}` : ''}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        {/* Mode switch */}
+        <div
+          role="radiogroup"
+          aria-label={t('platformBilling.extendTrial.modeLabel')}
+          className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1"
+        >
+          {(['days', 'date'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                mode === m
+                  ? 'bg-teal-600 text-white'
+                  : 't-text-2 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {m === 'days' ? t('platformBilling.extendTrial.modeDays') : t('platformBilling.extendTrial.modeDate')}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'days' ? (
+          <div className="space-y-2">
+            <label htmlFor="extend-days" className="block text-sm font-medium t-text">
+              {t('platformBilling.extendTrial.daysLabel')}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {EXTEND_TRIAL_PRESETS.map(n => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => setDays(n)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                    days === n
+                      ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'
+                      : 'border-slate-200 dark:border-slate-700 t-text-2 hover:border-teal-400'
+                  }`}
+                >
+                  +{n} {t('platformBilling.extendTrial.daysUnit')}
+                </button>
+              ))}
+            </div>
+            <input
+              id="extend-days"
+              type="number"
+              min={1}
+              max={365}
+              value={days}
+              onChange={e => setDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
+              className={inp}
+              disabled={busy}
+            />
+            <p className="text-xs t-text-3">{t('platformBilling.extendTrial.daysHelp')}</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <label htmlFor="extend-date" className="block text-sm font-medium t-text">
+              {t('platformBilling.extendTrial.dateLabel')}
+            </label>
+            <input
+              id="extend-date"
+              type="date"
+              value={date}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={e => setDate(e.target.value)}
+              className={inp}
+              required
+              disabled={busy}
+            />
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label htmlFor="extend-reason" className="block text-sm font-medium t-text">
+            {t('platformBilling.extendTrial.reasonLabel')}
+            <span className="ml-1 text-xs t-text-3 font-normal">{t('common.optional')}</span>
+          </label>
+          <textarea
+            id="extend-reason"
+            rows={2}
+            maxLength={500}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            className={inp}
+            disabled={busy}
+            placeholder={t('platformBilling.extendTrial.reasonPh')}
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+            <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
+          </Button>
+          <Button type="submit" disabled={busy || (mode === 'date' && !date)}>
+            <Check className="w-4 h-4 mr-1.5" aria-hidden />
+            {busy ? t('common.saving') : t('platformBilling.extendTrial.confirm')}
           </Button>
         </div>
       </form>
@@ -276,14 +487,25 @@ export function PagePlatformBilling() {
     = useFetch<InvoiceRow[]>('/api/platform/billing/invoices');
   const { data: plans }
     = useFetch<PlanSummary[]>('/api/platform/plans');
+  // Tenants + plan courant — alimente la recherche par nom dans la modale Nouvelle Souscription.
+  // `/api/tenants` renvoie `planId`, `/api/platform/plans` le nom : on résout côté client.
+  const { data: tenantsRaw }
+    = useFetch<Array<{ id: string; name: string; slug: string; country: string; planId: string | null }>>('/api/tenants');
 
   const [changeTarget, setChangeTarget] = useState<SubscriptionRow | null>(null);
   const [statusTarget, setStatusTarget] = useState<SubscriptionRow | null>(null);
+  const [extendTarget, setExtendTarget] = useState<SubscriptionRow | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
 
   const planList = useMemo(() => plans ?? [], [plans]);
+  const tenantOptions = useMemo<TenantOption[]>(
+    () => (tenantsRaw ?? []).map(tn => ({
+      id: tn.id, name: tn.name, slug: tn.slug, country: tn.country, planId: tn.planId,
+    })),
+    [tenantsRaw],
+  );
 
   // ── Handlers subscriptions ──
 
@@ -314,6 +536,19 @@ export function PagePlatformBilling() {
     try {
       await apiPost('/api/platform/billing/subscriptions', body);
       setNewOpen(false);
+      refetchSubs();
+    } catch (e) { setActionErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const handleExtendTrial = async (
+    body: { days?: number; trialEndsAt?: string; reason?: string },
+  ) => {
+    if (!extendTarget) return;
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`/api/platform/billing/subscriptions/${extendTarget.id}/extend-trial`, body);
+      setExtendTarget(null);
       refetchSubs();
     } catch (e) { setActionErr((e as Error).message); }
     finally { setBusy(false); }
@@ -391,6 +626,7 @@ export function PagePlatformBilling() {
   ];
 
   const subActions: RowAction<SubscriptionRow>[] = [
+    { label: t('platformBilling.extendTrial.title'), icon: <CalendarClock size={13} />, onClick: (r) => { setExtendTarget(r); setActionErr(null); } },
     { label: t('platformBilling.changePlan'),   icon: <RefreshCw size={13} />, onClick: (r) => { setChangeTarget(r); setActionErr(null); } },
     { label: t('platformBilling.changeStatus'), icon: <Ban size={13} />,       onClick: (r) => { setStatusTarget(r); setActionErr(null); } },
   ];
@@ -587,10 +823,19 @@ export function PagePlatformBilling() {
       <NewSubDialog
         open={newOpen}
         plans={planList}
+        tenants={tenantOptions}
         busy={busy}
         error={actionErr}
         onClose={() => setNewOpen(false)}
         onSubmit={handleCreate}
+      />
+      <ExtendTrialDialog
+        open={!!extendTarget}
+        sub={extendTarget}
+        busy={busy}
+        error={actionErr}
+        onClose={() => setExtendTarget(null)}
+        onSubmit={handleExtendTrial}
       />
     </div>
   );

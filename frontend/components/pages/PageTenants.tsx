@@ -21,6 +21,7 @@
 import { useState, useMemo, type FormEvent } from 'react';
 import {
   Building2, Plus, ShieldOff, ShieldCheck, AlertTriangle, X, Check, Globe, UserCheck, ExternalLink,
+  Copy, CheckCircle2,
 } from 'lucide-react';
 import { useFetch }                     from '../../lib/hooks/useFetch';
 import { apiPost, apiPatch }            from '../../lib/api';
@@ -57,6 +58,32 @@ interface CreateForm {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const inp = 'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-50';
+
+/** Petit bouton cliquable copiant une valeur dans le presse-papier avec feedback visuel. */
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch { /* fallback silencieux — navigator.clipboard est bloqué dans certains contextes */ }
+      }}
+      className="inline-flex items-center gap-1 text-xs rounded border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+      aria-label={label}
+      title={label}
+    >
+      {copied
+        ? <><CheckCircle2 className="w-3 h-3 text-teal-600" aria-hidden /><span className="text-teal-700 dark:text-teal-400">OK</span></>
+        : <><Copy className="w-3 h-3" aria-hidden /><span className="t-text-2">Copy</span></>
+      }
+    </button>
+  );
+}
 
 function provisionVariant(status: string): 'success' | 'warning' | 'danger' | 'info' {
   switch (status) {
@@ -386,6 +413,12 @@ export function PageTenants() {
       >
         {detailTarget && (
           <div className="space-y-4">
+            {/* UUID toujours présent, copiable d'un clic — pour alimenter les modales Billing / Souscription. */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 flex items-center gap-2">
+              <span className="text-xs t-text-3 shrink-0">{t('tenantsPage.tenantIdLabel')}</span>
+              <code className="text-xs font-mono t-text truncate flex-1" title={detailTarget.id}>{detailTarget.id}</code>
+              <CopyButton value={detailTarget.id} label={t('tenantsPage.copyIdAria')} />
+            </div>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div>
                 <dt className="text-xs t-text-3">{t('tenantsPage.colStatus')}</dt>
