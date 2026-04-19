@@ -186,7 +186,9 @@ export function AdminTeamsScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           data={[{ id: 'ALL', name: L('Toutes', 'All') } as Agency, ...agencies]}
-          keyExtractor={(a) => a.id}
+          // Filet de s\u00e9curit\u00e9 : l'API pourrait renvoyer une agence avec id
+          // falsy ou d\u00e9j\u00e0 'ALL' (sentinel collision). On force un fallback index.
+          keyExtractor={(a, idx) => a.id || `ag-${idx}`}
           contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
           renderItem={({ item }) => {
             const selected = item.id === agencyId;
@@ -248,7 +250,10 @@ export function AdminTeamsScreen() {
 
       <FlatList
         data={grouped}
-        keyExtractor={([roleKey]) => roleKey}
+        // Si un staff backend arrive avec role vide/undefined, Map.entries()
+        // renverrait la cl\u00e9 stringifi\u00e9e qui pourrait \u00eatre falsy ou dupliqu\u00e9e.
+        // Index fallback pour \u00e9viter le warning "unique key" dans ces cas-bord.
+        keyExtractor={([roleKey], idx) => roleKey || `role-${idx}`}
         contentContainerStyle={{ padding: 16, gap: 14 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} />}
         ListEmptyComponent={!loading ? (
