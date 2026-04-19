@@ -156,51 +156,56 @@ createRoot(root).render(
               <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
-              {/* Portail admin — protégé (STAFF / SUPER_ADMIN) */}
+              {/* Portail admin — protégé (STAFF / SUPER_ADMIN).
+                  `portal="admin"` bloque les CUSTOMER qui tenteraient l'URL
+                  et les renvoie vers leur portail. */}
               <Route
                 path="/admin/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute portal="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Portail client — protégé (CUSTOMER) */}
+              {/* Portail client — protégé (CUSTOMER uniquement). Un STAFF qui
+                  atterrirait ici est renvoyé vers son portail (admin/driver/…). */}
               <Route
                 path="/customer/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute portal="customer">
                     <CustomerDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Portail chauffeur — protégé (STAFF avec perms trip.*.own) */}
+              {/* Portail chauffeur — nécessite une perm DRIVER_HINTS.
+                  Un admin sans perm chauffeur qui tape /driver est renvoyé
+                  vers /admin automatiquement. */}
               <Route
                 path="/driver/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute portal="driver">
                     <DriverDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Portail agent de gare — protégé */}
+              {/* Portail agent de gare — perm control.station.manage.tenant requise. */}
               <Route
                 path="/agent/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute portal="station-agent">
                     <StationAgentDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Portail agent de quai — protégé */}
+              {/* Portail agent de quai — perm control.quai.manage.tenant requise. */}
               <Route
                 path="/quai/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute portal="quai-agent">
                     <QuaiAgentDashboard />
                   </ProtectedRoute>
                 }

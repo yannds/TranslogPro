@@ -1,13 +1,18 @@
 /**
- * ProtectedRoute — Garde de route basée sur la session
+ * ProtectedRoute — Garde de route basée sur la session + portail.
  *
  * Comportement :
  *   - Spinner de chargement pendant la vérification de session initiale
  *   - Redirection vers /login (React Router Navigate) si non authentifié
- *   - Children si la session est valide
+ *   - Si `portal` fourni ET le user ne peut pas y accéder (cf. `canAccessPortal`),
+ *     redirige vers son portail résolu par défaut (`resolvePortal`). Évite
+ *     qu'un chauffeur atterrisse sur /admin en tapant l'URL à la main.
+ *   - Children si tout est OK.
  *
  * Usage :
- *   <Route path="/admin/*" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+ *   <Route path="/admin/*"  element={<ProtectedRoute portal="admin"><AdminDashboard /></ProtectedRoute>} />
+ *   <Route path="/driver/*" element={<ProtectedRoute portal="driver"><DriverDashboard /></ProtectedRoute>} />
+ *   <Route path="/account"  element={<ProtectedRoute><PageAccount /></ProtectedRoute>} />  (accès libre)
  */
 
 import { type ReactNode } from 'react';
@@ -15,6 +20,19 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
+import {
+  canAccessPortal, resolvePortal, type PortalId,
+} from '../../lib/navigation/resolvePortal';
+
+// Map portalId → path cible. Point unique de vérité, identique à celui
+// consommé par HomeRedirect dans main.tsx.
+const PORTAL_TO_PATH: Record<PortalId, string> = {
+  admin:           '/admin',
+  customer:        '/customer',
+  driver:          '/driver',
+  'station-agent': '/agent',
+  'quai-agent':    '/quai',
+};
 
 // ─── Spinner de chargement ────────────────────────────────────────────────────
 
@@ -38,7 +56,17 @@ function LoadingScreen() {
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
-export function ProtectedRoute({ children }: { children: ReactNode }) {
+export function ProtectedRoute({
+  children, portal,
+}: {
+  children: ReactNode;
+  /**
+   * Si défini, vérifie que l'utilisateur a bien le droit d'accéder à ce
+   * portail. Sinon, redirection silencieuse vers son portail par défaut.
+   * Omettre pour une route partagée (ex. /account accessible à tous les rôles).
+   */
+  portal?: PortalId;
+}) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -47,6 +75,18 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (!user) {
     // Mémorise l'URL cible pour rediriger après connexion
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Portal guard — un chauffeur qui tape /admin/xxx est renvoyé vers /driver,
+  // un admin sans perm driver qui tape /driver est renvoyé vers /admin, etc.
+  // Les multi-rôle (admin + chauffeur) sont autorisés partout puisqu'ils
+  // passent `canAccessPortal(...)` sur les deux.
+  if (portal) {
+    const input = { userType: user.userType, permissions: user.permissions };
+    if (!canAccessPortal(input, portal)) {
+      const resolved = resolvePortal(input);
+      return <Navigate to={PORTAL_TO_PATH[resolved]} replace />;
+    }
   }
 
   return <>{children}</>;
