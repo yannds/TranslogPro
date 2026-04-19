@@ -43,6 +43,22 @@ export class ShipmentController {
     return this.shipmentService.findByTrip(tenantId, tripId);
   }
 
+  /**
+   * Clôture du chargement — OPEN → LOADED. Utilisé par l'agent de quai ou
+   * le chauffeur quand tous les colis sont en soute. Rejeté (400) si des
+   * colis ne sont pas encore LOADED.
+   * Permission : PARCEL_UPDATE_AGENCY (mêmes rôles que addParcel).
+   */
+  @Post(':id/close')
+  @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
+  close(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.shipmentService.closeShipment(tenantId, id, actor);
+  }
+
   @Get(':id')
   @RequirePermission(Permission.PARCEL_UPDATE_AGENCY)
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {

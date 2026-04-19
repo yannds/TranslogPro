@@ -362,6 +362,7 @@ const TENANT_ROLES: Array<{
       'data.ticket.scan.agency',       // scan billets à l'embarquement (filtré par tripId côté service)
       'data.traveler.verify.agency',   // vérification identité voyageur (idem)
       'data.manifest.read.own',
+      'data.manifest.generate.agency', // génération draft du manifeste sur SON trajet (idempotent — si déjà généré par l'agent quai, réutilise l'existant)
       'data.manifest.sign.agency',     // attestation de départ — le chauffeur signe SON manifeste (endpoint scope-filtré par tripId + driver assignment)
       'data.manifest.print.agency',    // impression manifeste de SON trajet
       'data.ticket.read.agency',       // liste passagers de SON trajet (endpoint filtré)
@@ -439,6 +440,8 @@ const TENANT_ROLES: Array<{
       'data.trip.read.own',
       'data.trip.update.agency',       // marquer départ après chargement OK (endpoint scope-filtré par agence)
       'data.manifest.read.own',
+      'data.manifest.generate.agency', // l'agent quai prépare le manifeste avant signature chauffeur
+      'data.manifest.sign.agency',     // signature au nom de l'agence quand le chauffeur n'est pas encore là
       'data.manifest.print.agency',
       'data.ticket.read.agency',
       // Support & notifications

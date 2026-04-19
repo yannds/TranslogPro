@@ -111,4 +111,66 @@ export class ShipmentService {
       include: { parcels: { select: { id: true, trackingCode: true, status: true, weight: true } } },
     });
   }
+
+  /**
+   * Clôture du chargement — transition OPEN → LOADED pour signifier que
+   * l'agent quai ou le chauffeur a terminé la mise en soute. Après cette
+   * transition, plus aucun colis ne peut être ajouté au shipment
+   * (`addParcel` vérifie `status === OPEN`).
+   *
+   * Pré-condition métier : tous les colis du shipment doivent être en état
+   * LOADED. Sinon on renvoie BadRequest listant les colis qui bloquent —
+   * l'utilisateur voit précisément ce qui manque.
+   *
+   * Idempotence : si le shipment est déjà LOADED/IN_TRANSIT/ARRIVED/CLOSED
+   * on retourne l'état courant sans erreur (useful pour retries réseau).
+   */
+  async closeShipment(tenantId: string, shipmentId: string, actor: CurrentUserPayload) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where:   { id: shipmentId, tenantId },
+      include: { parcels: { select: { id: true, trackingCode: true, status: true } } },
+    });
+    if (!shipment) throw new NotFoundException(`Shipment ${shipmentId} introuvable`);
+
+    // Idempotence — déjà fermé
+    if (shipment.status !== ShipmentState.OPEN) return shipment;
+
+    // Tous les colis doivent être chargés (ou avoir avancé au-delà)
+    const CLEARED = new Set(['LOADED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED']);
+    const blocking = shipment.parcels.filter(p => !CLEARED.has(p.status));
+    if (blocking.length > 0) {
+      throw new BadRequestException(
+        `Impossible de clôturer : ${blocking.length} colis non chargés ` +
+        `(${blocking.map(p => p.trackingCode).slice(0, 5).join(', ')}${blocking.length > 5 ? '…' : ''})`,
+      );
+    }
+
+    // Transition + émission du domain event dans la même transaction —
+    // pattern Outbox identique à addParcel. Un listener dans un module séparé
+    // (audit, notifications, trip-readiness) pourra consommer l'événement.
+    return this.prisma.transact(async (tx) => {
+      const updated = await tx.shipment.update({
+        where: { id: shipmentId },
+        data:  { status: ShipmentState.LOADED },
+      });
+
+      const event: DomainEvent = {
+        id:            uuidv4(),
+        type:          'shipment.closed',
+        tenantId,
+        aggregateId:   shipmentId,
+        aggregateType: 'Shipment',
+        payload:       {
+          shipmentId,
+          tripId:      shipment.tripId,
+          parcelCount: shipment.parcels.length,
+          closedBy:    actor.id,
+        },
+        occurredAt:    new Date(),
+      };
+      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+
+      return updated;
+    });
+  }
 }

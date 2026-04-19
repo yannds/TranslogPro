@@ -28,7 +28,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  PackagePlus, PackageCheck, PackageOpen, AlertTriangle, Loader2, Boxes,
+  PackagePlus, PackageCheck, PackageOpen, AlertTriangle, Loader2, Boxes, Lock,
 } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { useI18n } from '../../lib/i18n/useI18n';
@@ -154,6 +154,26 @@ export function FreightLoadingPanel({ tenantId, tripId, role = 'driver' }: Freig
     }
   }
 
+  // Clôture d'un shipment entier : OPEN → LOADED. Le backend rejette si des
+  // colis ne sont pas encore en état LOADED. On passe le shipmentId au même
+  // busyMap/errorMap pour feedback inline (key = shipmentId).
+  async function handleCloseShipment(shipmentId: string) {
+    if (!window.confirm(t('freight.confirmCloseShipment'))) return;
+    setBusyMap(m => ({ ...m, [shipmentId]: true }));
+    setErrorMap(m => ({ ...m, [shipmentId]: null }));
+    try {
+      await apiPost(`/api/tenants/${tenantId}/shipments/${shipmentId}/close`, {});
+      refetch();
+    } catch (e) {
+      const msg = e instanceof ApiError
+        ? String((e.body as { message?: string })?.message ?? e.message)
+        : String(e);
+      setErrorMap(m => ({ ...m, [shipmentId]: msg }));
+    } finally {
+      setBusyMap(m => ({ ...m, [shipmentId]: false }));
+    }
+  }
+
   async function handleDamage(parcelId: string) {
     const description = window.prompt(t('freight.damagePrompt'));
     if (!description || description.trim().length === 0) return;
@@ -215,20 +235,53 @@ export function FreightLoadingPanel({ tenantId, tripId, role = 'driver' }: Freig
               key={shipment.id}
               className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
             >
-              {/* En-tête shipment */}
+              {/* En-tête shipment — le bouton "Clôturer" apparaît uniquement
+                  tant que le shipment est OPEN, et reste disabled tant que
+                  tous les colis ne sont pas LOADED (ou au-delà). Le backend
+                  rejette aussi toute tentative invalide en 400. */}
               <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Boxes className="w-4 h-4 text-purple-500 shrink-0" aria-hidden />
                   <code className="text-xs font-mono font-semibold t-text">{shipment.id.slice(0, 8)}</code>
-                  <Badge size="sm" variant={shipment.status === 'OPEN' ? 'warning' : 'default'}>
+                  <Badge size="sm" variant={shipment.status === 'OPEN' ? 'warning' : 'success'}>
                     {shipment.status}
                   </Badge>
                 </div>
-                <span className="text-xs t-text-3 tabular-nums">
-                  {(shipment.totalWeight - shipment.remainingWeight).toLocaleString('fr-FR')} /{' '}
-                  {shipment.totalWeight.toLocaleString('fr-FR')} kg
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs t-text-3 tabular-nums">
+                    {(shipment.totalWeight - shipment.remainingWeight).toLocaleString('fr-FR')} /{' '}
+                    {shipment.totalWeight.toLocaleString('fr-FR')} kg
+                  </span>
+                  {shipment.status === 'OPEN' && (() => {
+                    const CLEARED = new Set(['LOADED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED']);
+                    const allLoaded = shipment.parcels.length > 0
+                      && shipment.parcels.every(p => CLEARED.has(p.status));
+                    const isBusy = !!busyMap[shipment.id];
+                    return (
+                      <Button
+                        variant={allLoaded ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleCloseShipment(shipment.id)}
+                        disabled={!allLoaded || isBusy}
+                        className="min-h-[36px]"
+                        leftIcon={isBusy
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                          : <Lock className="w-3.5 h-3.5" aria-hidden />}
+                        title={allLoaded
+                          ? t('freight.closeShipmentOk')
+                          : t('freight.closeShipmentBlocked')}
+                      >
+                        {t('freight.closeShipment')}
+                      </Button>
+                    );
+                  })()}
+                </div>
               </div>
+              {errorMap[shipment.id] && (
+                <div role="alert" className="px-4 py-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30">
+                  {errorMap[shipment.id]}
+                </div>
+              )}
 
               {/* Liste des colis — chaque ligne = 1 action contextuelle */}
               <ul role="list" className="divide-y divide-slate-100 dark:divide-slate-800">
