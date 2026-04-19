@@ -99,21 +99,41 @@ export class TripService {
   ) {
     // scope 'own' : Trip.driverId est un Staff ID, pas un User ID.
     // Il faut résoudre le staffId du user pour filtrer correctement.
-    let ownerFilter: Record<string, string> = {};
+    //
+    // scope 'agency' : Trip n'a pas de colonne agencyId directe. La relation
+    // à l'agence se fait via `bus.agencyId`. On filtre donc sur la relation
+    // Prisma imbriquée pour ne pas exposer les trajets des autres agences du
+    // tenant à un AGENT_QUAI / AGENCY_MANAGER.
+    let ownerFilter: Record<string, unknown> = {};
     if (scope?.scope === 'own') {
       const staff = await this.prisma.staff.findFirst({
         where: { userId: scope.userId, tenantId },
         select: { id: true },
       });
       ownerFilter = staff ? { driverId: staff.id } : { driverId: '__none__' };
+    } else if (scope?.scope === 'agency') {
+      ownerFilter = { bus: { agencyId: scope.agencyId ?? '__none__' } };
     } else if (scope) {
       ownerFilter = ownershipWhere(scope, 'driverId');
     }
 
-    // Filtre fenêtre temporelle (utilisé par le calendrier chauffeur)
+    // Filtre fenêtre temporelle (utilisé par le calendrier chauffeur + quai home).
+    //
+    // Subtilité "date nue" (YYYY-MM-DD) : `new Date("2026-04-19")` → 00:00:00 UTC
+    // exact. Si le frontend envoie `from=today&to=today`, le range devient
+    // [00:00, 00:00] = un instant vide → aucun trip ne passe. On force donc
+    // `to` à la fin de journée (23:59:59.999) pour que toute la journée soit
+    // couverte. Le frontend qui envoie déjà une heure explicite (ISO complet)
+    // n'est pas impacté car la heure est préservée par le constructeur Date.
     const dateRange: Record<string, Date> = {};
     if (filters?.from) dateRange.gte = new Date(filters.from);
-    if (filters?.to)   dateRange.lte = new Date(filters.to);
+    if (filters?.to) {
+      const toDate = new Date(filters.to);
+      // Si la chaîne est YYYY-MM-DD (pas d'heure), on étend à la fin de journée UTC
+      const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(filters.to);
+      if (isDateOnly) toDate.setUTCHours(23, 59, 59, 999);
+      dateRange.lte = toDate;
+    }
 
     // Filtre driverId explicite (admin/dispatcher). Se combine avec ownerFilter
     // mais ownerFilter est vide pour un admin sans scope 'own'.
@@ -182,7 +202,24 @@ export class TripService {
     });
     if (!trip) throw new NotFoundException(`Trip ${id} not found`);
     // Enforcement scope : un chauffeur ne peut pas lire le trip d'un autre.
-    if (scope) assertOwnership(scope, trip, 'driverId');
+    // Pour le scope 'agency' on passe par bus.agencyId (Trip n'a pas de
+    // colonne agencyId). Mismatch → NotFound (on cache l'existence du trip).
+    if (scope?.scope === 'agency') {
+      if (trip.bus?.agencyId && trip.bus.agencyId !== scope.agencyId) {
+        throw new NotFoundException(`Trip ${id} not found`);
+      }
+    } else if (scope?.scope === 'own') {
+      // Trip.driverId est un Staff.id, pas un User.id → on ne peut pas
+      // utiliser assertOwnership(scope, trip, 'driverId') qui compare à
+      // scope.userId. On résout d'abord le Staff de l'acteur puis compare.
+      const staff = await this.prisma.staff.findFirst({
+        where:  { tenantId, userId: scope.userId },
+        select: { id: true },
+      });
+      if (!staff || trip.driverId !== staff.id) {
+        throw new NotFoundException(`Trip ${id} not found`);
+      }
+    }
 
     // Driver est lié à Trip via driverId scalaire (pas de relation Prisma objet).
     // On résout le Staff → User pour exposer le nom côté admin/dispatcher.
