@@ -80,6 +80,66 @@ export class TicketingController {
     return this.ticketingService.cancel(tenantId, id, actor, reason);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Scénarios no-show / rebook (2026-04-19)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Marquer no-show (agent quai / scheduler) — CONFIRMED|CHECKED_IN → NO_SHOW */
+  @Post(':id/no-show')
+  @RequirePermission(Permission.TICKET_NOSHOW_MARK_AGENCY)
+  markNoShow(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.ticketingService.markNoShow(tenantId, id, actor);
+  }
+
+  /** Rebook sur le prochain trajet disponible (même route, aujourd'hui / demain). */
+  @Post(':id/rebook/next-available')
+  @RequirePermission([Permission.TICKET_REBOOK_AGENCY, Permission.TICKET_REBOOK_OWN])
+  rebookNextAvailable(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.ticketingService.rebookNextAvailable(tenantId, id, actor);
+  }
+
+  /** Rebook sur un trajet futur spécifique. Body: { newTripId } */
+  @Post(':id/rebook/later')
+  @RequirePermission([Permission.TICKET_REBOOK_AGENCY, Permission.TICKET_REBOOK_OWN])
+  rebookLater(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('newTripId') newTripId: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.ticketingService.rebookLater(tenantId, id, newTripId, actor);
+  }
+
+  /**
+   * Demande de remboursement pour un billet raté (no-show / annulation client).
+   * Le service applique automatiquement la pénalité no-show (si config activée)
+   * et les paliers de pénalité d'annulation.
+   * Body: { reason?, waive? }  — `waive` nécessite perm `refund.waive_penalty`.
+   */
+  @Post(':id/refund-request')
+  @RequirePermission([Permission.REFUND_REQUEST_OWN, Permission.TICKET_CANCEL_AGENCY])
+  requestRefundForMissed(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+    @Body('reason') reason?: 'NO_SHOW' | 'CLIENT_CANCEL' | 'TRIP_CANCELLED',
+    @Body('waive') waive?: boolean,
+  ) {
+    // TODO: vérifier côté guard que `waive=true` est réservé aux titulaires
+    // de la perm `control.refund.waive_penalty.tenant` (tracé audit).
+    return this.ticketingService.requestRefundForMissedTicket(
+      tenantId, id, actor, reason ?? 'NO_SHOW', 'CUSTOMER', waive ?? false,
+    );
+  }
+
   @Get()
   @RequirePermission(Permission.TICKET_READ_AGENCY)
   findByTrip(

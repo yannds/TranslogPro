@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
@@ -226,6 +226,23 @@ export class ParcelService {
   ) {
     const parcel = await this.findOne(tenantId, parcelId);
 
+    // Verrou Clôture fret : si l'agent quai/chauffeur a clos le chargement de
+    // ce trajet, on refuse toute action LOAD ultérieure. Les autres actions
+    // (ARRIVE/DELIVER…) restent permises — la clôture ne concerne que la
+    // phase chargement avant départ.
+    if (action === 'LOAD' && parcel.shipment?.tripId) {
+      const trip = await this.prisma.trip.findFirst({
+        where:  { id: parcel.shipment.tripId, tenantId },
+        select: { freightClosedAt: true },
+      });
+      if (trip?.freightClosedAt) {
+        throw new BadRequestException(
+          `Chargement clôturé pour ce trajet le ${trip.freightClosedAt.toISOString()} — ` +
+          `aucun nouveau colis ne peut être chargé.`,
+        );
+      }
+    }
+
     return this.workflow.transition(parcel as Parameters<typeof this.workflow.transition>[0], {
       action,
       actor,
@@ -264,6 +281,190 @@ export class ParcelService {
     actor:       CurrentUserPayload,
   ) {
     return this.transition(tenantId, parcelId, 'DAMAGE', actor, undefined);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Scénarios hub / entrepôt / retrait / retour (2026-04-19)
+  // Toutes les transitions passent par WorkflowEngine (blueprint-driven).
+  // Les méthodes ajoutent leurs propres stamps (hubArrivedAt, pickedUpAt, etc.)
+  // dans la persist callback via le helper `transitionWithStamps`.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Variante de `transition` qui enrichit la persist callback avec des champs
+   * de stamping propres à l'action (hubArrivedAt, pickedUpAt, etc.).
+   * Garde la même sémantique : permissions + guards + audit + idempotence
+   * gérés par l'engine.
+   */
+  private async transitionWithStamps(
+    tenantId: string,
+    parcelId: string,
+    action:   string,
+    actor:    CurrentUserPayload,
+    stamps:   Record<string, unknown>,
+    idempotencyKey?: string,
+  ) {
+    const parcel = await this.findOne(tenantId, parcelId);
+    return this.workflow.transition(
+      parcel as Parameters<typeof this.workflow.transition>[0],
+      { action, actor, idempotencyKey },
+      {
+        aggregateType: 'Parcel',
+        persist: async (entity, state, p) => {
+          return p.parcel.update({
+            where: { id: entity.id },
+            data:  { status: state, version: { increment: 1 }, ...stamps },
+          }) as Promise<typeof entity>;
+        },
+      },
+    );
+  }
+
+  /**
+   * Le colis arrive dans un hub intermédiaire (nodal).
+   * IN_TRANSIT → AT_HUB_INBOUND. Stamp hubStationId + hubArrivedAt.
+   */
+  async arriveAtHub(
+    tenantId: string,
+    parcelId: string,
+    hubStationId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'ARRIVE_AT_HUB', actor, {
+      hubStationId,
+      hubArrivedAt: new Date(),
+    }, idempotencyKey);
+  }
+
+  /**
+   * Stockage en entrepôt du hub.
+   * AT_HUB_INBOUND → STORED_AT_HUB. Stamp hubStoredAt (début TTL stockage).
+   */
+  async storeAtHub(
+    tenantId: string,
+    parcelId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'STORE_AT_HUB', actor, {
+      hubStoredAt: new Date(),
+    }, idempotencyKey);
+  }
+
+  /**
+   * Chargement sur bus sortant depuis le hub.
+   * AT_HUB_INBOUND | STORED_AT_HUB → AT_HUB_OUTBOUND.
+   */
+  async loadOutboundFromHub(
+    tenantId: string,
+    parcelId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'LOAD_OUTBOUND', actor, {}, idempotencyKey);
+  }
+
+  /**
+   * Départ depuis le hub (bus sort du hub vers destination finale ou prochain hub).
+   * AT_HUB_OUTBOUND → IN_TRANSIT. Reset hubStationId (colis n'est plus au hub).
+   */
+  async departFromHub(
+    tenantId: string,
+    parcelId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'DEPART_FROM_HUB', actor, {
+      hubStationId: null,
+    }, idempotencyKey);
+  }
+
+  /**
+   * Notification de mise à disposition au destinataire.
+   * ARRIVED → AVAILABLE_FOR_PICKUP. Stamp pickupAvailableAt (début TTL retour).
+   * TODO: trigger notification SMS/WhatsApp via NotificationService (sideEffect).
+   */
+  async notifyForPickup(
+    tenantId: string,
+    parcelId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'NOTIFY_FOR_PICKUP', actor, {
+      pickupAvailableAt: new Date(),
+    }, idempotencyKey);
+  }
+
+  /**
+   * Destinataire retire le colis au comptoir destination.
+   * AVAILABLE_FOR_PICKUP → DELIVERED. Stamp pickedUpAt.
+   */
+  async pickup(
+    tenantId: string,
+    parcelId: string,
+    actor: CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'PICKUP', actor, {
+      pickedUpAt: new Date(),
+    }, idempotencyKey);
+  }
+
+  /**
+   * Destinataire ou expéditeur conteste le colis (manquant, cassé, litige).
+   * DELIVERED | AVAILABLE_FOR_PICKUP → DISPUTED.
+   */
+  async dispute(
+    tenantId: string,
+    parcelId: string,
+    reason:   string,
+    actor:    CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    const parcel = await this.findOne(tenantId, parcelId);
+    return this.workflow.transition(
+      parcel as Parameters<typeof this.workflow.transition>[0],
+      { action: 'DISPUTE', actor, idempotencyKey, context: { reason } },
+      {
+        aggregateType: 'Parcel',
+        persist: async (entity, state, p) => {
+          return p.parcel.update({
+            where: { id: entity.id },
+            data:  { status: state, version: { increment: 1 } },
+          }) as Promise<typeof entity>;
+        },
+      },
+    );
+  }
+
+  /**
+   * Initiation retour expéditeur (TTL retrait dépassé ou demande explicite).
+   * AVAILABLE_FOR_PICKUP | STORED_AT_HUB → RETURN_TO_SENDER. Stamp returnInitiatedAt.
+   * Permission: control.parcel.return_init.tenant (admin).
+   */
+  async initiateReturn(
+    tenantId: string,
+    parcelId: string,
+    actor:    CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'INITIATE_RETURN', actor, {
+      returnInitiatedAt: new Date(),
+    }, idempotencyKey);
+  }
+
+  /**
+   * Finalisation du retour expéditeur (colis remis physiquement à l'expéditeur).
+   * RETURN_TO_SENDER → RETURNED.
+   */
+  async completeReturn(
+    tenantId: string,
+    parcelId: string,
+    actor:    CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    return this.transitionWithStamps(tenantId, parcelId, 'COMPLETE_RETURN', actor, {}, idempotencyKey);
   }
 
   async findByShipment(tenantId: string, shipmentId: string) {

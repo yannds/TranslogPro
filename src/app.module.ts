@@ -85,6 +85,8 @@ import { SubscriptionCheckoutModule } from './modules/subscription-checkout/subs
 import { PortalAdminModule }    from './modules/portal-admin/portal-admin.module';
 import { TariffModule }          from './modules/tariff/tariff.module';
 import { InvoiceModule }         from './modules/invoice/invoice.module';
+import { VoucherModule }         from './modules/voucher/voucher.module';
+import { IncidentCompensationModule } from './modules/incident-compensation/incident-compensation.module';
 import { QuaiModule }            from './modules/quai/quai.module';
 import { AnnouncementModule }    from './modules/announcement/announcement.module';
 
@@ -232,6 +234,10 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     QuaiModule,
     // Annonces gare — messages sonores/visuels diffusés aux écrans
     AnnouncementModule,
+    // Voucher — bons de réduction (compensation, promo, geste commercial) ─ 2026-04-19
+    VoucherModule,
+    // Incident en route — suspend/cancel/major-delay + compensation (refund/voucher/snack) ─ 2026-04-19
+    IncidentCompensationModule,
   ],
   providers: [
     // PathTenantMatchGuard global — ferme la fuite cross-tenant sur les

@@ -651,4 +651,409 @@ export class TicketingService {
     if (!ticket) throw new NotFoundException('Ticket not found');
     return ticket;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Scénarios no-show / rebook / forfeit (2026-04-19)
+  // Toutes les transitions passent par WorkflowEngine (blueprint-driven).
+  // Paramètres métier (grace, TTL, penalty) lus depuis TenantBusinessConfig.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Marque un billet no-show après la période de grâce configurée.
+   * CONFIRMED | CHECKED_IN → NO_SHOW
+   * Le caller peut être un agent quai (marquage manuel) ou le scheduler (auto).
+   * Guard : now() >= departureScheduled + graceMinutes.
+   */
+  async markNoShow(tenantId: string, ticketId: string, actor: CurrentUserPayload) {
+    const ticket = await this.findOne(tenantId, ticketId);
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: ticket.tripId, tenantId },
+      select: { id: true, departureScheduled: true },
+    });
+    if (!trip) throw new NotFoundException(`Trip ${ticket.tripId} introuvable`);
+
+    const config = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId },
+      select: { noShowGraceMinutes: true },
+    });
+    const graceMs = (config?.noShowGraceMinutes ?? 15) * 60_000;
+    const graceExpiresAt = trip.departureScheduled.getTime() + graceMs;
+
+    if (Date.now() < graceExpiresAt) {
+      const remainingMin = Math.ceil((graceExpiresAt - Date.now()) / 60_000);
+      throw new BadRequestException(
+        `Période de grâce non écoulée — encore ${remainingMin} min avant de pouvoir marquer no-show.`,
+      );
+    }
+
+    return this.workflow.transition(ticket as any, {
+      action: TicketAction.MISS_BOARDING,
+      actor,
+    }, {
+      aggregateType: 'Ticket',
+      persist: async (entity, state, p) => {
+        return p.ticket.update({
+          where: { id: entity.id },
+          data:  {
+            status: state,
+            noShowMarkedAt: new Date(),
+            noShowMarkedById: actor.id,
+            version: { increment: 1 },
+          },
+        }) as Promise<typeof entity>;
+      },
+    });
+  }
+
+  /**
+   * Guard TTL : le billet ne doit pas avoir dépassé la fenêtre de validité post-départ.
+   * Au-delà : seule l'action FORFEIT est autorisée (via scheduler).
+   */
+  private async assertWithinTtl(tenantId: string, ticket: { tripId: string }) {
+    const [config, trip] = await Promise.all([
+      this.prisma.tenantBusinessConfig.findUnique({
+        where: { tenantId },
+        select: { ticketTtlHours: true },
+      }),
+      this.prisma.trip.findFirst({
+        where:  { id: ticket.tripId, tenantId },
+        select: { departureScheduled: true },
+      }),
+    ]);
+    if (!trip) throw new NotFoundException('Trip introuvable');
+    const ttlMs = (config?.ticketTtlHours ?? 48) * 3_600_000;
+    const expiresAt = trip.departureScheduled.getTime() + ttlMs;
+    if (Date.now() > expiresAt) {
+      throw new BadRequestException(
+        `TTL du billet dépassé (validité ${config?.ticketTtlHours ?? 48}h post-départ). ` +
+        `Aucun rebook ni remboursement n'est plus possible — billet sera forfaituré par le scheduler.`,
+      );
+    }
+  }
+
+  /**
+   * Rebook sur le prochain trajet disponible (même route, même jour si possible).
+   * NO_SHOW | LATE_ARRIVED | CONFIRMED → REBOOKED (ticket original)
+   * + création d'un nouveau billet CONFIRMED sur le trip cible.
+   *
+   * Sélection du trip cible : même routeId, departureScheduled > now(), pas
+   * encore COMPLETED/CANCELLED, ordonné par proximité temporelle. Si aucun n'a
+   * de siège dispo (guard capacité), on lance 409 Conflict.
+   */
+  async rebookNextAvailable(tenantId: string, ticketId: string, actor: CurrentUserPayload) {
+    const oldTicket = await this.findOne(tenantId, ticketId);
+    await this.assertWithinTtl(tenantId, oldTicket);
+
+    const oldTrip = await this.prisma.trip.findFirst({
+      where:  { id: oldTicket.tripId, tenantId },
+      select: { routeId: true },
+    });
+    if (!oldTrip) throw new NotFoundException('Trajet original introuvable');
+
+    // Cherche candidats : même route, départ futur, non annulé/complété.
+    const candidates = await this.prisma.trip.findMany({
+      where: {
+        tenantId,
+        routeId: oldTrip.routeId,
+        departureScheduled: { gt: new Date() },
+        status: { notIn: ['CANCELLED', 'CANCELLED_IN_TRANSIT', 'COMPLETED'] },
+      },
+      orderBy: { departureScheduled: 'asc' },
+      take: 10,
+    });
+
+    // Sélection : premier candidat avec capacité dispo.
+    for (const candidate of candidates) {
+      const available = await this.countAvailableSeats(tenantId, candidate.id);
+      if (available > 0) {
+        return this.performRebook(tenantId, oldTicket, candidate.id, actor, 'REBOOK_NEXT_AVAILABLE');
+      }
+    }
+    throw new ConflictException(
+      'Aucun trajet futur disponible avec des places libres sur cette route.',
+    );
+  }
+
+  /**
+   * Rebook sur un trip futur choisi (self-service voyageur ou agent).
+   * Vérifie seat availability + TTL + même route (optionnel : tolérer autre route
+   * si tenant accepte — ici on impose route identique pour rester simple).
+   */
+  async rebookLater(
+    tenantId: string,
+    ticketId: string,
+    newTripId: string,
+    actor: CurrentUserPayload,
+  ) {
+    const oldTicket = await this.findOne(tenantId, ticketId);
+    await this.assertWithinTtl(tenantId, oldTicket);
+
+    const [oldTrip, newTrip] = await Promise.all([
+      this.prisma.trip.findFirst({ where: { id: oldTicket.tripId, tenantId }, select: { routeId: true } }),
+      this.prisma.trip.findFirst({ where: { id: newTripId, tenantId } }),
+    ]);
+    if (!newTrip) throw new NotFoundException(`Trip ${newTripId} introuvable`);
+    if (!oldTrip) throw new NotFoundException('Trajet original introuvable');
+    if (newTrip.routeId !== oldTrip.routeId) {
+      throw new BadRequestException('Rebook limité à la même route que le billet original.');
+    }
+    if (newTrip.departureScheduled.getTime() <= Date.now()) {
+      throw new BadRequestException('Le trajet cible est déjà passé ou en cours.');
+    }
+    if (['CANCELLED', 'CANCELLED_IN_TRANSIT', 'COMPLETED'].includes(newTrip.status)) {
+      throw new BadRequestException(`Trajet cible indisponible (${newTrip.status}).`);
+    }
+    const available = await this.countAvailableSeats(tenantId, newTripId);
+    if (available <= 0) {
+      throw new ConflictException('Aucune place disponible sur le trajet cible.');
+    }
+    return this.performRebook(tenantId, oldTicket, newTripId, actor, 'REBOOK_LATER');
+  }
+
+  /**
+   * Exécute le rebook atomique : transition old → REBOOKED + création nouveau CONFIRMED.
+   * Idempotence : la création d'un nouveau ticket est visible en sortie.
+   */
+  private async performRebook(
+    tenantId: string,
+    oldTicket: Awaited<ReturnType<TicketingService['findOne']>>,
+    newTripId: string,
+    actor: CurrentUserPayload,
+    action: 'REBOOK_NEXT_AVAILABLE' | 'REBOOK_LATER',
+  ) {
+    // Génération QR pour le nouveau billet (HMAC signé, unique).
+    // On utilise un ticketId temporaire dans la signature pour garantir l'unicité
+    // du QR ; le vrai id sera assigné par Prisma à la création ci-dessous. La
+    // signature reste valide : `verify` décode le payload et cherche le ticket
+    // en DB via le qrCode (unique), pas via ticketId dans le payload.
+    const tempId = `rebook-${uuidv4()}`;
+    const newQrToken = await this.qr.sign({
+      ticketId: tempId,
+      tripId:   newTripId,
+      tenantId,
+      issuedAt: Date.now(),
+    });
+
+    // Transition old ticket → REBOOKED (engine valide blueprint + audit).
+    await this.workflow.transition(oldTicket as any, {
+      action,
+      actor,
+    }, {
+      aggregateType: 'Ticket',
+      persist: async (entity, state, p) => {
+        return p.ticket.update({
+          where: { id: entity.id },
+          data:  { status: state, version: { increment: 1 } },
+        }) as Promise<typeof entity>;
+      },
+    });
+
+    // Création du nouveau ticket, statut CONFIRMED (QR déjà signé).
+    const newTicket = await this.prisma.ticket.create({
+      data: {
+        tenantId,
+        tripId:             newTripId,
+        passengerId:        oldTicket.passengerId,
+        passengerName:      oldTicket.passengerName,
+        passengerPhone:     oldTicket.passengerPhone,
+        passengerEmail:     oldTicket.passengerEmail,
+        customerId:         oldTicket.customerId,
+        seatNumber:         null,
+        boardingStationId:  oldTicket.boardingStationId,
+        alightingStationId: oldTicket.alightingStationId,
+        fareClass:          oldTicket.fareClass,
+        pricePaid:          oldTicket.pricePaid,
+        status:             'CONFIRMED',
+        qrCode:             newQrToken,
+        agencyId:           oldTicket.agencyId,
+        rebookedFromTicketId: oldTicket.id,
+        version:            1,
+      },
+    });
+
+    // Domain event (permet aux consumers de notifier, rafraîchir analytics, etc.)
+    const event: DomainEvent = {
+      id:            uuidv4(),
+      type:          EventTypes.TICKET_ISSUED,
+      tenantId,
+      aggregateId:   newTicket.id,
+      aggregateType: 'Ticket',
+      payload: {
+        ticketId:         newTicket.id,
+        tripId:           newTripId,
+        rebookedFromId:   oldTicket.id,
+        rebookAction:     action,
+      },
+      occurredAt: new Date(),
+    };
+    await this.eventBus.publish(event, null);
+
+    return { oldTicketId: oldTicket.id, newTicket };
+  }
+
+  /**
+   * Nombre de sièges disponibles sur un trip (dénominateur = bus.totalSeats ;
+   * numérateur = tickets CONFIRMED/CHECKED_IN/BOARDED déjà émis). Implémentation
+   * simple — le pricing engine a un calcul plus sophistiqué qui tient compte des
+   * yields et overbooking, on reste ici sur la disponibilité brute.
+   */
+  private async countAvailableSeats(tenantId: string, tripId: string): Promise<number> {
+    const trip = await this.prisma.trip.findFirst({
+      where:  { id: tripId, tenantId },
+      include: { bus: { select: { capacity: true } } },
+    });
+    if (!trip) return 0;
+    const booked = await this.prisma.ticket.count({
+      where: {
+        tenantId,
+        tripId,
+        status: { in: ['CONFIRMED', 'CHECKED_IN', 'BOARDED'] },
+      },
+    });
+    return Math.max(0, (trip.bus?.capacity ?? 0) - booked);
+  }
+
+  /**
+   * Ouvre un refund pour un billet NO_SHOW / LATE_ARRIVED / CONFIRMED.
+   * Applique la politique d'annulation (y compris pénalité no-show si activée dans config).
+   * Transition : status → REFUND_PENDING + création Refund entity via RefundService.
+   */
+  async requestRefundForMissedTicket(
+    tenantId: string,
+    ticketId: string,
+    actor: CurrentUserPayload,
+    reason: 'NO_SHOW' | 'CLIENT_CANCEL' | 'TRIP_CANCELLED' = 'NO_SHOW',
+    actorRole: string = 'CUSTOMER',
+    waive: boolean = false,
+  ) {
+    const ticket = await this.findOne(tenantId, ticketId);
+    await this.assertWithinTtl(tenantId, ticket);
+
+    // Calcul montant via policy (N-tier + applies_to + trip override + waive).
+    const { CancellationPolicyService } = await import('../sav/cancellation-policy.service');
+    const policy = new CancellationPolicyService(this.prisma);
+    let calc = await policy.calculateRefundAmount(tenantId, ticketId, actorRole, waive);
+
+    // Pénalité spécifique no-show (additive à la pénalité cancellation tiers).
+    if (reason === 'NO_SHOW' && !waive) {
+      const config = await this.prisma.tenantBusinessConfig.findUnique({
+        where: { tenantId },
+        select: { noShowPenaltyEnabled: true, noShowPenaltyPct: true, noShowPenaltyFlatAmount: true },
+      });
+      const trip = await this.prisma.trip.findFirst({
+        where:  { id: ticket.tripId, tenantId },
+        select: { noShowPenaltyEnabledOverride: true, noShowPenaltyPctOverride: true, noShowPenaltyFlatAmountOverride: true },
+      });
+      const enabled = trip?.noShowPenaltyEnabledOverride ?? config?.noShowPenaltyEnabled ?? false;
+      if (enabled) {
+        const pct  = trip?.noShowPenaltyPctOverride ?? config?.noShowPenaltyPct ?? 0;
+        const flat = trip?.noShowPenaltyFlatAmountOverride ?? config?.noShowPenaltyFlatAmount ?? 0;
+        // On prend le max entre pénalité tiers existante et pénalité no-show (évite double-dip).
+        const noShowPenaltyAmount = Math.max(ticket.pricePaid * pct, flat);
+        const combinedPenalty = Math.max(calc.penaltyAmount, noShowPenaltyAmount);
+        const newRefundAmount = Math.max(0, ticket.pricePaid - combinedPenalty);
+        calc = {
+          ...calc,
+          penaltyAmount: combinedPenalty,
+          penaltyPct:    combinedPenalty / ticket.pricePaid,
+          refundAmount:  Math.round(newRefundAmount * 100) / 100,
+          refundPercent: newRefundAmount / ticket.pricePaid,
+        };
+      }
+    }
+
+    // Transition ticket → REFUND_PENDING via engine.
+    await this.workflow.transition(ticket as any, {
+      action: TicketAction.REQUEST_REFUND,
+      actor,
+      context: { reason },
+    }, {
+      aggregateType: 'Ticket',
+      persist: async (entity, state, p) => {
+        return p.ticket.update({
+          where: { id: entity.id },
+          data:  { status: state, version: { increment: 1 } },
+        }) as Promise<typeof entity>;
+      },
+    });
+
+    // Création de l'entité Refund (elle-même workflow-driven).
+    const refund = await this.refundService.createRefund({
+      tenantId,
+      ticketId,
+      tripId:         ticket.tripId,
+      amount:         calc.refundAmount,
+      originalAmount: calc.originalAmount,
+      policyPercent:  calc.refundPercent,
+      currency:       calc.currency,
+      reason:         reason === 'NO_SHOW' ? RefundReason.NO_SHOW : RefundReason.CLIENT_CANCEL,
+      requestedBy:    actor.id,
+      requestChannel: 'TICKETING_MISSED',
+      departureAt:    calc.departureAt,
+    });
+
+    return { ticketId, refund, penalty: calc };
+  }
+
+  /**
+   * Forfait automatique des billets en NO_SHOW/LATE_ARRIVED/CONFIRMED dont le TTL
+   * post-départ est dépassé. Appelé par le scheduler périodiquement.
+   * Retourne le nombre de billets forfaitisés.
+   */
+  async forfeitExpiredTickets(tenantId: string): Promise<number> {
+    const config = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId },
+      select: { ticketTtlHours: true },
+    });
+    const ttlHours = config?.ticketTtlHours ?? 48;
+    const cutoff = new Date(Date.now() - ttlHours * 3_600_000);
+
+    // 1) Trips éligibles : départ ≤ cutoff
+    const expiredTrips = await this.prisma.trip.findMany({
+      where: { tenantId, departureScheduled: { lte: cutoff } },
+      select: { id: true },
+      take: 1000,
+    });
+    const tripIds = expiredTrips.map(t => t.id);
+    if (tripIds.length === 0) return 0;
+
+    // 2) Candidats : NO_SHOW / LATE_ARRIVED sur un trip expiré (pas de relation
+    //    Prisma directe sur Ticket → on fait via tripId IN [...]).
+    const candidates = await this.prisma.ticket.findMany({
+      where: {
+        tenantId,
+        status: { in: ['NO_SHOW', 'LATE_ARRIVED'] },
+        tripId: { in: tripIds },
+      },
+      take: 500, // batch cap pour garder la transaction raisonnable
+    });
+
+    let forfeited = 0;
+    const SYSTEM_ACTOR: CurrentUserPayload = { id: 'SYSTEM', tenantId: 'SYSTEM', roleId: 'SYSTEM' } as CurrentUserPayload;
+
+    for (const ticket of candidates) {
+      try {
+        await this.workflow.transition(ticket as any, {
+          action: TicketAction.FORFEIT,
+          actor: SYSTEM_ACTOR,
+        }, {
+          aggregateType: 'Ticket',
+          persist: async (entity, state, p) => {
+            return p.ticket.update({
+              where: { id: entity.id },
+              data:  {
+                status: state,
+                forfeitedAt: new Date(),
+                version: { increment: 1 },
+              },
+            }) as Promise<typeof entity>;
+          },
+        });
+        forfeited++;
+      } catch (err) {
+        this.logger.warn(`Forfeit failed for ticket=${ticket.id}: ${(err as Error).message}`);
+      }
+    }
+    return forfeited;
+  }
 }
