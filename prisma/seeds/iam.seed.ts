@@ -365,6 +365,14 @@ const TENANT_ROLES: Array<{
       'data.manifest.sign.agency',     // attestation de départ — le chauffeur signe SON manifeste (endpoint scope-filtré par tripId + driver assignment)
       'data.manifest.print.agency',    // impression manifeste de SON trajet
       'data.ticket.read.agency',       // liste passagers de SON trajet (endpoint filtré)
+      // ── Gestion fret opérationnelle pour le chauffeur (tenant sans agent quai).
+      // Scope-filtré par tripId côté FlightDeckService / parcel service : un
+      // chauffeur ne peut charger/scanner QUE les colis de SES trajets. Même
+      // pattern que ticket.scan.agency / traveler.verify.agency au-dessus.
+      'data.parcel.scan.agency',       // scan QR colis au chargement / déchargement
+      'data.parcel.update.agency',     // transition LOADED → IN_TRANSIT → ARRIVED
+      'data.parcel.report.agency',     // signaler casse / perte en route
+      'data.parcel.print.agency',      // réimprimer une étiquette abîmée sur terrain
       'data.sav.report.own',
       'data.notification.read.own',
       'data.session.revoke.own',
@@ -396,6 +404,44 @@ const TENANT_ROLES: Array<{
     permissions: [
       'data.fleet.status.agency',
       'data.maintenance.update.own',
+      'data.notification.read.own',
+      'data.session.revoke.own',
+      'data.support.create.tenant',
+    ],
+  },
+  {
+    // ─── AGENT_QUAI ───────────────────────────────────────────────────────────
+    // Agent de quai : opère au pied du bus, gère le chargement des colis dans
+    // la soute et contrôle les billets des passagers à l'embarquement. À
+    // distinguer de l'agent de gare (STATION_AGENT — guichet + check-in).
+    // Portail dédié : /quai (resolvePortal branche via control.quai.manage.tenant).
+    //
+    // Jeu de perms symétrique avec le DRIVER côté fret (mêmes actions sur
+    // data.parcel.*), plus la gestion shipment (regroupement pré-départ) et
+    // la perm portail. Tous les endpoints concernés sont scope-filtrés par
+    // agency — un agent de quai ne voit que les trajets de SA gare/agence.
+    name:     'AGENT_QUAI',
+    isSystem: true,
+    permissions: [
+      // Portail
+      'control.quai.manage.tenant',
+      // Gestion fret (chargement / déchargement / signalement / impression)
+      'data.parcel.scan.agency',
+      'data.parcel.update.agency',
+      'data.parcel.report.agency',
+      'data.parcel.print.agency',
+      'data.shipment.group.agency',    // regroupement des colis par destination avant chargement
+      // Embarquement passagers
+      'data.ticket.scan.agency',
+      'data.traveler.verify.agency',
+      'data.luggage.weigh.agency',
+      // Visibilité opérationnelle
+      'data.trip.read.own',
+      'data.trip.update.agency',       // marquer départ après chargement OK (endpoint scope-filtré par agence)
+      'data.manifest.read.own',
+      'data.manifest.print.agency',
+      'data.ticket.read.agency',
+      // Support & notifications
       'data.notification.read.own',
       'data.session.revoke.own',
       'data.support.create.tenant',

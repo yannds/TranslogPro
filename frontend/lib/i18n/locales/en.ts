@@ -3204,6 +3204,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "my_platform": "My Platform",
     "scan_ticket": "Scan Ticket",
     "boarding": "Boarding",
+    "freight_loading": "Freight loading",
     "manifest": "Manifest",
     "luggage_check": "Luggage Check",
     "declare_delay": "Declare Delay",
@@ -4969,6 +4970,48 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "dataSafe":  "Your data is safe and intact. It will be immediately accessible once payment is settled.",
     "cta":       "Settle payment",
     "logout":    "Sign out"
+  },
+
+  "freight": {
+    "sectionLabel":     "Trip parcels list",
+    "titleDriver":      "Freight for my trip",
+    "titleQuai":        "Freight for selected trip",
+    "loadedCount":      "loaded",
+    "noShipments":      "No parcel attached to this trip",
+    "noShipmentsHint":  "Parcels will appear here as soon as they are grouped on a shipment linked to the trip.",
+    "actionLoad":       "Load",
+    "actionArrive":     "Arrived",
+    "actionDeliver":    "Deliver",
+    "actionDamage":     "Report damage or loss",
+    "damagePrompt":     "Describe the parcel condition (damage, loss, etc.) — required:",
+    "statusCreated":    "Created",
+    "statusAtOrigin":   "At origin",
+    "statusPacked":     "Grouped",
+    "statusLoaded":     "Loaded",
+    "statusInTransit":  "In transit",
+    "statusArrived":    "Arrived",
+    "statusDelivered":  "Delivered",
+    "statusDamaged":    "Damaged",
+    "statusLost":       "Lost"
+  },
+
+  "driverFreight": {
+    "pageTitle":        "Freight loading",
+    "pageSubtitle":     "Manage parcels in the luggage hold for your active trip.",
+    "currentTrip":      "Active trip",
+    "noActiveTrip":     "No active trip",
+    "noActiveTripMsg":  "Freight loading will be available as soon as a trip is assigned and started."
+  },
+
+  "quaiFreight": {
+    "pageTitle":        "Quay loading",
+    "pageSubtitle":     "Load and check parcels for trips departing from this quay.",
+    "dateLabel":        "Date",
+    "tripLabel":        "Trip",
+    "selectTripPh":     "— Select a trip —",
+    "noTrips":          "No trips that day",
+    "pickTrip":         "Select a trip to display its parcels",
+    "selectedTrip":     "Selected trip"
   },
 
   "tripActions": {

@@ -135,6 +135,10 @@ export const P_AGENCY_READ_TENANT          = 'data.agency.read.tenant';
 // Suppression refusée (409) si la station est référencée ailleurs.
 export const P_STATION_MANAGE_TENANT       = 'control.station.manage.tenant';
 export const P_STATION_READ_TENANT         = 'data.station.read.tenant';
+// Quai management — portail agent de quai (chargement fret + embarquement).
+// Référencée par resolvePortal.ts pour orienter l'user vers /quai. Accordée
+// au rôle système AGENT_QUAI, optionnellement à des rôles custom tenant.
+export const P_QUAI_MANAGE_TENANT          = 'control.quai.manage.tenant';
 
 // ─── CRM & Campagnes ─────────────────────────────────────────────────────────
 export const P_CRM_READ_TENANT             = 'data.crm.read.tenant';
@@ -363,6 +367,7 @@ export const Permission = {
   // Station (CRUD)
   STATION_MANAGE_TENANT:      P_STATION_MANAGE_TENANT,
   STATION_READ_TENANT:        P_STATION_READ_TENANT,
+  QUAI_MANAGE_TENANT:         P_QUAI_MANAGE_TENANT,
   // CRM
   CRM_READ_TENANT:            P_CRM_READ_TENANT,
   CRM_READ_AGENCY:            P_CRM_READ_AGENCY,

@@ -129,6 +129,10 @@ const LazyDriverMaint         = lazy(() => import('../pages/PageDriverMaint').th
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDriverSchedule      = lazy(() => import('../pages/PageDriverSchedule').then(m => ({ default: m.PageDriverSchedule })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverFreight       = lazy(() => import('../pages/PageDriverFreight').then(m => ({ default: m.PageDriverFreight })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiFreight         = lazy(() => import('../pages/PageQuaiFreight').then(m => ({ default: m.PageQuaiFreight })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDriverDocs          = lazy(() => import('../pages/PageDriverDocs').then(m => ({ default: m.PageDriverDocs })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazySellTicket          = lazy(() => import('../pages/PageSellTicket').then(m => ({ default: m.PageSellTicket })));
@@ -190,6 +194,8 @@ const LazyPlatformSupport     = lazy(() => import('../pages/PagePlatformSupport'
 const LazyCustomerSupport     = lazy(() => import('../pages/PageCustomerSupport').then(m => ({ default: m.PageCustomerSupport })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformSettings    = lazy(() => import('../pages/PagePlatformSettings').then(m => ({ default: m.PagePlatformSettings })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformEmail       = lazy(() => import('../pages/PagePlatformEmail').then(m => ({ default: m.PagePlatformEmail })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformAudit       = lazy(() => import('../pages/PagePlatformAudit').then(m => ({ default: m.PagePlatformAudit })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -273,6 +279,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'drv-home':            return <LazyDriverTrip />;
     case 'drv-manifest':        return <LazyDriverManifest />;
     case 'drv-checkin':         return <LazyDriverCheckin />;
+    case 'drv-freight':         return <LazyDriverFreight />;
     case 'drv-events':          return <LazyDriverEvents />;
     case 'drv-report':          return <LazyDriverReport />;
     case 'drv-maint':           return <LazyDriverMaint />;
@@ -297,6 +304,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'qa-home':             return <PageWip title={t('router.qaHome')} />;
     case 'qa-scan':             return <PageWip title={t('router.qaScan')} />;
     case 'qa-boarding':         return <PageWip title={t('router.qaBoarding')} />;
+    case 'qa-freight':          return <LazyQuaiFreight />;
     case 'qa-manifest':         return <PageWip title={t('router.qaManifest')} />;
     case 'qa-luggage':          return <PageWip title={t('router.qaLuggage')} />;
     case 'qa-delay':            return <PageWip title={t('router.qaDelay')} />;
@@ -368,6 +376,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-users':      return <LazyPlatformUsers />;
     case 'platform-roles':      return <LazyPlatformRoles />;
     case 'platform-settings':   return <LazyPlatformSettings />;
+    case 'platform-email':      return <LazyPlatformEmail />;
 
     // ── Support tenant → plateforme (côté tenant) ──────────────────────────
     case 'support':             return <LazyCustomerSupport />;

@@ -3075,6 +3075,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "my_platform": "Mon quai",
     "scan_ticket": "Scanner billet",
     "boarding": "Embarquement",
+    "freight_loading": "Chargement fret",
     "manifest": "Manifeste",
     "luggage_check": "Contrôle bagages",
     "declare_delay": "Déclarer retard",
@@ -4986,6 +4987,49 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "dataSafe":  "Vos données sont intactes et en sécurité. Elles seront immédiatement accessibles dès la régularisation.",
     "cta":       "Régulariser le paiement",
     "logout":    "Se déconnecter"
+  },
+
+  // ─── Chargement fret (chauffeur + agent de quai) ─────────────────────────
+  "freight": {
+    "sectionLabel":     "Liste des colis du trajet",
+    "titleDriver":      "Fret de mon trajet",
+    "titleQuai":        "Fret du trajet sélectionné",
+    "loadedCount":      "chargés",
+    "noShipments":      "Aucun colis attaché à ce trajet",
+    "noShipmentsHint":  "Les colis apparaîtront ici dès qu'ils auront été groupés sur un shipment lié au trajet.",
+    "actionLoad":       "Charger",
+    "actionArrive":     "Arrivée",
+    "actionDeliver":    "Livrer",
+    "actionDamage":     "Signaler casse ou perte",
+    "damagePrompt":     "Décrivez l'état du colis (casse, perte, etc.) — obligatoire :",
+    "statusCreated":    "Créé",
+    "statusAtOrigin":   "À l'origine",
+    "statusPacked":     "Groupé",
+    "statusLoaded":     "Chargé",
+    "statusInTransit":  "En route",
+    "statusArrived":    "Arrivé",
+    "statusDelivered":  "Livré",
+    "statusDamaged":    "Endommagé",
+    "statusLost":       "Perdu"
+  },
+
+  "driverFreight": {
+    "pageTitle":        "Chargement du fret",
+    "pageSubtitle":     "Gérez les colis dans la soute pour votre trajet actif.",
+    "currentTrip":      "Trajet actif",
+    "noActiveTrip":     "Aucun trajet actif",
+    "noActiveTripMsg":  "Le chargement des colis sera disponible dès qu'un trajet vous est attribué et démarré."
+  },
+
+  "quaiFreight": {
+    "pageTitle":        "Chargement quai",
+    "pageSubtitle":     "Chargez et contrôlez les colis des trajets partant de ce quai.",
+    "dateLabel":        "Date",
+    "tripLabel":        "Trajet",
+    "selectTripPh":     "— Sélectionner un trajet —",
+    "noTrips":          "Aucun trajet ce jour",
+    "pickTrip":         "Sélectionnez un trajet pour afficher ses colis",
+    "selectedTrip":     "Trajet sélectionné"
   },
 
   // ─── Actions workflow sur un trajet (driver + agent) ─────────────────────
