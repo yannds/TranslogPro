@@ -4,6 +4,13 @@
 - Ne JAMAIS ajouter de ligne `Co-Authored-By` dans les messages de commit.
 - Ne JAMAIS mentionner Claude, Anthropic, ou tout assistant IA dans les commits, PR, ou commentaires.
 
+## Workflows blueprint-driven (ADR-15 / ADR-16)
+- **Toute transition d'état métier passe par `WorkflowEngine.transition()`**. Jamais de `prisma.<entity>.update({ data: { status: X } })` direct sur un champ `status` géré par un blueprint.
+- Source de vérité runtime : `WorkflowConfig` en DB (par tenant). Seed dans `prisma/seeds/iam.seed.ts` (`DEFAULT_WORKFLOW_CONFIGS`).
+- Documentation complète : [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — liste des entités, états, actions, permissions, config tenant.
+- Entités blueprint-driven : Trip, Ticket, Parcel, Traveler, Shipment, Bus, Checklist, Manifest, Refund, Claim, CashRegister, Incident, MaintenanceReport, CrewAssignment, Driver, **Invoice**, **Staff**, **StaffAssignment**, **SupportTicket**, **DriverTraining**, **QhseExecution**, **Voucher**, **CompensationItem**.
+- **Zéro magic number** : tous les seuils (délai grace, TTL billet, % pénalité, tiers JSON, % compensation) passent par `TenantBusinessConfig` (par tenant) ou `Trip.*Override` (ponctuel). Config via UI : `/admin/settings/rules`.
+
 ## Contrat qualité UI/UX (appliqué par défaut à chaque livraison)
 - **i18n 8 locales obligatoire** : toute chaîne visible passe par `t()`. Clés ajoutées en même temps dans `fr.ts`, `en.ts`, `wo.ts`, `ln.ts`, `ktu.ts`, `ar.ts`, `pt.ts`, `es.ts`.
 - **WCAG AA + ARIA** : `aria-label`, `aria-describedby`, rôles sémantiques, focus visible, navigation clavier.
@@ -73,3 +80,29 @@ Phases CRM livrées :
 - Phase 3 : Claim rétroactif OTP (5 attempts max, 5 min TTL, 3/jour/phone)
 - Phase 4 : Recommandations dérivées (topSeat, fareClass, routes) + hint CrmPhoneHint dans PageSellTicket
 - Phase 5 : Segments auto (VIP/FREQUENT/NEW/DORMANT) + compteurs + Campaign.estimateAudience
+
+Suite Workflow-driven (2026-04-19) :
+- `test/unit/sav/cancellation-policy.service.spec.ts` (9 tests) — N-tiers, applies_to, waive, trip override, legacy fallback
+- `test/unit/voucher/voucher.service.spec.ts` (11 tests) — issue validations, redeem guards (status, validity, scope, recipient)
+- `test/unit/incident-compensation/incident-compensation.service.spec.ts` (8 tests) — suspend/cancel/major-delay, sélection palier, forme MIXED, trip override
+
+Phases Workflow-driven livrées (2026-04-19) :
+- Phase 0 : Socle (schema Prisma étendu, 25+ permissions, 40+ blueprints, models Voucher/CompensationItem)
+- Phase 1 : 7 modules migrés hardcoded → WorkflowEngine (flight-deck Trip driver, shipment Parcel, invoice, staff + cascade, support, driver-profile, qhse)
+- Phase 2A : Parcel hubs (arrive/store/load_outbound/depart, notify_for_pickup, pickup, dispute, initiate_return)
+- Phase 2B : Ticket no-show (mark, rebook next-available / later, request refund, forfeit scheduler)
+- Phase 2C : CancellationPolicyService généralisé (N-tiers JSON + applies_to actors + trip override + waive)
+- Phase 2D : IncidentCompensationService (suspend/resume/cancel_in_transit/declare_major_delay) + VoucherService (issue/redeem/expire/cancel) + CompensationItem (snack fan-out)
+- Phase 3.1 : `PageTenantBusinessRules` — éditeur config métier (4 sections, JSON tier editor)
+- Phase 3.2 : `PageVouchers` — liste admin, émission, filtrage, annulation
+- Phase 4 : +28 tests unit sur nouveaux services (total 561/561 PASS)
+- Phase 5 : [docs/WORKFLOWS.md](docs/WORKFLOWS.md)
+
+UI restantes (backlog, documentées mais non implémentées) :
+- Actions ticket no-show/rebook dans la fiche ticket admin (endpoints exposés côté back-end)
+- TripDetailDialog incident panel (suspend/cancel/declare-delay) admin
+- Parcel hub actions UI pour agent quai
+- Mobile driver : bouton SUSPEND trip + declare major delay
+- Mobile quai : actions hub inbound/store/load-outbound + pickup + dispute
+- Portail voyageur : page "Mes bons" + actions rebook self-service
+- i18n 6 locales restantes (ar, es, ktu, ln, pt, wo) pour `tenantRules.*` et `vouchers.*` — voir [docs/TODO_i18n_propagation.md](docs/TODO_i18n_propagation.md)

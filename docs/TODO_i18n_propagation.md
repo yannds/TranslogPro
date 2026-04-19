@@ -6,11 +6,14 @@ Les derniers ajouts frontend ont introduit **3 namespaces i18n** actuellement pr
 
 | Namespace | Clés | Scope | Ajouté dans |
 |---|---|---|---|
-| `tour.*`   | ~20 | Product tour Billetterie (ProductTour + ticketing-v1) | [tours.ts](../frontend/lib/tour/tours.ts) |
-| `tip.*`    | ~6  | Astuces contextuelles post-aha (ContextualTip)        | [PageSellTicket.tsx](../frontend/components/pages/PageSellTicket.tsx) |
-| `billing.*`| ~20 | Trial banner + checkout modal                         | [TrialBanner.tsx](../frontend/components/billing/TrialBanner.tsx) |
+| `tour.*`        | ~20 | Product tour Billetterie (ProductTour + ticketing-v1) | [tours.ts](../frontend/lib/tour/tours.ts) |
+| `tip.*`         | ~6  | Astuces contextuelles post-aha (ContextualTip)        | [PageSellTicket.tsx](../frontend/components/pages/PageSellTicket.tsx) |
+| `billing.*`     | ~20 | Trial banner + checkout modal                         | [TrialBanner.tsx](../frontend/components/billing/TrialBanner.tsx) |
+| `tenantRules.*` | ~60 | Règles métier (annulation N-tiers, no-show, compensation, hub) | [PageTenantBusinessRules.tsx](../frontend/components/pages/PageTenantBusinessRules.tsx) — ajouté 2026-04-19 |
+| `vouchers.*`    | ~30 | Page admin Vouchers (émission, filtrage, annulation)  | [PageVouchers.tsx](../frontend/components/pages/PageVouchers.tsx) — ajouté 2026-04-19 |
+| `nav.business_rules`, `nav.vouchers` | 2 | Entrées nav admin | [nav.config.ts](../frontend/lib/navigation/nav.config.ts) — ajouté 2026-04-19 |
 
-Total : **~46 clés** × 6 locales = ~280 lignes à ajouter.
+Total : **~140 clés** × 6 locales = ~840 lignes à ajouter.
 
 ## Locales à mettre à jour
 
