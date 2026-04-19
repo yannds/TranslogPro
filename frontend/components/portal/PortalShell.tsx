@@ -15,13 +15,14 @@
 
 import { useMemo, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
-import { LogOut, Sun, Moon }  from 'lucide-react';
+import { LogOut, Sun, Moon, UserCircle2 } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation }      from '../../lib/hooks/useNavigation';
 import { useTheme }           from '../theme/ThemeProvider';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
+import { SuspendedScreen }    from '../billing/SuspendedScreen';
 import type { PortalNavConfig, ResolvedNavItem } from '../../lib/navigation/nav.types';
 
 function PageLoadingFallback() {
@@ -136,6 +137,18 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
         {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
       </button>
 
+      {/* Self-service compte — même lien que sur AdminDashboard, côté PortalShell
+          il est accessible à tous les rôles non-admin (chauffeur, agent, client…).
+          /account n'est pas gaté par portail (ProtectedRoute sans prop portal). */}
+      <a
+        href="/account"
+        title={t('account.title')}
+        aria-label={t('account.title')}
+        className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 dark:hover:text-teal-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+      >
+        <UserCircle2 className="w-4 h-4" />
+      </a>
+
       <button
         onClick={() => void logout()}
         title={t('portal.logout')}
@@ -167,6 +180,12 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
           <PageRouter activeId={activeId} />
         </Suspense>
       </main>
+
+      {/* Verrou SUSPENDED — commun à tous les portails (driver, station-agent,
+          quai-agent) qui dérivent de PortalShell. AdminDashboard a sa propre
+          instance. Ne s'affiche que si user.subscriptionStatus === 'SUSPENDED'
+          et hors des routes exemptées (/admin/billing, /welcome, /login). */}
+      <SuspendedScreen />
     </div>
   );
 }

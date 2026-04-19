@@ -133,6 +133,16 @@ const LazyDriverFreight       = lazy(() => import('../pages/PageDriverFreight').
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyQuaiFreight         = lazy(() => import('../pages/PageQuaiFreight').then(m => ({ default: m.PageQuaiFreight })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiHome            = lazy(() => import('../pages/PageQuaiHome').then(m => ({ default: m.PageQuaiHome })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiScan            = lazy(() => import('../pages/PageQuaiScan').then(m => ({ default: m.PageQuaiScan })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiBoarding        = lazy(() => import('../pages/PageQuaiBoarding').then(m => ({ default: m.PageQuaiBoarding })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiManifest        = lazy(() => import('../pages/PageQuaiManifest').then(m => ({ default: m.PageQuaiManifest })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuaiLuggage         = lazy(() => import('../pages/PageQuaiLuggage').then(m => ({ default: m.PageQuaiLuggage })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDriverDocs          = lazy(() => import('../pages/PageDriverDocs').then(m => ({ default: m.PageDriverDocs })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazySellTicket          = lazy(() => import('../pages/PageSellTicket').then(m => ({ default: m.PageSellTicket })));
@@ -301,12 +311,12 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'sa-sav':              return <PageWip title={t('router.saIncident')} />;
 
     // ── Portail Agent de Quai (items QUAI_AGENT_NAV) ───────────────────────
-    case 'qa-home':             return <PageWip title={t('router.qaHome')} />;
-    case 'qa-scan':             return <PageWip title={t('router.qaScan')} />;
-    case 'qa-boarding':         return <PageWip title={t('router.qaBoarding')} />;
+    case 'qa-home':             return <LazyQuaiHome />;
+    case 'qa-scan':             return <LazyQuaiScan />;
+    case 'qa-boarding':         return <LazyQuaiBoarding />;
     case 'qa-freight':          return <LazyQuaiFreight />;
-    case 'qa-manifest':         return <PageWip title={t('router.qaManifest')} />;
-    case 'qa-luggage':          return <PageWip title={t('router.qaLuggage')} />;
+    case 'qa-manifest':         return <LazyQuaiManifest />;
+    case 'qa-luggage':          return <LazyQuaiLuggage />;
     case 'qa-delay':            return <PageWip title={t('router.qaDelay')} />;
     case 'qa-display':          return <LazyDisplayQuai />;
     case 'qa-sav':              return <PageWip title={t('router.qaIncident')} />;

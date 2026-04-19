@@ -4972,6 +4972,74 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Sign out"
   },
 
+  "quaiPicker": {
+    "date":   "Date",
+    "trip":   "Trip",
+    "none":   "No trip that day",
+    "select": "— Select a trip —"
+  },
+  "quaiHome": {
+    "title":    "My quay",
+    "subtitle": "Today's trips, status and quick access to boarding.",
+    "noTrips":  "No trip scheduled today."
+  },
+  "quaiScan": {
+    "title":           "Scan a code",
+    "subtitle":        "Ticket or parcel code — the action adapts to the detected kind.",
+    "codeLabel":       "Code",
+    "codePh":          "Paste or type the code…",
+    "codeHint":        "Accepts ticket QR and parcel tracking code. Auto-detection by default.",
+    "asTicket":        "As ticket",
+    "asParcel":        "As parcel",
+    "autoDetect":      "Auto detect",
+    "cameraSoonHint":  "Web camera scanner coming soon — for now, manual or USB scanner input.",
+    "errUnknownKind":  "Could not detect the kind — pick ticket or parcel manually."
+  },
+  "quaiBoarding": {
+    "title":            "Boarding",
+    "subtitle":         "Check in and board passengers trip by trip.",
+    "pickTrip":         "Select a trip to see its passengers.",
+    "colSeat":          "Seat",
+    "colName":          "Name",
+    "colClass":         "Class",
+    "colLuggage":       "Luggage",
+    "colStatus":        "Status",
+    "checkIn":          "Check in",
+    "board":            "Board",
+    "boardedCount":     "boarded",
+    "checkedInCount":   "checked in",
+    "pendingCount":     "pending",
+    "empty":            "No passenger for this trip."
+  },
+  "quaiManifest": {
+    "title":       "Manifests",
+    "subtitle":    "Prepare and sign passenger / parcel manifests before departure.",
+    "pickTrip":    "Select a trip to manage its manifests.",
+    "passengers":  "Passenger manifest",
+    "parcels":     "Parcel manifest",
+    "signed":      "Signed",
+    "draft":       "Draft",
+    "none":        "Not generated",
+    "generate":    "Generate",
+    "sign":        "Sign",
+    "download":    "Download PDF",
+    "pdfPending":  "PDF pending…"
+  },
+  "quaiLuggage": {
+    "title":          "Luggage check",
+    "subtitle":       "Verify declared and weighed luggage weights.",
+    "pickTrip":       "Select a trip.",
+    "colSeat":        "Seat",
+    "colName":        "Name",
+    "colWeight":      "Declared weight",
+    "colStatus":      "Status",
+    "notDeclared":    "—",
+    "declaredCount":  "declared",
+    "totalWeight":    "total",
+    "empty":          "No passenger for this trip.",
+    "updateHint":     "Weight updates go through the counter / sales module. A dedicated endpoint is coming."
+  },
+
   "freight": {
     "sectionLabel":     "Trip parcels list",
     "titleDriver":      "Freight for my trip",

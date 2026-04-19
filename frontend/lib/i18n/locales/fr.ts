@@ -4989,6 +4989,75 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Se déconnecter"
   },
 
+  // ─── Portail Agent de Quai (2026-04-19) ─────────────────────────────────
+  "quaiPicker": {
+    "date":   "Date",
+    "trip":   "Trajet",
+    "none":   "Aucun trajet ce jour",
+    "select": "— Sélectionner un trajet —"
+  },
+  "quaiHome": {
+    "title":    "Mon quai",
+    "subtitle": "Trajets du jour, statut et accès rapide à l'embarquement.",
+    "noTrips":  "Aucun trajet programmé aujourd'hui."
+  },
+  "quaiScan": {
+    "title":           "Scanner un code",
+    "subtitle":        "Billet ou code colis — l'action s'adapte au type détecté.",
+    "codeLabel":       "Code",
+    "codePh":          "Collez ou saisissez le code…",
+    "codeHint":        "Le ticket QR et le code colis sont acceptés. Détection automatique par défaut.",
+    "asTicket":        "Comme billet",
+    "asParcel":        "Comme colis",
+    "autoDetect":      "Détection auto",
+    "cameraSoonHint":  "Scanner caméra web à venir — pour l'instant saisie manuelle ou douchette USB.",
+    "errUnknownKind":  "Impossible de détecter le type — choisissez billet ou colis manuellement."
+  },
+  "quaiBoarding": {
+    "title":            "Embarquement",
+    "subtitle":         "Enregistrez et embarquez les passagers trajet par trajet.",
+    "pickTrip":         "Sélectionnez un trajet pour voir les passagers.",
+    "colSeat":          "Siège",
+    "colName":          "Nom",
+    "colClass":         "Classe",
+    "colLuggage":       "Bagages",
+    "colStatus":        "Statut",
+    "checkIn":          "Enregistrer",
+    "board":            "Embarquer",
+    "boardedCount":     "embarqués",
+    "checkedInCount":   "enregistrés",
+    "pendingCount":     "en attente",
+    "empty":            "Aucun passager pour ce trajet."
+  },
+  "quaiManifest": {
+    "title":       "Manifestes",
+    "subtitle":    "Préparation et signature des manifestes passagers / colis avant le départ.",
+    "pickTrip":    "Sélectionnez un trajet pour gérer ses manifestes.",
+    "passengers":  "Manifeste passagers",
+    "parcels":     "Manifeste colis",
+    "signed":      "Signé",
+    "draft":       "Brouillon",
+    "none":        "Non généré",
+    "generate":    "Générer",
+    "sign":        "Signer",
+    "download":    "Télécharger PDF",
+    "pdfPending":  "PDF en cours…"
+  },
+  "quaiLuggage": {
+    "title":          "Contrôle bagages",
+    "subtitle":       "Vérifiez le poids des bagages déclarés et contrôlés à la balance.",
+    "pickTrip":       "Sélectionnez un trajet.",
+    "colSeat":        "Siège",
+    "colName":        "Nom",
+    "colWeight":      "Poids déclaré",
+    "colStatus":      "Statut",
+    "notDeclared":    "—",
+    "declaredCount":  "déclarés",
+    "totalWeight":    "total",
+    "empty":          "Aucun passager pour ce trajet.",
+    "updateHint":     "La mise à jour du poids se fait au guichet ou via le module de vente. Un endpoint dédié viendra prochainement."
+  },
+
   // ─── Chargement fret (chauffeur + agent de quai) ─────────────────────────
   "freight": {
     "sectionLabel":     "Liste des colis du trajet",
