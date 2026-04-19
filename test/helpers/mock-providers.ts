@@ -213,6 +213,8 @@ export const FIXTURE_COST_SNAPSHOT = {
  * Les méthodes renvoient des fixtures par défaut (overridables dans chaque test).
  */
 export function createPrismaMock() {
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  let selfRef: any;
   const common = (fixture: unknown) => ({
     findUnique:  jest.fn().mockResolvedValue(fixture),
     findFirst:   jest.fn().mockResolvedValue(fixture),
@@ -228,7 +230,7 @@ export function createPrismaMock() {
     groupBy:     jest.fn().mockResolvedValue([{ status: 'COMPLETED', _count: { id: 10 }, _sum: { amount: 500000 } }]),
   });
 
-  return {
+  const mock: Record<string, unknown> = {
     // Auth / IAM
     session:               common({ id: 'sess-01', userId: USER_ID, tenantId: TENANT_ID, token: 'tok-test', expiresAt: new Date(Date.now() + 86400_000) }),
     user:                  common({ id: USER_ID, tenantId: TENANT_ID, roleId: ROLE_ID, email: 'test@example.com', name: 'Test User' }),
@@ -290,12 +292,18 @@ export function createPrismaMock() {
     tripAnalytics:         common({ id: 'ta-01', tenantId: TENANT_ID, routeId: 'route-01', busId: BUS_ID, avgFillRate: 0.76, isGoldenDay: false, isBlackRoute: false, dayOfWeek: 1, tripDate: new Date(), createdAt: new Date() }),
     installedModule:       common({ id: 'im-01', tenantId: TENANT_ID, moduleKey: 'YIELD_ENGINE', isActive: true, config: {} }),
 
-    // Prisma transactions
-    $transaction:  jest.fn().mockImplementation((fn: unknown) => typeof fn === 'function' ? fn({}) : Promise.resolve(fn)),
+    // Prisma transactions — la callback reçoit le prisma mock lui-même (selfRef)
+    // plutôt qu'un `{}` vide, pour que WorkflowEngine.transition() puisse
+    // appeler tx.$queryRaw / tx.rolePermission.findFirst / tx.<entity>.update
+    // exactement comme en prod.
+    $transaction:  jest.fn().mockImplementation((fn: unknown) =>
+      typeof fn === 'function' ? fn(selfRef) : Promise.resolve(fn)),
     $queryRaw:     jest.fn().mockResolvedValue([{ version: 1 }]),
     $executeRaw:   jest.fn().mockResolvedValue(1),
-    transact:      jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn({})),
+    transact:      jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(selfRef)),
   };
+  selfRef = mock;
+  return mock;
 }
 
 // ─── Redis mock ───────────────────────────────────────────────────────────────

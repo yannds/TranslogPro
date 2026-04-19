@@ -286,10 +286,23 @@ describe('[E2E] /platform/support/tickets (queue)', () => {
     (prismaMock as unknown as { supportTicket: Record<string, jest.Mock> }).supportTicket = {
       ...(prismaMock as unknown as { supportTicket: Record<string, jest.Mock> }).supportTicket,
       findUnique: jest.fn().mockResolvedValue({
-        id: 'tk-1', tenantId: TENANT_ID, status: 'IN_PROGRESS', priority: 'NORMAL',
+        id: 'tk-1', tenantId: TENANT_ID, status: 'IN_PROGRESS', priority: 'NORMAL', version: 1,
       }),
       update: jest.fn().mockResolvedValue({
-        id: 'tk-1', status: 'RESOLVED', resolvedAt: new Date(),
+        id: 'tk-1', status: 'RESOLVED', resolvedAt: new Date(), version: 2,
+      }),
+    };
+    // Depuis la migration SupportTicket → WorkflowEngine (2026-04-19), le PATCH
+    // passe par workflow.transition() qui lit WorkflowConfig pour trouver
+    // (fromState=IN_PROGRESS, action=resolve) → toState=RESOLVED + requiredPerm.
+    // Le fixture par défaut renvoie scope='.agency' ce qui fait échouer la check
+    // d'actor.agencyId (le SA plateforme n'a pas d'agence). On force un scope
+    // '.global' le temps du test.
+    (prismaMock as unknown as { workflowConfig: Record<string, jest.Mock> }).workflowConfig = {
+      findFirst: jest.fn().mockResolvedValue({
+        fromState: 'IN_PROGRESS', toState: 'RESOLVED', action: 'resolve',
+        requiredPerm: 'control.platform.support.write.global',
+        guards: [], sideEffects: [], isActive: true,
       }),
     };
 

@@ -1874,9 +1874,69 @@ existante) — pas de nouveau champ sur `User`.
 
 ---
 
-*Fin du PRD TransLog Pro v6.0*
+## XII. Révision v7.0 — Workflow-driven full enforcement & scénarios avancés (2026-04-19 PM)
+
+### XII.1 Contexte
+- 7 modules ne passaient pas par `WorkflowEngine` (ADR-15/16 non pleinement appliquées).
+- Plusieurs scénarios réels non couverts : hub/entrepôt colis, no-show, panne en route, retard majeur, compensations non-monétaires.
+
+### XII.2 Nouveaux scénarios
+
+**Parcel — hub/entrepôt** : `IN_TRANSIT → AT_HUB_INBOUND → STORED_AT_HUB → AT_HUB_OUTBOUND → IN_TRANSIT → ARRIVED → AVAILABLE_FOR_PICKUP → DELIVERED`. Branches : `DISPUTED`, `RETURN_TO_SENDER`, `RETURNED`. Config tenant : `parcelHubMaxStorageDays`, `parcelPickupMaxDaysBeforeReturn`, `parcelPickupNoShowAction`.
+
+**Ticket — no-show/rebook/forfeit** : nouveaux états `NO_SHOW`, `LATE_ARRIVED`, `REBOOKED`, `FORFEITED`. Flow : `MISS_BOARDING` (après grâce) → choix rebook next available / rebook later / request refund / forfait auto après TTL. Config : `noShowGraceMinutes`, `ticketTtlHours`, `noShowPenalty*`.
+
+**Incident en route** : Trip ajoute `SUSPENDED` et `CANCELLED_IN_TRANSIT`. Actions `SUSPEND` / `RESUME_FROM_SUSPEND` / `CANCEL_IN_TRANSIT` (refund auto prorata km) / `DECLARE_MAJOR_DELAY` (compensation selon paliers).
+
+**Compensation modulable** : MONETARY / VOUCHER / MIXED / SNACK. Émise auto sur incident/retard selon `incidentCompensationDelayTiers` JSON. Override trip `compensationPolicyOverride` + `compensationFormOverride` pour décisions compagnie au cas par cas.
+
+### XII.3 Pénalités annulation N-tiers (JSON)
+
+Remplacement legacy 2-paliers par `[{hoursBeforeDeparture, penaltyPct}]`. Priorité : trip override > tenant JSON > legacy fallback. `cancellationPenaltyAppliesTo` = liste acteurs (CUSTOMER/AGENT/ADMIN/SYSTEM) ; hors liste → 0 %. Waive explicite via perm `control.refund.waive_penalty.tenant`, tracé audit.
+
+### XII.4 Migration 7 modules hardcoded → engine
+
+flight-deck Trip (driver) · shipment Parcel (PACK) · invoice · staff + cascade StaffAssignment · support · driver-profile DriverTraining · qhse QhseExecution.
+
+### XII.5 UIs livrées
+
+- Web admin : `/admin/settings/rules`, `/admin/sav/vouchers`, TicketIncidentDialog, TripIncidentDialog, ParcelHubActionsDialog.
+- Portail voyageur : `/customer/vouchers` (Mes bons) + boutons Actions billet (rebook self-service + request refund).
+- Mobile driver : modal SUSPEND + DECLARE_MAJOR_DELAY dans TripDetailScreen.
+- Mobile quai : QuaiParcelActionsScreen (9 actions hub/pickup/dispute/return).
+
+### XII.6 RBAC
+
+25+ permissions ajoutées (refund.waive_penalty, ticket.rebook.{own,agency,tenant}, trip.{suspend,cancel_in_transit,declare_major_delay,override_policy}, parcel.{hub_move,pickup,dispute}, parcel.return_init, compensation.issue.*, voucher.*).
+
+### XII.7 Nouveaux ADR (v7.0)
+
+| ADR | Titre |
+|---|---|
+| ADR-50 | Migration hardcoded → WorkflowEngine full enforcement |
+| ADR-51 | Paliers pénalité N-tiers JSON |
+| ADR-52 | `cancellationPenaltyAppliesTo` + waive explicite |
+| ADR-53 | No-show + TTL configurables (max entre pénalités) |
+| ADR-54 | Compensation modulable par paliers délai + forme |
+| ADR-55 | Whitelist aggregateTypes étendue |
+| ADR-56 | Voucher one-shot signé tenant-préfixé |
+| ADR-57 | CompensationItem audit non-monétaire |
+| ADR-58 | `prisma db push` en dev (pas de migrations historisées) |
+
+### XII.8 Tests
+
+- `test/unit/sav/cancellation-policy.service.spec.ts` (9)
+- `test/unit/voucher/voucher.service.spec.ts` (11)
+- `test/unit/incident-compensation/incident-compensation.service.spec.ts` (8)
+
+Total post-chantier : **583/583 unit tests PASS** (+28).
+
+---
+
+*Fin du PRD TransLog Pro v7.0*
 *Révision v2.0 : Critique architecturale complète — Avril 2026*
 *Révision v3.0 : Intégration PRD-ADD (CRM, Safety, Crew, Public Reporter, IAM DB-driven) — Avril 2026*
 *Révision v4.0 : White Label · Profitabilité · ICostCalculator · TenantBusinessConfig · Templates · 404 — Avril 2026*
 *Révision v5.0 : Portail Plateforme SaaS — Plans · Billing · Analytics · Support · Config DB-driven · Playwright — Avril 2026*
-*Révision v6.0 : Self-service compte (PageAccount) · MFA wire dans signIn · Reset-password cross-tenant · UX corrections plateforme — 2026-04-19*
+*Révision v6.0 : Self-service compte (PageAccount) · MFA wire dans signIn · Reset-password cross-tenant · UX corrections plateforme — 2026-04-19 AM*
+*Révision v7.0 : Workflow-driven full enforcement · Scénarios hub/no-show/incident/voucher · N-tiers JSON · ADR-50→58 · 583/583 unit PASS — 2026-04-19 PM*

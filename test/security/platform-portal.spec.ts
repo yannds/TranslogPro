@@ -111,7 +111,7 @@ describe('[SECURITY] Portail plateforme SaaS', () => {
     it('tenantA ne peut pas lire un ticket de tenantB', async () => {
       const prisma = prismaSupportMock();
       prisma.__tickets.set('tk-secret', { id: 'tk-secret', tenantId: TENANT_B, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, "IN_PROGRESS", prisma)) } as never);
 
       await expect(svc.findByTenant(TENANT_A, 'tk-secret'))
         .rejects.toThrow(ForbiddenException);
@@ -120,7 +120,7 @@ describe('[SECURITY] Portail plateforme SaaS', () => {
     it('tenantA ne peut pas répondre à un ticket de tenantB (blocage find avant message)', async () => {
       const prisma = prismaSupportMock();
       prisma.__tickets.set('tk-foreign', { id: 'tk-foreign', tenantId: TENANT_B, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, "IN_PROGRESS", prisma)) } as never);
 
       await expect(svc.addMessageByTenant(
         { id: 'attacker', tenantId: TENANT_A },
@@ -135,7 +135,7 @@ describe('[SECURITY] Portail plateforme SaaS', () => {
     it('un user tenant client ne peut pas poster un message en tant que PLATFORM', async () => {
       const prisma = prismaSupportMock();
       prisma.__tickets.set('tk-1', { id: 'tk-1', tenantId: TENANT_A, status: 'OPEN' });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, "IN_PROGRESS", prisma)) } as never);
 
       await expect(svc.addMessageByPlatform(
         { id: 'tenant-user', tenantId: TENANT_A }, // PAS plateforme
@@ -146,7 +146,7 @@ describe('[SECURITY] Portail plateforme SaaS', () => {
 
     it('le staff plateforme ne peut pas créer de ticket "client" (endpoint tenant)', async () => {
       const prisma = prismaSupportMock();
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, "IN_PROGRESS", prisma)) } as never);
 
       await expect(svc.createByTenant(
         { id: 'sa', tenantId: PLATFORM_TENANT_ID },
@@ -163,7 +163,7 @@ describe('[SECURITY] Portail plateforme SaaS', () => {
         id: TENANT_A,
         plan: { sla: { maxPriority: 'NORMAL' } }, // plan bas de gamme
       });
-      const svc = new SupportService(prisma as never);
+      const svc = new SupportService(prisma as never, { transition: jest.fn().mockImplementation((e: any, i: any, c: any) => c.persist(e, "IN_PROGRESS", prisma)) } as never);
 
       await svc.createByTenant(
         { id: 'u', tenantId: TENANT_A },

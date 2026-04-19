@@ -1,7 +1,38 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-19.
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-19 (workflow-driven).
+
+### Ajouts 2026-04-19 — Chantier workflow-driven (ADR-15/16 full enforcement + scénarios incident/hub/voucher)
+
+**Contexte** : migration de 7 modules hardcoded → WorkflowEngine + 4 nouveaux scénarios métier (Parcel hub, Ticket no-show, Incident en route, Voucher/Compensation) + UIs web/mobile/portail voyageur. Voir [docs/WORKFLOWS.md](docs/WORKFLOWS.md) pour la référence complète.
+
+Nouvelles suites :
+
+- `test/unit/sav/cancellation-policy.service.spec.ts` — 9 tests :
+  · tenant JSON N-tiers → sélection palier correcte selon `hoursBeforeDeparture`
+  · au-delà du palier 0 (départ imminent/passé) → pénalité max
+  · trip override `cancellationPenaltyTiersOverride` prioritaire sur config tenant
+  · appliesTo : si acteur hors liste, pénalité 0 % forcée
+  · waive=true (perm `control.refund.waive_penalty.tenant`) force 0 %
+  · legacy 2-tier fallback (≥ fullRefundMinutes / palier partiel / non remboursable)
+- `test/unit/voucher/voucher.service.spec.ts` — 11 tests :
+  · issue : rejet amount ≤ 0, validity < 1 jour, code unique préfixé tenant,
+    validityEnd = now + days (stable à l'émission)
+  · redeem : 404 unknown, déjà REDEEMED, expiré, scope SAME_ROUTE divergent,
+    nominatif divergent (anti-transfert), happy path
+  · cancel : transition via engine + stamps cancelledBy + reason
+- `test/unit/incident-compensation/incident-compensation.service.spec.ts` — 8 tests :
+  · suspendTrip : transition SUSPEND + stamps suspendedReason/suspendedById
+  · cancelInTransit : prorata km (1 - traveled/total) → refund partiel fan-out
+  · cancelInTransit sans prorata → refund 100 %
+  · declareMajorDelay : sélection palier (150min → palier 120min → 25 %)
+  · form=MIXED → split 50 % refund + 50 % voucher
+  · trip `compensationPolicyOverride` prioritaire sur config tenant
+  · délai < paliers → aucune compensation
+  · rejet delayMinutes < 0
+
+**Résultat** : **+28 tests**, suite unit complète **583/583 PASS** (était 533 avant le chantier).
 
 ### Ajouts 2026-04-19 — Self-service compte + MFA wire + reset-password cross-tenant
 
@@ -62,12 +93,11 @@ Nouvelles suites autour du portail plateforme et du self-service utilisateur :
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit — Engine** (src/) | `npm test` | 11 | 129 | ⚠️ 127 PASS / 2 pre-existing failures (WorkflowEngine audit) |
-| **Unit — Specs** (test/unit/) | `npx jest --config jest.unit.config.ts` | 16 | 188 | ✅ PASS (incl. 4 nouvelles suites auth 2026-04-19) |
-| **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS |
-| **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS |
+| **Unit complet** | `npx jest --config jest.unit.config.ts` | 57 | 583 | ✅ 583/583 PASS (incl. 28 nouvelles workflow-driven 2026-04-19) |
+| **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS (à revérifier après migration DB workflow) |
+| **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS (à revérifier après migration DB workflow) |
 
-**Total validé (hors pre-existing) : 459 tests / 0 new failure**
+**Total validé 2026-04-19 post-workflow : 583 tests unit / 0 failure**
 
 > ⚠️ **2 failures pre-existing** dans `workflow.engine.spec.ts` (tests n°3 et 14 — WorkflowTransition idempotencyKey et audit.record) — présents avant cette session, non introduits par les changements v5.0 / v6.0.
 
