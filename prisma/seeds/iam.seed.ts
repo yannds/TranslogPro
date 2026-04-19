@@ -340,27 +340,38 @@ const TENANT_ROLES: Array<{
   {
     name:     'DRIVER',
     isSystem: true,
+    // Principe : le chauffeur a accès aux outils dont il a besoin pour opérer
+    // son trajet (scanner billets, imprimer manifeste, vérifier voyageurs,
+    // marquer départ/arrivée). Les endpoints backend concernés sont
+    // scope-filtrés à runtime par FlightDeckService (le tripId doit appartenir
+    // au chauffeur authentifié), donc une perm `.agency` reste opérationnelle
+    // sans permettre un IDOR pratique — c'est la source de vérité de la
+    // permission côté route, la défense fine est côté service.
+    //
+    // TROIS PERMS RETIRÉES par rapport au rôle historique — fuites IDOR
+    // indiscutables (aucun usage légitime pour un chauffeur) :
+    //   - data.driver.profile.agency   → voyait dossiers RH de TOUS les collègues
+    //   - data.fleet.status.agency     → voyait toute la flotte
+    //   - control.trip.delay.agency    → pouvait retarder N'IMPORTE QUEL trajet
     permissions: [
       'data.trip.read.own',
-      'data.trip.update.agency',       // départ, arrivée
+      'data.trip.update.agency',       // marquer départ / arrivée (endpoint scope-filtré)
       'data.trip.check.own',
       'data.trip.report.own',
       'control.trip.log_event.own',    // plan de perm aligné sur constants + state graph
-      'control.trip.delay.agency',
-      'data.ticket.scan.agency',
-      'data.traveler.verify.agency',
+      'data.ticket.scan.agency',       // scan billets à l'embarquement (filtré par tripId côté service)
+      'data.traveler.verify.agency',   // vérification identité voyageur (idem)
       'data.manifest.read.own',
+      'data.manifest.sign.agency',     // attestation de départ — le chauffeur signe SON manifeste (endpoint scope-filtré par tripId + driver assignment)
+      'data.manifest.print.agency',    // impression manifeste de SON trajet
+      'data.ticket.read.agency',       // liste passagers de SON trajet (endpoint filtré)
       'data.sav.report.own',
       'data.notification.read.own',
       'data.session.revoke.own',
-      'data.manifest.print.agency',
       'data.driver.rest.own',          // périodes de repos (start/end)
-      'data.driver.profile.agency',   // briefing équipements, profil chauffeur
-      'data.fleet.status.agency',     // lire la liste des bus (manifeste, panne)
-      'data.ticket.read.agency',      // liste passagers du trajet
       'data.maintenance.update.own',   // signalement de panne depuis le terrain
       'data.feedback.submit.own',      // retours voyageur post-trajet
-      'data.support.create.tenant',
+      'data.support.create.tenant',    // ouvrir ticket support vers la plateforme
     ],
   },
   {
@@ -532,6 +543,18 @@ export async function seedTenantRoles(
         where:  { roleId_permission: { roleId: role.id, permission } },
         update: {},
         create: { roleId: role.id, permission },
+      });
+    }
+
+    // SYNC strict pour les rôles système : on retire les permissions qui ne
+    // sont plus dans la définition. Essentiel pour révoquer une permission
+    // historique accordée trop largement (ex: DRIVER qui avait .agency sur
+    // fleet.status ou driver.profile — fuite IDOR corrigée 2026-04-19).
+    // Les rôles custom (isSystem=false) ne sont jamais touchés par ce sync.
+    if (roleDef.isSystem) {
+      const keep = new Set(roleDef.permissions);
+      await prismaClient.rolePermission.deleteMany({
+        where: { roleId: role.id, permission: { notIn: Array.from(keep) } },
       });
     }
 
@@ -1001,13 +1024,14 @@ export async function backfillSystemBlueprintInstalls(
  */
 export async function backfillTenantRolePermissions(
   prismaClient: PrismaClient,
-): Promise<{ scanned: number; rowsCreated: number }> {
+): Promise<{ scanned: number; rowsCreated: number; rowsRevoked: number }> {
   const tenants = await prismaClient.tenant.findMany({
     where:  { id: { not: PLATFORM_TENANT_ID } },
     select: { id: true, slug: true },
   });
 
   let rowsCreated = 0;
+  let rowsRevoked = 0;
   for (const tenant of tenants) {
     const beforePerms = await prismaClient.rolePermission.count({
       where: { role: { tenantId: tenant.id } },
@@ -1018,12 +1042,15 @@ export async function backfillTenantRolePermissions(
     });
     const delta = afterPerms - beforePerms;
     if (delta > 0) {
-      console.log(`[IAM Seed] Backfill permissions tenant=${tenant.slug} — ${delta} ligne(s) créée(s)`);
+      rowsCreated += delta;
+      console.log(`[IAM Seed] Backfill tenant=${tenant.slug} — ${delta} permission(s) ajoutée(s)`);
+    } else if (delta < 0) {
+      rowsRevoked += -delta;
+      console.log(`[IAM Seed] Backfill tenant=${tenant.slug} — ${-delta} permission(s) révoquée(s) (sync système)`);
     }
-    rowsCreated += delta;
   }
 
-  return { scanned: tenants.length, rowsCreated };
+  return { scanned: tenants.length, rowsCreated, rowsRevoked };
 }
 
 // ─── Standalone runner ────────────────────────────────────────────────────────
@@ -1046,11 +1073,12 @@ async function main() {
   );
 
   // Backfill permissions de rôles — propage les nouvelles permissions du seed
-  // (ex. control.station.manage.tenant) aux tenants déjà onboardés.
+  // ET révoque celles retirées des rôles système (sync strict). Voir
+  // seedTenantRoles() pour la logique.
   const permReport = await backfillTenantRolePermissions(prisma);
   console.log(
     `[IAM Seed] Backfill permissions rôles — ${permReport.scanned} tenants scannés, ` +
-    `${permReport.rowsCreated} ligne(s) créée(s)`,
+    `${permReport.rowsCreated} ligne(s) créée(s), ${permReport.rowsRevoked} révoquée(s)`,
   );
 
   // Backfill blueprints système — rend les blueprints "installés" pour

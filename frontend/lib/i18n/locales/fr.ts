@@ -2005,7 +2005,15 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "statusBoarded": "Embarqué",
     "statusNoShow": "Absent",
     "statusCancelled": "Annulé",
-    "statusConfirmed": "Confirmé"
+    "statusConfirmed": "Confirmé",
+    "signatureLabel":    "Signature du manifeste",
+    "notGeneratedYet":   "Manifeste non encore généré",
+    "notGeneratedHint":  "Générer le manifeste consolide la liste des passagers et prépare la signature du chauffeur.",
+    "generate":          "Générer le manifeste",
+    "readyToSign":       "Prêt à être signé",
+    "signHint":          "La signature atteste que vous prenez en charge ce trajet avec les passagers enregistrés.",
+    "signAction":        "Signer le manifeste",
+    "signedOk":          "Manifeste signé"
   },
   "driverMaint": {
     "pageTitle": "Signaler une panne",

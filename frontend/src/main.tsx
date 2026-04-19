@@ -140,7 +140,17 @@ import { OfflineBanner } from '../components/offline/OfflineBanner';
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable dans index.html');
 
-createRoot(root).render(
+// HMR guard — en dev Vite, un full-page Fast Refresh peut ré-exécuter main.tsx
+// et créer un 2e root sur le même container, ce qui émet le warning "You are
+// calling ReactDOMClient.createRoot() on a container that has already been
+// passed to createRoot() before". On mémorise le root sur l'élément DOM et
+// on réutilise son render() si déjà présent.
+interface ReactRootContainer extends HTMLElement { _reactRoot?: ReturnType<typeof createRoot> }
+const container = root as ReactRootContainer;
+const reactRoot = container._reactRoot ?? createRoot(root);
+container._reactRoot = reactRoot;
+
+reactRoot.render(
   <StrictMode>
     <BrowserRouter>
       <ThemeProvider>

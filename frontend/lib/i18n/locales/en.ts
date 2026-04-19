@@ -2134,7 +2134,15 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "statusBoarded": "Boarded",
     "statusNoShow": "No Show",
     "statusCancelled": "Cancelled",
-    "statusConfirmed": "Confirmed"
+    "statusConfirmed": "Confirmed",
+    "signatureLabel":    "Manifest signature",
+    "notGeneratedYet":   "Manifest not generated yet",
+    "notGeneratedHint":  "Generating the manifest consolidates the passenger list and prepares the driver's signature.",
+    "generate":          "Generate manifest",
+    "readyToSign":       "Ready to sign",
+    "signHint":          "Signing attests you take charge of this trip with the registered passengers.",
+    "signAction":        "Sign manifest",
+    "signedOk":          "Manifest signed"
   },
   "driverMaint": {
     "pageTitle": "Report Breakdown",

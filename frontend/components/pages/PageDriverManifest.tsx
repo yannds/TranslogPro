@@ -6,14 +6,19 @@
  * Export CSV/PDF via DataTableMaster.
  */
 
-import { useMemo } from 'react';
-import { FileText, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { FileText, Users, FileSignature, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { apiPatch, apiPost, ApiError } from '../../lib/api';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import DataTableMaster, { type Column } from '../DataTableMaster';
+
+const P_MANIFEST_SIGN = 'data.manifest.sign.agency';
+const P_MANIFEST_GENERATE = 'data.manifest.generate.agency';
 
 /* ── Types ──────────────────────────────────────────────────────────── */
 
@@ -24,6 +29,14 @@ interface ActiveTrip {
   bus?:         { plateNumber: string; model?: string | null } | null;
   departureScheduled?: string | null;
   travelers?:   { id: string }[];
+}
+
+interface ManifestRecord {
+  id:        string;
+  tripId:    string;
+  status:    string; // 'DRAFT' | 'SUBMITTED' | 'SIGNED' | 'REJECTED'
+  signedAt:  string | null;
+  signedById: string | null;
 }
 
 interface Passenger {
@@ -89,7 +102,51 @@ export function PageDriverManifest() {
       [tenantId, trip?.id],
     );
 
+  // Manifeste du trajet actif — permet d'afficher l'état (DRAFT/SIGNED) et le
+  // bouton "Signer". Le 404 éventuel (manifeste pas encore généré) est traité
+  // comme "non généré" — on affiche alors le bouton "Générer le manifeste".
+  const { data: manifest, error: manifestError, refetch: refetchManifest } =
+    useFetch<ManifestRecord>(
+      trip?.id ? `/api/tenants/${tenantId}/manifests/trips/${trip.id}` : null,
+      [tenantId, trip?.id],
+    );
+
   const paxList = useMemo(() => passengers ?? [], [passengers]);
+  const canSign     = (user?.permissions ?? []).includes(P_MANIFEST_SIGN);
+  const canGenerate = (user?.permissions ?? []).includes(P_MANIFEST_GENERATE);
+  const [signBusy, setSignBusy] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    if (!trip?.id) return;
+    setSignBusy(true); setSignError(null);
+    try {
+      await apiPost(`/api/tenants/${tenantId}/manifests/trips/${trip.id}`, {});
+      refetchManifest();
+    } catch (e) {
+      setSignError(e instanceof ApiError
+        ? String((e.body as { message?: string })?.message ?? e.message)
+        : String(e));
+    } finally { setSignBusy(false); }
+  }
+
+  async function handleSign() {
+    if (!manifest?.id) return;
+    setSignBusy(true); setSignError(null);
+    try {
+      // signatureSvg omis — le backend accepte la signature vide (click = attestation).
+      // Une vraie signature tactile pourra être ajoutée plus tard.
+      await apiPatch(`/api/tenants/${tenantId}/manifests/${manifest.id}/sign`, {});
+      refetchManifest();
+    } catch (e) {
+      setSignError(e instanceof ApiError
+        ? String((e.body as { message?: string })?.message ?? e.message)
+        : String(e));
+    } finally { setSignBusy(false); }
+  }
+
+  const isSigned = manifest?.status === 'SIGNED';
+  const manifestNotFound = !!manifestError; // 404 = manifeste pas encore généré
 
   const boardedCount   = useMemo(() => paxList.filter(p => p.status === 'BOARDED').length, [paxList]);
   const checkedInCount = useMemo(() => paxList.filter(p => p.status === 'CHECKED_IN').length, [paxList]);
@@ -150,6 +207,78 @@ export function PageDriverManifest() {
           <KpiPill label={t('driverManifest.checkedIn')} value={checkedInCount} className="text-blue-700 dark:text-blue-400" />
           <KpiPill label={t('driverManifest.absent')}    value={noShowCount}    className="text-red-700 dark:text-red-400" />
         </div>
+      )}
+
+      {/* ── Signature manifeste — atteste que le chauffeur prend en charge
+          le trajet avec les passagers enregistrés. Le backend gère la
+          transition SUBMITTED → SIGNED (workflow manifest-standard). */}
+      {trip && !loading && (canSign || canGenerate) && (
+        <section
+          aria-label={t('driverManifest.signatureLabel')}
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4"
+        >
+          {signError && <ErrorAlert error={signError} icon />}
+
+          {manifestNotFound ? (
+            // Pas encore généré — proposer la génération (seule une perm agency peut générer)
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <FileSignature className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" aria-hidden />
+                <div>
+                  <p className="text-sm font-semibold t-text">{t('driverManifest.notGeneratedYet')}</p>
+                  <p className="text-xs t-text-3 mt-0.5">{t('driverManifest.notGeneratedHint')}</p>
+                </div>
+              </div>
+              {canGenerate && (
+                <Button
+                  onClick={handleGenerate}
+                  disabled={signBusy}
+                  className="min-h-[44px]"
+                  leftIcon={signBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                >
+                  {signBusy ? t('common.creating') : t('driverManifest.generate')}
+                </Button>
+              )}
+            </div>
+          ) : isSigned ? (
+            // Déjà signé — rappel
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  {t('driverManifest.signedOk')}
+                </p>
+                {manifest?.signedAt && (
+                  <p className="text-xs t-text-3 mt-0.5">
+                    {new Date(manifest.signedAt).toLocaleString('fr-FR')}
+                  </p>
+                )}
+              </div>
+              <Badge variant="success" size="sm">SIGNED</Badge>
+            </div>
+          ) : (
+            // SUBMITTED — proposer la signature si l'utilisateur a la perm
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <FileSignature className="w-5 h-5 text-teal-500 mt-0.5 shrink-0" aria-hidden />
+                <div>
+                  <p className="text-sm font-semibold t-text">{t('driverManifest.readyToSign')}</p>
+                  <p className="text-xs t-text-3 mt-0.5">{t('driverManifest.signHint')}</p>
+                </div>
+              </div>
+              {canSign && (
+                <Button
+                  onClick={handleSign}
+                  disabled={signBusy}
+                  className="min-h-[44px]"
+                  leftIcon={signBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSignature className="w-4 h-4" />}
+                >
+                  {signBusy ? t('common.saving') : t('driverManifest.signAction')}
+                </Button>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ── Passenger table ── */}
