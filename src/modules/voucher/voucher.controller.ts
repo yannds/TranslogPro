@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Patch, Param, Body, Query } from '@nestjs/common';
 import { VoucherService } from './voucher.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -43,10 +43,22 @@ export class VoucherController {
     return this.vouchers.redeem(tenantId, dto.code, dto.ticketId, actor);
   }
 
-  /** Annulation (admin, avant utilisation). */
+  /** Annulation (admin, avant utilisation). DELETE pour clients HTTP-compat,
+   *  PATCH /cancel pour clients qui ne supportent pas DELETE + body. */
   @Delete(':id')
   @RequirePermission(Permission.VOUCHER_CANCEL_TENANT)
-  cancel(
+  cancelByDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    return this.vouchers.cancel(tenantId, id, reason, actor);
+  }
+
+  @Patch(':id/cancel')
+  @RequirePermission(Permission.VOUCHER_CANCEL_TENANT)
+  cancelByPatch(
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body('reason') reason: string,

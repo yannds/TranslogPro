@@ -93,6 +93,12 @@ const P = {
   SAV_CLAIM:             'data.sav.claim.tenant',
   SAV_DELIVER:           'data.sav.deliver.agency',
   REFUND_READ:           'data.refund.read.tenant',
+  // Vouchers (2026-04-19)
+  VOUCHER_READ_TENANT:   'data.voucher.read.tenant',
+  VOUCHER_READ_OWN:      'data.voucher.read.own',
+  VOUCHER_ISSUE_TENANT:  'control.voucher.issue.tenant',
+  VOUCHER_ISSUE_AGENCY:  'data.voucher.issue.agency',
+  VOUCHER_REDEEM_AGENCY: 'data.voucher.redeem.agency',
   // Staff & Crew
   STAFF_MANAGE:          'control.staff.manage.tenant',
   STAFF_READ:            'data.staff.read.agency',
@@ -248,6 +254,7 @@ export const ADMIN_NAV: PortalNavConfig = {
             { kind: 'leaf', id: 'sav-claims',    label: 'nav.claims',        href: '/admin/sav/claims',    icon: 'FileWarning', anyOf: [P.SAV_CLAIM] },
             { kind: 'leaf', id: 'sav-reports',   label: 'nav.reports',        href: '/admin/sav/reports',   icon: 'Flag',        anyOf: [P.SAV_REPORT] },
             { kind: 'leaf', id: 'sav-returns',   label: 'nav.refunds',      href: '/admin/sav/returns',   icon: 'RotateCcw',   anyOf: [P.REFUND_READ] },
+            { kind: 'leaf', id: 'vouchers',      label: 'nav.vouchers',     href: '/admin/sav/vouchers',  icon: 'Ticket',      anyOf: [P.VOUCHER_READ_TENANT, P.VOUCHER_ISSUE_AGENCY] },
           ],
         },
       ],

@@ -59,6 +59,8 @@ const LazyTenantTaxes    = lazy(() => import('../pages/PageTenantTaxes').then(m 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyVouchers        = lazy(() => import('../pages/PageVouchers').then(m => ({ default: m.PageVouchers })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
@@ -374,6 +376,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'integrations':        return <LazyIntegrations />;
     case 'tenant-taxes':        return <LazyTenantTaxes />;
     case 'tenant-rules':        return <LazyTenantBusinessRules />;
+    case 'vouchers':            return <LazyVouchers />;
     case 'tenant-payment':      return <LazyTenantPayment />;
     case 'tenant-billing':      return <LazyAdminBilling />;
     case 'documents-templates': return <LazyTemplateStudio />;
