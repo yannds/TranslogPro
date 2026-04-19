@@ -39,12 +39,16 @@ test.describe('[E2E-API] Multi-tenant signIn Phase 1', () => {
     expect(body.tenantId).toBe(tenantA.id);
     expect(body.email).toBe(tenantA.userEmail);
 
-    // Cookie Set-Cookie présent et scopé : SameSite=Strict, HttpOnly
+    // Cookie Set-Cookie présent et scopé : HttpOnly + SameSite (dev=None pour
+    // autoriser le cross-subdomain admin.* → tenant.*, prod=Strict pour
+    // sécurité maximale). La constante SAMESITE_DEV dans auth.controller.ts
+    // bascule selon NODE_ENV. Le test accepte les deux — seul l'attribut
+    // Domain= est INTERDIT (sinon fuite cross-subdomain via domain parent).
     const setCookie = res.headers()['set-cookie'];
     expect(setCookie).toBeDefined();
     expect(setCookie).toMatch(/translog_session=/);
     expect(setCookie).toMatch(/HttpOnly/);
-    expect(setCookie).toMatch(/SameSite=Strict/);
+    expect(setCookie).toMatch(/SameSite=(Strict|None)/);
     // Pas d'attribut Domain=... → scope automatique à l'origine (sous-domaine exact)
     expect(setCookie).not.toMatch(/Domain=/i);
   });

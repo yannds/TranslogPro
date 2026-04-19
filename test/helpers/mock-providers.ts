@@ -32,10 +32,20 @@ export const FIXTURE_TRIP = {
   status:     'SCHEDULED',
   driverId:   USER_ID,
   busId:      BUS_ID,
-  departureAt: new Date('2026-05-01T08:00:00Z'),
-  arrivalAt:   new Date('2026-05-01T14:00:00Z'),
+  // Noms alignés sur Prisma schema (legacy alias conservé pour rétro-compat).
+  departureScheduled: new Date('2026-05-01T08:00:00Z'),
+  arrivalScheduled:   new Date('2026-05-01T14:00:00Z'),
+  departureAt:        new Date('2026-05-01T08:00:00Z'),
+  arrivalAt:          new Date('2026-05-01T14:00:00Z'),
   createdAt:   new Date(),
   updatedAt:   new Date(),
+  // Overrides politique workflow-driven (nullables, schema)
+  noShowPenaltyEnabledOverride:     null,
+  noShowPenaltyPctOverride:         null,
+  noShowPenaltyFlatAmountOverride:  null,
+  cancellationPenaltyTiersOverride: null,
+  compensationPolicyOverride:       null,
+  compensationFormOverride:         null,
   // Relations used by ManifestService
   travelers:  [{ id: 'trv-01', name: 'Jean Dupont' }],
   shipments:  [{ id: 'shp-01', parcels: [{ id: 'pcl-01' }] }],
@@ -57,17 +67,22 @@ export const FIXTURE_BUS = {
   id:       BUS_ID,
   tenantId: TENANT_ID,
   plate:    'AB-123-CD',
+  plateNumber: 'AB-123-CD',
   capacity: 50,
   status:   'AVAILABLE',
+  version:  1, // requis par WorkflowEngine (lock optimiste)
 };
 
 export const FIXTURE_PARCEL = {
-  id:         'pcl00001-0000-0000-0000-000000000001',
-  tenantId:   TENANT_ID,
-  trackCode:  'TRK-0001',
-  status:     'REGISTERED',
-  weightKg:   2.5,
-  createdAt:  new Date(),
+  id:          'pcl00001-0000-0000-0000-000000000001',
+  tenantId:    TENANT_ID,
+  trackCode:   'TRK-0001',
+  trackingCode:'TRK-0001',
+  status:      'REGISTERED',
+  weightKg:    2.5,
+  weight:      2.5,
+  createdAt:   new Date(),
+  version:     1,
 };
 
 export const FIXTURE_MANIFEST = {
@@ -78,6 +93,7 @@ export const FIXTURE_MANIFEST = {
   signedAt:   null,
   downloadUrl: null,
   createdAt:  new Date(),
+  version:    1,
 };
 
 export const FIXTURE_REGISTER = {
@@ -87,6 +103,10 @@ export const FIXTURE_REGISTER = {
   status:     'OPEN',
   openedAt:   new Date(),
   closedAt:   null,
+  version:    1,
+  // Liste vide par défaut — utilisé par CashierService.getDailyReport qui
+  // itère reg.transactions. Jamais null sinon `is not iterable`.
+  transactions: [] as unknown[],
 };
 
 export const FIXTURE_FEEDBACK = {
@@ -217,13 +237,16 @@ export function createPrismaMock() {
   let selfRef: any;
   const common = (fixture: unknown) => ({
     findUnique:  jest.fn().mockResolvedValue(fixture),
+    findUniqueOrThrow: jest.fn().mockResolvedValue(fixture),
     findFirst:   jest.fn().mockResolvedValue(fixture),
-    findMany:    jest.fn().mockResolvedValue([fixture]),
+    findFirstOrThrow: jest.fn().mockResolvedValue(fixture),
+    findMany:    jest.fn().mockResolvedValue(fixture === null ? [] : [fixture]),
     create:      jest.fn().mockResolvedValue(fixture),
     update:      jest.fn().mockResolvedValue(fixture),
     delete:      jest.fn().mockResolvedValue(fixture),
     updateMany:  jest.fn().mockResolvedValue({ count: 1 }),
     deleteMany:  jest.fn().mockResolvedValue({ count: 1 }),
+    createMany:  jest.fn().mockResolvedValue({ count: 1 }),
     count:       jest.fn().mockResolvedValue(1),
     upsert:      jest.fn().mockResolvedValue(fixture),
     aggregate:   jest.fn().mockResolvedValue({ _avg: { rating: 4.2 }, _count: { id: 10 }, _sum: { amount: 500000 } }),
@@ -275,8 +298,8 @@ export function createPrismaMock() {
     vehicle:               common({ id: BUS_ID, plate: 'AB-123-CD' }),
     maintenanceRecord:     common({ id: 'mnt-01', status: 'PENDING' }),
     maintenanceReport:     common({ id: 'mnt-01', busId: BUS_ID, tenantId: TENANT_ID, status: 'PENDING', type: 'CORRECTIVE', description: 'Panne frein', createdAt: new Date() }),
-    incident:              common({ id: 'inc-01', tenantId: TENANT_ID, type: 'BREAKDOWN', severity: 'HIGH', status: 'OPEN', isSos: false, reportedById: USER_ID, createdAt: new Date() }),
-    claim:                 common({ id: 'clm-01', tenantId: TENANT_ID, type: 'DAMAGE', status: 'OPEN', description: 'Test', createdAt: new Date() }),
+    incident:              common({ id: 'inc-01', tenantId: TENANT_ID, type: 'BREAKDOWN', severity: 'HIGH', status: 'OPEN', isSos: false, reportedById: USER_ID, createdAt: new Date(), version: 1 }),
+    claim:                 common({ id: 'clm-01', tenantId: TENANT_ID, type: 'DAMAGE', status: 'OPEN', description: 'Test', createdAt: new Date(), version: 1 }),
     traveler:              common({ id: 'trv-01', tenantId: TENANT_ID, userId: USER_ID, name: 'Jean Dupont', phone: '+221700000000', createdAt: new Date() }),
     checklist:             common({ id: 'chk-01', tenantId: TENANT_ID, tripId: TRIP_ID, item: 'Vérification freins', completed: false, createdAt: new Date() }),
     route:                 common({ id: 'route-01', tenantId: TENANT_ID, name: 'Dakar → Thiès' }),
@@ -286,11 +309,63 @@ export function createPrismaMock() {
     onboardingStep:        common({ step: 'PROFILE', completed: true }),
     tenantConfig:          common(null),   // null → TenantConfigService retourne DEFAULT_CONFIG
     tenantBrand:           common(FIXTURE_BRAND),
-    tenantBusinessConfig:  common(null),   // null → DEFAULT_BUSINESS_CONSTANTS dans ProfitabilityService
+    // Valeurs par défaut alignées sur les @default du schema Prisma. ProfitabilityService
+    // lit ce config via findUnique et doit y trouver les constantes (on retournait
+    // null auparavant, ce qui cassait les services qui lisent sans fallback — ex:
+    // CancellationPolicyService.calculateRefundAmount → 404).
+    tenantBusinessConfig:  common({
+      id: 'tbc-01', tenantId: TENANT_ID,
+      daysPerYear: 365, defaultTripsPerMonth: 30,
+      breakEvenThresholdPct: 0.05, agencyCommissionRate: 0.03,
+      stationFeePerDeparture: 0, seatSelectionFee: 0,
+      tvaEnabled: false, tvaRate: 0.18,
+      cancellationFullRefundMinutes: 1440, cancellationPartialRefundMinutes: 120,
+      cancellationPartialRefundPct: 0.5, refundApprovalThreshold: 50000,
+      refundAutoApproveMax: 0, autoApproveTripCancelled: true,
+      cancellationPenaltyTiers: [], cancellationPenaltyAppliesTo: ['CUSTOMER','AGENT','ADMIN'],
+      noShowGraceMinutes: 15, ticketTtlHours: 48,
+      noShowPenaltyEnabled: false, noShowPenaltyPct: 0, noShowPenaltyFlatAmount: 0,
+      incidentCompensationEnabled: false, incidentCompensationDelayTiers: [],
+      incidentCompensationFormDefault: 'VOUCHER', incidentVoucherValidityDays: 180,
+      incidentVoucherUsageScope: 'SAME_COMPANY', incidentRefundProrataEnabled: true,
+      parcelHubMaxStorageDays: 7, parcelPickupMaxDaysBeforeReturn: 14,
+      parcelPickupNoShowAction: 'return',
+      updatedAt: new Date(),
+    }),
     busCostProfile:        common(FIXTURE_COST_PROFILE),
     tripCostSnapshot:      common(FIXTURE_COST_SNAPSHOT),
     tripAnalytics:         common({ id: 'ta-01', tenantId: TENANT_ID, routeId: 'route-01', busId: BUS_ID, avgFillRate: 0.76, isGoldenDay: false, isBlackRoute: false, dayOfWeek: 1, tripDate: new Date(), createdAt: new Date() }),
     installedModule:       common({ id: 'im-01', tenantId: TENANT_ID, moduleKey: 'YIELD_ENGINE', isActive: true, config: {} }),
+
+    // CRM — CustomerResolverService utilisé par ParcelService.register (+ autres).
+    customer:                { ...common({ id: 'cust-01', tenantId: TENANT_ID, name: 'Test Customer', phoneE164: '+241700000000', totalTickets: 0, totalParcels: 0, totalSpentCents: BigInt(0) }), findFirst: jest.fn().mockResolvedValue(null) },
+    customerClaimToken:      common(null),
+    customerRetroClaimOtp:   common(null),
+
+    // Scheduling Guard (TripService.create) — lookups via SchedulingGuardService
+    // vehicleDocument.findMany DOIT retourner un array vide (pas de doc expiré) —
+    // `common()` retourne [fixture] même quand fixture=[] → on override explicitement.
+    vehicleDocument:         { ...common(null), findMany: jest.fn().mockResolvedValue([]) },
+    driverRestConfig:        common(null), // pas de config → limites par défaut
+    driverRestPeriod:        common(null), // pas de repos actif
+    driverRemediationAction: common(null), // pas de suspension
+    driverLicense:           common({ id: 'lic-01', status: 'VALID', expiresAt: new Date(Date.now() + 365 * 86400_000) }),
+
+    // SAV / Refund (TicketingService cancel) + Manifest (generate, sign, download)
+    refund:                  common({ id: 'rfd-01', tenantId: TENANT_ID, ticketId: 'tkt-01', status: 'PENDING', amount: 3500, version: 1, policyPercent: 1.0, currency: 'XAF' }),
+    voucher:                 common([]),
+    compensationItem:        common([]),
+
+    // Incident (update/resolve/assign) — incident déjà mocké mais incidentEvent manquait
+    incidentEvent:           common({ id: 'inc-evt-01', incidentId: 'inc-01', type: 'NOTE', createdAt: new Date() }),
+
+    // Documents & manifests avancés
+    manifestSignature:       common({ id: 'ms-01', manifestId: 'mf-01', signatoryType: 'DRIVER', signedAt: new Date() }),
+    document:                common({ id: 'doc-01', tenantId: TENANT_ID, minioKey: 'test/doc.pdf', type: 'MANIFEST' }),
+
+    // Cashier transaction (enregistrement flux) — déjà mocké mais payment manquait
+    payment:                 common({ id: 'pay-01', tenantId: TENANT_ID, status: 'SUCCEEDED', amount: 5000, currency: 'XAF' }),
+    paymentIntent:           common({ id: 'pi-01', tenantId: TENANT_ID, status: 'SUCCEEDED', amount: 5000, currency: 'XAF' }),
 
     // Prisma transactions — la callback reçoit le prisma mock lui-même (selfRef)
     // plutôt qu'un `{}` vide, pour que WorkflowEngine.transition() puisse

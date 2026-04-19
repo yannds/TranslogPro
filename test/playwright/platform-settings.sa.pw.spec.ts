@@ -22,9 +22,12 @@ test.describe('[pw:sa] Platform Settings — PlatformConfig', () => {
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Paramètres plateforme/i);
 
-    // Groupes (rendered via h2 aria-labelledby)
-    const sections = page.locator('section[aria-labelledby^="cfg-"]');
-    expect(await sections.count()).toBeGreaterThanOrEqual(2);
+    // Attendre qu'au moins un groupe (h2 dans une région) soit rendu — la page
+    // fetch PlatformConfig en async. Puis compter les h2 des groupes présents.
+    await expect(page.getByRole('heading', { level: 2, name: /Score de santé/i })).toBeVisible({ timeout: 10_000 });
+    const groupHeadings = page.getByRole('heading', { level: 2 });
+    // Au moins 2 groupes attendus sur le registre par défaut (Health + Billing).
+    expect(await groupHeadings.count()).toBeGreaterThanOrEqual(2);
   });
 
   test('modifie riskThreshold → badge "modifié" + save OK', async ({ page }) => {
@@ -45,8 +48,11 @@ test.describe('[pw:sa] Platform Settings — PlatformConfig', () => {
     // Clic Enregistrer
     await page.getByRole('button', { name: /Enregistrer$/i }).click();
 
-    // Feedback "Enregistré"
-    await expect(page.getByText(/Enregistré/i)).toBeVisible({ timeout: 5_000 });
+    // Feedback "Enregistré" — badge live-region (role="status" ou span à proximité
+    // du bouton Save). On cible le PREMIER match pour éviter les collisions
+    // avec les help-texts qui contiennent le mot "enregistré" (ex: "aucune vente
+    // n'a été enregistrée"). `.first()` suffit car le badge est en haut de la page.
+    await expect(page.getByText(/Enregistré/i).first()).toBeVisible({ timeout: 5_000 });
 
     // Recharger la page → la valeur doit persister
     await page.reload();

@@ -109,9 +109,11 @@ export async function createIntegrationFixtures(prisma: PrismaClient): Promise<I
     },
   });
 
-  // ── Users (upsert via email — unique) ───────────────────────────────────────
+  // ── Users (upsert via tenantId_email compound — multi-tenant unique) ────────
+  // Depuis la Phase 2 multi-tenant, l'email est unique PAR TENANT (et pas global).
+  // Utiliser la clé compound {tenantId_email: { tenantId, email }}.
   const driver = await prisma.user.upsert({
-    where:  { email: 'driver-integ@test.local' },
+    where:  { tenantId_email: { tenantId, email: 'driver-integ@test.local' } },
     update: {},
     create: {
       id:       IDS.driver,
@@ -125,7 +127,7 @@ export async function createIntegrationFixtures(prisma: PrismaClient): Promise<I
   });
 
   const passenger = await prisma.user.upsert({
-    where:  { email: 'passenger-integ@test.local' },
+    where:  { tenantId_email: { tenantId, email: 'passenger-integ@test.local' } },
     update: {},
     create: {
       id:       IDS.passenger,
@@ -151,17 +153,21 @@ export async function createIntegrationFixtures(prisma: PrismaClient): Promise<I
   });
 
   // ── Ticket (créé à chaque fois — PENDING_PAYMENT frais) ────────────────────
+  // Les relations boardingStation / alightingStation sont requises (FK Station).
+  // On utilise origine et destination de la route comme défaut.
   const ticket = await prisma.ticket.create({
     data: {
       tenantId,
-      tripId:       trip.id,
-      passengerId:  passenger.id,
-      passengerName:'Passenger Integration',
-      pricePaid:    3500,
-      agencyId:     IDS.agency,
-      status:       'PENDING_PAYMENT',
-      qrCode:       `qr-integ-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      version:      1,
+      tripId:             trip.id,
+      passengerId:        passenger.id,
+      passengerName:      'Passenger Integration',
+      pricePaid:          3500,
+      agencyId:           IDS.agency,
+      status:             'PENDING_PAYMENT',
+      qrCode:             `qr-integ-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      version:            1,
+      boardingStation:  { connect: { id: IDS.stationOrigin } },
+      alightingStation: { connect: { id: IDS.stationDest } },
     },
   });
 

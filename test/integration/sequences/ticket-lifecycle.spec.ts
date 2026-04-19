@@ -103,6 +103,8 @@ describe('Ticket Lifecycle — Scénario 1 : cycle complet', () => {
         status:        'PENDING_PAYMENT',
         qrCode:        `qr-lc1-${Date.now()}`,
         version:       1,
+        boardingStation:  { connect: { id: fixtures.stationOriginId } },
+        alightingStation: { connect: { id: fixtures.stationDestinationId } },
       },
     });
     ticketId = t.id;
@@ -171,6 +173,8 @@ describe('Ticket Lifecycle — Scénario 2 : expiration', () => {
         status:        'PENDING_PAYMENT',
         qrCode:        `qr-lc2-${Date.now()}`,
         version:       1,
+        boardingStation:  { connect: { id: fixtures.stationOriginId } },
+        alightingStation: { connect: { id: fixtures.stationDestinationId } },
       },
     });
     ticketId = t.id;
@@ -201,6 +205,8 @@ describe('Ticket Lifecycle — Scénario 3 : annulation', () => {
         status:        'PENDING_PAYMENT',
         qrCode:        `qr-lc3-${Date.now()}`,
         version:       1,
+        boardingStation:  { connect: { id: fixtures.stationOriginId } },
+        alightingStation: { connect: { id: fixtures.stationDestinationId } },
       },
     });
     ticketId = t.id;
