@@ -1212,6 +1212,55 @@ export async function reconcileSystemRolePermissions(
   return { tenants: tenants.length, rolesTouched, permsAdded, permsRemoved };
 }
 
+/**
+ * Backfill Staff pour chaque User(userType=STAFF) sans Staff record.
+ *
+ * Contexte : la table `staff` a une relation 1:1 avec `users` pour les membres
+ * du personnel (vs CUSTOMER/ANONYMOUS). Sans Staff row, flight-deck, crew et
+ * staff_assignments ne trouvent pas le lien userId→staffId → driver voit 0 trip,
+ * admin voit 0 membre dans l'équipe.
+ *
+ * Cause racine possible : import Users via seed sans création Staff, ou
+ * `prisma db push --accept-data-loss` qui a recréé la table lors d'un changement
+ * de colonne (ex. ajout de `version` pour lock optimiste WorkflowEngine).
+ *
+ * Protection SaaS-grade : cette fonction est rejouée au boot via
+ * IamBootstrapService pour garantir l'intégrité référentielle en permanence.
+ *
+ * Idempotent : utilise la unique constraint `userId` + skipDuplicates.
+ */
+export async function backfillStaffFromUsers(
+  prismaClient: PrismaClient,
+): Promise<{ usersScanned: number; staffCreated: number }> {
+  const users = await prismaClient.user.findMany({
+    where:  { userType: 'STAFF' },
+    select: { id: true, tenantId: true, agencyId: true, createdAt: true },
+  });
+  if (users.length === 0) return { usersScanned: 0, staffCreated: 0 };
+
+  const existing = await prismaClient.staff.findMany({
+    where:  { userId: { in: users.map(u => u.id) } },
+    select: { userId: true },
+  });
+  const existingSet = new Set(existing.map(s => s.userId));
+  const missing = users.filter(u => !existingSet.has(u.id));
+
+  if (missing.length === 0) return { usersScanned: users.length, staffCreated: 0 };
+
+  const res = await prismaClient.staff.createMany({
+    data: missing.map(u => ({
+      tenantId: u.tenantId,
+      userId:   u.id,
+      agencyId: u.agencyId ?? null,
+      status:   'ACTIVE',
+      hireDate: u.createdAt,
+      version:  1,
+    })),
+    skipDuplicates: true,
+  });
+  return { usersScanned: users.length, staffCreated: res.count };
+}
+
 export async function backfillDefaultWorkflows(
   prismaClient: PrismaClient,
 ): Promise<{ scanned: number; rowsCreated: number }> {

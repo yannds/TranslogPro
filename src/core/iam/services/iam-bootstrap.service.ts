@@ -27,7 +27,10 @@
  */
 import { Injectable, Logger, OnApplicationBootstrap, Inject, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { reconcileSystemRolePermissions } from '../../../../prisma/seeds/iam.seed';
+import {
+  reconcileSystemRolePermissions,
+  backfillStaffFromUsers,
+} from '../../../../prisma/seeds/iam.seed';
 import { REDIS_CLIENT } from '../../../infrastructure/eventbus/redis-publisher.service';
 import type Redis from 'ioredis';
 
@@ -53,25 +56,38 @@ export class IamBootstrapService implements OnApplicationBootstrap {
 
     const startedAt = Date.now();
     try {
-      const report = await reconcileSystemRolePermissions(this.prisma);
-      const durationMs = Date.now() - startedAt;
+      // 1. Reconciliation rôles système (perms ajoutées/retirées vs seed TS)
+      const permReport = await reconcileSystemRolePermissions(this.prisma);
 
-      if (report.rolesTouched === 0) {
+      if (permReport.rolesTouched === 0) {
         this.logger.log(
-          `[IamBootstrap] ${report.tenants} tenant(s) scanned — 0 drift, ` +
-          `DB déjà synchrone avec TENANT_ROLES (${durationMs}ms)`,
+          `[IamBootstrap] perms — ${permReport.tenants} tenant(s) scanné(s), 0 drift`,
         );
       } else {
         this.logger.warn(
-          `[IamBootstrap] ${report.tenants} tenant(s), ${report.rolesTouched} rôle(s) mis à jour : ` +
-          `+${report.permsAdded} perms ajoutées, -${report.permsRemoved} perms retirées (${durationMs}ms). ` +
-          `Invalidation du cache Redis iam:perm:* ...`,
+          `[IamBootstrap] perms — ${permReport.tenants} tenant(s), ` +
+          `${permReport.rolesTouched} rôle(s) mis à jour : ` +
+          `+${permReport.permsAdded} / -${permReport.permsRemoved}. Flush Redis iam:perm:*`,
         );
-
-        // Invalide le cache de permissions — sinon PermissionGuard lit l'ancien
-        // état (cache TTL 60s) et continue de retourner 403 malgré la DB à jour.
         await this.flushPermissionCache();
       }
+
+      // 2. Backfill Staff depuis Users (intégrité 1:1 — drivers voient leurs
+      //    trajets, admin voit son équipe, crew_assignments restent valides).
+      const staffReport = await backfillStaffFromUsers(this.prisma);
+      if (staffReport.staffCreated === 0) {
+        this.logger.log(
+          `[IamBootstrap] staff — ${staffReport.usersScanned} user(s) STAFF, 0 Staff manquant`,
+        );
+      } else {
+        this.logger.warn(
+          `[IamBootstrap] staff — ${staffReport.usersScanned} user(s) STAFF scanné(s), ` +
+          `${staffReport.staffCreated} Staff row(s) recréé(s) (backfill intégrité)`,
+        );
+      }
+
+      const durationMs = Date.now() - startedAt;
+      this.logger.log(`[IamBootstrap] ready in ${durationMs}ms`);
     } catch (err) {
       // Ne JAMAIS bloquer le boot sur un souci de reconcile. Log + continue.
       this.logger.error(
