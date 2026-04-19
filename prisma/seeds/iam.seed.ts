@@ -60,6 +60,7 @@ const SUPER_ADMIN_PERMISSIONS = [
   'data.platform.iam.read.global',
   'control.platform.session.revoke.global',
   'control.platform.mfa.reset.global',
+  'control.platform.user.reset-password.global',
   // Documents imprimables (accès global pour assistance)
   'data.ticket.print.agency',
   'data.manifest.print.global',
@@ -109,6 +110,8 @@ const SUPPORT_L2_PERMISSIONS = [
   // Platform IAM — L2 peut révoquer sessions + reset MFA en escalade
   'control.platform.session.revoke.global',
   'control.platform.mfa.reset.global',
+  // Reset mot de passe cross-tenant (support verrouillage — escalade L2)
+  'control.platform.user.reset-password.global',
 ];
 
 // ─── Permissions par rôle tenant ──────────────────────────────────────────────

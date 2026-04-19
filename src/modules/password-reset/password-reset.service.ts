@@ -147,6 +147,126 @@ export class PasswordResetService {
    *   - userId doit appartenir au même tenant que l'actor
    *   - actor ne peut pas reset son propre compte (passer par self-service)
    */
+  /**
+   * Variante cross-tenant réservée au staff plateforme (SUPER_ADMIN, SUPPORT_L2).
+   * Même logique que `initiateByAdmin` mais SANS le filtre `tenantId: actorTenantId` :
+   * le target peut vivre dans n'importe quel tenant. Son `tenantId` est résolu
+   * automatiquement. L'actor vit typiquement sur le tenant plateforme.
+   *
+   * Garde-fou : on refuse toujours que l'actor se reset lui-même (→ forgot-password).
+   */
+  async initiateByPlatformAdmin(params: {
+    actorId:      string;
+    targetUserId: string;
+    mode:         'link' | 'set';
+    newPassword?: string;
+    ipAddress:    string;
+  }): Promise<InitiateByAdminResult> {
+    if (params.actorId === params.targetUserId) {
+      throw new ForbiddenException(
+        'Utilisez la fonction "mot de passe oublié" pour votre propre compte',
+      );
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where:  { id: params.targetUserId },
+      select: {
+        id: true, email: true, tenantId: true, isActive: true,
+        tenant: { select: { slug: true } },
+      },
+    });
+    if (!target) throw new NotFoundException('Utilisateur introuvable');
+
+    // Délègue au flow standard en imitant un actor "du tenant du target"
+    // — cette route tire l'autorisation du PermissionGuard global amont, pas
+    // du check (actorTenantId ?= target.tenantId) de initiateByAdmin.
+    return this.initiateByAdminCrossTenant({
+      actorId:      params.actorId,
+      targetUserId: params.targetUserId,
+      targetUserTenantId: target.tenantId,
+      mode:         params.mode,
+      newPassword:  params.newPassword,
+      ipAddress:    params.ipAddress,
+    });
+  }
+
+  /**
+   * Implémentation partagée — ne vérifie pas actor vs tenant. Utilisé par
+   * `initiateByAdmin` (après check tenant match) ET `initiateByPlatformAdmin`
+   * (où la permission .global fait autorité). Ne pas exposer publiquement.
+   */
+  private async initiateByAdminCrossTenant(params: {
+    actorId:            string;
+    targetUserId:       string;
+    targetUserTenantId: string;
+    mode:               'link' | 'set';
+    newPassword?:       string;
+    ipAddress:          string;
+  }): Promise<InitiateByAdminResult> {
+    const target = await this.prisma.user.findFirst({
+      where:  { id: params.targetUserId, tenantId: params.targetUserTenantId },
+      select: {
+        id: true, email: true, tenantId: true, isActive: true,
+        tenant: { select: { slug: true } },
+      },
+    });
+    if (!target) throw new NotFoundException('Utilisateur introuvable');
+
+    const account = await this.prisma.account.findFirst({
+      where:  { userId: target.id, providerId: 'credential' },
+      select: { id: true },
+    });
+    if (!account) {
+      throw new BadRequestException(
+        'Ce compte ne possède pas d\'identifiants — impossible de réinitialiser',
+      );
+    }
+
+    if (params.mode === 'set') {
+      if (!params.newPassword) throw new BadRequestException('Mot de passe requis en mode "set"');
+      const hash = await bcrypt.hash(params.newPassword, 12);
+      await this.prisma.account.update({
+        where: { id: account.id },
+        data:  {
+          password: hash,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          forcePasswordChange:    true,
+        },
+      });
+      await this.prisma.session.deleteMany({ where: { userId: target.id } });
+      await this.writeAuditLog({
+        tenantId: target.tenantId,
+        userId:   target.id,
+        actorId:  params.actorId,
+        action:   'auth.password_reset.platform.set',
+        level:    'warn',
+        ipAddress: params.ipAddress,
+        meta:     { email: target.email, forcedRotation: true, crossTenant: true },
+      });
+      return { email: target.email, mode: 'set' };
+    }
+
+    const rawToken  = randomBytes(RESET_TOKEN_BYTES).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data:  { passwordResetTokenHash: tokenHash, passwordResetExpiresAt: expiresAt },
+    });
+    const resetUrl = this.buildResetUrl(rawToken, target.tenant.slug);
+    await this.writeAuditLog({
+      tenantId: target.tenantId,
+      userId:   target.id,
+      actorId:  params.actorId,
+      action:   'auth.password_reset.platform.link',
+      level:    'warn',
+      ipAddress: params.ipAddress,
+      meta:     { email: target.email, expiresAt: expiresAt.toISOString(), crossTenant: true },
+    });
+    return { email: target.email, mode: 'link', rawToken, resetUrl, expiresAt };
+  }
+
   async initiateByAdmin(params: {
     actorTenantId: string;
     actorId:       string;

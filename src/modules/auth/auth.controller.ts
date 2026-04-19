@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Get, Body, Req, Res, Query,
+  Controller, Post, Get, Patch, Body, Req, Res, Query,
   HttpCode, UseGuards, UnauthorizedException, BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -11,6 +11,7 @@ import {
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
 import { ImpersonationService } from '../../core/iam/services/impersonation.service';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 const COOKIE_NAME = 'translog_session';
 
@@ -70,7 +71,7 @@ export class AuthController {
     @Body() dto:  SignInDto,
     @Req()  req:  Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<Omit<AuthUserDto, 'roleId'> & { roleId: string | null }> {
+  ): Promise<AuthUserDto | { mfaRequired: true; expiresAt: string }> {
     // Le tenant est résolu depuis le Host par TenantHostMiddleware
     // (voir core/tenancy). Sans sous-domaine tenant valide, on refuse le login
     // — pas de fallback "global" : un cookie doit être scopé à un sous-domaine.
@@ -82,7 +83,7 @@ export class AuthController {
       );
     }
 
-    const { token, user } = await this.authService.signIn(
+    const result = await this.authService.signIn(
       tenantId,
       dto.email,
       dto.password,
@@ -90,8 +91,16 @@ export class AuthController {
       req.headers['user-agent'] ?? '',
     );
 
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
-    return user;
+    // Branch MFA — on pose le cookie pré-session (TTL 5 min) et on retourne
+    // un marqueur à destination du frontend pour qu'il bascule sur l'écran
+    // code à 6 chiffres. Le vrai cookie de session sera posé après /mfa/verify.
+    if (result.kind === 'mfaChallenge') {
+      res.cookie(MFA_COOKIE_NAME, result.challengeToken, MFA_COOKIE_OPTS);
+      return { mfaRequired: true, expiresAt: result.expiresAt.toISOString() };
+    }
+
+    res.cookie(COOKIE_NAME, result.token, COOKIE_OPTS);
+    return result.user;
   }
 
   /**
@@ -171,6 +180,70 @@ export class AuthController {
     res.clearCookie(MFA_COOKIE_NAME, { path: '/', sameSite: 'strict' });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
     return user;
+  }
+
+  /**
+   * POST /api/auth/change-password
+   *
+   * Self-service : l'utilisateur authentifié change son mot de passe en
+   * fournissant l'ancien + le nouveau. Toutes ses sessions sont invalidées
+   * — il devra se reconnecter (y compris sur cet onglet → cookie purgé).
+   *
+   * Rate-limit : 5 tentatives / 15 min par IP pour freiner une attaque
+   * qui aurait volé un cookie de session et voudrait essayer des mots de
+   * passe par force brute via cet endpoint.
+   */
+  @Post('change-password')
+  @HttpCode(200)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 15 * 60_000, keyBy: 'ip', suffix: 'auth_changepwd' })
+  async changePassword(
+    @Body() body: { currentPassword: string; newPassword: string },
+    @Req()  req:  Request,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() actor: CurrentUserPayload,
+  ): Promise<{ ok: true }> {
+    if (typeof body?.currentPassword !== 'string' ||
+        typeof body?.newPassword     !== 'string') {
+      throw new BadRequestException('currentPassword et newPassword requis');
+    }
+    await this.authService.changePassword(
+      actor.id,
+      body.currentPassword,
+      body.newPassword,
+      extractIp(req),
+    );
+    // Toutes les sessions (y compris courante) ont été invalidées — on
+    // purge aussi le cookie côté client pour cohérence UX.
+    res.clearCookie(COOKIE_NAME, { path: '/', sameSite: 'strict' });
+    return { ok: true };
+  }
+
+  /**
+   * PATCH /api/auth/me/preferences
+   *
+   * Self-service : met à jour `locale` et/ou `timezone` dans User.preferences.
+   * Les autres clés du JSON sont préservées (merge partiel).
+   */
+  @Patch('me/preferences')
+  async updateMyPreferences(
+    @Body()        body:  { locale?: string; timezone?: string },
+    @CurrentUser() actor: CurrentUserPayload,
+  ): Promise<{ locale: string | null; timezone: string | null }> {
+    // Validation simple — les valeurs inconnues (locale non supportée, TZ
+    // arbitraire) sont acceptées ; le frontend choisit dans des listes fixes.
+    if (body.locale !== undefined &&
+        (typeof body.locale !== 'string' || body.locale.length > 8)) {
+      throw new BadRequestException('locale invalide');
+    }
+    if (body.timezone !== undefined &&
+        (typeof body.timezone !== 'string' || body.timezone.length > 64)) {
+      throw new BadRequestException('timezone invalide');
+    }
+    return this.authService.updateMyPreferences(actor.id, {
+      locale:   body.locale,
+      timezone: body.timezone,
+    });
   }
 
   /**

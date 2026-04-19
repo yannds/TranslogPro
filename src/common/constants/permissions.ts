@@ -252,6 +252,10 @@ export const P_PLATFORM_AUDIT_READ_GLOBAL      = 'data.platform.audit.read.globa
 export const P_PLATFORM_IAM_READ_GLOBAL        = 'data.platform.iam.read.global';
 export const P_PLATFORM_SESSION_REVOKE_GLOBAL  = 'control.platform.session.revoke.global';
 export const P_PLATFORM_MFA_RESET_GLOBAL       = 'control.platform.mfa.reset.global';
+// Reset password cross-tenant (support utilisateur verrouillé sur un autre
+// tenant). Mode 'link' recommandé en cross-tenant (audit plus propre) ;
+// mode 'set' réservé aux escalades critiques avec justification audit.
+export const P_PLATFORM_USER_RESET_PWD_GLOBAL  = 'control.platform.user.reset-password.global';
 
 // ─── Support ticket (côté tenant client) ────────────────────────────────────
 // Un utilisateur tenant peut ouvrir un ticket vers la plateforme. La
@@ -440,6 +444,7 @@ export const Permission = {
   PLATFORM_IAM_READ_GLOBAL:       P_PLATFORM_IAM_READ_GLOBAL,
   PLATFORM_SESSION_REVOKE_GLOBAL: P_PLATFORM_SESSION_REVOKE_GLOBAL,
   PLATFORM_MFA_RESET_GLOBAL:      P_PLATFORM_MFA_RESET_GLOBAL,
+  PLATFORM_USER_RESET_PWD_GLOBAL: P_PLATFORM_USER_RESET_PWD_GLOBAL,
   // Support tenant (émetteur)
   SUPPORT_CREATE_TENANT:          P_SUPPORT_CREATE_TENANT,
   SUPPORT_READ_TENANT:            P_SUPPORT_READ_TENANT,

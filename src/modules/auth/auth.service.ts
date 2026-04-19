@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TenantModuleService } from '../tenant/tenant-module.service';
 import { MfaService } from '../mfa/mfa.service';
@@ -34,6 +35,15 @@ const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1_000;
 
 /** Nombre max de codes erronés acceptés par challenge avant invalidation. */
 const MFA_MAX_ATTEMPTS = 5;
+
+/**
+ * Résultat d'un sign-in : soit une session complète (flow standard), soit un
+ * challenge MFA en attente (flow 2FA). Le controller discrimine via `kind`
+ * pour poser le bon cookie (translog_session vs translog_mfa_challenge).
+ */
+export type SignInResult =
+  | { kind: 'session';      token:          string; user:      AuthUserDto }
+  | { kind: 'mfaChallenge'; challengeToken: string; expiresAt: Date };
 
 export interface AuthUserDto {
   id:              string;
@@ -90,6 +100,30 @@ export interface AuthUserDto {
    */
   businessActivity: string | null;
   /**
+   * Statut de la souscription SaaS du tenant — TRIAL | ACTIVE | PAST_DUE |
+   * SUSPENDED | CANCELLED. Null si pas de souscription (tenant plateforme,
+   * SA, ou provisioning hors signup). Utilisé par le frontend pour afficher
+   * le SuspendedScreen bloquant quand status=SUSPENDED.
+   */
+  subscriptionStatus: string | null;
+  /**
+   * Préférences self-service — override des valeurs par défaut du tenant.
+   * Null = utilise le fallback tenant. Stockées dans User.preferences JSON.
+   */
+  locale:           string | null;
+  timezone:         string | null;
+  /**
+   * MFA activé sur ce compte. Quand true, le flow sign-in retourne un
+   * challenge pré-session au lieu d'une session directe.
+   */
+  mfaEnabled:       boolean;
+  /**
+   * Indique qu'un admin a forcé la rotation du mot de passe au prochain
+   * login (Account.forcePasswordChange). Le frontend affiche alors
+   * automatiquement l'écran /account/security.
+   */
+  mustChangePassword: boolean;
+  /**
    * Contexte d'impersonation — présent ssi la session courante a été
    * créée via exchange d'un token d'impersonation JIT (effectiveTenantId
    * ≠ tenantId). Le frontend affiche un banner + chrono tant que ce
@@ -134,7 +168,7 @@ export class AuthService {
     password:  string,
     ipAddress: string,
     userAgent: string,
-  ): Promise<{ token: string; user: AuthUserDto }> {
+  ): Promise<SignInResult> {
 
     if (!tenantId) {
       // Filet de sécurité : ne jamais signer sans tenant résolu.
@@ -179,6 +213,23 @@ export class AuthService {
         email,
       });
       throw new UnauthorizedException('Compte désactivé');
+    }
+
+    // 1c. MFA wire — si le user a activé TOTP, on n'émet PAS de session mais
+    //     un challenge pré-session. Le controller pose un cookie MFA distinct
+    //     (TTL 5 min) et le frontend bascule sur l'écran code à 6 chiffres.
+    //     La vérification passe ensuite par POST /auth/mfa/verify qui appelle
+    //     verifyMfa() et crée enfin la vraie session.
+    if (user.mfaEnabled) {
+      const challenge = await this.issueMfaChallenge(
+        user.id, user.tenantId, ipAddress, userAgent,
+      );
+      this.logger.log(`[AUTH] sign-in pending MFA challenge: ${email} tenant=${user.tenantId}`);
+      return {
+        kind:           'mfaChallenge',
+        challengeToken: challenge.token,
+        expiresAt:      challenge.expiresAt,
+      };
     }
 
     // 2. Invalidation préventive des sessions expirées du même user (housekeeping)
@@ -227,8 +278,125 @@ export class AuthService {
     this.logger.log(`[AUTH] sign-in: ${email} tenant=${user.tenantId} ip=${ipAddress}`);
 
     return {
+      kind:  'session',
       token,
-      user: await this.toDto(user),
+      user:  await this.toDto(user),
+    };
+  }
+
+  // ─── Self-service : changement de mot de passe ───────────────────────────
+
+  /**
+   * Permet à un utilisateur authentifié de changer son propre mot de passe.
+   *
+   * - Vérifie `currentPassword` via bcrypt
+   * - Hashe `newPassword` (bcrypt 12)
+   * - Invalide toutes les autres sessions du user (defense-in-depth)
+   * - Met à jour `forcePasswordChange = false` (cas rotation forcée)
+   *
+   * Sessions préservées : aucune — on demande au user de se reconnecter
+   * partout (par prudence). Ce choix peut être assoupli plus tard si UX
+   * trop dure, en ne conservant que la session courante (via `keepToken`).
+   */
+  async changePassword(
+    userId:          string,
+    currentPassword: string,
+    newPassword:     string,
+    ipAddress:       string,
+  ): Promise<void> {
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException('Nouveau mot de passe requis (≥ 8 caractères)');
+    }
+    if (newPassword === currentPassword) {
+      throw new BadRequestException('Le nouveau mot de passe doit différer de l\'actuel');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { id: true, tenantId: true, email: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+    const account = await this.prisma.account.findFirst({
+      where:  { userId: user.id, providerId: 'credential' },
+      select: { id: true, password: true },
+    });
+    if (!account || !account.password) {
+      throw new BadRequestException(
+        'Ce compte n\'a pas de mot de passe (connexion OAuth uniquement)',
+      );
+    }
+
+    const ok = await bcrypt.compare(currentPassword, account.password);
+    if (!ok) throw new UnauthorizedException('Mot de passe actuel invalide');
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.$transaction([
+      this.prisma.account.update({
+        where: { id: account.id },
+        data:  {
+          password: hash,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          forcePasswordChange:    false,
+        },
+      }),
+      this.prisma.session.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    await this.auditSignIn({
+      userId:    user.id,
+      tenantId:  user.tenantId,
+      success:   true,
+      ipAddress,
+      userAgent: '',
+      email:     user.email,
+    }).catch(() => { /* audit fails never block password change */ });
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId:  user.tenantId,
+        userId:    user.id,
+        plane:     'control',
+        level:     'info',
+        action:    'auth.password.change.self',
+        resource:  `User:${user.id}`,
+        ipAddress,
+      },
+    }).catch(() => { /* best effort */ });
+  }
+
+  // ─── Self-service : préférences (locale / timezone) ──────────────────────
+
+  /**
+   * Fusionne les clés fournies dans `User.preferences` JSON (sans écraser les
+   * autres clés déjà présentes). Les valeurs null/undefined sont ignorées.
+   */
+  async updateMyPreferences(
+    userId: string,
+    patch:  { locale?: string | null; timezone?: string | null },
+  ): Promise<{ locale: string | null; timezone: string | null }> {
+    const user = await this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { id: true, preferences: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+    // preferences JSON peut déjà contenir d'autres clés (ex. siège préféré
+    // pour clients) — on merge sans écraser.
+    const prev = (user.preferences as Record<string, unknown> | null) ?? {};
+    const next: Record<string, unknown> = { ...prev };
+    if (typeof patch.locale === 'string')   next['locale']   = patch.locale;
+    if (typeof patch.timezone === 'string') next['timezone'] = patch.timezone;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data:  { preferences: next as Prisma.InputJsonValue },
+    });
+
+    return {
+      locale:   (next['locale']   as string | undefined) ?? null,
+      timezone: (next['timezone'] as string | undefined) ?? null,
     };
   }
 
@@ -546,10 +714,12 @@ export class AuthService {
   private async toDto(user: {
     id: string; email: string; name: string | null;
     tenantId: string; roleId: string | null; userType: string;
+    mfaEnabled?: boolean;
+    preferences?: unknown;
     role?: { name: string; permissions?: { permission: string }[] } | null;
   }, sessionTenantId?: string): Promise<AuthUserDto> {
     const effectiveTenantId = sessionTenantId ?? user.tenantId;
-    const [enabledModules, staff, tenant] = await Promise.all([
+    const [enabledModules, staff, tenant, subscription, credAccount, fullUser] = await Promise.all([
       this.modules.listActiveKeys(effectiveTenantId),
       this.prisma.staff.findFirst({
         where:  { userId: user.id, tenantId: user.tenantId },
@@ -559,7 +729,27 @@ export class AuthService {
         where:  { id: effectiveTenantId },
         select: { onboardingCompletedAt: true, businessActivity: true },
       }),
+      this.prisma.platformSubscription.findUnique({
+        where:  { tenantId: effectiveTenantId },
+        select: { status: true },
+      }),
+      // Account.forcePasswordChange — indépendant de la session, propre à l'identité.
+      this.prisma.account.findFirst({
+        where:  { userId: user.id, providerId: 'credential' },
+        select: { forcePasswordChange: true },
+      }),
+      // Si l'appelant a passé un user partiel sans preferences/mfaEnabled, on complète.
+      (user.preferences === undefined || user.mfaEnabled === undefined)
+        ? this.prisma.user.findUnique({
+            where:  { id: user.id },
+            select: { preferences: true, mfaEnabled: true },
+          })
+        : Promise.resolve(null),
     ]);
+
+    const prefs = ((fullUser?.preferences ?? user.preferences) as Record<string, unknown> | null) ?? {};
+    const mfaEnabled = fullUser?.mfaEnabled ?? user.mfaEnabled ?? false;
+
     return {
       id:               user.id,
       email:            user.email,
@@ -575,6 +765,11 @@ export class AuthService {
       permissions:      user.role?.permissions?.map(p => p.permission) ?? [],
       onboardingCompletedAt: tenant?.onboardingCompletedAt ? tenant.onboardingCompletedAt.toISOString() : null,
       businessActivity:      tenant?.businessActivity ?? null,
+      subscriptionStatus:    subscription?.status ?? null,
+      locale:           (prefs['locale']   as string | undefined) ?? null,
+      timezone:         (prefs['timezone'] as string | undefined) ?? null,
+      mfaEnabled,
+      mustChangePassword: credAccount?.forcePasswordChange ?? false,
     };
   }
 

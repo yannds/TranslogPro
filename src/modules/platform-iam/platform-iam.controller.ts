@@ -15,10 +15,12 @@
  *   acteurs dont le tenantId ≠ PLATFORM_TENANT_ID pour ces permissions globales.
  */
 import {
-  Controller, Get, Post, Delete,
-  Param, Query, HttpCode, HttpStatus,
+  Controller, Get, Post, Delete, Body, Req,
+  Param, Query, HttpCode, HttpStatus, BadRequestException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { PlatformIamService } from './platform-iam.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import {
   PlatformAuditQueryDto,
   PlatformUsersQueryDto,
@@ -28,9 +30,24 @@ import { RequirePermission }   from '../../common/decorators/require-permission.
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission } from '../../common/constants/permissions';
 
+/** Corps de requête pour la réinitialisation cross-tenant. */
+interface PlatformResetPasswordBody {
+  mode:         'link' | 'set';
+  newPassword?: string;
+}
+
+function extractIp(req: Request): string {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0]?.trim() ?? req.ip ?? '';
+  return req.ip ?? req.socket?.remoteAddress ?? '';
+}
+
 @Controller('platform/iam')
 export class PlatformIamController {
-  constructor(private readonly iam: PlatformIamService) {}
+  constructor(
+    private readonly iam:           PlatformIamService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   // ─── Audit ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +91,40 @@ export class PlatformIamController {
     @CurrentUser()   actor:  CurrentUserPayload,
   ) {
     return this.iam.resetMfa(userId, actor.id);
+  }
+
+  /**
+   * Réinitialisation du mot de passe d'un utilisateur cross-tenant.
+   * Réservé aux rôles plateforme (SUPER_ADMIN, SUPPORT_L2).
+   *
+   *   - mode 'link' : renvoie un resetUrl signé (TTL 30 min) à transmettre
+   *                   hors-bande. Tous les sessions du user sont préservés.
+   *   - mode 'set'  : applique immédiatement un nouveau mot de passe, force
+   *                   la rotation au prochain login (forcePasswordChange=true)
+   *                   et invalide toutes les sessions actives du user.
+   */
+  @Post('users/:userId/reset-password')
+  @RequirePermission(Permission.PLATFORM_USER_RESET_PWD_GLOBAL)
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Param('userId') userId: string,
+    @Body()          body:   PlatformResetPasswordBody,
+    @CurrentUser()   actor:  CurrentUserPayload,
+    @Req()           req:    Request,
+  ) {
+    if (body?.mode !== 'link' && body?.mode !== 'set') {
+      throw new BadRequestException('mode doit être "link" ou "set"');
+    }
+    if (body.mode === 'set' && !body.newPassword) {
+      throw new BadRequestException('newPassword requis en mode "set"');
+    }
+    return this.passwordReset.initiateByPlatformAdmin({
+      actorId:      actor.id,
+      targetUserId: userId,
+      mode:         body.mode,
+      newPassword:  body.newPassword,
+      ipAddress:    extractIp(req),
+    });
   }
 
   // ─── Roles (vue read-only des rôles plateforme système) ──────────────────
