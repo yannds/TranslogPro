@@ -6,7 +6,7 @@
 
 import { useMemo, useState, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
-import { LogOut, Sun, Moon, Menu, X }  from 'lucide-react';
+import { LogOut, Sun, Moon, Menu, X, UserCircle2 } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation } from '../../lib/hooks/useNavigation';
@@ -19,6 +19,7 @@ import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 import { TenantScopeSelector } from '../platform/TenantScopeSelector';
 import { ImpersonationBanner } from '../platform/ImpersonationBanner';
 import { TrialBanner }         from '../billing/TrialBanner';
+import { SuspendedScreen }     from '../billing/SuspendedScreen';
 
 function PageLoadingFallback() {
   return (
@@ -133,6 +134,16 @@ export function AdminDashboard() {
         {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
       </button>
 
+      {/* Accès self-service au compte — mot de passe, MFA, préférences. */}
+      <a
+        href="/account"
+        title={t('account.title')}
+        aria-label={t('account.title')}
+        className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 dark:hover:text-teal-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+      >
+        <UserCircle2 className="w-4 h-4" />
+      </a>
+
       <button
         onClick={() => void logout()}
         title={t('portal.logout')}
@@ -230,6 +241,11 @@ export function AdminDashboard() {
           </Suspense>
         </main>
       </div>
+
+      {/* Verrou SUSPENDED — bloque toute l'app admin sauf /admin/billing
+          et /welcome. Se monte ici pour rester au-dessus de la sidebar,
+          du header et du contenu. */}
+      <SuspendedScreen />
     </div>
   );
 }

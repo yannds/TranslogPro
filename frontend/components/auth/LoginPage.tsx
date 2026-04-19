@@ -21,10 +21,15 @@ import { useI18n } from '../../lib/i18n/useI18n';
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export function LoginPage() {
-  const { login, user, loading: authLoading } = useAuth();
+  const { login, verifyMfa, user, loading: authLoading } = useAuth();
   const { t }     = useI18n();
   const navigate  = useNavigate();
   const location  = useLocation();
+
+  // Étape du flow : 'credentials' (email+password) → 'mfa' (code 6 chiffres).
+  // Quand le backend répond `{ mfaRequired: true }`, on passe à 'mfa'.
+  const [step,    setStep]    = useState<'credentials' | 'mfa'>('credentials');
+  const [mfaCode, setMfaCode] = useState('');
 
   // Rediriger vers la page demandée avant la déconnexion, sinon laisser
   // HomeRedirect choisir le portail selon (userType, permissions).
@@ -50,8 +55,14 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+      const result = await login(email, password);
+      if (result.kind === 'mfa') {
+        // Un challenge MFA est ouvert côté serveur (cookie translog_mfa_challenge
+        // posé, TTL 5 min). On bascule l'écran sur le code à 6 chiffres.
+        setStep('mfa');
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 429) {
@@ -61,6 +72,26 @@ export function LoginPage() {
         } else {
           setError(`${t('auth.serverError')} (${err.status}). ${t('auth.serverRetry')}`);
         }
+      } else {
+        setError(t('auth.networkError'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await verifyMfa(mfaCode);
+      navigate(from, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 429) setError(t('auth.tooManyAttempts'));
+        else if (err.status === 401) setError(t('auth.mfaInvalid'));
+        else setError(`${t('auth.serverError')} (${err.status}).`);
       } else {
         setError(t('auth.networkError'));
       }
@@ -82,7 +113,65 @@ export function LoginPage() {
           <p className="text-slate-400 text-sm mt-1">{t('auth.subtitle')}</p>
         </div>
 
-        {/* Formulaire */}
+        {/* Étape MFA — s'affiche après un sign-in email+password valide quand
+            l'utilisateur a activé TOTP. Le cookie pré-session est posé côté
+            serveur ; on a 5 minutes pour fournir le code à 6 chiffres. */}
+        {step === 'mfa' ? (
+          <form
+            onSubmit={handleMfaSubmit}
+            noValidate
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5"
+          >
+            {error && (
+              <div role="alert" aria-live="polite"
+                className="flex items-start gap-2 rounded-lg bg-red-950/60 border border-red-800 px-3 py-2.5 text-sm text-red-300">
+                <span aria-hidden className="mt-0.5">⚠</span>{error}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label htmlFor="mfa-code" className="block text-sm font-medium text-slate-300">
+                {t('auth.mfaCodeLabel')}
+              </label>
+              <input
+                id="mfa-code"
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                autoComplete="one-time-code"
+                required
+                value={mfaCode}
+                onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                aria-describedby="mfa-help"
+                className={cn(
+                  'w-full rounded-lg border bg-slate-800 px-3 py-2.5 text-center text-xl font-mono tracking-widest text-white placeholder:text-slate-500',
+                  'border-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30',
+                )}
+                disabled={loading}
+                autoFocus
+              />
+              <p id="mfa-help" className="text-xs text-slate-500">{t('auth.mfaCodeHint')}</p>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || mfaCode.length !== 6}
+              className={cn(
+                'w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white transition-colors',
+                'hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            >
+              {loading ? t('auth.signing') : t('auth.mfaVerify')}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStep('credentials'); setMfaCode(''); setError(null); }}
+              className="w-full text-xs text-slate-400 hover:text-teal-400"
+            >
+              {t('auth.mfaBack')}
+            </button>
+          </form>
+        ) : (
+        /* Formulaire */
         <form
           onSubmit={handleSubmit}
           noValidate
@@ -178,6 +267,7 @@ export function LoginPage() {
             </Link>
           </div>
         </form>
+        )}
 
         <p className="text-center text-xs text-slate-600">
           {t('auth.copyright')}

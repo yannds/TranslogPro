@@ -3,7 +3,10 @@
  * To add a translatable string: add the key here, then translate in other locales.
  */
 
-const fr: Record<string, Record<string, string>> = {
+// Les valeurs imbriquées (ex. platformBilling.extendTrial.* ) sont acceptées
+// — le loader i18n sait aplatir ces namespaces en notation pointée.
+type LocaleValue = string | Record<string, string>;
+const fr: Record<string, Record<string, LocaleValue>> = {
   "simulation": {
     "simTitle": "▶ Simulation Live-Path",
     "success": "✓ Succès",
@@ -693,7 +696,6 @@ const fr: Record<string, Record<string, string>> = {
     "errorSaveFare": "Erreur lors de la sauvegarde du tarif",
     "errorConfirm": "Erreur lors de la confirmation",
     "offlineTripsHint": "Liste des voyages en cache local (hors ligne). Disponibilités & prix seront revérifiés à la reconnexion.",
-    "phonePlaceholder": "+237 6XX XXX XXX",
     "seatPlaceholder": "ex : 12A",
     "luggagePlaceholder": "0",
     "promoPlaceholder": "ex : PROMO20",
@@ -2853,7 +2855,12 @@ const fr: Record<string, Record<string, string>> = {
     "passwordMinLength": "Minimum 8 caractères.",
     "passwordMismatch": "Les mots de passe ne correspondent pas.",
     "resetPassword": "Réinitialiser",
-    "resetting": "Réinitialisation…"
+    "resetting": "Réinitialisation…",
+    "mfaCodeLabel": "Code de vérification",
+    "mfaCodeHint": "Saisissez le code à 6 chiffres généré par votre application d'authentification.",
+    "mfaVerify": "Vérifier",
+    "mfaBack": "Retour à la connexion",
+    "mfaInvalid": "Code incorrect. Vérifiez que l'horloge de votre téléphone est synchronisée."
   },
   "stationAgent": {
     "tabSale": "Vente",
@@ -3024,6 +3031,7 @@ const fr: Record<string, Record<string, string>> = {
     "cms_pages": "Pages CMS",
     "cms_posts": "Actualités",
     "api_integrations": "Intégrations API",
+    "billing": "Abonnement",
     "document_templates": "Modèles de documents",
     "users_roles": "Utilisateurs & Rôles",
     "users": "Utilisateurs",
@@ -3036,7 +3044,7 @@ const fr: Record<string, Record<string, string>> = {
     "platform_billing": "Facturation plateforme",
     "platform_support": "File de support",
     "platform_settings": "Paramètres plateforme",
-    "support": "Contacter le support",
+    "contact_support": "Contacter le support",
     "tenant_management": "Gestion des tenants",
     "platform_staff": "Staff plateforme",
     "jit_impersonation": "Impersonation JIT",
@@ -3082,6 +3090,7 @@ const fr: Record<string, Record<string, string>> = {
     "claim": "Réclamation",
     "retro_claim": "Retrouver mes achats",
     "leave_a_review": "Donner un avis",
+    "my_incidents": "Mes signalements",
     "today_s_trips": "Trajets du jour",
     "overview": "Vue d'ensemble"
   },
@@ -3167,7 +3176,9 @@ const fr: Record<string, Record<string, string>> = {
     "refresh": "Actualiser",
     "loading": "Chargement",
     "enabled": "Activé",
-    "disabled": "Désactivé"
+    "disabled": "Désactivé",
+    "copy": "Copier",
+    "copied": "Copié !"
   },
   "ui": {
     "loading": "Chargement…",
@@ -4046,7 +4057,9 @@ const fr: Record<string, Record<string, string>> = {
     "formAdminName": "Nom admin",
     "formIrreversible": "La création provisionne un tenant avec une agence par défaut et un utilisateur admin. Le slug ne pourra plus être modifié ensuite.",
     "openPortal": "Ouvrir le portail",
-    "impersonate": "Impersonner"
+    "impersonate": "Impersonner",
+    "tenantIdLabel": "ID tenant :",
+    "copyIdAria": "Copier l'identifiant UUID du tenant"
   },
 
   // ─── Staff plateforme ──────────────────────────────────────────────────────
@@ -4232,6 +4245,10 @@ const fr: Record<string, Record<string, string>> = {
     "newSubscription": "Nouvelle souscription",
     "newSubscriptionDesc": "Assigner un plan à un tenant (idempotent).",
     "tenantIdLabel": "ID du tenant (UUID)",
+    "tenantPickLabel": "Tenant",
+    "tenantPickPh": "Rechercher un tenant par nom ou slug…",
+    "currentPlanTag": "Plan actuel détecté",
+    "planPrefilledHint": "Plan actuel pré-rempli — modifiez-le si nécessaire.",
     "plan": "Plan",
     "changePlan": "Changer de plan",
     "selectNewPlan": "Choisir le nouveau plan",
@@ -4251,7 +4268,22 @@ const fr: Record<string, Record<string, string>> = {
     "colInvoiceNumber": "N°",
     "colPeriod": "Période",
     "colAmount": "Montant",
-    "colDueAt": "Échéance"
+    "colDueAt": "Échéance",
+    "extendTrial": {
+      "title":         "Prolonger la période d'essai",
+      "currentEnd":    "Fin actuelle :",
+      "noCurrentEnd":  "non définie",
+      "modeLabel":     "Mode de prolongation",
+      "modeDays":      "Jours à ajouter",
+      "modeDate":      "Date précise",
+      "daysLabel":     "Nombre de jours",
+      "daysUnit":      "j",
+      "daysHelp":      "Ajouté à la date de fin actuelle — ou à aujourd'hui si le trial est déjà expiré.",
+      "dateLabel":     "Nouvelle date de fin d'essai",
+      "reasonLabel":   "Motif (pour audit)",
+      "reasonPh":      "Ex. geste commercial, prospect en évaluation…",
+      "confirm":       "Prolonger"
+    }
   },
 
   "platformSupport": {
@@ -4322,6 +4354,8 @@ const fr: Record<string, Record<string, string>> = {
     "defaultValue": "Défaut",
     "groupHealth": "Score de santé tenant",
     "groupBilling": "Facturation",
+    "groupActivation": "Activation post-signup",
+    "groupSecurity": "Sécurité & anti-abus",
     "healthRiskThreshold": "Seuil « à risque »",
     "healthRiskThresholdHelp": "Tenants dont le score est sous ce seuil apparaissent dans la liste « à risque » du dashboard.",
     "healthThresholdIncidents": "Seuil d'incidents (uptime 0)",
@@ -4334,8 +4368,33 @@ const fr: Record<string, Record<string, string>> = {
     "billingDueDaysHelp": "Nombre de jours après la fin de période pour échoir une facture auto-générée.",
     "billingCustomCycleDays": "Cycle CUSTOM (jours)",
     "billingCustomCycleDaysHelp": "Durée par défaut d'un cycle de plan marqué CUSTOM.",
+    "activationDay1":     "Email J+1 (heures)",
+    "activationDay1Help": "Âge minimum du tenant (en heures) pour envoyer l'email J+1 si l'onboarding n'est pas terminé.",
+    "activationDay3":     "Email J+3 (heures)",
+    "activationDay3Help": "Âge minimum pour envoyer l'email J+3 si aucun collègue n'a été invité.",
+    "activationDay7":     "Email J+7 (heures)",
+    "activationDay7Help": "Âge minimum pour envoyer l'email J+7 si aucune vente ni colis n'a été enregistré.",
+    "activationMaxAgeDays":     "Âge max drip (jours)",
+    "activationMaxAgeDaysHelp": "Au-delà de cet âge, plus aucun email d'activation n'est envoyé (comportement SaaS standard).",
+    "renewalLeadDays":     "Rappel renouvellement (jours avant)",
+    "renewalLeadDaysHelp": "Nombre de jours avant currentPeriodEnd pour envoyer le rappel ou tenter l'auto-charge (si auto-renew activé).",
+    "dunningDay1":     "Relance J+1 (heures PAST_DUE)",
+    "dunningDay1Help": "Durée minimale en PAST_DUE avant la 1re relance (informatif).",
+    "dunningDay3":     "Relance J+3 (heures)",
+    "dunningDay3Help": "Durée minimale avant la 2e relance (ferme).",
+    "dunningDay7":     "Relance J+7 (heures)",
+    "dunningDay7Help": "Durée minimale avant le dernier avertissement avant suspension.",
+    "dunningSuspendAfterDays":     "Suspension après (jours)",
+    "dunningSuspendAfterDaysHelp": "Après N jours en PAST_DUE avec day7 envoyé, la subscription passe SUSPENDED (verrou UI).",
+    "trialBannerMaxDays":     "Seuil bannière essai (jours)",
+    "trialBannerMaxDaysHelp": "Jours restants à partir desquels le banner « Passer à l'abonnement » apparaît dans /admin.",
+    "waitlistMaxAttempts":     "Waitlist — max tentatives / email",
+    "waitlistMaxAttemptsHelp": "Après N soumissions pour le même email, on ignore silencieusement pour éviter le spam.",
     "errNotNumber": "Doit être un nombre.",
-    "errOutOfRange": "Valeur hors bornes autorisées."
+    "errOutOfRange": "Valeur hors bornes autorisées.",
+    "errNotString": "Valeur non valide (chaîne attendue).",
+    "subscriptionDefaultPlanSlug":     "Plan par défaut des nouveaux tenants",
+    "subscriptionDefaultPlanSlugHelp": "Slug du plan attribué automatiquement aux tenants sans souscription (backfill, onboarding). Doit correspondre à un Plan.slug existant et actif."
   },
   "payment": {
     "title":            "Paiement",
@@ -4430,7 +4489,21 @@ const fr: Record<string, Record<string, string>> = {
     "mfaResetDone":      "MFA réinitialisé",
     "mfaResetFailed":    "Échec de la réinitialisation MFA",
     "tenantPlatformOnly": "Plateforme uniquement (défaut)",
-    "tenantAll":         "Tous les tenants du SaaS"
+    "tenantAll":         "Tous les tenants du SaaS",
+    "resetPassword":     "Réinitialiser mot de passe",
+    "resetPasswordTitle": "Réinitialiser le mot de passe",
+    "resetPasswordDesc": "Générer un lien de réinitialisation à transmettre, ou définir un mot de passe temporaire.",
+    "pwdModeLabel":      "Mode de réinitialisation",
+    "pwdModeLink":       "Lien (recommandé)",
+    "pwdModeSet":        "Mot de passe direct",
+    "pwdNewLabel":       "Nouveau mot de passe temporaire",
+    "pwdNewHint":        "L'utilisateur devra le changer à sa prochaine connexion.",
+    "pwdLinkWarning":    "Un lien valide 30 minutes sera généré. Transmettez-le hors-bande (email/SMS). L'utilisateur définira lui-même son nouveau mot de passe.",
+    "pwdSetWarning":     "Mode critique — toutes les sessions actives seront invalidées et le prochain login forcera la rotation. À utiliser uniquement en escalade.",
+    "pwdLinkIssued":     "Lien généré",
+    "pwdLinkShareHint":  "Copiez le lien et transmettez-le à l'utilisateur — il n'est plus affiché après fermeture.",
+    "pwdSetDone":        "Mot de passe appliqué pour {email}. L'utilisateur devra le changer à la prochaine connexion.",
+    "pwdResetFailed":    "Échec de la réinitialisation du mot de passe"
   },
   "platformRoles": {
     "title":             "Rôles plateforme",
@@ -4838,6 +4911,125 @@ const fr: Record<string, Record<string, string>> = {
     "method.CARD":       "Carte bancaire",
     "method.MOBILE_MONEY":"Mobile Money",
     "method.BANK_TRANSFER":"Virement bancaire"
+  },
+  "adminBilling": {
+    "title":               "Abonnement & facturation",
+    "subtitle":            "Votre plan, vos paiements, vos factures.",
+    "loadError":           "Impossible de charger vos informations de facturation.",
+    "retry":               "Réessayer",
+    "plan.current":        "Plan actuel",
+    "plan.nextBilling":    "Prochaine échéance",
+    "plan.endsOnCancel":   "Prend fin à cette date (résilié)",
+    "method.saved":        "Moyen de paiement enregistré",
+    "method.none":         "Aucun (ajoutez-en un au prochain paiement)",
+    "method.lastUsed":     "Utilisé le",
+    "method.tokenized":    "Prélèvement automatique disponible",
+    "autoRenew.title":     "Prélèvement automatique",
+    "autoRenew.hint":      "Si activé, nous tentons un renouvellement automatique 3 jours avant la fin de période. Sinon, nous vous envoyons simplement un rappel par email.",
+    "autoRenew.updated":   "Préférence mise à jour.",
+    "actions.title":       "Actions",
+    "actions.pay":         "Payer maintenant",
+    "actions.cancel":      "Résilier l'abonnement",
+    "actions.resume":      "Annuler la résiliation",
+    "actions.hint":        "La résiliation prend effet à la fin de la période en cours. Vos données restent accessibles jusqu'à cette date.",
+    "pastDue.title":       "Paiement en attente",
+    "pastDue.subtitle":    "Merci de régulariser pour éviter la suspension de votre accès.",
+    "pastDue.cta":         "Régler maintenant",
+    "cancel.confirm":      "Êtes-vous sûr ? La résiliation prendra effet à la fin de la période en cours.",
+    "cancel.done":         "Résiliation programmée.",
+    "resume.done":         "Résiliation annulée — l'abonnement continue.",
+    "checkout.noUrl":      "Le fournisseur n'a pas renvoyé d'URL de paiement.",
+    "error.bad":           "Requête invalide. Vérifiez vos informations.",
+    "error.rateLimit":     "Trop de tentatives. Réessayez dans quelques minutes.",
+    "error.generic":       "Une erreur est survenue. Réessayez dans un instant.",
+    "invoices.title":      "Factures récentes",
+    "invoices.count":      "facture(s)",
+    "invoices.empty":      "Aucune facture émise pour le moment.",
+    "invoices.paidAt":     "payée le",
+    "history.title":       "Historique des paiements",
+    "history.count":       "tentative(s)",
+    "history.empty":       "Aucun paiement pour le moment.",
+    "status.TRIAL":        "Essai",
+    "status.ACTIVE":       "Actif",
+    "status.PAST_DUE":     "En retard",
+    "status.SUSPENDED":    "Suspendu",
+    "status.CANCELLED":    "Résilié",
+    "intent.SUCCEEDED":    "Réussi",
+    "intent.FAILED":       "Échoué",
+    "intent.CREATED":      "En attente",
+    "intent.PROCESSING":   "En cours",
+    "intent.CANCELLED":    "Annulé",
+    "intent.EXPIRED":      "Expiré",
+    "intent.REFUNDED":     "Remboursé",
+    "invoice.DRAFT":       "Brouillon",
+    "invoice.ISSUED":      "Émise",
+    "invoice.PAID":        "Payée",
+    "invoice.VOID":        "Annulée",
+    "invoice.OVERDUE":     "En retard",
+    "cycle.monthly":       "/ mois",
+    "cycle.yearly":        "/ an",
+    "noSubscription.title": "Aucun abonnement configuré",
+    "noSubscription.body":  "Votre organisation n'a pas encore de souscription active. Contactez le support plateforme pour démarrer votre essai."
+  },
+  "suspended": {
+    "title":     "Accès suspendu",
+    "subtitle":  "Votre abonnement n'est plus à jour.",
+    "body":      "Nous avons tenté à plusieurs reprises de traiter votre paiement sans succès. Pour rétablir l'accès à votre espace, merci de régler votre abonnement dès maintenant.",
+    "dataSafe":  "Vos données sont intactes et en sécurité. Elles seront immédiatement accessibles dès la régularisation.",
+    "cta":       "Régulariser le paiement",
+    "logout":    "Se déconnecter"
+  },
+
+  // ─── Self-service compte (PageAccount) ─────────────────────────────────────
+  "account": {
+    "title":              "Mon compte",
+    "subtitle":           "Gérez vos informations personnelles, votre sécurité et vos préférences.",
+    "tablistAria":        "Sections du compte",
+    "tabProfile":         "Profil",
+    "tabSecurity":        "Sécurité",
+    "tabPrefs":           "Préférences",
+
+    "profileTitle":       "Informations du profil",
+    "profileDesc":        "Ces informations sont gérées par votre administrateur — contactez-le pour toute mise à jour.",
+    "fieldEmail":         "Email",
+    "fieldName":          "Nom complet",
+    "fieldRole":          "Rôle",
+    "fieldUserType":      "Type de compte",
+
+    "pwdTitle":           "Changer de mot de passe",
+    "pwdDesc":            "Toutes vos sessions seront déconnectées après le changement.",
+    "pwdCurrent":         "Mot de passe actuel",
+    "pwdNew":             "Nouveau mot de passe",
+    "pwdConfirm":         "Confirmer le nouveau",
+    "pwdSubmit":          "Mettre à jour",
+    "pwdMismatch":        "Les deux nouveaux mots de passe ne correspondent pas.",
+    "pwdTooShort":        "Le nouveau mot de passe doit contenir au moins 8 caractères.",
+    "pwdOk":              "Mot de passe changé — vous allez être redirigé vers la page de connexion.",
+    "pwdFailed":          "Échec du changement de mot de passe.",
+    "mustChangePassword": "Votre administrateur a demandé que vous changiez votre mot de passe avant de continuer.",
+
+    "mfaTitle":           "Double authentification (TOTP)",
+    "mfaDesc":            "Protégez votre compte avec une application d'authentification comme Google Authenticator ou 1Password.",
+    "mfaStatusOff":       "Aucune authentification forte activée.",
+    "mfaStatusOn":        "La double authentification est activée sur ce compte.",
+    "mfaActivate":        "Activer le TOTP",
+    "mfaScanHint":        "Scannez le QR code avec votre application d'authentification, puis saisissez le code à 6 chiffres pour confirmer.",
+    "mfaSecretLabel":     "Secret (si vous ne pouvez pas scanner) :",
+    "mfaCodeLabel":       "Code à 6 chiffres",
+    "mfaConfirm":         "Confirmer l'activation",
+    "mfaEnabledOk":       "La double authentification est maintenant active.",
+    "mfaBackupTitle":     "Codes de secours",
+    "mfaBackupHint":      "Sauvegardez ces codes hors-ligne. Chacun ne peut être utilisé qu'une fois en remplacement du code TOTP.",
+    "mfaDeactivate":      "Désactiver",
+    "mfaDisableWarn":     "Confirmez votre mot de passe actuel pour désactiver la double authentification.",
+    "mfaDeactivateConfirm": "Désactiver maintenant",
+
+    "prefsTitle":         "Préférences",
+    "prefsDesc":          "Langue et fuseau horaire — spécifiques à votre compte, sans affecter les autres utilisateurs.",
+    "prefsOk":            "Préférences enregistrées.",
+    "localeLabel":        "Langue de l'interface",
+    "timezoneLabel":      "Fuseau horaire",
+    "useTenantDefault":   "— Utiliser la valeur par défaut du tenant —"
   }
 };
 

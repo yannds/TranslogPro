@@ -30,6 +30,7 @@ import { StationAgentDashboard } from '../components/station-agent/StationAgentD
 import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
 import { LegacyTenantRedirect } from '../components/legacy/LegacyTenantRedirect';
 import { PageClaim }            from '../components/pages/PageClaim';
+import { PageAccount }          from '../components/pages/PageAccount';
 // Routes publiques lazy — réduit le bundle initial `index.js` (~2.3 MB → ~1.4 MB)
 // en sortant landing + signup + onboarding + welcome dans leurs propres chunks
 // chargés à la demande. Affichés derrière un Suspense pour éviter les flashs.
@@ -129,6 +130,11 @@ import './index.css';
 import { startSyncLoop } from '../lib/offline/outbox';
 startSyncLoop();
 
+// Telemetry : capture globale des erreurs. Driver par défaut = console.
+// Pour prod, ajouter un driver Sentry via setTelemetryDriver() ici après init DSN.
+import { installGlobalErrorCapture } from '../lib/telemetry/telemetry';
+installGlobalErrorCapture();
+
 import { OfflineBanner } from '../components/offline/OfflineBanner';
 
 const root = document.getElementById('root');
@@ -208,6 +214,18 @@ createRoot(root).render(
 
               {/* Claim CRM — magic link "revendication" d'historique shadow */}
               <Route path="/claim" element={<PageClaim />} />
+
+              {/* Self-service compte : mot de passe, MFA, préférences (langue/TZ).
+                  Accessible à tous les rôles authentifiés — PageAccount n'impose
+                  aucune permission en plus de la session. */}
+              <Route
+                path="/account"
+                element={
+                  <ProtectedRoute>
+                    <PageAccount />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Signup SaaS public — wizard 3 étapes. Accessible partout (apex +
                   sous-domaines réservés), le wizard configure lui-même le tenant. */}

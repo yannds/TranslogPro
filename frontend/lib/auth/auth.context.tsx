@@ -59,15 +59,41 @@ export interface AuthUser {
    * un banner chrono tant que ce champ est présent.
    */
   impersonation?: ImpersonationContextDto;
+  /**
+   * Préférences utilisateur self-service (override des défauts tenant).
+   * Null = utilise la valeur par défaut du tenant.
+   */
+  locale?:             string | null;
+  timezone?:           string | null;
+  /** Indique qu'une rotation forcée de mot de passe est attendue au prochain login. */
+  mustChangePassword?: boolean;
+  /** True quand MFA activé et confirmé sur ce compte. */
+  mfaEnabled?:         boolean;
 }
+
+/** Résultat possible de login : soit session OK, soit MFA requis. */
+export type LoginResult =
+  | { kind: 'session' }
+  | { kind: 'mfa'; expiresAt: string };
 
 interface AuthContextValue {
   user:    AuthUser | null;
   loading: boolean;
-  login:   (email: string, password: string) => Promise<void>;
+  /**
+   * Retourne `{ kind: 'mfa', expiresAt }` si un challenge MFA est en cours
+   * (user.mfaEnabled). L'UI doit alors afficher l'input code 6 chiffres et
+   * appeler `verifyMfa(code)` pour finaliser la connexion.
+   */
+  login:   (email: string, password: string) => Promise<LoginResult>;
+  /** Complète un login en attente MFA — pose le cookie de session. */
+  verifyMfa: (code: string) => Promise<void>;
   logout:  () => Promise<void>;
   /** Force la relecture du user (utile après toggle de module). */
   refresh: () => Promise<void>;
+  /** Change le mot de passe propre — toutes les sessions sont invalidées. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Met à jour locale/timezone sur le user courant (User.preferences). */
+  updatePreferences: (patch: { locale?: string; timezone?: string }) => Promise<void>;
 }
 
 // ─── Contexte ─────────────────────────────────────────────────────────────────
@@ -93,13 +119,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await apiFetch<AuthUser>('/api/auth/sign-in', {
-      method:            'POST',
-      body:              { email, password },
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+    const result = await apiFetch<AuthUser | { mfaRequired: true; expiresAt: string }>(
+      '/api/auth/sign-in',
+      { method: 'POST', body: { email, password }, skipRedirectOn401: true },
+    );
+    // Discrimination : MFA required → pas de user, le cookie pré-session est
+    // déjà posé côté serveur, l'UI doit afficher l'input code 6 chiffres.
+    if ('mfaRequired' in result && result.mfaRequired) {
+      return { kind: 'mfa', expiresAt: result.expiresAt };
+    }
+    setUser(result as AuthUser);
+    return { kind: 'session' };
+  }, []);
+
+  const verifyMfa = useCallback(async (code: string) => {
+    const user = await apiFetch<AuthUser>('/api/auth/mfa/verify', {
+      method: 'POST',
+      body:   { code },
       skipRedirectOn401: true,
     });
-    setUser(result);
+    setUser(user);
+  }, []);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    await apiFetch('/api/auth/change-password', {
+      method: 'POST',
+      body:   { currentPassword, newPassword },
+    });
+    // Toutes les sessions sont invalidées côté serveur — on purge le contexte
+    // local et on redirige vers /login pour cohérence.
+    setUser(null);
+    navigate('/login', { replace: true });
+  }, [navigate]);
+
+  const updatePreferences = useCallback(async (patch: { locale?: string; timezone?: string }) => {
+    const updated = await apiFetch<{ locale: string | null; timezone: string | null }>(
+      '/api/auth/me/preferences',
+      { method: 'PATCH', body: patch },
+    );
+    setUser(prev => prev ? { ...prev, locale: updated.locale, timezone: updated.timezone } : prev);
   }, []);
 
   const logout = useCallback(async () => {
@@ -138,7 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, refresh]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthContext.Provider value={{
+      user, loading, login, verifyMfa, logout, refresh,
+      changePassword, updatePreferences,
+    }}>
       {children}
     </AuthContext.Provider>
   );
