@@ -24,6 +24,7 @@ import { apiPost, apiFetch, ApiError } from '../../lib/api';
 import { Badge }      from '../ui/Badge';
 import { Button }     from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import { SignatureDialog } from '../ui/SignatureDialog';
 import { TripPickerForDay } from '../agent/TripPickerForDay';
 
 const P_MANIFEST_SIGN     = 'data.manifest.sign.agency';
@@ -100,14 +101,16 @@ export function PageQuaiManifest() {
     } finally { setBusyKind(null); }
   }, [tripId, base]);
 
-  const handleSign = useCallback(async (kind: ManifestKind) => {
+  const [signingKind, setSigningKind] = useState<ManifestKind | null>(null);
+
+  const handleSign = useCallback(async (kind: ManifestKind, signatureSvg: string | null) => {
     const draft = state[kind].draft;
     if (!draft) return;
     setBusyKind(kind); setError(null);
     try {
       const m = await apiPost<ManifestSigned>(
         `${base}/manifests/${encodeURIComponent(draft.storageKey)}/sign`,
-        { kind },
+        signatureSvg ? { kind, signatureSvg } : { kind },
       );
       setState(prev => ({
         ...prev,
@@ -121,6 +124,7 @@ export function PageQuaiManifest() {
           },
         },
       }));
+      setSigningKind(null);
       refetchSigned();
     } catch (e) {
       setError(e instanceof ApiError ? String((e.body as { message?: string })?.message ?? e.message) : String(e));
@@ -199,7 +203,7 @@ export function PageQuaiManifest() {
                     </Button>
                   )}
                   {!isSigned && hasDraft && canSign && (
-                    <Button onClick={() => handleSign(kind)} disabled={busy}
+                    <Button onClick={() => setSigningKind(kind)} disabled={busy}
                       className="min-h-[44px]"
                       leftIcon={busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSignature className="w-4 h-4" />}>
                       {t('quaiManifest.sign')}
@@ -218,6 +222,17 @@ export function PageQuaiManifest() {
             );
           })}
         </section>
+      )}
+
+      {/* Dialog signature tactile — même flow que chauffeur */}
+      {signingKind && (
+        <SignatureDialog
+          open
+          title={t('quaiManifest.signDialogTitle')}
+          description={signingKind === 'PASSENGERS' ? t('quaiManifest.passengers') : t('quaiManifest.parcels')}
+          onConfirm={(svg) => handleSign(signingKind, svg)}
+          onClose={() => setSigningKind(null)}
+        />
       )}
     </main>
   );

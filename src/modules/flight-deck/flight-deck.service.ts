@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { TripState } from '../../common/constants/workflow-states';
+import { TripState, TravelerAction } from '../../common/constants/workflow-states';
 import type { ScopeContext } from '../../common/decorators/scope-context.decorator';
+import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { assertTripOwnership } from '../../common/helpers/scope-filter';
+import { TravelerService } from '../traveler/traveler.service';
+import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 
 /**
  * Flight-deck = Driver dashboard.
@@ -11,7 +14,68 @@ import { assertTripOwnership } from '../../common/helpers/scope-filter';
  */
 @Injectable()
 export class FlightDeckService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:          PrismaService,
+    private readonly travelerService: TravelerService,
+    private readonly workflow:        WorkflowEngine,
+  ) {}
+
+  /**
+   * Lazy-crée un Traveler si aucun n'existe pour ce ticket. L'état initial
+   * n'est pas hardcodé : on interroge `workflow_configs` pour savoir à partir
+   * de quel `fromState` l'action demandée est autorisée dans le blueprint du
+   * tenant. Comme ça, si demain un tenant modifie son workflow (ex. fusionne
+   * VERIFY + SCAN_IN en une seule étape), le lazy-create reste cohérent —
+   * c'est tout l'intérêt du moteur DB-driven.
+   *
+   * Retourne systématiquement un Traveler valide ou lève.
+   */
+  private async ensureTraveler(
+    tenantId: string,
+    tripId:   string,
+    ticketId: string,
+    action:   string,
+  ) {
+    const existing = await this.prisma.traveler.findFirst({
+      where: { ticketId, tenantId },
+    });
+    if (existing) return existing;
+
+    // Ticket doit exister dans ce trip + ne pas être dans un état terminal
+    // négatif. Le ticket peut être CONFIRMED ou PENDING_PAYMENT selon le
+    // blueprint tenant (certains autorisent un scan gare avant encaissement).
+    const ticket = await this.prisma.ticket.findFirst({
+      where:  { id: ticketId, tenantId, tripId },
+      select: { id: true, status: true },
+    });
+    if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable pour ce trajet`);
+    if (['CANCELLED', 'EXPIRED', 'REFUNDED'].includes(ticket.status)) {
+      throw new BadRequestException(
+        `Ticket ${ticketId} ${ticket.status.toLowerCase()} — action refusée`,
+      );
+    }
+
+    // Lookup blueprint : à quel fromState cette action est-elle valide ?
+    const cfg = await this.prisma.workflowConfig.findFirst({
+      where: {
+        tenantId,
+        entityType: 'Traveler',
+        action,
+        isActive:   true,
+      },
+      select: { fromState: true },
+    });
+    if (!cfg) {
+      throw new BadRequestException(
+        `Action ${action} non configurée pour Traveler dans ce tenant — ` +
+        `vérifier le blueprint Voyageur`,
+      );
+    }
+
+    return this.prisma.traveler.create({
+      data: { tenantId, ticketId, tripId, status: cfg.fromState, version: 1 },
+    });
+  }
 
   /**
    * Trip.driverId is a Staff.id, not a User.id.
@@ -80,16 +144,167 @@ export class FlightDeckService {
     });
   }
 
+  /**
+   * Valide une checklist pré-départ via le blueprint `checklist-departure`.
+   *
+   * Transition fast-track PENDING → APPROVED via action `complete`
+   * (cf. DEFAULT_WORKFLOW_CONFIGS). Le champ legacy `isCompliant = true`
+   * est conservé pour rétro-compat des callers qui lisent ce booléen.
+   *
+   * Si la checklist a un tenantId NULL (rows legacy avant 2026-04-19) on
+   * backfill avec le tenantId courant avant la transition.
+   */
   async completeChecklist(tenantId: string, checklistId: string, userId: string) {
     const item = await this.prisma.checklist.findFirst({
       where: { id: checklistId },
     });
     if (!item) throw new NotFoundException(`Checklist ${checklistId} introuvable`);
 
-    return this.prisma.checklist.update({
-      where: { id: checklistId },
-      data:  { isCompliant: true },
+    // Backfill tenantId si manquant (legacy rows)
+    const entity = item.tenantId
+      ? item
+      : await this.prisma.checklist.update({
+          where: { id: checklistId },
+          data:  { tenantId },
+        });
+
+    // Transition via WorkflowEngine — respecte le blueprint per-tenant
+    const actor = { id: userId, tenantId } as CurrentUserPayload;
+    const result = await this.workflow.transition(
+      entity as Parameters<typeof this.workflow.transition>[0],
+      { action: 'complete', actor },
+      {
+        aggregateType: 'Checklist',
+        persist: async (e, toState, prisma) => {
+          const updated = await prisma.checklist.update({
+            where: { id: e.id },
+            data:  {
+              status:      toState,
+              version:     { increment: 1 },
+              isCompliant: true,  // rétro-compat : callers existants lisent ce booléen
+            },
+          });
+          return updated as typeof e;
+        },
+      },
+    );
+    return result.entity;
+  }
+
+  /**
+   * Compteurs live d'un trajet — **source de vérité** pour les écrans
+   * embarqués (BusScreen) et le panneau quai (QuaiScreen). Requêtes count()
+   * à chaque appel (polling 10s côté frontend), donc pas de dénormalisation
+   * sur `Trip.passengersOnBoard` qui dérivait et causait des affichages
+   * incohérents entre les deux écrans.
+   *
+   * Sources :
+   *   - passengersOnBoard = Traveler(tripId).status='BOARDED'
+   *   - passengersCheckedIn = Traveler(tripId).status IN ('CHECKED_IN','BOARDED')
+   *   - passengersTotal = Ticket(tripId) non annulés — plafond attendu en cabine
+   *   - parcelsLoaded = Parcel via Shipment(tripId) dont status IN ('LOADED','IN_TRANSIT')
+   *   - parcelsTotal  = Parcel via Shipment(tripId) non CANCELLED
+   *   - busCapacity   = Bus.capacity du trajet
+   *   - updatedAt     = now() — sert à afficher "données à X min" côté UI
+   */
+  async getTripLiveStats(tenantId: string, tripId: string) {
+    const trip = await this.prisma.trip.findFirst({
+      where:  { id: tripId, tenantId },
+      select: {
+        id: true, status: true, departureScheduled: true,
+        bus: { select: { capacity: true } },
+      },
     });
+    if (!trip) throw new NotFoundException(`Trip ${tripId} introuvable dans ce tenant`);
+
+    const [
+      passengersOnBoard, passengersCheckedIn, passengersConfirmed, passengersTotal,
+      parcelsLoaded, parcelsTotal,
+    ] = await Promise.all([
+      this.prisma.traveler.count({ where: { tenantId, tripId, status: 'BOARDED' } }),
+      this.prisma.traveler.count({ where: { tenantId, tripId, status: { in: ['CHECKED_IN', 'BOARDED'] } } }),
+      // passengersConfirmed = tickets confirmés (CONFIRMED ou déjà CHECKED_IN).
+      // Consommé par QuaiScreen/BusScreen comme plafond "attendu" à bord vs
+      // passengersTotal qui inclut aussi PENDING. On veut la source unique de
+      // vérité "passagers qui ont effectivement un billet payé".
+      this.prisma.ticket.count({ where: { tenantId, tripId, status: { in: ['CONFIRMED', 'CHECKED_IN'] } } }),
+      this.prisma.ticket.count({ where: { tenantId, tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } } }),
+      this.prisma.parcel.count({
+        where: {
+          tenantId,
+          shipment: { tripId },
+          status: { in: ['LOADED', 'IN_TRANSIT'] },
+        },
+      }),
+      this.prisma.parcel.count({
+        where: {
+          tenantId,
+          shipment: { tripId },
+          status: { notIn: ['CANCELLED'] },
+        },
+      }),
+    ]);
+
+    // Retard : minutes écoulées depuis l'heure prévue si elle est dépassée et
+    // que le trajet n'est pas encore marqué COMPLETED. Permet aux écrans
+    // BusScreen/QuaiScreen d'afficher un badge + d'injecter une alerte dans le
+    // ticker sans recalculer côté frontend.
+    const scheduled = trip.departureScheduled ? trip.departureScheduled.getTime() : null;
+    const nowMs     = Date.now();
+    const isTerminal = trip.status === 'COMPLETED' || trip.status === 'CANCELLED';
+    const delayMinutes = scheduled && !isTerminal && nowMs > scheduled
+      ? Math.floor((nowMs - scheduled) / 60_000)
+      : 0;
+
+    return {
+      tripId:              trip.id,
+      tripStatus:          trip.status,
+      scheduledDeparture:  trip.departureScheduled?.toISOString() ?? null,
+      delayMinutes,
+      passengersOnBoard,
+      passengersCheckedIn,
+      passengersConfirmed,
+      passengersTotal,
+      parcelsLoaded,
+      parcelsTotal,
+      busCapacity:         trip.bus?.capacity ?? 0,
+      updatedAt:           new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Upsert du poids bagage d'un ticket — utilisé par l'agent de quai (balance)
+   * ou le chauffeur avant départ. Stratégie :
+   *   - Supprime toutes les lignes Baggage du ticket puis recrée UNE ligne
+   *     HOLD avec le nouveau poids (si > 0). Simplification volontaire v1 —
+   *     une UX plus fine (cabine vs soute, historique, surcharge) pourra
+   *     venir plus tard avec un endpoint dédié par bagage.
+   * Retourne { ticketId, weightKg } consolidé.
+   */
+  async setLuggageWeight(
+    tenantId: string,
+    ticketId: string,
+    weightKg: number,
+  ): Promise<{ ticketId: string; weightKg: number }> {
+    if (!Number.isFinite(weightKg) || weightKg < 0) {
+      throw new BadRequestException('Poids invalide — doit être un nombre positif ou nul');
+    }
+    const ticket = await this.prisma.ticket.findFirst({
+      where:  { id: ticketId, tenantId },
+      select: { id: true },
+    });
+    if (!ticket) throw new NotFoundException(`Ticket ${ticketId} introuvable`);
+
+    await this.prisma.$transaction([
+      this.prisma.baggage.deleteMany({ where: { tenantId, ticketId } }),
+      ...(weightKg > 0
+        ? [this.prisma.baggage.create({
+            data: { tenantId, ticketId, count: 1, weight: weightKg, type: 'HOLD' },
+          })]
+        : []),
+    ]);
+
+    return { ticketId, weightKg };
   }
 
   async getPassengerList(tenantId: string, tripId: string) {
@@ -107,6 +322,19 @@ export class FlightDeckService {
     });
     const travelerMap = new Map(travelers.map(t => [t.ticketId, t.status]));
 
+    // Enrich with luggage — somme des Baggage.weight par ticket. Plusieurs
+    // lignes possibles (cabine + soute, corrections) → on agrège.
+    const baggages = tickets.length > 0
+      ? await this.prisma.baggage.findMany({
+          where:  { tenantId, ticketId: { in: tickets.map(t => t.id) } },
+          select: { ticketId: true, weight: true },
+        })
+      : [];
+    const weightByTicket = new Map<string, number>();
+    for (const b of baggages) {
+      weightByTicket.set(b.ticketId, (weightByTicket.get(b.ticketId) ?? 0) + b.weight);
+    }
+
     return tickets.map(t => ({
       id:             t.id,
       passengerName:  t.passengerName,
@@ -114,42 +342,53 @@ export class FlightDeckService {
       seatNumber:     t.seatNumber,
       fareClass:      (t as Record<string, unknown>).fareClass as string | null ?? null,
       status:         travelerMap.get(t.id) ?? t.status,
-      luggageKg:      null as number | null,
+      luggageKg:      weightByTicket.get(t.id) ?? null,
       checkedInAt:    null as string | null,
       boardedAt:      null as string | null,
     }));
   }
 
   /**
-   * Board a passenger: update the Traveler status to BOARDED.
-   * If no Traveler row exists yet for this ticket, create one.
+   * Check-in d'un passager à l'entrée de la gare.
+   *
+   * Façade orientée BusScreen / PageDriverCheckin (accès par ticketId plutôt
+   * que travelerId) — la transition réelle est déléguée à `TravelerService`
+   * qui passe par le `WorkflowEngine`. Résultat : la transition respecte
+   * `workflow_configs` du tenant (blueprint). Un tenant peut modifier son
+   * workflow et l'app suit automatiquement — zéro hardcode des états.
+   *
+   * Lazy-creation : si aucun Traveler n'existe pour ce ticket, on le crée à
+   * l'état prédecesseur de SCAN_IN dans le blueprint du tenant (VERIFIED par
+   * défaut). Couvre le cas réel où les Traveler ne sont pas encore créés à la
+   * vente du billet.
    */
-  async boardPassenger(tenantId: string, tripId: string, ticketId: string) {
-    const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, tenantId, tripId },
-    });
-    if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+  async checkInPassenger(
+    tenantId: string,
+    tripId:   string,
+    ticketId: string,
+    actor:    CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    const traveler = await this.ensureTraveler(tenantId, tripId, ticketId, TravelerAction.SCAN_IN);
+    return this.travelerService.scanIn(tenantId, traveler.id, actor, idempotencyKey);
+  }
 
-    // Upsert traveler
-    const existing = await this.prisma.traveler.findFirst({
-      where: { ticketId, tenantId },
-    });
-
-    if (existing) {
-      return this.prisma.traveler.update({
-        where: { id: existing.id },
-        data:  { status: 'BOARDED' },
-      });
-    }
-
-    return this.prisma.traveler.create({
-      data: {
-        tenantId,
-        ticketId,
-        tripId,
-        status: 'BOARDED',
-      },
-    });
+  /**
+   * Embarquement bus — idem, facade ticketId-based qui délègue au
+   * WorkflowEngine via TravelerService. Lazy-create à l'état prédecesseur de
+   * SCAN_BOARD (CHECKED_IN par défaut) pour couvrir le cas driver qui
+   * embarque sans scan gare préalable. Le blueprint peut refuser cette
+   * transition si le tenant l'a configuré ainsi.
+   */
+  async boardPassenger(
+    tenantId: string,
+    tripId:   string,
+    ticketId: string,
+    actor:    CurrentUserPayload,
+    idempotencyKey?: string,
+  ) {
+    const traveler = await this.ensureTraveler(tenantId, tripId, ticketId, TravelerAction.SCAN_BOARD);
+    return this.travelerService.scanBoard(tenantId, traveler.id, actor, idempotencyKey);
   }
 
   /**
@@ -192,6 +431,65 @@ export class FlightDeckService {
     }
 
     return { ...trip, briefing };
+  }
+
+  /**
+   * Transition d'état déclenchée par le chauffeur depuis son portail.
+   *
+   * Defense in depth : on vérifie systématiquement que le trajet est assigné
+   * au chauffeur authentifié (driverId === staffId) avant d'autoriser la
+   * transition, même si le permission guard a déjà accepté TRIP_LOG_EVENT_OWN.
+   * Cela protège contre un éventuel IDOR si un user manipule `tripId`.
+   *
+   * Transitions autorisées (state graph du driver uniquement) :
+   *   PLANNED|OPEN → BOARDING
+   *   BOARDING     → IN_PROGRESS
+   *   IN_PROGRESS  → COMPLETED
+   *
+   * Toute autre transition est rejetée en 400 — les retards, annulations ou
+   * réouvertures doivent passer par les endpoints manager (scope .agency).
+   */
+  async transitionTripStatus(
+    tenantId: string,
+    tripId:   string,
+    userId:   string,
+    nextStatus: 'BOARDING' | 'IN_PROGRESS' | 'COMPLETED',
+  ) {
+    const trip = await this.prisma.trip.findFirst({
+      where:  { id: tripId, tenantId },
+      select: { id: true, status: true, driverId: true },
+    });
+    if (!trip) throw new NotFoundException(`Trip ${tripId} introuvable dans ce tenant`);
+
+    const staffId = await this.resolveStaffId(tenantId, userId);
+    if (!staffId || trip.driverId !== staffId) {
+      throw new ForbiddenException('Ce trajet n\'est pas assigné à ce chauffeur');
+    }
+
+    // State graph strict pour le flow driver. Toute autre transition = 400.
+    const allowed: Record<string, typeof nextStatus | undefined> = {
+      PLANNED:     'BOARDING',
+      OPEN:        'BOARDING',
+      BOARDING:    'IN_PROGRESS',
+      IN_PROGRESS: 'COMPLETED',
+    };
+    if (allowed[trip.status] !== nextStatus) {
+      throw new BadRequestException(
+        `Transition interdite : ${trip.status} → ${nextStatus}. ` +
+        `Attendu : ${trip.status} → ${allowed[trip.status] ?? '(aucune transition driver disponible)'}`,
+      );
+    }
+
+    // Transition pure sur `status`. Les horodatages de départ/arrivée effectifs
+    // ne sont pas stockés directement sur Trip (le schema a seulement
+    // departureScheduled / arrivalScheduled) — l'AuditLog et les DomainEvents
+    // (TRIP_STARTED / TRIP_COMPLETED) servent de source de vérité historique.
+    const updated = await this.prisma.trip.update({
+      where:  { id: trip.id },
+      data:   { status: nextStatus },
+      select: { id: true, status: true },
+    });
+    return updated;
   }
 
   async getDriverSchedule(tenantId: string, userId: string, from: Date, to: Date) {

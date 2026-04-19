@@ -2013,7 +2013,18 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "readyToSign":       "Prêt à être signé",
     "signHint":          "La signature atteste que vous prenez en charge ce trajet avec les passagers enregistrés.",
     "signAction":        "Signer le manifeste",
-    "signedOk":          "Manifeste signé"
+    "signDialogTitle":   "Signer le manifeste",
+    "signedOk":          "Manifeste signé",
+    "passengersManifest":"Manifeste passagers",
+    "parcelsManifest":   "Manifeste colis",
+    "passengersDesc":    "Acknowledgment des passagers embarqués à bord.",
+    "parcelsDesc":       "Acknowledgment des colis chargés à bord.",
+    "statusSigned":      "Signé",
+    "statusDraft":       "À signer",
+    "statusNone":        "Non généré",
+    "pdfPending":        "PDF en cours…",
+    "download":          "Télécharger le PDF",
+    "signedAt":          "Signé le"
   },
   "driverMaint": {
     "pageTitle": "Signaler une panne",
@@ -4989,6 +5000,31 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Se déconnecter"
   },
 
+  // ─── Scanner QR / code-barres web ────────────────────────────────────────
+  "qrScanner": {
+    "modeLabel":         "Mode d'entrée",
+    "camera":            "Caméra",
+    "manual":            "Saisie manuelle",
+    "noCamera":          "Caméra indisponible sur cet appareil — utilisez la saisie manuelle ou une douchette USB.",
+    "manualPlaceholder": "Scannez ou collez le code…",
+    "manualLabel":       "Code à valider",
+    "validate":          "Valider",
+    "lastDetected":      "Détecté",
+    "errStart":          "Caméra refusée ou indisponible : {msg}"
+  },
+
+  // ─── Signature tactile (manifestes) ──────────────────────────────────────
+  "signaturePad": {
+    "ariaLabel":  "Zone de signature — tracez avec le doigt, le stylet ou la souris",
+    "placeholder":"Signez ici",
+    "hint":       "Tracez avec le doigt, le stylet ou la souris.",
+    "clear":      "Effacer"
+  },
+  "signatureDialog": {
+    "optionalHint": "La signature est optionnelle — vous pouvez valider sans dessiner. Dans ce cas, le manifeste est signé numériquement par votre identifiant uniquement.",
+    "confirm":      "Confirmer la signature"
+  },
+
   // ─── Portail Agent de Quai (2026-04-19) ─────────────────────────────────
   "quaiPicker": {
     "date":   "Date",
@@ -5007,6 +5043,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "codeLabel":       "Code",
     "codePh":          "Collez ou saisissez le code…",
     "codeHint":        "Le ticket QR et le code colis sont acceptés. Détection automatique par défaut.",
+    "detectedLabel":   "Code détecté",
     "asTicket":        "Comme billet",
     "asParcel":        "Comme colis",
     "autoDetect":      "Détection auto",
@@ -5041,7 +5078,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "generate":    "Générer",
     "sign":        "Signer",
     "download":    "Télécharger PDF",
-    "pdfPending":  "PDF en cours…"
+    "pdfPending":  "PDF en cours…",
+    "signDialogTitle": "Signer le manifeste"
   },
   "quaiLuggage": {
     "title":          "Contrôle bagages",
@@ -5055,7 +5093,9 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "declaredCount":  "déclarés",
     "totalWeight":    "total",
     "empty":          "Aucun passager pour ce trajet.",
-    "updateHint":     "La mise à jour du poids se fait au guichet ou via le module de vente. Un endpoint dédié viendra prochainement."
+    "updateHint":     "Cliquez sur une valeur pour la modifier. Enter pour valider, Échap pour annuler.",
+    "editHint":       "Cliquer pour modifier",
+    "errInvalid":     "Poids invalide — saisissez un nombre positif."
   },
 
   // ─── Chargement fret (chauffeur + agent de quai) ─────────────────────────

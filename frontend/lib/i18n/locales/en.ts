@@ -2142,7 +2142,18 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "readyToSign":       "Ready to sign",
     "signHint":          "Signing attests you take charge of this trip with the registered passengers.",
     "signAction":        "Sign manifest",
-    "signedOk":          "Manifest signed"
+    "signDialogTitle":   "Sign the manifest",
+    "signedOk":          "Manifest signed",
+    "passengersManifest":"Passenger manifest",
+    "parcelsManifest":   "Parcel manifest",
+    "passengersDesc":    "Acknowledgment of passengers on board.",
+    "parcelsDesc":       "Acknowledgment of parcels loaded on board.",
+    "statusSigned":      "Signed",
+    "statusDraft":       "To sign",
+    "statusNone":        "Not generated",
+    "pdfPending":        "PDF pending…",
+    "download":          "Download PDF",
+    "signedAt":          "Signed on"
   },
   "driverMaint": {
     "pageTitle": "Report Breakdown",
@@ -4972,6 +4983,29 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "logout":    "Sign out"
   },
 
+  "qrScanner": {
+    "modeLabel":         "Input mode",
+    "camera":            "Camera",
+    "manual":            "Manual input",
+    "noCamera":          "Camera unavailable on this device — use manual input or USB barcode scanner.",
+    "manualPlaceholder": "Scan or paste the code…",
+    "manualLabel":       "Code to validate",
+    "validate":          "Validate",
+    "lastDetected":      "Detected",
+    "errStart":          "Camera denied or unavailable: {msg}"
+  },
+
+  "signaturePad": {
+    "ariaLabel":  "Signature area — draw with finger, stylus or mouse",
+    "placeholder":"Sign here",
+    "hint":       "Draw with finger, stylus or mouse.",
+    "clear":      "Clear"
+  },
+  "signatureDialog": {
+    "optionalHint": "Signature is optional — you can confirm without drawing. In that case, the manifest is digitally signed with your identifier only.",
+    "confirm":      "Confirm signature"
+  },
+
   "quaiPicker": {
     "date":   "Date",
     "trip":   "Trip",
@@ -4989,6 +5023,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "codeLabel":       "Code",
     "codePh":          "Paste or type the code…",
     "codeHint":        "Accepts ticket QR and parcel tracking code. Auto-detection by default.",
+    "detectedLabel":   "Detected code",
     "asTicket":        "As ticket",
     "asParcel":        "As parcel",
     "autoDetect":      "Auto detect",
@@ -5023,7 +5058,8 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "generate":    "Generate",
     "sign":        "Sign",
     "download":    "Download PDF",
-    "pdfPending":  "PDF pending…"
+    "pdfPending":  "PDF pending…",
+    "signDialogTitle": "Sign the manifest"
   },
   "quaiLuggage": {
     "title":          "Luggage check",
@@ -5037,7 +5073,9 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "declaredCount":  "declared",
     "totalWeight":    "total",
     "empty":          "No passenger for this trip.",
-    "updateHint":     "Weight updates go through the counter / sales module. A dedicated endpoint is coming."
+    "updateHint":     "Click a value to edit. Enter to save, Escape to cancel.",
+    "editHint":       "Click to edit",
+    "errInvalid":     "Invalid weight — enter a positive number."
   },
 
   "freight": {

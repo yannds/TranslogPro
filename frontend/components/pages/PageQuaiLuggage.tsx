@@ -14,12 +14,15 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Luggage } from 'lucide-react';
+import { Luggage, Save, Loader2 } from 'lucide-react';
 import { useAuth }   from '../../lib/auth/auth.context';
 import { useI18n }  from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { apiPatch, ApiError } from '../../lib/api';
 import { Badge }      from '../ui/Badge';
+import { Button }     from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import { inputClass } from '../ui/inputClass';
 import { TripPickerForDay } from '../agent/TripPickerForDay';
 import DataTableMaster, { type Column } from '../DataTableMaster';
 
@@ -37,10 +40,43 @@ export function PageQuaiLuggage() {
   const tenantId = user?.tenantId ?? '';
   const [tripId, setTripId] = useState<string | null>(null);
 
-  const { data: travelers, loading, error } = useFetch<Traveler[]>(
-    tenantId && tripId ? `/api/tenants/${tenantId}/travelers/trips/${tripId}` : null,
+  // On tape la même API que PageQuaiBoarding : /flight-deck/.../passengers
+  // retourne `luggageKg` agrégé depuis Baggage (enrichi côté service).
+  // L'id correspond au ticketId, qu'on utilise pour PATCH /luggage.
+  const { data: travelers, loading, error, refetch } = useFetch<Traveler[]>(
+    tenantId && tripId ? `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/passengers` : null,
     [tenantId, tripId],
   );
+
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draftKg, setDraftKg] = useState<string>('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rowErr, setRowErr] = useState<Record<string, string>>({});
+
+  async function saveWeight(ticketId: string) {
+    const weightKg = Number(draftKg);
+    if (!Number.isFinite(weightKg) || weightKg < 0) {
+      setRowErr(m => ({ ...m, [ticketId]: t('quaiLuggage.errInvalid') }));
+      return;
+    }
+    setBusyId(ticketId); setRowErr(m => ({ ...m, [ticketId]: '' }));
+    try {
+      await apiPatch(
+        `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/passengers/${ticketId}/luggage`,
+        { weightKg },
+      );
+      setEditId(null);
+      setDraftKg('');
+      refetch();
+    } catch (e) {
+      setRowErr(m => ({
+        ...m,
+        [ticketId]: e instanceof ApiError
+          ? String((e.body as { message?: string })?.message ?? e.message)
+          : String(e),
+      }));
+    } finally { setBusyId(null); }
+  }
 
   const totalKg = useMemo(
     () => (travelers ?? []).reduce((sum, tr) => sum + (tr.luggageKg ?? 0), 0),
@@ -54,10 +90,46 @@ export function PageQuaiLuggage() {
   const columns: Column<Traveler>[] = [
     { key: 'seatNumber',    header: t('quaiLuggage.colSeat'), width: '80px', cellRenderer: v => v ?? '—' },
     { key: 'passengerName', header: t('quaiLuggage.colName'), sortable: true },
-    { key: 'luggageKg',     header: t('quaiLuggage.colWeight'), sortable: true, width: '140px', align: 'right',
-      cellRenderer: v => (v as number | null) != null
-        ? <span className="tabular-nums">{(v as number).toLocaleString('fr-FR')} kg</span>
-        : <span className="text-xs text-slate-400">{t('quaiLuggage.notDeclared')}</span>,
+    { key: 'luggageKg', header: t('quaiLuggage.colWeight'), sortable: true, width: '220px', align: 'right',
+      cellRenderer: (v, row) => {
+        const isEditing = editId === row.id;
+        const isBusy    = busyId === row.id;
+        const err       = rowErr[row.id];
+        if (isEditing) {
+          return (
+            <div className="flex items-center gap-1.5 justify-end">
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={draftKg}
+                onChange={e => setDraftKg(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveWeight(row.id); if (e.key === 'Escape') { setEditId(null); setDraftKg(''); }}}
+                className={`${inputClass} w-20 text-right tabular-nums`}
+                autoFocus
+                disabled={isBusy}
+                aria-label={t('quaiLuggage.colWeight')}
+              />
+              <Button size="sm" onClick={() => saveWeight(row.id)} disabled={isBusy}
+                leftIcon={isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}>
+                OK
+              </Button>
+            </div>
+          );
+        }
+        return (
+          <button type="button"
+            onClick={() => { setEditId(row.id); setDraftKg(String((v as number | null) ?? '')); }}
+            className="w-full text-right hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5"
+            title={err || t('quaiLuggage.editHint')}
+          >
+            {(v as number | null) != null
+              ? <span className="tabular-nums">{(v as number).toLocaleString('fr-FR')} kg</span>
+              : <span className="text-xs text-slate-400">{t('quaiLuggage.notDeclared')}</span>}
+            {err && <span className="block text-[10px] text-red-600 truncate">{err}</span>}
+          </button>
+        );
+      },
     },
     { key: 'status', header: t('quaiLuggage.colStatus'), width: '130px',
       cellRenderer: v => <Badge size="sm" variant={String(v) === 'BOARDED' ? 'success' : 'info'}>{String(v)}</Badge> },

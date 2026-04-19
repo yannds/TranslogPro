@@ -9,12 +9,12 @@
  * Permissions : TICKET_SCAN_AGENCY et/ou PARCEL_SCAN_AGENCY.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { ScanLine, Package, Ticket } from 'lucide-react';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { Button } from '../ui/Button';
-import { inputClass } from '../ui/inputClass';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import { QrScannerWeb } from '../ui/QrScannerWeb';
 
 // Heuristique très simple pour distinguer ticket vs colis.
 // Ticket QR codes : format JWT-like / hex long / URL-encoded — typiquement long.
@@ -30,25 +30,30 @@ function guessKind(code: string): 'ticket' | 'parcel' | 'unknown' {
 
 export function PageQuaiScan() {
   const { t } = useI18n();
-  const [code, setCode]   = useState('');
+  const [detectedCode, setDetectedCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: FormEvent, forceKind?: 'ticket' | 'parcel') {
-    e.preventDefault();
+  function routeByKind(code: string, forceKind?: 'ticket' | 'parcel') {
     setError(null);
     const kind = forceKind ?? guessKind(code);
     if (kind === 'unknown') {
       setError(t('quaiScan.errUnknownKind'));
       return;
     }
-    // Redirige vers la page concernée avec le code en query.
-    // Les pages cibles consomment le paramètre pour pré-filtrer / pré-remplir.
     if (kind === 'ticket') {
       window.location.href = `/quai/boarding?code=${encodeURIComponent(code)}`;
     } else {
       window.location.href = `/quai/freight?code=${encodeURIComponent(code)}`;
     }
   }
+
+  // Quand le scanner (caméra ou manuel) détecte un code, on le stocke et on
+  // propose à l'agent de le router auto OU de forcer ticket/colis. On évite
+  // la redirection immédiate pour qu'il garde le contrôle en cas d'ambiguïté.
+  const handleDetected = (code: string) => {
+    setDetectedCode(code);
+    setError(null);
+  };
 
   return (
     <main className="p-4 sm:p-6 space-y-6 max-w-lg mx-auto" role="main">
@@ -62,52 +67,52 @@ export function PageQuaiScan() {
         </div>
       </header>
 
-      <form onSubmit={e => handleSubmit(e)} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-4">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-4">
         <ErrorAlert error={error} icon />
 
-        <div className="space-y-1.5">
-          <label htmlFor="scan-code" className="block text-sm font-medium t-text">
-            {t('quaiScan.codeLabel')}
-          </label>
-          <input
-            id="scan-code"
-            type="text"
-            value={code}
-            onChange={e => setCode(e.target.value)}
-            placeholder={t('quaiScan.codePh')}
-            className={`${inputClass} font-mono`}
-            autoFocus
-            autoComplete="off"
-          />
-          <p className="text-xs t-text-3">{t('quaiScan.codeHint')}</p>
-        </div>
+        {/* Scanner principal — camera + fallback manuel géré dans le composant */}
+        <QrScannerWeb
+          onDetected={handleDetected}
+          manualPlaceholder={t('quaiScan.codePh')}
+        />
 
-        {/* Un seul bouton qui auto-détecte OU deux boutons explicites si ambigu */}
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" variant="outline"
-            onClick={e => handleSubmit(e, 'ticket')}
-            disabled={!code.trim()}
-            className="min-h-[44px] justify-center"
-            leftIcon={<Ticket className="w-4 h-4" aria-hidden />}
-          >
-            {t('quaiScan.asTicket')}
-          </Button>
-          <Button type="button" variant="outline"
-            onClick={e => handleSubmit(e, 'parcel')}
-            disabled={!code.trim()}
-            className="min-h-[44px] justify-center"
-            leftIcon={<Package className="w-4 h-4" aria-hidden />}
-          >
-            {t('quaiScan.asParcel')}
-          </Button>
-        </div>
-        <Button type="submit" disabled={!code.trim()} className="w-full min-h-[44px] justify-center"
-          leftIcon={<ScanLine className="w-4 h-4" aria-hidden />}>
-          {t('quaiScan.autoDetect')}
-        </Button>
+        <p className="text-xs t-text-3">{t('quaiScan.codeHint')}</p>
 
-        <p className="text-[11px] t-text-3 text-center">{t('quaiScan.cameraSoonHint')}</p>
-      </form>
+        {/* Code détecté — confirmation + routage */}
+        {detectedCode && (
+          <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                {t('quaiScan.detectedLabel')}
+              </p>
+              <code className="block text-sm font-mono break-all rounded bg-slate-50 dark:bg-slate-800 px-2 py-1.5 t-text">
+                {detectedCode}
+              </code>
+            </div>
+
+            <Button onClick={() => routeByKind(detectedCode)}
+              className="w-full min-h-[44px] justify-center"
+              leftIcon={<ScanLine className="w-4 h-4" aria-hidden />}>
+              {t('quaiScan.autoDetect')}
+            </Button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline"
+                onClick={() => routeByKind(detectedCode, 'ticket')}
+                className="min-h-[40px] justify-center"
+                leftIcon={<Ticket className="w-4 h-4" aria-hidden />}>
+                {t('quaiScan.asTicket')}
+              </Button>
+              <Button variant="outline"
+                onClick={() => routeByKind(detectedCode, 'parcel')}
+                className="min-h-[40px] justify-center"
+                leftIcon={<Package className="w-4 h-4" aria-hidden />}>
+                {t('quaiScan.asParcel')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
