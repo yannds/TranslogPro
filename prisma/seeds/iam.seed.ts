@@ -116,7 +116,7 @@ const SUPPORT_L2_PERMISSIONS = [
 
 // ─── Permissions par rôle tenant ──────────────────────────────────────────────
 
-const TENANT_ROLES: Array<{
+export const TENANT_ROLES: Array<{
   name:        string;
   isSystem:    boolean;
   permissions: string[];
@@ -1134,6 +1134,82 @@ export async function backfillVehicleDocumentTypes(
   }
 
   return { scanned: tenants.length, rowsCreated };
+}
+
+/**
+ * Re-synchronise les permissions des rôles SYSTEM (TENANT_ROLES) de TOUS les
+ * tenants existants depuis la source de vérité TS (`TENANT_ROLES`).
+ *
+ * Comportement SYNC STRICT pour rôles isSystem=true :
+ *   - Ajoute les permissions manquantes (présentes dans le seed, absentes en DB)
+ *   - Retire les permissions en trop (présentes en DB, absentes du seed)
+ *   - Les rôles custom (isSystem=false) ne sont JAMAIS touchés
+ *
+ * Conçu pour être rejoué à chaque démarrage de l'application (via
+ * `IamBootstrapService.onApplicationBootstrap()`) afin qu'un ajout de perm
+ * dans `TENANT_ROLES` (commit TS) se propage automatiquement dans TOUS les
+ * tenants existants, sans intervention manuelle. SaaS-grade.
+ *
+ * Idempotent : 2ᵉ run = 0 changement. Safe à rejouer.
+ *
+ * Retourne { tenants, rolesTouched, permsAdded, permsRemoved }.
+ */
+export async function reconcileSystemRolePermissions(
+  prismaClient: PrismaClient,
+): Promise<{ tenants: number; rolesTouched: number; permsAdded: number; permsRemoved: number }> {
+  const tenants = await prismaClient.tenant.findMany({ select: { id: true, slug: true } });
+  let rolesTouched = 0;
+  let permsAdded   = 0;
+  let permsRemoved = 0;
+
+  for (const tenant of tenants) {
+    if (tenant.id === PLATFORM_TENANT_ID) continue; // rôles plateforme gérés par bootstrapPlatform()
+
+    for (const roleDef of TENANT_ROLES) {
+      if (!roleDef.isSystem) continue; // on ne touche jamais aux rôles custom
+
+      // Le rôle système DOIT exister — sinon rien à reconcilier (seedTenantRoles
+      // aurait dû l'avoir créé à l'onboarding).
+      const role = await prismaClient.role.findUnique({
+        where: { tenantId_name: { tenantId: tenant.id, name: roleDef.name } },
+      });
+      if (!role) continue;
+
+      // 1. Permissions manquantes → à ajouter
+      const existing   = await prismaClient.rolePermission.findMany({
+        where:  { roleId: role.id },
+        select: { permission: true },
+      });
+      const existingSet = new Set(existing.map(r => r.permission));
+      const desiredSet  = new Set(roleDef.permissions);
+
+      const toAdd = roleDef.permissions.filter(p => !existingSet.has(p));
+      if (toAdd.length > 0) {
+        await prismaClient.rolePermission.createMany({
+          data: toAdd.map(permission => ({ roleId: role.id, permission })),
+          skipDuplicates: true,
+        });
+        permsAdded += toAdd.length;
+      }
+
+      // 2. Permissions en trop → à retirer (STRICT sync)
+      const toRemove = existing
+        .map(r => r.permission)
+        .filter(p => !desiredSet.has(p));
+      if (toRemove.length > 0) {
+        const res = await prismaClient.rolePermission.deleteMany({
+          where: { roleId: role.id, permission: { in: toRemove } },
+        });
+        permsRemoved += res.count;
+      }
+
+      if (toAdd.length > 0 || toRemove.length > 0) {
+        rolesTouched++;
+      }
+    }
+  }
+
+  return { tenants: tenants.length, rolesTouched, permsAdded, permsRemoved };
 }
 
 export async function backfillDefaultWorkflows(

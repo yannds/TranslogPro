@@ -20,9 +20,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Bus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
-import {
-  canAccessPortal, resolvePortal, type PortalId,
-} from '../../lib/navigation/resolvePortal';
+import { resolvePortal, type PortalId } from '../../lib/navigation/resolvePortal';
 
 // Map portalId → path cible. Point unique de vérité, identique à celui
 // consommé par HomeRedirect dans main.tsx.
@@ -77,14 +75,26 @@ export function ProtectedRoute({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Portal guard — un chauffeur qui tape /admin/xxx est renvoyé vers /driver,
-  // un admin sans perm driver qui tape /driver est renvoyé vers /admin, etc.
-  // Les multi-rôle (admin + chauffeur) sont autorisés partout puisqu'ils
-  // passent `canAccessPortal(...)` sur les deux.
+  // Portal guard — **strict par défaut** :
+  //   - un chauffeur qui tape /admin est renvoyé vers /driver
+  //   - un admin qui tape /driver est renvoyé vers /admin
+  //     (même s'il HÉRITE de perms driver .own — ex. TENANT_ADMIN qui peut
+  //     faire ses propres check-in → `canAccessPortal(driver)` = true, mais
+  //     ce n'est PAS son portail principal)
+  //
+  // Règle appliquée : le portail courant DOIT être celui résolu par
+  // `resolvePortal` pour l'utilisateur. Si un admin veut basculer sur le
+  // portail driver, il doit utiliser le switcher explicite qui posera un
+  // flag storage/query (non implémenté ici — à ajouter si besoin).
+  //
+  // L'ordre résolu dans resolvePortal est : platform > admin > driver >
+  // station > quai > fallback admin. Un TENANT_ADMIN (qui a
+  // `control.iam.manage.tenant`) ressort toujours 'admin', peu importe
+  // ses perms .own héritées.
   if (portal) {
-    const input = { userType: user.userType, permissions: user.permissions };
-    if (!canAccessPortal(input, portal)) {
-      const resolved = resolvePortal(input);
+    const input    = { userType: user.userType, permissions: user.permissions };
+    const resolved = resolvePortal(input);
+    if (portal !== resolved) {
       return <Navigate to={PORTAL_TO_PATH[resolved]} replace />;
     }
   }
