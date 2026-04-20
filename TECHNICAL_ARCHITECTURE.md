@@ -760,6 +760,14 @@ Formule: delay = min(attempts² × 10s, 600s)
 | Customer | Identité CRM tenant-scoped (voyageur + expéditeur unifiés) | id, tenantId, phoneE164, email, name, userId?, segments[], compteurs, deletedAt, @@unique([tenantId, phoneE164]), @@unique([tenantId, email]) |
 | CustomerClaimToken | Magic link sha-256 hashé (one-shot, TTL 30j) | id, tenantId, customerId, tokenHash@unique, channel, expiresAt, usedAt?, invalidatedAt? |
 | CustomerRetroClaimOtp | OTP SMS/WhatsApp pour claim rétroactif (Phase 3, TTL 5min, 5 attempts max) | id, tenantId, phoneE164, otpHash, targetType, targetId, attempts, expiresAt, usedAt?, invalidatedAt? |
+| **v8.0 — refonte pricing Sprints S1-S5 (2026-04-20)** | | |
+| TenantFareClass | Classes de voyage configurables (remplace enum figé) | id, tenantId, code, multiplier, sortOrder, enabled, isSystemDefault, @@unique([tenantId, code]) |
+| SeasonalAggregate | KPI saisonniers agrégés par période | id, tenantId, routeId?, periodType (YEAR/MONTH/WEEK/WEEKEND/WEEKDAY), periodKey, revenueTotal, fillRateAvg, vsPreviousPct, vsLastYearPct, @@unique([tenantId, routeId, periodType, periodKey]) |
+| PeakPeriod | Calendrier saisonnier yield (fériés, vacances, creux) | id, tenantId, code, dates, expectedDemandFactor, isHoliday, isSystemDefault, countryCode?, @@unique([tenantId, code]) |
+
+**Enrichissements v8.0 (colonnes ajoutées) :**
+- `TenantTax` : `+appliedToPrice: boolean` (si false, taxe visible mais exclue du total), `+appliedToRecommendation: boolean` (ignore par le simulateur), `+isSystemDefault: boolean` (non supprimable si true — TVA seedée).
+- `Route` : `+pricingOverrides: Json?` (structure extensible : `taxes[code]`, `tolls`, `luggage`, `fareClasses.allowed`). `tvaOverrideRate` conservé en legacy le temps du backfill.
 
 **Changements FKs (v4.0 CRM) :**
 - `Ticket.passengerId` devient **nullable** (plus de sentinel `portal-anonymous`) ; ajout de `customerId`, `passengerPhone`, `passengerEmail` ; index `[tenantId, customerId]`, `[tenantId, passengerPhone]`.
@@ -1490,17 +1498,136 @@ Post-snapshot :
   netMargin          = totalRevenue - totalCost              ← marge nette
 ```
 
-### 14.3 Yield Engine — 4 règles en cascade
+### 14.3 Yield Engine — 5 règles en cascade (v8.0, Sprint S5)
 
 ```
+PEAK_PERIOD → date ∈ PeakPeriod enabled : prix × expectedDemandFactor        ← priorité max S5
 GOLDEN_DAY  → isGoldenDay (avgFillRate > 0.85) : prix × (1 + goldenDayMultiplier)
 BLACK_ROUTE → isBlackRoute (>50% déficit 90j)  : prix → breakEven estimé
-LOW_FILL    → J-2 et fillRate < 0.40           : prix × (1 - lowFillDiscount)
-HIGH_FILL   → fillRate ≥ 0.80                  : prix × (1 + highFillPremium)
-Bornes      : [basePrice × 0.70, basePrice × 2.00]
+LOW_FILL    → J-2 et fillRate < lowFillThreshold : prix × (1 - lowFillDiscount)
+HIGH_FILL   → fillRate ≥ highFillThreshold        : prix × (1 + highFillPremium)
+Bornes      : [basePrice × priceFloorRate, basePrice × priceCeilingRate]
 ```
 
-Tous les seuils configurables via `InstalledModule.config` (clé `YIELD_ENGINE`).
+Tous les seuils configurables via `InstalledModule.config` (clé `YIELD_ENGINE`)
+avec fallback sur le registry `platform-config` (`yield.defaults.*`). Les
+multi-period chevauchantes sont combinées par **produit** des factors dans
+`PeakPeriodService.resolveDemandFactor`.
+
+### 14.4 Refonte pricing Sprints S1→S5 (2026-04-20)
+
+**S1 — Fondations « zéro magic number » :**
+- **`TenantFareClass`** (nouvelle table) remplace l'enum TypeScript figé. Chaque
+  tenant peut avoir ses propres classes avec multipliers et flag `isSystemDefault`
+  (STANDARD/CONFORT/VIP/STANDING seedées par défaut au provisioning).
+- **`TenantTax` enrichie** : `+appliedToPrice`, `+appliedToRecommendation`,
+  `+isSystemDefault`. La TVA est désormais seedée automatiquement
+  (désactivée par défaut — marché Afrique centrale).
+- **`Route.pricingOverrides: Json?`** : override par ligne (taxes par code,
+  péages, bagages, classes autorisées). Structure extensible sans migration.
+- **Registry `platform-config`** étendu : 25+ clés `pricing.*`, `tax.*`,
+  `yield.*` + nouveau type `json` pour `pricing.defaults.fareClasses`.
+- **`PricingEngine` branché sur `TaxCalculatorService`** via `TenantTax[]` —
+  `PricingResult` expose `taxes: number` (rétro-compat) + `taxBreakdown: TaxLine[]`
+  (N taxes détaillées). Fallback legacy sur `rules.taxRate` si tenant non migré.
+- **Backfill idempotent** `prisma/seeds/pricing-defaults.backfill.ts` :
+  rattrape tenants existants + intégré dans `OnboardingService.seedPricingDefaults`
+  pour les futurs.
+
+**S2 — Toggle TVA/péages tenant + ligne + affichage pédagogique :**
+- **`TaxLine.applied: boolean`** + option `includeNonApplied` dans
+  `TaxCalculatorService.computeTaxes` → mode pédagogique qui calcule aussi
+  les taxes non-appliquées (montant "serait X XOF") sans les additionner
+  au total.
+- **`PricingInput.explainTaxes`** propagé depuis l'endpoint
+  `POST /tickets/batch` → consommé par PageSellTicket pour afficher les
+  taxes grisées barrées avec tooltip explicatif.
+- **`RoutePricingOverridesEditor`** (composant React réutilisable) :
+  checkbox d'activation + sections Taxes par code / Péages / Bagages
+  avec affichage des defaults tenant en contexte.
+
+**S3 — Simulateur "prix souhaité" live :**
+- Branchement front de l'endpoint existant `POST /simulate-trip` dans
+  `PageRoutes` (édition). 3 appels parallèles avec fillRate 50/70/90 →
+  tableau rentabilité avec tag couleur + recommandations break-even/profitable.
+- Réutilise `CostCalculatorEngine` pur (aucun duplication de logique).
+
+**S4 — KPI saisonniers + règle YoY progressive :**
+- **`SeasonalAggregate`** (nouvelle table) : agrégats multi-périodes
+  (YEAR, MONTH, WEEK, WEEKEND, WEEKDAY) avec `vsPreviousPct` et `vsLastYearPct`.
+  Unique (tenantId, routeId, periodType, periodKey).
+- **`SeasonalityService.computeHistoryWindow`** applique une règle YoY
+  **progressive stricte** (jamais de YoY fabriqué sur base trop petite) :
+  ```
+  < 30j       → INSUFFICIENT  (aucune comparaison)
+  1-3 mois    → SHORT         (mensuel seul, badge "Période courte")
+  3-12 mois   → MEDIUM        (M-1 et M-3 disponibles)
+  ≥ 12 mois   → YOY           (YoY débloqué)
+  ≥ 24 mois   → MULTI_YEAR    (tendance pluriannuelle)
+  ```
+- **Cron quotidien 03h** dans `SchedulerService.recomputeSeasonalAggregates` :
+  recompute pour tous les tenants actifs (après les 02h00/02h30/02h45 de
+  platform-analytics pour éviter contention DB).
+- **`PageSeasonality`** : banner window + 4 onglets + bar chart (MiniBarChart
+  existant, zéro dépendance nouvelle) + recommandations dérivées (détection
+  pic +10% et creux -10% YoY).
+
+**S5 — Peak periods + activation YIELD_ENGINE :**
+- **`PeakPeriod`** (nouvelle table) : `code`, `label`, dates, `expectedDemandFactor`,
+  `isHoliday`, `isSystemDefault`, `countryCode?`. Unique (tenantId, code).
+- **Seed `peak-periods.seed.ts`** : catalogue 14 périodes de base × 2 années
+  (courante + suivante). Filtre automatique par pays du tenant :
+  * Universelles : Nouvel An, Noël, Pâques, creux de janvier (factor 0.85)
+  * CG : Indépendance, Fête du Travail, Grandes vacances
+  * SN : Indépendance, Tabaski
+  * CI : Indépendance, Grandes vacances
+  * FR : Fête Nationale, Grandes vacances
+- **5ème règle yield PEAK_PERIOD** en priorité maximale — un événement
+  calendrier prime sur la réaction de demande historique (golden day / fill rate).
+- **Activation automatique `InstalledModule(YIELD_ENGINE, isActive=true)`**
+  dans `OnboardingService` + backfill → tous les tenants (neufs + existants)
+  ont le yield engine actif par défaut. L'admin peut le désactiver via
+  PageModules si besoin.
+
+### 14.5 Pipeline de résolution tarifaire (récap final post-S5)
+
+```
+┌─ Plateforme (registry platform-config) ──────────── defaults marché
+│   pricing.defaults.* (luggage, fareClasses, tolls…)
+│   tax.defaults.*     (tvaRate, tvaEnabled, tvaCode…)
+│   yield.defaults.*   (goldenDayMultiplier, lowFillThreshold…)
+│
+├─ Tenant ───────────────────────────────────────── surcharge globale
+│   TenantTax[]          (enabled + appliedToPrice + appliedToRecommendation)
+│   TenantFareClass[]    (multipliers)
+│   PeakPeriod[]         (calendrier saisonnier yield)
+│   InstalledModule      (YIELD_ENGINE actif/inactif)
+│   TenantBusinessConfig (seatSelectionFee, commissionRate, thresholds)
+│
+├─ Ligne (Route) ──────────────────────────────────── surcharge par route
+│   Route.pricingOverrides.taxes[CODE].{rate, appliedToPrice}
+│   Route.pricingOverrides.tolls.override
+│   Route.pricingOverrides.luggage.{freeKg, perExtraKg}
+│   Route.pricingOverrides.fareClasses.allowed
+│
+└─ Runtime PricingEngine ──────────────────────────── calcule le prix final
+    basePrice = segmentPrice × fareClassMultiplier × (peakFactor si applicable)
+    taxes     = TaxCalculator.computeTaxes(TenantTax + overrides, context)
+    tolls     = overrides.tolls.override ?? rules.tollsXof + waypoints
+    luggage   = overrides.luggage ?? rules.luggageFreeKg/perExtraKg
+    yield     = YieldService.calculateSuggestedPrice(trip)
+                [PEAK_PERIOD > GOLDEN_DAY > BLACK_ROUTE > LOW_FILL > HIGH_FILL]
+    + mode pédagogique (explainTaxes=true) pour UI caisse
+```
+
+### 14.6 Navigation admin — 4 nouvelles pages
+
+| Page                          | Chemin                               | Permission                         |
+|-------------------------------|--------------------------------------|------------------------------------|
+| Classes de voyage             | `/admin/settings/fare-classes`       | `data.fareClass.read.tenant`       |
+| Périodes peak                 | `/admin/settings/peak-periods`       | `data.peakPeriod.read.tenant`      |
+| Saisonnalité & KPI            | `/admin/analytics/seasonality`       | `data.stats.read.tenant`           |
+| Simulateur rentabilité        | intégré dans PageRoutes (édition)    | `data.profitability.read.tenant`   |
 
 ---
 

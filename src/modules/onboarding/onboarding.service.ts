@@ -4,6 +4,9 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
 import { Inject } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { FareClassDefault } from '../tenant-settings/tenant-fare-class.service';
+import { seedPeakPeriodsForTenant } from '../../../prisma/seeds/peak-periods.seed';
 import {
   seedTenantRoles,
   ensureDefaultAgency,
@@ -91,8 +94,9 @@ export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:         PrismaService,
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
+    private readonly platformConfig: PlatformConfigService,
   ) {}
 
   async onboard(dto: OnboardTenantDto) {
@@ -161,6 +165,13 @@ export class OnboardingService {
 
       // 7. Pack de démarrage — copies éditables des templates de documents
       await this.seedStarterTemplates(tx as unknown as PrismaService, tenant.id, admin.id);
+
+      // 7.bis. Pricing defaults marché — seed TenantBusinessConfig +
+      // TenantTax (TVA isSystemDefault, appliedToPrice=false par défaut) +
+      // TenantFareClass × N (depuis pricing.defaults.fareClasses).
+      // Cf. pricing-defaults.backfill.ts pour le rattrapage des tenants
+      // existants pré-migration.
+      await this.seedPricingDefaults(tx as unknown as PrismaService, tenant.id);
 
       // 8. Marquer tenant ACTIVE
       await tx.tenant.update({
@@ -231,6 +242,98 @@ export class OnboardingService {
       });
     }
     this.logger.log(`Pack de démarrage : ${systemTemplates.length} templates dupliqués pour tenant ${tenantId}`);
+  }
+
+  /**
+   * Seed pricing defaults marché — TenantBusinessConfig + TenantTax (TVA) +
+   * TenantFareClass × N. Idempotent : les upsert/skip garantissent la
+   * ré-exécution sans doublon (important car le script backfill
+   * `pricing-defaults.backfill.ts` appelle la même logique côté job).
+   *
+   * Source unique de vérité : `pricing.defaults.*` + `tax.defaults.*` dans le
+   * registre platform-config. Aucune valeur n'est hardcodée ici.
+   */
+  private async seedPricingDefaults(prisma: PrismaService, tenantId: string) {
+    // 1. TenantBusinessConfig — upsert minimal ; les colonnes ont toutes des
+    // defaults Prisma. La seule raison de l'appeler ici : garantir la présence
+    // de la ligne pour que les futures lectures n'aient pas à upsert en lazy.
+    await prisma.tenantBusinessConfig.upsert({
+      where:  { tenantId },
+      create: { tenantId },
+      update: {},
+    });
+
+    // 2. TenantTax TVA (marquée isSystemDefault — non supprimable)
+    const [tvaCode, tvaLabelKey, tvaRate, tvaEnabled, tvaAppliedToPrice, tvaAppliedToRecommendation] = await Promise.all([
+      this.platformConfig.getString('tax.defaults.tvaCode'),
+      this.platformConfig.getString('tax.defaults.tvaLabelKey'),
+      this.platformConfig.getNumber('tax.defaults.tvaRate'),
+      this.platformConfig.getBoolean('tax.defaults.tvaEnabled'),
+      this.platformConfig.getBoolean('tax.defaults.tvaAppliedToPrice'),
+      this.platformConfig.getBoolean('tax.defaults.tvaAppliedToRecommendation'),
+    ]);
+
+    await prisma.tenantTax.upsert({
+      where:  { tenantId_code: { tenantId, code: tvaCode } },
+      create: {
+        tenantId,
+        code:                    tvaCode,
+        label:                   `TVA ${Math.round(tvaRate * 1000) / 10}%`,
+        labelKey:                tvaLabelKey,
+        rate:                    tvaRate,
+        kind:                    'PERCENT',
+        base:                    'SUBTOTAL',
+        appliesTo:               ['ALL'],
+        sortOrder:               0,
+        enabled:                 tvaEnabled,
+        appliedToPrice:          tvaAppliedToPrice,
+        appliedToRecommendation: tvaAppliedToRecommendation,
+        isSystemDefault:         true,
+      },
+      update: {}, // idempotent, ne pas écraser les choix admin
+    });
+
+    // 3. TenantFareClass × N (depuis pricing.defaults.fareClasses)
+    const fareDefaults = await this.platformConfig.getJson<FareClassDefault[]>('pricing.defaults.fareClasses');
+    for (const def of fareDefaults) {
+      await prisma.tenantFareClass.upsert({
+        where:  { tenantId_code: { tenantId, code: def.code } },
+        create: {
+          tenantId,
+          code:            def.code,
+          label:           def.code,
+          labelKey:        def.labelKey,
+          multiplier:      def.multiplier,
+          sortOrder:       def.sortOrder,
+          color:           def.color,
+          enabled:         true,
+          isSystemDefault: true,
+        },
+        update: {}, // ne pas écraser les ajustements admin
+      });
+    }
+
+    this.logger.log(
+      `[pricing-defaults] tenant ${tenantId} — TenantBusinessConfig + TenantTax(TVA) + ${fareDefaults.length} TenantFareClass seedés`,
+    );
+
+    // 4. Peak periods + activation YIELD_ENGINE (Sprint 5).
+    // Les calendriers saisonniers par défaut selon le pays + activation du
+    // module yield pour que la 5ème règle PEAK_PERIOD ait un effet.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }, select: { country: true },
+    });
+    const peakRes = await seedPeakPeriodsForTenant(
+      prisma as any, tenantId, tenant?.country ?? null,
+    );
+    await prisma.installedModule.upsert({
+      where:  { tenantId_moduleKey: { tenantId, moduleKey: 'YIELD_ENGINE' } },
+      create: { tenantId, moduleKey: 'YIELD_ENGINE', isActive: true, config: {} },
+      update: { isActive: true },
+    });
+    this.logger.log(
+      `[pricing-defaults] tenant ${tenantId} — peak periods seedés: ${peakRes.created}, YIELD_ENGINE actif`,
+    );
   }
 
   private async seedInstalledModules(prisma: PrismaService, tenantId: string) {

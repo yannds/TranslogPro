@@ -252,3 +252,86 @@ Architecture hexagonale : le code métier ne dépend que de `PaymentOrchestrator
 `/tenants/:id/settings/taxes` — TenantTax CRUD via `DataTableMaster`-friendly tableau.
 Le `TaxCalculatorService` consomme la liste filtrée/triée pour chaque Intent — la décomposition fiscale est figée dans `PaymentIntent.taxBreakdown` pour audit.
 
+---
+
+## 💰 MODULE : PRICING DYNAMIQUE & KPI SAISONNIERS (Sprints S1-S5, 2026-04-20)
+
+**Motivation** — Transport voyageur Afrique centrale : la TVA n'est pas systématique (beaucoup de transporteurs non-assujettis), les classes de voyage varient par pays, les fériés et vacances scolaires dictent la demande. Le moteur historique hardcodait tout (`0.18` TVA, enum figé STANDARD/CONFORT/VIP, 4 règles yield figées). Refonte complète en 5 sprints « zéro magic number, modularité maximale ».
+
+### Principes directeurs
+- **Zéro hardcoding** : toutes les valeurs via `PlatformConfig` (registry) ou `TenantBusinessConfig` / `TenantTax` / `TenantFareClass` / `PeakPeriod` / `Route.pricingOverrides`.
+- **Hiérarchie de résolution** : platform defaults → tenant config → override par ligne (Route) → runtime.
+- **Rétro-compat stricte** : `PricingResult.taxes: number` conservé, `taxBreakdown: TaxLine[]` ajouté.
+- **Affichage pédagogique** : le caissier voit les taxes non-appliquées en italique barré ("serait X XOF") pour compréhension sans impact total.
+
+### Fonctionnalités livrées
+
+**S1 — Defaults marché configurables**
+- TVA 18,9% (configurable) **saisie mais désactivée** par défaut — cohérent avec le marché Afrique centrale.
+- 4 classes seedées (STANDARD, CONFORT, VIP, STANDING) — un tenant peut ajouter/renommer/supprimer via `PageTenantFareClasses`.
+- Bagages : 20 kg gratuits, 100 XOF/kg supplémentaire (configurables plateforme + tenant + ligne).
+- **Modèle `TenantFareClass`** : élimine l'enum figé, permet à un tenant sénégalais d'avoir `ECONOMY/BUSINESS/FIRST` et un congolais `STANDARD/CONFORT/VIP`.
+
+**S2 — Toggle TVA/péages tenant + ligne**
+- Au niveau **tenant global** (`/admin/settings/taxes`) : activation/désactivation par taxe + flag "appliquée au prix" + flag "prise en compte par le simulateur".
+- Au niveau **ligne** (`Route.pricingOverrides`) : override taxe par code (rate + appliedToPrice), péages, bagages.
+- **Affichage pédagogique caisse** : les taxes définies mais non-appliquées affichées en italique barré avec montant théorique — le manager voit ce qu'il choisit de ne pas facturer.
+- Aucun override au point de vente (caisse = pure exécution, pas de micromanagement caissier).
+
+**S3 — Mode "prix souhaité" + simulateur rentabilité live**
+- Dans la fiche ligne (édition), l'admin sélectionne un bus, entre un prix cible → simulation instantanée avec 3 scénarios d'occupation (50%/70%/90%).
+- Retour : marge nette XOF, tag couleur (PROFITABLE/BREAK_EVEN/DEFICIT), prix break-even, prix rentable.
+- Réutilise `CostCalculatorEngine` existant (DRY).
+
+**S4 — KPI saisonniers avec règle YoY progressive**
+- Page `/admin/analytics/seasonality` : 4 onglets (Mensuel / Annuel / Weekend / Semaine) × bar chart + table détaillée + recommandations.
+- **Règle YoY progressive** (jamais de YoY fabriqué) :
+  - < 30 jours d'historique : "Données insuffisantes — revenez après 1 mois"
+  - 1-3 mois : agrégats mensuels seuls, badge "Période courte"
+  - 3-12 mois : comparaisons M-1, M-3 débloquées
+  - ≥ 12 mois : YoY affiché
+  - ≥ 24 mois : tendance pluriannuelle
+- Cron nocturne 03h agrège automatiquement toutes les périodes et deltas.
+- Recommandations dérivées : détection pic +10% → "ajouter trips Q4" ; détection creux -10% → "planifier formations en janvier".
+
+**S5 — Calendrier peak periods + yield étendu + activation YIELD_ENGINE**
+- **`PeakPeriod`** : fériés + vacances scolaires + creux saisonniers. Seed automatique par pays (CG/SN/CI/FR + universels) à l'onboarding.
+- **5ème règle yield `PEAK_PERIOD`** en priorité maximale : un événement calendrier prime sur la réaction fillRate.
+- **Module `YIELD_ENGINE` activé par défaut** à l'onboarding (et rattrapage des tenants existants). L'admin peut désactiver via `PageModules` si souhaité.
+- CRUD admin `/admin/settings/peak-periods` avec badges couleur selon facteur (vert majoration, orange creux).
+
+### Couverture tenants
+- **Tous les tenants existants (dev)** : rattrapés par `prisma/seeds/pricing-defaults.backfill.ts` — idempotent, ré-exécutable. Chaque tenant reçoit : TenantBusinessConfig + TenantTax(TVA) + TenantFareClass × 4 + PeakPeriod × 14 + `YIELD_ENGINE` actif.
+- **Tous les tenants futurs** : `OnboardingService.seedPricingDefaults` dans la transaction atomique de provisioning — **aucun tenant ne démarre sans ce pipeline**.
+- **Impact business** : un tenant qui signup un lundi peut vendre des billets le mardi avec : devise locale, classes de voyage, TVA saisie mais désactivable d'un clic, calendrier fériés de son pays pré-configuré, simulateur de prix, tableau KPI saisonnier progressif.
+
+### Pipeline de résolution (récap technique)
+```
+platform-config.registry (defaults universels)
+   ↓
+TenantBusinessConfig + TenantTax + TenantFareClass + PeakPeriod (overrides tenant)
+   ↓
+Route.pricingOverrides (overrides par ligne)
+   ↓
+PricingEngine.calculate(input, context)
+   = segmentPrice × fareClassMultiplier (× peakFactor si période active)
+   + taxes via TaxCalculatorService[context=PRICE|RECOMMENDATION]
+   + péages (override ligne ou tenant)
+   + bagages (override ligne ou tenant)
+   + yield (5 règles en cascade : PEAK > GOLDEN > BLACK > LOW_FILL > HIGH_FILL)
+   clampé dans [priceFloorRate × basePrice, priceCeilingRate × basePrice]
+```
+
+### Tests livrés
+- Unit : **773/773 PASS** (75 suites) — dont 46 nouveaux tests S1-S5.
+- Couverture : TaxCalculator context/pédagogique (25), TenantFareClass seed idempotent, PricingEngine fallback legacy, SeasonalityService window progressif + agrégations + deltas (10), PeakPeriodService resolve + validation + sécurité tenantId (8), YieldService 5 règles + combinaison peak chevauchantes (11 adaptés).
+
+### Pages admin livrées (toutes gated par permissions granulaires)
+| Page                     | Chemin                         | Permission                       |
+|--------------------------|--------------------------------|----------------------------------|
+| Taxes                    | `/admin/settings/taxes`        | `data.tax.read.tenant`           |
+| Classes de voyage        | `/admin/settings/fare-classes` | `data.fareClass.read.tenant`     |
+| Périodes peak            | `/admin/settings/peak-periods` | `data.peakPeriod.read.tenant`    |
+| Saisonnalité & KPI       | `/admin/analytics/seasonality` | `data.stats.read.tenant`         |
+| Simulateur rentabilité   | intégré PageRoutes (édition)   | `data.profitability.read.tenant` |
+

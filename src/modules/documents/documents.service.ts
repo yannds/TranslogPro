@@ -29,6 +29,7 @@ import { PuppeteerService, PrintFormat } from '../../infrastructure/renderer/pup
 import { ExcelService }        from '../../infrastructure/renderer/excel.service';
 import { PdfmeService, PdfmeInputRecord } from '../../infrastructure/renderer/pdfme.service';
 import { TemplatesService }    from '../templates/templates.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 
 import { renderTicket }                            from './renderers/ticket.renderer';
 import { renderManifest }                          from './renderers/manifest.renderer';
@@ -47,10 +48,7 @@ import { renderEnvelope }     from './renderers/envelope.renderer';
 import { renderBaggageTag }   from './renderers/baggage-tag.renderer';
 import { docLabels }         from './renderers/doc-i18n';
 
-// TVA par défaut UEMOA — utilisé uniquement si TenantBusinessConfig n'existe pas
-const DEFAULT_TVA_RATE = 0.18;
-
-/** Résolution TVA : route override > tenant config > fallback 18 % */
+/** Résolution TVA : route override > TenantTax(code=TVA) > platform default. */
 interface TvaConfig { enabled: boolean; rate: number; }
 
 /** Registre fiscal configurable par pays ({label: "NIU", value: "CG-..."}) */
@@ -87,13 +85,27 @@ export class DocumentsService {
   private readonly logger = new Logger(DocumentsService.name);
 
   constructor(
-    private readonly prisma:     PrismaService,
-    private readonly puppeteer:  PuppeteerService,
-    private readonly excel:      ExcelService,
-    private readonly pdfme:      PdfmeService,
-    private readonly templates:  TemplatesService,
+    private readonly prisma:         PrismaService,
+    private readonly puppeteer:      PuppeteerService,
+    private readonly excel:          ExcelService,
+    private readonly pdfme:          PdfmeService,
+    private readonly templates:      TemplatesService,
+    private readonly platformConfig: PlatformConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
+
+  /**
+   * Taux TVA effectif pour l'affichage sur les factures.
+   * Lit TenantTax(code=TVA) si présent et appliqué au prix ; sinon retombe
+   * sur le registre platform-config (`tax.defaults.tvaRate`).
+   */
+  private async resolveEffectiveTvaRate(tenantId: string): Promise<number> {
+    const tva = await this.prisma.tenantTax.findFirst({
+      where: { tenantId, code: 'TVA', enabled: true, appliedToPrice: true },
+    });
+    if (tva) return tva.rate;
+    return this.platformConfig.getNumber('tax.defaults.tvaRate');
+  }
 
   // ─── TVA resolution ─────────────────────────────────────────────────────────
 
@@ -633,10 +645,11 @@ export class DocumentsService {
     ]);
     const invoiceNumber = buildInvoiceNumber(ticketId);
 
+    const effectiveTvaRate = await this.resolveEffectiveTvaRate(tenantId);
     const lines = ticketToInvoiceLines(
       ticket.passengerName,
       ticket.pricePaid,
-      DEFAULT_TVA_RATE,
+      effectiveTvaRate,
       trip?.route?.name ?? 'Trajet',
       (ticket as any).seatNumber ?? null,
     );
@@ -678,11 +691,12 @@ export class DocumentsService {
     const recipient   = parcel.recipientInfo as { name?: string; phone?: string; address?: string };
     const invoiceNumber = buildInvoiceNumber(parcelId);
 
+    const effectiveTvaRate = await this.resolveEffectiveTvaRate(tenantId);
     const lines = parcelToInvoiceLines(
       parcel.trackingCode,
       parcel.weight,
       parcel.price,
-      DEFAULT_TVA_RATE,
+      effectiveTvaRate,
       destination?.name ?? parcel.destinationId,
     );
 

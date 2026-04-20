@@ -1,7 +1,91 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint 11 — rentabilité pré-trajet + scénarios métier).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprints Pricing S1→S5 + rentabilité pré-trajet + scénarios métier).
+
+### Sprints Pricing S1→S5 — Refonte complète (2026-04-20)
+
+**Livraison bout-en-bout** de la chaîne tarifaire : defaults marché → taxes
+configurables → overrides par ligne → simulateur prix souhaité → KPI
+saisonniers → yield engine activé avec calendrier peak periods.
+
+**S1 — Fondations pricing (zéro magic number)** :
+- Nouveau modèle Prisma `TenantFareClass` (remplace enum figé),
+  `TenantTax +3 flags` (`appliedToPrice`, `appliedToRecommendation`,
+  `isSystemDefault`), `Route.pricingOverrides Json?`
+- Registry `platform-config` : 25+ clés `pricing.*`, `tax.*`, `yield.*`
+  (support nouveau type `json` pour `fareClasses` defaults)
+- `PricingEngine` branché sur `TenantTax[]` + `TenantFareClass` via
+  `TaxCalculatorService` (rétro-compat : `PricingResult.taxes: number`
+  conservé, `taxBreakdown: TaxLine[]` ajouté)
+- Permissions `FARE_CLASS_*` + `PEAK_PERIOD_*` assignées aux 4 rôles système
+- Magic numbers retirés : `DEFAULT_TVA_RATE=0.18`, `DEFAULT_YIELD_CONFIG`,
+  `HOURS_BEFORE_DEPARTURE=48`, `0.85`, `0.50` → tous via `PlatformConfigService`
+- Seed `OnboardingService.seedPricingDefaults` + script backfill
+  `pricing-defaults.backfill.ts` idempotent → tenants neufs + existants
+- +5 tests (context `PRICE|RECOMMENDATION`) sur TaxCalculator
+
+**S2 — Toggle TVA/péages tenant + ligne + affichage pédagogique** :
+- `TaxLine.applied: boolean` + option `includeNonApplied` (mode pédagogique)
+- `PricingInput.explainTaxes` propagé jusqu'à `TaxCalculatorService`
+- `UpdateRouteDto.pricingOverrides` + validation stricte
+- Composant `RoutePricingOverridesEditor` (taxes par code + péages + bagages)
+- PageSellTicket affiche les taxes non-appliquées en **italique barré**
+  avec tooltip "serait X XOF"
+- +4 tests `includeNonApplied` sur TaxCalculator
+
+**S3 — Simulateur "prix souhaité" live** :
+- Composant `PricingSimulatorCard` dans PageRoutes (édition uniquement)
+- 3 appels parallèles à `/simulate-trip` avec fillRate 50/70/90
+- Tableau rentabilité avec tag couleur PROFITABLE/BREAK_EVEN/DEFICIT
+- Recommandations dérivées (break-even price, prix rentable à 70%)
+- Réutilise `CostCalculatorEngine` existant (DRY)
+
+**S4 — KPI saisonniers + règle YoY progressive** :
+- Modèle Prisma `SeasonalAggregate` (tenantId, routeId?, periodType,
+  periodKey, ticketsSold, revenueTotal, vsPreviousPct, vsLastYearPct)
+- `SeasonalityService.computeHistoryWindow` : règle YoY progressive stricte
+  (INSUFFICIENT < 30j / SHORT 30-89 / MEDIUM 90-364 / YOY 365-729 / MULTI_YEAR ≥730)
+- `SeasonalityService.recomputeForTenant` : agrège depuis `Trip COMPLETED` +
+  `TripCostSnapshot` sur 5 periodType × 2 scopes (tenant global + par route)
+- Scheduler cron 03h quotidien `recomputeSeasonalAggregates`
+- Endpoint `GET /analytics/seasonality?periodType=MONTH&from=X&to=Y`
+- Page `PageSeasonality` avec banner window + 4 onglets + bar chart +
+  recommandations dérivées
+- +10 tests (window progressif + agrégations + deltas + sécurité)
+
+**S5 — Peak periods + activation YIELD_ENGINE** :
+- Modèle Prisma `PeakPeriod` (tenantId, code, dates, expectedDemandFactor,
+  isHoliday, isSystemDefault, countryCode?)
+- Seed calendriers par défaut `peak-periods.seed.ts` — 14 périodes/tenant :
+  10 universelles (Noël, Nouvel An, Pâques, creux janvier) + spécifiques
+  par pays (CG, SN, CI, FR)
+- `PeakPeriodService.resolveDemandFactor` : produit des facteurs si
+  chevauchement de périodes actives
+- **5ème règle `YieldService` PEAK_PERIOD en priorité maximale** — avant
+  GOLDEN_DAY / BLACK_ROUTE / LOW_FILL / HIGH_FILL (événement calendrier
+  prime sur réaction fillRate)
+- **Activation automatique `InstalledModule(YIELD_ENGINE, isActive=true)`**
+  via onboarding + backfill → tous les tenants (3/3 en dev) actifs
+- Page `PageTenantPeakPeriods` CRUD
+- +8 tests PeakPeriodService + réparation test YieldService (mock peakPeriod)
+
+**Régression tierce réparée hors scope** : `platform-kpi.service.spec.ts`
+avait les anciennes clés de module registry (`'ticketing'` → `'TICKETING'`
+UPPER_SNAKE_CASE). Sed de migration appliqué → 23/23 restauré.
+
+**Compteurs post-S1-S5 :**
+- Unit        : **773/773** (75 suites) — +46 tests (5 S1 + 4 S2 + 10 S4 + 8 S5 + régressions réparées)
+- TypeScript  : **0 erreur** (hors préexistantes mobile/i18n/poc)
+- DB          : 4 tables additives créées, zéro data loss
+  (`tenant_fare_classes`, `seasonal_aggregates`, `peak_periods` + colonnes
+  additionnelles sur `tenant_taxes` + `routes`)
+- Backfill exécuté : 3/3 tenants rattrapés, 42 peak_periods seedés,
+  YIELD_ENGINE actif sur 3/3
+
+**Clôture roadmap pricing : tous les tenants (existants + futurs) ont un
+pipeline tarifaire complet opérationnel.**
+
 
 ### Sprint 11 — Rentabilité pré-trajet + scénarios métier imbriqués (2026-04-20)
 
@@ -46,13 +130,13 @@ Remédiation bug flaky hors scope (commit `f67421c`) :
   forcer la visibilité du slug créé (indépendant de la pagination/ordre)
 
 **Compteurs 5 niveaux post-Sprint 11 :**
-- Unit        : **727/727**   (+12 simulate-trip, autres ajouts tiers)
+- Unit        : **727/727**   (+12 simulate-trip, autres ajouts tiers — puis +46 post-S1-S5 → 773/773)
 - Security    : **172/172**   (+15 tiers)
 - Integration : **62/62**     (+5 tiers)
 - E2E         : **149/149**   (stable)
 - Playwright  : **76 passed** + 4 skipped + **9 failed** sur `platform-kpi.sa.pw.spec.ts` hors scope Sprint 11 — le test référence des sections `pk-northstar` / `pk-*` qui n'existent pas dans la page `/admin/platform/dashboard`. Ticket de suite à ouvrir : soit la page a été régressée, soit le test anticipe une UI non livrée.
 
-**Total tests au vert : 1186.**
+**Total tests au vert post-S1-S5 : 1232 (773 unit + 172 security + 62 integ + 149 e2e + 76 pw).**
 
 **Backup DB pré-Sprint 11 final :** `backups/pre-sprint11-finale-20260420-1129.sql` (17 MB).
 
