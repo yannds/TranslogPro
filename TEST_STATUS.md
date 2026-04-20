@@ -1,7 +1,28 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprints 0-9 roadmap post-blueprint UX).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint KPI SaaS plateforme).
+
+### Sprint KPI SaaS plateforme livré (2026-04-20) — dashboard cross-tenant investisseur
+
+**Total : +34 tests unit + 15 security + 4 integration + 9 Playwright. Zéro régression.**
+
+| Sprint | Livraison | Commit | Tests |
+|---|---|---|---|
+| 1 | Schéma Prisma additif (Tenant.estimatedOperationsMonthly, SubscriptionChange, PlatformKpiSnapshot) | `aabb059` | 5 unit |
+| 2 | PlatformKpiService (7 méthodes cross-tenant + cache) | `b7ae2f6` | 17 unit |
+| 3 | Endpoints REST + RBAC fine-grained (4 perms) | `9a68c1b` | 7 unit |
+| 4 | UI 7 sections dashboard (refonte PagePlatformDashboard) | `191452c` | — |
+| 5 | i18n fr+en complet (80 clés platformKpi.*) | `d9f270b` | — |
+| 6 | Tests 5 niveaux (security + integration + Playwright) | `a1e3a28` | 15 sec + 4 integ + 9 pw |
+| 7 | Documentation complète (docs/PLATFORM_KPI.md) | (ce commit) | — |
+
+**Nouveaux totaux** :
+- Unit : **727** (+19 vs 708 baseline roadmap 9)
+- Security : **172** (+15 vs 157 baseline)
+- Voir [docs/PLATFORM_KPI.md](docs/PLATFORM_KPI.md) pour détails complets.
+
+---
 
 ### Roadmap 9 sprints livrée (2026-04-20) — post blueprint UX
 
@@ -26,6 +47,32 @@
 - Integration : **57** (baseline 52, +5)
 - E2E : **149** (stable)
 - Playwright : **50** (stable)
+
+### Sprint Tax-RBAC (2026-04-20) — split lecture/écriture taxes tenant
+
+Découverte audit : `PageTenantTaxes` était orpheline (composant + route PageRouter mais aucune entrée nav → invisible). Permission unique `SETTINGS_MANAGE_TENANT` trop large : seul TENANT_ADMIN pouvait gérer la fiscalité.
+
+Livré :
+- 2 nouvelles permissions : `data.tax.read.tenant` (lecture) + `control.tax.manage.tenant` (écriture)
+- Rôle `ACCOUNTANT` (comptable) ajouté au seed IAM avec read+write taxes + facturation/refund/stats
+- Mapping par défaut : TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT (read+write) ; CASHIER (read seul) ; aucun autre rôle système n'a de fuite
+- Controller `TenantSettingsController` : décorateurs split GET=read, POST/PATCH/DELETE=write — par permission, jamais par rôle
+- Nav `/admin/settings/taxes` branché dans Configuration, gated sur `data.tax.read.tenant` ou `control.tax.manage.tenant`
+- Page UI : bouton "Ajouter" + actions "Modifier/Supprimer" masqués si l'utilisateur n'a pas l'écriture (badge "Lecture seule")
+- Bug fix : `prisma/seeds/iam.seed.ts` — `main()` enveloppé dans `require.main === module` pour permettre l'import du seed depuis les tests sans déclencher le runner standalone
+- i18n fr+en : `nav.taxes_fiscality`, `tenantSettings.taxes.subtitleReadOnly`, `common.readOnly`
+
+Tests ajoutés (12) :
+- `test/unit/tenant-settings/tenant-tax-rbac.spec.ts` — décorateurs `@RequirePermission` sur les 4 endpoints + mapping rôle→permission par défaut + zéro fuite sur DRIVER/HOSTESS/MECHANIC/AGENT_QUAI/CUSTOMER/DISPATCHER/PUBLIC_REPORTER
+
+**Compteurs après Sprint Tax-RBAC :** Unit **686** (+15), Security **157** (stable).
+
+**Audit orphans — chantiers livrés dans la foulée :**
+- ✅ `PageTenantPayment` branchée — entrée nav `tenant-payment` ajoutée sous Configuration (`/admin/settings/payment`, gated `SETTINGS_MANAGE_TENANT`)
+- ✅ `PageAnnouncements` branchée — la nav avait déjà `display-announcements` mais PageRouter retournait `<PageWip>` placeholder ; remplacé par `<LazyAnnouncements />` (les 5 endpoints `/tenants/:id/announcements` ont enfin leur UI)
+- ⏳ `PagePersonnel` — incohérence id `'personnel'` vs nav `'staff-list'`, à arbitrer dans un sprint dédié (renommage cas ou nouvelle entrée nav)
+
+**Compteurs après orphan fixes :** Unit **708**, Security **157** (zéro régression).
 
 **Tous les schémas tenant-config étendus avec seuils paramétrables (zéro magic number) :**
 - `intermediateBookingEnabled/CutoffMins/MinSegmentMinutes/SegmentBlacklist` (Sprint 1)
