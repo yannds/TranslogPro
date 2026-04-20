@@ -19,7 +19,7 @@
 
 export interface PlatformConfigDef<T> {
   key:      string;
-  type:     'number' | 'boolean' | 'string';
+  type:     'number' | 'boolean' | 'string' | 'json';
   default:  T;
   label:    string; // i18n key — UI resolve via t(label)
   help:     string; // i18n key
@@ -287,7 +287,252 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     group:    'platformConfig.groupKpi',
     validate: numberInRange(1, 1000),
   },
+
+  // ── Pricing defaults (seed onboarding tenant) ───────────────────────────
+  // Valeurs injectées au provisioning d'un nouveau tenant et utilisées comme
+  // fallback par RouteService.create / backfill quand aucune PricingRules
+  // n'existe pour une route. Un tenant admin peut ensuite tout surcharger via
+  // PageTenantBusinessRules / PageTenantTaxes / PageTenantFareClasses.
+  {
+    key:      'pricing.defaults.luggageFreeKg',
+    type:     'number',
+    default:  20,
+    label:    'platformConfig.pricingLuggageFreeKg',
+    help:     'platformConfig.pricingLuggageFreeKgHelp',
+    group:    'platformConfig.groupPricing',
+    validate: numberInRange(0, 1000),
+  },
+  {
+    key:      'pricing.defaults.luggagePerExtraKg',
+    type:     'number',
+    default:  100,
+    label:    'platformConfig.pricingLuggagePerExtraKg',
+    help:     'platformConfig.pricingLuggagePerExtraKgHelp',
+    group:    'platformConfig.groupPricing',
+    validate: numberInRange(0, 1_000_000),
+  },
+  {
+    key:      'pricing.defaults.tollsXof',
+    type:     'number',
+    default:  0,
+    label:    'platformConfig.pricingTollsXof',
+    help:     'platformConfig.pricingTollsXofHelp',
+    group:    'platformConfig.groupPricing',
+    validate: numberInRange(0, 10_000_000),
+  },
+  {
+    key:      'pricing.defaults.costPerKm',
+    type:     'number',
+    default:  0,
+    label:    'platformConfig.pricingCostPerKm',
+    help:     'platformConfig.pricingCostPerKmHelp',
+    group:    'platformConfig.groupPricing',
+    validate: numberInRange(0, 10_000),
+  },
+  // Liste des classes de voyage créées par défaut à l'onboarding.
+  // Format : Array<{ code, labelKey, multiplier, sortOrder, color }>.
+  // L'admin tenant peut ensuite ajouter/modifier/retirer via PageTenantFareClasses.
+  {
+    key:      'pricing.defaults.fareClasses',
+    type:     'json',
+    default:  [
+      { code: 'STANDARD', labelKey: 'fareClass.standard', multiplier: 1.0, sortOrder: 0, color: '#6b7280' },
+      { code: 'CONFORT',  labelKey: 'fareClass.confort',  multiplier: 1.4, sortOrder: 1, color: '#3b82f6' },
+      { code: 'VIP',      labelKey: 'fareClass.vip',      multiplier: 2.0, sortOrder: 2, color: '#f59e0b' },
+      { code: 'STANDING', labelKey: 'fareClass.standing', multiplier: 0.8, sortOrder: 3, color: '#94a3b8' },
+    ],
+    label:    'platformConfig.pricingFareClasses',
+    help:     'platformConfig.pricingFareClassesHelp',
+    group:    'platformConfig.groupPricing',
+    validate: (v) => Array.isArray(v) && v.every(isFareClassDefault)
+      ? null
+      : 'platformConfig.errInvalidFareClasses',
+  },
+
+  // ── Tax defaults (seed onboarding) ─────────────────────────────────────
+  // Une ligne TenantTax est créée automatiquement à l'onboarding avec ces
+  // valeurs. enabled=tvaEnabled, rate=tvaRate. L'admin tenant peut désactiver
+  // ou modifier ; il ne peut pas supprimer la ligne (isSystemDefault=true).
+  {
+    key:      'tax.defaults.tvaCode',
+    type:     'string',
+    default:  'TVA',
+    label:    'platformConfig.taxTvaCode',
+    help:     'platformConfig.taxTvaCodeHelp',
+    group:    'platformConfig.groupTax',
+    validate: (v) => (typeof v === 'string' && v.trim().length > 0)
+      ? null
+      : 'platformConfig.errNotString',
+  },
+  {
+    key:      'tax.defaults.tvaLabelKey',
+    type:     'string',
+    default:  'tax.tva',
+    label:    'platformConfig.taxTvaLabelKey',
+    help:     'platformConfig.taxTvaLabelKeyHelp',
+    group:    'platformConfig.groupTax',
+    validate: (v) => (typeof v === 'string' && v.trim().length > 0)
+      ? null
+      : 'platformConfig.errNotString',
+  },
+  {
+    key:      'tax.defaults.tvaRate',
+    type:     'number',
+    default:  0.189,
+    label:    'platformConfig.taxTvaRate',
+    help:     'platformConfig.taxTvaRateHelp',
+    group:    'platformConfig.groupTax',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'tax.defaults.tvaEnabled',
+    type:     'boolean',
+    default:  false,
+    label:    'platformConfig.taxTvaEnabled',
+    help:     'platformConfig.taxTvaEnabledHelp',
+    group:    'platformConfig.groupTax',
+  },
+  {
+    key:      'tax.defaults.tvaAppliedToPrice',
+    type:     'boolean',
+    default:  false,
+    label:    'platformConfig.taxTvaAppliedToPrice',
+    help:     'platformConfig.taxTvaAppliedToPriceHelp',
+    group:    'platformConfig.groupTax',
+  },
+  {
+    key:      'tax.defaults.tvaAppliedToRecommendation',
+    type:     'boolean',
+    default:  true,
+    label:    'platformConfig.taxTvaAppliedToRecommendation',
+    help:     'platformConfig.taxTvaAppliedToRecommendationHelp',
+    group:    'platformConfig.groupTax',
+  },
+
+  // ── Yield defaults (YieldService — remplace DEFAULT_YIELD_CONFIG) ───────
+  // Les tenants qui activent le module YIELD_ENGINE peuvent surcharger ces
+  // valeurs via InstalledModule.config. Par défaut le module reste désactivé.
+  {
+    key:      'yield.defaults.goldenDayMultiplier',
+    type:     'number',
+    default:  0.15,
+    label:    'platformConfig.yieldGoldenDayMultiplier',
+    help:     'platformConfig.yieldGoldenDayMultiplierHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 2),
+  },
+  {
+    key:      'yield.defaults.lowFillThreshold',
+    type:     'number',
+    default:  0.40,
+    label:    'platformConfig.yieldLowFillThreshold',
+    help:     'platformConfig.yieldLowFillThresholdHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.lowFillDiscount',
+    type:     'number',
+    default:  0.10,
+    label:    'platformConfig.yieldLowFillDiscount',
+    help:     'platformConfig.yieldLowFillDiscountHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.highFillThreshold',
+    type:     'number',
+    default:  0.80,
+    label:    'platformConfig.yieldHighFillThreshold',
+    help:     'platformConfig.yieldHighFillThresholdHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.highFillPremium',
+    type:     'number',
+    default:  0.10,
+    label:    'platformConfig.yieldHighFillPremium',
+    help:     'platformConfig.yieldHighFillPremiumHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.priceFloorRate',
+    type:     'number',
+    default:  0.70,
+    label:    'platformConfig.yieldPriceFloorRate',
+    help:     'platformConfig.yieldPriceFloorRateHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0.1, 1),
+  },
+  {
+    key:      'yield.defaults.priceCeilingRate',
+    type:     'number',
+    default:  2.00,
+    label:    'platformConfig.yieldPriceCeilingRate',
+    help:     'platformConfig.yieldPriceCeilingRateHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(1, 5),
+  },
+  {
+    key:      'yield.defaults.goldenDayFillThreshold',
+    type:     'number',
+    default:  0.85,
+    label:    'platformConfig.yieldGoldenDayFillThreshold',
+    help:     'platformConfig.yieldGoldenDayFillThresholdHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.blackRouteDeficitRatio',
+    type:     'number',
+    default:  0.50,
+    label:    'platformConfig.yieldBlackRouteDeficitRatio',
+    help:     'platformConfig.yieldBlackRouteDeficitRatioHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(0, 1),
+  },
+  {
+    key:      'yield.defaults.analyticsWindowDays',
+    type:     'number',
+    default:  90,
+    label:    'platformConfig.yieldAnalyticsWindowDays',
+    help:     'platformConfig.yieldAnalyticsWindowDaysHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(7, 365),
+  },
+  // Fenêtre en heures avant le départ à partir de laquelle la règle "faible
+  // remplissage" (discount) se déclenche. Défaut = J-2 (48h).
+  {
+    key:      'yield.defaults.lowFillTriggerHoursBeforeDeparture',
+    type:     'number',
+    default:  48,
+    label:    'platformConfig.yieldLowFillTriggerHours',
+    help:     'platformConfig.yieldLowFillTriggerHoursHelp',
+    group:    'platformConfig.groupYield',
+    validate: numberInRange(1, 720),
+  },
 ];
+
+// ─── Validators JSON ─────────────────────────────────────────────────────────
+
+interface FareClassDefault {
+  code:       string;
+  labelKey:   string;
+  multiplier: number;
+  sortOrder:  number;
+  color?:     string;
+}
+
+function isFareClassDefault(v: unknown): v is FareClassDefault {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.code       === 'string' && o.code.trim().length > 0
+      && typeof o.labelKey   === 'string' && o.labelKey.trim().length > 0
+      && typeof o.multiplier === 'number' && Number.isFinite(o.multiplier) && o.multiplier > 0
+      && typeof o.sortOrder  === 'number' && Number.isInteger(o.sortOrder);
+}
 
 export function findDef(key: string): PlatformConfigDef<unknown> | undefined {
   return PLATFORM_CONFIG_REGISTRY.find(d => d.key === key);

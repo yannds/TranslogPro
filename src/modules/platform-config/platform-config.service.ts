@@ -63,6 +63,15 @@ export class PlatformConfigService {
     return String(v);
   }
 
+  async getJson<T = unknown>(key: string): Promise<T> {
+    const def = findDef(key);
+    if (!def || def.type !== 'json') {
+      throw new Error(`PlatformConfig key "${key}" is not registered as json`);
+    }
+    const v = await this.readWithFallback(key, def);
+    return v as T;
+  }
+
   // ─── Lecture "brute" (UI admin) ─────────────────────────────────────────
 
   /**
@@ -164,6 +173,20 @@ export class PlatformConfigService {
     }
     if (type === 'string') {
       return typeof value === 'string' ? value : null;
+    }
+    if (type === 'json') {
+      // Accept déjà parsé (object/array) ou string JSON valide. Rejette primitifs.
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'object') return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+          return null;
+        }
+      }
+      return null;
     }
     return null;
   }
