@@ -1474,7 +1474,13 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "soonIntervention": "Imminent Operation",
     "counters": "Counters",
     "vehicleWorkshop": "Vehicle in Workshop",
-    "missingSeatDesc": "Numbered ticket sales will be refused until the plan is defined."
+    "missingSeatDesc": "Numbered ticket sales will be refused until the plan is defined.",
+    "predictiveDue": "Maintenance due now",
+    "predictiveSoon": "Maintenance due soon",
+    "overdue": "overdue",
+    "daysOverdue": "d overdue",
+    "remaining": "remaining",
+    "daysRemaining": "d remaining"
   },
   "iamUsers": {
     "users": "Users",
@@ -2807,6 +2813,32 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "discrepanciesLabel": "Cash discrepancies",
     "last30Days": "last 30 days"
   },
+  "yieldSuggest": {
+    "rule_GOLDEN_DAY":  "Golden day — high demand",
+    "rule_HIGH_FILL":   "High occupancy",
+    "rule_LOW_FILL":    "Low occupancy",
+    "rule_BLACK_ROUTE": "Under-profitable route",
+    "rule_NO_CHANGE":   "Standard price"
+  },
+  "driverScoring": {
+    "title": "Driver leaderboard",
+    "subtitle": "30-day scoring — punctuality, incidents, volume",
+    "recompute": "Recompute",
+    "recomputing": "Recomputing…",
+    "empty": "No driver scores yet. Trigger a recompute.",
+    "podium": "Top 3",
+    "ranking": "Full ranking",
+    "rank": "Rank",
+    "driver": "Driver",
+    "overall": "Score /100",
+    "punctuality": "Punctuality",
+    "reliability": "Reliability",
+    "activity": "Activity",
+    "incidents": "Incidents",
+    "trips": "Trips",
+    "tripsOnTime": "trips on time",
+    "incidentsLabel": "incident(s)"
+  },
   "execDash": {
     "title": "Executive dashboard — Today",
     "anomalyTitle": "Anomalies detected",
@@ -3237,6 +3269,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "refunds": "Refunds",
     "finance": "Finance",
     "cashier": "Cashier",
+    "cash_discrepancies": "Cash discrepancies",
     "pricing": "Pricing",
     "pricing_grid": "Pricing Grid",
     "yield_management": "Yield Management",
@@ -3261,6 +3294,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "documents_consumables": "Documents & Consumables",
     "staff": "Staff",
     "drivers": "Drivers",
+    "driver_scoring": "Scoring leaderboard",
     "all_staff": "All Staff",
     "crews": "Crews",
     "crew_planning": "Crew Planning",

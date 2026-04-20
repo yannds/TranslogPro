@@ -34,6 +34,7 @@ import { useOfflineList } from '../../lib/hooks/useOfflineList';
 import { ProductTour, isTourDone } from '../tour/ProductTour';
 import { ContextualTip } from '../tour/ContextualTip';
 import { TICKETING_TOUR_ID, TICKETING_TOUR_STEPS } from '../../lib/tour/tours';
+import { YieldSuggestionCard } from '../dashboard/YieldSuggestionCard';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -561,6 +562,12 @@ export function PageSellTicket() {
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" /> {t('sellTicket.loadingRoute')}
                   </div>
+                )}
+
+                {/* Suggestion yield (Sprint 10.3) — visible si PRICING_YIELD + trip sélectionné
+                    + module YIELD_ENGINE actif. Affiche règle matchée + prix suggéré delta. */}
+                {selectedTripId && tenantId && (
+                  <YieldSuggestionCard tenantId={tenantId} tripId={selectedTripId} />
                 )}
 
                 {/* Availability badge */}

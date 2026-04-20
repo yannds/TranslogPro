@@ -71,6 +71,15 @@ export function PageMaintenanceAlerts() {
   const { data: reports, loading: loadingReports, error: errReports } = useFetch<ReportRow[]>(
     tenantId ? `/api/tenants/${tenantId}/garage/reports` : null, [tenantId],
   );
+  // Rappels prédictifs (Sprint 7) — vidange/courroie/freins basés sur km + date
+  // depuis TenantBusinessConfig.maintenanceIntervals. DUE = échu ; SOON = marge
+  // d'anticipation atteinte.
+  const { data: reminders } = useFetch<Array<{
+    busId: string; plateNumber: string; type: string; label: string;
+    dueAtKm?: number | null; dueAtDate?: string | null;
+    kmRemaining?: number | null; daysRemaining?: number | null;
+    status: 'DUE' | 'SOON' | 'OK' | 'UNKNOWN';
+  }>>(tenantId ? `/api/tenants/${tenantId}/garage/reminders` : null, [tenantId]);
 
   const alerts = useMemo<AlertItem[]>(() => {
     const out: AlertItem[] = [];
@@ -122,11 +131,34 @@ export function PageMaintenanceAlerts() {
       }
     }
 
+    // Rappels prédictifs (Sprint 7)
+    for (const r of reminders ?? []) {
+      if (r.status === 'DUE') {
+        out.push({
+          id: `reminder-due-${r.busId}-${r.type}`, severity: 'critical',
+          icon: <Wrench className="w-4 h-4" />,
+          title: t('maintenanceAlerts.predictiveDue'),
+          subject: r.plateNumber,
+          detail: `${r.label}${r.kmRemaining != null && r.kmRemaining < 0 ? ` · ${Math.abs(Math.round(r.kmRemaining))} km ${t('maintenanceAlerts.overdue')}` : ''}${r.daysRemaining != null && r.daysRemaining < 0 ? ` · ${Math.abs(r.daysRemaining)} ${t('maintenanceAlerts.daysOverdue')}` : ''}`,
+          at: r.dueAtDate ?? undefined,
+        });
+      } else if (r.status === 'SOON') {
+        out.push({
+          id: `reminder-soon-${r.busId}-${r.type}`, severity: 'warning',
+          icon: <Wrench className="w-4 h-4" />,
+          title: t('maintenanceAlerts.predictiveSoon'),
+          subject: r.plateNumber,
+          detail: `${r.label}${r.kmRemaining != null ? ` · ${Math.round(r.kmRemaining)} km ${t('maintenanceAlerts.remaining')}` : ''}${r.daysRemaining != null ? ` · ${r.daysRemaining} ${t('maintenanceAlerts.daysRemaining')}` : ''}`,
+          at: r.dueAtDate ?? undefined,
+        });
+      }
+    }
+
     return out.sort((a, b) => {
       const order: Severity[] = ['critical', 'warning', 'info'];
       return order.indexOf(a.severity) - order.indexOf(b.severity);
     });
-  }, [buses, reports, t]);
+  }, [buses, reports, reminders, t]);
 
   const counts = useMemo(() => ({
     critical: alerts.filter(a => a.severity === 'critical').length,

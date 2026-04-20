@@ -275,6 +275,15 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE],
         },
         {
+          kind: 'leaf',
+          id: 'cash-discrepancies',
+          label: 'nav.cash_discrepancies',
+          href: '/admin/cash-discrepancies',
+          icon: 'AlertTriangle',
+          // Audit des écarts de clôture — même perm que close + read tenant analytics
+          anyOf: [P.CASHIER_CLOSE, P.STATS_READ],
+        },
+        {
           kind: 'group',
           id: 'pricing',
           label: 'nav.pricing',
@@ -403,6 +412,16 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Steer',
           href: '/admin/drivers',
           anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
+          moduleKey: 'DRIVER_PROFILE',
+        },
+        {
+          // Leaderboard scoring conducteur (Sprint 9) — DriverScoringService
+          kind: 'leaf',
+          id: 'driver-scoring',
+          label: 'nav.driver_scoring',
+          icon: 'Trophy',
+          href: '/admin/drivers/scoring',
+          anyOf: [P.DRIVER_PROFILE, P.STAFF_MANAGE, P.CREW_MANAGE],
           moduleKey: 'DRIVER_PROFILE',
         },
         {

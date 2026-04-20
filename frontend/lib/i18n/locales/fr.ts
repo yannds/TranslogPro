@@ -1328,7 +1328,13 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "soonIntervention": "Intervention imminente",
     "counters": "Compteurs",
     "vehicleWorkshop": "Véhicule à l'atelier",
-    "missingSeatDesc": "La vente de billets numérotés sera refusée tant que le plan n'est pas défini."
+    "missingSeatDesc": "La vente de billets numérotés sera refusée tant que le plan n'est pas défini.",
+    "predictiveDue": "Maintenance à faire maintenant",
+    "predictiveSoon": "Maintenance à prévoir bientôt",
+    "overdue": "de dépassement",
+    "daysOverdue": "j de retard",
+    "remaining": "restants",
+    "daysRemaining": "j restants"
   },
   "iamUsers": {
     "users": "Utilisateurs",
@@ -2661,6 +2667,32 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "discrepanciesLabel": "Écarts caisse",
     "last30Days": "30 derniers jours"
   },
+  "yieldSuggest": {
+    "rule_GOLDEN_DAY":  "Jour d'or — forte demande",
+    "rule_HIGH_FILL":   "Fort remplissage",
+    "rule_LOW_FILL":    "Faible remplissage",
+    "rule_BLACK_ROUTE": "Trajet sous-rentable",
+    "rule_NO_CHANGE":   "Prix standard"
+  },
+  "driverScoring": {
+    "title": "Classement conducteurs",
+    "subtitle": "Scoring sur 30 jours — ponctualité, incidents, volume",
+    "recompute": "Recalculer",
+    "recomputing": "Recalcul…",
+    "empty": "Aucun score conducteur disponible. Lancez un recalcul.",
+    "podium": "Top 3",
+    "ranking": "Classement complet",
+    "rank": "Rang",
+    "driver": "Conducteur",
+    "overall": "Score /100",
+    "punctuality": "Ponctualité",
+    "reliability": "Fiabilité",
+    "activity": "Activité",
+    "incidents": "Incidents",
+    "trips": "Trajets",
+    "tripsOnTime": "trajets à l'heure",
+    "incidentsLabel": "incident(s)"
+  },
   "execDash": {
     "title": "Dashboard exécutif — Aujourd'hui",
     "anomalyTitle": "Alertes anomalies détectées",
@@ -3091,6 +3123,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "refunds": "Remboursements",
     "finance": "Finance",
     "cashier": "Caisse",
+    "cash_discrepancies": "Écarts de caisse",
     "pricing": "Tarification",
     "pricing_grid": "Grille tarifaire",
     "yield_management": "Yield Management",
@@ -3115,6 +3148,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "documents_consumables": "Documents & Consommables",
     "staff": "Personnel",
     "drivers": "Chauffeurs",
+    "driver_scoring": "Classement scoring",
     "all_staff": "Tout le personnel",
     "crews": "Équipages",
     "crew_planning": "Planning équipages",

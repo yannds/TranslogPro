@@ -61,6 +61,10 @@ const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRu
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyVouchers        = lazy(() => import('../pages/PageVouchers').then(m => ({ default: m.PageVouchers })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyCashDiscrepancies = lazy(() => import('../pages/PageCashDiscrepancies').then(m => ({ default: m.PageCashDiscrepancies })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyDriverScoring    = lazy(() => import('../pages/PageDriverScoring').then(m => ({ default: m.PageDriverScoring })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
@@ -260,6 +264,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── Finance ────────────────────────────────────────────────────────────
     case 'cashier':             return <PageCashier />;
+    case 'cash-discrepancies':  return <LazyCashDiscrepancies />;
     case 'pricing-grid':        return <LazyTariffGrid />;
     case 'pricing-yield':       return <LazyProfitability />;
     case 'pricing-promo':       return <LazyPromotions />;
@@ -286,6 +291,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     // Les onglets internes (licenses/rest/trainings/remediation) sont gérés
     // par la page elle-même ; une seule route parent suffit.
     case 'drivers':             return <LazyDriverProfile initialTab="overview" />;
+    case 'driver-scoring':      return <LazyDriverScoring />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
     case 'drv-briefing':        return <LazyDriverBriefing />;
 
