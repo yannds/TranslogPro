@@ -71,44 +71,52 @@ model Tenant {
   // Chaque pays utilise ses propres identifiants (NIU Congo, NIF France, TIN USA…)
   fiscalRegistries Json @default("[]")
 
+  // ── North Star KPI — estimation opérations mensuelles déclarée par le tenant
+  // Format : { tickets: number, trips: number, incidents: number } — tous optionnels.
+  // Utilisé par PlatformKpiService.getNorthStar() en mode "Déclaratif".
+  // Si null → fallback automatique sur le mode "Heuristique" (capacité flotte × occupation cible).
+  // Édité via /admin/settings/operations-estimate (TENANT_ADMIN).
+  estimatedOperationsMonthly Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                 User[]
-  agencies              Agency[]
-  driverScores          DriverScore[]
-  maintenanceReminders  MaintenanceReminder[]
-  modules               InstalledModule[]
-  routes           Route[]
-  trips            Trip[]
-  workflowConfigs  WorkflowConfig[]
-  pricingRules     PricingRules[]
-  buses            Bus[]
-  stations         Station[]
-  parcels          Parcel[]
-  config           TenantConfig?
-  brand            TenantBrand?
-  businessConfig   TenantBusinessConfig?
-  portalConfig     TenantPortalConfig?
-  pages            TenantPage[]
-  posts            TenantPost[]
-  busCostProfiles  BusCostProfile[]
-  fuelLogs         FuelLog[]
-  odometerReadings OdometerReading[]
-  tariffGrids      TariffGrid[]
-  promotions       Promotion[]
-  invoices         Invoice[]
-  platforms        Platform[]
-  announcements    Announcement[]
-  customers        Customer[]
-  plan             Plan?                 @relation(fields: [planId], references: [id])
-  subscription     PlatformSubscription?
-  platformInvoices PlatformInvoice[]
-  supportTickets   SupportTicket[]
-  dailyActiveUsers DailyActiveUser[]
-  healthScores     TenantHealthScore[]
-  domains          TenantDomain[]
-  accounts         Account[]
+  users                User[]
+  agencies             Agency[]
+  driverScores         DriverScore[]
+  maintenanceReminders MaintenanceReminder[]
+  modules              InstalledModule[]
+  routes               Route[]
+  trips                Trip[]
+  workflowConfigs      WorkflowConfig[]
+  pricingRules         PricingRules[]
+  buses                Bus[]
+  stations             Station[]
+  parcels              Parcel[]
+  config               TenantConfig?
+  brand                TenantBrand?
+  businessConfig       TenantBusinessConfig?
+  portalConfig         TenantPortalConfig?
+  pages                TenantPage[]
+  posts                TenantPost[]
+  busCostProfiles      BusCostProfile[]
+  fuelLogs             FuelLog[]
+  odometerReadings     OdometerReading[]
+  tariffGrids          TariffGrid[]
+  promotions           Promotion[]
+  invoices             Invoice[]
+  platforms            Platform[]
+  announcements        Announcement[]
+  customers            Customer[]
+  plan                 Plan?                 @relation(fields: [planId], references: [id])
+  subscription         PlatformSubscription?
+  platformInvoices     PlatformInvoice[]
+  supportTickets       SupportTicket[]
+  dailyActiveUsers     DailyActiveUser[]
+  healthScores         TenantHealthScore[]
+  subscriptionChanges  SubscriptionChange[]
+  domains              TenantDomain[]
+  accounts             Account[]
 
   // ── Paiements & Fiscalité (ADR-paiement) ────────────────────────────────────
   // Toutes ces relations sont créées lors du provisioning via des seeds idempotents.
@@ -328,53 +336,53 @@ model TenantBusinessConfig {
   // ── Scoring conducteur (2026-04-20, Sprint 9) ───────────────────────────
   // Poids relatifs des 3 composantes. Somme = 1.0 (normalisée côté service).
   // Défaut : ponctualité 50%, incidents 30%, volume trips 20%.
-  driverScoreWeightPunctuality    Float @default(0.5)
-  driverScoreWeightIncidents      Float @default(0.3)
-  driverScoreWeightTripVolume     Float @default(0.2)
+  driverScoreWeightPunctuality Float @default(0.5)
+  driverScoreWeightIncidents   Float @default(0.3)
+  driverScoreWeightTripVolume  Float @default(0.2)
   // Délai de grâce (min) avant de considérer un départ comme en retard.
-  driverScoreGraceMinutes         Int   @default(10)
+  driverScoreGraceMinutes      Int   @default(10)
   // Fenêtre de calcul (jours) — par défaut 30 derniers jours glissants.
-  driverScoreWindowDays           Int   @default(30)
+  driverScoreWindowDays        Int   @default(30)
 
   // ── Maintenance prédictive simple (2026-04-20, Sprint 7) ────────────────
   // Intervalles standards par type d'intervention (km + jours). Structure :
   // [{ type: "VIDANGE", intervalKm: 10000, intervalDays: 180, label: "Vidange moteur" }, ...]
   // Le garage saisit pour chaque bus le dernier kilométrage/date d'intervention
   // et le service prédit la prochaine date/km. Zéro ML, juste seuils configurables.
-  maintenanceIntervals            Json  @default("[]")
+  maintenanceIntervals        Json @default("[]")
   // Marge d'anticipation (km ou jours avant échéance) → alerte "bientôt due"
-  maintenanceAnticipationKm       Int   @default(500)
-  maintenanceAnticipationDays     Int   @default(14)
+  maintenanceAnticipationKm   Int  @default(500)
+  maintenanceAnticipationDays Int  @default(14)
 
   // ── Dashboard gérant : seuils d'alertes anomalies (2026-04-20) ──────────
   // Nombre d'incidents OPEN+ASSIGNED au-delà duquel l'alerte s'affiche au
   // dashboard exécutif. Zéro magic number : configurable par tenant.
-  anomalyIncidentThreshold        Int   @default(3)
+  anomalyIncidentThreshold    Int   @default(3)
   // Nombre d'écarts caisse (CashRegister.status=DISCREPANCY) sur les 30 jours
   // au-delà duquel l'alerte est rouge.
-  anomalyDiscrepancyThreshold     Int   @default(1)
+  anomalyDiscrepancyThreshold Int   @default(1)
   // Taux de remplissage moyen (fraction) en-deçà duquel on alerte « sous-utilisation ».
-  anomalyFillRateFloor            Float @default(0.4)
+  anomalyFillRateFloor        Float @default(0.4)
 
   // ── Trajets intermédiaires : politique de réservation (2026-04-20) ──────
   // Autoriser la vente / recherche de billets sur des segments intermédiaires
   // (ex: Mindouli → Bouansa sur un trajet Brazza → Pointe-Noire), pas
   // uniquement origine → destination de la route.
-  intermediateBookingEnabled      Boolean @default(true)
+  intermediateBookingEnabled    Boolean @default(true)
   // Cut-off minutes AVANT départ programmé en-deçà duquel la vente d'un
   // segment intermédiaire est bloquée (le bus est déjà en route ou sur le
   // point de partir). N'affecte pas la vente OD complète.
-  intermediateBookingCutoffMins   Int     @default(30)
+  intermediateBookingCutoffMins Int     @default(30)
   // Durée minimale (en minutes estimées) entre boarding et alighting pour
   // qu'un segment soit proposé (évite de lister des micro-trajets).
-  intermediateMinSegmentMinutes   Int     @default(0)
+  intermediateMinSegmentMinutes Int     @default(0)
   // Black-list de segments interdits explicitement par le tenant.
   // Structure : [{ routeId, fromStationId, toStationId, reason? }]
   // Un segment blacklisté n'apparaît jamais dans la recherche publique.
-  intermediateSegmentBlacklist    Json    @default("[]")
+  intermediateSegmentBlacklist  Json    @default("[]")
   // Si true, respecte la politique des hubs (Station.hubDepotOnly etc.)
   // pour décider si un hub peut servir de point de montée/descente public.
-  intermediateRespectHubRules     Boolean @default(true)
+  intermediateRespectHubRules   Boolean @default(true)
 
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -947,16 +955,16 @@ model Bus {
   fuelConsumptionPer100Km   Float? // Consommation déclarée/constructeur (L/100km)
   adBlueConsumptionPer100Km Float? // Consommation AdBlue déclarée (L/100km) — moteurs Euro 6
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id])
-  agency              Agency?              @relation(fields: [agencyId], references: [id])
-  trips                 Trip[]
-  maintenanceReports    MaintenanceReport[]
-  maintenanceReminders  MaintenanceReminder[]
-  costProfile         BusCostProfile?
-  vehicleDocuments    VehicleDocument[]
-  consumableTrackings ConsumableTracking[]
-  fuelLogs            FuelLog[]
-  odometerReadings    OdometerReading[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  agency               Agency?               @relation(fields: [agencyId], references: [id])
+  trips                Trip[]
+  maintenanceReports   MaintenanceReport[]
+  maintenanceReminders MaintenanceReminder[]
+  costProfile          BusCostProfile?
+  vehicleDocuments     VehicleDocument[]
+  consumableTrackings  ConsumableTracking[]
+  fuelLogs             FuelLog[]
+  odometerReadings     OdometerReading[]
 
   @@index([tenantId, status])
   @@index([tenantId, agencyId])
@@ -1289,26 +1297,26 @@ model Incident {
 // DriverScore — score calculé d'un conducteur (Staff) sur fenêtre glissante.
 // Sprint 9. Recalculé par cron nocturne ou à la demande via l'API.
 model DriverScore {
-  id                String   @id @default(cuid())
-  tenantId          String
-  staffId           String   @unique
+  id               String   @id @default(cuid())
+  tenantId         String
+  staffId          String   @unique
   // Composantes normalisées [0..1]
-  punctualityScore  Float    @default(0)
-  incidentScore     Float    @default(1)
-  tripVolumeScore   Float    @default(0)
+  punctualityScore Float    @default(0)
+  incidentScore    Float    @default(1)
+  tripVolumeScore  Float    @default(0)
   // Note globale [0..100] = somme pondérée × 100
-  overallScore      Float    @default(0)
+  overallScore     Float    @default(0)
   // Compteurs bruts pour transparence / audit
-  tripsCompleted    Int      @default(0)
-  tripsOnTime       Int      @default(0)
-  incidents         Int      @default(0)
+  tripsCompleted   Int      @default(0)
+  tripsOnTime      Int      @default(0)
+  incidents        Int      @default(0)
   // Fenêtre de calcul
-  windowStart       DateTime
-  windowEnd         DateTime
-  computedAt        DateTime @default(now()) @updatedAt
+  windowStart      DateTime
+  windowEnd        DateTime
+  computedAt       DateTime @default(now()) @updatedAt
 
-  staff   Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, staffId])
   @@index([tenantId, overallScore])
@@ -1320,24 +1328,24 @@ model DriverScore {
 // la prochaine échéance à partir des intervalles configurés dans
 // TenantBusinessConfig.maintenanceIntervals.
 model MaintenanceReminder {
-  id              String    @id @default(cuid())
-  tenantId        String
-  busId           String
+  id                String    @id @default(cuid())
+  tenantId          String
+  busId             String
   // Type standardisé : VIDANGE | COURROIE | FREINS | PNEUS | FILTRE_AIR | FILTRE_CARBURANT | AUTRE
   // (Validé côté DTO ; pas un enum Prisma pour rester extensible par tenant.)
-  type            String
-  label           String
+  type              String
+  label             String
   // Dernière intervention effectuée — saisi par le garage à chaque remplacement.
-  lastPerformedKm    Float?
-  lastPerformedDate  DateTime?
-  notes              String?
+  lastPerformedKm   Float?
+  lastPerformedDate DateTime?
+  notes             String?
   // Active / désactivée (ex. pièce non concernée pour ce bus).
-  isActive           Boolean @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  bus     Bus     @relation(fields: [busId], references: [id], onDelete: Cascade)
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bus    Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, busId, type])
   @@index([tenantId, busId])
@@ -3294,6 +3302,8 @@ model Plan {
   modules       PlanModule[]
   tenants       Tenant[]
   subscriptions PlatformSubscription[]
+  changesFrom   SubscriptionChange[]   @relation("SubscriptionChangeFromPlan")
+  changesTo     SubscriptionChange[]   @relation("SubscriptionChangeToPlan")
 
   @@index([isActive, isPublic, sortOrder])
   @@map("plans")
@@ -3352,9 +3362,10 @@ model PlatformSubscription {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id])
-  plan     Plan              @relation(fields: [planId], references: [id])
+  tenant   Tenant               @relation(fields: [tenantId], references: [id])
+  plan     Plan                 @relation(fields: [planId], references: [id])
   invoices PlatformInvoice[]
+  changes  SubscriptionChange[]
 
   @@index([status])
   @@index([renewsAt])
@@ -3478,6 +3489,66 @@ model TenantHealthScore {
   @@unique([tenantId, date])
   @@index([date, score])
   @@map("tenant_health_scores")
+}
+
+// ── Historique changements d'abonnement (expansion / contraction / churn) ───
+// Source de vérité pour l'expansion revenue (PlatformKpiService.getMrrBreakdown).
+// Normalise les montants sur un cycle MONTHLY pour agrégation homogène.
+// Alimenté automatiquement par :
+//   - PlatformBillingService lors d'un changement de plan
+//   - Hook post-CANCELLED / post-REACTIVATED sur PlatformSubscription
+//   - Backfill script (prisma/seeds/subscription-change.backfill.ts)
+model SubscriptionChange {
+  id                String   @id @default(cuid())
+  tenantId          String
+  subscriptionId    String
+  fromPlanId        String?
+  toPlanId          String
+  // Montants normalisés en équivalent MONTHLY pour MRR.
+  // Exemple plan annuel 600 €/an → fromMonthlyAmount = 50.
+  fromMonthlyAmount Float    @default(0)
+  toMonthlyAmount   Float    @default(0)
+  deltaMonthly      Float    @default(0) // = to - from (signé)
+  currency          String   @default("EUR")
+  // NEW | EXPANSION | CONTRACTION | CHURN | REACTIVATION
+  // NEW          : première souscription d'un tenant
+  // EXPANSION    : upgrade (deltaMonthly > 0)
+  // CONTRACTION  : downgrade (deltaMonthly < 0 sans cancel)
+  // CHURN        : passage CANCELLED (deltaMonthly = -toMonthly, toPlanId = fromPlanId)
+  // REACTIVATION : retour depuis CANCELLED
+  changeType        String
+  reason            String?
+  actorUserId       String? // null = automatique (cron, webhook)
+  createdAt         DateTime @default(now())
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  subscription PlatformSubscription @relation(fields: [subscriptionId], references: [id])
+  fromPlan     Plan?                @relation("SubscriptionChangeFromPlan", fields: [fromPlanId], references: [id])
+  toPlan       Plan                 @relation("SubscriptionChangeToPlan", fields: [toPlanId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([changeType, createdAt])
+  @@index([createdAt])
+  @@map("subscription_changes")
+}
+
+// ── Snapshots KPI quotidiens précalculés (cron nocturne) ────────────────────
+// Évite de recalculer à chaque requête pour les métriques lourdes :
+// cohortes de rétention, funnel activation, adoption modules.
+// Clés : namespacées identifiables (`mrr.total`, `dau.staff`, `cohort.d7.signup-2026-04-01`…).
+// Le service lit en priorité ce cache et dégrade vers calcul live si manquant.
+model PlatformKpiSnapshot {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  metricKey String // ex: "mrr.total", "activation.funnel.trip-created"
+  value     Float    @default(0)
+  // breakdown : détail ventilé ({ byPlan, byCountry, byUserType, ...})
+  breakdown Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@unique([date, metricKey])
+  @@index([metricKey, date])
+  @@map("platform_kpi_snapshots")
 }
 
 // ── Configuration plateforme (KV store global, DB-driven) ───────────────────
