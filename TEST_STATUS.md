@@ -385,10 +385,17 @@ Nouvelles suites autour du portail plateforme et du self-service utilisateur :
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit complet** | `npx jest --config jest.unit.config.ts` | 57 | 583 | ✅ 583/583 PASS (incl. 28 nouvelles workflow-driven 2026-04-19) |
+| **Unit complet** | `npx jest --config jest.unit.config.ts` | 78 | 791 | ✅ 791/791 PASS (incl. CRM portail public + annonces temps réel 2026-04-20) |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Playwright portail SaaS** (landing → welcome) | `npm run test:pw -- --project=public saas-journey` | 1 | 2 | ✅ PASS (TICKETING + PARCELS, cleanup tenants auto) |
+
+**Total validé 2026-04-20 post-annonces : 791 tests unit / 0 failure**
+
+### Ajouts 2026-04-20 (annonces temps réel + CRM portail)
+- `test/unit/public-portal/portal-crm-wiring.service.spec.ts` — 4 tests (shadow Customer créé sur booking + parcel portail public, magic link dédup par customer)
+- `test/unit/announcement/announcement.service.spec.ts` — 6 tests (create/update/remove publient ANNOUNCEMENT_* via EventBus, idempotence createAuto via sourceEventId, findAll activeOnly + station)
+- `test/unit/announcement/announcement-trip.listener.spec.ts` — 8 tests (mapping TRIP_STARTED→BOARDING, TRIP_DELAYED→DELAY, TRIP_CANCELLED→CANCELLATION, TRIP_COMPLETED→ARRIVAL, TRIP_PAUSED→SUSPENSION, INCIDENT_SOS→SECURITY + templates FR/EN + trip introuvable silencieux)
 
 **Total validé 2026-04-19 post-workflow : 583 tests unit / 0 failure**
 

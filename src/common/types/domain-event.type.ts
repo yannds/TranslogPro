@@ -84,6 +84,13 @@ export const EventTypes = {
   DISPUTE_OPENED:                 'dispute.opened',
   DISPUTE_SETTLED:                'dispute.settled',
 
+  // Announcement (diffusion temps réel — écrans gare, portail voyageur)
+  // payload : { announcementId, stationId?, citySlug?, tripId?, type, priority,
+  //            title, message, startsAt, endsAt?, source }
+  ANNOUNCEMENT_CREATED:           'announcement.created',
+  ANNOUNCEMENT_UPDATED:           'announcement.updated',
+  ANNOUNCEMENT_DELETED:           'announcement.deleted',
+
   // Payment (PaymentOrchestrator → webhook success / failure)
   // payload : { tenantId, intentId, entityType, entityId, amount, currency,
   //            metadata } — voir PaymentOrchestrator.emitIntentTerminalEvent

@@ -13,11 +13,12 @@
 
 import { useEffect, useRef } from 'react';
 
-export interface RealtimeEvent {
+export interface RealtimeEvent<P = Record<string, unknown>> {
   type:          string;
   aggregateId?:  string;
   aggregateType?: string;
   occurredAt?:   string;
+  payload?:      P;
 }
 
 export interface UseRealtimeEventsOptions {
@@ -58,6 +59,7 @@ export function useRealtimeEvents(
               aggregateId:   parsed?.aggregateId,
               aggregateType: parsed?.aggregateType,
               occurredAt:    parsed?.occurredAt,
+              payload:       parsed?.payload,
             };
             if (!types || types.length === 0 || types.includes(evt.type)) {
               onEventRef.current(evt);

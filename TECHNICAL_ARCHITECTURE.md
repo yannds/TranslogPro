@@ -678,7 +678,11 @@ incident.declared | incident.sos_triggered | incident.resolved
 cashregister.opened | cashregister.closed | cashregister.discrepancy_detected
 
 tenant.provisioned | tenant.module.installed | tenant.module.uninstalled
+
+announcement.created | announcement.updated | announcement.deleted
 ```
+
+**Annonces gare (2026-04-20)** — les événements `announcement.*` sont produits par `AnnouncementService` (manuel via UI admin) et par `AnnouncementTripListener` (auto sur `trip.started/paused/delayed/cancelled/completed` + `incident.sos`). Payload : `{announcementId, stationId, tripId, citySlug, type, priority, title, message, startsAt, endsAt, isActive, source}`. Consumers : DepartureBoard (SSE authentifié) + PortailVoyageur (polling public anonyme). Pipeline complet : [docs/ANNOUNCEMENTS.md](./docs/ANNOUNCEMENTS.md).
 
 ### 4.3 Redis Channels (WebSocket Fan-out)
 

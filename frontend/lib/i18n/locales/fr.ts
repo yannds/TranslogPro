@@ -6009,6 +6009,30 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "localeLabel":        "Langue de l'interface",
     "timezoneLabel":      "Fuseau horaire",
     "useTenantDefault":   "— Utiliser la valeur par défaut du tenant —"
+  },
+
+  "announcements": {
+    "tickerAriaLabel":     "Annonces de la gare",
+    "noneActive":          "Aucune annonce active",
+    "typeInfo":            "Information",
+    "typeDelay":           "Retard",
+    "typeCancellation":    "Annulation",
+    "typeSecurity":        "Sécurité",
+    "typePromo":           "Promotion",
+    "typeCustom":          "Autre",
+    "typeBoarding":        "Embarquement",
+    "typeArrival":         "Arrivée",
+    "typeSuspension":      "Suspension",
+    "adminTitle":          "Annonces gare",
+    "adminDesc":           "Annonces diffusées sur les écrans et le portail voyageur. Les annonces automatiques sont générées par le cycle de vie des trajets.",
+    "sourceManual":        "Manuel",
+    "sourceAuto":          "Automatique",
+    "priorityLabel":       "Priorité",
+    "startsAtLabel":       "Début",
+    "endsAtLabel":         "Fin",
+    "activeLabel":         "Active",
+    "stationLabel":        "Gare",
+    "allStations":         "Toutes les gares"
   }
 };
 

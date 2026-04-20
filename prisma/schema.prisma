@@ -3347,7 +3347,7 @@ model Announcement {
   title       String
   message     String
   type        String    @default("INFO")
-  // INFO | DELAY | CANCELLATION | SECURITY | PROMO | CUSTOM
+  // INFO | DELAY | CANCELLATION | SECURITY | PROMO | CUSTOM | BOARDING | ARRIVAL | SUSPENSION
   priority    Int       @default(0) // plus élevé = affiché en premier
   // Diffusion
   isActive    Boolean   @default(true)
@@ -3355,14 +3355,22 @@ model Announcement {
   endsAt      DateTime?
   // Auteur
   createdById String?
+  // Source : MANUAL (UI admin) ou AUTO (listener trip lifecycle)
+  // sourceEventId sert à l'idempotence des auto-annonces (outbox retries).
+  source        String  @default("MANUAL")
+  sourceEventId String?
+  // Contexte trip/incident (null pour annonces manuelles libres)
+  tripId        String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   station Station? @relation(fields: [stationId], references: [id])
 
+  @@unique([tenantId, sourceEventId])
   @@index([tenantId, isActive])
   @@index([tenantId, stationId, isActive])
+  @@index([tenantId, tripId])
   @@map("announcements")
 }
 

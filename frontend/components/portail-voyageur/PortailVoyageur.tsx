@@ -30,6 +30,8 @@ import type { Language } from '../../lib/i18n/types';
 import { createContext, useContext } from 'react';
 import { getTheme, type PortalTheme } from './portal-themes';
 import { SeatMapPicker } from '../tickets/SeatMapPicker';
+import { AnnouncementTicker } from '../display/AnnouncementTicker';
+import { useAnnouncements } from '../../lib/hooks/useAnnouncements';
 import {
   HorizonNavbar, HorizonHero, HorizonTripCard, HorizonSectionTitle, HorizonFooter,
   VividNavbar, VividHero, VividTripCard, VividSectionTitle, VividFooter,
@@ -1451,6 +1453,13 @@ export function PortailVoyageur() {
   }, [theme, toggleTheme]);
 
   const apiBase = tenantSlug ? `/api/public/${tenantSlug}/portal` : null;
+
+  // Annonces actives (polling public — le portail est anonyme par défaut)
+  const { announcements: portalAnnouncements } = useAnnouncements({
+    mode:       'public',
+    tenantSlug: tenantSlug ?? undefined,
+    enabled:    !!tenantSlug,
+  });
   const skip = useMemo(() => ({ skipRedirectOn401: true } as const), []);
   const cfgUrl = apiBase ? `${apiBase}/config` : null;
   const stUrl = apiBase ? `${apiBase}/stations` : null;
@@ -1615,6 +1624,15 @@ export function PortailVoyageur() {
         '--portal-secondary': portalTheme.secondary,
       } as React.CSSProperties}
     >
+      {/* ── Bandeau annonces (temps réel, polling public) ──────────── */}
+      {portalAnnouncements.length > 0 && (
+        <AnnouncementTicker
+          announcements={portalAnnouncements}
+          lang={lang}
+          className="sticky top-0 z-50"
+        />
+      )}
+
       {/* ── Navbar (layout-variant) ────────────────────────────── */}
       {layout === 'horizon' ? (
         <HorizonNavbar brandName={brandName} brandLogo={brandLogo} nav={navItems} section={section} onSection={handleSection} onHome={handleHome} mobileNav={mobileNav} setMobileNav={setMobileNav} themeToggle={<ThemeToggle />} langSwitcher={<LanguageSwitcher />} loginLabel={authLabel} onLogin={handleAuthClick} accent={portalTheme.accent} accentDark={portalTheme.accentDark} t={t} />

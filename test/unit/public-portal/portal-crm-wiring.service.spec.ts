@@ -143,6 +143,7 @@ describe('PublicPortalService — câblage CRM portail', () => {
       notificationMock as any,
       crmResolverMock,
       crmClaimMock,
+      {} as any, // announcements
     );
 
     return { service, prismaMock, eventBusMock };

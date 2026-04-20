@@ -109,6 +109,7 @@ describe('PublicPortalService — searchTrips (intermediate)', () => {
       {} as any, // notification
       {} as any, // crmResolver
       {} as any, // crmClaim
+      {} as any, // announcements
     );
   });
 

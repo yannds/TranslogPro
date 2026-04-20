@@ -88,6 +88,20 @@ export class PublicPortalController {
     return this.service.getTripSeats(slug, tripId);
   }
 
+  /** Annonces actives pour le tenant (optionnellement filtrées par station). */
+  @Get('announcements')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_announcements',
+    message: 'Too many requests.',
+  })
+  getAnnouncements(
+    @Param('tenantSlug') slug: string,
+    @Query('stationId') stationId?: string,
+  ) {
+    return this.service.getPublicAnnouncements(slug, stationId);
+  }
+
   /** Flotte (photos, seatmaps) */
   @Get('fleet')
   @UseGuards(RedisRateLimitGuard)

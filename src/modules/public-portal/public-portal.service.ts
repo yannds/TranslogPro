@@ -21,6 +21,7 @@ import { EventTypes } from '../../common/types/domain-event.type';
 import { NotificationService } from '../notification/notification.service';
 import { CustomerResolverService } from '../crm/customer-resolver.service';
 import { CustomerClaimService }    from '../crm/customer-claim.service';
+import { AnnouncementService }     from '../announcement/announcement.service';
 import { v4 as uuidv4 } from 'uuid';
 import {
   RouteSnapshot,
@@ -47,7 +48,33 @@ export class PublicPortalService {
     private readonly notification: NotificationService,
     private readonly crmResolver: CustomerResolverService,
     private readonly crmClaim:    CustomerClaimService,
+    private readonly announcements: AnnouncementService,
   ) {}
+
+  // ─── Annonces publiques ───────────────────────────────────────────────────
+
+  /**
+   * Retourne les annonces actives pour le tenant (+ station optionnelle).
+   * Filtrage serveur : seules les champs publics sont exposés (pas de createdById
+   * ni sourceEventId — fuite d'info interne potentielle).
+   */
+  async getPublicAnnouncements(slug: string, stationId?: string) {
+    const tenant = await this.resolveTenant(slug);
+    const rows = await this.announcements.findAll(tenant.id, stationId, /* activeOnly */ true);
+    return rows.map(a => ({
+      id:        a.id,
+      type:      a.type,
+      priority:  a.priority,
+      title:     a.title,
+      message:   a.message,
+      stationId: a.stationId,
+      tripId:    a.tripId,
+      startsAt:  a.startsAt.toISOString(),
+      endsAt:    a.endsAt ? a.endsAt.toISOString() : null,
+      station:   a.station,
+      source:    a.source,
+    }));
+  }
 
   // ─── Tenant resolution ────────────────────────────────────────────────────
 

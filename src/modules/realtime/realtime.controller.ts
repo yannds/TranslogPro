@@ -39,8 +39,10 @@ export class RealtimeController {
           aggregateId:   evt.aggregateId,
           aggregateType: evt.aggregateType,
           occurredAt:    evt.occurredAt,
-          // Payload visible — OK car tenant isolé. Ne JAMAIS inclure tenantId
-          // ici : redondant et surface d'attaque si le client fuite le flux.
+          payload:       evt.payload,
+          // Payload visible — OK car tenant isolé + permission requise.
+          // Ne JAMAIS inclure tenantId ici : redondant et surface d'attaque
+          // si le client fuite le flux.
         },
       })),
     );

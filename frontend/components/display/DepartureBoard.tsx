@@ -17,6 +17,8 @@ import { cn }                    from '../../lib/utils';
 import { useI18n }               from '../../lib/i18n/useI18n';
 import { useOfflineList }        from '../../lib/hooks/useOfflineList';
 import { useNotifications, NOTIFICATION_ICONS } from '../../lib/hooks/useNotifications';
+import { useAnnouncements } from '../../lib/hooks/useAnnouncements';
+import { AnnouncementTicker } from './AnnouncementTicker';
 import { useWeatherMulti }       from '../../lib/hooks/useWeather';
 import { WEATHER_ICONS }         from '../../lib/hooks/useWeather';
 import { useTenantConfig }       from '../../providers/TenantConfigProvider';
@@ -644,6 +646,14 @@ export function DepartureBoard({
   const tenantConfig = useTenantConfig();
   const { notifications, isConnected } = useNotifications({ tenantId });
 
+  // Annonces gare — temps réel via SSE + polling fallback
+  const { announcements } = useAnnouncements({
+    mode:      'authenticated',
+    tenantId:  tenantId && tenantId !== 'demo' ? tenantId : undefined,
+    stationId: stationId && stationId !== '__all__' ? stationId : undefined,
+    enabled:   !!tenantId && tenantId !== 'demo',
+  });
+
   const [mode, setMode]              = useState<BoardMode>(initialMode);
   const [autoRotating, setAutoRotating] = useState(autoRotateLang);
   const rotateRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -853,6 +863,11 @@ export function DepartureBoard({
           })
         )}
       </main>
+
+      {/* ── Bandeau annonces gare (temps réel) ─────────────────────────── */}
+      {announcements.length > 0 && (
+        <AnnouncementTicker announcements={announcements} lang={lang} />
+      )}
 
       {/* ── Ticker ─────────────────────────────────────────────────────── */}
       <Ticker
