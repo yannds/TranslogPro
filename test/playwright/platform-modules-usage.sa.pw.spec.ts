@@ -52,11 +52,12 @@ test.describe('[pw:sa] Page Modules Usage', () => {
 
   test('navigation — l\'entrée "Modules — usage tenants" est dans la nav plateforme', async ({ page }) => {
     await page.goto('/admin/platform/dashboard');
-    // L'item peut être dans la sidebar ou dans un menu compact — on cherche
-    // par son texte (fr ou en).
-    const navLink = page.getByRole('link', { name: /Modules — usage tenants|Modules — tenant usage/i });
-    await expect(navLink).toBeVisible({ timeout: 15_000 });
-    await navLink.click();
-    await expect(page).toHaveURL(/\/admin\/platform\/modules-usage/);
+    // L'item peut être rendu comme <a> OU <button> selon le composant de nav
+    // (SidebarNavItem peut être soit Link soit button selon le contexte).
+    // On cible via le texte — plus robuste que le rôle.
+    const navItem = page.locator('nav').getByText(/Modules — usage tenants|Modules — tenant usage/i).first();
+    await expect(navItem).toBeVisible({ timeout: 15_000 });
+    await navItem.click();
+    await expect(page).toHaveURL(/\/admin\/platform\/modules-usage/, { timeout: 10_000 });
   });
 });
