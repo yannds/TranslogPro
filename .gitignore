@@ -27,7 +27,10 @@ prisma/migrations/*.sql.bak
 # Backups locaux (dumps DB pré-migration, non versionnés)
 backups/
 
-# Claude Code runtime lock (sessionId + pid — ne pas versionner)
+# Claude Code — allow-list locale + runtime (contient des passwords de test
+# en dev ; à NE PAS publier. À nettoyer avant passage en prod — cf.
+# docs/SECURITY_CHECKLIST_PROD.md).
+.claude/settings.json
 .claude/scheduled_tasks.lock
 
 # Logs
