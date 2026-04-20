@@ -14,6 +14,7 @@ import {
   CompleteTrainingDto,
   CreateRemediationRuleDto,
 } from './driver-profile.service';
+import { DriverScoringService } from './driver-scoring.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
 
@@ -32,7 +33,37 @@ import { Permission }        from '../../common/constants/permissions';
 // toujours actives, la seule protection reste la permission.
 @Controller('tenants/:tenantId/driver-profile')
 export class DriverProfileController {
-  constructor(private readonly svc: DriverProfileService) {}
+  constructor(
+    private readonly svc:     DriverProfileService,
+    private readonly scoring: DriverScoringService,
+  ) {}
+
+  // ─── Scoring conducteur (Sprint 9) ────────────────────────────────────────
+
+  @Get('scoring/:staffId')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getScore(
+    @TenantId() tenantId: string,
+    @Param('staffId') staffId: string,
+  ) {
+    return this.scoring.recomputeForDriver(tenantId, staffId);
+  }
+
+  @Get('scoring/leaderboard')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getLeaderboard(
+    @TenantId() tenantId: string,
+    @Query('limit') limit?: string,
+  ) {
+    const n = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
+    return this.scoring.leaderboard(tenantId, n);
+  }
+
+  @Post('scoring/recompute-all')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  recomputeAll(@TenantId() tenantId: string) {
+    return this.scoring.recomputeForTenant(tenantId).then(count => ({ recomputed: count }));
+  }
 
   // ── Stats (KPIs) ───────────────────────────────────────────────────────────
 

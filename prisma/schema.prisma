@@ -76,6 +76,7 @@ model Tenant {
 
   users                 User[]
   agencies              Agency[]
+  driverScores          DriverScore[]
   maintenanceReminders  MaintenanceReminder[]
   modules               InstalledModule[]
   routes           Route[]
@@ -323,6 +324,17 @@ model TenantBusinessConfig {
   //   "dispose" → DISPUTED (admin tranchera)
   //   "hold"    → garder sur place (notifier l'expéditeur)
   parcelPickupNoShowAction        String @default("return")
+
+  // ── Scoring conducteur (2026-04-20, Sprint 9) ───────────────────────────
+  // Poids relatifs des 3 composantes. Somme = 1.0 (normalisée côté service).
+  // Défaut : ponctualité 50%, incidents 30%, volume trips 20%.
+  driverScoreWeightPunctuality    Float @default(0.5)
+  driverScoreWeightIncidents      Float @default(0.3)
+  driverScoreWeightTripVolume     Float @default(0.2)
+  // Délai de grâce (min) avant de considérer un départ comme en retard.
+  driverScoreGraceMinutes         Int   @default(10)
+  // Fenêtre de calcul (jours) — par défaut 30 derniers jours glissants.
+  driverScoreWindowDays           Int   @default(30)
 
   // ── Maintenance prédictive simple (2026-04-20, Sprint 7) ────────────────
   // Intervalles standards par type d'intervention (km + jours). Structure :
@@ -1020,6 +1032,7 @@ model Staff {
 
   user        User              @relation(fields: [userId], references: [id])
   assignments StaffAssignment[]
+  driverScore DriverScore?
 
   @@index([tenantId, status])
   @@map("staff")
@@ -1271,6 +1284,35 @@ model Incident {
   @@index([tenantId, severity, resolvedAt])
   @@index([tenantId, isSos, status])
   @@map("incidents")
+}
+
+// DriverScore — score calculé d'un conducteur (Staff) sur fenêtre glissante.
+// Sprint 9. Recalculé par cron nocturne ou à la demande via l'API.
+model DriverScore {
+  id                String   @id @default(cuid())
+  tenantId          String
+  staffId           String   @unique
+  // Composantes normalisées [0..1]
+  punctualityScore  Float    @default(0)
+  incidentScore     Float    @default(1)
+  tripVolumeScore   Float    @default(0)
+  // Note globale [0..100] = somme pondérée × 100
+  overallScore      Float    @default(0)
+  // Compteurs bruts pour transparence / audit
+  tripsCompleted    Int      @default(0)
+  tripsOnTime       Int      @default(0)
+  incidents         Int      @default(0)
+  // Fenêtre de calcul
+  windowStart       DateTime
+  windowEnd         DateTime
+  computedAt        DateTime @default(now()) @updatedAt
+
+  staff   Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, staffId])
+  @@index([tenantId, overallScore])
+  @@map("driver_scores")
 }
 
 // MaintenanceReminder — rappel d'intervention périodique par bus (Sprint 7).
