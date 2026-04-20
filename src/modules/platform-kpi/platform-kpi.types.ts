@@ -142,6 +142,43 @@ export interface ActivationFunnelReport {
   avgDaysToActivate:  number | null;
 }
 
+// ─── Modules Usage (per tenant) ────────────────────────────────────────────
+
+/**
+ * Rapport par module pour un tenant donné. Source : InstalledModule (état
+ * courant + historique activation) + ModuleUsageDaily (rollup cron).
+ *
+ * Un module peut être :
+ *   - installed: false, everUsed: false → jamais installé
+ *   - installed: true, isActive: true   → actif
+ *   - installed: true, isActive: false  → désactivé (deactivatedAt/By renseignés)
+ *
+ * actionCount / uniqueUsers agrégés sur la période demandée. Si la somme est 0
+ * alors que isActive = true, le module est "installé non utilisé" — signal
+ * fort pour le support (churn risk) ou pour un nudge tenant.
+ */
+export interface ModuleUsageEntry {
+  moduleKey:        string;
+  installed:        boolean;     // existe une ligne InstalledModule (même inactive)
+  isActive:         boolean;
+  activatedAt:      string | null; // ISO
+  activatedBy:      string | null;
+  deactivatedAt:    string | null;
+  deactivatedBy:    string | null;
+  periodDays:       number;
+  actionCount:      number;      // somme sur la période
+  uniqueUsers:      number;      // max quotidien sur la période (proxy "utilisateurs distincts du module")
+  activeDays:       number;      // nb de jours avec actionCount > 0
+  lastUsedAt:       string | null; // date (YYYY-MM-DD) du dernier rollup > 0
+}
+
+export interface ModulesUsageReport {
+  tenantId:         string;
+  periodDays:       number;
+  generatedAt:      string; // ISO
+  modules:          ModuleUsageEntry[];
+}
+
 // ─── Strategic ─────────────────────────────────────────────────────────────
 
 export interface StrategicReport {

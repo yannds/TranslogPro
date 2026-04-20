@@ -124,6 +124,7 @@ const P = {
   PLATFORM_PLANS_MANAGE:   'control.platform.plans.manage.global',
   PLATFORM_BILLING_MANAGE: 'control.platform.billing.manage.global',
   PLATFORM_METRICS_READ:   'data.platform.metrics.read.global',
+  PLATFORM_KPI_ADOPTION:   'data.platform.kpi.adoption.read.global',
   PLATFORM_SUPPORT_READ:   'control.platform.support.read.global',
   PLATFORM_CONFIG_MANAGE:  'control.platform.config.manage.global',
   PLATFORM_AUDIT_READ:     'data.platform.audit.read.global',
@@ -868,6 +869,14 @@ export const ADMIN_NAV: PortalNavConfig = {
         },
         {
           kind: 'leaf',
+          id: 'platform-modules-usage',
+          label: 'nav.platform_modules_usage',
+          href: '/admin/platform/modules-usage',
+          icon: 'Package',
+          anyOf: [P.PLATFORM_KPI_ADOPTION],
+        },
+        {
+          kind: 'leaf',
           id: 'platform-settings',
           label: 'nav.platform_settings',
           href: '/admin/platform/settings',
@@ -1005,6 +1014,14 @@ export const PLATFORM_NAV: PortalNavConfig = {
           href: '/admin/platform/roles',
           icon: 'Shield',
           anyOf: [P.PLATFORM_IAM_READ],
+        },
+        {
+          kind: 'leaf',
+          id: 'platform-modules-usage',
+          label: 'nav.platform_modules_usage',
+          href: '/admin/platform/modules-usage',
+          icon: 'Package',
+          anyOf: [P.PLATFORM_KPI_ADOPTION],
         },
         {
           kind: 'leaf',

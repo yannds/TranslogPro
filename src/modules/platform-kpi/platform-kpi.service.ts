@@ -42,6 +42,8 @@ import type {
   AdoptionReport,
   ActivationFunnelReport,
   StrategicReport,
+  ModulesUsageReport,
+  ModuleUsageEntry,
 } from './platform-kpi.types';
 
 interface CacheEntry<T> { value: T; expiresAt: number }
@@ -678,6 +680,92 @@ export class PlatformKpiService {
         totalTenants: total,
         steps,
         avgDaysToActivate: countActivated > 0 ? round(sumDaysToActivate / countActivated, 1) : null,
+      };
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 6bis. MODULES USAGE PAR TENANT — installés, actifs, utilisés, fréquence
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Retourne pour un tenant l'état de chaque module du registry
+   * MODULE_ACTION_PREFIXES + son usage agrégé sur la période.
+   *
+   * Lecture directe de ModuleUsageDaily (alimenté par cron nocturne).
+   * Si le cron n'a pas encore tourné, un module actif verra actionCount = 0
+   * et activeDays = 0 — c'est factuel : on ne ment pas sur la donnée.
+   */
+  async getModulesUsageForTenant(tenantId: string, periodDays?: number): Promise<ModulesUsageReport> {
+    const days = periodDays ?? await this.config.getNumber('kpi.defaultPeriodDays').catch(() => KPI_PERIODS.medium);
+    return this.withCache(`modules-usage:${tenantId}:${days}`, async () => {
+      const since = new Date(Date.now() - days * MS_PER_DAY);
+
+      const [installed, usageRows] = await Promise.all([
+        this.prisma.installedModule.findMany({
+          where:  { tenantId },
+          select: {
+            moduleKey: true, isActive: true,
+            activatedAt: true, activatedBy: true,
+            deactivatedAt: true, deactivatedBy: true,
+          },
+        }),
+        this.prisma.moduleUsageDaily.findMany({
+          where:  { tenantId, date: { gte: since } },
+          select: { moduleKey: true, date: true, actionCount: true, uniqueUsers: true },
+        }),
+      ]);
+
+      const installedByKey = new Map(installed.map((i) => [i.moduleKey, i]));
+
+      // Agréger ModuleUsageDaily par moduleKey
+      const usageByKey = new Map<string, {
+        actionSum: number;
+        maxUsers:  number;
+        activeDays: number;
+        lastUsedAt: Date | null;
+      }>();
+      for (const row of usageRows) {
+        const acc = usageByKey.get(row.moduleKey) ?? { actionSum: 0, maxUsers: 0, activeDays: 0, lastUsedAt: null };
+        acc.actionSum  += row.actionCount;
+        acc.maxUsers    = Math.max(acc.maxUsers, row.uniqueUsers);
+        if (row.actionCount > 0) acc.activeDays += 1;
+        if (!acc.lastUsedAt || row.date > acc.lastUsedAt) acc.lastUsedAt = row.date;
+        usageByKey.set(row.moduleKey, acc);
+      }
+
+      // Union des clés : registry + ceux déjà installés (tenant peut avoir des
+      // modules legacy hors registry) + ceux vus dans usage.
+      const allKeys = new Set<string>([
+        ...Object.keys(MODULE_ACTION_PREFIXES),
+        ...installed.map((i) => i.moduleKey),
+        ...Array.from(usageByKey.keys()),
+      ]);
+
+      const modules: ModuleUsageEntry[] = Array.from(allKeys).map((moduleKey) => {
+        const inst  = installedByKey.get(moduleKey) ?? null;
+        const usage = usageByKey.get(moduleKey);
+        return {
+          moduleKey,
+          installed:     inst !== null,
+          isActive:      inst?.isActive ?? false,
+          activatedAt:   inst?.activatedAt?.toISOString() ?? null,
+          activatedBy:   inst?.activatedBy ?? null,
+          deactivatedAt: inst?.deactivatedAt?.toISOString() ?? null,
+          deactivatedBy: inst?.deactivatedBy ?? null,
+          periodDays:    days,
+          actionCount:   usage?.actionSum ?? 0,
+          uniqueUsers:   usage?.maxUsers ?? 0,
+          activeDays:    usage?.activeDays ?? 0,
+          lastUsedAt:    usage?.lastUsedAt ? usage.lastUsedAt.toISOString().slice(0, 10) : null,
+        };
+      }).sort((a, b) => b.actionCount - a.actionCount);
+
+      return {
+        tenantId,
+        periodDays:  days,
+        generatedAt: new Date().toISOString(),
+        modules,
       };
     });
   }

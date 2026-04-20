@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
 import { IsBoolean } from 'class-validator';
 import { TenantModuleService, TenantModuleDto } from './tenant-module.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission } from '../../common/constants/permissions';
 
 class ToggleModuleDto {
@@ -35,7 +36,8 @@ export class TenantModuleController {
     @Param('tenantId')  tenantId:  string,
     @Param('moduleKey') moduleKey: string,
     @Body()             dto:       ToggleModuleDto,
+    @CurrentUser()      user:      CurrentUserPayload,
   ): Promise<TenantModuleDto> {
-    return this.modules.setActive(tenantId, moduleKey, dto.isActive);
+    return this.modules.setActive(tenantId, moduleKey, dto.isActive, user.id);
   }
 }

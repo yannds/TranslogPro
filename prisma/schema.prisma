@@ -121,6 +121,7 @@ model Tenant {
   // ── Paiements & Fiscalité (ADR-paiement) ────────────────────────────────────
   // Toutes ces relations sont créées lors du provisioning via des seeds idempotents.
   taxes                 TenantTax[]
+  fareClasses           TenantFareClass[]
   paymentConfig         TenantPaymentConfig?
   paymentIntents        PaymentIntent[]
   paymentProviderStates PaymentProviderState[]
@@ -611,9 +612,18 @@ model InstalledModule {
   config    Json    @default("{}")
   isActive  Boolean @default(true)
 
+  // Traçabilité activation/désactivation — chaque toggle est horodaté et attribué.
+  // Utilisé par /platform/kpi/modules/usage pour distinguer "jamais installé"
+  // de "désactivé après usage" et auditer qui a coupé quoi.
+  activatedAt    DateTime  @default(now())
+  activatedBy    String?   // User.id (SA ou TENANT_ADMIN)
+  deactivatedAt  DateTime?
+  deactivatedBy  String?   // User.id — renseigné quand isActive=false
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, moduleKey])
+  @@index([tenantId, isActive])
   @@map("installed_modules")
 }
 
@@ -859,7 +869,23 @@ model Route {
 
   // TVA override par route (null = utilise le taux tenant)
   // Permet d'exonérer certaines lignes ou d'appliquer un taux réduit.
+  // @deprecated Remplacé par `pricingOverrides.taxes.TVA.rate` (JSON extensible).
+  // Conservé pour rétro-compat le temps du backfill ; sera retiré ultérieurement.
   tvaOverrideRate Float?
+
+  // Overrides de pricing par ligne (extensible sans migration).
+  // Structure attendue :
+  //   {
+  //     "taxes": {
+  //       "TVA":    { "rate": 0.20, "appliedToPrice": true },
+  //       "TIMBRE": { "appliedToPrice": false }
+  //     },
+  //     "tolls":   { "override": 1500 },            // force tollsXof pour cette ligne
+  //     "luggage": { "freeKg": 15, "perExtraKg": 150 },
+  //     "fareClasses": { "allowed": ["STANDARD","CONFORT"] }   // restreint les classes
+  //   }
+  // null / {} = pas d'override, le tenant config s'applique.
+  pricingOverrides Json?
 
   tenant        Tenant              @relation(fields: [tenantId], references: [id])
   origin        Station             @relation("RouteOrigin", fields: [originId], references: [id])
@@ -3473,6 +3499,33 @@ model DailyActiveUser {
   @@map("daily_active_users")
 }
 
+// ModuleUsageDaily : 1 ligne par (tenant, moduleKey, date). Alimentée par le
+// cron nocturne `runModuleUsageDailyJob` qui agrège AuditLog J-1 via les
+// préfixes d'action du registry MODULE_ACTION_PREFIXES (voir
+// src/modules/platform-kpi/platform-kpi.constants.ts).
+//
+// actionCount   : nombre total d'entrées AuditLog du module sur la journée
+// uniqueUsers   : nombre d'utilisateurs distincts ayant déclenché au moins une
+//                 action du module (= "utilisateurs actifs du module" ce jour-là)
+//
+// Source de vérité pour l'endpoint /platform/kpi/modules/usage : on peut
+// distinguer un module "installé mais jamais utilisé" (actionCount = 0 sur
+// toute la période) d'un module "utilisé régulièrement".
+model ModuleUsageDaily {
+  id           String   @id @default(cuid())
+  tenantId     String
+  moduleKey    String
+  date         DateTime @db.Date // jour (00:00 UTC)
+  actionCount  Int      @default(0)
+  uniqueUsers  Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, moduleKey, date])
+  @@index([tenantId, date])
+  @@index([moduleKey, date])
+  @@map("module_usage_daily")
+}
+
 // TenantHealthScore : 1 ligne par (tenant, date). Score agrégé 0-100 +
 // détail des composantes (uptime, incidents, refunds, support, dlq…).
 model TenantHealthScore {
@@ -3810,6 +3863,20 @@ model TenantTax {
   // Ordre d'application (petit = appliqué en premier, utile pour cascade)
   sortOrder Int       @default(0)
   enabled   Boolean   @default(true)
+  // Si true, la taxe est réellement appliquée au montant facturé au client.
+  // Si false, elle reste visible (facture, affichage pédagogique grisé) mais
+  // n'entre pas dans le total. Permet à un tenant de "voir ce que la TVA
+  // aurait donné" sans facturer.
+  appliedToPrice          Boolean @default(true)
+  // Si true, la taxe est prise en compte par le simulateur de prix recommandé
+  // (module de recommandation / break-even). Utile pour projeter un futur
+  // "que se passe-t-il si on active cette taxe ?" indépendamment de la
+  // facturation courante.
+  appliedToRecommendation Boolean @default(true)
+  // Si true, la taxe a été créée au provisioning (ex: TVA) et n'est pas
+  // supprimable — seulement désactivable. Évite de perdre par erreur une taxe
+  // système. Les taxes custom ajoutées par l'admin sont isSystemDefault=false.
+  isSystemDefault         Boolean @default(false)
   // Versioning fiscal — permet une bascule nette à date (loi de finances)
   validFrom DateTime?
   validTo   DateTime?
@@ -3821,6 +3888,41 @@ model TenantTax {
   @@unique([tenantId, code])
   @@index([tenantId, enabled])
   @@map("tenant_taxes")
+}
+
+// ── TenantFareClass : classes de voyage configurables par tenant ─────────────
+// Remplace l'ancien enum TypeScript figé (STANDARD/CONFORT/VIP/STANDING).
+// Chaque tenant peut créer ses propres classes avec ses multiplicateurs de prix
+// (ex: ECONOMY/BUSINESS/FIRST pour un tenant aérien-like, CLASSE_A/B/C pour un
+// tenant à dénomination locale). Zéro hardcoding côté moteur.
+// Seed au provisioning : 4 classes par défaut (STANDARD, CONFORT, VIP, STANDING)
+// avec isSystemDefault=true, multipliers depuis platform-config.registry.
+model TenantFareClass {
+  id         String  @id @default(cuid())
+  tenantId   String
+  // Code stable (STANDARD, CONFORT, VIP, STANDING, BUSINESS, …) — utilisé dans
+  // Ticket.fareClass. Libre mais unique par tenant.
+  code       String
+  // Libellé affiché (sinon labelKey pour i18n).
+  label      String
+  labelKey   String?
+  // Coefficient multiplicateur appliqué au prix de base segment (ex: 1.0, 1.4, 2.0).
+  multiplier Float   @default(1.0)
+  // Ordre d'affichage (0 = en premier dans les listes).
+  sortOrder  Int     @default(0)
+  // Couleur (hex #RRGGBB ou token) pour badges UI et seatmap. Optionnel.
+  color      String?
+  enabled    Boolean @default(true)
+  // Si true, classe créée au provisioning, non supprimable (seulement désactivable).
+  isSystemDefault Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, enabled])
+  @@map("tenant_fare_classes")
 }
 
 // ── TenantPaymentConfig : toutes les constantes paiement par tenant ──────────

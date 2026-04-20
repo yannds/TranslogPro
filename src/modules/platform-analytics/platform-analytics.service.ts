@@ -19,6 +19,7 @@ import { PlatformConfigService } from '../platform-config/platform-config.servic
 import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
 import { MS_PER_DAY } from '../../common/constants/time';
 import { HEALTH_SCORE, ACTIVITY_WINDOWS } from './platform-analytics.constants';
+import { MODULE_ACTION_PREFIXES } from '../platform-kpi/platform-kpi.constants';
 
 @Injectable()
 export class PlatformAnalyticsService {
@@ -349,6 +350,80 @@ export class PlatformAnalyticsService {
       }
     }
     this.logger.log(`[Health cron] ${tenants.length} tenants scorés ${today.toISOString().slice(0, 10)}`);
+  }
+
+  /**
+   * 02:45 UTC — rollup ModuleUsageDaily pour J-1.
+   *
+   * Pour chaque (tenant, module) du registry MODULE_ACTION_PREFIXES, compte :
+   *   - actionCount : nombre d'entrées AuditLog dont action startsWith l'un des préfixes
+   *   - uniqueUsers : nombre d'userId distincts
+   *
+   * Permet de distinguer un module "installé jamais utilisé" d'un module "utilisé
+   * quotidiennement" sans recalculer AuditLog à chaque dashboard (trop coûteux).
+   *
+   * Idempotent : upsert par (tenantId, moduleKey, date) — rejouer le cron
+   * ne duplique rien, il met simplement à jour les compteurs.
+   *
+   * Sécurité : filtrage explicite `tenantId` dans chaque requête, PLATFORM_TENANT_ID
+   * exclu. AuditLog n'est pas sous RLS (table plateforme), pas de withTenant ici.
+   */
+  @Cron('45 2 * * *')
+  async runModuleUsageDailyJob(): Promise<void> {
+    const now    = new Date();
+    const yStart = startOfUtcDay(new Date(now.getTime() - MS_PER_DAY));
+    const yEnd   = new Date(yStart.getTime() + MS_PER_DAY);
+
+    const tenants = await this.prisma.tenant.findMany({
+      where:  { id: { not: PLATFORM_TENANT_ID }, isActive: true },
+      select: { id: true },
+    });
+
+    if (tenants.length === 0) {
+      this.logger.log(`[ModuleUsage cron] aucun tenant éligible ${yStart.toISOString().slice(0, 10)}`);
+      return;
+    }
+
+    let rowsWritten = 0;
+    for (const t of tenants) {
+      for (const [moduleKey, prefixes] of Object.entries(MODULE_ACTION_PREFIXES)) {
+        // Filtrage PG via OR de startsWith — les préfixes sont internes (pas de user input).
+        const whereAction = { OR: prefixes.map((p) => ({ action: { startsWith: p } })) };
+
+        const [actionCount, users] = await Promise.all([
+          this.prisma.auditLog.count({
+            where: {
+              tenantId:  t.id,
+              createdAt: { gte: yStart, lt: yEnd },
+              ...whereAction,
+            },
+          }),
+          this.prisma.auditLog.findMany({
+            where: {
+              tenantId:  t.id,
+              createdAt: { gte: yStart, lt: yEnd },
+              userId:    { not: null },
+              ...whereAction,
+            },
+            select:   { userId: true },
+            distinct: ['userId'],
+          }),
+        ]);
+
+        // Zéro activité → on skip le write pour ne pas gonfler la table inutilement.
+        // La lecture distingue ensuite absence de ligne = 0 usage.
+        if (actionCount === 0) continue;
+
+        await this.prisma.moduleUsageDaily.upsert({
+          where:  { tenantId_moduleKey_date: { tenantId: t.id, moduleKey, date: yStart } },
+          update: { actionCount, uniqueUsers: users.length },
+          create: { tenantId: t.id, moduleKey, date: yStart, actionCount, uniqueUsers: users.length },
+        });
+        rowsWritten += 1;
+      }
+    }
+
+    this.logger.log(`[ModuleUsage cron] ${rowsWritten} lignes écrites pour ${yStart.toISOString().slice(0, 10)} (${tenants.length} tenants)`);
   }
 }
 

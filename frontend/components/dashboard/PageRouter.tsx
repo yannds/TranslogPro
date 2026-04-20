@@ -224,6 +224,8 @@ const LazyPlatformSessions    = lazy(() => import('../pages/PagePlatformSessions
 const LazyPlatformUsers       = lazy(() => import('../pages/PagePlatformUsers').then(m => ({ default: m.PagePlatformUsers })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformRoles       = lazy(() => import('../pages/PagePlatformRoles').then(m => ({ default: m.PagePlatformRoles })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformModulesUsage = lazy(() => import('../pages/PagePlatformModulesUsage').then(m => ({ default: m.PagePlatformModulesUsage })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -407,6 +409,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-sessions':   return <LazyPlatformSessions />;
     case 'platform-users':      return <LazyPlatformUsers />;
     case 'platform-roles':      return <LazyPlatformRoles />;
+    case 'platform-modules-usage': return <LazyPlatformModulesUsage />;
     case 'platform-settings':   return <LazyPlatformSettings />;
     case 'platform-email':      return <LazyPlatformEmail />;
 

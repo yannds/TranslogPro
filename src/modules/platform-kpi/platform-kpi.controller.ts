@@ -19,7 +19,7 @@
  * Note : North Star, transactional, strategic utilisent `adoption` car ils
  * contiennent des métriques utiles à l'équipe support (pas de montants business).
  */
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { PlatformKpiService } from './platform-kpi.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
@@ -92,5 +92,19 @@ export class PlatformKpiController {
   @RequirePermission(Permission.PLATFORM_KPI_ADOPTION_READ_GLOBAL)
   strategic(@Query('days') days?: string) {
     return this.kpi.getStrategic(parsePeriodDays(days, 7));
+  }
+
+  // ─── Modules usage par tenant — SA + L1 + L2 ──────────────────────────────
+  // Retourne pour chaque module du registry son état (installé / actif /
+  // désactivé + qui/quand) et son usage agrégé sur la période (actionCount,
+  // uniqueUsers, activeDays, lastUsedAt). Source : ModuleUsageDaily.
+  @Get('modules/usage/:tenantId')
+  @RequirePermission(Permission.PLATFORM_KPI_ADOPTION_READ_GLOBAL)
+  modulesUsage(
+    @Param('tenantId') tenantId: string,
+    @Query('days')     days?:    string,
+  ) {
+    if (!tenantId || tenantId.length < 8) throw new BadRequestException('Invalid tenantId');
+    return this.kpi.getModulesUsageForTenant(tenantId, parsePeriodDays(days, 30));
   }
 }

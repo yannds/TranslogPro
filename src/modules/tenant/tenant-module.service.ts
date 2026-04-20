@@ -4,9 +4,13 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '../../infrastructure/eventbus/redis-publisher.service';
 
 export interface TenantModuleDto {
-  moduleKey: string;
-  isActive:  boolean;
-  config:    Record<string, unknown>;
+  moduleKey:      string;
+  isActive:       boolean;
+  config:         Record<string, unknown>;
+  activatedAt:    Date | null;
+  activatedBy:    string | null;
+  deactivatedAt:  Date | null;
+  deactivatedBy:  string | null;
 }
 
 /**
@@ -29,12 +33,20 @@ export class TenantModuleService {
   async listForTenant(tenantId: string): Promise<TenantModuleDto[]> {
     const rows = await this.prisma.installedModule.findMany({
       where:  { tenantId },
-      select: { moduleKey: true, isActive: true, config: true },
+      select: {
+        moduleKey: true, isActive: true, config: true,
+        activatedAt: true, activatedBy: true,
+        deactivatedAt: true, deactivatedBy: true,
+      },
     });
     return rows.map(r => ({
-      moduleKey: r.moduleKey,
-      isActive:  r.isActive,
-      config:    (r.config ?? {}) as Record<string, unknown>,
+      moduleKey:     r.moduleKey,
+      isActive:      r.isActive,
+      config:        (r.config ?? {}) as Record<string, unknown>,
+      activatedAt:   r.activatedAt ?? null,
+      activatedBy:   r.activatedBy ?? null,
+      deactivatedAt: r.deactivatedAt ?? null,
+      deactivatedBy: r.deactivatedBy ?? null,
     }));
   }
 
@@ -50,23 +62,55 @@ export class TenantModuleService {
   /**
    * Active ou désactive un module pour un tenant.
    * Crée la ligne si elle n'existe pas (upsert).
+   * Horodate `activatedAt` / `deactivatedAt` et attribue l'acteur.
    * Invalide le cache Redis du ModuleGuard.
+   *
+   * @param actorId  User.id qui déclenche l'action (pour l'audit). Optionnel
+   *                 pour scripts système (seed, backfill) — null accepté.
    */
-  async setActive(tenantId: string, moduleKey: string, isActive: boolean): Promise<TenantModuleDto> {
+  async setActive(
+    tenantId:  string,
+    moduleKey: string,
+    isActive:  boolean,
+    actorId?:  string | null,
+  ): Promise<TenantModuleDto> {
+    const now = new Date();
+    const by  = actorId ?? null;
+
+    const update = isActive
+      ? { isActive: true,  activatedAt: now, activatedBy: by, deactivatedAt: null, deactivatedBy: null }
+      : { isActive: false, deactivatedAt: now, deactivatedBy: by };
+
+    const create = {
+      tenantId, moduleKey, isActive,
+      activatedAt:   isActive ? now : now, // toujours horodaté, même à la création désactivée
+      activatedBy:   isActive ? by  : null,
+      deactivatedAt: isActive ? null : now,
+      deactivatedBy: isActive ? null : by,
+    };
+
     const row = await this.prisma.installedModule.upsert({
       where:  { tenantId_moduleKey: { tenantId, moduleKey } },
-      update: { isActive },
-      create: { tenantId, moduleKey, isActive },
-      select: { moduleKey: true, isActive: true, config: true },
+      update,
+      create,
+      select: {
+        moduleKey: true, isActive: true, config: true,
+        activatedAt: true, activatedBy: true,
+        deactivatedAt: true, deactivatedBy: true,
+      },
     });
 
     await this.invalidateCache(tenantId, moduleKey);
-    this.logger.log(`[MODULES] tenant=${tenantId} key=${moduleKey} isActive=${isActive}`);
+    this.logger.log(`[MODULES] tenant=${tenantId} key=${moduleKey} isActive=${isActive} actor=${by ?? 'system'}`);
 
     return {
-      moduleKey: row.moduleKey,
-      isActive:  row.isActive,
-      config:    (row.config ?? {}) as Record<string, unknown>,
+      moduleKey:     row.moduleKey,
+      isActive:      row.isActive,
+      config:        (row.config ?? {}) as Record<string, unknown>,
+      activatedAt:   row.activatedAt ?? null,
+      activatedBy:   row.activatedBy ?? null,
+      deactivatedAt: row.deactivatedAt ?? null,
+      deactivatedBy: row.deactivatedBy ?? null,
     };
   }
 
