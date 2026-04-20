@@ -2639,6 +2639,27 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "typeErr": "Erreur",
     "noAccess": "Aucune permission n'est attribuée à votre compte. Contactez un administrateur pour activer vos droits d'accès."
   },
+  "execDash": {
+    "title": "Dashboard exécutif — Aujourd'hui",
+    "anomalyTitle": "Alertes anomalies détectées",
+    "incidentsOpen": "incident(s) ouvert(s)",
+    "cashDiscrepancies": "écart(s) de caisse (30 derniers jours)",
+    "fillRateLow": "Taux de remplissage moyen du jour",
+    "threshold": "seuil",
+    "kpiRevenue": "Chiffre d'affaires",
+    "kpiRevenueSub": "aujourd'hui",
+    "kpiTickets": "Billets vendus",
+    "activeTrips": "trajets actifs",
+    "kpiFillRate": "Taux remplissage",
+    "tripsCounted": "trajet(s)",
+    "kpiIncidents": "Incidents ouverts",
+    "cashIssues": "écart(s) caisse",
+    "revenue7d": "CA des 7 derniers jours",
+    "quickActions": "Actions rapides",
+    "actionReports": "Voir les rapports",
+    "actionRules": "Gérer les règles métier",
+    "actionCashDiscrepancies": "Écarts de caisse"
+  },
   "crmPage": {
     "title": "CRM — Clients",
     "customerCount": "client(s) enregistré(s)",

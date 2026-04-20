@@ -18,10 +18,13 @@ import { cn }                  from '../../lib/utils';
 import { KpiCard }             from './KpiCard';
 import { MiniBarChart }        from './MiniBarChart';
 import { DashboardSkeleton }   from './DashboardSkeleton';
+import { ExecutiveSummaryBanner } from './ExecutiveSummaryBanner';
 import { useDashboardStats }   from '../../lib/hooks/useDashboardStats';
 import { useAuth }             from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import type { ActivityEntry }  from './types';
+
+const P_STATS_READ = 'control.stats.read.tenant';
 
 // ─── Activity Feed ────────────────────────────────────────────────────────────
 
@@ -81,6 +84,8 @@ export function PageDashboard() {
     );
   }
 
+  const canSeeExec = !!user?.permissions?.includes(P_STATS_READ);
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -90,6 +95,13 @@ export function PageDashboard() {
           {t('dashboard.today')} — {new Date().toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </header>
+
+      {/* Bandeau exécutif "Aujourd'hui" — seulement si permission STATS_READ (gérant/tenant-admin).
+          Affiche KPI live + alertes anomalies + actions rapides. Ne remplace
+          pas les KPIs gated-by-perm ci-dessous (DRY — KpiCard réutilisé). */}
+      {canSeeExec && user?.tenantId && (
+        <ExecutiveSummaryBanner tenantId={user.tenantId} />
+      )}
 
       {/* KPIs ligne 1 */}
       {kpisRow1.length > 0 && (

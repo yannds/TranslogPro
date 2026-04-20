@@ -323,6 +323,16 @@ model TenantBusinessConfig {
   //   "hold"    → garder sur place (notifier l'expéditeur)
   parcelPickupNoShowAction        String @default("return")
 
+  // ── Dashboard gérant : seuils d'alertes anomalies (2026-04-20) ──────────
+  // Nombre d'incidents OPEN+ASSIGNED au-delà duquel l'alerte s'affiche au
+  // dashboard exécutif. Zéro magic number : configurable par tenant.
+  anomalyIncidentThreshold        Int   @default(3)
+  // Nombre d'écarts caisse (CashRegister.status=DISCREPANCY) sur les 30 jours
+  // au-delà duquel l'alerte est rouge.
+  anomalyDiscrepancyThreshold     Int   @default(1)
+  // Taux de remplissage moyen (fraction) en-deçà duquel on alerte « sous-utilisation ».
+  anomalyFillRateFloor            Float @default(0.4)
+
   // ── Trajets intermédiaires : politique de réservation (2026-04-20) ──────
   // Autoriser la vente / recherche de billets sur des segments intermédiaires
   // (ex: Mindouli → Bouansa sur un trajet Brazza → Pointe-Noire), pas

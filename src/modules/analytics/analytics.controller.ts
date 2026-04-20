@@ -85,6 +85,27 @@ export class AnalyticsController {
   }
 
   /**
+   * Dashboard exécutif "Aujourd'hui" (Sprint 4) — agrège KPI jour + série 7j +
+   * seuils + flags d'alerte en un seul appel pour PageDashboard/Exec.
+   * Scope agency respecté pour AGENCY_MANAGER.
+   */
+  @Get('today-summary')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'userId', suffix: 'analytics_today',
+    message: 'Too many dashboard refresh requests.',
+  })
+  todaySummary(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
+  ) {
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getTodaySummary(tenantId, effectiveAgencyId);
+  }
+
+  /**
    * Segmentation client par activité (voyageur / expéditeur / les deux).
    * Source de vérité : tables Ticket + Parcel — pas le rôle.
    */

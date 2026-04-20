@@ -2785,6 +2785,27 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "typeErr": "Error",
     "noAccess": "No permissions assigned to your account. Contact an administrator to enable your access."
   },
+  "execDash": {
+    "title": "Executive dashboard — Today",
+    "anomalyTitle": "Anomalies detected",
+    "incidentsOpen": "open incident(s)",
+    "cashDiscrepancies": "cash discrepancy(ies) (last 30 days)",
+    "fillRateLow": "Today's average fill rate",
+    "threshold": "threshold",
+    "kpiRevenue": "Revenue",
+    "kpiRevenueSub": "today",
+    "kpiTickets": "Tickets sold",
+    "activeTrips": "active trips",
+    "kpiFillRate": "Fill rate",
+    "tripsCounted": "trip(s)",
+    "kpiIncidents": "Open incidents",
+    "cashIssues": "cash discrepancy(ies)",
+    "revenue7d": "Revenue — last 7 days",
+    "quickActions": "Quick actions",
+    "actionReports": "View reports",
+    "actionRules": "Manage business rules",
+    "actionCashDiscrepancies": "Cash discrepancies"
+  },
   "crmPage": {
     "title": "CRM \\u2014 Customers",
     "customerCount": "registered customer(s)",
