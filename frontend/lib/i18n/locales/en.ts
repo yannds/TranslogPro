@@ -219,7 +219,12 @@ const en: Record<string, Record<string, LocaleValue>> = {
   "portal": {
     "logout": "Log Out",
     "lightMode": "Switch to light mode",
-    "darkMode": "Switch to dark mode"
+    "darkMode": "Switch to dark mode",
+    "sidebar.collapse": "Collapse menu",
+    "sidebar.expand": "Expand menu"
+  },
+  "notify": {
+    "dismissAll": "Dismiss all"
   },
   "portail": {
     "heroTitle": "Travel in Style",

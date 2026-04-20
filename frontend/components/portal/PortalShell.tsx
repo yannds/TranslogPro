@@ -15,16 +15,18 @@
 
 import { useMemo, Suspense }  from 'react';
 import { useLocation }        from 'react-router-dom';
-import { LogOut, Sun, Moon, UserCircle2 } from 'lucide-react';
+import { LogOut, Sun, Moon, UserCircle2, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation }      from '../../lib/hooks/useNavigation';
 import { useLockedViewport } from '../../lib/hooks/useLockedViewport';
+import { useSidebarCollapsed } from '../../lib/hooks/useSidebarCollapsed';
 import { useTheme }           from '../theme/ThemeProvider';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import { SuspendedScreen }    from '../billing/SuspendedScreen';
 import { OfflineBanner }      from '../offline/OfflineBanner';
+import { cn }                 from '../../lib/utils';
 import type { PortalNavConfig, ResolvedNavItem } from '../../lib/navigation/nav.types';
 
 function PageLoadingFallback() {
@@ -40,22 +42,33 @@ function PageLoadingFallback() {
 }
 
 interface SidebarSectionProps {
-  title?:     string;
-  items:      ResolvedNavItem[];
-  activeHref: string;
+  title?:          string;
+  items:           ResolvedNavItem[];
+  activeHref:      string;
+  collapsed:       boolean;
+  onRequestExpand: () => void;
 }
 
-function SidebarSection({ title, items, activeHref }: SidebarSectionProps) {
+function SidebarSection({ title, items, activeHref, collapsed, onRequestExpand }: SidebarSectionProps) {
   return (
     <div>
-      {title && (
+      {title && !collapsed && (
         <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest t-text-2">
           {title}
         </div>
       )}
+      {title && collapsed && (
+        <div className="mx-2 mb-1 h-px bg-slate-200 dark:bg-slate-700/60" aria-hidden />
+      )}
       <ul role="list" className="space-y-0.5">
         {items.map(item => (
-          <SidebarNavItem key={item.id} item={item} activeHref={activeHref} />
+          <SidebarNavItem
+            key={item.id}
+            item={item}
+            activeHref={activeHref}
+            collapsed={collapsed}
+            onRequestExpand={onRequestExpand}
+          />
         ))}
       </ul>
     </div>
@@ -78,6 +91,7 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
   const { theme, toggle }          = useTheme();
   const { t }                      = useI18n();
   const location = useLocation();
+  const { collapsed, toggle: toggleCollapsed, setCollapsed } = useSidebarCollapsed();
 
   const permissions = authUser?.permissions ?? [];
 
@@ -106,38 +120,44 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
           title={section.title}
           items={section.items}
           activeHref={activeHref}
+          collapsed={collapsed}
+          onRequestExpand={() => setCollapsed(false)}
         />
       ))}
     </nav>
-  ), [sections, activeHref, ariaNavLabel]);
+  ), [sections, activeHref, ariaNavLabel, collapsed, setCollapsed]);
 
   const logo = (
     <div className="flex items-center gap-2">
-      <div className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center text-white font-black text-sm">
+      <div className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center text-white font-black text-sm shrink-0">
         T
       </div>
-      <span className="font-bold t-text text-sm tracking-wide">
-        TranslogPro
-      </span>
+      {!collapsed && (
+        <span className="font-bold t-text text-sm tracking-wide">
+          TranslogPro
+        </span>
+      )}
     </div>
   );
 
   const userPanel = (
-    <div className="flex items-center gap-2.5">
+    <div className={cn('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-2.5')}>
       <div
         className="w-8 h-8 rounded-full bg-teal-600 dark:bg-teal-700 flex items-center justify-center text-white text-xs font-bold shrink-0"
         aria-hidden
       >
         {(authUser?.name ?? authUser?.email ?? '?').slice(0, 2).toUpperCase()}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium t-text-body truncate">
-          {authUser?.name ?? authUser?.email}
-        </p>
-        <p className="text-[10px] text-slate-500 truncate">
-          {authUser?.roleName ?? roleFallbackLabel}
-        </p>
-      </div>
+      {!collapsed && (
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium t-text-body truncate">
+            {authUser?.name ?? authUser?.email}
+          </p>
+          <p className="text-[10px] text-slate-500 truncate">
+            {authUser?.roleName ?? roleFallbackLabel}
+          </p>
+        </div>
+      )}
 
       <button
         onClick={toggle}
@@ -175,15 +195,32 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
     <div className="flex h-screen overflow-hidden t-app">
       <aside
         aria-label={ariaNavLabel}
-        className="hidden lg:flex flex-col w-64 shrink-0 t-sidebar border-r t-border"
+        className={cn(
+          'hidden lg:flex flex-col shrink-0 t-sidebar border-r t-border transition-[width] duration-200',
+          collapsed ? 'w-14' : 'w-64',
+        )}
       >
-        <div className="flex h-14 items-center px-4 border-b t-border shrink-0">
+        <div
+          className={cn(
+            'flex h-14 items-center border-b t-border shrink-0',
+            collapsed ? 'justify-center px-2' : 'px-4',
+          )}
+        >
           {logo}
         </div>
         {sidebarContent}
-        <div className="shrink-0 border-t t-border p-3">
+        <div className={cn('shrink-0 border-t t-border', collapsed ? 'p-2' : 'p-3')}>
           {userPanel}
         </div>
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? t('portal.sidebar.expand') : t('portal.sidebar.collapse')}
+          aria-label={collapsed ? t('portal.sidebar.expand') : t('portal.sidebar.collapse')}
+          aria-expanded={!collapsed}
+          className="shrink-0 border-t t-border py-2 flex items-center justify-center text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 dark:hover:text-teal-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+        >
+          {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
+        </button>
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">

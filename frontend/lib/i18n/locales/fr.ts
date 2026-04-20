@@ -72,7 +72,12 @@ const fr: Record<string, Record<string, LocaleValue>> = {
   "portal": {
     "logout": "Déconnexion",
     "lightMode": "Passer en mode clair",
-    "darkMode": "Passer en mode sombre"
+    "darkMode": "Passer en mode sombre",
+    "sidebar.collapse": "Réduire le menu",
+    "sidebar.expand": "Agrandir le menu"
+  },
+  "notify": {
+    "dismissAll": "Tout fermer"
   },
   "portail": {
     "heroTitle": "Voyagez en toute élégance",

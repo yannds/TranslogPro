@@ -135,6 +135,8 @@ startSyncLoop();
 import { installGlobalErrorCapture } from '../lib/telemetry/telemetry';
 installGlobalErrorCapture();
 
+import { NotifyToaster } from '../components/notify/NotifyToaster';
+
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable dans index.html');
 
@@ -295,6 +297,10 @@ reactRoot.render(
           </AuthProvider>
           </I18nProvider>
         </TenantConfigProvider>
+        {/* Toaster global — monté une seule fois à la racine pour que
+            notify.* dispatche depuis n'importe quel composant. Le bouton
+            « Fermer tout » flotte sur tous les portails. */}
+        <NotifyToaster />
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,

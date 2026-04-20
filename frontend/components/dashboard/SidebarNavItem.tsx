@@ -3,6 +3,10 @@
  *
  * Utilise les tokens sémantiques (t-nav-*, t-badge-wip) définis dans index.css.
  * Pour modifier les couleurs de navigation, modifier index.css uniquement.
+ *
+ * Mode `collapsed` : rendu rail d'icônes (w-14). Pas de label, pas de chevron,
+ * pas de liste enfants — un clic sur un groupe en mode rail auto-déplie la
+ * sidebar via `onRequestExpand`. Badge numérique → petit point ambre.
  */
 import { useState }     from 'react';
 import { useNavigate }  from 'react-router-dom';
@@ -11,17 +15,67 @@ import { NavIcon }      from './NavIcon';
 import type { ResolvedNavItem } from '../../lib/navigation/nav.types';
 
 export interface SidebarNavItemProps {
-  item:       ResolvedNavItem;
-  activeHref: string | null;
-  depth?:     number;
+  item:             ResolvedNavItem;
+  activeHref:       string | null;
+  depth?:           number;
+  collapsed?:       boolean;
+  onRequestExpand?: () => void;
 }
 
-export function SidebarNavItem({ item, activeHref, depth: _depth = 0 }: SidebarNavItemProps) {
+export function SidebarNavItem({
+  item,
+  activeHref,
+  depth: _depth = 0,
+  collapsed = false,
+  onRequestExpand,
+}: SidebarNavItemProps) {
   const navigate = useNavigate();
 
   const isChildActive = item.children?.some(c => c.href === activeHref) ?? false;
   const [expanded, setExpanded] = useState(() => isChildActive);
   const isActive = item.href === activeHref || isChildActive;
+
+  // ── Mode rail d'icônes (desktop collapsed) ────────────────────────────────
+  // On rend un bouton compact icône-seule pour tout item (groupe comme leaf).
+  // Le clic sur un groupe auto-déplie la sidebar via onRequestExpand et
+  // marque le groupe comme expanded pour que ses enfants soient visibles
+  // immédiatement après la bascule.
+  if (collapsed) {
+    const onClick = () => {
+      if (item.wip) return;
+      if (item.children) {
+        setExpanded(true);
+        onRequestExpand?.();
+      } else {
+        navigate(item.href);
+      }
+    };
+    const hasNew = item.badge != null;
+    return (
+      <li>
+        <button
+          onClick={onClick}
+          disabled={item.wip}
+          title={item.label}
+          aria-label={item.label}
+          aria-current={item.href === activeHref ? 'page' : undefined}
+          className={cn(
+            'relative w-full flex items-center justify-center rounded-lg px-0 py-2 transition-colors',
+            isActive ? 't-nav-active' : cn('t-nav-text', 't-nav-hover'),
+            item.wip && 'opacity-40 cursor-not-allowed',
+          )}
+        >
+          <NavIcon name={item.icon} />
+          {hasNew && (
+            <span
+              aria-hidden
+              className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
+            />
+          )}
+        </button>
+      </li>
+    );
+  }
 
   // ── Groupe avec sous-items ─────────────────────────────────────────────────
   if (item.children) {
