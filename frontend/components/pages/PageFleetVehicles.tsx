@@ -12,6 +12,7 @@
 
 import { useMemo, useState, useEffect, type FormEvent } from 'react';
 import { useNavigate }                     from 'react-router-dom';
+import { FleetStatusHeader }               from '../dashboard/FleetStatusHeader';
 import {
   Bus, Plus, Wrench, CheckCircle2, LayoutGrid, Power, Pencil, Trash2, FileText, X,
   Camera, Upload, ImageOff, ChevronDown, ChevronUp, Gauge, Coins, Sparkles,
@@ -1059,6 +1060,10 @@ export function PageFleetVehicles() {
       </div>
 
       <ErrorAlert error={error || actionErr} icon />
+
+      {/* Synthèse flotte (Sprint 5) — manager vue macro : actifs/maintenance/offline
+          + bus sous-utilisés sur 7 jours. DRY : KPI = /analytics/fleet-summary. */}
+      {tenantId && <FleetStatusHeader tenantId={tenantId} />}
 
       <section aria-label={t('fleetVehicles.fleetIndicators')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Kpi label={t('fleetVehicles.kpiVehicles')}    value={kpi.total}       icon={<Bus className="w-5 h-5" />} />

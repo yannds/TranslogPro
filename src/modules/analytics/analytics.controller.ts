@@ -106,6 +106,26 @@ export class AnalyticsController {
   }
 
   /**
+   * Synthèse flotte (Sprint 5) — manager de flotte.
+   * Groupe actifs/maintenance/offline + top sous-utilisés sur 7j.
+   */
+  @Get('fleet-summary')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 30, windowMs: 60_000, keyBy: 'userId', suffix: 'analytics_fleet',
+    message: 'Too many fleet summary requests.',
+  })
+  fleetSummary(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
+  ) {
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getFleetSummary(tenantId, effectiveAgencyId);
+  }
+
+  /**
    * Segmentation client par activité (voyageur / expéditeur / les deux).
    * Source de vérité : tables Ticket + Parcel — pas le rôle.
    */

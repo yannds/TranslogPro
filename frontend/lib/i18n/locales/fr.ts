@@ -2639,6 +2639,28 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "typeErr": "Erreur",
     "noAccess": "Aucune permission n'est attribuée à votre compte. Contactez un administrateur pour activer vos droits d'accès."
   },
+  "fleetOverview": {
+    "title": "Vue d'ensemble flotte",
+    "active": "Bus actifs",
+    "maintenance": "En maintenance",
+    "offline": "Hors service",
+    "total": "au total",
+    "underutilizedTitle": "Bus sous-utilisés (7 derniers jours)",
+    "belowThreshold": "en-deçà de",
+    "trips7d": "trajet(s) / 7j"
+  },
+  "accountingToday": {
+    "title": "Résumé comptable — Aujourd'hui",
+    "alertTitle": "Écarts de caisse détectés",
+    "discrepancyDescribe": "clôture(s) avec écart sur les 30 derniers jours",
+    "threshold": "seuil",
+    "revenue": "Ventes du jour",
+    "tickets": "billet(s)",
+    "openRegisters": "Caisses ouvertes",
+    "currentlyOpen": "en activité",
+    "discrepanciesLabel": "Écarts caisse",
+    "last30Days": "30 derniers jours"
+  },
   "execDash": {
     "title": "Dashboard exécutif — Aujourd'hui",
     "anomalyTitle": "Alertes anomalies détectées",

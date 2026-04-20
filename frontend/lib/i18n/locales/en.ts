@@ -2785,6 +2785,28 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "typeErr": "Error",
     "noAccess": "No permissions assigned to your account. Contact an administrator to enable your access."
   },
+  "fleetOverview": {
+    "title": "Fleet overview",
+    "active": "Active buses",
+    "maintenance": "In maintenance",
+    "offline": "Offline",
+    "total": "total",
+    "underutilizedTitle": "Underutilized buses (last 7 days)",
+    "belowThreshold": "below",
+    "trips7d": "trip(s) / 7d"
+  },
+  "accountingToday": {
+    "title": "Accounting — Today",
+    "alertTitle": "Cash discrepancies detected",
+    "discrepancyDescribe": "closing(s) with discrepancy over the last 30 days",
+    "threshold": "threshold",
+    "revenue": "Today's revenue",
+    "tickets": "ticket(s)",
+    "openRegisters": "Open registers",
+    "currentlyOpen": "currently open",
+    "discrepanciesLabel": "Cash discrepancies",
+    "last30Days": "last 30 days"
+  },
   "execDash": {
     "title": "Executive dashboard — Today",
     "anomalyTitle": "Anomalies detected",

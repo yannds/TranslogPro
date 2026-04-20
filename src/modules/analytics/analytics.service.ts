@@ -355,6 +355,71 @@ export class AnalyticsService {
     return `${y}-${m}-${dd}`;
   }
 
+  /**
+   * Synthèse flotte (Sprint 5) — pour le manager de flotte.
+   * Agrège count par état (active / maintenance / offline) + top bus
+   * sous-utilisés (utilization < seuil tenant anomalyFillRateFloor sur 7j).
+   */
+  async getFleetSummary(tenantId: string, agencyId?: string) {
+    const agencyScope = agencyId ? { agencyId } : {};
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Buckets de statuts (documentés dans schema : AVAILABLE | BOARDING | DEPARTED
+    // | ARRIVED | MAINTENANCE | CLOSED | IN_SERVICE)
+    const ACTIVE_STATUSES = ['AVAILABLE', 'IN_SERVICE', 'BOARDING', 'DEPARTED', 'ARRIVED'];
+
+    const [total, active, maintenance, closed, buses, config] = await Promise.all([
+      this.prisma.bus.count({ where: { tenantId, ...agencyScope } }),
+      this.prisma.bus.count({ where: { tenantId, ...agencyScope, status: { in: ACTIVE_STATUSES } } }),
+      this.prisma.bus.count({ where: { tenantId, ...agencyScope, status: 'MAINTENANCE' } }),
+      this.prisma.bus.count({ where: { tenantId, ...agencyScope, status: 'CLOSED' } }),
+      this.prisma.bus.findMany({
+        where:  { tenantId, ...agencyScope, status: { in: ACTIVE_STATUSES } },
+        select: {
+          id: true, plateNumber: true, model: true, capacity: true,
+          trips: {
+            where:  { departureScheduled: { gte: sevenDaysAgo, lte: now }, status: { in: ['BOARDING', 'IN_PROGRESS', 'COMPLETED'] } },
+            select: { id: true, travelers: { where: { status: 'BOARDED' }, select: { id: true } } },
+          },
+        },
+      }),
+      this.prisma.tenantBusinessConfig.findUnique({
+        where:  { tenantId },
+        select: { anomalyFillRateFloor: true },
+      }),
+    ]);
+
+    const floor = config?.anomalyFillRateFloor ?? 0.4;
+
+    // Utilization par bus (7j) = totalBoarded / (capacity * nbTrips)
+    const buses7dUtil = buses.map(bus => {
+      const totalBoarded = bus.trips.reduce((sum, t) => sum + t.travelers.length, 0);
+      const totalSeats   = bus.capacity * bus.trips.length;
+      const util         = totalSeats > 0 ? totalBoarded / totalSeats : 0;
+      return {
+        busId:         bus.id,
+        plateNumber:   bus.plateNumber,
+        model:         bus.model,
+        tripCount7d:   bus.trips.length,
+        utilization7d: util,
+      };
+    });
+
+    const underutilized = buses7dUtil
+      .filter(b => b.tripCount7d > 0 && b.utilization7d < floor)
+      .sort((a, b) => a.utilization7d - b.utilization7d)
+      .slice(0, 5);
+
+    return {
+      total,
+      byStatus:        { active, maintenance, offline: closed },
+      underutilized,
+      underutilizedThreshold: floor,
+    };
+  }
+
   async getOccupancyRate(tenantId: string, tripId: string) {
     const trip = await this.prisma.trip.findFirst({
       where:   { id: tripId, tenantId },

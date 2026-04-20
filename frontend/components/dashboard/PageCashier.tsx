@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { AlertCircle, ArrowDownRight, ArrowUpRight, Coins, Landmark, Loader2 } from 'lucide-react';
+import { AccountingTodayHeader } from './AccountingTodayHeader';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
@@ -66,6 +67,10 @@ export function PageCashier() {
         <Landmark className="w-6 h-6 text-teal-600 dark:text-teal-400" aria-hidden />
         {t('cashierDash.title')}
       </h1>
+
+      {/* Résumé comptable du jour (Sprint 5) — synthèse tenant-scoped, DRY via
+          /analytics/today-summary. Bandeau rouge si écarts > seuil tenant. */}
+      {tenantId && <AccountingTodayHeader tenantId={tenantId} />}
 
       <CashierSessionBar onChange={refetch} />
 
