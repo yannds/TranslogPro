@@ -151,8 +151,15 @@ async function cleanupTenantFixture(prisma: PrismaClient, tenantId: string): Pro
   await prisma.session.deleteMany({ where: { tenantId } });
   await prisma.auditLog.deleteMany({ where: { tenantId } });
   await prisma.account.deleteMany({ where: { tenantId } });
+  // Staff doit être supprimé avant User (FK Staff.userId). Depuis 2026-04-19 le
+  // boot backfillStaffFromUsers crée un Staff pour chaque user STAFF/admin.
+  await prisma.staff.deleteMany({ where: { tenantId } });
   await prisma.user.deleteMany({ where: { tenantId } });
   await prisma.role.deleteMany({ where: { tenantId } });
   await prisma.tenantDomain.deleteMany({ where: { tenantId } });
+  // Agencies créées par OnboardingService ou backfill au boot — FK bloquante
+  // sur tenant.delete() sans cleanup explicite.
+  await prisma.tenantBusinessConfig.deleteMany({ where: { tenantId } });
+  await prisma.agency.deleteMany({ where: { tenantId } });
   await prisma.tenant.delete({ where: { id: tenantId } });
 }

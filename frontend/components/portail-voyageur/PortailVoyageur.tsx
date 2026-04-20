@@ -25,6 +25,7 @@ import { apiFetch } from '../../lib/api';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { ComboboxEditable, type ComboboxOption } from '../ui/ComboboxEditable';
 import { TripDatePicker } from './TripDatePicker';
+import { TripStopsTimeline, type TripStop } from './TripStopsTimeline';
 import type { Language } from '../../lib/i18n/types';
 import { createContext, useContext } from 'react';
 import { getTheme, type PortalTheme } from './portal-themes';
@@ -86,6 +87,17 @@ interface SeatLayout {
   disabled?: string[];
 }
 
+interface TripStopEnriched {
+  stationId:    string;
+  name:         string;
+  city:         string;
+  km:           number;
+  order:        number;
+  estimatedAt:  string;
+  isBoarding?:  boolean;
+  isAlighting?: boolean;
+}
+
 interface TripResult {
   id: string;
   departure: string;
@@ -99,7 +111,13 @@ interface TripResult {
   busModel: string;
   amenities: string[];
   canBook: boolean;
-  stops?: { city: string; name: string; km: number }[];
+  // Backend v2 (Sprint 1) : stops enrichis avec stationId / order / estimatedAt
+  // Rétrocompat : anciens stops {city,name,km} still supported.
+  stops?: Array<TripStopEnriched | { city: string; name: string; km: number }>;
+  boardingStationId?:     string;
+  alightingStationId?:    string;
+  isIntermediateSegment?: boolean;
+  isAutoCalculated?:      boolean;
   seatingMode?: 'FREE' | 'NUMBERED';
   seatLayout?: SeatLayout | null;
   seatSelectionFee?: number;
@@ -108,6 +126,7 @@ interface TripResult {
 }
 
 interface StationInfo {
+  id?: string;
   name: string;
   city: string;
   type: string;
@@ -292,6 +311,10 @@ function HeroCarousel({ children }: { children: React.ReactNode }) {
 // Trip Card (responsive)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function hasEnrichedStops(stops: TripResult['stops']): stops is TripStop[] {
+  return Array.isArray(stops) && stops.length > 0 && typeof (stops[0] as TripStop).stationId === 'string';
+}
+
 function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: TripResult) => void; fmt: (n: number) => string; t: (k: string) => string }) {
   const full = trip.availableSeats === 0, urgent = trip.availableSeats > 0 && trip.availableSeats <= 5, isVip = trip.busType === 'VIP';
   return (
@@ -316,12 +339,30 @@ function TripCard({ trip, onBook, fmt, t }: { trip: TripResult; onBook: (t: Trip
           </div>
           <div className="text-center min-w-[60px] sm:min-w-[72px]"><p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{fmtTime(trip.arrivalTime)}</p><p className="text-xs text-slate-500 mt-0.5">{trip.arrival}</p></div>
         </div>
-        {/* Stops/escales */}
-        {trip.stops && trip.stops.length > 0 && (
+        {/* Timeline des arrêts — affichée si stops enrichis (backend v2) */}
+        {Array.isArray(trip.stops) && trip.stops.length > 0 && hasEnrichedStops(trip.stops) && (
+          <div className="mb-4">
+            <TripStopsTimeline
+              stops={trip.stops as TripStop[]}
+              boardingStationId={trip.boardingStationId}
+              alightingStationId={trip.alightingStationId}
+              isIntermediateSegment={trip.isIntermediateSegment}
+              compact
+              t={t}
+            />
+            {trip.isAutoCalculated && (
+              <p className="mt-1.5 text-[10px] text-amber-600 dark:text-amber-400 italic">
+                ⓘ {t('portail.intermediatePriceEstimated')}
+              </p>
+            )}
+          </div>
+        )}
+        {/* Fallback rétrocompat : anciens stops non enrichis (city seulement) */}
+        {Array.isArray(trip.stops) && trip.stops.length > 0 && !hasEnrichedStops(trip.stops) && (
           <div className="flex flex-wrap items-center gap-1.5 mb-4 px-1">
             <span className="text-[10px] text-slate-400 font-medium">{t('portail.via')}:</span>
             {trip.stops.map((s, i) => (
-              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full [background:color-mix(in_srgb,var(--portal-accent-light),white_50%)] text-amber-700 dark:text-amber-400 font-medium border border-amber-200/50 dark:border-amber-800/30">{s.city}</span>
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full [background:color-mix(in_srgb,var(--portal-accent-light),white_50%)] text-amber-700 dark:text-amber-400 font-medium border border-amber-200/50 dark:border-amber-800/30">{(s as { city: string }).city}</span>
             ))}
             {trip.distanceKm && <span className="text-[10px] text-slate-400 ml-auto">{trip.distanceKm} km</span>}
           </div>
@@ -473,6 +514,9 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
             seatNumber:         p.wantsSeatSelection ? p.seatNumber : undefined,
           })),
           paymentMethod: selectedPayment,
+          // Segments intermédiaires (Sprint 1/2) — si absents, backend utilisera OD complet par défaut
+          boardingStationId:  trip.boardingStationId,
+          alightingStationId: trip.alightingStationId,
         },
       });
       setBooking(result);
@@ -1414,26 +1458,26 @@ export function PortailVoyageur() {
   const stations = stRes.data ?? [];
   const pms = cfg.data?.paymentMethods ?? DEMO_PAYMENT_METHODS; // payment methods fallback OK (country-specific)
 
-  // Derive unique cities sorted by importance: PRINCIPALE stations first, then by count
+  // Derive autocomplete options : villes (PRINCIPALE prioritaires) + noms de gares
+  // intermédiaires (SECONDAIRE / HUB / ESCALE). Le voyageur peut ainsi taper
+  // "Mindouli" et trouver un arrêt intermédiaire sans connaître sa ville. Le
+  // matching côté backend gère indifféremment city OU name, insensible à la casse.
   const cityOptions: ComboboxOption[] = useMemo(() => {
-    const info = new Map<string, { count: number; hasPrincipale: boolean }>();
+    const opts = new Map<string, { label: string; importance: number }>();
+    const addOpt = (value: string, label: string, importance: number) => {
+      const key = value.toLowerCase();
+      const prev = opts.get(key);
+      if (!prev || prev.importance < importance) opts.set(key, { label, importance });
+    };
+    // Priorité : PRINCIPALE ville > PRINCIPALE name > autre ville > autre name
     for (const s of stations) {
-      const prev = info.get(s.city) ?? { count: 0, hasPrincipale: false };
-      info.set(s.city, {
-        count: prev.count + 1,
-        hasPrincipale: prev.hasPrincipale || s.type === 'PRINCIPALE',
-      });
+      const isPrincipale = s.type === 'PRINCIPALE';
+      if (s.city)               addOpt(s.city, s.city, isPrincipale ? 40 : 20);
+      if (s.name && s.name !== s.city) addOpt(s.name, s.name, isPrincipale ? 30 : 10);
     }
-    return [...info.entries()]
-      .sort((a, b) => {
-        // Cities with PRINCIPALE stations first
-        if (a[1].hasPrincipale !== b[1].hasPrincipale) return a[1].hasPrincipale ? -1 : 1;
-        // Then by station count (more = more important)
-        if (a[1].count !== b[1].count) return b[1].count - a[1].count;
-        // Then alphabetical
-        return a[0].localeCompare(b[0]);
-      })
-      .map(([city]) => ({ value: city, label: city }));
+    return [...opts.entries()]
+      .sort((a, b) => b[1].importance - a[1].importance || a[1].label.localeCompare(b[1].label))
+      .map(([, meta]) => ({ value: meta.label, label: meta.label }));
   }, [stations]);
 
   const [dep, setDep] = useState('');
