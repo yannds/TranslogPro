@@ -17,14 +17,26 @@
  * Le parent filtre déjà par permission — pas de check redondant ici.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { KpiCard } from './KpiCard';
 import { MiniBarChart } from './MiniBarChart';
 import { useFetch } from '../../lib/hooks/useFetch';
+import { useRealtimeEvents } from '../../lib/hooks/useRealtimeEvents';
 import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { cn } from '../../lib/utils';
+
+// Types d'événements qui doivent déclencher un refresh du bandeau exécutif.
+// DRY : défini ici, référencé par le hook useRealtimeEvents.
+const EXEC_DASH_EVENT_TYPES = [
+  'ticket.issued',
+  'ticket.cancelled',
+  'incident.created',
+  'incident.resolved',
+  'cashregister.closed',
+  'trip.completed',
+];
 
 interface TodaySummary {
   today: {
@@ -52,9 +64,20 @@ export interface ExecutiveSummaryBannerProps {
 export function ExecutiveSummaryBanner({ tenantId, refreshMs = 60_000 }: ExecutiveSummaryBannerProps) {
   const { t } = useI18n();
   const fmt = useCurrencyFormatter();
+  const [refreshTick, setRefreshTick] = useState(0);
   const url = tenantId ? `/api/tenants/${tenantId}/analytics/today-summary` : null;
-  const deps = useMemo(() => [tenantId, refreshMs], [tenantId, refreshMs]);
+  const deps = useMemo(() => [tenantId, refreshMs, refreshTick], [tenantId, refreshMs, refreshTick]);
   const { data, error, loading } = useFetch<TodaySummary>(url, deps);
+
+  // Realtime : refresh débouncé sur événements cross-rôles (Sprint 6).
+  // Tous les événements qui changent la vue du gérant déclenchent un re-fetch
+  // après 800ms (évite le spam de requêtes sur burst d'events).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onEvent = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setRefreshTick(n => n + 1), 800);
+  }, []);
+  useRealtimeEvents(tenantId, onEvent, { types: EXEC_DASH_EVENT_TYPES });
 
   if (loading || error || !data) return null; // Le reste du dashboard reste visible
 

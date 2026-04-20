@@ -37,6 +37,7 @@ import { SavModule } from './modules/sav/sav.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { DisplayModule } from './modules/display/display.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { SafetyModule } from './modules/safety/safety.module';
 import { CrewModule } from './modules/crew/crew.module';
@@ -150,6 +151,7 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     NotificationModule,
     DisplayModule,
     AnalyticsModule,
+    RealtimeModule,
     FeedbackModule,
     SafetyModule,
     CrewModule,
