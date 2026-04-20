@@ -39,18 +39,31 @@ function normalizeMonthlyAmount(price: number, billingCycle: string): number {
 }
 
 async function backfillSubscriptionChanges(prisma: PrismaClient): Promise<void> {
+  // On utilise findMany SANS include tenant pour tolérer les subscriptions
+  // orphelines (tenant supprimé sans cascade — résidu cleanup E2E).
   const subscriptions = await prisma.platformSubscription.findMany({
-    include: { plan: true, tenant: true, changes: true },
+    include: { plan: true, changes: true },
   });
+
+  // Set des tenantIds encore valides, pour filtrer les orphelins
+  const validTenants = new Set(
+    (await prisma.tenant.findMany({ select: { id: true } })).map((t) => t.id),
+  );
 
   let createdNew = 0;
   let createdChurn = 0;
   let skipped = 0;
+  let orphan = 0;
 
   for (const sub of subscriptions) {
     // Ignore tenant plateforme — il n'a jamais de subscription facturée
     if (sub.tenantId === PLATFORM_TENANT_ID) {
       skipped++;
+      continue;
+    }
+    // Ignore les subscriptions orphelines (tenant supprimé sans cascade)
+    if (!validTenants.has(sub.tenantId)) {
+      orphan++;
       continue;
     }
 
@@ -108,6 +121,7 @@ async function backfillSubscriptionChanges(prisma: PrismaClient): Promise<void> 
   console.log(`   - ${createdNew} entrées NEW créées`);
   console.log(`   - ${createdChurn} entrées CHURN créées`);
   console.log(`   - ${skipped} subscriptions ignorées (tenant plateforme)`);
+  console.log(`   - ${orphan} subscriptions orphelines ignorées (tenant supprimé)`);
 }
 
 async function main(): Promise<void> {
