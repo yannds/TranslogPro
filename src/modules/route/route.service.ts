@@ -58,20 +58,47 @@ export class RouteService {
       throw new BadRequestException('L\'origine et la destination doivent être différentes');
     }
 
-    return this.prisma.route.create({
-      data: {
-        tenantId,
-        name:          payload.name!,
-        originId:      payload.originId!,
-        destinationId: payload.destinationId!,
-        distanceKm:    payload.distanceKm!,
-        basePrice:     payload.basePrice!,
-      },
-      include: {
-        origin:      { select: { id: true, name: true, city: true } },
-        destination: { select: { id: true, name: true, city: true } },
-        _count:      { select: { trips: true } },
-      },
+    // Création Route + PricingRules par défaut dans une seule transaction.
+    // Sans PricingRules active, la vente de billets est bloquée par le
+    // PricingEngine ("Aucune règle tarifaire active"). On initialise donc avec
+    // les valeurs minimales dérivées du payload — l'admin peut affiner ensuite.
+    return this.prisma.transact(async (tx) => {
+      const route = await tx.route.create({
+        data: {
+          tenantId,
+          name:          payload.name!,
+          originId:      payload.originId!,
+          destinationId: payload.destinationId!,
+          distanceKm:    payload.distanceKm!,
+          basePrice:     payload.basePrice!,
+        },
+        include: {
+          origin:      { select: { id: true, name: true, city: true } },
+          destination: { select: { id: true, name: true, city: true } },
+          _count:      { select: { trips: true } },
+        },
+      });
+
+      // PricingRules par défaut si aucune n'existe déjà pour (tenant, route).
+      // Le @@unique([tenantId, routeId]) protège contre la création en double.
+      await tx.pricingRules.upsert({
+        where:  { tenantId_routeId: { tenantId, routeId: route.id } },
+        update: {}, // ne pas écraser si déjà configuré (update côté Route séparé)
+        create: {
+          tenantId, routeId: route.id,
+          rules: {
+            basePriceXof:      payload.basePrice!,
+            taxRate:           0,
+            tollsXof:          0,
+            costPerKm:         0,
+            luggageFreeKg:     20,
+            luggagePerExtraKg: 100,
+            fareMultipliers:   { STANDARD: 1.0, CONFORT: 1.4, VIP: 2.0 },
+          },
+        },
+      });
+
+      return route;
     });
   }
 
