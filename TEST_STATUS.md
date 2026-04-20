@@ -206,6 +206,33 @@ Tests ajoutés (12) :
 
 **Compteurs après Sprint Tax-RBAC :** Unit **686** (+15), Security **157** (stable).
 
+---
+
+## Sprint BYO-credentials (2026-04-20)
+
+**Fonctionnalité :** Modèle B — tenant saisit ses propres clés API paiement via l'UI `/admin/integrations`. Credentials écrits dans Vault au chemin `tenants/<id>/payments/<provider>`.
+
+**Changements :**
+- `src/infrastructure/payment/providers/types.ts` — `CredentialFieldSpec` + `credentialFields` dans `PaymentProviderMeta`
+- `src/infrastructure/secret/interfaces/secret.interface.ts` + `vault.service.ts` — ajout `deleteSecret(path)`
+- 6 providers — `credentialFields` peuplé (MTN 9 champs, Airtel 6, Wave 3, Flutterwave 2, Paystack 1, Stripe 2)
+- `payment-provider.registry.ts` — `getCredentialSchema(providerKey)`
+- `integrations.service.ts` — injection `SECRET_SERVICE` + `getCredentialSchema()` / `saveCredentials()` / `deleteCredentials()`
+- `tenant-settings.controller.ts` — 3 nouveaux endpoints : `GET /schema`, `PUT /credentials`, `DELETE /credentials`
+- `frontend/components/ui/FormFooter.tsx` — prop `formId?` (bouton submit HTML5 hors-form)
+- `frontend/components/pages/integrations/IntegrationCredentialsDialog.tsx` — NEW modale formulaire dynamique
+- `frontend/components/pages/PageIntegrations.tsx` — bouton "Saisir mes identifiants" + badge "Mes identifiants"
+- i18n fr+en — `integrations.credentials.*` (16 clés)
+- `docs/INTEGRATIONS.md` — §6 matrice + §13 BYO-credentials complet
+- `TECHNICAL_ARCHITECTURE.md` — ADR-34
+
+**Tests ajoutés (17) :**
+- `test/unit/tenant-settings/integrations-credentials.service.spec.ts` — 11 cas : getCredentialSchema, saveCredentials (écriture Vault, path tenant-scoped, validation, rétrogradation LIVE→SANDBOX, champ hors schéma), deleteCredentials (fallback plateforme, mode DISABLED, NotFoundException, path non-scoped)
+- `test/security/integrations-credentials.spec.ts` — 6 cas : unauth 401, cross-tenant 403, provider inconnu 404, champ hors schéma 400
+- `test/playwright/payment-integrations-credentials.spec.ts` — 4 cas E2E smoke : chargement page, boutons configurer, ouverture modale, soumission formulaire Wave
+
+**Compteurs après Sprint BYO-credentials :** Unit **697** (+11), Security **163** (+6), Playwright smoke **+4**.
+
 **Audit orphans — chantiers livrés dans la foulée :**
 - ✅ `PageTenantPayment` branchée — entrée nav `tenant-payment` ajoutée sous Configuration (`/admin/settings/payment`, gated `SETTINGS_MANAGE_TENANT`)
 - ✅ `PageAnnouncements` branchée — la nav avait déjà `display-announcements` mais PageRouter retournait `<PageWip>` placeholder ; remplacé par `<LazyAnnouncements />` (les 5 endpoints `/tenants/:id/announcements` ont enfin leur UI)

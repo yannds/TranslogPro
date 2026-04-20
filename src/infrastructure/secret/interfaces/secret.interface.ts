@@ -13,6 +13,9 @@ export interface ISecretService {
   /** Génère un certificat TLS via le PKI Engine de Vault */
   issueCertificate(commonName: string, ttl?: string): Promise<VaultCertificate>;
 
+  /** Supprime un secret (toutes versions) dans Vault KV v2 */
+  deleteSecret(path: string): Promise<void>;
+
   /** Vérifie que la connexion à Vault est active */
   healthCheck(): Promise<boolean>;
 }

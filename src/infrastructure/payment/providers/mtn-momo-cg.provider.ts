@@ -73,6 +73,17 @@ export class MtnMomoCgProvider implements IPaymentProvider {
     supportedCountries:  ['CG'],
     supportedCurrencies: ['XAF'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'COLLECTION_SUBSCRIPTION_KEY', label: 'Collection Subscription Key', type: 'password', required: true, helpText: 'Ocp-Apim-Subscription-Key du produit Collection (https://momodeveloper.mtn.com)' },
+      { key: 'COLLECTION_API_USER',         label: 'Collection API User (UUID)',  type: 'text',     required: true },
+      { key: 'COLLECTION_API_KEY',          label: 'Collection API Key',          type: 'password', required: true },
+      { key: 'DISBURSEMENT_SUBSCRIPTION_KEY', label: 'Disbursement Subscription Key', type: 'password', required: true, helpText: 'Ocp-Apim-Subscription-Key du produit Disbursement' },
+      { key: 'DISBURSEMENT_API_USER',       label: 'Disbursement API User (UUID)', type: 'text',    required: true },
+      { key: 'DISBURSEMENT_API_KEY',        label: 'Disbursement API Key',         type: 'password', required: true },
+      { key: 'TARGET_ENVIRONMENT', label: 'Environnement cible', type: 'select', required: true, options: ['sandbox', 'mtncongo'], helpText: '"sandbox" pour les tests, "mtncongo" pour la production Congo' },
+      { key: 'WEBHOOK_HMAC_KEY', label: 'Webhook HMAC Key', type: 'password', required: true, helpText: 'Clé secrète de vérification des callbacks MTN' },
+      { key: 'BASE_URL', label: 'Base URL (optionnel)', type: 'text', required: false, placeholder: 'https://sandbox.momodeveloper.mtn.com' },
+    ],
   };
 
   readonly webhookSignatureHeader = 'x-mtn-signature';

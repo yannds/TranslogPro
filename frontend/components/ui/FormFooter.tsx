@@ -17,6 +17,8 @@ export interface FormFooterProps {
   /** Libellé affiché pendant la soumission (ex. "Création…"). */
   pendingLabel: string;
   cancelLabel?: string;
+  /** ID du <form> cible — utile quand le footer est rendu hors du <form> (slot Dialog). */
+  formId?: string;
 }
 
 export function FormFooter({
@@ -25,6 +27,7 @@ export function FormFooter({
   submitLabel,
   pendingLabel,
   cancelLabel,
+  formId,
 }: FormFooterProps) {
   const { t } = useI18n();
   const resolvedCancel = cancelLabel ?? t('common.cancel');
@@ -33,7 +36,7 @@ export function FormFooter({
       <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
         <X className="w-4 h-4 mr-1.5" aria-hidden />{resolvedCancel}
       </Button>
-      <Button type="submit" disabled={busy} loading={busy}>
+      <Button type="submit" form={formId} disabled={busy} loading={busy}>
         <Check className="w-4 h-4 mr-1.5" aria-hidden />{busy ? pendingLabel : submitLabel}
       </Button>
     </div>

@@ -1885,6 +1885,7 @@ Sections et items ajoutés :
 | ADR-31 | Cache module Redis TTL 300s | Modules rarement modifiés — TTL long évite les DB hits à chaque requête ; `invalidateModuleCache()` assure la cohérence sur changement |
 | ADR-32 | `allEquipmentOk` calculé côté serveur | Intégrité des données — le client ne peut pas forcer allEquipmentOk=true ; calculé depuis les types configurés en DB |
 | ADR-33 | `evaluateRemediationForDriver` anti-doublon | Idempotence — score peut être réévalué plusieurs fois sans créer plusieurs actions pour la même règle ; vérification `PENDING/IN_PROGRESS` avant `create` |
+| ADR-34 | Tenant BYO-credentials — Vault path `tenants/<tid>/payments/<key>` | Chaque tenant peut fournir ses propres clés API (modèle B) sans que la plateforme soit merchant-of-record. Écriture via PUT /credentials, validation contre schéma `credentialFields` (anti-injection), rétrogradation automatique LIVE→SANDBOX sur rotation. |
 
 ---
 

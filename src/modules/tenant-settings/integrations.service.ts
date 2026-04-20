@@ -1,6 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaymentProviderRegistry } from '../../infrastructure/payment/payment-provider.registry';
+import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
 import { OAuthProviderRegistry } from '../oauth/providers/oauth-provider.registry';
 import { defaultOAuthVaultPath } from '../oauth/types';
 
@@ -46,6 +47,12 @@ export interface UpdateIntegrationModeDto {
   notes?:       string;
 }
 
+/** Payload pour PUT /credentials — paires clé/valeur issues du formulaire tenant. */
+export interface SaveCredentialsDto {
+  /** Map<VaultKey, valeur> — ex: { API_KEY: 'wave_xxx', WEBHOOK_SECRET: 'whsec_yyy' } */
+  credentials: Record<string, string>;
+}
+
 @Injectable()
 export class IntegrationsService {
   private readonly log = new Logger(IntegrationsService.name);
@@ -54,6 +61,7 @@ export class IntegrationsService {
     private readonly prisma:        PrismaService,
     private readonly paymentReg:    PaymentProviderRegistry,
     private readonly oauthReg:      OAuthProviderRegistry,
+    @Inject(SECRET_SERVICE) private readonly vault: ISecretService,
   ) {}
 
   /** Liste agrégée pour l'UI Intégrations API. */
@@ -308,6 +316,133 @@ export class IntegrationsService {
       });
     }
     return { status: result.status, latencyMs: result.latencyMs, error: result.error };
+  }
+
+  // ─── BYO-credentials (tenant-scoped Vault path) ────────────────────────────
+
+  /** Schéma des champs attendus pour un provider paiement (sert à construire le formulaire UI). */
+  getCredentialSchema(providerKey: string) {
+    const schema = this.paymentReg.getCredentialSchema(providerKey);
+    if (!schema) throw new NotFoundException(`Provider ${providerKey} inconnu`);
+    return { providerKey, fields: schema };
+  }
+
+  /**
+   * Sauvegarde les credentials tenant dans Vault à `tenants/<tenantId>/payments/<providerKey>`,
+   * crée/met-à-jour la ligne `paymentProviderState` avec `scopedToTenant=true`,
+   * et rétrograde le mode LIVE → SANDBOX si nécessaire (les creds viennent de changer).
+   */
+  async saveCredentials(
+    tenantId:    string,
+    providerKey: string,
+    dto:         SaveCredentialsDto,
+    actorUserId: string,
+  ): Promise<IntegrationItem> {
+    const schema = this.paymentReg.getCredentialSchema(providerKey);
+    if (!schema) throw new NotFoundException(`Provider ${providerKey} inconnu`);
+
+    // Validation des champs requis
+    const missing = schema.filter(f => f.required && !dto.credentials[f.key]?.trim());
+    if (missing.length > 0) {
+      throw new BadRequestException(`Champs requis manquants : ${missing.map(f => f.key).join(', ')}`);
+    }
+
+    // Valider que seules les clés déclarées dans le schéma sont envoyées (pas d'injection)
+    const allowedKeys = new Set(schema.map(f => f.key));
+    const unknown = Object.keys(dto.credentials).filter(k => !allowedKeys.has(k));
+    if (unknown.length > 0) {
+      throw new BadRequestException(`Champs non reconnus : ${unknown.join(', ')}`);
+    }
+
+    const vaultPath = `tenants/${tenantId}/payments/${providerKey}`;
+    await this.vault.putSecret(vaultPath, dto.credentials);
+
+    const existing = await this.prisma.paymentProviderState.findFirst({
+      where: { tenantId, providerKey },
+    });
+
+    // Si le mode était LIVE, on rétrograde à SANDBOX — les creds viennent de changer.
+    const currentMode = (existing?.mode ?? 'DISABLED') as 'DISABLED' | 'SANDBOX' | 'LIVE';
+    const newMode     = currentMode === 'LIVE' ? 'SANDBOX' : currentMode;
+
+    const provider = this.paymentReg.get(providerKey);
+    const platformRow = await this.prisma.paymentProviderState.findFirst({
+      where: { tenantId: null, providerKey },
+    });
+
+    const payload = {
+      mode:         newMode,
+      vaultPath,
+      activatedAt:  existing?.activatedAt ?? null,
+      activatedBy:  existing?.activatedBy ?? actorUserId,
+      notes:        existing?.notes ?? null,
+    };
+
+    if (existing) {
+      await this.prisma.paymentProviderState.update({ where: { id: existing.id }, data: payload });
+    } else {
+      await this.prisma.paymentProviderState.create({
+        data: {
+          tenantId,
+          providerKey,
+          displayName:         platformRow?.displayName         ?? provider?.meta.displayName ?? providerKey,
+          supportedMethods:    platformRow?.supportedMethods    ?? provider?.meta.supportedMethods    ?? [],
+          supportedCountries:  platformRow?.supportedCountries  ?? provider?.meta.supportedCountries  ?? [],
+          supportedCurrencies: platformRow?.supportedCurrencies ?? provider?.meta.supportedCurrencies ?? [],
+          ...payload,
+        },
+      });
+    }
+
+    if (currentMode === 'LIVE') {
+      this.log.warn(`[Credentials] ${providerKey} tenant=${tenantId} — mode rétrogradé LIVE→SANDBOX suite rotation credentials`);
+    }
+    this.log.log(`[Credentials] ${providerKey} tenant=${tenantId} — credentials sauvegardés par ${actorUserId}`);
+
+    const hydrated = await this.listPaymentHydrated(tenantId);
+    const item = hydrated.find(i => i.key === providerKey);
+    if (!item) throw new NotFoundException(`Provider ${providerKey} introuvable après save`);
+    return item;
+  }
+
+  /**
+   * Supprime les credentials tenant-scoped depuis Vault et retire l'override tenant en DB.
+   * Si une ligne plateforme existe, le tenant retombe sur elle (mode=DISABLED).
+   * Si aucune ligne plateforme, la row DB est supprimée.
+   */
+  async deleteCredentials(tenantId: string, providerKey: string): Promise<{ deleted: true; fallback: 'platform' | 'none' }> {
+    if (!this.paymentReg.get(providerKey)) {
+      throw new NotFoundException(`Provider ${providerKey} inconnu`);
+    }
+
+    const tenantRow = await this.prisma.paymentProviderState.findFirst({
+      where: { tenantId, providerKey },
+    });
+    if (!tenantRow) throw new NotFoundException(`Aucun credential tenant pour ${providerKey}`);
+
+    // Supprime dans Vault uniquement si le path est bien tenant-scoped
+    if (tenantRow.vaultPath.startsWith(`tenants/${tenantId}/`)) {
+      await this.vault.deleteSecret(tenantRow.vaultPath);
+    }
+
+    const platformRow = await this.prisma.paymentProviderState.findFirst({
+      where: { tenantId: null, providerKey },
+    });
+
+    if (platformRow) {
+      // Retour sur la config plateforme : on efface la row tenant
+      await this.prisma.paymentProviderState.delete({ where: { id: tenantRow.id } });
+      this.log.log(`[Credentials] ${providerKey} tenant=${tenantId} — credentials supprimés, retour config plateforme`);
+      return { deleted: true, fallback: 'platform' };
+    } else {
+      // Pas de plateforme de repli : on remet le mode à DISABLED
+      await this.prisma.paymentProviderState.update({
+        where: { id: tenantRow.id },
+        data:  { mode: 'DISABLED', vaultPath: `platform/payments/${providerKey}`, activatedAt: null, activatedBy: null },
+      });
+      this.log.log(`[Credentials] ${providerKey} tenant=${tenantId} — credentials supprimés, mode=DISABLED`);
+      return { deleted: true, fallback: 'none' };
+    }
   }
 
   private previewVaultPath(path: string): string {

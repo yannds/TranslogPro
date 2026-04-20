@@ -5205,7 +5205,22 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "confirmLive":     "Going live requires validated secrets and active MFA. Confirm?",
     "empty":           "No integration available.",
     "notConfigured":   "Not configured",
-    "configPrompt":    "Ask the platform admin to provision Vault to enable this connector."
+    "configPrompt":    "Ask the platform admin to provision Vault to enable this connector.",
+    "credentials": {
+      "title":               "Configure credentials — {{provider}}",
+      "subtitle":            "Enter your own API keys for this payment provider. Keys are stored directly in Vault under your tenant path.",
+      "formLabel":           "Credentials form for {{provider}}",
+      "save":                "Save credentials",
+      "saving":              "Saving…",
+      "configureBtn":        "Set up my credentials",
+      "updateBtn":           "Update credentials",
+      "configure":           "Configure credentials for {{provider}}",
+      "ownBadge":            "My credentials",
+      "promptPayment":       "Configure your own API keys or ask the platform admin to enable the shared connector.",
+      "vaultNotice":         "Your credentials are encrypted and stored directly in Vault. They are never written to the application database.",
+      "liveWarning":         "This provider is currently LIVE. Saving new credentials will downgrade it to SANDBOX — you will need to re-validate and switch back to LIVE.",
+      "existingPlaceholder": "••••••••  (leave blank to keep current value)"
+    }
   },
 
   "platformEmail": {

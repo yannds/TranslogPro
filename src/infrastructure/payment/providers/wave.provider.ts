@@ -52,6 +52,11 @@ export class WaveProvider implements IPaymentProvider {
     supportedCountries:  ['SN', 'CI', 'ML', 'BF'],
     supportedCurrencies: ['XOF'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'API_KEY',        label: 'API Key',        type: 'password', required: true, helpText: 'Bearer token depuis https://business.wave.com → Settings → API' },
+      { key: 'WEBHOOK_SECRET', label: 'Webhook Secret', type: 'password', required: true, helpText: 'Secret HMAC-SHA256 de vérification des webhooks Wave' },
+      { key: 'BASE_URL', label: 'Base URL (optionnel)', type: 'text', required: false, placeholder: 'https://api.wave.com' },
+    ],
   };
 
   readonly webhookSignatureHeader = 'wave-signature';

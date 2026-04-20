@@ -5217,7 +5217,22 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "confirmLive":     "Passer en production nécessite que les secrets soient validés et un MFA actif. Confirmer ?",
     "empty":           "Aucune intégration disponible.",
     "notConfigured":   "Non configuré",
-    "configPrompt":    "Demandez à l'admin plateforme de provisionner Vault pour activer ce connecteur."
+    "configPrompt":    "Demandez à l'admin plateforme de provisionner Vault pour activer ce connecteur.",
+    "credentials": {
+      "title":               "Configurer les identifiants — {{provider}}",
+      "subtitle":            "Saisissez vos propres clés API pour ce provider paiement. Les clés sont stockées directement dans Vault sous votre chemin tenant.",
+      "formLabel":           "Formulaire d'identifiants pour {{provider}}",
+      "save":                "Enregistrer les identifiants",
+      "saving":              "Enregistrement…",
+      "configureBtn":        "Saisir mes identifiants",
+      "updateBtn":           "Mettre à jour mes identifiants",
+      "configure":           "Configurer les identifiants pour {{provider}}",
+      "ownBadge":            "Mes identifiants",
+      "promptPayment":       "Saisissez vos propres clés API ou demandez à l'admin plateforme d'activer le connecteur partagé.",
+      "vaultNotice":         "Vos identifiants sont chiffrés et stockés directement dans Vault. Ils ne sont jamais écrits dans la base de données applicative.",
+      "liveWarning":         "Ce provider est actuellement en PRODUCTION. Enregistrer de nouveaux identifiants le rétrograde en SANDBOX — vous devrez re-valider et repasser en Production.",
+      "existingPlaceholder": "••••••••  (laisser vide pour conserver la valeur actuelle)"
+    }
   },
 
   "platformEmail": {

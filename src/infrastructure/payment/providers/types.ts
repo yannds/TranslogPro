@@ -21,6 +21,19 @@ import {
 
 export const PAYMENT_PROVIDERS = Symbol('PAYMENT_PROVIDERS');
 
+export type CredentialFieldType = 'text' | 'password' | 'select';
+
+export interface CredentialFieldSpec {
+  key:          string;
+  label:        string;
+  type:         CredentialFieldType;
+  required:     boolean;
+  placeholder?: string;
+  helpText?:    string;
+  /** Valeurs possibles (uniquement pour type='select'). */
+  options?:     string[];
+}
+
 export interface PaymentProviderMeta {
   /** Identifiant stable unique, ex: 'mtn_momo_cg', 'flutterwave_agg'. */
   key:                 string;
@@ -34,6 +47,8 @@ export interface PaymentProviderMeta {
   supportedCurrencies: PaymentCurrency[];
   /** Chemin Vault par défaut (peut être surchargé par PaymentProviderState.vaultPath). */
   defaultVaultPath:    string;
+  /** Schéma des champs attendus dans Vault — sert à générer le formulaire tenant BYO-credentials. */
+  credentialFields:    CredentialFieldSpec[];
 }
 
 export type ProviderMode = 'DISABLED' | 'SANDBOX' | 'LIVE';

@@ -66,6 +66,14 @@ export class AirtelMoneyCgProvider implements IPaymentProvider {
     supportedCountries:  ['CG'],
     supportedCurrencies: ['XAF'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'CLIENT_ID',        label: 'Client ID',        type: 'text',     required: true, helpText: 'App Client ID depuis https://developers.airtel.africa' },
+      { key: 'CLIENT_SECRET',    label: 'Client Secret',    type: 'password', required: true },
+      { key: 'X_COUNTRY',        label: 'Pays (X-Country)', type: 'text',     required: true, placeholder: 'CG', helpText: 'Code pays ISO 3166-1 alpha-2 (ex: CG, CD, TZ)' },
+      { key: 'X_CURRENCY',       label: 'Devise (X-Currency)', type: 'text',  required: true, placeholder: 'XAF' },
+      { key: 'WEBHOOK_HMAC_KEY', label: 'Webhook HMAC Key', type: 'password', required: true },
+      { key: 'BASE_URL', label: 'Base URL (optionnel)', type: 'text', required: false, placeholder: 'https://openapiuat.airtel.africa' },
+    ],
   };
 
   readonly webhookSignatureHeader = 'x-airtel-signature';

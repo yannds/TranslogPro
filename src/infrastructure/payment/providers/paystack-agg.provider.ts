@@ -39,6 +39,9 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
     supportedCountries:  ['NG', 'GH', 'ZA', 'KE'],
     supportedCurrencies: ['NGN', 'GHS', 'KES', 'USD'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'SECRET_KEY', label: 'Secret Key', type: 'password', required: true, helpText: 'Commence par sk_test_ (sandbox) ou sk_live_ (prod) — Dashboard → Settings → API Keys' },
+    ],
   };
 
   constructor(

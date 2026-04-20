@@ -9,7 +9,7 @@
  *   et la date de dernière rotation.
  */
 import { useMemo, useState } from 'react';
-import { ShieldCheck, ShieldAlert, Wifi, WifiOff, KeyRound, RefreshCw, Lock } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Wifi, WifiOff, KeyRound, RefreshCw, Lock, Settings2 } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPatch, apiPost } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
@@ -19,6 +19,7 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
+import { IntegrationCredentialsDialog } from './integrations/IntegrationCredentialsDialog';
 
 interface Integration {
   category:    'PAYMENT' | 'AUTH';
@@ -58,8 +59,9 @@ export function PageIntegrations() {
     tenantId ? `/api/v1/tenants/${tenantId}/settings/integrations` : null,
   );
 
-  const [actionErr, setActionErr] = useState<string | null>(null);
-  const [busyKey,   setBusyKey]   = useState<string | null>(null);
+  const [actionErr,      setActionErr]      = useState<string | null>(null);
+  const [busyKey,        setBusyKey]         = useState<string | null>(null);
+  const [credDialog,     setCredDialog]      = useState<Integration | null>(null);
 
   // Routage backend : PAYMENT sur /integrations/:key, OAuth sur /integrations/oauth/:key
   const endpointFor = (item: Integration): string => {
@@ -118,33 +120,50 @@ export function PageIntegrations() {
           <TabsTrigger value="auth">{t('integrations.tabAuth')}</TabsTrigger>
         </TabsList>
         <TabsContent value="payment">
-          <IntegrationList items={payment} busyKey={busyKey} onChangeMode={changeMode} onHealth={runHealth} />
+          <IntegrationList
+            items={payment}
+            busyKey={busyKey}
+            onChangeMode={changeMode}
+            onHealth={runHealth}
+            onConfigure={item => setCredDialog(item)}
+          />
         </TabsContent>
         <TabsContent value="auth">
           <IntegrationList items={auth} busyKey={busyKey} onChangeMode={changeMode} onHealth={runHealth} />
         </TabsContent>
       </Tabs>
+
+      {credDialog && (
+        <IntegrationCredentialsDialog
+          open={!!credDialog}
+          onOpenChange={open => { if (!open) setCredDialog(null); }}
+          tenantId={tenantId}
+          providerKey={credDialog.key}
+          displayName={credDialog.displayName}
+          hasExisting={credDialog.scopedToTenant}
+          isLive={credDialog.mode === 'LIVE'}
+          onSaved={() => { setCredDialog(null); refetch(); }}
+        />
+      )}
     </div>
   );
 }
 
 function IntegrationList({
-  items, busyKey, onChangeMode, onHealth,
+  items, busyKey, onChangeMode, onHealth, onConfigure,
 }: {
-  items: Integration[];
-  busyKey: string | null;
+  items:        Integration[];
+  busyKey:      string | null;
   onChangeMode: (item: Integration, mode: Integration['mode']) => void;
   onHealth:     (item: Integration) => void;
+  onConfigure?: (item: Integration) => void;
 }) {
   const { t } = useI18n();
   if (items.length === 0) return <div className="py-10 text-center text-gray-500">{t('integrations.empty')}</div>;
   return (
     <ul className="space-y-3">
       {items.map(item => {
-        // Un provider non-configuré (Vault vide) n'est pas activable. On garde
-        // la ligne visible mais on grise les actions et on affiche un message
-        // explicite pour l'admin tenant.
-        const notConfigured = !item.secretsConfigured;
+        const notConfigured = !item.secretsConfigured && !item.scopedToTenant;
         const actionsLocked = notConfigured || busyKey === item.key;
         return (
           <li key={item.key} className={cn(
@@ -158,7 +177,11 @@ function IntegrationList({
                 <span className="font-medium text-gray-900 dark:text-gray-100">{item.displayName}</span>
                 <ModeBadge mode={item.mode} />
                 <HealthBadge status={item.healthStatus} />
-                {item.scopedToTenant && <Badge variant="outline">{t('integrations.scopedTenant')}</Badge>}
+                {item.scopedToTenant && (
+                  <Badge variant="outline" className="border-teal-300 text-teal-700 dark:border-teal-700 dark:text-teal-300">
+                    {t('integrations.credentials.ownBadge')}
+                  </Badge>
+                )}
                 {notConfigured && (
                   <Badge variant="outline" className="border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
                     <Lock className="w-3 h-3 mr-1" aria-hidden />
@@ -178,13 +201,33 @@ function IntegrationList({
                 {!item.secretsConfigured && <ShieldAlert className="w-3 h-3 text-orange-500" aria-hidden />}
                 {item.lastHealthCheckAt && <span>· {t('integrations.lastCheck')}: {new Date(item.lastHealthCheckAt).toLocaleString()}</span>}
               </div>
-              {notConfigured && (
+              {notConfigured && item.category === 'PAYMENT' && (
+                <p className="text-xs italic text-orange-700 dark:text-orange-300 pt-1">
+                  {t('integrations.credentials.promptPayment')}
+                </p>
+              )}
+              {notConfigured && item.category === 'AUTH' && (
                 <p className="text-xs italic text-orange-700 dark:text-orange-300 pt-1">
                   {t('integrations.configPrompt')}
                 </p>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Bouton "Mes identifiants" — uniquement pour PAYMENT */}
+              {item.category === 'PAYMENT' && onConfigure && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onConfigure(item)}
+                  aria-label={t('integrations.credentials.configure', { provider: item.displayName })}
+                  className="border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-300 dark:hover:bg-teal-950/30"
+                >
+                  <Settings2 className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+                  {item.scopedToTenant
+                    ? t('integrations.credentials.updateBtn')
+                    : t('integrations.credentials.configureBtn')}
+                </Button>
+              )}
               <Button size="sm" variant={item.mode === 'DISABLED' ? 'default' : 'outline'} disabled={busyKey === item.key}
                 onClick={() => onChangeMode(item, 'DISABLED')}>
                 {t('integrations.modeDisabled')}

@@ -16,6 +16,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import {
+  CredentialFieldSpec,
   IPaymentProvider,
   PAYMENT_PROVIDERS,
   PaymentProviderMeta,
@@ -110,6 +111,12 @@ export class PaymentProviderRegistry implements OnModuleInit {
       scopedToTenant: row.tenantId === tenantId && !!tenantId,
       meta:           provider.meta,
     };
+  }
+
+  /** Schéma des champs Vault pour un provider donné (sert au formulaire BYO-credentials). */
+  getCredentialSchema(providerKey: string): CredentialFieldSpec[] | null {
+    const p = this.active.get(providerKey);
+    return p ? p.meta.credentialFields : null;
   }
 
   /**

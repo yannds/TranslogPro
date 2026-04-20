@@ -92,6 +92,14 @@ export class VaultService implements ISecretService {
     }
   }
 
+  async deleteSecret(path: string): Promise<void> {
+    await this.ensureClient();
+    await this.client.delete(`secret/metadata/${path}`);
+    for (const [key] of this.cache) {
+      if (key.startsWith(`${path}::`)) this.cache.delete(key);
+    }
+  }
+
   async issueCertificate(commonName: string, ttl = '24h'): Promise<VaultCertificate> {
     await this.ensureClient();
     const result = await this.client.write('pki/issue/translog-services', {

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission } from '../../common/constants/permissions';
@@ -6,7 +6,7 @@ import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-l
 import { TenantTaxService, CreateTenantTaxDto, UpdateTenantTaxDto } from './tenant-tax.service';
 import { TenantFareClassService, CreateTenantFareClassDto, UpdateTenantFareClassDto } from './tenant-fare-class.service';
 import { TenantPaymentConfigService, UpdatePaymentConfigDto } from './tenant-payment-config.service';
-import { IntegrationsService, UpdateIntegrationModeDto } from './integrations.service';
+import { IntegrationsService, UpdateIntegrationModeDto, SaveCredentialsDto } from './integrations.service';
 import { TenantResetService } from './tenant-reset.service';
 
 /**
@@ -180,5 +180,38 @@ export class TenantSettingsController {
     @Param('providerKey') providerKey: string,
   ) {
     return this.integrations.runOAuthHealthcheck(tenantId, providerKey);
+  }
+
+  // ── BYO-credentials (tenant-scoped Vault) ─────────────────────────────────
+  // GET  /integrations/:key/schema    → schéma des champs (sans secrets)
+  // PUT  /integrations/:key/credentials → sauvegarde dans Vault tenants/<tid>/payments/<key>
+  // DELETE /integrations/:key/credentials → supprime de Vault + revient à la config plateforme
+
+  @Get('integrations/:providerKey/schema')
+  @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
+  getCredentialSchema(
+    @Param('providerKey') providerKey: string,
+  ) {
+    return this.integrations.getCredentialSchema(providerKey);
+  }
+
+  @Put('integrations/:providerKey/credentials')
+  @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
+  saveCredentials(
+    @Param('tenantId')    tenantId:    string,
+    @Param('providerKey') providerKey: string,
+    @Body()               dto:         SaveCredentialsDto,
+    @CurrentUser()        user:        CurrentUserPayload,
+  ) {
+    return this.integrations.saveCredentials(tenantId, providerKey, dto, user.id);
+  }
+
+  @Delete('integrations/:providerKey/credentials')
+  @RequirePermission(Permission.INTEGRATION_SETUP_TENANT)
+  deleteCredentials(
+    @Param('tenantId')    tenantId:    string,
+    @Param('providerKey') providerKey: string,
+  ) {
+    return this.integrations.deleteCredentials(tenantId, providerKey);
   }
 }

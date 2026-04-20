@@ -65,11 +65,13 @@ export class StripeProvider implements IPaymentProvider {
     key:                 'stripe',
     displayName:         'Stripe (Card international)',
     supportedMethods:    ['CARD'],
-    // Stripe est multi-pays mais on limite à ce que le reste de l'app connaît
-    // + quelques marchés EU/US pour les tenants internationaux.
     supportedCountries:  ['FR','BE','US','GB','DE','ES','PT','IT','NL','SN','CI','GH','NG','KE'],
     supportedCurrencies: ['USD','XOF','GHS','KES','NGN'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'API_KEY',        label: 'Secret Key',      type: 'password', required: true, helpText: 'Commence par sk_test_ (sandbox) ou sk_live_ (prod) — Dashboard → Developers → API keys' },
+      { key: 'WEBHOOK_SECRET', label: 'Webhook Secret',  type: 'password', required: true, helpText: 'Commence par whsec_ — Dashboard → Developers → Webhooks → endpoint secret' },
+    ],
   };
 
   constructor(

@@ -55,6 +55,10 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
     supportedCountries:  ['CG','CD','SN','CI','CM','GA','BF','ML','NG','GH','KE'],
     supportedCurrencies: ['XAF','XOF','NGN','GHS','KES','USD'],
     defaultVaultPath:    VAULT_PATH,
+    credentialFields: [
+      { key: 'SECRET_KEY',   label: 'Secret Key',   type: 'password', required: true, helpText: 'Commence par FLWSECK_TEST- (sandbox) ou FLWSECK- (prod) — Dashboard → Settings → API' },
+      { key: 'WEBHOOK_HASH', label: 'Webhook Hash', type: 'password', required: true, helpText: 'Hash de vérification des webhooks (Dashboard → Settings → Webhooks)' },
+    ],
   };
 
   constructor(

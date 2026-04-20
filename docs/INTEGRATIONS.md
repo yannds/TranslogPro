@@ -137,7 +137,8 @@ Ce que l'utilisateur voit : `platform/payments/•••_cg` (empreinte du path)
 | Action | Rôle requis | Où | Comment |
 |---|---|---|---|
 | **Ajouter un nouveau provider** (code) | Dev | PR sur le repo | Implémenter `IPaymentProvider` ou `IOAuthProvider`, déclarer dans le module. |
-| **Provisionner les secrets du provider** | Admin plateforme (SUPER_ADMIN) | Vault (`http://localhost:8200` en dev, Vault cluster en prod) | `vault kv put secret/platform/payments/mtn_momo_cg PRIMARY_KEY=… SECRET_KEY=…` ou script TS dans `infra/vault/`. |
+| **Provisionner les secrets du provider** (config partagée) | Admin plateforme (SUPER_ADMIN) | Vault (`http://localhost:8200` en dev, Vault cluster en prod) | `vault kv put secret/platform/payments/mtn_momo_cg …` ou script TS dans `infra/vault/`. |
+| **Saisir ses propres credentials** (BYO) | Admin tenant avec `control.integration.setup.tenant` | Page `/admin/integrations` → bouton "Saisir mes identifiants" | Voir §13. |
 | **Activer le provider pour un tenant** (mode) | Admin tenant avec `control.integration.setup.tenant` | Page `/admin/integrations` | Bouton SANDBOX ou LIVE. |
 | **Confirmer le passage LIVE** | Même admin tenant + MFA TOTP valide | Page `/admin/integrations` | Confirm dialog aujourd'hui → TOTP step-up demain. |
 | **Tester la connexion** | Admin tenant | Page `/admin/integrations` | Icône refresh à droite de la ligne → `POST /healthcheck`. |
@@ -225,14 +226,16 @@ Contrairement à PAYMENT, Google/Microsoft/Facebook n'ont pas d'endpoint sandbox
 
 | Fichier | Rôle |
 |---|---|
-| [src/modules/tenant-settings/tenant-settings.controller.ts](../src/modules/tenant-settings/tenant-settings.controller.ts) | Endpoints REST `/api/v1/tenants/:tid/settings/integrations`. |
-| [src/modules/tenant-settings/integrations.service.ts](../src/modules/tenant-settings/integrations.service.ts) | Logique métier : agrégation PAYMENT + AUTH, changement de mode, healthcheck. |
-| [src/infrastructure/payment/payment-provider.registry.ts](../src/infrastructure/payment/payment-provider.registry.ts) | Registre plateforme des providers PAYMENT avec lecture du mode effectif par tenant. |
+| [src/modules/tenant-settings/tenant-settings.controller.ts](../src/modules/tenant-settings/tenant-settings.controller.ts) | Endpoints REST `/api/v1/tenants/:tid/settings/integrations` + `/credentials` + `/schema`. |
+| [src/modules/tenant-settings/integrations.service.ts](../src/modules/tenant-settings/integrations.service.ts) | Logique métier : agrégation PAYMENT + AUTH, changement de mode, healthcheck, BYO-credentials. |
+| [src/infrastructure/payment/payment-provider.registry.ts](../src/infrastructure/payment/payment-provider.registry.ts) | Registre plateforme des providers PAYMENT avec lecture du mode effectif par tenant + `getCredentialSchema()`. |
+| [src/infrastructure/payment/providers/types.ts](../src/infrastructure/payment/providers/types.ts) | Types `PaymentProviderMeta` (incl. `credentialFields: CredentialFieldSpec[]`) et `CredentialFieldSpec`. |
 | [src/modules/oauth/providers/oauth-provider.registry.ts](../src/modules/oauth/providers/oauth-provider.registry.ts) | Registre OAuth — tous providers visibles, filtrage à l'appel via `isConfigured()`. |
 | [src/modules/oauth/providers/base-oauth.provider.ts](../src/modules/oauth/providers/base-oauth.provider.ts) | Base class abstraite : cache Vault 5 min, `isConfigured()`, exécution des credentials. |
-| Table `payment_provider_states` | État d'activation PAYMENT : (tenantId\|null, providerKey, mode, lastHealthCheckAt, activatedBy). |
+| Table `payment_provider_states` | État d'activation PAYMENT : (tenantId\|null, providerKey, mode, vaultPath, lastHealthCheckAt, activatedBy). |
 | Table `oauth_provider_states` | État d'activation OAuth : même schéma que PAYMENT, tenant-scopable. |
-| [frontend/components/pages/PageIntegrations.tsx](../frontend/components/pages/PageIntegrations.tsx) | Page UI avec onglets PAYMENT / AUTH, providers grisés si non configurés. |
+| [frontend/components/pages/PageIntegrations.tsx](../frontend/components/pages/PageIntegrations.tsx) | Page UI avec onglets PAYMENT / AUTH, bouton "Saisir mes identifiants" par provider PAYMENT. |
+| [frontend/components/pages/integrations/IntegrationCredentialsDialog.tsx](../frontend/components/pages/integrations/IntegrationCredentialsDialog.tsx) | Modale formulaire dynamique BYO-credentials par provider. |
 
 ---
 
@@ -240,11 +243,65 @@ Contrairement à PAYMENT, Google/Microsoft/Facebook n'ont pas d'endpoint sandbox
 
 - Remplacer le `confirm()` UI pour le passage LIVE par un vrai TOTP step-up via `/auth/mfa/verify`.
 - Table d'audit dédiée `integration_audit_log` (actuellement seul `activatedBy` + timestamp sont conservés).
-- UI de rotation de credentials (aujourd'hui il faut passer par Vault CLI).
 - Catégories NOTIFICATION (Twilio, Brevo) et STORAGE (S3, Cloudflare R2).
-- Providers OAuth configurables par tenant avec Vault paths tenant-scopés (aujourd'hui plateforme-global, la table `oauth_provider_states` supporte déjà `tenantId`).
+- Providers OAuth configurables par tenant avec Vault paths tenant-scopés (aujourd'hui plateforme-global).
 - Apps OAuth distinctes sandbox/prod pour Google/Microsoft/Facebook si vrai besoin d'isolation test/prod (cf. §9).
+- IHM de rotation de credentials : bouton "Révoquer mes identifiants" pour revenir à la config plateforme.
 
 ## 12. Email transactionnel
 
 La partie email (envoi de billets, rappels, magic links) n'est **pas** dans la page Intégrations. C'est par design — l'email est un canal technique plateforme-global, pas un service tenant-activable. Voir la documentation dédiée : [EMAIL.md](./EMAIL.md).
+
+---
+
+## 13. BYO-credentials — saisie des identifiants par le tenant
+
+**Modèle B** : le tenant fournit ses propres clés API sans passer par l'admin plateforme.
+
+### Flux complet
+
+1. **Admin tenant** ouvre `/admin/integrations`, onglet **Paiement**.
+2. Il clique le bouton **"Saisir mes identifiants"** (ou "Mettre à jour") sur la ligne du provider souhaité.
+3. La modale `IntegrationCredentialsDialog` s'ouvre avec un formulaire dynamique dérivé du schéma du provider (champs requis/optionnels, type text/password/select, help contextuel).
+4. Il saisit ses clés (obtenues sur le portail développeur du provider) et clique **Enregistrer**.
+5. L'API valide le payload contre le schéma (`CredentialFieldSpec[]`), écrit dans Vault à `tenants/<tenantId>/payments/<providerKey>`, et crée/met à jour la ligne `paymentProviderState` avec `vaultPath = tenants/<tid>/...` et `scopedToTenant = true`.
+6. La ligne affiche désormais le badge **"Mes identifiants"** (teal). Le provider est activable en SANDBOX puis LIVE normalement.
+
+**Garde-fou** : si le provider était en mode LIVE lors de la sauvegarde, il est automatiquement rétrogradé en SANDBOX (les credentials viennent de changer — il faut re-valider).
+
+### Champs par provider (référence rapide)
+
+| Provider | Champs requis | Optionnels |
+|---|---|---|
+| **MTN MoMo Congo** | COLLECTION_SUBSCRIPTION_KEY, COLLECTION_API_USER, COLLECTION_API_KEY, DISBURSEMENT_SUBSCRIPTION_KEY, DISBURSEMENT_API_USER, DISBURSEMENT_API_KEY, TARGET_ENVIRONMENT (sandbox\|mtncongo), WEBHOOK_HMAC_KEY | BASE_URL |
+| **Airtel Money Congo** | CLIENT_ID, CLIENT_SECRET, X_COUNTRY (ex: CG), X_CURRENCY (ex: XAF), WEBHOOK_HMAC_KEY | BASE_URL |
+| **Wave** | API_KEY, WEBHOOK_SECRET | BASE_URL |
+| **Flutterwave** | SECRET_KEY, WEBHOOK_HASH | — |
+| **Paystack** | SECRET_KEY | — |
+| **Stripe** | API_KEY, WEBHOOK_SECRET | — |
+
+Le schéma complet (avec labels et help contextuel) est disponible via `GET /api/v1/tenants/:tid/settings/integrations/:key/schema`.
+
+### Endpoints BYO-credentials
+
+| Méthode | Chemin | Description |
+|---|---|---|
+| `GET`    | `/tenants/:tid/settings/integrations/:key/schema`      | Schéma des champs (sans valeurs — jamais de secret). |
+| `PUT`    | `/tenants/:tid/settings/integrations/:key/credentials` | Enregistre les credentials dans Vault tenant-scoped. |
+| `DELETE` | `/tenants/:tid/settings/integrations/:key/credentials` | Supprime de Vault et revient à la config plateforme (si disponible). |
+
+### Vault path tenant-scoped
+
+```
+tenants/<tenantId>/payments/<providerKey>
+```
+
+Exemple : `tenants/tenant-abc-123/payments/wave`
+
+Jamais exposé dans l'UI — l'`IntegrationItem.vaultPathPreview` masque le milieu (`ten•••abc/payments/wav•••`).
+
+### Sécurité
+
+- Seules les clés déclarées dans `credentialFields` du provider sont acceptées — rejet 400 de tout champ hors schéma (impossible d'injecter un path Vault arbitraire).
+- La permission `control.integration.setup.tenant` est requise sur les 3 endpoints — isolation cross-tenant garantie par la condition `tenantId` du guard.
+- `deleteSecret` utilise `DELETE /secret/metadata/<path>` en KV v2 — supprime toutes les versions.
