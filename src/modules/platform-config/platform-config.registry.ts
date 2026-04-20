@@ -223,6 +223,70 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     group:    'platformConfig.groupSecurity',
     validate: numberInRange(1, 1000),
   },
+
+  // ── KPI plateforme (PlatformKpiService) ─────────────────────────────────
+  // Occupation cible utilisée par le mode "Heuristique" du North Star :
+  // si un tenant n'a pas déclaré `estimatedOperationsMonthly`, on compare
+  // l'activité SaaS réelle à (capacité flotte × targetOccupancyRate).
+  {
+    key:      'kpi.targetOccupancyRate',
+    type:     'number',
+    default:  0.65, // 65% occupation théorique moyenne sectorielle
+    label:    'platformConfig.kpiTargetOccupancyRate',
+    help:     'platformConfig.kpiTargetOccupancyRateHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(0, 1),
+  },
+  // Période par défaut (en jours) pour calcul trends / MoM / retention.
+  {
+    key:      'kpi.defaultPeriodDays',
+    type:     'number',
+    default:  30,
+    label:    'platformConfig.kpiDefaultPeriodDays',
+    help:     'platformConfig.kpiDefaultPeriodDaysHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(1, 365),
+  },
+  // Seuils adoption : à partir de quel % de tenants qui utilisent un module
+  // on le considère "adopté" (pour le rapport adoption produit).
+  {
+    key:      'kpi.moduleAdoptionThreshold',
+    type:     'number',
+    default:  0.3, // 30%
+    label:    'platformConfig.kpiModuleAdoptionThreshold',
+    help:     'platformConfig.kpiModuleAdoptionThresholdHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(0, 1),
+  },
+  // TTL cache KPI (secondes) — protège la DB d'une fréquence de refresh trop élevée.
+  {
+    key:      'kpi.cacheTtlSeconds',
+    type:     'number',
+    default:  60,
+    label:    'platformConfig.kpiCacheTtlSeconds',
+    help:     'platformConfig.kpiCacheTtlSecondsHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(10, 3600),
+  },
+  // Minimum trajets / tickets pour considérer un tenant "activé" (funnel).
+  {
+    key:      'kpi.activation.minTickets',
+    type:     'number',
+    default:  1,
+    label:    'platformConfig.kpiActivationMinTickets',
+    help:     'platformConfig.kpiActivationMinTicketsHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(1, 1000),
+  },
+  {
+    key:      'kpi.activation.minTrips',
+    type:     'number',
+    default:  1,
+    label:    'platformConfig.kpiActivationMinTrips',
+    help:     'platformConfig.kpiActivationMinTripsHelp',
+    group:    'platformConfig.groupKpi',
+    validate: numberInRange(1, 1000),
+  },
 ];
 
 export function findDef(key: string): PlatformConfigDef<unknown> | undefined {

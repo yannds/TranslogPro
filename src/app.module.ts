@@ -57,6 +57,7 @@ import { PlatformModule }   from './modules/platform/platform.module';
 import { PlatformPlansModule }     from './modules/platform-plans/platform-plans.module';
 import { PlatformBillingModule }   from './modules/platform-billing/platform-billing.module';
 import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module';
+import { PlatformKpiModule }       from './modules/platform-kpi/platform-kpi.module';
 import { PlatformConfigModule }    from './modules/platform-config/platform-config.module';
 import { PlatformEmailModule }     from './modules/platform-email/platform-email.module';
 import { SupportModule }           from './modules/support/support.module';
@@ -175,6 +176,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     PlatformBillingModule,
     // Analytics plateforme — growth/adoption/health + crons DAU/HealthScore
     PlatformAnalyticsModule,
+    // KPI plateforme — North Star, MRR, cohortes, activation, stratégique (lecture cross-tenant)
+    PlatformKpiModule,
     // Config plateforme — seuils/paramètres DB-driven (SA settings)
     PlatformConfigModule,
     // Email plateforme — liste providers + healthcheck (read-only sur le choix)
