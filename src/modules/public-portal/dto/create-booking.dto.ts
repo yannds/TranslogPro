@@ -52,4 +52,24 @@ export class CreateBookingDto {
   @IsString()
   @MaxLength(50)
   paymentMethod!: string; // providerId (mtn_momo, airtel_money, card_visa…)
+
+  /**
+   * Gare de montée (segment intermédiaire). Si omis ou égal à route.originId,
+   * le billet est vendu au départ de la route. Doit être une station présente
+   * sur la route (origin ou waypoint) — validé côté service.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  boardingStationId?: string;
+
+  /**
+   * Gare de descente (segment intermédiaire). Si omis ou égal à route.destinationId,
+   * le billet est vendu jusqu'au terminus. Doit être une station présente sur la
+   * route (waypoint ou destination) ET plus loin que boardingStationId — validé service.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  alightingStationId?: string;
 }

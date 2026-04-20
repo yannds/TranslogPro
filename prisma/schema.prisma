@@ -323,6 +323,26 @@ model TenantBusinessConfig {
   //   "hold"    → garder sur place (notifier l'expéditeur)
   parcelPickupNoShowAction        String @default("return")
 
+  // ── Trajets intermédiaires : politique de réservation (2026-04-20) ──────
+  // Autoriser la vente / recherche de billets sur des segments intermédiaires
+  // (ex: Mindouli → Bouansa sur un trajet Brazza → Pointe-Noire), pas
+  // uniquement origine → destination de la route.
+  intermediateBookingEnabled      Boolean @default(true)
+  // Cut-off minutes AVANT départ programmé en-deçà duquel la vente d'un
+  // segment intermédiaire est bloquée (le bus est déjà en route ou sur le
+  // point de partir). N'affecte pas la vente OD complète.
+  intermediateBookingCutoffMins   Int     @default(30)
+  // Durée minimale (en minutes estimées) entre boarding et alighting pour
+  // qu'un segment soit proposé (évite de lister des micro-trajets).
+  intermediateMinSegmentMinutes   Int     @default(0)
+  // Black-list de segments interdits explicitement par le tenant.
+  // Structure : [{ routeId, fromStationId, toStationId, reason? }]
+  // Un segment blacklisté n'apparaît jamais dans la recherche publique.
+  intermediateSegmentBlacklist    Json    @default("[]")
+  // Si true, respecte la politique des hubs (Station.hubDepotOnly etc.)
+  // pour décider si un hub peut servir de point de montée/descente public.
+  intermediateRespectHubRules     Boolean @default(true)
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1054,6 +1074,15 @@ model Trip {
   // Stocké en DB (pas MinIO) pour permettre les requêtes sur waypoints
   departureScheduled DateTime
   arrivalScheduled   DateTime
+  // Horodatages effectifs — stampés quand le chauffeur clique "Démarrer
+  // le trajet" (departureActual) puis "Terminer trajet" (arrivalActual).
+  // Servent à FIGER l'estimation côté UI : avant le départ on roule en
+  // temps réel (delay = now - scheduled), après on prend departureActual
+  // et on conserve la durée nominale du trajet (estimatedArrival =
+  // arrivalScheduled + (departureActual - departureScheduled)).
+  // Une fois arrivalActual posé, l'arrivée est figée définitivement.
+  departureActual    DateTime?
+  arrivalActual      DateTime?
   currentLat         Float?
   currentLng         Float?
   lastGpsAt          DateTime?

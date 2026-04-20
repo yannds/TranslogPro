@@ -20,6 +20,11 @@ import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus
 import { EventTypes } from '../../common/types/domain-event.type';
 import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  RouteSnapshot,
+  resolveSegmentPriceFromSnapshot,
+  stationDistanceOnRoute,
+} from '../../core/pricing/segment-price.helper';
 
 const PORTAL_CACHE_TTL = 300; // 5 min
 
@@ -183,6 +188,27 @@ export class PublicPortalService {
 
   // ─── Trip search (public) ─────────────────────────────────────────────────
 
+  /**
+   * Recherche de trajets publique, avec support des segments intermédiaires.
+   *
+   * Comportement :
+   *   - `departure` / `arrival` peuvent désigner N'IMPORTE QUELLE gare sur la
+   *     route (origine, waypoint ou destination), pas seulement l'OD complète.
+   *   - Le service détermine les stations `boarding` et `alighting` en
+   *     respectant l'ordre : alighting.order > boarding.order.
+   *   - Politique tenant (`TenantBusinessConfig.intermediate*`) :
+   *       · `intermediateBookingEnabled=false`       → n'expose que les trajets OD.
+   *       · `intermediateBookingCutoffMins`          → bloque les segments si
+   *         le bus part dans moins de N minutes (OD reste possible).
+   *       · `intermediateMinSegmentMinutes`          → filtre les micro-segments.
+   *       · `intermediateSegmentBlacklist`           → segments interdits.
+   *   - Le prix retourné est celui du segment résolu (manuel si configuré,
+   *     sinon proportionnel si `Route.allowProportionalFallback=true`).
+   *
+   * Aucun ID interne n'est exposé AU-DELÀ de ce qui est nécessaire au booking :
+   * tripId (inchangé), boardingStationId / alightingStationId (pour que le
+   * client les renvoie dans CreateBookingDto).
+   */
   async searchTrips(tenantSlug: string, params: {
     departure: string;
     arrival: string;
@@ -199,26 +225,43 @@ export class PublicPortalService {
     const dayEnd = new Date(searchDate);
     dayEnd.setHours(23, 59, 59, 999);
 
-    // Find trips for this tenant on the given date with available seats
+    // Charge politique + frais choix siège
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where: { tenantId: tenant.id },
+      select: {
+        seatSelectionFee:              true,
+        intermediateBookingEnabled:    true,
+        intermediateBookingCutoffMins: true,
+        intermediateMinSegmentMinutes: true,
+        intermediateSegmentBlacklist:  true,
+      },
+    });
+    const seatSelectionFee              = bizConfig?.seatSelectionFee ?? 0;
+    const interEnabled                  = bizConfig?.intermediateBookingEnabled ?? true;
+    const cutoffMins                    = bizConfig?.intermediateBookingCutoffMins ?? 30;
+    const minSegmentMins                = bizConfig?.intermediateMinSegmentMinutes ?? 0;
+    const blacklist = Array.isArray(bizConfig?.intermediateSegmentBlacklist)
+      ? bizConfig!.intermediateSegmentBlacklist as Array<{ routeId: string; fromStationId: string; toStationId: string }>
+      : [];
+
+    // Charge tous les trajets actifs du jour (pas de préfiltre SQL sur O-D —
+    // on matche waypoints côté JS pour gérer les segments intermédiaires).
     const trips = await this.prisma.trip.findMany({
       where: {
         tenantId: tenant.id,
         status:   { in: ['PLANNED', 'OPEN', 'BOARDING'] },
         departureScheduled: { gte: dayStart, lt: dayEnd },
-        route: {
-          origin:      { OR: [{ name: { contains: params.departure, mode: 'insensitive' } }, { city: { contains: params.departure, mode: 'insensitive' } }] },
-          destination: { OR: [{ name: { contains: params.arrival, mode: 'insensitive' } }, { city: { contains: params.arrival, mode: 'insensitive' } }] },
-        },
       },
       include: {
         route: {
           include: {
-            origin:      { select: { name: true, city: true } },
-            destination: { select: { name: true, city: true } },
-            waypoints:   {
+            origin:        { select: { id: true, name: true, city: true } },
+            destination:   { select: { id: true, name: true, city: true } },
+            waypoints:     {
               orderBy: { order: 'asc' },
-              include: { station: { select: { name: true, city: true } } },
+              include: { station: { select: { id: true, name: true, city: true } } },
             },
+            segmentPrices: { select: { fromStationId: true, toStationId: true, basePriceXaf: true } },
           },
         },
         bus: {
@@ -229,62 +272,204 @@ export class PublicPortalService {
         },
       },
       orderBy: { departureScheduled: 'asc' },
-      take: 20,
+      take: 50,
     });
 
-    // Load seatSelectionFee from business config
-    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
-      where: { tenantId: tenant.id },
-      select: { seatSelectionFee: true },
-    });
-    const seatSelectionFee = bizConfig?.seatSelectionFee ?? 0;
-
-    // Count occupied seats per trip
+    // Count occupied seats per trip (une seule requête agrégée)
     const tripIds = trips.map(t => t.id);
-    const ticketCounts = await this.prisma.ticket.groupBy({
-      by: ['tripId'],
-      where: { tenantId: tenant.id, tripId: { in: tripIds }, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
-      _count: true,
-    });
+    const ticketCounts = tripIds.length > 0
+      ? await this.prisma.ticket.groupBy({
+          by: ['tripId'],
+          where: { tenantId: tenant.id, tripId: { in: tripIds }, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+          _count: true,
+        })
+      : [];
     const countByTrip = new Map(ticketCounts.map(c => [c.tripId, c._count]));
 
-    // Map to safe public DTOs (no internal IDs exposed beyond trip ID)
-    return trips.map(trip => {
+    const depTerm = params.departure.trim().toLowerCase();
+    const arrTerm = params.arrival.trim().toLowerCase();
+    const nowMs   = Date.now();
+
+    const results: unknown[] = [];
+
+    for (const trip of trips) {
+      // Construire la séquence complète des arrêts (origine + waypoints + destination)
+      // triée par order. `order` pour origine = -1 conventionnellement (avant tous les waypoints),
+      // et destination = maxWaypointOrder + 1.
+      const stopsSeq = this.buildTripStopsSequence(trip);
+
+      // Trouver boarding = première gare qui matche `departure`
+      const boardingIdx = stopsSeq.findIndex(s => this.stopMatches(s, depTerm));
+      if (boardingIdx === -1) continue;
+
+      // Trouver alighting = première gare APRÈS boarding qui matche `arrival`
+      const alightingIdx = stopsSeq.findIndex(
+        (s, idx) => idx > boardingIdx && this.stopMatches(s, arrTerm),
+      );
+      if (alightingIdx === -1) continue;
+
+      const boarding  = stopsSeq[boardingIdx];
+      const alighting = stopsSeq[alightingIdx];
+
+      const isFullOD = boarding.stationId === trip.route.originId
+                    && alighting.stationId === trip.route.destinationId;
+
+      // Politique : si les segments intermédiaires sont désactivés, on ne garde
+      // que les trajets OD complets.
+      if (!interEnabled && !isFullOD) continue;
+
+      // Politique cut-off (seulement pour segments intermédiaires)
+      const departureMs = trip.departureScheduled.getTime();
+      if (!isFullOD && departureMs - nowMs < cutoffMins * 60_000) continue;
+
+      // Black-list
+      const blacklisted = blacklist.some(b =>
+        b.routeId === trip.route.id &&
+        b.fromStationId === boarding.stationId &&
+        b.toStationId === alighting.stationId,
+      );
+      if (blacklisted) continue;
+
+      // Segment min minutes (estimé proportionnel à la durée totale)
+      const boardingEst  = this.estimateStopTime(trip, boarding);
+      const alightingEst = this.estimateStopTime(trip, alighting);
+      const segmentMins  = (alightingEst.getTime() - boardingEst.getTime()) / 60_000;
+      if (!isFullOD && segmentMins < minSegmentMins) continue;
+
+      // Résolution prix du segment via helper partagé
+      const routeSnap: RouteSnapshot = {
+        basePrice:                 trip.route.basePrice,
+        distanceKm:                trip.route.distanceKm,
+        allowProportionalFallback: trip.route.allowProportionalFallback,
+        originId:                  trip.route.originId,
+        destinationId:             trip.route.destinationId,
+        waypoints: trip.route.waypoints.map(w => ({
+          stationId:            w.stationId,
+          distanceFromOriginKm: w.distanceFromOriginKm,
+          tollCostXaf:          w.tollCostXaf,
+          checkpointCosts:      w.checkpointCosts as unknown,
+          order:                w.order,
+        })),
+      };
+      const priced = resolveSegmentPriceFromSnapshot(
+        routeSnap,
+        boarding.stationId,
+        alighting.stationId,
+        trip.route.segmentPrices,
+      );
+      if (priced.blocked) continue; // tarif non résoluble → exclure du listing
+
+      // Capacité / places
       const seatLayout = trip.bus?.seatLayout as { rows: number; cols: number; aisleAfter?: number; disabled?: string[] } | null;
       const totalSeats = seatLayout
         ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
         : (trip.bus?.capacity ?? 0);
-      const occupiedSeats = countByTrip.get(trip.id) ?? 0;
-      const availableSeats = totalSeats - occupiedSeats;
+      const occupiedSeats  = countByTrip.get(trip.id) ?? 0;
+      const availableSeats = Math.max(0, totalSeats - occupiedSeats);
 
-      // Build stops list from waypoints
-      const stops = trip.route.waypoints.map(wp => ({
-        city: wp.station.city || wp.station.name,
-        name: wp.station.name,
-        km:   wp.distanceFromOriginKm,
+      // Timeline complète des arrêts avec ordre + heure estimée
+      const stops = stopsSeq.map((s, idx) => ({
+        stationId:     s.stationId,
+        name:          s.name,
+        city:          s.city || s.name,
+        km:            s.distanceFromOriginKm,
+        order:         idx,
+        estimatedAt:   this.estimateStopTime(trip, s).toISOString(),
+        isBoarding:    idx === boardingIdx,
+        isAlighting:   idx === alightingIdx,
       }));
 
-      return {
-        id:            trip.id,
-        departure:     trip.route.origin.city || trip.route.origin.name,
-        arrival:       trip.route.destination.city || trip.route.destination.name,
-        departureTime: trip.departureScheduled.toISOString(),
-        arrivalTime:   trip.arrivalScheduled.toISOString(),
-        price:         trip.route.basePrice,
-        distanceKm:    trip.route.distanceKm,
-        availableSeats: Math.max(0, availableSeats),
-        busType:       trip.bus?.type ?? 'STANDARD',
-        busModel:      trip.bus?.model ?? '',
-        amenities:     trip.bus?.amenities ?? [],
-        canBook:       availableSeats >= pax,
+      results.push({
+        id:               trip.id,
+        departure:        boarding.city || boarding.name,
+        arrival:          alighting.city || alighting.name,
+        departureTime:    boardingEst.toISOString(),
+        arrivalTime:      alightingEst.toISOString(),
+        price:            priced.price,
+        distanceKm:       Math.max(0, alighting.distanceFromOriginKm - boarding.distanceFromOriginKm),
+        availableSeats,
+        busType:          trip.bus?.type ?? 'STANDARD',
+        busModel:         trip.bus?.model ?? '',
+        amenities:        trip.bus?.amenities ?? [],
+        canBook:          availableSeats >= pax,
         stops,
+        boardingStationId:  boarding.stationId,
+        alightingStationId: alighting.stationId,
+        isIntermediateSegment: !isFullOD,
+        isAutoCalculated:      priced.isAutoCalculated,
         seatingMode:      (trip as any).seatingMode ?? 'FREE',
         seatLayout:       seatLayout ?? null,
         seatSelectionFee,
         isFullVip:        (trip.bus as any)?.isFullVip ?? false,
         vipSeats:         (trip.bus as any)?.vipSeats ?? [],
-      };
-    });
+      });
+
+      if (results.length >= 20) break;
+    }
+
+    return results;
+  }
+
+  /** Construit la séquence ordonnée des arrêts (origine → waypoints → destination). */
+  private buildTripStopsSequence(trip: {
+    route: {
+      originId:      string;
+      destinationId: string;
+      distanceKm:    number;
+      origin:        { id: string; name: string; city: string | null };
+      destination:   { id: string; name: string; city: string | null };
+      waypoints:     Array<{ order: number; distanceFromOriginKm: number;
+                             station: { id: string; name: string; city: string | null } }>;
+    };
+  }) {
+    const seq = [
+      {
+        stationId:            trip.route.origin.id,
+        name:                 trip.route.origin.name,
+        city:                 trip.route.origin.city,
+        distanceFromOriginKm: 0,
+      },
+      ...trip.route.waypoints
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map(wp => ({
+          stationId:            wp.station.id,
+          name:                 wp.station.name,
+          city:                 wp.station.city,
+          distanceFromOriginKm: wp.distanceFromOriginKm,
+        })),
+      {
+        stationId:            trip.route.destination.id,
+        name:                 trip.route.destination.name,
+        city:                 trip.route.destination.city,
+        distanceFromOriginKm: trip.route.distanceKm,
+      },
+    ];
+    return seq;
+  }
+
+  /** Test de correspondance textuelle (name OU city, insensible à la casse). */
+  private stopMatches(
+    stop: { name: string; city: string | null },
+    term: string,
+  ): boolean {
+    if (!term) return false;
+    const n = stop.name.toLowerCase();
+    const c = (stop.city ?? '').toLowerCase();
+    return n.includes(term) || (c !== '' && c.includes(term));
+  }
+
+  /** Heure estimée de passage à un arrêt (interpolation linéaire distance/durée). */
+  private estimateStopTime(
+    trip: { route: { distanceKm: number }; departureScheduled: Date; arrivalScheduled: Date },
+    stop: { distanceFromOriginKm: number },
+  ): Date {
+    const dep = trip.departureScheduled.getTime();
+    const arr = trip.arrivalScheduled.getTime();
+    const totalKm = trip.route.distanceKm;
+    if (totalKm <= 0) return new Date(dep);
+    const ratio = Math.min(1, Math.max(0, stop.distanceFromOriginKm / totalKm));
+    return new Date(dep + (arr - dep) * ratio);
   }
 
   // ─── Trip seats (public — real-time availability for seatmap) ─────────────
@@ -489,7 +674,7 @@ export class PublicPortalService {
 
     const stations = await this.prisma.station.findMany({
       where: { tenantId: tenant.id },
-      select: { name: true, city: true, type: true, coordinates: true },
+      select: { id: true, name: true, city: true, type: true, coordinates: true },
       orderBy: { city: 'asc' },
     });
 
@@ -506,17 +691,27 @@ export class PublicPortalService {
       wantsSeatSelection?: boolean; seatNumber?: string;
     }>;
     paymentMethod: string;
+    /** Gare de montée (segment intermédiaire). Défaut = route.originId. */
+    boardingStationId?: string;
+    /** Gare de descente (segment intermédiaire). Défaut = route.destinationId. */
+    alightingStationId?: string;
   }) {
     const tenant = await this.resolveTenant(tenantSlug);
 
-    // Verify trip belongs to this tenant and is bookable
+    // Verify trip belongs to this tenant and is bookable — charge aussi
+    // waypoints + segmentPrices pour la résolution segment intermédiaire.
     const trip = await this.prisma.trip.findFirst({
       where: { id: dto.tripId, tenantId: tenant.id, status: { in: ['PLANNED', 'OPEN', 'BOARDING'] } },
       include: {
         route: {
           include: {
-            origin:      { select: { id: true, name: true, city: true } },
-            destination: { select: { id: true, name: true, city: true } },
+            origin:        { select: { id: true, name: true, city: true } },
+            destination:   { select: { id: true, name: true, city: true } },
+            waypoints: {
+              orderBy: { order: 'asc' },
+              include: { station: { select: { id: true, name: true, city: true } } },
+            },
+            segmentPrices: { select: { fromStationId: true, toStationId: true, basePriceXaf: true } },
           },
         },
         bus: { select: { capacity: true, seatLayout: true, isFullVip: true, vipSeats: true } },
@@ -541,13 +736,98 @@ export class PublicPortalService {
       ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
       : (trip.bus?.capacity ?? 0);
 
-    // Load seatSelectionFee from business config
+    // Load seatSelectionFee + politique intermédiaire from business config
     const isNumbered = (trip as any).seatingMode === 'NUMBERED' && !!seatLayout;
     const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
       where: { tenantId: tenant.id },
-      select: { seatSelectionFee: true },
+      select: {
+        seatSelectionFee:              true,
+        intermediateBookingEnabled:    true,
+        intermediateBookingCutoffMins: true,
+        intermediateSegmentBlacklist:  true,
+      },
     });
-    const seatFee = (bizConfig as any)?.seatSelectionFee ?? 0;
+    const seatFee     = bizConfig?.seatSelectionFee ?? 0;
+    const interEnabled = bizConfig?.intermediateBookingEnabled ?? true;
+    const cutoffMins   = bizConfig?.intermediateBookingCutoffMins ?? 30;
+    const blacklist = Array.isArray(bizConfig?.intermediateSegmentBlacklist)
+      ? bizConfig!.intermediateSegmentBlacklist as Array<{ routeId: string; fromStationId: string; toStationId: string }>
+      : [];
+
+    // ── Résolution boarding / alighting stations ──────────────────────────
+    const boardingStationId  = dto.boardingStationId  ?? trip.route.originId;
+    const alightingStationId = dto.alightingStationId ?? trip.route.destinationId;
+
+    // Valider que les deux stations sont sur la route
+    const routeStationIds = new Set<string>([
+      trip.route.originId,
+      trip.route.destinationId,
+      ...trip.route.waypoints.map(w => w.stationId),
+    ]);
+    if (!routeStationIds.has(boardingStationId) || !routeStationIds.has(alightingStationId)) {
+      throw new BadRequestException('Boarding or alighting station not on this route');
+    }
+
+    // Valider l'ordre (boarding doit précéder alighting)
+    const routeSnap: RouteSnapshot = {
+      basePrice:                 trip.route.basePrice,
+      distanceKm:                trip.route.distanceKm,
+      allowProportionalFallback: trip.route.allowProportionalFallback,
+      originId:                  trip.route.originId,
+      destinationId:             trip.route.destinationId,
+      waypoints: trip.route.waypoints.map(w => ({
+        stationId:            w.stationId,
+        distanceFromOriginKm: w.distanceFromOriginKm,
+        tollCostXaf:          w.tollCostXaf,
+        checkpointCosts:      w.checkpointCosts as unknown,
+        order:                w.order,
+      })),
+    };
+    const boardingKm  = stationDistanceOnRoute(boardingStationId, routeSnap);
+    const alightingKm = stationDistanceOnRoute(alightingStationId, routeSnap);
+    if (boardingKm < 0 || alightingKm < 0) {
+      throw new BadRequestException('Invalid boarding/alighting station reference');
+    }
+    if (alightingKm <= boardingKm) {
+      throw new BadRequestException('Alighting station must be after boarding on the route');
+    }
+
+    const isFullOD = boardingStationId === trip.route.originId
+                  && alightingStationId === trip.route.destinationId;
+
+    // Politique : segments intermédiaires désactivés → seul OD accepté
+    if (!interEnabled && !isFullOD) {
+      throw new ForbiddenException('Intermediate segment booking is disabled for this tenant');
+    }
+
+    // Cut-off (ne s'applique qu'aux segments intermédiaires)
+    if (!isFullOD) {
+      const msBeforeDeparture = trip.departureScheduled.getTime() - Date.now();
+      if (msBeforeDeparture < cutoffMins * 60_000) {
+        throw new BadRequestException('Too late to book this intermediate segment');
+      }
+    }
+
+    // Black-list
+    if (blacklist.some(b =>
+      b.routeId === trip.route.id &&
+      b.fromStationId === boardingStationId &&
+      b.toStationId === alightingStationId,
+    )) {
+      throw new ForbiddenException('This segment is not available for booking');
+    }
+
+    // Prix segment (manuel ou proportionnel)
+    const priced = resolveSegmentPriceFromSnapshot(
+      routeSnap,
+      boardingStationId,
+      alightingStationId,
+      trip.route.segmentPrices,
+    );
+    if (priced.blocked) {
+      throw new BadRequestException(priced.warnings[0] ?? 'Price not configured for this segment');
+    }
+    const segmentBasePrice = priced.price;
 
     // 1. Create all tickets in PENDING_PAYMENT (single transaction for atomicity)
     const tickets = await this.prisma.transact(async (tx) => {
@@ -641,9 +921,9 @@ export class PublicPortalService {
           occupiedSeats.add(seatNumber);
         }
 
-        // ── Prix = base + supplément choix de siège si applicable ───────
+        // ── Prix = base segment (OD ou intermédiaire) + supplément siège ─
         const seatSurcharge = (wantsSeat && isNumbered && seatFee > 0) ? seatFee : 0;
-        const pricePaid = trip.route.basePrice + seatSurcharge;
+        const pricePaid = segmentBasePrice + seatSurcharge;
 
         const ticketId = uuidv4();
         const t = await tx.ticket.create({
@@ -654,8 +934,8 @@ export class PublicPortalService {
             passengerId:        'portal-anonymous',
             passengerName,
             seatNumber,
-            boardingStationId:  trip.route.origin.id,
-            alightingStationId: trip.route.destination.id,
+            boardingStationId,
+            alightingStationId,
             fareClass,
             pricePaid,
             agencyId,
@@ -741,15 +1021,30 @@ export class PublicPortalService {
 
     const totalPrice = tickets.reduce((sum, tk) => sum + tk.pricePaid, 0);
 
+    // Résoudre les libellés des gares de montée/descente pour la réponse
+    const boardingLabel = boardingStationId === trip.route.originId
+      ? (trip.route.origin.city || trip.route.origin.name)
+      : (trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station.city
+         || trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station.name
+         || '');
+    const alightingLabel = alightingStationId === trip.route.destinationId
+      ? (trip.route.destination.city || trip.route.destination.name)
+      : (trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station.city
+         || trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station.name
+         || '');
+
     return {
       tickets: confirmedTickets,
       trip: {
-        departure:     trip.route.origin.city || trip.route.origin.name,
-        arrival:       trip.route.destination.city || trip.route.destination.name,
+        departure:     boardingLabel,
+        arrival:       alightingLabel,
         departureTime: trip.departureScheduled.toISOString(),
         arrivalTime:   trip.arrivalScheduled.toISOString(),
         routeName:     trip.route.name,
-        price:         trip.route.basePrice,
+        price:         segmentBasePrice,
+        boardingStationId,
+        alightingStationId,
+        isIntermediateSegment: !isFullOD,
       },
       totalPrice,
       seatSelectionFee: seatFee,
