@@ -57,6 +57,10 @@ interface BusinessRules {
   parcelHubMaxStorageDays:         number;
   parcelPickupMaxDaysBeforeReturn: number;
   parcelPickupNoShowAction:        string;
+  // Sécurité endpoints publics (2026-04-20)
+  captchaEnabled:                  boolean;
+  dailyMagicLinkBudget:            number;
+  magicLinkPhoneCooldownHours:     number;
 }
 
 const PENALTY_ACTORS   = ['CUSTOMER', 'AGENT', 'ADMIN', 'SYSTEM'];
@@ -384,6 +388,43 @@ export function PageTenantBusinessRules() {
                 onChange={e => set({ parcelPickupNoShowAction: e.target.value })}
                 options={PICKUP_ACTIONS.map(a => ({ value: a, label: t(`tenantRules.pickupAction.${a}`) }))} />
             </label>
+          </div>
+        </section>
+
+        {/* ── Section 5 : Sécurité endpoints publics ───────────────────── */}
+        <section aria-labelledby="sec-security" className="rounded-lg border border-gray-200 dark:border-gray-700 p-5 bg-white dark:bg-gray-800">
+          <h2 id="sec-security" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            {t('tenantRules.securityTitle')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t('tenantRules.securityHint')}
+          </p>
+          <div className="space-y-4">
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={form.captchaEnabled}
+                onChange={e => set({ captchaEnabled: e.target.checked })}
+                aria-describedby="captcha-help"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tenantRules.captchaEnabled')}</span>
+                <span id="captcha-help" className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{t('tenantRules.captchaEnabledHint')}</span>
+              </span>
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.dailyMagicLinkBudget')}</span>
+                <Input type="number" min="0" value={form.dailyMagicLinkBudget}
+                  onChange={e => set({ dailyMagicLinkBudget: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{t('tenantRules.dailyMagicLinkBudgetHint')}</span>
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.magicLinkPhoneCooldownHours')}</span>
+                <Input type="number" min="0" max="168" value={form.magicLinkPhoneCooldownHours}
+                  onChange={e => set({ magicLinkPhoneCooldownHours: Math.max(0, Math.min(168, parseInt(e.target.value, 10) || 0)) })} />
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{t('tenantRules.magicLinkPhoneCooldownHoursHint')}</span>
+              </label>
+            </div>
           </div>
         </section>
 

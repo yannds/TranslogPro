@@ -23,6 +23,7 @@ import { AlertTriangle, CheckCircle2, Loader2, Shield, MapPin } from 'lucide-rea
 import { useI18n } from '../../lib/i18n/useI18n';
 import { apiGet, apiPost, ApiError } from '../../lib/api';
 import { PublicLayout } from './PublicLayout';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
 
 const REPORT_TYPES = ['DANGEROUS_DRIVING', 'ACCIDENT', 'BREAKDOWN', 'OTHER'] as const;
 type ReportType = (typeof REPORT_TYPES)[number];
@@ -47,6 +48,7 @@ export function PublicReport() {
   const [type,         setType]         = useState<ReportType>('DANGEROUS_DRIVING');
   const [description,  setDescription]  = useState('');
   const [useGps,       setUseGps]       = useState(false);
+  const [captcha,      setCaptcha]      = useState<string | null>(null);
   const [gps,          setGps]          = useState<{ lat: number; lng: number } | null>(null);
   const [busy,         setBusy]         = useState(false);
   const [formError,    setFormError]    = useState<string | null>(null);
@@ -96,7 +98,7 @@ export function PublicReport() {
         description:       description.trim(),
         reporterGpsLat:    useGps && gps ? gps.lat : undefined,
         reporterGpsLng:    useGps && gps ? gps.lng : undefined,
-      }, { skipRedirectOn401: true });
+      }, { skipRedirectOn401: true, captchaToken: captcha });
       setResult(res);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
@@ -282,6 +284,9 @@ export function PublicReport() {
               {formError}
             </p>
           )}
+
+          {/* CAPTCHA (silencieux si pas de site-key) */}
+          <CaptchaWidget onToken={setCaptcha} />
 
           {/* Actions */}
           <button

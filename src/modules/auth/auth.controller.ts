@@ -10,6 +10,7 @@ import {
   RateLimit,
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
 import { ImpersonationService } from '../../core/iam/services/impersonation.service';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
@@ -82,13 +83,16 @@ export class AuthController {
    */
   @Post('sign-in')
   @HttpCode(200)
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({
-    limit:    process.env.NODE_ENV === 'production' ? 5 : 1000,
-    windowMs: 15 * 60_000,
-    keyBy:    'ip',
-    suffix:   'auth_signin',
-  })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @RateLimit([
+    {
+      limit:    process.env.NODE_ENV === 'production' ? 5 : 1000,
+      windowMs: 15 * 60_000,
+      keyBy:    'ip',
+      suffix:   'auth_signin',
+    },
+  ])
   async signIn(
     @Body() dto:  SignInDto,
     @Req()  req:  Request,

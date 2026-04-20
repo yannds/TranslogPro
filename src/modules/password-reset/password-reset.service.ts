@@ -151,6 +151,22 @@ export class PasswordResetService {
       return;
     }
 
+    // Cooldown par email : si un token actif a été émis il y a moins d'une
+    // heure (TTL 30min + marge 30min), skip silencieusement. Empêche un
+    // attaquant de flooder un email tiers avec des mails de reset même s'il
+    // rote les IP. Le client qui a réellement perdu son mot de passe peut
+    // réessayer après expiration du précédent token.
+    const EMAIL_COOLDOWN_MS = 60 * 60 * 1_000;
+    if (account.passwordResetExpiresAt) {
+      const issuedAt = account.passwordResetExpiresAt.getTime() - RESET_TOKEN_TTL_MS;
+      if (Date.now() - issuedAt < EMAIL_COOLDOWN_MS) {
+        this.logger.warn(
+          `[PasswordReset] cooldown hit email=${email} tenant=${tenantId} (issued ${new Date(issuedAt).toISOString()})`,
+        );
+        return;
+      }
+    }
+
     const rawToken   = randomBytes(RESET_TOKEN_BYTES).toString('hex');
     const tokenHash  = this.hashToken(rawToken);
     const expiresAt  = new Date(Date.now() + RESET_TOKEN_TTL_MS);

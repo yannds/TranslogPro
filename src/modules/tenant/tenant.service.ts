@@ -49,6 +49,10 @@ export interface UpdateBusinessConfigDto {
   parcelHubMaxStorageDays?:         number;
   parcelPickupMaxDaysBeforeReturn?: number;
   parcelPickupNoShowAction?:        string;  // return | dispose | hold
+  // ── Sécurité endpoints publics (2026-04-20) ────────────────────────────
+  captchaEnabled?:              boolean;
+  dailyMagicLinkBudget?:        number;
+  magicLinkPhoneCooldownHours?: number;
 }
 
 export interface UpdateCompanyInfoDto {
@@ -248,6 +252,8 @@ export class TenantService {
     // Parcel hub
     'parcelHubMaxStorageDays', 'parcelPickupMaxDaysBeforeReturn',
     'parcelPickupNoShowAction',
+    // Sécurité endpoints publics
+    'captchaEnabled', 'dailyMagicLinkBudget', 'magicLinkPhoneCooldownHours',
   ] as const;
 
   async updateBusinessConfig(tenantId: string, dto: UpdateBusinessConfigDto) {

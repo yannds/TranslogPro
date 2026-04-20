@@ -217,7 +217,9 @@ export class AuthService {
         userAgent,
         email,
       });
-      throw new UnauthorizedException('Compte désactivé');
+      // Anti-énumération : même message qu'un mot de passe invalide. Le motif
+      // réel (compte désactivé) reste uniquement dans l'audit log côté serveur.
+      throw new UnauthorizedException('Identifiants invalides');
     }
 
     // 1c. MFA wire — si le user a activé TOTP, on n'émet PAS de session mais

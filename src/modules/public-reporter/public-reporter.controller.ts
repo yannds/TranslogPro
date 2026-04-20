@@ -6,6 +6,7 @@ import { PublicReporterService, PublicReportDto } from './public-reporter.servic
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
 
 function extractIp(req: Request): string {
   return (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim()
@@ -29,14 +30,17 @@ export class PublicReporterController {
    * Sliding window Redis — pas de session requise, clé = IP.
    */
   @Post()
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({
-    limit:    5,
-    windowMs: 60 * 60 * 1_000,
-    keyBy:    'ip',
-    suffix:   'public_report',
-    message:  'Limite de signalements atteinte (5/heure). Vos données GPS seront supprimées sous 24h (RGPD).',
-  })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @RateLimit([
+    {
+      limit:    5,
+      windowMs: 60 * 60 * 1_000,
+      keyBy:    'ip',
+      suffix:   'public_report',
+      message:  'Limite de signalements atteinte (5/heure). Vos données GPS seront supprimées sous 24h (RGPD).',
+    },
+  ])
   submit(
     @Param('tenantId') tenantId: string,
     @Body() dto: PublicReportDto,
@@ -66,14 +70,17 @@ export class PublicReporterHostController {
 
   /** Même rate-limit que la version "par slug" : 5/h/IP. */
   @Post()
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({
-    limit:    5,
-    windowMs: 60 * 60 * 1_000,
-    keyBy:    'ip',
-    suffix:   'public_report',
-    message:  'Limite de signalements atteinte (5/heure). Vos données GPS seront supprimées sous 24h (RGPD).',
-  })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @RateLimit([
+    {
+      limit:    5,
+      windowMs: 60 * 60 * 1_000,
+      keyBy:    'ip',
+      suffix:   'public_report',
+      message:  'Limite de signalements atteinte (5/heure). Vos données GPS seront supprimées sous 24h (RGPD).',
+    },
+  ])
   submit(
     @Body() dto: PublicReportDto,
     @Req() req: Request,

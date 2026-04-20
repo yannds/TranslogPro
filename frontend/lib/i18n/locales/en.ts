@@ -5180,7 +5180,15 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "parcelPickupNoShowAction":       "Action if not picked up",
     "pickupAction.return":            "Return to sender",
     "pickupAction.dispose":           "Dispute (admin)",
-    "pickupAction.hold":              "Hold on-site (notify)"
+    "pickupAction.hold":              "Hold on-site (notify)",
+    "securityTitle":                  "Public endpoint security",
+    "securityHint":                   "Anti-abuse protections on public forms (traveler portal, parcel request, password reset). Turn on CAPTCHA once your Cloudflare Turnstile keys are provisioned by the platform admin.",
+    "captchaEnabled":                 "Enable CAPTCHA (Cloudflare Turnstile)",
+    "captchaEnabledHint":             "When enabled, public POSTs require a valid Turnstile token. Keep unchecked while the keys are not yet provisioned in Vault.",
+    "dailyMagicLinkBudget":           "Daily magic link budget (SMS + WhatsApp + Email)",
+    "dailyMagicLinkBudgetHint":       "Max magic links dispatched per day (UTC) for this tenant. Above that, new sends are blocked with a warn log. Default 200.",
+    "magicLinkPhoneCooldownHours":    "Phone cooldown (hours)",
+    "magicLinkPhoneCooldownHoursHint":"Minimum time between two magic links sent to the same phone number. Anti-spam. Default 24h. Set 0 to disable (not recommended)."
   },
   "integrations": {
     "title":           "API Integrations",

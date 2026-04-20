@@ -8,6 +8,7 @@ import {
   RateLimit,
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
 
 function extractIp(req: Request): string {
   if (process.env.NODE_ENV === 'production') {
@@ -40,8 +41,11 @@ export class PasswordResetController {
    */
   @Post('request')
   @HttpCode(200)
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({ limit: 3, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'auth_pw_reset_req' })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @RateLimit([
+    { limit: 3, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'auth_pw_reset_req' },
+  ])
   async request(
     @Body() dto: RequestPasswordResetDto,
     @Req()  req: Request,

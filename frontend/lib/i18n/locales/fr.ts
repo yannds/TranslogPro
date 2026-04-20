@@ -5192,7 +5192,15 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "parcelPickupNoShowAction":       "Action si non retiré",
     "pickupAction.return":            "Retour expéditeur",
     "pickupAction.dispose":           "Contestation (admin)",
-    "pickupAction.hold":              "Garder sur place (notifier)"
+    "pickupAction.hold":              "Garder sur place (notifier)",
+    "securityTitle":                  "Sécurité endpoints publics",
+    "securityHint":                   "Protections anti-abus sur les formulaires publics (portail voyageur, demande colis, réinitialisation mot de passe). Activez le CAPTCHA dès que vos clés Cloudflare Turnstile sont provisionnées côté plateforme.",
+    "captchaEnabled":                 "Activer le CAPTCHA (Cloudflare Turnstile)",
+    "captchaEnabledHint":             "Quand activé, les POST publics exigent un token Turnstile valide. Laisser décoché si les clés ne sont pas encore provisionnées dans Vault.",
+    "dailyMagicLinkBudget":           "Plafond journalier de magic links (SMS+WhatsApp+Email)",
+    "dailyMagicLinkBudgetHint":       "Nombre max de magic links émis par jour (UTC) pour ce tenant. Au-delà, les nouveaux envois sont bloqués avec log warn. Défaut 200.",
+    "magicLinkPhoneCooldownHours":    "Cooldown par téléphone (heures)",
+    "magicLinkPhoneCooldownHoursHint":"Durée minimale entre deux magic links envoyés au même numéro. Anti-spam. Défaut 24h. Mettre 0 pour désactiver (déconseillé)."
   },
   "integrations": {
     "title":           "Intégrations API",

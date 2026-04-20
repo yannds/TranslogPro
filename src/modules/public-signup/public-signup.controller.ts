@@ -1,11 +1,15 @@
 import {
-  Controller, Post, Get, Body, Req, HttpCode, UseGuards,
+  Controller, Post, Get, Body, Req, HttpCode, UseGuards, UseInterceptors,
   BadRequestException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
   RateLimit, RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
+import {
+  IdempotencyGuard, IdempotencyInterceptor, Idempotent,
+} from '../../common/idempotency/idempotency.guard';
 import { PublicSignupService } from './public-signup.service';
 import { WaitlistSubmitDto } from './dto/waitlist.dto';
 import { PublicSignupDto } from './dto/signup.dto';
@@ -50,8 +54,11 @@ export class PublicSignupController {
 
   @Post('waitlist')
   @HttpCode(200)
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({ limit: 5, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'public_waitlist' })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @RateLimit([
+    { limit: 5, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'public_waitlist' },
+  ])
   async submitWaitlist(
     @Body() dto: WaitlistSubmitDto,
     @Req()  req: Request,
@@ -65,8 +72,13 @@ export class PublicSignupController {
 
   @Post('signup')
   @HttpCode(201)
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({ limit: 3, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'public_signup' })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard, IdempotencyGuard)
+  @UseInterceptors(IdempotencyInterceptor)
+  @RequireCaptcha()
+  @Idempotent({ scope: 'public_signup' })
+  @RateLimit([
+    { limit: 3, windowMs: 60 * 60_000, keyBy: 'ip', suffix: 'public_signup' },
+  ])
   async signup(
     @Body() dto: PublicSignupDto,
     @Req()  req: Request,

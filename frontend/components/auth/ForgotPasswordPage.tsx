@@ -15,6 +15,7 @@ import { Bus, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { apiPost, ApiError } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
 
 export function ForgotPasswordPage() {
   const { t }    = useI18n();
@@ -24,13 +25,14 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [sent,    setSent]    = useState(false);
   const [error,   setError]   = useState<string | null>(null);
+  const [captcha, setCaptcha] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await apiPost('/api/auth/password-reset/request', { email });
+      await apiPost('/api/auth/password-reset/request', { email }, { captchaToken: captcha });
       setSent(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
@@ -116,6 +118,8 @@ export function ForgotPasswordPage() {
                 disabled={loading}
               />
             </div>
+
+            <CaptchaWidget onToken={setCaptcha} theme="dark" />
 
             <button
               type="submit"

@@ -17,6 +17,7 @@ import { useAuth } from '../../lib/auth/auth.context';
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+  // CAPTCHA (Cloudflare Turnstile) — backend fail-open si pas de site-key
+  const [captcha,  setCaptcha]  = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,7 +58,7 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, captcha);
       if (result.kind === 'mfa') {
         // Un challenge MFA est ouvert côté serveur (cookie translog_mfa_challenge
         // posé, TTL 5 min). On bascule l'écran sur le code à 6 chiffres.
@@ -239,6 +242,9 @@ export function LoginPage() {
               disabled={loading}
             />
           </div>
+
+          {/* CAPTCHA (silencieux si VITE_TURNSTILE_SITE_KEY absent) */}
+          <CaptchaWidget onToken={setCaptcha} theme="dark" />
 
           {/* Submit */}
           <button

@@ -84,7 +84,7 @@ interface AuthContextValue {
    * (user.mfaEnabled). L'UI doit alors afficher l'input code 6 chiffres et
    * appeler `verifyMfa(code)` pour finaliser la connexion.
    */
-  login:   (email: string, password: string) => Promise<LoginResult>;
+  login:   (email: string, password: string, captchaToken?: string | null) => Promise<LoginResult>;
   /** Complète un login en attente MFA — pose le cookie de session. */
   verifyMfa: (code: string) => Promise<void>;
   logout:  () => Promise<void>;
@@ -119,10 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password: string, captchaToken?: string | null): Promise<LoginResult> => {
     const result = await apiFetch<AuthUser | { mfaRequired: true; expiresAt: string }>(
       '/api/auth/sign-in',
-      { method: 'POST', body: { email, password }, skipRedirectOn401: true },
+      { method: 'POST', body: { email, password }, skipRedirectOn401: true, captchaToken },
     );
     // Discrimination : MFA required → pas de user, le cookie pré-session est
     // déjà posé côté serveur, l'UI doit afficher l'input code 6 chiffres.

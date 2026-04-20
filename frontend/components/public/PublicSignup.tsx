@@ -22,6 +22,8 @@ import {
 import { PublicLayout } from './PublicLayout';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { apiFetch, ApiError } from '../../lib/api';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
+import { newIdempotencyKey } from '../../lib/captcha/useTurnstile';
 import { cn } from '../../lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ function SignupWizard() {
 
   const [planSlug,      setPlanSlug]      = useState<string | undefined>(preselectedPlan);
   const [honeypot,      setHoneypot]      = useState(''); // doit rester vide
+  const [captcha,       setCaptcha]       = useState<string | null>(null);
 
   // Field-level errors (client side) ------------------------------------------
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
@@ -165,6 +168,8 @@ function SignupWizard() {
         method: 'POST',
         body:   payload,
         skipRedirectOn401: true,
+        captchaToken:      captcha,
+        idempotencyKey:    newIdempotencyKey(),
       });
       setSuccess({ slug: res.tenantSlug, trialDays: res.trialDays });
     } catch (err) {
@@ -250,6 +255,13 @@ function SignupWizard() {
             >
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>{submitError}</span>
+            </div>
+          )}
+
+          {/* CAPTCHA rendu sur la dernière étape (avant le submit final). */}
+          {step === 3 && (
+            <div className="mt-4 flex justify-center">
+              <CaptchaWidget onToken={setCaptcha} />
             </div>
           )}
 

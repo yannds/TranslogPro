@@ -28,6 +28,12 @@
 | `POST /api/public/:slug/portal/booking` | 10/h | 3/h/phone | ✅ | ✅ 24h | cooldown 24h/phone sur magic link |
 | `POST /api/public/:slug/portal/parcel-pickup-request` | 5/h | 3/h/phone | ✅ | ✅ 24h | idem |
 | `POST /api/public/:slug/portal/tickets/:ref/cancel` | 5/h | — | ✅ | ✅ 24h | — |
+| `POST /api/public/signup` (création tenant SaaS + admin) | 3/h | — | ✅ | ✅ 24h | honeypot DTO `company_website` |
+| `POST /api/public/waitlist` | 5/h | — | ✅ | — | honeypot |
+| `POST /api/auth/sign-in` | 5/15min prod | — | ✅ | — | anti-énumération (même message "Identifiants invalides" pour unknown/inactive/wrong-pw) + bcrypt timing-safe même si user inexistant |
+| `POST /api/auth/password-reset/request` | 3/h | — | ✅ | — | cooldown 60min/email (skip si token actif émis < 60min) |
+| `POST /api/public/:tenantId/report` | 5/h | — | ✅ | — | RGPD TTL 24h |
+| `POST /api/public/report` (host-resolved) | 5/h | — | ✅ | — | idem |
 | `POST /api/v1/tenants/:id/customer/claim/initiate` (retro OTP) | 3/h | 3/24h/phone | ✅ | — | auth CUSTOMER requis |
 | `POST /api/v1/tenants/:id/customer/claim/confirm` | 10/h (throttler) | — | — | — | auth CUSTOMER + 5 tentatives OTP max |
 
@@ -147,5 +153,6 @@ Appliqué sur :
 - [`test/unit/common/idempotency.guard.spec.ts`](../test/unit/common/idempotency.guard.spec.ts) — 5 tests
 - [`test/unit/crm/claim-cooldown-budget.spec.ts`](../test/unit/crm/claim-cooldown-budget.spec.ts) — 5 tests
 - [`test/unit/crm/bump-counters-phone-verified.spec.ts`](../test/unit/crm/bump-counters-phone-verified.spec.ts) — 5 tests
+- [`test/unit/password-reset/email-cooldown.spec.ts`](../test/unit/password-reset/email-cooldown.spec.ts) — 4 tests
 
-**Total : 27 nouveaux tests unit — 819/819 PASS.**
+**Total : 31 nouveaux tests unit — 823/823 PASS.**

@@ -20,6 +20,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../../lib/api';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
 import {
   ArrowRight, PlayCircle, ChevronDown,
   Shield, Cloud, Activity,
@@ -599,6 +600,7 @@ function FinalCTA() {
   const { t, lang } = useI18n();
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'invalid' | 'error'>('idle');
+  const [captcha, setCaptcha] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -611,6 +613,7 @@ function FinalCTA() {
         method: 'POST',
         body:   { email: email.trim().toLowerCase(), locale: lang, source: 'landing_cta' },
         skipRedirectOn401: true,
+        captchaToken: captcha,
       });
       setStatus('success');
       setEmail('');
@@ -671,6 +674,9 @@ function FinalCTA() {
               autoComplete="email"
               required
             />
+          </div>
+          <div className="mt-2">
+            <CaptchaWidget onToken={setCaptcha} theme="dark" />
           </div>
           <button
             type="submit"
