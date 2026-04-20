@@ -10,6 +10,7 @@
  */
 
 import { test, expect, uniqueSlug } from './fixtures-portal';
+import { deletePlanBySlug } from '../../scripts/cleanup-e2e-tenants';
 
 test.describe('[pw:sa] Platform Plans — CRUD', () => {
 
@@ -20,7 +21,7 @@ test.describe('[pw:sa] Platform Plans — CRUD', () => {
     await expect(page.getByPlaceholder(/Rechercher/i).first()).toBeVisible();
   });
 
-  test('crée un nouveau plan via le dialog', async ({ page, apiRequest, cleanupRegister }) => {
+  test('crée un nouveau plan via le dialog', async ({ page, cleanupRegister }) => {
     const slug = uniqueSlug('pw-pln');
 
     await page.goto('/admin/platform/plans');
@@ -60,13 +61,10 @@ test.describe('[pw:sa] Platform Plans — CRUD', () => {
     await search.fill(slug);
     await expect(page.getByText(slug)).toBeVisible({ timeout: 10_000 });
 
-    cleanupRegister(async () => {
-      const list = await apiRequest.get('/api/platform/plans');
-      if (!list.ok()) return;
-      const plans = (await list.json()) as Array<{ id: string; slug: string }>;
-      const target = plans.find(p => p.slug === slug);
-      if (target) await apiRequest.delete(`/api/platform/plans/${target.id}`);
-    });
+    // Cleanup direct DB — l'ancienne version passait par apiRequest.delete()
+    // mais l'APIRequestContext de la fixture n'est pas authentifié (401 silencieux),
+    // ce qui laissait des plans orphelins s'accumuler.
+    cleanupRegister(() => deletePlanBySlug(slug).then(() => undefined));
   });
 
   test('rejette un slug invalide (UI validation)', async ({ page }) => {

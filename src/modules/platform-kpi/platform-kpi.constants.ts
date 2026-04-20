@@ -63,16 +63,43 @@ export type NorthStarMode = typeof NORTH_STAR_MODES[number];
  * Un module est "utilisé" par un tenant si au moins une entrée AuditLog
  * correspond à l'un de ses préfixes dans la période analysée.
  *
- * Ajouter un nouveau module : étendre ce dict + i18n platformDash.modules.*.
+ * Convention des clés : **UPPER_SNAKE_CASE**, aligné sur plans.seed.ts,
+ * onboarding.service.ts, nav.config.ts, et la validation dans
+ * PlatformPlansService.attachModule. Toute nouvelle clé doit être ajoutée ici
+ * ET dans ces sources (sinon le module est invisible soit dans les plans,
+ * soit dans l'adoption plateforme).
+ *
+ * Un module avec `prefixes: []` apparaît dans le rapport d'adoption mais
+ * restera à 0 action tant qu'aucun préfixe AuditLog n'est déclaré — cas des
+ * modules "configuration/vue seule" qui ne génèrent pas d'audit data.*
+ * directement. À enrichir quand les writes du module sont instrumentés.
  */
 export const MODULE_ACTION_PREFIXES: Record<string, readonly string[]> = {
-  ticketing:   ['data.ticket.', 'data.traveler.'],
-  trips:       ['data.trip.', 'data.route.'],
-  parcels:     ['data.parcel.', 'data.shipment.'],
-  garage:      ['data.maintenance.', 'data.bus.', 'data.fuel.'],
-  qhse:        ['data.incident.', 'data.qhse.', 'data.checklist.'],
-  pricing:     ['data.pricing.', 'data.tariff.', 'data.promotion.'],
-  reporting:   ['data.report.', 'data.analytics.'],
-  crm:         ['data.customer.', 'data.crm.'],
+  // ── Core (plan Starter) ─────────────────────────────────────────────────
+  TICKETING:        ['data.ticket.', 'data.traveler.'],
+  PARCEL:           ['data.parcel.', 'data.shipment.'],
+  FLEET:            ['data.trip.', 'data.route.'],
+  CASHIER:          ['data.cashier.', 'data.transaction.'],
+  TRACKING:         ['data.gps.', 'data.trip_event.'],
+  NOTIFICATIONS:    ['data.notification.', 'data.announcement.', 'data.campaign.'],
+
+  // ── Growth (ajoutés au plan Growth) ─────────────────────────────────────
+  CRM:              ['data.customer.', 'data.crm.'],
+  ANALYTICS:        ['data.report.', 'data.analytics.'],
+  SAV_MODULE:       ['data.claim.', 'data.refund.', 'data.dispute.'],
+
+  // ── Enterprise (ajoutés au plan Enterprise) ─────────────────────────────
+  YIELD_ENGINE:     ['data.pricing.', 'data.tariff.', 'data.promotion.'],
+  WORKFLOW_STUDIO:  ['data.workflow.', 'data.blueprint.'],
+  WHITE_LABEL:      ['data.brand.', 'data.portal_config.', 'data.tenant_page.', 'data.tenant_post.'],
+  QHSE:             ['data.incident.', 'data.qhse.', 'data.checklist.'],
+  DRIVER_PROFILE:   ['data.driver_license.', 'data.driver_score.', 'data.driver_training.'],
+  CREW_BRIEFING:    ['data.briefing.', 'data.crew_assignment.'],
+  GARAGE_PRO:       ['data.maintenance.', 'data.bus.', 'data.fuel.'],
+  FLEET_DOCS:       ['data.vehicle_document.'],
+
+  // ── Add-ons plateforme (hors plans standards) ───────────────────────────
+  PROFITABILITY:    ['data.trip_cost_snapshot.', 'data.profitability.'],
+  SCHEDULING_GUARD: ['data.driver_rest.'],
 };
 export type KnownModule = keyof typeof MODULE_ACTION_PREFIXES;

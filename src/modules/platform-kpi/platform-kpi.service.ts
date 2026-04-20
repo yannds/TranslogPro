@@ -223,10 +223,13 @@ export class PlatformKpiService {
       const since   = new Date(Date.now() - days * MS_PER_DAY);
       const sinceM1 = new Date(since.getTime() - days * MS_PER_DAY);
 
-      // Subscriptions actives (TRIAL exclu du MRR facturé)
+      // Subscriptions actives (TRIAL exclu du MRR facturé). On ne joint que
+      // `plan` — le `tenant` inclus auparavant faisait exploser Prisma dès
+      // qu'une souscription orphaline (tenant reset) traînait en base, car la
+      // relation est typée non-null. `s.tenantId` suffit aux agrégats.
       const active = await this.prisma.platformSubscription.findMany({
         where:   { status: { in: ['ACTIVE', 'PAST_DUE'] } },
-        include: { plan: true, tenant: { select: { id: true } } },
+        include: { plan: true },
       });
 
       const mrr: Record<string, number> = {};
@@ -763,6 +766,112 @@ export class PlatformKpiService {
 
       return {
         tenantId,
+        periodDays:  days,
+        generatedAt: new Date().toISOString(),
+        modules,
+      };
+    });
+  }
+
+  /**
+   * Agrégat plateforme — même contrat que getModulesUsageForTenant mais sommé
+   * sur tous les tenants actifs (hors tenant plateforme). Destiné à la vue par
+   * défaut de /admin/platform/modules-usage quand le SUPER_ADMIN arrive.
+   *
+   * - `installed` / `isActive` : true si ≥1 tenant a le module installé/actif.
+   * - `activatedAt/By` / `deactivatedAt/By` : null (pas de sens globalement —
+   *   la traçabilité existe dans la vue par tenant).
+   * - `actionCount` / `activeDays` / `lastUsedAt` : agrégats via
+   *   ModuleUsageDaily (sum / distinct days / max).
+   * - `uniqueUsers` : nombre d'utilisateurs distincts (cross-tenant) sur la
+   *   période — calcul direct sur AuditLog pour la précision.
+   */
+  async getModulesUsagePlatformWide(periodDays?: number): Promise<ModulesUsageReport> {
+    const days = periodDays ?? await this.config.getNumber('kpi.defaultPeriodDays').catch(() => KPI_PERIODS.medium);
+    return this.withCache(`modules-usage:__all__:${days}`, async () => {
+      const since = new Date(Date.now() - days * MS_PER_DAY);
+
+      const [installedGrouped, usageRows] = await Promise.all([
+        this.prisma.installedModule.groupBy({
+          by:     ['moduleKey'],
+          where:  { tenantId: { not: PLATFORM_TENANT_ID } },
+          _count: { tenantId: true },
+          _max:   { activatedAt: true, deactivatedAt: true },
+        }),
+        this.prisma.moduleUsageDaily.findMany({
+          where:  { tenantId: { not: PLATFORM_TENANT_ID }, date: { gte: since } },
+          select: { moduleKey: true, date: true, actionCount: true },
+        }),
+      ]);
+
+      // Modules actifs distincts (≥1 tenant avec isActive=true).
+      const activeCount = await this.prisma.installedModule.groupBy({
+        by:     ['moduleKey'],
+        where:  { tenantId: { not: PLATFORM_TENANT_ID }, isActive: true },
+        _count: { tenantId: true },
+      });
+      const activeByKey = new Map(activeCount.map(a => [a.moduleKey, a._count.tenantId]));
+
+      // Users distincts cross-tenant par module, sur la période.
+      const uniqueUsersByKey = new Map<string, number>();
+      for (const [moduleKey, prefixes] of Object.entries(MODULE_ACTION_PREFIXES)) {
+        const rows = await this.prisma.auditLog.findMany({
+          where: {
+            tenantId:  { not: PLATFORM_TENANT_ID },
+            createdAt: { gte: since },
+            userId:    { not: null },
+            OR:        prefixes.map(p => ({ action: { startsWith: p } })),
+          },
+          select:   { userId: true },
+          distinct: ['userId'],
+        });
+        uniqueUsersByKey.set(moduleKey, rows.length);
+      }
+
+      // Agrégats ModuleUsageDaily par moduleKey.
+      const usageByKey = new Map<string, {
+        actionSum:  number;
+        activeDays: Set<string>;
+        lastUsedAt: Date | null;
+      }>();
+      for (const row of usageRows) {
+        const acc = usageByKey.get(row.moduleKey) ?? { actionSum: 0, activeDays: new Set(), lastUsedAt: null };
+        acc.actionSum += row.actionCount;
+        if (row.actionCount > 0) acc.activeDays.add(row.date.toISOString().slice(0, 10));
+        if (!acc.lastUsedAt || row.date > acc.lastUsedAt) acc.lastUsedAt = row.date;
+        usageByKey.set(row.moduleKey, acc);
+      }
+
+      const installedByKey = new Map(installedGrouped.map(i => [i.moduleKey, i]));
+
+      const allKeys = new Set<string>([
+        ...Object.keys(MODULE_ACTION_PREFIXES),
+        ...installedGrouped.map(i => i.moduleKey),
+        ...Array.from(usageByKey.keys()),
+      ]);
+
+      const modules: ModuleUsageEntry[] = Array.from(allKeys).map((moduleKey) => {
+        const inst   = installedByKey.get(moduleKey);
+        const active = activeByKey.get(moduleKey) ?? 0;
+        const usage  = usageByKey.get(moduleKey);
+        return {
+          moduleKey,
+          installed:     (inst?._count.tenantId ?? 0) > 0,
+          isActive:      active > 0,
+          activatedAt:   null,
+          activatedBy:   null,
+          deactivatedAt: null,
+          deactivatedBy: null,
+          periodDays:    days,
+          actionCount:   usage?.actionSum ?? 0,
+          uniqueUsers:   uniqueUsersByKey.get(moduleKey) ?? 0,
+          activeDays:    usage?.activeDays.size ?? 0,
+          lastUsedAt:    usage?.lastUsedAt ? usage.lastUsedAt.toISOString().slice(0, 10) : null,
+        };
+      }).sort((a, b) => b.actionCount - a.actionCount);
+
+      return {
+        tenantId:    '__all__',
         periodDays:  days,
         generatedAt: new Date().toISOString(),
         modules,

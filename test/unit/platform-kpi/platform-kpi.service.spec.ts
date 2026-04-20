@@ -281,15 +281,15 @@ describe('PlatformKpiService — getAdoptionBreakdown', () => {
     prisma.user.findMany.mockResolvedValue([]);
     prisma.tenant.count.mockResolvedValue(10);
     prisma.installedModule.groupBy.mockResolvedValue([
-      { moduleKey: 'ticketing', _count: { tenantId: 5 } },  // 50% → adopted
-      { moduleKey: 'qhse',      _count: { tenantId: 2 } },  // 20% → not adopted
+      { moduleKey: 'TICKETING', _count: { tenantId: 5 } },  // 50% → adopted
+      { moduleKey: 'QHSE',      _count: { tenantId: 2 } },  // 20% → not adopted
     ]);
     const svc = make(prisma, createConfigMock({
       'kpi.cacheTtlSeconds': 60, 'kpi.defaultPeriodDays': 30, 'kpi.moduleAdoptionThreshold': 0.3,
     }));
     const report = await svc.getAdoptionBreakdown(30);
-    const t = report.modules.find((m) => m.moduleKey === 'ticketing')!;
-    const q = report.modules.find((m) => m.moduleKey === 'qhse')!;
+    const t = report.modules.find((m) => m.moduleKey === 'TICKETING')!;
+    const q = report.modules.find((m) => m.moduleKey === 'QHSE')!;
     expect(t.adopted).toBe(true);
     expect(q.adopted).toBe(false);
   });
@@ -407,7 +407,7 @@ describe('PlatformKpiService.getModulesUsageForTenant', () => {
     expect(report.periodDays).toBe(30);
     // registry = ticketing, trips, parcels, garage, qhse, pricing, reporting, crm
     expect(report.modules.length).toBeGreaterThanOrEqual(8);
-    const ticketing = report.modules.find((m) => m.moduleKey === 'ticketing')!;
+    const ticketing = report.modules.find((m) => m.moduleKey === 'TICKETING')!;
     expect(ticketing.installed).toBe(false);
     expect(ticketing.isActive).toBe(false);
     expect(ticketing.actionCount).toBe(0);
@@ -418,7 +418,7 @@ describe('PlatformKpiService.getModulesUsageForTenant', () => {
     const prisma = createPrismaMock();
     prisma.installedModule.findMany.mockResolvedValue([
       {
-        moduleKey: 'ticketing', isActive: false,
+        moduleKey: 'TICKETING', isActive: false,
         activatedAt: new Date('2026-01-01'), activatedBy: 'user-admin',
         deactivatedAt: new Date('2026-04-15'), deactivatedBy: 'user-admin',
       },
@@ -427,7 +427,7 @@ describe('PlatformKpiService.getModulesUsageForTenant', () => {
     const svc = make(prisma, createConfigMock({ 'kpi.cacheTtlSeconds': 60, 'kpi.defaultPeriodDays': 30 }));
 
     const report = await svc.getModulesUsageForTenant('tenant-abc', 30);
-    const ticketing = report.modules.find((m) => m.moduleKey === 'ticketing')!;
+    const ticketing = report.modules.find((m) => m.moduleKey === 'TICKETING')!;
     expect(ticketing.installed).toBe(true);
     expect(ticketing.isActive).toBe(false);
     expect(ticketing.activatedBy).toBe('user-admin');
@@ -439,21 +439,21 @@ describe('PlatformKpiService.getModulesUsageForTenant', () => {
     const prisma = createPrismaMock();
     prisma.installedModule.findMany.mockResolvedValue([
       {
-        moduleKey: 'parcels', isActive: true,
+        moduleKey: 'PARCEL', isActive: true,
         activatedAt: new Date('2026-01-01'), activatedBy: 'user-1',
         deactivatedAt: null, deactivatedBy: null,
       },
     ]);
     prisma.moduleUsageDaily.findMany.mockResolvedValue([
-      { moduleKey: 'parcels', date: new Date('2026-04-10'), actionCount: 5,  uniqueUsers: 2 },
-      { moduleKey: 'parcels', date: new Date('2026-04-11'), actionCount: 12, uniqueUsers: 4 },
-      { moduleKey: 'parcels', date: new Date('2026-04-12'), actionCount: 0,  uniqueUsers: 0 },
-      { moduleKey: 'parcels', date: new Date('2026-04-13'), actionCount: 3,  uniqueUsers: 1 },
+      { moduleKey: 'PARCEL', date: new Date('2026-04-10'), actionCount: 5,  uniqueUsers: 2 },
+      { moduleKey: 'PARCEL', date: new Date('2026-04-11'), actionCount: 12, uniqueUsers: 4 },
+      { moduleKey: 'PARCEL', date: new Date('2026-04-12'), actionCount: 0,  uniqueUsers: 0 },
+      { moduleKey: 'PARCEL', date: new Date('2026-04-13'), actionCount: 3,  uniqueUsers: 1 },
     ]);
     const svc = make(prisma, createConfigMock({ 'kpi.cacheTtlSeconds': 60, 'kpi.defaultPeriodDays': 30 }));
 
     const report = await svc.getModulesUsageForTenant('tenant-abc', 30);
-    const parcels = report.modules.find((m) => m.moduleKey === 'parcels')!;
+    const parcels = report.modules.find((m) => m.moduleKey === 'PARCEL')!;
     expect(parcels.actionCount).toBe(20);   // 5+12+0+3
     expect(parcels.uniqueUsers).toBe(4);    // max quotidien
     expect(parcels.activeDays).toBe(3);     // 3 jours avec actionCount > 0
@@ -464,17 +464,17 @@ describe('PlatformKpiService.getModulesUsageForTenant', () => {
     const prisma = createPrismaMock();
     prisma.installedModule.findMany.mockResolvedValue([]);
     prisma.moduleUsageDaily.findMany.mockResolvedValue([
-      { moduleKey: 'ticketing', date: new Date('2026-04-10'), actionCount: 100, uniqueUsers: 5 },
-      { moduleKey: 'parcels',   date: new Date('2026-04-10'), actionCount: 50,  uniqueUsers: 3 },
-      { moduleKey: 'qhse',      date: new Date('2026-04-10'), actionCount: 200, uniqueUsers: 8 },
+      { moduleKey: 'TICKETING', date: new Date('2026-04-10'), actionCount: 100, uniqueUsers: 5 },
+      { moduleKey: 'PARCEL',   date: new Date('2026-04-10'), actionCount: 50,  uniqueUsers: 3 },
+      { moduleKey: 'QHSE',      date: new Date('2026-04-10'), actionCount: 200, uniqueUsers: 8 },
     ]);
     const svc = make(prisma, createConfigMock({ 'kpi.cacheTtlSeconds': 60, 'kpi.defaultPeriodDays': 30 }));
 
     const report = await svc.getModulesUsageForTenant('tenant-abc', 30);
     // Le plus utilisé en premier
-    expect(report.modules[0].moduleKey).toBe('qhse');
-    expect(report.modules[1].moduleKey).toBe('ticketing');
-    expect(report.modules[2].moduleKey).toBe('parcels');
+    expect(report.modules[0].moduleKey).toBe('QHSE');
+    expect(report.modules[1].moduleKey).toBe('TICKETING');
+    expect(report.modules[2].moduleKey).toBe('PARCEL');
   });
 
   it('inclut modules legacy hors registry (installés mais pas dans MODULE_ACTION_PREFIXES)', async () => {

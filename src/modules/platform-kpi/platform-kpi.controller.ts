@@ -94,6 +94,16 @@ export class PlatformKpiController {
     return this.kpi.getStrategic(parsePeriodDays(days, 7));
   }
 
+  // ─── Modules usage — vue plateforme (agrégée tous tenants) ───────────────
+  // Déclarée AVANT `/modules/usage/:tenantId` pour éviter qu'un segment
+  // littéral comme "all" soit interprété comme un tenantId. Retourne les
+  // mêmes champs que la version par-tenant mais sommés cross-tenant.
+  @Get('modules/usage')
+  @RequirePermission(Permission.PLATFORM_KPI_ADOPTION_READ_GLOBAL)
+  modulesUsagePlatform(@Query('days') days?: string) {
+    return this.kpi.getModulesUsagePlatformWide(parsePeriodDays(days, 30));
+  }
+
   // ─── Modules usage par tenant — SA + L1 + L2 ──────────────────────────────
   // Retourne pour chaque module du registry son état (installé / actif /
   // désactivé + qui/quand) et son usage agrégé sur la période (actionCount,

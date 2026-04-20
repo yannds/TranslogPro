@@ -36,6 +36,9 @@ import DataTableMaster, { type Column } from '../DataTableMaster';
 
 const P_KPI_ADOPTION = 'data.platform.kpi.adoption.read.global';
 const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+// Sentinel pour la vue agrégée « tous tenants ». N'est PAS un vrai tenantId —
+// le frontend branche sur un endpoint dédié quand cette valeur est sélectionnée.
+const ALL_TENANTS = '__all__';
 
 // ─── Types (alignés sur PlatformKpiService.ModulesUsageReport) ────────────────
 
@@ -275,23 +278,26 @@ export function PagePlatformModulesUsage() {
     canRead ? '/api/tenants' : null,
   );
 
-  const tenantOptions = useMemo(
-    () => (tenants ?? [])
+  const tenantOptions = useMemo(() => {
+    const real = (tenants ?? [])
       .filter(t => t.id !== PLATFORM_TENANT_ID)
       .map(t => ({ value: t.id, label: `${t.name} (${t.slug})` }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-    [tenants],
-  );
+      .sort((a, b) => a.label.localeCompare(b.label));
+    // Option virtuelle en tête — vue agrégée, sélectionnée par défaut.
+    return [{ value: ALL_TENANTS, label: t('platformModulesUsage.allTenants') }, ...real];
+  }, [tenants, t]);
 
-  const [tenantId, setTenantId] = useState<string>('');
+  // Par défaut : vue agrégée plateforme (SA pense d'abord SaaS).
+  const [tenantId, setTenantId] = useState<string>(ALL_TENANTS);
   const [days,     setDays]     = useState<number>(30);
   const [rev,      setRev]      = useState(0);
 
-  // Sélection auto du premier tenant disponible dès que la liste est chargée.
-  const effectiveTenantId = tenantId || tenantOptions[0]?.value || '';
+  const effectiveTenantId = tenantId || ALL_TENANTS;
 
-  const url = canRead && effectiveTenantId
-    ? `/api/platform/kpi/modules/usage/${effectiveTenantId}?days=${days}`
+  const url = canRead
+    ? effectiveTenantId === ALL_TENANTS
+        ? `/api/platform/kpi/modules/usage?days=${days}`
+        : `/api/platform/kpi/modules/usage/${effectiveTenantId}?days=${days}`
     : null;
 
   const { data, loading, error, refetch } = useFetch<ModulesUsageReport>(

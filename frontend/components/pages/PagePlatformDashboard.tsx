@@ -189,21 +189,22 @@ function Action({ to, icon, title, desc }: { to: string; icon: React.ReactNode; 
 
 function ModuleBar({ moduleKey, pct, tenants }: { moduleKey: string; pct: number; tenants: number }) {
   const pctRound = Math.round(pct * 100);
+  const pctBar = Math.max(0, Math.min(100, pctRound));
   return (
-    <div>
-      <div className="flex items-baseline justify-between text-xs mb-1">
-        <span className="t-text-body font-medium font-mono">{moduleKey}</span>
-        <span className="t-text-2 tabular-nums">{tenants} · {pctRound}%</span>
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between text-xs mb-1 gap-2">
+        <span className="t-text-body font-medium font-mono truncate">{moduleKey}</span>
+        <span className="t-text-2 tabular-nums shrink-0">{tenants} · {pctRound}%</span>
       </div>
       <div
-        className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5"
+        className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden"
         role="progressbar"
         aria-label={moduleKey}
-        aria-valuenow={pctRound}
+        aria-valuenow={pctBar}
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <div className="bg-teal-500 h-1.5 rounded-full" style={{ width: `${pctRound}%` }} />
+        <div className="bg-teal-500 h-1.5 rounded-full" style={{ width: `${pctBar}%` }} />
       </div>
     </div>
   );
