@@ -29,7 +29,9 @@
     "test:pw:ui": "playwright test --ui",
     "test:pw:headed": "playwright test --headed",
     "test:pw:report": "playwright show-report test/playwright/.report",
-    "seed:e2e": "ts-node scripts/seed-e2e.ts"
+    "seed:e2e": "ts-node scripts/seed-e2e.ts",
+    "dev:sync-hosts": "./scripts/dev-sync-hosts.sh",
+    "dev:sync-hosts:dry": "./scripts/dev-sync-hosts.sh --dry-run"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

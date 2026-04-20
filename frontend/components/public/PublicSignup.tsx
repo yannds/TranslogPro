@@ -561,6 +561,12 @@ function StepPlan({ planSlug, setPlanSlug }: { planSlug?: string; setPlanSlug: (
     if (featured) setPlanSlug(featured.slug);
   }, [plans, planSlug, setPlanSlug]);
 
+  // Hook appelé inconditionnellement — jamais après un early-return (Rules of Hooks).
+  const numberFmt = useMemo(
+    () => new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR', { maximumFractionDigits: 0 }),
+    [lang],
+  );
+
   if (loadErr) {
     return (
       <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -579,11 +585,6 @@ function StepPlan({ planSlug, setPlanSlug }: { planSlug?: string; setPlanSlug: (
   if (plans.length === 0) {
     return <p className="text-sm text-slate-600 dark:text-slate-400">{t('signup.plan.empty')}</p>;
   }
-
-  const numberFmt = useMemo(
-    () => new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR', { maximumFractionDigits: 0 }),
-    [lang],
-  );
 
   return (
     <div>
@@ -647,6 +648,11 @@ function StepPlan({ planSlug, setPlanSlug }: { planSlug?: string; setPlanSlug: (
 function SuccessScreen({ slug, trialDays }: { slug: string; trialDays: number }) {
   const { t } = useI18n();
   const tenantUrl = buildTenantLoginUrl(slug);
+  // Signal dev-only : le slug vient d'être créé en DB, mais /etc/hosts n'est
+  // pas encore à jour → le CTA mènerait à un host non résolu. On affiche la
+  // commande à lancer. Condition : domaine de base == translog.test (conv. dev).
+  const isDevDomain =
+    ((import.meta as any)?.env?.VITE_PLATFORM_BASE_DOMAIN ?? 'translog.test') === 'translog.test';
   return (
     <section className="relative overflow-hidden py-20 lg:py-28">
       <div className="absolute inset-0 -z-10" aria-hidden>
@@ -668,6 +674,23 @@ function SuccessScreen({ slug, trialDays }: { slug: string; trialDays: number })
           <p className="mt-3 text-sm font-medium text-teal-700 dark:text-teal-400">
             {t('signup.success.trialInfo').replace('{days}', String(trialDays))}
           </p>
+        )}
+        {isDevDomain && (
+          <div
+            role="alert"
+            className="mx-auto mt-6 max-w-xl rounded-lg border border-amber-300 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <p className="font-semibold">
+              <AlertTriangle className="mr-1.5 inline h-4 w-4 align-[-2px]" aria-hidden />
+              {t('signup.success.devHostsTitle')}
+            </p>
+            <p className="mt-1">
+              {t('signup.success.devHostsBody').replace('{slug}', slug)}
+            </p>
+            <pre className="mt-3 overflow-x-auto rounded bg-amber-100 px-3 py-2 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+npm run dev:sync-hosts
+            </pre>
+          </div>
         )}
         <div className="mt-8 flex justify-center">
           <a
