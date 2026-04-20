@@ -387,6 +387,20 @@ model TenantBusinessConfig {
   // pour décider si un hub peut servir de point de montée/descente public.
   intermediateRespectHubRules   Boolean @default(true)
 
+  // ── Sécurité endpoints publics (2026-04-20) ─────────────────────────────
+  // Plafond journalier (UTC) de magic links / OTP envoyés par SMS/WhatsApp/email
+  // via les flows publics. Au-delà, le tenant ne peut plus dispatcher de
+  // nouveaux liens/codes avant minuit — anti-spam et contrôle de coût opérateur.
+  dailyMagicLinkBudget          Int @default(200)
+  // Cooldown par phone avant ré-émission d'un magic link / OTP. Empêche un
+  // attaquant d'utiliser `POST /portal/booking` pour bombarder un numéro tiers.
+  magicLinkPhoneCooldownHours   Int @default(24)
+  // Active/désactive la protection CAPTCHA Cloudflare Turnstile sur les POST
+  // publics (booking, parcel pickup, retro-claim initiate). En dev local,
+  // laisser false tant que Vault `platform/captcha/turnstile` n'est pas
+  // provisionné — TurnstileGuard fail-open avec log.warn.
+  captchaEnabled                Boolean @default(false)
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1568,6 +1582,16 @@ model Customer {
   language        String? // ISO 639-1 (fr, en, wo…) — préférence contact
   // userId = null → shadow profile (anonyme, jamais connecté)
   userId          String?   @unique
+  // Vérification phone/email :
+  //   - phoneVerified = true quand un magic link / OTP retro-claim a été utilisé
+  //     avec succès par le possesseur réel du numéro, OU quand un agent l'a
+  //     confirmé en présentiel (caisse, guichet).
+  //   - Tant que false, `bumpCounters` (et donc dérivation segments) doit être
+  //     skippé pour les flows publics anonymes : sinon un attaquant peut
+  //     polluer le CRM avec le numéro d'autrui.
+  phoneVerified     Boolean   @default(false)
+  phoneVerifiedAt   DateTime?
+  phoneVerifiedVia  String? // MAGIC_LINK | RETRO_CLAIM | AGENT_IN_PERSON
   preferences     Json      @default("{}")
   // { favoriteSeatType, favoriteSeatNumber, favoriteRoute, channels: { sms, whatsapp, email } }
   segments        String[]  @default([])

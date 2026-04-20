@@ -26,8 +26,25 @@ export interface RateLimitConfig {
   limit:       number;
   /** Taille de la fenêtre en millisecondes */
   windowMs:    number;
-  /** Clé de partition : 'userId' | 'ip' | 'tenantId' | 'custom' */
-  keyBy:       'userId' | 'ip' | 'tenantId';
+  /**
+   * Clé de partition :
+   *   - 'userId'   : req.user.id (auth required)
+   *   - 'ip'       : X-Forwarded-For ou socket
+   *   - 'tenantId' : req.user.tenantId
+   *   - 'phone'    : valeur extraite du body via `phonePath`
+   *                  (flows publics anonymes — rate-limit par cible)
+   */
+  keyBy:       'userId' | 'ip' | 'tenantId' | 'phone';
+  /**
+   * Chemin d'accès (dot-notation) vers le phone dans req.body, OU liste de
+   * chemins (on rate-limit chaque phone résolu). Requis si keyBy='phone'.
+   *
+   * Exemples :
+   *   - `passengers[].phone`        → tous les phones des passagers (booking)
+   *   - `senderPhone,recipientPhone`→ sender ET recipient (parcel)
+   *   - `phone`                     → phone direct au root
+   */
+  phonePath?:  string;
   /**
    * Suffixe unique identifiant l'endpoint (évite les collisions de clé).
    * Ex: 'sos', 'safety_alert', 'public_report'
@@ -40,10 +57,19 @@ export interface RateLimitConfig {
 /**
  * Décorateur applicatif pour configurer le rate limiting par endpoint.
  *
- * Usage :
+ * Usage simple :
  *   @RateLimit({ limit: 3, windowMs: 3600_000, keyBy: 'userId', suffix: 'sos' })
+ *
+ * Usage combiné (plusieurs dimensions — IP + phone par ex.) :
+ *   @RateLimit([
+ *     { limit: 5,  windowMs: 3600_000, keyBy: 'ip',    suffix: 'booking_ip'    },
+ *     { limit: 3,  windowMs: 3600_000, keyBy: 'phone', suffix: 'booking_phone',
+ *       phonePath: 'passengers[].phone' },
+ *   ])
+ *
+ * Toutes les dimensions doivent passer : si UNE SEULE dépasse → 429.
  */
-export const RateLimit = (config: RateLimitConfig) =>
+export const RateLimit = (config: RateLimitConfig | RateLimitConfig[]) =>
   SetMetadata(RATE_LIMIT_KEY, config);
 
 /**
@@ -77,28 +103,56 @@ export class RedisRateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const config = this.reflector.get<RateLimitConfig>(
+    const raw = this.reflector.get<RateLimitConfig | RateLimitConfig[] | undefined>(
       RATE_LIMIT_KEY,
       context.getHandler(),
     );
+    if (!raw) return true;
 
-    // Pas de @RateLimit() sur cet endpoint → laisser passer
-    if (!config) return true;
-
+    const configs = Array.isArray(raw) ? raw : [raw];
     const req = context.switchToHttp().getRequest<Request & {
       user?: { id?: string; tenantId?: string };
     }>();
 
+    // Toutes les dimensions doivent passer (AND logique).
+    for (const config of configs) {
+      await this.checkOne(req, config);
+    }
+    return true;
+  }
+
+  private async checkOne(
+    req: Request & { user?: { id?: string; tenantId?: string } },
+    config: RateLimitConfig,
+  ): Promise<void> {
+    // keyBy='phone' → possiblement N phones ; rate-limit chacun.
+    if (config.keyBy === 'phone') {
+      const phones = this.extractPhones(req, config.phonePath);
+      if (phones.length === 0) {
+        // Pas de phone dans le body → fail-closed (payload malformé).
+        throw new HttpException(
+          config.message ?? 'Requête invalide',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      for (const phone of phones) {
+        await this.checkPartition(`rl:${config.suffix}:phone:${phone}`, config);
+      }
+      return;
+    }
+
     const partitionValue = this.resolvePartitionKey(req, config.keyBy);
     if (!partitionValue) {
-      // Impossible de déterminer la clé → refuser (fail-closed)
       throw new HttpException(
         config.message ?? 'Trop de requêtes — réessayez plus tard',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+    await this.checkPartition(`rl:${config.suffix}:${partitionValue}`, config);
+  }
 
-    const redisKey = `rl:${config.suffix}:${partitionValue}`;
+  /** Vérifie une partition (IP, userId, phone…) — retourne true sinon throw 429. */
+  private async checkPartition(redisKey: string, config: RateLimitConfig): Promise<boolean> {
     const now      = Date.now();
     const windowStart = now - config.windowMs;
 
@@ -155,6 +209,47 @@ export class RedisRateLimitGuard implements CanActivate {
         return (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
           ?? req.socket?.remoteAddress
           ?? null;
+      case 'phone':
+        // géré séparément dans canActivate (peut produire N partitions)
+        return null;
     }
+  }
+
+  /**
+   * Extrait les phones du body selon `phonePath` (dot-notation, `[]` pour les
+   * tableaux, virgule pour plusieurs chemins).
+   * Normalise trivialement (lowercase + trim) — la normalisation E.164
+   * définitive se fait au DTO ; ici on veut juste une clé de rate-limit stable.
+   */
+  private extractPhones(req: Request, path?: string): string[] {
+    if (!path) return [];
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const phones = new Set<string>();
+    for (const p of path.split(',').map(s => s.trim()).filter(Boolean)) {
+      const values = this.resolvePath(body, p);
+      for (const v of values) {
+        if (typeof v === 'string' && v.trim()) phones.add(v.trim().toLowerCase());
+      }
+    }
+    return Array.from(phones);
+  }
+
+  private resolvePath(root: unknown, path: string): unknown[] {
+    // Support `a.b[].c` et `a.b.c`
+    const parts = path.split('.');
+    let current: unknown[] = [root];
+    for (const part of parts) {
+      const next: unknown[] = [];
+      const isArr = part.endsWith('[]');
+      const key   = isArr ? part.slice(0, -2) : part;
+      for (const cur of current) {
+        if (!cur || typeof cur !== 'object') continue;
+        const v = (cur as Record<string, unknown>)[key];
+        if (isArr && Array.isArray(v)) next.push(...v);
+        else if (v !== undefined) next.push(v);
+      }
+      current = next;
+    }
+    return current;
   }
 }

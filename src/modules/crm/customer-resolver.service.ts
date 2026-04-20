@@ -54,19 +54,61 @@ export class CustomerResolverService {
    * que le ticket/parcel pour atomicité. Fait lastSeenAt=now.
    *
    * `amountCents` est optionnel : pour un colis on peut ignorer si pas facturé.
+   *
+   * Protection anti-pollution CRM (flows publics anonymes) :
+   *   - Si `source = 'PUBLIC'` ET Customer.phoneVerified = false → on ne
+   *     bumpe PAS les compteurs (sinon un attaquant peut gonfler les
+   *     totalTickets/totalParcels d'un phone d'autrui via des bookings
+   *     anonymes, faussant les segments VIP/FREQUENT et déclenchant des
+   *     campaigns marketing contre un tiers non consenti).
+   *   - Caisse/guichet (source 'AGENT' ou non précisé) → bumpe toujours :
+   *     l'agent a le client en face, identité implicite confirmée.
+   *   - Le flip `phoneVerified=true` a lieu lors du claim magic link
+   *     (CustomerClaimService.completeToken) ou retro-claim OTP.
+   *
+   * Le `lastSeenAt` est mis à jour dans tous les cas — activité tracée.
    */
   async bumpCounters(
-    tx:         { customer: { update: Function } } | undefined | null,
+    tx:         { customer: { update: Function; findUnique?: Function } } | undefined | null,
     customerId: string,
     kind:       'ticket' | 'parcel',
     amountCents: bigint = 0n,
+    opts:       { source?: 'PUBLIC' | 'AGENT' } = {},
   ): Promise<void> {
     const db = (tx ?? this.prisma) as unknown as typeof this.prisma;
+
+    // Gating public : vérifier le statut phoneVerified avant de bumper.
+    // Règle : si le Customer a un phoneE164 et qu'il n'est pas vérifié, SKIP —
+    // un attaquant peut avoir soumis le phone d'un tiers via POST /portal/*.
+    // Cas email-only (phoneE164=null) : verified implicite, pas de surface
+    // d'attaque par téléphone (flood SMS impossible).
+    let verified = true;
+    if (opts.source === 'PUBLIC') {
+      const cust = await db.customer.findUnique({
+        where:  { id: customerId },
+        select: { phoneE164: true, phoneVerified: true },
+      });
+      verified = !!cust && (cust.phoneVerified === true || !cust.phoneE164);
+      if (!verified) {
+        this.logger.debug(`[CRM Bump] skipped counters for unverified public customer ${customerId} (kind=${kind})`);
+      }
+    }
+
+    // Flow agent : flip phoneVerified (identité vérifiée en présentiel).
+    // Pas de SELECT préalable nécessaire — `phoneVerified: true` est idempotent
+    // et `phoneVerifiedAt` est écrasé avec la dernière confirmation.
+    const agentFlip = opts.source === 'AGENT'
+      ? { phoneVerified: true, phoneVerifiedAt: new Date(), phoneVerifiedVia: 'AGENT_IN_PERSON' as const }
+      : {};
+
     await db.customer.update({
       where: { id: customerId },
       data:  {
-        ...(kind === 'ticket' ? { totalTickets: { increment: 1 } } : { totalParcels: { increment: 1 } }),
-        ...(amountCents > 0n ? { totalSpentCents: { increment: amountCents } } : {}),
+        ...(verified ? {
+          ...(kind === 'ticket' ? { totalTickets: { increment: 1 } } : { totalParcels: { increment: 1 } }),
+          ...(amountCents > 0n ? { totalSpentCents: { increment: amountCents } } : {}),
+        } : {}),
+        ...agentFlip,
         lastSeenAt: new Date(),
       },
     });

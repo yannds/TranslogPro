@@ -32,6 +32,8 @@ import { getTheme, type PortalTheme } from './portal-themes';
 import { SeatMapPicker } from '../tickets/SeatMapPicker';
 import { AnnouncementTicker } from '../display/AnnouncementTicker';
 import { useAnnouncements } from '../../lib/hooks/useAnnouncements';
+import { CaptchaWidget } from '../ui/CaptchaWidget';
+import { newIdempotencyKey } from '../../lib/captcha/useTurnstile';
 import {
   HorizonNavbar, HorizonHero, HorizonTripCard, HorizonSectionTitle, HorizonFooter,
   VividNavbar, VividHero, VividTripCard, VividSectionTitle, VividFooter,
@@ -436,6 +438,8 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
   const [booking, setBooking] = useState<BookingResult | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  // CAPTCHA token (Cloudflare Turnstile) — null si pas rendu ou expiré.
+  const [bookingCaptcha, setBookingCaptcha] = useState<string | null>(null);
 
   // ── Seat selection state ──────────────────────────────────────────────────
   const [seatInfo, setSeatInfo] = useState<SeatInfo | null>(null);
@@ -504,6 +508,8 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
       const result = await apiFetch<BookingResult>(`${apiBase}/booking`, {
         method: 'POST',
         skipRedirectOn401: true,
+        captchaToken:   bookingCaptcha,
+        idempotencyKey: newIdempotencyKey(),
         body: {
           tripId: trip.id,
           passengers: passengers.map(p => ({
@@ -728,6 +734,8 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
               {bookingError && (
                 <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{bookingError}</div>
               )}
+              {/* CAPTCHA Cloudflare Turnstile — rendu silencieux si pas de site-key */}
+              <CaptchaWidget onToken={setBookingCaptcha} />
               <div className="flex gap-3">
                 <button onClick={() => setStep(isNumbered ? 'seats' : 'passengers')} disabled={bookingLoading} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-50">{t('portail.back')}</button>
                 <button onClick={handlePay} disabled={!selectedPayment || bookingLoading} className={cn('flex-1 py-3 rounded-xl font-semibold text-sm transition-all', selectedPayment && !bookingLoading ? 'text-white shadow-lg [background:linear-gradient(to_right,var(--portal-accent),var(--portal-accent-dark))] hover:brightness-110' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed')}>
@@ -972,6 +980,10 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<ParcelPickupResult | null>(null);
   const [copied, setCopied] = useState(false);
+  // Token CAPTCHA Cloudflare Turnstile — null tant que non complété côté widget.
+  // Backend fail-open si `tenantBusinessConfig.captchaEnabled = false` OU si
+  // Vault `platform/captcha/turnstile` pas provisionné (dev local).
+  const [parcelCaptcha, setParcelCaptcha] = useState<string | null>(null);
 
   const formValid =
     form.senderName.trim().length >= 2 &&
@@ -991,6 +1003,8 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
       const result = await apiFetch<ParcelPickupResult>(`${apiBase}/parcel-pickup-request`, {
         method: 'POST',
         skipRedirectOn401: true,
+        captchaToken:   parcelCaptcha,
+        idempotencyKey: newIdempotencyKey(),
         body: {
           senderName:    form.senderName.trim(),
           senderPhone:   form.senderPhone.trim(),
@@ -1119,6 +1133,10 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
                 {sendError}
               </div>
             )}
+
+            {/* Turnstile CAPTCHA — rendu seulement si VITE_TURNSTILE_SITE_KEY présent.
+                Sinon silencieux (backend fail-open si tenant.captchaEnabled=false). */}
+            <CaptchaWidget onToken={setParcelCaptcha} />
 
             <button
               onClick={handleSend}

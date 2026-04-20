@@ -3,6 +3,7 @@ import {
   MaxLength, ValidateIf, ValidateNested, ArrayMinSize, ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsE164Phone } from '../../../common/validators/is-e164-phone.validator';
 
 class PassengerDto {
   @IsString()
@@ -15,6 +16,7 @@ class PassengerDto {
 
   @IsString()
   @MaxLength(30)
+  @IsE164Phone()
   phone!: string;
 
   @IsOptional()

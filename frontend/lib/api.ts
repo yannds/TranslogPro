@@ -35,6 +35,18 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
    * Utile pour le check initial de session (on veut juste null, pas un reload).
    */
   skipRedirectOn401?: boolean;
+  /**
+   * Token Cloudflare Turnstile (CAPTCHA) — envoyé en header `x-captcha-token`.
+   * Requis sur les POST publics annotés `@RequireCaptcha()` côté backend quand
+   * `TenantBusinessConfig.captchaEnabled = true`.
+   */
+  captchaToken?: string | null;
+  /**
+   * Clé d'idempotence UUID (header `Idempotency-Key`). Requis sur les POST
+   * publics annotés `@Idempotent()`. Si omis, le backend exécute sans cache —
+   * un double-submit peut alors produire 2 ressources.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -47,7 +59,7 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
  */
 export async function apiFetch<T = unknown>(
   path: string,
-  { body, baseUrl = '', skipRedirectOn401 = false, ...init }: ApiFetchOptions = {},
+  { body, baseUrl = '', skipRedirectOn401 = false, captchaToken, idempotencyKey, ...init }: ApiFetchOptions = {},
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
 
@@ -60,6 +72,10 @@ export async function apiFetch<T = unknown>(
   if (body !== undefined && !isFormData && !isBlob && !isString && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+
+  // Sécurité endpoints publics : headers opt-in
+  if (captchaToken) headers.set('x-captcha-token', captchaToken);
+  if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
 
   const serializedBody: BodyInit | undefined =
     body === undefined              ? undefined

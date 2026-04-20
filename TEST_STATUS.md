@@ -385,10 +385,19 @@ Nouvelles suites autour du portail plateforme et du self-service utilisateur :
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit complet** | `npx jest --config jest.unit.config.ts` | 78 | 791 | ✅ 791/791 PASS (incl. CRM portail public + annonces temps réel 2026-04-20) |
+| **Unit complet** | `npx jest --config jest.unit.config.ts` | 83 | 819 | ✅ 819/819 PASS (incl. hardening sécurité endpoints publics 2026-04-20) |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Playwright portail SaaS** (landing → welcome) | `npm run test:pw -- --project=public saas-journey` | 1 | 2 | ✅ PASS (TICKETING + PARCELS, cleanup tenants auto) |
+
+**Total validé 2026-04-20 post-security-hardening : 819 tests unit / 0 failure**
+
+### Ajouts 2026-04-20 (hardening sécurité endpoints publics)
+- `test/unit/common/is-e164-phone.validator.spec.ts` — 6 tests (validation E.164 + fallback country)
+- `test/unit/common/turnstile.guard.spec.ts` — 6 tests (CAPTCHA Cloudflare : feature flag, fail-open, 403 token manquant, slug→tenantId)
+- `test/unit/common/idempotency.guard.spec.ts` — 5 tests (SETNX pending, 409 concurrent, cache 200, header invalide)
+- `test/unit/crm/claim-cooldown-budget.spec.ts` — 5 tests (cooldown 24h/phone + budget/jour tenant, fallbacks, disable via config)
+- `test/unit/crm/bump-counters-phone-verified.spec.ts` — 5 tests (PUBLIC skip, PUBLIC email-only bump, AGENT flip, legacy sans gating)
 
 **Total validé 2026-04-20 post-annonces : 791 tests unit / 0 failure**
 

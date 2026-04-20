@@ -216,9 +216,18 @@ export class RetroClaimService {
         throw new BadRequestException('user_already_linked');
       }
 
+      // Retro-claim réussi = propriétaire réel du phone a saisi l'OTP reçu.
+      // Flip phoneVerified pour que les bumpCounters publics futurs le prennent
+      // en compte et que les segments se dérivent normalement.
       await tx.customer.update({
         where: { id: customer.id },
-        data:  { userId: input.userId, lastSeenAt: new Date() },
+        data:  {
+          userId: input.userId,
+          lastSeenAt:       new Date(),
+          phoneVerified:    true,
+          phoneVerifiedAt:  new Date(),
+          phoneVerifiedVia: 'RETRO_CLAIM',
+        },
       });
       await tx.customerRetroClaimOtp.update({
         where: { id: record.id },

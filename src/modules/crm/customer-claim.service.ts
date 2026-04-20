@@ -28,6 +28,11 @@ import { createHash, randomBytes } from 'crypto';
  */
 
 const DEFAULT_TTL_DAYS = 30;
+// Fallback si TenantBusinessConfig absent. Jamais magic number en prod : la
+// config tenant prime. Ces valeurs reflètent des défauts raisonnables pour
+// un tenant moyen (200 SMS/jour, cooldown 24h).
+const FALLBACK_DAILY_BUDGET      = 200;
+const FALLBACK_COOLDOWN_HOURS    = 24;
 
 type ClaimChannel = 'MAGIC_EMAIL' | 'MAGIC_WHATSAPP' | 'MAGIC_SMS';
 
@@ -57,7 +62,23 @@ export class CustomerClaimService {
     private readonly notification: NotificationService,
   ) {}
 
-  /** Émet un token + dispatche le magic link selon les canaux dispo. */
+  /** Émet un token + dispatche le magic link selon les canaux dispo.
+   *
+   * Protections anti-abus (flows publics anonymes) :
+   *   - Cooldown par phone : si un token a déjà été émis pour ce phoneE164
+   *     dans les `magicLinkPhoneCooldownHours` dernières heures → SKIP
+   *     (anti-bombardement SMS d'un phone tiers via POST /portal/booking).
+   *   - Budget quotidien tenant : si le nombre de tokens déjà émis
+   *     aujourd'hui ≥ `dailyMagicLinkBudget` → SKIP (contrôle de coût
+   *     opérateur, circuit-breaker contre abus massif).
+   *
+   * Les deux seuils viennent de `TenantBusinessConfig` (fallback codé en
+   * constantes — jamais magic numbers en prod : la config tenant prime).
+   *
+   * Les skips retournent `null` (pas d'erreur) pour que l'appelant
+   * fire-and-forget (booking/parcel) ne casse pas le flow principal. La
+   * raison du skip est loggée.
+   */
   async issueToken(
     tenantId:   string,
     customerId: string,
@@ -73,6 +94,48 @@ export class CustomerClaimService {
     if (!customer.phoneE164 && !customer.email) {
       this.logger.debug(`[CustomerClaim] customer ${customerId} has no contact channel`);
       return null;
+    }
+
+    // ── Anti-abus (cooldown phone + budget tenant) ────────────────────────
+    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where:  { tenantId },
+      select: { dailyMagicLinkBudget: true, magicLinkPhoneCooldownHours: true },
+    });
+    const cooldownHours = bizConfig?.magicLinkPhoneCooldownHours ?? FALLBACK_COOLDOWN_HOURS;
+    const dailyBudget   = bizConfig?.dailyMagicLinkBudget        ?? FALLBACK_DAILY_BUDGET;
+
+    // Cooldown phone : 1 token actif max par phone sur la fenêtre
+    if (customer.phoneE164 && cooldownHours > 0) {
+      const cooldownFloor = new Date(Date.now() - cooldownHours * 3600_000);
+      const recentForPhone = await this.prisma.customerClaimToken.findFirst({
+        where: {
+          tenantId,
+          customer: { phoneE164: customer.phoneE164 },
+          createdAt: { gte: cooldownFloor },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (recentForPhone) {
+        this.logger.warn(
+          `[CustomerClaim] cooldown hit phone=${this.maskPhone(customer.phoneE164)} tenant=${tenantId} (last=${recentForPhone.createdAt.toISOString()})`,
+        );
+        return null;
+      }
+    }
+
+    // Budget tenant/jour (UTC minuit → maintenant)
+    if (dailyBudget > 0) {
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const sentToday = await this.prisma.customerClaimToken.count({
+        where: { tenantId, createdAt: { gte: startOfDay } },
+      });
+      if (sentToday >= dailyBudget) {
+        this.logger.warn(
+          `[CustomerClaim] daily budget exhausted tenant=${tenantId} (${sentToday}/${dailyBudget})`,
+        );
+        return null;
+      }
     }
 
     const tokenClear = randomBytes(32).toString('hex');
@@ -186,9 +249,18 @@ export class CustomerClaimService {
         throw new BadRequestException('Cet utilisateur est déjà rattaché à un autre client');
       }
 
+      // Succès claim = preuve que le possesseur du phone/email a reçu le lien.
+      // On peut donc basculer `phoneVerified = true` → les prochains
+      // bumpCounters incrémenteront réellement les agrégats CRM de ce client.
       await tx.customer.update({
         where: { id: record.customerId },
-        data:  { userId, lastSeenAt: new Date() },
+        data:  {
+          userId,
+          lastSeenAt:       new Date(),
+          phoneVerified:    true,
+          phoneVerifiedAt:  new Date(),
+          phoneVerifiedVia: 'MAGIC_LINK',
+        },
       });
       await tx.customerClaimToken.update({
         where: { id: record.id },

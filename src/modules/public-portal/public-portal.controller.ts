@@ -19,6 +19,9 @@ import { SearchTripsDto }        from './dto/search-trips.dto';
 import { CreateBookingDto }      from './dto/create-booking.dto';
 import { CreateParcelPickupRequestDto } from './dto/create-parcel-pickup-request.dto';
 import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
+import { IdempotencyGuard, IdempotencyInterceptor, Idempotent } from '../../common/idempotency/idempotency.guard';
+import { UseInterceptors } from '@nestjs/common';
 
 @Controller('public/:tenantSlug/portal')
 export class PublicPortalController {
@@ -208,7 +211,10 @@ export class PublicPortalController {
    * Crée le remboursement basé sur la politique d'annulation du tenant.
    */
   @Post('tickets/:ticketRef/cancel')
-  @UseGuards(RedisRateLimitGuard)
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard, IdempotencyGuard)
+  @UseInterceptors(IdempotencyInterceptor)
+  @RequireCaptcha()
+  @Idempotent({ scope: 'portal_cancel' })
   @RateLimit({
     limit: 5, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_cancel',
     message: 'Cancellation limit reached (5/hour). Please try again later.',
@@ -229,11 +235,20 @@ export class PublicPortalController {
    * Rate limit strict : 5/h/IP — même cadence que l'annulation self-service.
    */
   @Post('parcel-pickup-request')
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({
-    limit: 5, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_parcel_pickup',
-    message: 'Parcel pickup request limit reached (5/hour). Please try again later.',
-  })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard, IdempotencyGuard)
+  @UseInterceptors(IdempotencyInterceptor)
+  @RequireCaptcha()
+  @Idempotent({ scope: 'portal_parcel_pickup' })
+  @RateLimit([
+    // IP : 5/h/IP (inchangé)
+    { limit: 5, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_parcel_pickup',
+      message: 'Parcel pickup request limit reached (5/hour). Please try again later.' },
+    // Phone : 3/h/phone — un attaquant qui rote les IP ne peut pas flood
+    // un phone tiers via sender/recipient.
+    { limit: 3, windowMs: 3600_000, keyBy: 'phone', suffix: 'portal_parcel_pickup_phone',
+      phonePath: 'senderPhone,recipientPhone',
+      message: 'Too many pickup requests for one of these phone numbers.' },
+  ])
   createParcelPickupRequest(
     @Param('tenantSlug') slug: string,
     @Body() dto: CreateParcelPickupRequestDto,
@@ -255,13 +270,19 @@ export class PublicPortalController {
     return this.service.trackParcelByCode(slug, trackingCode);
   }
 
-  /** Création de réservation (rate limit strict) */
+  /** Création de réservation — protection : rate-limit IP + phone, CAPTCHA, idempotency. */
   @Post('booking')
-  @UseGuards(RedisRateLimitGuard)
-  @RateLimit({
-    limit: 10, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_booking',
-    message: 'Booking limit reached (10/hour). Please try again later.',
-  })
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard, IdempotencyGuard)
+  @UseInterceptors(IdempotencyInterceptor)
+  @RequireCaptcha()
+  @Idempotent({ scope: 'portal_booking' })
+  @RateLimit([
+    { limit: 10, windowMs: 3600_000, keyBy: 'ip', suffix: 'portal_booking',
+      message: 'Booking limit reached (10/hour). Please try again later.' },
+    { limit: 3, windowMs: 3600_000, keyBy: 'phone', suffix: 'portal_booking_phone',
+      phonePath: 'passengers[].phone',
+      message: 'Too many bookings for one of these phone numbers.' },
+  ])
   createBooking(
     @Param('tenantSlug') slug: string,
     @Body() dto: CreateBookingDto,

@@ -68,18 +68,21 @@ export class ParcelService {
       });
 
       // Phase 5 : compteurs CRM pour sender + recipient dans la même transaction
+      // source='AGENT' → flip phoneVerified (agent au guichet confirme l'identité)
       const priceCents = BigInt(Math.round((dto.declaredValue ?? 0) * 100));
       if (senderRes?.customer.id) {
         await this.crmResolver.bumpCounters(
-          tx as unknown as { customer: { update: Function } },
+          tx as any,
           senderRes.customer.id, 'parcel', priceCents,
+          { source: 'AGENT' },
         );
       }
       if (recipientRes?.customer.id && recipientRes.customer.id !== senderRes?.customer.id) {
         await this.crmResolver.bumpCounters(
-          tx as unknown as { customer: { update: Function } },
-          recipientRes.customer.id, 'parcel',
-          // pas de montant côté destinataire (il ne paie pas)
+          tx as any,
+          recipientRes.customer.id, 'parcel', 0n,
+          // destinataire : pas en présentiel, on ne flip pas phoneVerified ici.
+          // Le flip se fera au retrait du colis par lui (AGENT_IN_PERSON).
         );
       }
 

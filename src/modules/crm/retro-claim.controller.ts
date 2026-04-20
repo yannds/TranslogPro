@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Body, BadRequestException, HttpCode, Req,
+  Controller, Post, Body, BadRequestException, HttpCode, Req, UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -9,6 +9,9 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 import { IsString, IsIn, IsNotEmpty, Length, Matches } from 'class-validator';
+import { IsE164Phone } from '../../common/validators/is-e164-phone.validator';
+import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
+import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
 
 /**
  * RetroClaimController — Phase 3 CRM.
@@ -33,7 +36,7 @@ class InitiateRetroDto {
   @IsString() @IsNotEmpty() @Length(4, 128)
   code!: string;
 
-  @IsString() @IsNotEmpty() @Length(6, 30)
+  @IsString() @IsNotEmpty() @Length(6, 30) @IsE164Phone()
   phone!: string;
 }
 
@@ -55,7 +58,16 @@ export class RetroClaimController {
    */
   @Post('initiate')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 3600_000 } })   // 3 / heure / IP
+  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
+  @RequireCaptcha()
+  @Throttle({ default: { limit: 3, ttl: 3600_000 } })   // 3 / heure / IP (defense in depth)
+  @RateLimit([
+    { limit: 3, windowMs: 3600_000, keyBy: 'ip',    suffix: 'retro_claim_ip',
+      message: 'Too many retro-claim attempts from this IP.' },
+    { limit: 3, windowMs: 24 * 3600_000, keyBy: 'phone', suffix: 'retro_claim_phone',
+      phonePath: 'phone',
+      message: 'Too many retro-claim attempts for this phone number.' },
+  ])
   @RequirePermission(Permission.FEEDBACK_SUBMIT_OWN)
   async initiate(
     @TenantId()  tenantId: string,

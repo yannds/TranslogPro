@@ -30,7 +30,15 @@ describe('CustomerClaimService', () => {
         create:     jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         findUnique: jest.fn(),
+        findFirst:  jest.fn().mockResolvedValue(null), // cooldown miss
+        count:      jest.fn().mockResolvedValue(0),    // budget miss
         update:     jest.fn(),
+      },
+      tenantBusinessConfig: {
+        findUnique: jest.fn().mockResolvedValue({
+          dailyMagicLinkBudget:        200,
+          magicLinkPhoneCooldownHours: 24,
+        }),
       },
       ticket:   { count: jest.fn().mockResolvedValue(2) },
       parcel:   { count: jest.fn().mockResolvedValue(1) },

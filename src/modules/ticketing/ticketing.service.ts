@@ -212,11 +212,13 @@ export class TicketingService {
       });
 
       // Phase 5 : compteurs CRM incrémentés dans la même transaction
+      // source='AGENT' → bumpCounters flip phoneVerified (identité en présentiel)
       if (crmRes?.customer.id) {
         await this.crmResolver.bumpCounters(
-          tx as unknown as { customer: { update: Function } },
+          tx as any,
           crmRes.customer.id, 'ticket',
           BigInt(Math.round(price.total * 100)),
+          { source: 'AGENT' },
         );
       }
 
@@ -387,9 +389,10 @@ export class TicketingService {
         // Phase 5 : compteurs CRM incrémentés dans la même transaction
         if (crmRes?.customer.id) {
           await this.crmResolver.bumpCounters(
-            tx as unknown as { customer: { update: Function } },
+            tx as any,
             crmRes.customer.id, 'ticket',
             BigInt(Math.round(pricings[i].total * 100)),
+            { source: 'AGENT' },
           );
         }
 

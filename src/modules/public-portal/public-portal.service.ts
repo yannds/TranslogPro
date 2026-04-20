@@ -989,9 +989,10 @@ export class PublicPortalService {
 
         if (crmRes?.customer.id) {
           await this.crmResolver.bumpCounters(
-            tx as unknown as { customer: { update: Function } },
+            tx as any,
             crmRes.customer.id, 'ticket',
             BigInt(Math.round(pricePaid * 100)),
+            { source: 'PUBLIC' },
           );
         }
 
@@ -1252,14 +1253,18 @@ export class PublicPortalService {
 
       if (senderRes?.customer.id) {
         await this.crmResolver.bumpCounters(
-          tx as unknown as { customer: { update: Function } },
+          tx as any,
           senderRes.customer.id, 'parcel',
+          0n,
+          { source: 'PUBLIC' },
         );
       }
       if (recipientRes?.customer.id && recipientRes.customer.id !== senderRes?.customer.id) {
         await this.crmResolver.bumpCounters(
-          tx as unknown as { customer: { update: Function } },
+          tx as any,
           recipientRes.customer.id, 'parcel',
+          0n,
+          { source: 'PUBLIC' },
         );
       }
 

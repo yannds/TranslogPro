@@ -1,4 +1,5 @@
 import { IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsE164Phone } from '../../../common/validators/is-e164-phone.validator';
 
 /**
  * DTO — demande publique d'enlèvement de colis (portail voyageur).
@@ -14,6 +15,7 @@ export class CreateParcelPickupRequestDto {
   @IsString()
   @MinLength(6)
   @MaxLength(30)
+  @IsE164Phone()
   senderPhone!: string;
 
   @IsString()
@@ -24,6 +26,7 @@ export class CreateParcelPickupRequestDto {
   @IsString()
   @MinLength(6)
   @MaxLength(30)
+  @IsE164Phone()
   recipientPhone!: string;
 
   /** Ville de départ (l'agent confirme le rattachement à une agence) */

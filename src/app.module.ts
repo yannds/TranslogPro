@@ -7,6 +7,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 // Infrastructure
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretModule } from './infrastructure/secret/secret.module';
+import { SecurityModule } from './common/security/security.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { EventBusModule } from './infrastructure/eventbus/eventbus.module';
 import { IdentityModule } from './infrastructure/identity/identity.module';
@@ -122,6 +123,7 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     DatabaseModule,
     StorageModule,
     EventBusModule,
+    SecurityModule, // @Global — Turnstile, Idempotency (anti-abus POST publics)
     IdentityModule,
     // Global providers — fournissent IPaymentService, ISmsService,
     // IWhatsappService, IWeatherService à tous les modules métier

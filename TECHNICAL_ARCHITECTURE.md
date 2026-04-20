@@ -684,6 +684,8 @@ announcement.created | announcement.updated | announcement.deleted
 
 **Annonces gare (2026-04-20)** — les événements `announcement.*` sont produits par `AnnouncementService` (manuel via UI admin) et par `AnnouncementTripListener` (auto sur `trip.started/paused/delayed/cancelled/completed` + `incident.sos`). Payload : `{announcementId, stationId, tripId, citySlug, type, priority, title, message, startsAt, endsAt, isActive, source}`. Consumers : DepartureBoard (SSE authentifié) + PortailVoyageur (polling public anonyme). Pipeline complet : [docs/ANNOUNCEMENTS.md](./docs/ANNOUNCEMENTS.md).
 
+**Sécurité endpoints publics (2026-04-20)** — tous les POST publics (portail voyageur booking/parcel/cancel + retro-claim OTP) passent désormais 8 verrous obligatoires : CAPTCHA Cloudflare Turnstile + rate-limit IP + rate-limit phone (multi-dimension) + DTO `@IsE164Phone` + cooldown 24h/phone sur magic link + budget SMS/jour par tenant + `Idempotency-Key` obligatoire + gating `phoneVerified` sur bumpCounters CRM (anti-pollution). Détail : [docs/SECURITY_PUBLIC_ENDPOINTS.md](./docs/SECURITY_PUBLIC_ENDPOINTS.md).
+
 ### 4.3 Redis Channels (WebSocket Fan-out)
 
 ```
