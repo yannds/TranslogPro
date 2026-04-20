@@ -12,8 +12,9 @@ Les derniers ajouts frontend ont introduit **3 namespaces i18n** actuellement pr
 | `tenantRules.*` | ~60 | Règles métier (annulation N-tiers, no-show, compensation, hub) | [PageTenantBusinessRules.tsx](../frontend/components/pages/PageTenantBusinessRules.tsx) — ajouté 2026-04-19 |
 | `vouchers.*`    | ~30 | Page admin Vouchers (émission, filtrage, annulation)  | [PageVouchers.tsx](../frontend/components/pages/PageVouchers.tsx) — ajouté 2026-04-19 |
 | `nav.business_rules`, `nav.vouchers` | 2 | Entrées nav admin | [nav.config.ts](../frontend/lib/navigation/nav.config.ts) — ajouté 2026-04-19 |
+| `platformKpi.*` | ~80 | Dashboard KPI SaaS plateforme (7 sections : North Star, MRR, retention, transactional, adoption détaillée, activation, strategic) | [fr.ts](../frontend/lib/i18n/locales/fr.ts), [en.ts](../frontend/lib/i18n/locales/en.ts) — ajouté 2026-04-20 |
 
-Total : **~140 clés** × 6 locales = ~840 lignes à ajouter.
+Total : **~220 clés** × 6 locales = ~1320 lignes à ajouter.
 
 ## Locales à mettre à jour
 

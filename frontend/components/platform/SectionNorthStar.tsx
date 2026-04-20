@@ -74,7 +74,7 @@ export function SectionNorthStar() {
                       : 'bg-transparent t-text-2 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  {t(`platformKpi.northStar.mode.${m}`) ?? m}
+                  {t(`platformKpi.mode.${m}`) ?? m}
                 </button>
               ))}
             </div>
@@ -163,7 +163,7 @@ export function SectionNorthStar() {
                       ${r.appliedMode === 'declarative' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : ''}
                       ${r.appliedMode === 'heuristic'   ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : ''}
                       ${r.appliedMode === 'compared'    ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' : ''}`}>
-                      {t(`platformKpi.northStar.mode.${r.appliedMode}`) ?? r.appliedMode}
+                      {t(`platformKpi.mode.${r.appliedMode}`) ?? r.appliedMode}
                     </span>
                   </td>
                 </tr>

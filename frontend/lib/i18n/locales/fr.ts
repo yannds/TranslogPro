@@ -4231,6 +4231,126 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "actSupportDesc": "Tickets des tenants à traiter"
   },
 
+  // ─── KPI SaaS plateforme (Sprint KPI 2026-04-20) ────────────────────────────
+  "platformKpi": {
+    "common": {
+      "noData": "Aucune donnée disponible."
+    },
+    "filters": {
+      "periodDays": "Période (jours)"
+    },
+    "mode": {
+      "declarative": "Déclaratif",
+      "heuristic": "Heuristique",
+      "compared": "Comparé"
+    },
+    "step": {
+      "TRIP_CREATED": "A créé un trajet",
+      "TICKET_SOLD": "A vendu un billet",
+      "DRIVER_ADDED": "A ajouté un chauffeur",
+      "TWO_MODULES_USED": "Utilise ≥ 2 modules"
+    },
+    "northStar": {
+      "title": "North Star — % opérations via SaaS",
+      "modeAria": "Mode de calcul",
+      "globalPct": "% ops via SaaS",
+      "globalPctHint": "Moyenne pondérée des tenants couverts",
+      "tenantsCovered": "Tenants couverts",
+      "missing": "sans donnée",
+      "targetOccupancy": "Occupation cible",
+      "targetOccupancyHint": "Config kpi.targetOccupancyRate",
+      "periodDays": "Période",
+      "periodDaysHint": "Fenêtre d'analyse",
+      "perTenant": "Par tenant",
+      "tenant": "Tenant",
+      "ticketsPct": "Billets %",
+      "tripsPct": "Trajets %",
+      "incidentsPct": "Incidents %",
+      "appliedMode": "Mode appliqué"
+    },
+    "mrr": {
+      "title": "Business & Traction",
+      "mrrLabel": "MRR",
+      "mrrHint": "Revenu récurrent mensuel normalisé",
+      "arr": "ARR",
+      "arrHint": "MRR × 12",
+      "arpu": "ARPU",
+      "payingTenants": "tenants payants",
+      "mom": "Croissance MoM",
+      "momHint": "Vs période précédente",
+      "netNew": "Net New MRR",
+      "newRevenue": "New",
+      "expansion": "Expansion",
+      "contraction": "Contraction",
+      "churn": "Churn",
+      "netTotal": "Net",
+      "byPlan": "Par plan",
+      "plan": "Plan",
+      "tenants": "Tenants"
+    },
+    "retention": {
+      "title": "Rétention cohortes",
+      "avgD7": "Rétention J+7",
+      "avgD7Hint": "Moyenne sur toutes cohortes",
+      "avgD30": "Rétention J+30",
+      "avgD30Hint": "Moyenne sur toutes cohortes",
+      "avgD90": "Rétention J+90",
+      "avgD90Hint": "Moyenne sur toutes cohortes",
+      "perCohort": "Par cohorte mensuelle",
+      "cohortMonth": "Cohorte",
+      "signups": "Signups"
+    },
+    "transactional": {
+      "title": "Activité transactionnelle",
+      "ticketsSold": "Billets vendus",
+      "digital": "digital",
+      "gmv": "GMV",
+      "gmvHint": "Volume brut de ventes",
+      "tripsOperated": "Trajets opérés",
+      "cancelled": "annulés",
+      "onTime": "Ponctualité",
+      "onTimeHint": "Tolérance ≤ 10 min",
+      "dailyTrend": "Activité quotidienne",
+      "dailyTrendHint": "Billets + trajets agrégés par jour",
+      "parcels": "Colis",
+      "parcelsTotal": "Total",
+      "parcelsDelivered": "Livrés"
+    },
+    "adoption": {
+      "title": "Adoption détaillée",
+      "staffMau": "MAU Staff",
+      "driverMau": "MAU Chauffeurs",
+      "customerMau": "MAU Clients",
+      "dauLabel": "DAU",
+      "stickiness": "stickiness",
+      "modules": "Adoption modules",
+      "dauTrend": "DAU (30j)",
+      "dauTrendHint": "DAU total toutes catégories confondues"
+    },
+    "activation": {
+      "title": "Activation (early stage)",
+      "totalTenants": "Tenants totaux",
+      "totalTenantsHint": "Base du funnel",
+      "avgDays": "Temps moyen d'activation",
+      "avgDaysHint": "Signup → 4 étapes complètes",
+      "funnel": "Funnel étapes",
+      "conversion": "Conversion vs étape précédente"
+    },
+    "strategic": {
+      "title": "KPI stratégiques",
+      "saasDependency": "Dépendance SaaS",
+      "saasDependencyHint": "% opérations critiques via SaaS",
+      "actionsWeek": "Actions / user / sem.",
+      "actionsWeekHint": "Signal d'engagement",
+      "sessionsWeek": "Sessions / user / sem.",
+      "sessionsWeekHint": "Fréquence de retour",
+      "topActive": "Top tenants actifs",
+      "rank": "Rang",
+      "tenant": "Tenant",
+      "actions": "Actions"
+    }
+  },
+
   // ─── Gestion tenants ────────────────────────────────────────────────────────
   "tenantsPage": {
     "title": "Gestion des tenants",
@@ -5159,6 +5279,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "success.subtitle":  "Votre espace {slug}.translogpro.com est prêt. Nous vous avons envoyé un email de confirmation.",
     "success.cta":       "Accéder à mon espace",
     "success.trialInfo": "Vous bénéficiez de {days} jours d'essai gratuit. Aucune carte bancaire requise.",
+    "success.devHostsTitle": "Dev local : un pas avant de cliquer",
+    "success.devHostsBody":  "Le sous-domaine {slug}.translog.test n'est pas encore dans /etc/hosts. Lance la commande ci-dessous (sudo requis) puis clique sur le bouton :",
 
     "aria.stepIndicator":"Progression de l'inscription",
     "terms.prefix":      "En continuant, vous acceptez nos",

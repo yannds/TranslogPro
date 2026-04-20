@@ -67,7 +67,7 @@ export function SectionActivation() {
         {(data?.steps ?? []).map((s, i) => (
           <div key={s.step}>
             <ProgressBar
-              label={t(`platformKpi.activation.step.${s.step}`) ?? s.step}
+              label={t(`platformKpi.step.${s.step}`) ?? s.step}
               value={s.tenants}
               pct={s.pct}
               tone={s.pct >= 0.7 ? 'emerald' : s.pct >= 0.4 ? 'teal' : 'amber'}
