@@ -33,6 +33,14 @@ import { useAuth }  from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { useI18n }  from '../../lib/i18n/useI18n';
 import { Badge }    from '../ui/Badge';
+// Sections KPI SaaS (sprint KPI 2026-04-20) — montage conditionnel par permission
+import { SectionNorthStar }       from '../platform/SectionNorthStar';
+import { SectionMrrBreakdown }    from '../platform/SectionMrrBreakdown';
+import { SectionRetention }       from '../platform/SectionRetention';
+import { SectionTransactional }   from '../platform/SectionTransactional';
+import { SectionAdoptionDetailed } from '../platform/SectionAdoptionDetailed';
+import { SectionActivation }      from '../platform/SectionActivation';
+import { SectionStrategic }       from '../platform/SectionStrategic';
 
 // ─── Permissions ─────────────────────────────────────────────────────────────
 const P_METRICS         = 'data.platform.metrics.read.global';
@@ -42,6 +50,10 @@ const P_PLATFORM_STAFF  = 'control.platform.staff.global';
 const P_IMPERSONATION   = 'control.impersonation.switch.global';
 const P_PLANS_MANAGE    = 'control.platform.plans.manage.global';
 const P_BILLING_MANAGE  = 'control.platform.billing.manage.global';
+// Fine-grained KPI permissions (Sprint KPI 2026-04-20)
+const P_KPI_BUSINESS    = 'data.platform.kpi.business.read.global';
+const P_KPI_ADOPTION    = 'data.platform.kpi.adoption.read.global';
+const P_KPI_RETENTION   = 'data.platform.kpi.retention.read.global';
 
 // ─── Types (alignés sur PlatformAnalyticsService) ────────────────────────────
 
@@ -239,6 +251,10 @@ export function PagePlatformDashboard() {
   const canImpersonate   = useHasPerm(P_IMPERSONATION);
   const canManagePlans   = useHasPerm(P_PLANS_MANAGE);
   const canManageBilling = useHasPerm(P_BILLING_MANAGE);
+  // Fine-grained KPI permissions — montage conditionnel des sections SaaS
+  const canKpiBusiness   = useHasPerm(P_KPI_BUSINESS);
+  const canKpiAdoption   = useHasPerm(P_KPI_ADOPTION);
+  const canKpiRetention  = useHasPerm(P_KPI_RETENTION);
 
   const { data: growth,   loading: lGrowth  } = useFetch<GrowthPayload>(canMetrics ? '/api/platform/analytics/growth'   : null);
   const { data: adoption, loading: lAdoption } = useFetch<AdoptionPayload>(canMetrics ? '/api/platform/analytics/adoption' : null);
@@ -535,6 +551,20 @@ export function PagePlatformDashboard() {
           </div>
         </section>
       )}
+
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* SECTIONS KPI SAAS (Sprint KPI 2026-04-20)                                 */}
+      {/* Montage conditionnel par permission fine-grained. Chaque section est      */}
+      {/* auto-contenue (état local, useFetch, tokens sémantiques).                 */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+
+      {canKpiAdoption && <SectionNorthStar />}
+      {canKpiBusiness && <SectionMrrBreakdown />}
+      {canKpiAdoption && <SectionTransactional />}
+      {canKpiAdoption && <SectionAdoptionDetailed />}
+      {canKpiAdoption && <SectionActivation />}
+      {canKpiRetention && <SectionRetention />}
+      {canKpiAdoption && <SectionStrategic />}
 
       {/* ─── Quick actions ──────────────────────────────────────────────── */}
       <section aria-labelledby="pd-actions">
