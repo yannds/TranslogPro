@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, type FormEvent } from 'react';
+import { TenantResetSection } from './TenantResetSection';
 import {
   Building2, Save, Loader2, Globe, Clock, Banknote, FileBadge, Phone,
   Mail, ExternalLink, MapPin, Flag, CalendarDays, Settings2,
@@ -538,6 +539,11 @@ export function PageCompanySetup() {
             </button>
           </div>
         </form>
+      )}
+
+      {/* Zone dangereuse — reset tenant (TENANT_ADMIN + permission + re-auth) */}
+      {tenantId && remote?.slug && (
+        <TenantResetSection tenantId={tenantId} tenantSlug={remote.slug} />
       )}
     </div>
   );

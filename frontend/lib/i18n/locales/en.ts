@@ -1074,6 +1074,24 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "execStatus_COMPLETED": "Completed",
     "execStatus_ABORTED": "Aborted"
   },
+  "tenantReset": {
+    "zoneTitle": "Danger zone — Reset tenant",
+    "zoneDesc": "Deletes all business data (tickets, trips, parcels, cash registers, incidents…) while preserving infrastructure (agencies, lines, buses, staff, config).",
+    "buttonOpen": "Reset tenant…",
+    "dialogTitle": "Confirm reset",
+    "dialogWarn": "This action is IRREVERSIBLE. Read carefully before confirming.",
+    "bulletPurged": "Will be purged: tickets, travelers, parcels, trips, manifests, incidents, cash registers, transactions, driver scores, vouchers, claims, analytics.",
+    "bulletKept": "Will be kept: tenant, agencies, stations, routes, pricing rules, buses, cost profiles, users, roles, configurations.",
+    "bulletIrreversible": "No automatic backup — export your data first if needed.",
+    "labelPassword": "Your password",
+    "labelSlug": "Type the tenant slug to confirm:",
+    "submit": "Reset permanently",
+    "submitting": "Resetting…",
+    "successTitle": "Tenant reset successfully",
+    "rowsPurged": "row(s) deleted total",
+    "showDetail": "Show per-table detail",
+    "genericError": "Error while resetting"
+  },
   "profitability": {
     "title": "Profitability",
     "subtitle": "Cost and margin analysis per trip",

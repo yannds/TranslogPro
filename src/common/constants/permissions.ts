@@ -39,6 +39,11 @@ export const P_WORKFLOW_CONFIG_TENANT      = 'control.workflow.config.tenant';
 export const P_WORKFLOW_OVERRIDE_GLOBAL    = 'control.workflow.override.global';
 export const P_MODULE_INSTALL_TENANT       = 'control.module.install.tenant';
 export const P_SETTINGS_MANAGE_TENANT      = 'control.settings.manage.tenant';
+// Reset complet des données métier d'un tenant (purge tickets/trips/parcels/
+// caisses mais préserve agencies/stations/routes/users/config). Opération
+// destructive réservée au TENANT_ADMIN avec re-auth password + confirmation slug.
+// PAS mappée sur AGENCY_MANAGER ni ACCOUNTANT — trop sensible.
+export const P_TENANT_RESET_TENANT         = 'control.tenant.reset.tenant';
 
 // ─── Routes & Planning ────────────────────────────────────────────────────────
 export const P_ROUTE_MANAGE_TENANT         = 'control.route.manage.tenant';
@@ -348,6 +353,7 @@ export const Permission = {
   WORKFLOW_OVERRIDE_GLOBAL:   P_WORKFLOW_OVERRIDE_GLOBAL,
   MODULE_INSTALL_TENANT:      P_MODULE_INSTALL_TENANT,
   SETTINGS_MANAGE_TENANT:     P_SETTINGS_MANAGE_TENANT,
+  TENANT_RESET_TENANT:        P_TENANT_RESET_TENANT,
   // Routes / Trips
   ROUTE_MANAGE_TENANT:        P_ROUTE_MANAGE_TENANT,
   TRIP_CREATE_TENANT:         P_TRIP_CREATE_TENANT,

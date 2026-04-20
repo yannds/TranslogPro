@@ -287,6 +287,9 @@ export const TENANT_ROLES: Array<{
       'control.tax.manage.tenant',
       // Rentabilité prévisionnelle pré-trajet (Sprint 11.A)
       'data.profitability.read.tenant',
+      // Reset complet tenant — opération destructive, uniquement TENANT_ADMIN
+      // avec re-auth password + confirmation slug côté endpoint.
+      'control.tenant.reset.tenant',
     ],
   },
   {

@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { Permission } from '../../common/constants/permissions';
+import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
 import { TenantTaxService, CreateTenantTaxDto, UpdateTenantTaxDto } from './tenant-tax.service';
 import { TenantPaymentConfigService, UpdatePaymentConfigDto } from './tenant-payment-config.service';
 import { IntegrationsService, UpdateIntegrationModeDto } from './integrations.service';
+import { TenantResetService } from './tenant-reset.service';
 
 /**
  * Regroupe 3 endpoints /settings côté tenant :
@@ -26,7 +28,26 @@ export class TenantSettingsController {
     private readonly taxes:         TenantTaxService,
     private readonly paymentConfig: TenantPaymentConfigService,
     private readonly integrations:  IntegrationsService,
+    private readonly reset_:        TenantResetService,
   ) {}
+
+  // ── Reset tenant (destructif — TENANT_ADMIN + re-auth + confirmation) ──
+  // Garde-fous : permission granulaire + re-auth password + confirmation slug
+  // + rate-limit 3/h/user. Détails dans TenantResetService.reset().
+  @Post('reset')
+  @RequirePermission(Permission.TENANT_RESET_TENANT)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 3, windowMs: 3_600_000, keyBy: 'userId', suffix: 'tenant_reset',
+    message: 'Trop de tentatives de reset — réessayez dans 1h.',
+  })
+  resetTenant(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      { password: string; confirmSlug: string },
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ) {
+    return this.reset_.reset(tenantId, actor.id, dto);
+  }
 
   // ── Taxes ──────────────────────────────────────────────────────────────────
   @Get('taxes')

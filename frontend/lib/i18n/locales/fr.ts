@@ -927,6 +927,24 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "execStatus_COMPLETED": "Terminé",
     "execStatus_ABORTED": "Annulé"
   },
+  "tenantReset": {
+    "zoneTitle": "Zone dangereuse — Réinitialiser le tenant",
+    "zoneDesc": "Supprime toutes les données métier (billets, trajets, colis, caisses, incidents…) en conservant l'infrastructure (agences, lignes, bus, personnel, config).",
+    "buttonOpen": "Réinitialiser le tenant…",
+    "dialogTitle": "Confirmer la réinitialisation",
+    "dialogWarn": "Cette action est IRRÉVERSIBLE. Relisez attentivement avant de confirmer.",
+    "bulletPurged": "Seront purgés : billets, voyageurs, colis, trajets, manifestes, incidents, caisses, transactions, scores conducteurs, bons, réclamations, analytics.",
+    "bulletKept": "Seront conservés : tenant, agences, gares, lignes, règles tarifaires, bus, profils de coûts, utilisateurs, rôles, configurations.",
+    "bulletIrreversible": "Aucune sauvegarde automatique n'est faite — exportez vos données avant si besoin.",
+    "labelPassword": "Votre mot de passe",
+    "labelSlug": "Saisissez le slug du tenant pour confirmer :",
+    "submit": "Réinitialiser définitivement",
+    "submitting": "Réinitialisation en cours…",
+    "successTitle": "Tenant réinitialisé avec succès",
+    "rowsPurged": "ligne(s) supprimée(s) au total",
+    "showDetail": "Voir le détail par table",
+    "genericError": "Erreur lors de la réinitialisation"
+  },
   "profitability": {
     "title": "Rentabilité",
     "subtitle": "Analyse des coûts et marges par trajet",

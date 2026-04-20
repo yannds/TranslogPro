@@ -5,6 +5,7 @@ import { TenantSettingsController } from './tenant-settings.controller';
 import { TenantTaxService } from './tenant-tax.service';
 import { TenantPaymentConfigService } from './tenant-payment-config.service';
 import { IntegrationsService } from './integrations.service';
+import { TenantResetService } from './tenant-reset.service';
 
 /**
  * TenantSettingsModule — regroupe :
@@ -17,7 +18,7 @@ import { IntegrationsService } from './integrations.service';
 @Module({
   imports: [DatabaseModule, OAuthModule],
   controllers: [TenantSettingsController],
-  providers:   [TenantTaxService, TenantPaymentConfigService, IntegrationsService],
-  exports:     [TenantTaxService, TenantPaymentConfigService, IntegrationsService],
+  providers:   [TenantTaxService, TenantPaymentConfigService, IntegrationsService, TenantResetService],
+  exports:     [TenantTaxService, TenantPaymentConfigService, IntegrationsService, TenantResetService],
 })
 export class TenantSettingsModule {}
