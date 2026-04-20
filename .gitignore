@@ -24,6 +24,9 @@ unseal-keys.txt
 # Prisma
 prisma/migrations/*.sql.bak
 
+# Backups locaux (dumps DB pré-migration, non versionnés)
+backups/
+
 # Logs
 logs/
 *.log
