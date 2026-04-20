@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import type { Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { SeasonalityService, SeasonalPeriodType } from './seasonality.service';
 import { AuditService } from '../../core/workflow/audit.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -18,8 +19,46 @@ const ONE_DAY_MS      = 24 * 60 * 60 * 1_000;
 export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,
+    private readonly seasonality:      SeasonalityService,
     private readonly audit:             AuditService,
   ) {}
+
+  /** KPI saisonniers — Sprint 4. Retourne les agrégats par période avec la
+   *  fenêtre d'historique disponible (INSUFFICIENT..MULTI_YEAR) pour piloter
+   *  l'affichage YoY progressif. */
+  @Get('seasonality')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  getSeasonality(
+    @TenantId() tenantId: string,
+    @Query('periodType') periodType?: string,
+    @Query('routeId')    routeId?:    string,
+    @Query('from')       from?:       string,
+    @Query('to')         to?:         string,
+  ) {
+    const allowed: SeasonalPeriodType[] = ['YEAR', 'MONTH', 'WEEK', 'WEEKEND', 'WEEKDAY'];
+    const pt = (periodType ?? 'MONTH') as SeasonalPeriodType;
+    if (!allowed.includes(pt)) {
+      throw new BadRequestException(`periodType invalide : attendu ${allowed.join('|')}`);
+    }
+    return this.seasonality.query(tenantId, {
+      periodType: pt,
+      // routeId omis   → agrégats tenant global (routeId=null) ET par route
+      // routeId='null' → seulement agrégats tenant global
+      // routeId=<id>   → seulement cette route
+      routeId: routeId === undefined ? undefined : (routeId === 'null' ? null : routeId),
+      from: from ? new Date(from) : undefined,
+      to:   to   ? new Date(to)   : undefined,
+    });
+  }
+
+  /** Recompute manuel — utile en dev / après import de données. Réservé
+   *  TENANT_ADMIN (permission STATS_READ_TENANT déjà granular par config). */
+  @Get('seasonality/recompute')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  async recomputeSeasonality(@TenantId() tenantId: string) {
+    const stats = await this.seasonality.recomputeForTenant(tenantId);
+    return { ok: true, stats };
+  }
 
   @Get('dashboard')
   @RequirePermission(Permission.STATS_READ_TENANT)

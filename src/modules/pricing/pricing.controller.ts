@@ -10,10 +10,11 @@
  *   GET    /api/v1/tenants/:tid/analytics/profitability        — dashboard décideur
  */
 import {
-  Controller, Get, Put, Post, Param, Body, Query,
+  Controller, Get, Put, Post, Patch, Delete, Param, Body, Query,
 } from '@nestjs/common';
 import { ProfitabilityService }   from './profitability.service';
 import { YieldService }           from './yield.service';
+import { PeakPeriodService, CreatePeakPeriodDto, UpdatePeakPeriodDto } from './peak-period.service';
 import { UpsertBusCostProfileDto } from './dto/bus-cost-profile.dto';
 import { RequirePermission }      from '../../common/decorators/require-permission.decorator';
 import { Permission }             from '../../common/constants/permissions';
@@ -23,7 +24,37 @@ export class PricingController {
   constructor(
     private readonly profitability: ProfitabilityService,
     private readonly yield_:        YieldService,
+    private readonly peakPeriods:   PeakPeriodService,
   ) {}
+
+  // ── Périodes peak (calendrier yield) — Sprint 5 ─────────────────────────
+  @Get('peak-periods')
+  @RequirePermission(Permission.PEAK_PERIOD_READ_TENANT)
+  listPeakPeriods(@Param('tenantId') tenantId: string) {
+    return this.peakPeriods.list(tenantId);
+  }
+
+  @Post('peak-periods')
+  @RequirePermission(Permission.PEAK_PERIOD_MANAGE_TENANT)
+  createPeakPeriod(@Param('tenantId') tenantId: string, @Body() dto: CreatePeakPeriodDto) {
+    return this.peakPeriods.create(tenantId, dto);
+  }
+
+  @Patch('peak-periods/:id')
+  @RequirePermission(Permission.PEAK_PERIOD_MANAGE_TENANT)
+  updatePeakPeriod(
+    @Param('tenantId') tenantId: string,
+    @Param('id')       id:       string,
+    @Body()            dto:      UpdatePeakPeriodDto,
+  ) {
+    return this.peakPeriods.update(tenantId, id, dto);
+  }
+
+  @Delete('peak-periods/:id')
+  @RequirePermission(Permission.PEAK_PERIOD_MANAGE_TENANT)
+  removePeakPeriod(@Param('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.peakPeriods.remove(tenantId, id);
+  }
 
   // ── Profils de coût ──────────────────────────────────────────────────────────
 

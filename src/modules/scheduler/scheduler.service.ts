@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { DriverProfileService } from '../driver-profile/driver-profile.service';
+import { SeasonalityService } from '../analytics/seasonality.service';
 
 /**
  * PRD §IV.11 — Module M : Scheduler & Récurrence.
@@ -17,8 +18,9 @@ export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:        PrismaService,
     private readonly driverProfile: DriverProfileService,
+    private readonly seasonality:   SeasonalityService,
   ) {}
 
   /**
@@ -97,6 +99,20 @@ export class SchedulerService {
     if (closed > 0) {
       this.logger.log(`Périodes de repos auto-clôturées : ${closed}`);
     }
+  }
+
+  /**
+   * KPI saisonniers (Sprint 4) — recompute les agrégats par période pour
+   * tous les tenants actifs. Tourne chaque nuit à 03h00 (après les autres
+   * jobs 02h00/02h30/02h45 de platform-analytics pour éviter contention DB).
+   */
+  @Cron('0 3 * * *')
+  async recomputeSeasonalAggregates(): Promise<void> {
+    this.logger.log('[seasonality-cron] Démarrage recompute tous tenants…');
+    const res = await this.seasonality.recomputeAllTenants();
+    this.logger.log(
+      `[seasonality-cron] Terminé — tenants=${res.tenantsProcessed} lignes=${res.totalRows}`,
+    );
   }
 
   async createTemplate(tenantId: string, data: {

@@ -19,7 +19,7 @@ import pt from './pt';
 import ar from './ar';
 import wo from './wo';
 
-export type LocaleDict = Record<string, Record<string, string>>;
+export type LocaleDict = Record<string, unknown>;
 
 const LOCALES: Record<Language, LocaleDict> = {
   fr:  fr as unknown as LocaleDict,
@@ -35,23 +35,53 @@ const LOCALES: Record<Language, LocaleDict> = {
 const frDict = fr as unknown as LocaleDict;
 
 /**
- * Résout une clé de traduction ('namespace.key') pour une langue donnée.
+ * Résout une clé pointée dans un dict qui peut mélanger :
+ *   - Clés plates dottées : { billing: { "trial.daysLeft": "..." } }
+ *   - Objets imbriqués    : { platformKpi: { strategic: { title: "..." } } }
+ *
+ * Stratégie : essaie d'abord le walk récursif, puis tente chaque point comme
+ * frontière ns/k (pour les clés plates dottées).
+ */
+function lookup(dict: LocaleDict, key: string): string | undefined {
+  const parts = key.split('.');
+
+  // 1) Walk récursif sur les sous-objets
+  let cur: unknown = dict;
+  for (const p of parts) {
+    if (cur && typeof cur === 'object' && p in (cur as Record<string, unknown>)) {
+      cur = (cur as Record<string, unknown>)[p];
+    } else {
+      cur = undefined;
+      break;
+    }
+  }
+  if (typeof cur === 'string') return cur;
+
+  // 2) Clés plates dottées : essaie chaque frontière possible
+  for (let i = 1; i < parts.length; i++) {
+    const ns = parts.slice(0, i).join('.');
+    const rest = parts.slice(i).join('.');
+    const node = dict[ns];
+    if (node && typeof node === 'object') {
+      const v = (node as Record<string, unknown>)[rest];
+      if (typeof v === 'string') return v;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Résout une clé de traduction ('namespace.key' ou 'a.b.c') pour une langue.
  * Fallback : locale demandée → fr → clé brute.
  */
 export function resolveKey(key: string, lang: Language): string {
-  const [ns, ...rest] = key.split('.');
-  const k = rest.join('.');
-  if (!ns || !k) return key;
-
-  // Essayer la locale demandée
+  if (!key) return key;
   const locale = LOCALES[lang];
-  const val = (locale?.[ns] as Record<string, string> | undefined)?.[k];
-  if (val) return val;
-
-  // Fallback vers français
-  const frVal = (frDict?.[ns] as Record<string, string> | undefined)?.[k];
-  if (frVal) return frVal;
-
-  // Clé brute si introuvable
+  if (locale) {
+    const v = lookup(locale, key);
+    if (v !== undefined) return v;
+  }
+  const frVal = lookup(frDict, key);
+  if (frVal !== undefined) return frVal;
   return key;
 }

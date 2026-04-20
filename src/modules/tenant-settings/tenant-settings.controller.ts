@@ -4,6 +4,7 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
 import { Permission } from '../../common/constants/permissions';
 import { RedisRateLimitGuard, RateLimit } from '../../common/guards/redis-rate-limit.guard';
 import { TenantTaxService, CreateTenantTaxDto, UpdateTenantTaxDto } from './tenant-tax.service';
+import { TenantFareClassService, CreateTenantFareClassDto, UpdateTenantFareClassDto } from './tenant-fare-class.service';
 import { TenantPaymentConfigService, UpdatePaymentConfigDto } from './tenant-payment-config.service';
 import { IntegrationsService, UpdateIntegrationModeDto } from './integrations.service';
 import { TenantResetService } from './tenant-reset.service';
@@ -26,6 +27,7 @@ import { TenantResetService } from './tenant-reset.service';
 export class TenantSettingsController {
   constructor(
     private readonly taxes:         TenantTaxService,
+    private readonly fareClasses:   TenantFareClassService,
     private readonly paymentConfig: TenantPaymentConfigService,
     private readonly integrations:  IntegrationsService,
     private readonly reset_:        TenantResetService,
@@ -76,6 +78,43 @@ export class TenantSettingsController {
   @RequirePermission(Permission.TAX_MANAGE_TENANT)
   removeTax(@Param('tenantId') tenantId: string, @Param('id') id: string) {
     return this.taxes.remove(tenantId, id);
+  }
+
+  // ── Classes de voyage (TenantFareClass) ───────────────────────────────────
+  // Read : caissier/agent doit lister les classes à la vente (dropdown).
+  // Manage : réservé à TENANT_ADMIN + ACCOUNTANT (par cohérence fiscale).
+  @Get('fare-classes')
+  @RequirePermission(Permission.FARE_CLASS_READ_TENANT)
+  listFareClasses(@Param('tenantId') tenantId: string) {
+    return this.fareClasses.list(tenantId);
+  }
+
+  @Post('fare-classes')
+  @RequirePermission(Permission.FARE_CLASS_MANAGE_TENANT)
+  createFareClass(
+    @Param('tenantId') tenantId: string,
+    @Body()            dto:      CreateTenantFareClassDto,
+  ) {
+    return this.fareClasses.create(tenantId, dto);
+  }
+
+  @Patch('fare-classes/:id')
+  @RequirePermission(Permission.FARE_CLASS_MANAGE_TENANT)
+  updateFareClass(
+    @Param('tenantId') tenantId: string,
+    @Param('id')       id:       string,
+    @Body()            dto:      UpdateTenantFareClassDto,
+  ) {
+    return this.fareClasses.update(tenantId, id, dto);
+  }
+
+  @Delete('fare-classes/:id')
+  @RequirePermission(Permission.FARE_CLASS_MANAGE_TENANT)
+  removeFareClass(
+    @Param('tenantId') tenantId: string,
+    @Param('id')       id:       string,
+  ) {
+    return this.fareClasses.remove(tenantId, id);
   }
 
   // ── Payment config ─────────────────────────────────────────────────────────

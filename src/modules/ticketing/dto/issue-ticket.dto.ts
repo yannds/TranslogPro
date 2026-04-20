@@ -106,6 +106,15 @@ export class IssueBatchDto {
   @IsString()
   @IsOptional()
   paymentMethod?: string;
+
+  /**
+   * Si true, `pricingSummary` inclura les taxes non appliquées (enabled mais
+   * `appliedToPrice=false` globalement ou au niveau ligne) avec `applied=false`
+   * et leur montant calculé, pour l'affichage pédagogique côté caissier
+   * (grisé "serait X XOF"). N'affecte pas le total facturé.
+   */
+  @IsOptional()
+  explainTaxes?: boolean;
 }
 
 export class ConfirmBatchDto {

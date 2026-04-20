@@ -23,6 +23,8 @@ import { useTenantConfig }                  from '../../providers/TenantConfigPr
 import { apiPost, apiPatch, apiDelete }     from '../../lib/api';
 import { Card, CardHeader, CardContent }    from '../ui/Card';
 import { Badge }                            from '../ui/Badge';
+import { RoutePricingOverridesEditor }       from '../routes/RoutePricingOverridesEditor';
+import { PricingSimulatorCard }              from '../routes/PricingSimulatorCard';
 import { Skeleton }                         from '../ui/Skeleton';
 import { Button }                           from '../ui/Button';
 import { Dialog }                           from '../ui/Dialog';
@@ -47,6 +49,7 @@ interface RouteRow {
   destinationId: string;
   distanceKm:    number;
   basePrice:     number;
+  pricingOverrides: import('../routes/RoutePricingOverridesEditor').RoutePricingOverrides | null;
   origin?:      { id: string; name: string; city: string } | null;
   destination?: { id: string; name: string; city: string } | null;
   _count?:      { trips: number };
@@ -58,10 +61,12 @@ interface RouteFormValues {
   destinationId: string;
   distanceKm:    string; // controlled as string for input
   basePrice:     string;
+  pricingOverrides: import('../routes/RoutePricingOverridesEditor').RoutePricingOverrides | null;
 }
 
 const EMPTY_FORM: RouteFormValues = {
   name: '', originId: '', destinationId: '', distanceKm: '', basePrice: '',
+  pricingOverrides: null,
 };
 
 const inp = 'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50';
@@ -79,7 +84,7 @@ function formatStation(s: { name: string; city: string } | null | undefined) {
 // ─── Formulaire ───────────────────────────────────────────────────────────────
 
 function RouteForm({
-  initial, stations, onSubmit, onCancel, busy, error, submitLabel,
+  initial, stations, onSubmit, onCancel, busy, error, submitLabel, tenantId, routeId,
 }: {
   initial:     RouteFormValues;
   stations:    StationLite[];
@@ -88,6 +93,10 @@ function RouteForm({
   busy:        boolean;
   error:       string | null;
   submitLabel: string;
+  tenantId:    string;
+  /** Si fourni (mode édition), affiche le simulateur de rentabilité.
+   *  En création, absent car pas encore de routeId persisté. */
+  routeId?:    string;
 }) {
   const { operational } = useTenantConfig();
   const { t } = useI18n();
@@ -171,6 +180,22 @@ function RouteForm({
         </div>
       </div>
 
+      <RoutePricingOverridesEditor
+        tenantId={tenantId}
+        value={f.pricingOverrides}
+        onChange={po => patch({ pricingOverrides: po })}
+        disabled={busy}
+      />
+
+      {routeId && f.basePrice && Number(f.basePrice) > 0 && (
+        <PricingSimulatorCard
+          tenantId={tenantId}
+          routeId={routeId}
+          basePrice={Number(f.basePrice)}
+          currency={operational.currency}
+        />
+      )}
+
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
           <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
@@ -220,11 +245,14 @@ export function PageRoutes() {
   }, [routes]);
 
   const toPayload = (f: RouteFormValues) => ({
-    name:          f.name.trim(),
-    originId:      f.originId,
-    destinationId: f.destinationId,
-    distanceKm:    Number(f.distanceKm),
-    basePrice:     Number(f.basePrice),
+    name:             f.name.trim(),
+    originId:         f.originId,
+    destinationId:    f.destinationId,
+    distanceKm:       Number(f.distanceKm),
+    basePrice:        Number(f.basePrice),
+    // null = reset côté backend (RouteService.update remet pricingOverrides à null).
+    // object = persist.
+    pricingOverrides: f.pricingOverrides,
   });
 
   const handleCreate = async (f: RouteFormValues) => {
@@ -408,6 +436,7 @@ export function PageRoutes() {
           busy={busy}
           error={actionErr}
           submitLabel={t('common.create')}
+          tenantId={tenantId}
         />
       </Dialog>
 
@@ -422,11 +451,12 @@ export function PageRoutes() {
         {editTarget && (
           <RouteForm
             initial={{
-              name:          editTarget.name,
-              originId:      editTarget.originId,
-              destinationId: editTarget.destinationId,
-              distanceKm:    String(editTarget.distanceKm ?? ''),
-              basePrice:     String(editTarget.basePrice  ?? ''),
+              name:             editTarget.name,
+              originId:         editTarget.originId,
+              destinationId:    editTarget.destinationId,
+              distanceKm:       String(editTarget.distanceKm ?? ''),
+              basePrice:        String(editTarget.basePrice  ?? ''),
+              pricingOverrides: editTarget.pricingOverrides ?? null,
             }}
             stations={stations ?? []}
             onSubmit={handleEdit}
@@ -434,6 +464,8 @@ export function PageRoutes() {
             busy={busy}
             error={actionErr}
             submitLabel={t('common.save')}
+            tenantId={tenantId}
+            routeId={editTarget.id}
           />
         )}
       </Dialog>

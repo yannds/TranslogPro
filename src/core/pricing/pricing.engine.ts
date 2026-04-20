@@ -1,20 +1,46 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { TenantFareClassService } from '../../modules/tenant-settings/tenant-fare-class.service';
+import {
+  computeTaxes,
+  TaxContext,
+  TaxLine,
+  TenantTaxInput,
+} from '../billing/tax-calculator.service';
 
 /**
  * Structure JSONB de PricingRules.rules — PRD §IV.7
  *
  * Zéro hardcoding : tout est en DB par tenant + route.
+ *
+ * Note 2026-04-20 : `taxRate` est conservé pour rétro-compat (lecture en fallback
+ * si aucune TenantTax n'est définie pour le tenant) mais le chemin canonique
+ * passe désormais par `TenantTax[]` + `TaxCalculatorService`. `fareMultipliers`
+ * est également legacy — les classes sont désormais stockées dans `TenantFareClass`
+ * et résolues via `TenantFareClassService.getMultiplier`.
  */
 interface PricingRulesConfig {
   basePriceXof:        number;
-  taxRate:             number;   // ex: 0.18 = 18%
+  /** @deprecated Utiliser TenantTax[]. Gardé en fallback pendant la migration. */
+  taxRate?:            number;
   tollsXof:            number;
   costPerKm:           number;
   luggageFreeKg:       number;   // seuil franchise bagage
   luggagePerExtraKg:   number;   // XOF par kg supplémentaire
-  fareMultipliers:     Record<string, number>; // STANDARD=1.0, CONFORT=1.4, VIP=2.0
+  /** @deprecated Utiliser TenantFareClass. Gardé en fallback. */
+  fareMultipliers?:    Record<string, number>;
   yieldSteps?:         YieldStep[];
+}
+
+/**
+ * Structure attendue de `Route.pricingOverrides` (JSON extensible).
+ * Tout est optionnel — null/{} = pas d'override, tenant config s'applique.
+ */
+interface RoutePricingOverrides {
+  taxes?: Record<string, { rate?: number; appliedToPrice?: boolean }>;
+  tolls?: { override?: number };
+  luggage?: { freeKg?: number; perExtraKg?: number };
+  fareClasses?: { allowed?: string[] };
 }
 
 interface YieldStep {
@@ -31,11 +57,22 @@ export interface PricingInput {
   luggageKg?:         number;
   discountCode?:      string;
   wantsSeatSelection?: boolean; // true = le passager paie l'option choix de siège
+  /**
+   * Si true, `taxBreakdown` inclut aussi les taxes enabled mais non
+   * appliquées au prix (flag `applied=false`) — utilisé par la caisse pour
+   * afficher en grisé le montant qu'elles auraient coûté. N'affecte pas le
+   * total. Défaut = false (payload minimal pour documents/invoice).
+   */
+  explainTaxes?:       boolean;
 }
 
 export interface PricingResult {
   basePrice:        number;
+  /** Somme scalaire des taxes appliquées au prix (compat historique). */
   taxes:            number;
+  /** Détail N taxes appliquées — nouveau 2026-04-20, utilisé par facture/reçu.
+   *  Vide si pricingEngine retombe en mode legacy (rules.taxRate). */
+  taxBreakdown:     TaxLine[];
   tolls:            number;
   luggageFee:       number;
   yieldSurplus:     number;
@@ -55,9 +92,12 @@ export interface PricingResult {
 export class PricingEngine {
   private readonly logger = new Logger(PricingEngine.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:         PrismaService,
+    private readonly fareClasses:    TenantFareClassService,
+  ) {}
 
-  async calculate(input: PricingInput): Promise<PricingResult> {
+  async calculate(input: PricingInput, context: TaxContext = 'PRICE'): Promise<PricingResult> {
     const trip = await this.prisma.trip.findUniqueOrThrow({
       where:   { id: input.tripId },
       include: {
@@ -68,6 +108,7 @@ export class PricingEngine {
     });
 
     const route = trip.route;
+    const overrides = (route.pricingOverrides as unknown as RoutePricingOverrides) ?? {};
 
     // ── 1. Résoudre le prix du segment (boarding → alighting) ────────────
     const segmentResult = await this.resolveSegmentPrice(
@@ -75,7 +116,7 @@ export class PricingEngine {
     );
     const segmentBase = segmentResult.price;
 
-    // ── 2. Charger les règles tarifaires (taxes, bagages, yield) ─────────
+    // ── 2. Charger les règles tarifaires (taxes legacy, bagages, yield) ──
     const pricingRule = await this.prisma.pricingRules.findFirst({
       where: { tenantId: input.tenantId, routeId: route.id },
     });
@@ -89,19 +130,46 @@ export class PricingEngine {
     const rules = pricingRule.rules as unknown as PricingRulesConfig;
 
     // ── 3. Prix de base = prix segment × multiplicateur classe ───────────
-    const multiplier = rules.fareMultipliers[input.fareClass] ?? 1.0;
-    const basePrice  = segmentBase * multiplier;
+    // Résolution canonique via TenantFareClass ; fallback sur rules.fareMultipliers
+    // tant que le backfill n'a pas seedé les classes pour tous les tenants.
+    let multiplier = await this.fareClasses.getMultiplier(input.tenantId, input.fareClass);
+    if (multiplier === 1.0 && rules.fareMultipliers?.[input.fareClass]) {
+      // Ni la classe n'existe pas (→ 1.0), ni l'admin ne l'a saisie à 1.0 :
+      // on retombe sur le legacy pour ne pas sous-évaluer une vente.
+      multiplier = rules.fareMultipliers[input.fareClass];
+    }
+    const basePrice = segmentBase * multiplier;
 
-    // ── 4. Taxes État ──────────────────────────────────────────────────────
-    const taxes = basePrice * rules.taxRate;
+    // ── 4. Taxes : canonique via TenantTax + TaxCalculatorService ────────
+    // Fallback legacy sur `rules.taxRate` si aucune TenantTax n'est définie
+    // (garantit la rétro-compat pour les tenants non-migrés).
+    const tenantTaxes = await this.loadTenantTaxes(input.tenantId, overrides);
+    let taxes = 0;
+    let taxBreakdown: TaxLine[] = [];
+    if (tenantTaxes.length > 0) {
+      const taxResult = computeTaxes({
+        subtotal:         basePrice,
+        currency:         'XOF', // overridé plus bas
+        entityType:       'TICKET',
+        taxes:            tenantTaxes,
+        context,
+        includeNonApplied: input.explainTaxes === true,
+      });
+      taxes        = taxResult.taxTotal;
+      taxBreakdown = taxResult.taxes;
+    } else if (typeof rules.taxRate === 'number') {
+      taxes = basePrice * rules.taxRate;
+    }
 
     // ── 5. Péages ──────────────────────────────────────────────────────────
-    const tolls = rules.tollsXof;
+    const tolls = overrides.tolls?.override ?? rules.tollsXof;
 
-    // ── 6. Surplus bagages ────────────────────────────────────────────────
+    // ── 6. Surplus bagages (override ligne possible) ─────────────────────
     const luggageKg  = input.luggageKg ?? 0;
-    const extraKg    = Math.max(0, luggageKg - rules.luggageFreeKg);
-    const luggageFee = extraKg * rules.luggagePerExtraKg;
+    const freeKg     = overrides.luggage?.freeKg     ?? rules.luggageFreeKg;
+    const perExtraKg = overrides.luggage?.perExtraKg ?? rules.luggagePerExtraKg;
+    const extraKg    = Math.max(0, luggageKg - freeKg);
+    const luggageFee = extraKg * perExtraKg;
 
     // ── 7. Yield management ──────────────────────────────────────────────
     let yieldSurplus = 0;
@@ -151,6 +219,7 @@ export class PricingEngine {
     return {
       basePrice,
       taxes,
+      taxBreakdown,
       tolls,
       luggageFee,
       yieldSurplus,
@@ -176,6 +245,38 @@ export class PricingEngine {
         discount:      -discount,
       },
     };
+  }
+
+  /**
+   * Charge les TenantTax applicables à une route en fusionnant les overrides :
+   *   - Base : toutes les TenantTax du tenant (enabled filtré côté TaxCalculator).
+   *   - Overrides : `Route.pricingOverrides.taxes[code]` peut forcer un `rate`
+   *     ou un `appliedToPrice` spécifique pour cette ligne.
+   */
+  private async loadTenantTaxes(
+    tenantId: string,
+    overrides: RoutePricingOverrides,
+  ): Promise<TenantTaxInput[]> {
+    const rows = await this.prisma.tenantTax.findMany({ where: { tenantId } });
+    const overrideMap = overrides.taxes ?? {};
+    return rows.map(r => {
+      const ov = overrideMap[r.code] ?? {};
+      return {
+        code:                    r.code,
+        label:                   r.label,
+        labelKey:                r.labelKey,
+        rate:                    ov.rate ?? r.rate,
+        kind:                    r.kind as 'PERCENT' | 'FIXED',
+        base:                    r.base as 'SUBTOTAL' | 'TOTAL_AFTER_PREVIOUS',
+        appliesTo:               r.appliesTo,
+        sortOrder:               r.sortOrder,
+        enabled:                 r.enabled,
+        appliedToPrice:          ov.appliedToPrice ?? r.appliedToPrice,
+        appliedToRecommendation: r.appliedToRecommendation,
+        validFrom:               r.validFrom,
+        validTo:                 r.validTo,
+      };
+    });
   }
 
   // ── Résolution prix segment ────────────────────────────────────────────────

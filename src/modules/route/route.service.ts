@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { FareClassDefault } from '../tenant-settings/tenant-fare-class.service';
 
 export interface CreateRouteDto {
   name:          string;
@@ -14,17 +16,38 @@ export interface CreateRouteDto {
   basePrice:     number;
 }
 
+/**
+ * Structure de `Route.pricingOverrides` (JSON extensible).
+ * Tous les champs sont optionnels : `null` ou `{}` = pas d'override, tenant
+ * config s'applique.
+ *
+ *   taxes:       override par code taxe (rate + appliedToPrice)
+ *   tolls:       péages ligne (override du rules.tollsXof legacy)
+ *   luggage:     franchise / surcharge bagages spécifiques à cette ligne
+ *   fareClasses: restreint la liste des classes vendues sur cette ligne
+ */
+export interface RoutePricingOverridesInput {
+  taxes?: Record<string, { rate?: number; appliedToPrice?: boolean }>;
+  tolls?: { override?: number };
+  luggage?: { freeKg?: number; perExtraKg?: number };
+  fareClasses?: { allowed?: string[] };
+}
+
 export interface UpdateRouteDto {
   name?:          string;
   originId?:      string;
   destinationId?: string;
   distanceKm?:    number;
   basePrice?:     number;
+  pricingOverrides?: RoutePricingOverridesInput | null;
 }
 
 @Injectable()
 export class RouteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:         PrismaService,
+    private readonly platformConfig: PlatformConfigService,
+  ) {}
 
   findAll(tenantId: string) {
     return this.prisma.route.findMany({
@@ -61,7 +84,23 @@ export class RouteService {
     // Création Route + PricingRules par défaut dans une seule transaction.
     // Sans PricingRules active, la vente de billets est bloquée par le
     // PricingEngine ("Aucune règle tarifaire active"). On initialise donc avec
-    // les valeurs minimales dérivées du payload — l'admin peut affiner ensuite.
+    // les valeurs du registre platform-config (zéro hardcoding) — l'admin peut
+    // affiner ensuite via PageTenantBusinessRules / PricingRules dédiée.
+    //
+    // Note : taxRate et fareMultipliers sont gardés dans le payload JSON pour
+    // rétro-compat avec l'ancien moteur, mais la source canonique est désormais
+    // TenantTax[] et TenantFareClass (lus par PricingEngine en priorité).
+    const [luggageFreeKg, luggagePerExtraKg, tollsXof, costPerKm, fareDefaults] = await Promise.all([
+      this.platformConfig.getNumber('pricing.defaults.luggageFreeKg'),
+      this.platformConfig.getNumber('pricing.defaults.luggagePerExtraKg'),
+      this.platformConfig.getNumber('pricing.defaults.tollsXof'),
+      this.platformConfig.getNumber('pricing.defaults.costPerKm'),
+      this.platformConfig.getJson<FareClassDefault[]>('pricing.defaults.fareClasses'),
+    ]);
+
+    const fareMultipliers: Record<string, number> = {};
+    for (const fc of fareDefaults) fareMultipliers[fc.code] = fc.multiplier;
+
     return this.prisma.transact(async (tx) => {
       const route = await tx.route.create({
         data: {
@@ -88,12 +127,15 @@ export class RouteService {
           tenantId, routeId: route.id,
           rules: {
             basePriceXof:      payload.basePrice!,
+            // taxRate gardé à 0 : la fiscalité réelle vient de TenantTax[] +
+            // éventuels overrides via Route.pricingOverrides. Le 0 est un no-op
+            // dans le fallback legacy.
             taxRate:           0,
-            tollsXof:          0,
-            costPerKm:         0,
-            luggageFreeKg:     20,
-            luggagePerExtraKg: 100,
-            fareMultipliers:   { STANDARD: 1.0, CONFORT: 1.4, VIP: 2.0 },
+            tollsXof,
+            costPerKm,
+            luggageFreeKg,
+            luggagePerExtraKg,
+            fareMultipliers,
           },
         },
       });
@@ -124,6 +166,11 @@ export class RouteService {
         ...(payload.destinationId !== undefined ? { destinationId: payload.destinationId } : {}),
         ...(payload.distanceKm    !== undefined ? { distanceKm:    payload.distanceKm }    : {}),
         ...(payload.basePrice     !== undefined ? { basePrice:     payload.basePrice }     : {}),
+        // pricingOverrides : null explicite → reset à null (revient au tenant config).
+        // Objet → persist tel quel (structure validée par `validate`).
+        ...('pricingOverrides' in dto
+          ? { pricingOverrides: (payload.pricingOverrides ?? null) as any }
+          : {}),
       },
     });
     if (routeRes.count === 0) throw new NotFoundException(`Route ${id} introuvable`);
@@ -391,6 +438,46 @@ export class RouteService {
       out.basePrice = dto.basePrice;
     } else if (!partial) {
       throw new BadRequestException('Le tarif de base est requis');
+    }
+
+    // pricingOverrides : null explicite = reset, objet = persist. Validation
+    // structurelle minimale (structure attendue documentée sur RoutePricingOverridesInput).
+    if ('pricingOverrides' in dto) {
+      const po = (dto as UpdateRouteDto).pricingOverrides;
+      if (po === null) {
+        out.pricingOverrides = null;
+      } else if (po !== undefined) {
+        if (typeof po !== 'object' || Array.isArray(po)) {
+          throw new BadRequestException('pricingOverrides doit être un objet');
+        }
+        if (po.taxes !== undefined) {
+          if (typeof po.taxes !== 'object' || Array.isArray(po.taxes)) {
+            throw new BadRequestException('pricingOverrides.taxes doit être un objet indexé par code taxe');
+          }
+          for (const [code, v] of Object.entries(po.taxes)) {
+            if (!code.trim()) throw new BadRequestException('code taxe vide dans pricingOverrides.taxes');
+            if (v.rate !== undefined && (typeof v.rate !== 'number' || v.rate < 0 || v.rate > 1)) {
+              throw new BadRequestException(`pricingOverrides.taxes.${code}.rate invalide (0..1)`);
+            }
+          }
+        }
+        if (po.tolls?.override !== undefined) {
+          if (typeof po.tolls.override !== 'number' || po.tolls.override < 0) {
+            throw new BadRequestException('pricingOverrides.tolls.override doit être un nombre ≥ 0');
+          }
+        }
+        if (po.luggage?.freeKg !== undefined) {
+          if (typeof po.luggage.freeKg !== 'number' || po.luggage.freeKg < 0) {
+            throw new BadRequestException('pricingOverrides.luggage.freeKg invalide');
+          }
+        }
+        if (po.luggage?.perExtraKg !== undefined) {
+          if (typeof po.luggage.perExtraKg !== 'number' || po.luggage.perExtraKg < 0) {
+            throw new BadRequestException('pricingOverrides.luggage.perExtraKg invalide');
+          }
+        }
+        out.pricingOverrides = po;
+      }
     }
 
     return out;

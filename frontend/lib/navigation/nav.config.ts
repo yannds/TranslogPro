@@ -155,6 +155,12 @@ const P = {
   // Taxes & Fiscalité
   TAX_READ:              'data.tax.read.tenant',
   TAX_MANAGE:            'control.tax.manage.tenant',
+  // Classes de voyage (TenantFareClass)
+  FARE_CLASS_READ:       'data.fareClass.read.tenant',
+  FARE_CLASS_MANAGE:     'control.fareClass.manage.tenant',
+  // Périodes peak (calendrier yield)
+  PEAK_PERIOD_READ:      'data.peakPeriod.read.tenant',
+  PEAK_PERIOD_MANAGE:    'control.peakPeriod.manage.tenant',
   // Quais & Annonces
   PLATFORM_MANAGE:       'control.platform.manage.tenant',
   PLATFORM_READ:         'data.platform.read.agency',
@@ -322,6 +328,16 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.analytics',
           href: '/admin/analytics',
           icon: 'BarChart3',
+          anyOf: [P.STATS_READ],
+        },
+        {
+          // KPI saisonniers — Sprint 4. Agrégats par mois/année/weekend avec
+          // comparaisons M-1, M-3, YoY selon l'historique disponible.
+          kind: 'leaf',
+          id: 'seasonality',
+          label: 'nav.seasonality',
+          href: '/admin/analytics/seasonality',
+          icon: 'CalendarRange',
           anyOf: [P.STATS_READ],
         },
         {
@@ -651,6 +667,29 @@ export const ADMIN_NAV: PortalNavConfig = {
           href: '/admin/settings/taxes',
           icon: 'Calculator',
           anyOf: [P.TAX_READ, P.TAX_MANAGE],
+        },
+        {
+          // Classes de voyage — CRUD TenantFareClass (STANDARD/CONFORT/VIP/…).
+          // Lecture : caissier/agent (pour lister à la vente) ; écriture :
+          // TENANT_ADMIN/ACCOUNTANT. Les classes isSystemDefault ne sont
+          // pas supprimables (protection historique des tickets vendus).
+          kind: 'leaf',
+          id: 'tenant-fare-classes',
+          label: 'nav.fare_classes',
+          href: '/admin/settings/fare-classes',
+          icon: 'Tags',
+          anyOf: [P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE],
+        },
+        {
+          // Périodes peak — calendrier saisonnier pilotant la 5ème règle du
+          // yield management (priorité max sur golden-day / fill-rate).
+          // Fériés, vacances scolaires, creux typiques. Seed auto par pays.
+          kind: 'leaf',
+          id: 'peak-periods',
+          label: 'nav.peak_periods',
+          href: '/admin/settings/peak-periods',
+          icon: 'Calendar',
+          anyOf: [P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE],
         },
         {
           // Configuration paiement tenant — TTL intent, timeouts MoMo, retries

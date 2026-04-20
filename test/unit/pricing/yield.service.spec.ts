@@ -12,6 +12,33 @@ import { YieldService } from '../../../src/modules/pricing/yield.service';
  *
  * Bornes : prix clampé [basePrice × 0.7, basePrice × 2.0].
  */
+
+/** Mock PeakPeriodService — neutre par défaut (pas de peak actif). */
+const peakPeriodMock: any = {
+  resolveDemandFactor: jest.fn().mockResolvedValue({ factor: 1, periods: [] }),
+  findActiveForDate:   jest.fn().mockResolvedValue([]),
+};
+
+/** Mock PlatformConfigService — retourne les defaults historiques du registry. */
+const platformConfigMock: any = {
+  getNumber: jest.fn(async (key: string) => {
+    const defaults: Record<string, number> = {
+      'yield.defaults.goldenDayMultiplier':          0.15,
+      'yield.defaults.lowFillThreshold':             0.40,
+      'yield.defaults.lowFillDiscount':              0.10,
+      'yield.defaults.highFillThreshold':            0.80,
+      'yield.defaults.highFillPremium':              0.10,
+      'yield.defaults.priceFloorRate':               0.70,
+      'yield.defaults.priceCeilingRate':             2.00,
+      'yield.defaults.goldenDayFillThreshold':       0.85,
+      'yield.defaults.blackRouteDeficitRatio':       0.50,
+      'yield.defaults.analyticsWindowDays':          90,
+      'yield.defaults.lowFillTriggerHoursBeforeDeparture': 48,
+    };
+    return defaults[key] ?? 0;
+  }),
+};
+
 describe('YieldService.calculateSuggestedPrice', () => {
   let prismaMock: any;
   let service:    YieldService;
@@ -44,12 +71,12 @@ describe('YieldService.calculateSuggestedPrice', () => {
 
   beforeEach(() => {
     prismaMock = buildMocks();
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
   });
 
   it('NO_CHANGE si module YIELD_ENGINE inactif', async () => {
     prismaMock = buildMocks({ module: null });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('NO_CHANGE');
@@ -58,7 +85,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
 
   it('NO_CHANGE si trip introuvable', async () => {
     prismaMock = buildMocks({ trip: null });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-x');
     expect(res.rule).toBe('NO_CHANGE');
@@ -69,7 +96,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:      mkTrip({ basePrice: 10_000 }),
       analytics: { isGoldenDay: true, isBlackRoute: false },
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('GOLDEN_DAY');
@@ -83,7 +110,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       analytics: { isGoldenDay: false, isBlackRoute: true },
       snapshot:  { breakEvenSeats: 30, bookedSeats: 20, totalCost: 240_000 },
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('BLACK_ROUTE');
@@ -96,7 +123,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:        mkTrip({ basePrice: 10_000, capacity: 50, inHours: 24 }),
       bookedSeats: 10, // fillRate = 0.2 < 0.4
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('LOW_FILL');
@@ -109,7 +136,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:        mkTrip({ basePrice: 10_000, capacity: 50, inHours: 72 }),
       bookedSeats: 10,
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('NO_CHANGE');
@@ -120,7 +147,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:        mkTrip({ basePrice: 10_000, capacity: 50, inHours: 72 }),
       bookedSeats: 42, // fillRate = 0.84
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('HIGH_FILL');
@@ -132,7 +159,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:        mkTrip({ basePrice: 10_000, capacity: 50, inHours: 72 }),
       bookedSeats: 25, // fillRate = 0.5
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('NO_CHANGE');
@@ -145,7 +172,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:   mkTrip({ basePrice: 10_000, capacity: 50, inHours: 72 }),
       bookedSeats: 35, // fillRate = 0.7 ≥ 0.6
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.rule).toBe('HIGH_FILL');
@@ -159,7 +186,7 @@ describe('YieldService.calculateSuggestedPrice', () => {
       trip:   mkTrip({ basePrice: 10_000 }),
       analytics: { isGoldenDay: true, isBlackRoute: false },
     });
-    service = new YieldService(prismaMock);
+    service = new YieldService(prismaMock, platformConfigMock, peakPeriodMock);
 
     const res = await service.calculateSuggestedPrice('tenant-a', 'trip-1');
     expect(res.suggestedPrice).toBe(20_000); // clamped to 10000 * 2

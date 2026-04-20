@@ -36,30 +36,21 @@
  */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { PeakPeriodService } from './peak-period.service';
 
 // ─── Config Yield extraite de InstalledModule.config ─────────────────────────
 
 interface YieldConfig {
   enabled:             boolean;
-  goldenDayMultiplier: number; // défaut 0.15 → +15 %
-  lowFillThreshold:    number; // défaut 0.40
-  lowFillDiscount:     number; // défaut 0.10 → -10 %
-  highFillThreshold:   number; // défaut 0.80
-  highFillPremium:     number; // défaut 0.10 → +10 %
-  priceFloorRate:      number; // défaut 0.70 → 70 % du basePrice
-  priceCeilingRate:    number; // défaut 2.00 → 200 % du basePrice
+  goldenDayMultiplier: number;
+  lowFillThreshold:    number;
+  lowFillDiscount:     number;
+  highFillThreshold:   number;
+  highFillPremium:     number;
+  priceFloorRate:      number;
+  priceCeilingRate:    number;
 }
-
-const DEFAULT_YIELD_CONFIG: YieldConfig = {
-  enabled:             true,
-  goldenDayMultiplier: 0.15,
-  lowFillThreshold:    0.40,
-  lowFillDiscount:     0.10,
-  highFillThreshold:   0.80,
-  highFillPremium:     0.10,
-  priceFloorRate:      0.70,
-  priceCeilingRate:    2.00,
-};
 
 // ─── Résultat retourné ────────────────────────────────────────────────────────
 
@@ -68,17 +59,17 @@ export interface YieldSuggestion {
   suggestedPrice: number;
   delta:          number;   // suggestedPrice - basePrice
   deltaPercent:   number;   // delta / basePrice * 100
-  rule:           'GOLDEN_DAY' | 'BLACK_ROUTE' | 'LOW_FILL' | 'HIGH_FILL' | 'NO_CHANGE';
+  rule:           'PEAK_PERIOD' | 'GOLDEN_DAY' | 'BLACK_ROUTE' | 'LOW_FILL' | 'HIGH_FILL' | 'NO_CHANGE';
   reason:         string;
   fillRate:       number;
   isGoldenDay:    boolean;
   isBlackRoute:   boolean;
   yieldActive:    boolean;
+  /** Périodes peak actives qui ont contribué au calcul (empty si aucune). */
+  peakPeriods?:   { code: string; label: string; factor: number }[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const HOURS_BEFORE_DEPARTURE = 48;
 
 function hoursUntil(date: Date): number {
   return (date.getTime() - Date.now()) / 3_600_000;
@@ -96,7 +87,43 @@ function round2(n: number): number {
 
 @Injectable()
 export class YieldService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:         PrismaService,
+    private readonly platformConfig: PlatformConfigService,
+    private readonly peakPeriods:    PeakPeriodService,
+  ) {}
+
+  /**
+   * Charge la config yield en partant des defaults platform-config et en
+   * mergeant les overrides éventuels du InstalledModule.config pour ce tenant.
+   * Zéro magic number : tous les fallbacks viennent du registre.
+   */
+  private async loadYieldConfig(overrides: Partial<YieldConfig> | null): Promise<YieldConfig> {
+    const [
+      goldenDayMultiplier, lowFillThreshold, lowFillDiscount,
+      highFillThreshold, highFillPremium, priceFloorRate, priceCeilingRate,
+    ] = await Promise.all([
+      this.platformConfig.getNumber('yield.defaults.goldenDayMultiplier'),
+      this.platformConfig.getNumber('yield.defaults.lowFillThreshold'),
+      this.platformConfig.getNumber('yield.defaults.lowFillDiscount'),
+      this.platformConfig.getNumber('yield.defaults.highFillThreshold'),
+      this.platformConfig.getNumber('yield.defaults.highFillPremium'),
+      this.platformConfig.getNumber('yield.defaults.priceFloorRate'),
+      this.platformConfig.getNumber('yield.defaults.priceCeilingRate'),
+    ]);
+
+    const base: YieldConfig = {
+      enabled:             true,
+      goldenDayMultiplier,
+      lowFillThreshold,
+      lowFillDiscount,
+      highFillThreshold,
+      highFillPremium,
+      priceFloorRate,
+      priceCeilingRate,
+    };
+    return overrides ? { ...base, ...overrides } : base;
+  }
 
   /**
    * Point d'entrée principal : calcule le prix suggéré pour un trajet.
@@ -111,9 +138,9 @@ export class YieldService {
       where: { tenantId, moduleKey: 'YIELD_ENGINE', isActive: true },
     });
 
-    const cfg: YieldConfig = yieldModule
-      ? { ...DEFAULT_YIELD_CONFIG, ...(yieldModule.config as Partial<YieldConfig>) }
-      : DEFAULT_YIELD_CONFIG;
+    const cfg = await this.loadYieldConfig(
+      yieldModule ? (yieldModule.config as Partial<YieldConfig>) : null,
+    );
 
     if (!cfg.enabled || !yieldModule) {
       return this.noChange(0, 0, false, false);
@@ -155,7 +182,27 @@ export class YieldService {
     const floor   = basePrice * cfg.priceFloorRate;
     const ceiling = basePrice * cfg.priceCeilingRate;
 
-    // 5. Appliquer les règles
+    // 5. Appliquer les règles (ordre de priorité décroissant)
+
+    // Règle Z — Période peak (Sprint 5) : calendrier saisonnier prioritaire.
+    // Un événement calendrier (fête, vacances) prime sur les règles basées
+    // sur la réaction de demande historique (golden day, fill rate).
+    const peakResolution = await this.peakPeriods.resolveDemandFactor(
+      tenantId, trip.departureScheduled,
+    );
+    if (peakResolution.periods.length > 0 && peakResolution.factor !== 1) {
+      const suggested = clamp(round2(basePrice * peakResolution.factor), floor, ceiling);
+      const labels    = peakResolution.periods.map(p => p.label).join(', ');
+      return {
+        basePrice, suggestedPrice: suggested,
+        delta:        round2(suggested - basePrice),
+        deltaPercent: round2((suggested - basePrice) / basePrice * 100),
+        rule:         'PEAK_PERIOD',
+        reason:       `Période peak : ${labels} (facteur ×${peakResolution.factor.toFixed(2)})`,
+        fillRate, isGoldenDay, isBlackRoute, yieldActive: true,
+        peakPeriods: peakResolution.periods,
+      };
+    }
 
     // Règle A — Jour d'Or
     if (isGoldenDay) {
@@ -194,9 +241,12 @@ export class YieldService {
       }
     }
 
-    // Règle C — Faible remplissage à J-2
-    const hoursLeft = hoursUntil(trip.departureScheduled);
-    if (hoursLeft <= HOURS_BEFORE_DEPARTURE && fillRate < cfg.lowFillThreshold) {
+    // Règle C — Faible remplissage dans la fenêtre pré-départ configurable
+    const hoursLeft            = hoursUntil(trip.departureScheduled);
+    const lowFillTriggerHours  = await this.platformConfig.getNumber(
+      'yield.defaults.lowFillTriggerHoursBeforeDeparture',
+    );
+    if (hoursLeft <= lowFillTriggerHours && fillRate < cfg.lowFillThreshold) {
       const suggested = clamp(round2(basePrice * (1 - cfg.lowFillDiscount)), floor, ceiling);
       return {
         basePrice, suggestedPrice: suggested,
@@ -237,9 +287,14 @@ export class YieldService {
     routeId:  string,
     busId:    string,
   ): Promise<void> {
-    const since = new Date(Date.now() - 90 * 24 * 3_600_000);
+    const [windowDays, goldenDayFillThreshold, blackRouteDeficitRatio] = await Promise.all([
+      this.platformConfig.getNumber('yield.defaults.analyticsWindowDays'),
+      this.platformConfig.getNumber('yield.defaults.goldenDayFillThreshold'),
+      this.platformConfig.getNumber('yield.defaults.blackRouteDeficitRatio'),
+    ]);
+    const since = new Date(Date.now() - windowDays * 24 * 3_600_000);
 
-    // Snapshots des 90 derniers jours pour cette route/bus
+    // Snapshots de la fenêtre pour cette route/bus
     const trips = await this.prisma.trip.findMany({
       where: {
         tenantId, routeId, busId,
@@ -277,9 +332,9 @@ export class YieldService {
       const profitCount   = withSnapshot.filter(t => t.costSnapshot!.profitabilityTag === 'PROFITABLE').length;
       const deficitCount  = withSnapshot.filter(t => t.costSnapshot!.profitabilityTag === 'DEFICIT').length;
 
-      const isGoldenDay  = avgFillRate >= 0.85;
+      const isGoldenDay  = avgFillRate >= goldenDayFillThreshold;
       const isBlackRoute = withSnapshot.length > 0
-        && (deficitCount / withSnapshot.length) > 0.50;
+        && (deficitCount / withSnapshot.length) > blackRouteDeficitRatio;
 
       const tripDate = new Date(dowTrips[0].departureScheduled);
       tripDate.setUTCHours(0, 0, 0, 0);

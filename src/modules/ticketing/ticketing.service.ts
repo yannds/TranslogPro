@@ -270,6 +270,7 @@ export class TicketingService {
           discountCode:        dto.discountCode,
           luggageKg:           p.luggageKg,
           wantsSeatSelection:  p.wantsSeatSelection,
+          explainTaxes:        dto.explainTaxes === true,
         }),
       ),
     );
@@ -427,6 +428,14 @@ export class TicketingService {
           passengerName: t.passengerName,
           seatNumber:    t.seatNumber,
           total:         pricings[i].total,
+          basePrice:     pricings[i].basePrice,
+          taxes:         pricings[i].taxes,
+          // Détail N taxes (breakdown) — vide si aucune TenantTax côté tenant.
+          // Si explainTaxes=true, contient aussi les taxes non appliquées
+          // (applied=false) pour affichage pédagogique côté caisse.
+          taxBreakdown:  pricings[i].taxBreakdown,
+          tolls:         pricings[i].tolls,
+          luggageFee:    pricings[i].luggageFee,
           fareClass:     pricings[i].fareClass,
           currency:      pricings[i].currency,
         })),

@@ -12,6 +12,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useFetch } from '../../lib/hooks/useFetch';
 import {
   Ticket, Calculator, CheckCircle2, AlertTriangle, Loader2, Printer,
   UserPlus, X, FileText,
@@ -82,7 +83,21 @@ interface SeatInfo {
   vipSeats?:        string[];
 }
 
-type FareClass = 'STANDARD' | 'CONFORT' | 'VIP' | 'STANDING';
+// Les codes FareClass ne sont plus un enum figé — chaque tenant peut créer
+// ses propres classes via PageTenantFareClasses. Le type reste `string` côté
+// DTO ; la liste effective est chargée via l'API fare-classes.
+type FareClass = string;
+
+interface TenantFareClassRow {
+  id:         string;
+  code:       string;
+  label:      string;
+  labelKey?:  string | null;
+  multiplier: number;
+  sortOrder:  number;
+  color?:     string | null;
+  enabled:    boolean;
+}
 
 interface PassengerRow {
   id:                  string; // client-only key
@@ -97,6 +112,16 @@ interface PassengerRow {
   luggageKg:           string;
 }
 
+interface TaxLineLite {
+  code:     string;
+  label:    string;
+  labelKey?: string | null;
+  kind:     'PERCENT' | 'FIXED';
+  rate:     number;
+  amount:   number;
+  applied:  boolean;
+}
+
 interface BatchResult {
   tickets: { id: string; passengerName: string; seatNumber?: string | null }[];
   pricingSummary: {
@@ -105,6 +130,11 @@ interface BatchResult {
       passengerName: string;
       seatNumber:    string | null;
       total:         number;
+      basePrice?:    number;
+      taxes?:        number;
+      taxBreakdown?: TaxLineLite[];
+      tolls?:        number;
+      luggageFee?:   number;
       fareClass:     string;
       currency:      string;
     }[];
@@ -115,7 +145,9 @@ interface BatchResult {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const FARE_OPTIONS: { value: FareClass; labelKey: string }[] = [
+/** Fallback utilisé tant que la fetch des fare-classes n'a pas abouti.
+ *  Les tenants seedés ont ces codes par défaut, donc aucun impact visible. */
+const FARE_OPTIONS_FALLBACK: { value: FareClass; labelKey: string }[] = [
   { value: 'STANDARD', labelKey: 'sellTicket.fareStandard' },
   { value: 'CONFORT',  labelKey: 'sellTicket.fareConfort' },
   { value: 'VIP',      labelKey: 'sellTicket.fareVip' },
@@ -177,6 +209,20 @@ export function PageSellTicket() {
   // ── Caisse courante (pour traçabilité paiement) ──
   const { register: openRegister, refetch: refetchRegister } = useCashierSession(tenantId);
   const online = useOnline();
+
+  // ── Classes de voyage configurées par le tenant ──
+  // Remplace l'ancien enum figé — chaque tenant a ses propres classes.
+  // Si la fetch n'a pas (encore) abouti, on retombe sur la liste par défaut.
+  const { data: fareClassesData } = useFetch<TenantFareClassRow[]>(
+    tenantId ? `/api/v1/tenants/${tenantId}/settings/fare-classes` : null,
+  );
+  const fareOptions = (fareClassesData ?? [])
+    .filter(fc => fc.enabled)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(fc => ({ value: fc.code as FareClass, labelKey: fc.labelKey || fc.code, rawLabel: fc.label }));
+  const effectiveFareOptions = fareOptions.length > 0
+    ? fareOptions
+    : FARE_OPTIONS_FALLBACK.map(o => ({ ...o, rawLabel: '' }));
 
   // ── Trip list ── (read-through cache : survit aux coupures réseau courtes)
   const {
@@ -333,6 +379,9 @@ export function PageSellTicket() {
         })),
         discountCode:  discountCode.trim() || undefined,
         paymentMethod: paymentMethod.trim() || undefined,
+        // Demande au backend un breakdown détaillé (taxes appliquées + taxes
+        // visibles pour pédagogie grisée). Pas d'impact sur le total facturé.
+        explainTaxes:  true,
       };
 
       const result = await apiPost<BatchResult>(`/api/tenants/${tenantId}/tickets/batch`, dto);
@@ -703,8 +752,10 @@ export function PageSellTicket() {
                             value={p.fareClass}
                             onChange={e => updatePassenger(p.id, { fareClass: e.target.value as FareClass })}
                           >
-                            {FARE_OPTIONS.map(o => (
-                              <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+                            {effectiveFareOptions.map(o => (
+                              <option key={o.value} value={o.value}>
+                                {o.rawLabel || t(o.labelKey)}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -900,24 +951,57 @@ export function PageSellTicket() {
                     }
                   />
                   <CardContent className="space-y-3">
-                    {batchResult.pricingSummary.perTicket.map(pt => (
-                      <div key={pt.ticketId} className="flex justify-between text-sm">
-                        <span className="text-slate-600 dark:text-slate-400">
-                          {pt.passengerName}
-                          {pt.seatNumber && (
-                            <span className="text-xs text-slate-400 ml-1">
-                              ({t('sellTicket.seat')} {pt.seatNumber})
+                    {batchResult.pricingSummary.perTicket.map(pt => {
+                      const applied    = (pt.taxBreakdown ?? []).filter(tl => tl.applied);
+                      const notApplied = (pt.taxBreakdown ?? []).filter(tl => !tl.applied);
+                      return (
+                        <div key={pt.ticketId} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-400">
+                              {pt.passengerName}
+                              {pt.seatNumber && (
+                                <span className="text-xs text-slate-400 ml-1">
+                                  ({t('sellTicket.seat')} {pt.seatNumber})
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-400 ml-1">
+                                [{pt.fareClass}]
+                              </span>
                             </span>
+                            <span className="text-slate-900 dark:text-slate-100 font-medium">
+                              {formatCurrency(pt.total)}
+                            </span>
+                          </div>
+                          {(applied.length > 0 || notApplied.length > 0) && (
+                            <div className="pl-3 text-xs space-y-0.5 border-l-2 border-slate-100 dark:border-slate-700">
+                              {applied.map(tl => (
+                                <div key={tl.code} className="flex justify-between text-slate-500 dark:text-slate-400">
+                                  <span>
+                                    {tl.label}
+                                    {tl.kind === 'PERCENT' && <span className="text-slate-400 ml-1">({(tl.rate * 100).toFixed(1)}%)</span>}
+                                  </span>
+                                  <span>{formatCurrency(tl.amount)}</span>
+                                </div>
+                              ))}
+                              {notApplied.map(tl => (
+                                <div
+                                  key={tl.code}
+                                  className="flex justify-between italic text-slate-400 dark:text-slate-500"
+                                  title={t('sellTicket.taxNotAppliedHint')}
+                                >
+                                  <span>
+                                    {tl.label}
+                                    {tl.kind === 'PERCENT' && <span className="ml-1">({(tl.rate * 100).toFixed(1)}%)</span>}
+                                    <span className="ml-1">— {t('sellTicket.taxNotApplied')}</span>
+                                  </span>
+                                  <span className="line-through">{formatCurrency(tl.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          <span className="text-xs text-slate-400 ml-1">
-                            [{pt.fareClass}]
-                          </span>
-                        </span>
-                        <span className="text-slate-900 dark:text-slate-100 font-medium">
-                          {formatCurrency(pt.total)}
-                        </span>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
 
                     <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between items-baseline">
                       <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t('sellTicket.total')}</span>

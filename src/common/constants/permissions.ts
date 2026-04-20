@@ -224,6 +224,20 @@ export const P_INVOICE_READ_TENANT         = 'data.invoice.read.tenant';
 export const P_TAX_READ_TENANT             = 'data.tax.read.tenant';
 export const P_TAX_MANAGE_TENANT           = 'control.tax.manage.tenant';
 
+// ─── Classes de voyage (TenantFareClass) ─────────────────────────────────────
+// Un caissier/agent doit pouvoir lire la liste des classes configurées pour
+// choisir la classe lors d'une vente ; seul l'admin tenant peut ajouter /
+// modifier / désactiver une classe.
+export const P_FARE_CLASS_READ_TENANT      = 'data.fareClass.read.tenant';
+export const P_FARE_CLASS_MANAGE_TENANT    = 'control.fareClass.manage.tenant';
+
+// ─── Périodes peak (PeakPeriod) ──────────────────────────────────────────────
+// Pilote la 5ème règle du YieldService (calendrier saisonnier). Lecture
+// largement distribuée car impact prix sur toutes les ventes ; écriture
+// réservée TENANT_ADMIN (effet tarifaire sur toute la flotte).
+export const P_PEAK_PERIOD_READ_TENANT     = 'data.peakPeriod.read.tenant';
+export const P_PEAK_PERIOD_MANAGE_TENANT   = 'control.peakPeriod.manage.tenant';
+
 // ─── Quais & Annonces gare ───────────────────────────────────────────────────
 export const P_PLATFORM_MANAGE_TENANT      = 'control.platform.manage.tenant';
 export const P_PLATFORM_READ_AGENCY        = 'data.platform.read.agency';
@@ -466,6 +480,12 @@ export const Permission = {
   // Taxes & Fiscalité (CRUD TenantTax)
   TAX_READ_TENANT:            P_TAX_READ_TENANT,
   TAX_MANAGE_TENANT:          P_TAX_MANAGE_TENANT,
+  // Classes de voyage (CRUD TenantFareClass)
+  FARE_CLASS_READ_TENANT:     P_FARE_CLASS_READ_TENANT,
+  FARE_CLASS_MANAGE_TENANT:   P_FARE_CLASS_MANAGE_TENANT,
+  // Périodes peak (calendrier yield)
+  PEAK_PERIOD_READ_TENANT:    P_PEAK_PERIOD_READ_TENANT,
+  PEAK_PERIOD_MANAGE_TENANT:  P_PEAK_PERIOD_MANAGE_TENANT,
   // Quais & Annonces
   PLATFORM_MANAGE_TENANT:     P_PLATFORM_MANAGE_TENANT,
   PLATFORM_READ_AGENCY:       P_PLATFORM_READ_AGENCY,

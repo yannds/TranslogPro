@@ -27,6 +27,7 @@ import {
   seedDefaultVehicleDocumentTypes,
 } from './iam.seed';
 import { seedHtmlTemplates } from './templates.seed';
+import { seedTenantPricingDefaults, readPricingConfig, FareClassDef } from './pricing-defaults.backfill';
 
 const prisma = new PrismaClient();
 
@@ -452,7 +453,13 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
     },
   });
 
-  // Pricing rules pour la route
+  // Pricing rules pour la route — les fareMultipliers sont lus depuis le
+  // registre pour rester DRY (cohérent avec les TenantFareClass seedés plus
+  // haut par `seedTenantPricingDefaults`). taxRate legacy laissé à 0 : la
+  // fiscalité effective vient désormais de TenantTax (canonique).
+  const seedFareDefaults = await readPricingConfig<FareClassDef[]>(prisma, 'pricing.defaults.fareClasses');
+  const seedFareMultipliers: Record<string, number> = {};
+  for (const fc of seedFareDefaults) seedFareMultipliers[fc.code] = fc.multiplier;
   await prisma.pricingRules.upsert({
     where: { id: 'pricing-bzv-pnr' },
     update: {},
@@ -462,12 +469,12 @@ async function seedTicketingData(tenantId: string, driverUserId: string) {
       routeId:  route.id,
       rules: {
         basePriceXof:      15000,
-        taxRate:           0.18,
+        taxRate:           0,
         tollsXof:          500,
         costPerKm:         25,
         luggageFreeKg:     15,
         luggagePerExtraKg: 200,
-        fareMultipliers:   { STANDARD: 1.0, CONFORT: 1.4, VIP: 2.0, STANDING: 0.7 },
+        fareMultipliers:   seedFareMultipliers,
         yieldSteps:        [
           { occupancyThreshold: 0.7, priceMultiplier: 1.10 },
           { occupancyThreshold: 0.9, priceMultiplier: 1.25 },
@@ -744,6 +751,18 @@ async function main() {
     console.log(
       `[Dev Seed] ✅ ${t.adminEmail} (TENANT_ADMIN → ${t.name}, id=${admin.id}, ` +
       `agencyId=${defaultAgencyId})`,
+    );
+  }
+
+  // ── 2.bis. Pricing defaults (TenantBusinessConfig + TenantTax(TVA) +
+  // TenantFareClass × N) pour chaque tenant dev — sinon les nouvelles routes
+  // et la vente billets n'ont pas leurs classes/taxes configurées.
+  for (const t of TENANTS) {
+    const r = await seedTenantPricingDefaults(prisma, t.id);
+    console.log(
+      `[Dev Seed] ✅ Pricing defaults ${t.slug} → BC:${r.businessConfigCreated ? 'created' : 'skip'} ` +
+      `TVA:${r.taxCreated ? 'created' : 'skip'} ` +
+      `FareClass:+${r.fareClassesCreated} PricingRules(orphelines):+${r.pricingRulesCreated}`,
     );
   }
 

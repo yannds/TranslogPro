@@ -285,6 +285,12 @@ export const TENANT_ROLES: Array<{
       // Taxes & Fiscalité (CRUD TenantTax)
       'data.tax.read.tenant',
       'control.tax.manage.tenant',
+      // Classes de voyage (CRUD TenantFareClass)
+      'data.fareClass.read.tenant',
+      'control.fareClass.manage.tenant',
+      // Périodes peak (calendrier yield — tenant-admin pilote, effet sur toute la flotte)
+      'data.peakPeriod.read.tenant',
+      'control.peakPeriod.manage.tenant',
       // Rentabilité prévisionnelle pré-trajet (Sprint 11.A)
       'data.profitability.read.tenant',
       // Reset complet tenant — opération destructive, uniquement TENANT_ADMIN
@@ -365,6 +371,10 @@ export const TENANT_ROLES: Array<{
       // Taxes & Fiscalité (le gérant peut ajuster la grille fiscale tenant)
       'data.tax.read.tenant',
       'control.tax.manage.tenant',
+      // Classes de voyage (lecture — classes tenant-wide, édition via TENANT_ADMIN)
+      'data.fareClass.read.tenant',
+      // Peak periods (lecture pour contexte yield)
+      'data.peakPeriod.read.tenant',
       // Rentabilité prévisionnelle pré-trajet (Sprint 11.A) — le manager
       // d'agence programme des trajets et doit voir la viabilité.
       'data.profitability.read.tenant',
@@ -401,6 +411,8 @@ export const TENANT_ROLES: Array<{
       'data.voucher.redeem.agency',
       // Taxes (lecture seule — caissier doit voir la grille pour comprendre le ticket POS)
       'data.tax.read.tenant',
+      // Classes de voyage (lecture — le caissier doit lister les classes à la vente)
+      'data.fareClass.read.tenant',
     ],
   },
   {
@@ -418,6 +430,8 @@ export const TENANT_ROLES: Array<{
       // Taxes (cœur du métier comptable — read + write)
       'data.tax.read.tenant',
       'control.tax.manage.tenant',
+      // Classes de voyage (lecture pour facturation — gestion via TENANT_ADMIN)
+      'data.fareClass.read.tenant',
       // Facturation (lecture tenant + création/réémission)
       'data.invoice.read.agency',
       'data.invoice.read.tenant',

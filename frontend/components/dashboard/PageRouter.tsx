@@ -57,6 +57,12 @@ const LazyCompanySetup   = lazy(() => import('../pages/PageCompanySetup').then(m
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantTaxes    = lazy(() => import('../pages/PageTenantTaxes').then(m => ({ default: m.PageTenantTaxes })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTenantFareClasses = lazy(() => import('../pages/PageTenantFareClasses').then(m => ({ default: m.PageTenantFareClasses })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazySeasonality    = lazy(() => import('../pages/PageSeasonality').then(m => ({ default: m.PageSeasonality })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPeakPeriods    = lazy(() => import('../pages/PageTenantPeakPeriods').then(m => ({ default: m.PageTenantPeakPeriods })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyVouchers        = lazy(() => import('../pages/PageVouchers').then(m => ({ default: m.PageVouchers })));
@@ -276,6 +282,8 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── Analytique & IA ────────────────────────────────────────────────────
     case 'analytics':           return <PageAnalytics />;
+    case 'seasonality':         return <LazySeasonality />;
+    case 'peak-periods':        return <LazyPeakPeriods />;
     case 'ai-routes':           return <PageAiRoutes />;
     case 'ai-fleet':            return <LazyAiFleet />;
     case 'ai-demand':           return <LazyAiDemand />;
@@ -385,6 +393,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'tenant-company':      return <LazyCompanySetup />;
     case 'integrations':        return <LazyIntegrations />;
     case 'tenant-taxes':        return <LazyTenantTaxes />;
+    case 'tenant-fare-classes': return <LazyTenantFareClasses />;
     case 'tenant-rules':        return <LazyTenantBusinessRules />;
     case 'vouchers':            return <LazyVouchers />;
     case 'tenant-payment':      return <LazyTenantPayment />;

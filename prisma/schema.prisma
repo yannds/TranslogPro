@@ -122,6 +122,8 @@ model Tenant {
   // Toutes ces relations sont créées lors du provisioning via des seeds idempotents.
   taxes                 TenantTax[]
   fareClasses           TenantFareClass[]
+  seasonalAggregates    SeasonalAggregate[]
+  peakPeriods           PeakPeriod[]
   paymentConfig         TenantPaymentConfig?
   paymentIntents        PaymentIntent[]
   paymentProviderStates PaymentProviderState[]
@@ -2336,6 +2338,108 @@ model TripAnalytics {
   @@index([tenantId, routeId, isGoldenDay])
   @@index([tenantId, isBlackRoute])
   @@map("trip_analytics")
+}
+
+// ── KPI saisonniers — agrégation multi-périodes (Sprint 4 — 2026-04-20) ──────
+// Alimentée par un cron nocturne (SchedulerService) pour la page
+// `/admin/analytics/seasonality`. Sert à anticiper les besoins flotte/personnel
+// (ajout de trips Q4, formations en creux de janvier, etc.).
+//
+// Règle YoY progressive appliquée à l'affichage :
+//   < 30j       → "Données insuffisantes" (aucune comparaison affichée)
+//   1-3 mois    → mensuel seul, badge "Période courte"
+//   3-12 mois   → ajout comparaisons M-1, M-3
+//   ≥ 12 mois   → YoY débloqué
+//   ≥ 24 mois   → tendance pluriannuelle
+//
+// Pas de YoY fabriqué sur une base trop petite (un +340% YoY calculé sur
+// 2 mois d'historique induit en erreur les décisions RH/flotte).
+model SeasonalAggregate {
+  id        String @id @default(cuid())
+  tenantId  String
+
+  // routeId=null => agrégat tenant global (toutes lignes).
+  // Un routeId précis => agrégat ligne par ligne.
+  routeId   String?
+
+  /// YEAR | MONTH | WEEK | WEEKEND | WEEKDAY
+  periodType String
+  /// Clé canonique — YEAR="2026", MONTH="2026-04", WEEK="2026-W17",
+  /// WEEKEND="2026-04-WE", WEEKDAY="2026-04-WD". Stable pour tri + upsert.
+  periodKey  String
+  /// Date du début de la période (à minuit UTC) — utile pour sorting/range queries.
+  periodStartAt DateTime
+
+  ticketsSold      Int   @default(0)
+  revenueTotal     Float @default(0) // ticketRevenue + parcelRevenue
+  tripCount        Int   @default(0)
+  profitableCount  Int   @default(0)
+  deficitCount     Int   @default(0)
+  fillRateAvg      Float @default(0) // moyenne pondérée par tripCount
+  netMarginAvg     Float @default(0) // moyenne pondérée par tripCount
+
+  /// Variation vs période immédiatement précédente (M-1, Y-1, W-1 selon type).
+  /// null si données insuffisantes (pas de période précédente en DB).
+  vsPreviousPct Float?
+  /// Variation vs même période année précédente (M-12 pour MONTH, etc.).
+  /// null si l'historique est < 12 mois (règle YoY progressive).
+  vsLastYearPct Float?
+
+  computedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, routeId, periodType, periodKey])
+  @@index([tenantId, periodType, periodStartAt])
+  @@index([tenantId, routeId, periodType])
+  @@map("seasonal_aggregates")
+}
+
+// ── Périodes peak (Sprint 5) — calendrier saisonnier qui pilote le yield ─────
+// Déclenche une 5ème règle dans YieldService avec priorité maximale (événement
+// calendrier > réaction fillRate). Deux usages complémentaires :
+//   1. Fériés / périodes à forte demande (Noël, Pâques, fêtes nationales)
+//      → expectedDemandFactor > 1 = majoration tarif
+//   2. Périodes creuses (fin ramadan sans fête, basse saison touristique)
+//      → expectedDemandFactor < 1 = remise anticipée
+//
+// Seedées par défaut via `prisma/seeds/peak-periods.seed.ts` (calendriers CG,
+// SN, CI, FR). Éditables par TENANT_ADMIN via PageTenantPeakPeriods.
+model PeakPeriod {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Code stable (ex: "NEW_YEAR_2026", "SUMMER_VACATION_2026"). Unique par tenant.
+  code     String
+  /// Libellé affiché (sinon labelKey pour i18n).
+  label    String
+  labelKey String?
+  /// Pays ISO2 (CG, SN, CI, FR…) — info UI/traçabilité. null = tenant-custom.
+  countryCode String?
+
+  /// Dates de la période (inclusive, minuit UTC).
+  startDate DateTime
+  endDate   DateTime
+
+  /// Coefficient de demande attendu (1.0 = neutre, 1.3 = +30%, 0.7 = -30%).
+  /// Appliqué par YieldService comme multiplicateur prioritaire.
+  expectedDemandFactor Float @default(1.0)
+
+  /// Jour férié ? Purement informatif — pas utilisé pour le calcul tarifaire.
+  isHoliday Boolean @default(false)
+  /// Seedée par le système ? Si true, non supprimable (seulement désactivable).
+  isSystemDefault Boolean @default(false)
+
+  enabled  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, enabled, startDate, endDate])
+  @@map("peak_periods")
 }
 
 // ═════════════════════════════════════════════════════════════
