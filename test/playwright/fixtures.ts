@@ -146,20 +146,17 @@ async function createTenantFixture(
 }
 
 async function cleanupTenantFixture(prisma: PrismaClient, tenantId: string): Promise<void> {
-  // Cascade delete via FK onDelete: Cascade — mais par sécurité on efface
-  // explicitement sessions/audit qui n'ont pas forcément la cascade.
-  await prisma.session.deleteMany({ where: { tenantId } });
-  await prisma.auditLog.deleteMany({ where: { tenantId } });
-  await prisma.account.deleteMany({ where: { tenantId } });
-  // Staff doit être supprimé avant User (FK Staff.userId). Depuis 2026-04-19 le
-  // boot backfillStaffFromUsers crée un Staff pour chaque user STAFF/admin.
-  await prisma.staff.deleteMany({ where: { tenantId } });
-  await prisma.user.deleteMany({ where: { tenantId } });
-  await prisma.role.deleteMany({ where: { tenantId } });
-  await prisma.tenantDomain.deleteMany({ where: { tenantId } });
-  // Agencies créées par OnboardingService ou backfill au boot — FK bloquante
-  // sur tenant.delete() sans cleanup explicite.
-  await prisma.tenantBusinessConfig.deleteMany({ where: { tenantId } });
-  await prisma.agency.deleteMany({ where: { tenantId } });
-  await prisma.tenant.delete({ where: { id: tenantId } });
+  // Suppression d'un tenant E2E jetable : on s'appuie sur l'astuce Postgres
+  // `SET LOCAL session_replication_role = 'replica'` dans une transaction
+  // pour désactiver temporairement TOUTES les FK et permettre le DELETE même
+  // quand des tables tenant-scoped (workflow_configs, staff, agency, etc.)
+  // n'ont pas `onDelete: Cascade` explicite. Alignement avec
+  // scripts/cleanup-e2e-tenants.ts — évite le whack-a-mole FK à chaque
+  // nouveau modèle ajouté au schema.
+  //
+  // ⚠️ Uniquement acceptable sur des tenants E2E jetables préfixés pw-*.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL session_replication_role = 'replica'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tenants WHERE id = $1`, tenantId);
+  });
 }
