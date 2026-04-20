@@ -49,8 +49,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
-  // CAPTCHA (Cloudflare Turnstile) — backend fail-open si pas de site-key
-  const [captcha,  setCaptcha]  = useState<string | null>(null);
+  // CAPTCHA adaptatif (NIST/OWASP) : le widget n'apparaît QU'APRÈS 3 échecs
+  // consécutifs (détectés côté serveur via compteur Redis par IP + email).
+  // Un user légitime qui se connecte du premier coup ne le voit jamais.
+  const [captcha,         setCaptcha]         = useState<string | null>(null);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -68,7 +71,12 @@ export function LoginPage() {
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 429) {
+        // Backend signale que le CAPTCHA est exigé (seuil d'échecs dépassé)
+        const body = err.body as { requireCaptcha?: boolean } | null | undefined;
+        if (body?.requireCaptcha) {
+          setCaptchaRequired(true);
+          setError(t('auth.captchaRequired'));
+        } else if (err.status === 429) {
           setError(t('auth.tooManyAttempts'));
         } else if (err.status === 401 || err.status === 400) {
           setError(t('auth.badCredentials'));
@@ -243,8 +251,10 @@ export function LoginPage() {
             />
           </div>
 
-          {/* CAPTCHA (silencieux si VITE_TURNSTILE_SITE_KEY absent) */}
-          <CaptchaWidget onToken={setCaptcha} theme="dark" />
+          {/* CAPTCHA adaptatif : rendu uniquement si le backend a signalé
+              requireCaptcha=true (après 3 échecs consécutifs). Silencieux
+              autrement — zéro friction pour un user normal. */}
+          {captchaRequired && <CaptchaWidget onToken={setCaptcha} theme="dark" />}
 
           {/* Submit */}
           <button

@@ -3043,6 +3043,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "signIn": "Se connecter",
     "badCredentials": "Email ou mot de passe incorrect.",
     "tooManyAttempts": "Trop de tentatives de connexion. Veuillez patienter quelques minutes avant de réessayer.",
+    "captchaRequired": "Plusieurs échecs détectés — merci de valider le captcha ci-dessous avant de réessayer.",
     "serverError": "Erreur serveur",
     "serverRetry": "Réessayez dans un instant.",
     "networkError": "Impossible de contacter le serveur. Vérifiez votre connexion.",

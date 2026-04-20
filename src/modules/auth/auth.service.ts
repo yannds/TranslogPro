@@ -1,14 +1,24 @@
 import {
-  Injectable, UnauthorizedException, Logger,
+  Injectable, UnauthorizedException, Logger, Inject,
   ForbiddenException, NotFoundException, BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import type { Prisma } from '@prisma/client';
+import { Redis } from 'ioredis';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TenantModuleService } from '../tenant/tenant-module.service';
 import { MfaService } from '../mfa/mfa.service';
 import { AuthIdentityService } from '../../core/identity/auth-identity.service';
+import { TurnstileService } from '../../common/captcha/turnstile.service';
+import { REDIS_CLIENT } from '../../infrastructure/eventbus/redis-publisher.service';
+
+// Seuil de déclenchement du CAPTCHA adaptatif (OWASP/NIST) :
+//   - N échecs consécutifs par IP OU par email dans SIGNIN_FAIL_WINDOW_SEC
+//   - Au-delà, le prochain sign-in exige un token Turnstile valide.
+//   - Succès → compteurs remis à zéro.
+const SIGNIN_CAPTCHA_AFTER_FAILURES = 3;
+const SIGNIN_FAIL_WINDOW_SEC         = 15 * 60; // 15 min
 
 /** Durée de validité d'une session (30 jours). */
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1_000;
@@ -153,6 +163,8 @@ export class AuthService {
     private readonly modules:  TenantModuleService,
     private readonly mfa:      MfaService,
     private readonly identity: AuthIdentityService,
+    private readonly turnstile: TurnstileService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   // ─── Sign-in ───────────────────────────────────────────────────────────────
@@ -173,6 +185,7 @@ export class AuthService {
     password:  string,
     ipAddress: string,
     userAgent: string,
+    captchaToken?: string | null,
   ): Promise<SignInResult> {
 
     if (!tenantId) {
@@ -180,6 +193,44 @@ export class AuthService {
       throw new BadRequestException(
         'Tenant non résolu : l\'authentification doit passer par un sous-domaine tenant',
       );
+    }
+
+    // ── CAPTCHA ADAPTATIF (NIST/OWASP — credential-stuffing-cheat-sheet) ────
+    // Compteurs Redis d'échecs : IP ET email. Si l'un dépasse le seuil, le
+    // CAPTCHA est exigé. Succès → reset. Protège contre rotation d'IP ET
+    // contre bruteforce focalisé sur un email unique. Zéro friction pour un
+    // user normal (compteur à 0 → pas de CAPTCHA demandé).
+    const ipFailKey    = `auth:fail:ip:${ipAddress}`;
+    const emailFailKey = `auth:fail:email:${tenantId}:${email.toLowerCase()}`;
+    const [ipFails, emailFails] = await Promise.all([
+      this.redis.get(ipFailKey).then(v => parseInt(v ?? '0', 10)),
+      this.redis.get(emailFailKey).then(v => parseInt(v ?? '0', 10)),
+    ]);
+    const captchaRequired =
+      ipFails >= SIGNIN_CAPTCHA_AFTER_FAILURES || emailFails >= SIGNIN_CAPTCHA_AFTER_FAILURES;
+
+    if (captchaRequired) {
+      if (!captchaToken) {
+        // Fail-open si le service Turnstile n'est pas configuré (dev local) —
+        // on exige quand même le captcha, mais le front doit alors afficher le
+        // widget pour respecter la politique. Si Vault absent, isConfigured()
+        // = false et verify() renverrait 'not_configured' → on skip le check.
+        if (await this.turnstile.isConfigured()) {
+          throw new BadRequestException({
+            message: 'Trop d\'échecs récents — veuillez compléter le captcha',
+            requireCaptcha: true,
+          });
+        }
+      } else {
+        const ver = await this.turnstile.verify(captchaToken, ipAddress);
+        if (!ver.ok) {
+          throw new BadRequestException({
+            message: 'Captcha invalide',
+            requireCaptcha: true,
+            reason: ver.reason,
+          });
+        }
+      }
     }
 
     // 1. Recherche du compte credential via AuthIdentityService
@@ -202,6 +253,12 @@ export class AuthService {
         userAgent,
         email,
       });
+      // Incrémente les compteurs d'échec (TTL 15 min glissant). Permet au
+      // prochain appel de décider s'il faut exiger un CAPTCHA.
+      await Promise.all([
+        this.redis.multi().incr(ipFailKey).expire(ipFailKey, SIGNIN_FAIL_WINDOW_SEC).exec(),
+        this.redis.multi().incr(emailFailKey).expire(emailFailKey, SIGNIN_FAIL_WINDOW_SEC).exec(),
+      ]);
       throw new UnauthorizedException('Identifiants invalides');
     }
 
@@ -219,8 +276,22 @@ export class AuthService {
       });
       // Anti-énumération : même message qu'un mot de passe invalide. Le motif
       // réel (compte désactivé) reste uniquement dans l'audit log côté serveur.
+      // Incrémente aussi les compteurs — sinon un attaquant qui tombe sur un
+      // compte désactivé ne déclencherait jamais le CAPTCHA.
+      await Promise.all([
+        this.redis.multi().incr(ipFailKey).expire(ipFailKey, SIGNIN_FAIL_WINDOW_SEC).exec(),
+        this.redis.multi().incr(emailFailKey).expire(emailFailKey, SIGNIN_FAIL_WINDOW_SEC).exec(),
+      ]);
       throw new UnauthorizedException('Identifiants invalides');
     }
+
+    // Password + account actif validés → reset compteurs d'échec (IP + email).
+    // Le CAPTCHA ne sera plus exigé aux prochains logins tant qu'il n'y a pas
+    // de nouveaux échecs. Fire-and-forget : un échec Redis ne casse pas le login.
+    void Promise.all([
+      this.redis.del(ipFailKey),
+      this.redis.del(emailFailKey),
+    ]).catch(() => { /* noop */ });
 
     // 1c. MFA wire — si le user a activé TOTP, on n'émet PAS de session mais
     //     un challenge pré-session. Le controller pose un cookie MFA distinct

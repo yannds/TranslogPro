@@ -10,7 +10,6 @@ import {
   RateLimit,
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
-import { TurnstileGuard, RequireCaptcha } from '../../common/captcha/turnstile.guard';
 import { ImpersonationService } from '../../core/iam/services/impersonation.service';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
@@ -83,8 +82,7 @@ export class AuthController {
    */
   @Post('sign-in')
   @HttpCode(200)
-  @UseGuards(RedisRateLimitGuard, TurnstileGuard)
-  @RequireCaptcha()
+  @UseGuards(RedisRateLimitGuard)
   @RateLimit([
     {
       limit:    process.env.NODE_ENV === 'production' ? 5 : 1000,
@@ -93,6 +91,13 @@ export class AuthController {
       suffix:   'auth_signin',
     },
   ])
+  /**
+   * CAPTCHA ADAPTATIF (NIST/OWASP) : pas de @RequireCaptcha() statique.
+   * Le CAPTCHA est exigé par AuthService.signIn seulement après N échecs
+   * (par IP OU par email dans les 15 dernières minutes). Un user normal
+   * ne voit JAMAIS le widget. Seul un credential-stuffer / brute-forcer
+   * est confronté au défi à partir de la 4e tentative.
+   */
   async signIn(
     @Body() dto:  SignInDto,
     @Req()  req:  Request,
@@ -115,6 +120,7 @@ export class AuthController {
       dto.password,
       extractIp(req),
       req.headers['user-agent'] ?? '',
+      dto.captchaToken,
     );
 
     // Branch MFA — on pose le cookie pré-session (TTL 5 min) et on retourne

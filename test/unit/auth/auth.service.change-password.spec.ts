@@ -45,6 +45,8 @@ describe('AuthService.changePassword', () => {
       { listActiveKeys: jest.fn().mockResolvedValue([]) } as any,
       { verifyLoginCode: jest.fn() } as any,
       { findCredentialAccount: jest.fn(), upsertCredentialAccount: jest.fn() } as any,
+      {} as any,
+      {} as any,
     );
   });
 

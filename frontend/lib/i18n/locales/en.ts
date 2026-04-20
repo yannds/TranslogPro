@@ -3190,6 +3190,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "signIn": "Sign In",
     "badCredentials": "Invalid email or password.",
     "tooManyAttempts": "Too many sign-in attempts. Please wait a few minutes before trying again.",
+    "captchaRequired": "Multiple failures detected — please complete the captcha below before retrying.",
     "serverError": "Server error",
     "serverRetry": "Please try again shortly.",
     "networkError": "Unable to reach the server. Check your connection.",

@@ -53,6 +53,16 @@ describe('AuthService.signIn — MFA wire', () => {
       { listActiveKeys: jest.fn().mockResolvedValue([]) } as any,
       { verifyLoginCode: jest.fn() } as any,
       identityMock,
+      { isConfigured: jest.fn().mockResolvedValue(false), verify: jest.fn() } as any,
+      {
+        get: jest.fn().mockResolvedValue(null),
+        del: jest.fn().mockResolvedValue(0),
+        multi: jest.fn().mockReturnValue({
+          incr: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([]),
+        }),
+      } as any,
     );
   });
 

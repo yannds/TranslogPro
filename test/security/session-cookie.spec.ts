@@ -92,7 +92,7 @@ describe('[SECURITY] Session & Cookie Security', () => {
           create:     jest.fn().mockResolvedValue({}),
         },
       } as unknown as PrismaService;
-      return new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any);
+      return new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any, {} as any, {} as any);
     };
 
     it('should reject a forged token (not in DB)', async () => {
@@ -138,7 +138,7 @@ describe('[SECURITY] Session & Cookie Security', () => {
       const prisma = {
         session: { deleteMany },
       } as unknown as PrismaService;
-      const svc = new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any);
+      const svc = new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any, {} as any, {} as any);
 
       await svc.signOut('some-token');
       expect(deleteMany).toHaveBeenCalledWith({ where: { token: 'some-token' } });
@@ -148,7 +148,7 @@ describe('[SECURITY] Session & Cookie Security', () => {
       const prisma = {
         session: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       } as unknown as PrismaService;
-      const svc = new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any);
+      const svc = new AuthService(prisma, {} as TenantModuleService, {} as MfaService, {} as any, {} as any, {} as any);
 
       await expect(svc.signOut('nonexistent')).resolves.not.toThrow();
     });

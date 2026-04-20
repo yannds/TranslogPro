@@ -385,7 +385,7 @@ Nouvelles suites autour du portail plateforme et du self-service utilisateur :
 
 | Niveau | Commande | Suites | Tests | Statut |
 |--------|----------|--------|-------|--------|
-| **Unit complet** | `npx jest --config jest.unit.config.ts` | 84 | 823 | ✅ 823/823 PASS (incl. hardening étendu signup/signin/password-reset/waitlist/report 2026-04-20) |
+| **Unit complet** | `npx jest --config jest.unit.config.ts` | 85 | 829 | ✅ 829/829 PASS (incl. CAPTCHA adaptatif sign-in — NIST/OWASP 2026-04-20) |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Playwright portail SaaS** (landing → welcome) | `npm run test:pw -- --project=public saas-journey` | 1 | 2 | ✅ PASS (TICKETING + PARCELS, cleanup tenants auto) |

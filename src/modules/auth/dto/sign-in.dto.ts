@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsNotEmpty, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 /**
@@ -22,4 +22,14 @@ export class SignInDto {
   @MinLength(8,   { message: 'Mot de passe trop court (min 8 caractères)' })
   @MaxLength(128, { message: 'Mot de passe trop long' })
   password!: string;
+
+  /**
+   * Token CAPTCHA (Cloudflare Turnstile) — optionnel. Exigé UNIQUEMENT si
+   * AuthService détecte N échecs d'auth récents (par IP OU par email).
+   * En nominal, un user légitime n'envoie jamais ce champ.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string;
 }

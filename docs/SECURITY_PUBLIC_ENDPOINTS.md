@@ -30,7 +30,7 @@
 | `POST /api/public/:slug/portal/tickets/:ref/cancel` | 5/h | — | ✅ | ✅ 24h | — |
 | `POST /api/public/signup` (création tenant SaaS + admin) | 3/h | — | ✅ | ✅ 24h | honeypot DTO `company_website` |
 | `POST /api/public/waitlist` | 5/h | — | ✅ | — | honeypot |
-| `POST /api/auth/sign-in` | 5/15min prod | — | ✅ | — | anti-énumération (même message "Identifiants invalides" pour unknown/inactive/wrong-pw) + bcrypt timing-safe même si user inexistant |
+| `POST /api/auth/sign-in` | 5/15min prod | — | **adaptatif** | — | anti-énumération (même message "Identifiants invalides") + bcrypt timing-safe + CAPTCHA déclenché après 3 échecs (IP OU email/15min) |
 | `POST /api/auth/password-reset/request` | 3/h | — | ✅ | — | cooldown 60min/email (skip si token actif émis < 60min) |
 | `POST /api/public/:tenantId/report` | 5/h | — | ✅ | — | RGPD TTL 24h |
 | `POST /api/public/report` (host-resolved) | 5/h | — | ✅ | — | idem |
@@ -44,6 +44,12 @@
 ### 3.1 CAPTCHA — Cloudflare Turnstile
 
 **Pourquoi Turnstile plutôt que hCAPTCHA/reCAPTCHA** : gratuit, pas de cookies tiers, pas de collecte PII, performant en Afrique (Cloudflare CDN).
+
+**Systématique vs adaptatif — règle de décision** :
+- **Systématique** (`@RequireCaptcha()`) pour les endpoints **rares/critiques** : signup tenant, password-reset, waitlist, booking ticket, demande colis, signalement. Un user légitime les utilise < 1 fois/semaine → friction CAPTCHA acceptable.
+- **Adaptatif** (logique service) pour les endpoints **fréquents** : login. Compteur Redis d'échecs par IP ET par email sur 15 min glissantes. CAPTCHA exigé seulement après ≥ 3 échecs. Succès → reset. Aligné NIST SP 800-63B + OWASP ASVS V2.2.1 + OWASP Credential Stuffing Cheat Sheet (CAPTCHA comme "secondary defense, after suspicious activity — not always").
+
+Un user normal qui se connecte du premier coup **ne voit jamais le widget**. Seul un credential-stuffer / brute-forcer est confronté à partir de la 4e tentative. Le compteur par email protège contre la rotation d'IP.
 
 **Provisioning** :
 ```bash
@@ -154,5 +160,6 @@ Appliqué sur :
 - [`test/unit/crm/claim-cooldown-budget.spec.ts`](../test/unit/crm/claim-cooldown-budget.spec.ts) — 5 tests
 - [`test/unit/crm/bump-counters-phone-verified.spec.ts`](../test/unit/crm/bump-counters-phone-verified.spec.ts) — 5 tests
 - [`test/unit/password-reset/email-cooldown.spec.ts`](../test/unit/password-reset/email-cooldown.spec.ts) — 4 tests
+- [`test/unit/auth/signin-adaptive-captcha.spec.ts`](../test/unit/auth/signin-adaptive-captcha.spec.ts) — 6 tests (CAPTCHA adaptatif login : 0/3/6 échecs, IP vs email, fail-open)
 
-**Total : 31 nouveaux tests unit — 823/823 PASS.**
+**Total : 37 nouveaux tests unit — 829/829 PASS.**

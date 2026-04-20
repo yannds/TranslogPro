@@ -24,6 +24,8 @@ describe('AuthService.updateMyPreferences', () => {
       { listActiveKeys: jest.fn() } as any,
       { verifyLoginCode: jest.fn() } as any,
       { findCredentialAccount: jest.fn() } as any,
+      {} as any,
+      {} as any,
     );
   });
 
