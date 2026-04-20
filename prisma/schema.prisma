@@ -74,9 +74,10 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users            User[]
-  agencies         Agency[]
-  modules          InstalledModule[]
+  users                 User[]
+  agencies              Agency[]
+  maintenanceReminders  MaintenanceReminder[]
+  modules               InstalledModule[]
   routes           Route[]
   trips            Trip[]
   workflowConfigs  WorkflowConfig[]
@@ -322,6 +323,16 @@ model TenantBusinessConfig {
   //   "dispose" → DISPUTED (admin tranchera)
   //   "hold"    → garder sur place (notifier l'expéditeur)
   parcelPickupNoShowAction        String @default("return")
+
+  // ── Maintenance prédictive simple (2026-04-20, Sprint 7) ────────────────
+  // Intervalles standards par type d'intervention (km + jours). Structure :
+  // [{ type: "VIDANGE", intervalKm: 10000, intervalDays: 180, label: "Vidange moteur" }, ...]
+  // Le garage saisit pour chaque bus le dernier kilométrage/date d'intervention
+  // et le service prédit la prochaine date/km. Zéro ML, juste seuils configurables.
+  maintenanceIntervals            Json  @default("[]")
+  // Marge d'anticipation (km ou jours avant échéance) → alerte "bientôt due"
+  maintenanceAnticipationKm       Int   @default(500)
+  maintenanceAnticipationDays     Int   @default(14)
 
   // ── Dashboard gérant : seuils d'alertes anomalies (2026-04-20) ──────────
   // Nombre d'incidents OPEN+ASSIGNED au-delà duquel l'alerte s'affiche au
@@ -926,8 +937,9 @@ model Bus {
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
   agency              Agency?              @relation(fields: [agencyId], references: [id])
-  trips               Trip[]
-  maintenanceReports  MaintenanceReport[]
+  trips                 Trip[]
+  maintenanceReports    MaintenanceReport[]
+  maintenanceReminders  MaintenanceReminder[]
   costProfile         BusCostProfile?
   vehicleDocuments    VehicleDocument[]
   consumableTrackings ConsumableTracking[]
@@ -1259,6 +1271,35 @@ model Incident {
   @@index([tenantId, severity, resolvedAt])
   @@index([tenantId, isSos, status])
   @@map("incidents")
+}
+
+// MaintenanceReminder — rappel d'intervention périodique par bus (Sprint 7).
+// Le garage saisit la dernière intervention (km + date) ; le service calcule
+// la prochaine échéance à partir des intervalles configurés dans
+// TenantBusinessConfig.maintenanceIntervals.
+model MaintenanceReminder {
+  id              String    @id @default(cuid())
+  tenantId        String
+  busId           String
+  // Type standardisé : VIDANGE | COURROIE | FREINS | PNEUS | FILTRE_AIR | FILTRE_CARBURANT | AUTRE
+  // (Validé côté DTO ; pas un enum Prisma pour rester extensible par tenant.)
+  type            String
+  label           String
+  // Dernière intervention effectuée — saisi par le garage à chaque remplacement.
+  lastPerformedKm    Float?
+  lastPerformedDate  DateTime?
+  notes              String?
+  // Active / désactivée (ex. pièce non concernée pour ce bus).
+  isActive           Boolean @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  bus     Bus     @relation(fields: [busId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, busId, type])
+  @@index([tenantId, busId])
+  @@map("maintenance_reminders")
 }
 
 model MaintenanceReport {

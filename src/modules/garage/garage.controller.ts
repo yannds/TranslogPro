@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
 import { GarageService, CreateMaintenanceDto } from './garage.service';
+import { MaintenancePredictionService } from './maintenance-prediction.service';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
@@ -8,7 +9,41 @@ import { Permission } from '../../common/constants/permissions';
 
 @Controller('tenants/:tenantId/garage')
 export class GarageController {
-  constructor(private readonly garageService: GarageService) {}
+  constructor(
+    private readonly garageService: GarageService,
+    private readonly maintenancePrediction: MaintenancePredictionService,
+  ) {}
+
+  /**
+   * Rappels de maintenance prédictive simple (Sprint 7) — calculés à partir
+   * des intervalles configurés dans TenantBusinessConfig.maintenanceIntervals
+   * et des dernières interventions saisies par le garage. Zéro ML, juste seuils.
+   */
+  @Get('reminders')
+  @RequirePermission(Permission.MAINTENANCE_UPDATE_OWN)
+  reminders(
+    @TenantId() tenantId: string,
+    @Query('busId') busId?: string,
+  ) {
+    return this.maintenancePrediction.computeReminders(tenantId, busId);
+  }
+
+  /** Garage enregistre une intervention effectuée (upsert) — Sprint 7 */
+  @Post('reminders/:busId/:type/performed')
+  @RequirePermission(Permission.MAINTENANCE_UPDATE_OWN)
+  recordPerformed(
+    @TenantId() tenantId: string,
+    @Param('busId') busId: string,
+    @Param('type') type: string,
+    @Body() dto: { performedKm?: number; performedDate?: string; notes?: string },
+  ) {
+    return this.maintenancePrediction.recordPerformed(
+      tenantId, busId, type,
+      dto.performedKm ?? null,
+      dto.performedDate ? new Date(dto.performedDate) : null,
+      dto.notes,
+    );
+  }
 
   /** Mécanicien crée un rapport — scope own */
   @Post('reports')
