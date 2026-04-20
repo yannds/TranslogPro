@@ -6,7 +6,7 @@
  *            pricing | cashier | sav | maintenance | manifest | traveler |
  *            luggage | shipment | session | user | integration | settings | module |
  *            crm | campaign | feedback | safety | stats | crew | display |
- *            impersonation | outbox
+ *            impersonation | outbox | tax
  *   action : create | read | update | delete | scan | cancel | approve | report |
  *            check | open | close | transaction | deliver | claim | manage |
  *            config | override | install | revoke | verify | track | weigh |
@@ -102,6 +102,11 @@ export const P_FLEET_TRACKING_CREATE_AGENCY = 'data.fleet.tracking_create.agency
 export const P_PRICING_MANAGE_TENANT       = 'control.pricing.manage.tenant';
 export const P_PRICING_YIELD_TENANT        = 'control.pricing.yield.tenant';
 export const P_PRICING_READ_AGENCY         = 'data.pricing.read.agency';
+// Rentabilité prévisionnelle (pre-schedule) — Sprint 11.A. Permission granulaire
+// pour le gestionnaire/gérant/comptable qui veut estimer la viabilité d'un trajet
+// AVANT de le programmer. Séparée de STATS_READ pour permettre à un comptable
+// d'auditer la rentabilité sans voir les KPI opérationnels live.
+export const P_PROFITABILITY_READ_TENANT   = 'data.profitability.read.tenant';
 export const P_CASHIER_OPEN_OWN            = 'data.cashier.open.own';
 export const P_CASHIER_TRANSACTION_OWN     = 'data.cashier.transaction.own';
 export const P_CASHIER_CLOSE_AGENCY        = 'data.cashier.close.agency';
@@ -208,6 +213,12 @@ export const P_INVOICE_CREATE_AGENCY       = 'data.invoice.create.agency';
 export const P_INVOICE_READ_AGENCY         = 'data.invoice.read.agency';
 export const P_INVOICE_READ_TENANT         = 'data.invoice.read.tenant';
 
+// ─── Taxes & Fiscalité (CRUD TenantTax) ──────────────────────────────────────
+// Permissions séparées lecture/écriture : un caissier doit voir les taxes
+// applicables (audit ticket POS) sans pouvoir modifier la grille fiscale.
+export const P_TAX_READ_TENANT             = 'data.tax.read.tenant';
+export const P_TAX_MANAGE_TENANT           = 'control.tax.manage.tenant';
+
 // ─── Quais & Annonces gare ───────────────────────────────────────────────────
 export const P_PLATFORM_MANAGE_TENANT      = 'control.platform.manage.tenant';
 export const P_PLATFORM_READ_AGENCY        = 'data.platform.read.agency';
@@ -277,6 +288,20 @@ export const P_WORKFLOW_SIMULATE_TENANT     = 'control.workflow.simulate.tenant'
 export const P_PLATFORM_PLANS_MANAGE_GLOBAL    = 'control.platform.plans.manage.global';
 export const P_PLATFORM_BILLING_MANAGE_GLOBAL  = 'control.platform.billing.manage.global';
 export const P_PLATFORM_METRICS_READ_GLOBAL    = 'data.platform.metrics.read.global';
+// ─── KPI SaaS fine-grained (Sprint KPI 2026-04-20) ──────────────────────────
+// Découpage de la vue KPI plateforme en 4 canaux pour distinguer qui voit quoi :
+//   - business : MRR, ARPU, GMV, expansion revenue (SUPER_ADMIN only)
+//   - adoption : DAU/MAU, modules, activation (SA + SUPPORT_L1 + SUPPORT_L2
+//                — les agents support ont besoin de repérer les tenants faibles
+//                pour proposer webinaires, formation, onboarding ciblé)
+//   - retention: cohortes D7/D30/D90 (SA + SUPPORT_L2 — investigation)
+//   - ops     : incidents, qualité service, santé (SA + L1 + L2)
+// Le endpoint global PLATFORM_METRICS_READ_GLOBAL reste exposé pour la vue
+// "anciens growth/adoption/health" de PlatformAnalyticsService (legacy).
+export const P_PLATFORM_KPI_BUSINESS_READ_GLOBAL  = 'data.platform.kpi.business.read.global';
+export const P_PLATFORM_KPI_ADOPTION_READ_GLOBAL  = 'data.platform.kpi.adoption.read.global';
+export const P_PLATFORM_KPI_RETENTION_READ_GLOBAL = 'data.platform.kpi.retention.read.global';
+export const P_PLATFORM_KPI_OPS_READ_GLOBAL       = 'data.platform.kpi.ops.read.global';
 export const P_PLATFORM_SUPPORT_READ_GLOBAL    = 'control.platform.support.read.global';
 export const P_PLATFORM_SUPPORT_WRITE_GLOBAL   = 'control.platform.support.write.global';
 export const P_PLATFORM_CONFIG_MANAGE_GLOBAL   = 'control.platform.config.manage.global';
@@ -377,6 +402,7 @@ export const Permission = {
   PRICING_MANAGE_TENANT:      P_PRICING_MANAGE_TENANT,
   PRICING_YIELD_TENANT:       P_PRICING_YIELD_TENANT,
   PRICING_READ_AGENCY:        P_PRICING_READ_AGENCY,
+  PROFITABILITY_READ_TENANT:  P_PROFITABILITY_READ_TENANT,
   CASHIER_OPEN_OWN:           P_CASHIER_OPEN_OWN,
   CASHIER_TRANSACTION_OWN:    P_CASHIER_TRANSACTION_OWN,
   CASHIER_CLOSE_AGENCY:       P_CASHIER_CLOSE_AGENCY,
@@ -431,6 +457,9 @@ export const Permission = {
   INVOICE_CREATE_AGENCY:      P_INVOICE_CREATE_AGENCY,
   INVOICE_READ_AGENCY:        P_INVOICE_READ_AGENCY,
   INVOICE_READ_TENANT:        P_INVOICE_READ_TENANT,
+  // Taxes & Fiscalité (CRUD TenantTax)
+  TAX_READ_TENANT:            P_TAX_READ_TENANT,
+  TAX_MANAGE_TENANT:          P_TAX_MANAGE_TENANT,
   // Quais & Annonces
   PLATFORM_MANAGE_TENANT:     P_PLATFORM_MANAGE_TENANT,
   PLATFORM_READ_AGENCY:       P_PLATFORM_READ_AGENCY,
@@ -478,6 +507,10 @@ export const Permission = {
   PLATFORM_PLANS_MANAGE_GLOBAL:   P_PLATFORM_PLANS_MANAGE_GLOBAL,
   PLATFORM_BILLING_MANAGE_GLOBAL: P_PLATFORM_BILLING_MANAGE_GLOBAL,
   PLATFORM_METRICS_READ_GLOBAL:   P_PLATFORM_METRICS_READ_GLOBAL,
+  PLATFORM_KPI_BUSINESS_READ_GLOBAL:  P_PLATFORM_KPI_BUSINESS_READ_GLOBAL,
+  PLATFORM_KPI_ADOPTION_READ_GLOBAL:  P_PLATFORM_KPI_ADOPTION_READ_GLOBAL,
+  PLATFORM_KPI_RETENTION_READ_GLOBAL: P_PLATFORM_KPI_RETENTION_READ_GLOBAL,
+  PLATFORM_KPI_OPS_READ_GLOBAL:       P_PLATFORM_KPI_OPS_READ_GLOBAL,
   PLATFORM_SUPPORT_READ_GLOBAL:   P_PLATFORM_SUPPORT_READ_GLOBAL,
   PLATFORM_SUPPORT_WRITE_GLOBAL:  P_PLATFORM_SUPPORT_WRITE_GLOBAL,
   PLATFORM_CONFIG_MANAGE_GLOBAL:  P_PLATFORM_CONFIG_MANAGE_GLOBAL,

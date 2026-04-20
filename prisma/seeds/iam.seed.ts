@@ -42,6 +42,11 @@ const SUPER_ADMIN_PERMISSIONS = [
   'control.platform.plans.manage.global',
   'control.platform.billing.manage.global',
   'data.platform.metrics.read.global',
+  // KPI SaaS fine-grained — SUPER_ADMIN voit TOUT (business + adoption + retention + ops)
+  'data.platform.kpi.business.read.global',
+  'data.platform.kpi.adoption.read.global',
+  'data.platform.kpi.retention.read.global',
+  'data.platform.kpi.ops.read.global',
   'control.platform.support.read.global',
   'control.platform.support.write.global',
   'control.platform.config.manage.global',
@@ -90,6 +95,11 @@ const SUPPORT_L1_PERMISSIONS = [
   'data.manifest.print.global',
   // Portail plateforme — metrics (lecture) et support (lire + répondre)
   'data.platform.metrics.read.global',
+  // KPI SaaS fine-grained — L1 voit adoption + ops (identifier tenants à
+  // accompagner : webinaires, formation, onboarding ciblé). Pas de business
+  // (MRR, ARPU, GMV) ni de cohorts retention (investigation = L2).
+  'data.platform.kpi.adoption.read.global',
+  'data.platform.kpi.ops.read.global',
   'control.platform.support.read.global',
   'control.platform.support.write.global',
   // Platform IAM — lecture audit + users pour diagnostic ticket support
@@ -102,6 +112,9 @@ const SUPPORT_L1_PERMISSIONS = [
 // pour diagnostiquer des incidents. Toujours sans accès Control Plane.
 const SUPPORT_L2_PERMISSIONS = [
   ...SUPPORT_L1_PERMISSIONS,
+  // KPI SaaS retention — L2 a besoin des cohortes pour investiguer tickets complexes
+  // (usage baissé, activation bloquée). L2 ne voit toujours PAS le business (MRR/ARPU).
+  'data.platform.kpi.retention.read.global',
   // Debug technique
   'data.workflow.debug.global',
   'data.outbox.replay.global',
@@ -269,6 +282,11 @@ export const TENANT_ROLES: Array<{
       'data.voucher.redeem.agency',
       'control.voucher.cancel.tenant',
       'data.voucher.read.tenant',
+      // Taxes & Fiscalité (CRUD TenantTax)
+      'data.tax.read.tenant',
+      'control.tax.manage.tenant',
+      // Rentabilité prévisionnelle pré-trajet (Sprint 11.A)
+      'data.profitability.read.tenant',
     ],
   },
   {
@@ -341,6 +359,12 @@ export const TENANT_ROLES: Array<{
       'data.compensation.read.agency',
       'data.voucher.issue.agency',
       'data.voucher.redeem.agency',
+      // Taxes & Fiscalité (le gérant peut ajuster la grille fiscale tenant)
+      'data.tax.read.tenant',
+      'control.tax.manage.tenant',
+      // Rentabilité prévisionnelle pré-trajet (Sprint 11.A) — le manager
+      // d'agence programme des trajets et doit voir la viabilité.
+      'data.profitability.read.tenant',
     ],
   },
   {
@@ -372,6 +396,49 @@ export const TENANT_ROLES: Array<{
       // ── Rebook/voucher au guichet (2026-04-19) ──
       'data.ticket.rebook.agency',
       'data.voucher.redeem.agency',
+      // Taxes (lecture seule — caissier doit voir la grille pour comprendre le ticket POS)
+      'data.tax.read.tenant',
+    ],
+  },
+  {
+    // ─── ACCOUNTANT ────────────────────────────────────────────────────────────
+    // Comptable tenant : gère la fiscalité (taxes), consulte les factures et
+    // remboursements, audite les clôtures de caisse. Pas d'accès opérationnel
+    // (création billet/colis/trajet, embarquement, scan). Read-only sur tout
+    // sauf la fiscalité où il a le droit d'écriture.
+    //
+    // Rôle système — les permissions peuvent être ajustées par tenant via la
+    // matrice IAM (control.iam.manage.tenant requis).
+    name:     'ACCOUNTANT',
+    isSystem: true,
+    permissions: [
+      // Taxes (cœur du métier comptable — read + write)
+      'data.tax.read.tenant',
+      'control.tax.manage.tenant',
+      // Facturation (lecture tenant + création/réémission)
+      'data.invoice.read.agency',
+      'data.invoice.read.tenant',
+      'data.invoice.create.agency',
+      'data.invoice.print.agency',
+      // Remboursements (lecture + approbation tenant — flux financier sortant)
+      'data.refund.read.tenant',
+      'data.refund.read.agency',
+      'data.refund.approve.tenant',
+      'data.refund.process.tenant',
+      // Caisse (clôtures + écarts pour audit comptable)
+      'data.cashier.close.agency',
+      // Tarification (lecture pour cohérence comptable)
+      'data.pricing.read.agency',
+      'data.tariff.read.agency',
+      // Stats (vue d'ensemble financière)
+      'control.stats.read.tenant',
+      // Rentabilité prévisionnelle (Sprint 11.A) — cœur métier du comptable
+      'data.profitability.read.tenant',
+      // Utilitaires
+      'data.notification.read.own',
+      'data.session.revoke.own',
+      'data.support.create.tenant',
+      'data.support.read.tenant',
     ],
   },
   {
@@ -1431,6 +1498,11 @@ async function main() {
   );
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+// Standalone CLI uniquement — éviter le side-effect quand le module est
+// importé par un test unitaire ou un autre script (ex. spec qui lit
+// TENANT_ROLES pour vérifier le mapping rôle/permission).
+if (require.main === module) {
+  main()
+    .catch(console.error)
+    .finally(() => prisma.$disconnect());
+}

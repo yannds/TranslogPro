@@ -1,18 +1,20 @@
 import { Module } from '@nestjs/common';
+import { PlatformKpiController } from './platform-kpi.controller';
 import { PlatformKpiService } from './platform-kpi.service';
 
 /**
- * PlatformKpiModule — enregistre le service KPI cross-tenant.
+ * PlatformKpiModule — expose le dashboard KPI SaaS cross-tenant.
  *
- * Le controller est déclaré dans Sprint 3. Ce module exporte le service pour
- * permettre à d'autres modules (alertes, notifications) de consommer les KPI.
+ * 7 endpoints REST sous /platform/kpi/* protégés par 4 permissions
+ * fine-grained (business / adoption / retention / ops). Voir le controller.
  *
- * Dépendances :
+ * Dépendances injectées globalement :
  *   - PrismaService             : @Global via PrismaModule
  *   - PlatformConfigService     : @Global via PlatformConfigModule
  */
 @Module({
-  providers: [PlatformKpiService],
-  exports:   [PlatformKpiService],
+  controllers: [PlatformKpiController],
+  providers:   [PlatformKpiService],
+  exports:     [PlatformKpiService],
 })
 export class PlatformKpiModule {}
