@@ -1,7 +1,52 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint 1 — trajets intermédiaires).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprints 0-9 roadmap post-blueprint UX).
+
+### Roadmap 9 sprints livrée (2026-04-20) — post blueprint UX
+
+**Total : +100 tests sur 10 sprints (0→9). Zéro régression.**
+
+| Sprint | Livraison | Commits | Tests ajoutés |
+|---|---|---|---|
+| 0 | Audit + baseline + fix playwright TFD | `9f85ab4` | — |
+| 1 | Trajets intermédiaires bout-en-bout (backend) | `929ddd3`, `7e25f52` | 40 (18 helper + 10 service + 7 sec + 5 integ) |
+| 2 | Portail public + UI timeline voyageur + i18n | `435a40f` | fix ACC-3 |
+| 3 | Caissier + mobile + fix parcels regression | `2bb3262` | 6 unit (getParcelList) |
+| 4 | Dashboard Gérant "Aujourd'hui" + alertes anomalies | `0295954`, `bb3b843` | 11 unit (today-summary) |
+| 5 | Synthèse flotte + résumé comptable du jour | `7d19205` | 8 unit (fleet-summary) |
+| 6 | SSE cross-rôles tenant-isolated | `ff74cc8` | 5 unit (realtime) |
+| 7 | Maintenance prédictive simple (sans ML) | `5c80ae7` | 9 unit (maintenance-prediction) |
+| 8 | Couverture YieldService (+ UI cashier wiring) | `0bada62` | 11 unit (yield) |
+| 9 | Scoring conducteur (ponctualité/incidents/volume) | `9f4963d` | 10 unit (driver-scoring) |
+
+**Compteurs 5 niveaux finaux (baseline 984 → final 1084, +100) :**
+- Unit : **671** (baseline 583, +88)
+- Security : **157** (baseline 150, +7)
+- Integration : **57** (baseline 52, +5)
+- E2E : **149** (stable)
+- Playwright : **50** (stable)
+
+**Tous les schémas tenant-config étendus avec seuils paramétrables (zéro magic number) :**
+- `intermediateBookingEnabled/CutoffMins/MinSegmentMinutes/SegmentBlacklist` (Sprint 1)
+- `anomalyIncidentThreshold/DiscrepancyThreshold/FillRateFloor` (Sprint 4)
+- `maintenanceIntervals/AnticipationKm/AnticipationDays` (Sprint 7)
+- `driverScoreWeight{Punctuality,Incidents,TripVolume}/GraceMinutes/WindowDays` (Sprint 9)
+
+**Nouveaux endpoints :**
+- `GET /analytics/today-summary` (Sprint 4)
+- `GET /analytics/fleet-summary` (Sprint 5)
+- `GET /realtime/events` (SSE, Sprint 6)
+- `GET /garage/reminders` + `POST /garage/reminders/:busId/:type/performed` (Sprint 7)
+- `GET /driver-profile/scoring/:staffId` + `/scoring/leaderboard` + `POST /scoring/recompute-all` (Sprint 9)
+
+**Remédiations en sillage :**
+- Playwright TFD (Staff upsert idempotent post-backfill boot) — Sprint 0
+- Playwright ACC-3 (cleanup via `session_replication_role=replica`) — Sprint 2
+
+---
+
+### Ajouts 2026-04-20 — Sprint 1 : trajets intermédiaires bout-en-bout
 
 ### Ajouts 2026-04-20 — Sprint 1 : trajets intermédiaires bout-en-bout
 
