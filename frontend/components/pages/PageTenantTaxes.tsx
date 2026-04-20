@@ -35,6 +35,9 @@ interface TenantTax {
   appliesTo: string[];
   sortOrder: number;
   enabled:   boolean;
+  appliedToPrice:          boolean;
+  appliedToRecommendation: boolean;
+  isSystemDefault:         boolean;
   validFrom?: string | null;
   validTo?:   string | null;
 }
@@ -42,6 +45,7 @@ interface TenantTax {
 const EMPTY: Partial<TenantTax> = {
   code: '', label: '', rate: 0, kind: 'PERCENT', base: 'SUBTOTAL',
   appliesTo: ['ALL'], sortOrder: 0, enabled: true,
+  appliedToPrice: true, appliedToRecommendation: true, isSystemDefault: false,
 };
 
 const ENTITY_TYPES = ['ALL', 'TICKET', 'PARCEL', 'SUBSCRIPTION', 'INVOICE'];
@@ -131,10 +135,20 @@ export function PageTenantTaxes() {
                 </td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.base}</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.appliesTo.join(', ')}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 space-x-1">
                   <Badge variant={row.enabled ? 'success' : 'outline'}>
                     {row.enabled ? t('common.enabled') : t('common.disabled')}
                   </Badge>
+                  {row.isSystemDefault && (
+                    <Badge variant="outline" title={t('tenantSettings.taxes.systemBadgeHelp')}>
+                      {t('tenantSettings.taxes.systemBadge')}
+                    </Badge>
+                  )}
+                  {!row.appliedToPrice && (
+                    <Badge variant="outline" title={t('tenantSettings.taxes.notAppliedHelp')}>
+                      {t('tenantSettings.taxes.notApplied')}
+                    </Badge>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right space-x-1">
                   {canManage ? (
@@ -142,9 +156,11 @@ export function PageTenantTaxes() {
                       <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label={t('common.edit')}>
                         <Pencil className="w-4 h-4" aria-hidden="true" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
-                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                      </Button>
+                      {!row.isSystemDefault && (
+                        <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
+                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <span className="text-xs text-gray-400 dark:text-gray-500">{t('common.readOnly')}</span>
@@ -220,10 +236,36 @@ export function PageTenantTaxes() {
                 ))}
               </div>
             </fieldset>
-            <label className="lg:col-span-2 inline-flex items-center gap-2 text-sm">
-              <Checkbox checked={editing.enabled ?? true} onCheckedChange={c => setEditing({ ...editing, enabled: c as boolean })} />
-              <span>{t('tenantSettings.taxes.enableLabel')}</span>
-            </label>
+            <fieldset className="lg:col-span-2 border border-gray-200 dark:border-gray-700 rounded-md p-3 space-y-2">
+              <legend className="text-sm font-medium px-1">{t('tenantSettings.taxes.flagsLegend')}</legend>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={editing.enabled ?? true} onCheckedChange={c => setEditing({ ...editing, enabled: c as boolean })} />
+                <span className="flex flex-col">
+                  <span className="font-medium">{t('tenantSettings.taxes.enableLabel')}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('tenantSettings.taxes.enableHelp')}</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={editing.appliedToPrice ?? true}
+                  onCheckedChange={c => setEditing({ ...editing, appliedToPrice: c as boolean })}
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium">{t('tenantSettings.taxes.appliedToPriceLabel')}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('tenantSettings.taxes.appliedToPriceHelp')}</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={editing.appliedToRecommendation ?? true}
+                  onCheckedChange={c => setEditing({ ...editing, appliedToRecommendation: c as boolean })}
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium">{t('tenantSettings.taxes.appliedToRecoLabel')}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('tenantSettings.taxes.appliedToRecoHelp')}</span>
+                </span>
+              </label>
+            </fieldset>
             {submitError && <div className="lg:col-span-2"><ErrorAlert error={submitError} /></div>}
             <div className="lg:col-span-2">
               <FormFooter

@@ -194,4 +194,98 @@ describe('TaxCalculator', () => {
       expect(res.currency).toBe('EUR');
     });
   });
+
+  describe('context PRICE | RECOMMENDATION', () => {
+    const AT = new Date('2026-04-20T10:00:00Z');
+
+    it('context PRICE exclut les taxes avec appliedToPrice=false', () => {
+      const tax: TenantTaxInput = { ...tvaFixture, appliedToPrice: false, appliedToRecommendation: true };
+      expect(filterApplicableTaxes([tax], 'TICKET', AT, 'PRICE')).toHaveLength(0);
+      expect(filterApplicableTaxes([tax], 'TICKET', AT, 'RECOMMENDATION')).toHaveLength(1);
+    });
+
+    it('context RECOMMENDATION exclut les taxes avec appliedToRecommendation=false', () => {
+      const tax: TenantTaxInput = { ...tvaFixture, appliedToPrice: true, appliedToRecommendation: false };
+      expect(filterApplicableTaxes([tax], 'TICKET', AT, 'PRICE')).toHaveLength(1);
+      expect(filterApplicableTaxes([tax], 'TICKET', AT, 'RECOMMENDATION')).toHaveLength(0);
+    });
+
+    it('flag absent (undefined) = inclus (rétro-compat taxes historiques)', () => {
+      expect(filterApplicableTaxes([tvaFixture], 'TICKET', AT, 'PRICE')).toHaveLength(1);
+      expect(filterApplicableTaxes([tvaFixture], 'TICKET', AT, 'RECOMMENDATION')).toHaveLength(1);
+    });
+
+    it('computeTaxes propage le context au filtrage', () => {
+      const priceOnly: TenantTaxInput = { ...tvaFixture, appliedToPrice: true, appliedToRecommendation: false };
+      const resPrice = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET', taxes: [priceOnly], context: 'PRICE',
+      });
+      const resReco  = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET', taxes: [priceOnly], context: 'RECOMMENDATION',
+      });
+      expect(resPrice.taxTotal).toBe(180);
+      expect(resReco.taxTotal).toBe(0);
+    });
+
+    it('context par défaut = PRICE (rétro-compat API)', () => {
+      const priceOnly: TenantTaxInput = { ...tvaFixture, appliedToPrice: true, appliedToRecommendation: false };
+      const res = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET', taxes: [priceOnly],
+      });
+      expect(res.taxTotal).toBe(180);
+    });
+  });
+
+  describe('includeNonApplied (mode pédagogique S2)', () => {
+    it('inclut les taxes enabled non-appliquées avec applied=false', () => {
+      const tva: TenantTaxInput    = { ...tvaFixture, appliedToPrice: false };
+      const timbre: TenantTaxInput = { ...timbreFixture, appliedToPrice: true };
+      const res = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET',
+        taxes: [tva, timbre], context: 'PRICE', includeNonApplied: true,
+      });
+      expect(res.taxes).toHaveLength(2);
+      const tvaLine    = res.taxes.find(l => l.code === 'TVA')!;
+      const timbreLine = res.taxes.find(l => l.code === 'TIMBRE')!;
+      expect(tvaLine.applied).toBe(false);
+      expect(tvaLine.amount).toBe(180); // calculé à titre pédagogique
+      expect(timbreLine.applied).toBe(true);
+      // taxTotal n'additionne QUE les appliquées
+      expect(res.taxTotal).toBe(500);
+      expect(res.total).toBe(1500);
+    });
+
+    it('sans includeNonApplied (défaut), exclut les non-appliquées', () => {
+      const tva: TenantTaxInput = { ...tvaFixture, appliedToPrice: false };
+      const res = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET',
+        taxes: [tva], context: 'PRICE',
+      });
+      expect(res.taxes).toHaveLength(0);
+      expect(res.taxTotal).toBe(0);
+    });
+
+    it('ne duplique pas les taxes déjà appliquées', () => {
+      const tva: TenantTaxInput = { ...tvaFixture, appliedToPrice: true };
+      const res = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET',
+        taxes: [tva], context: 'PRICE', includeNonApplied: true,
+      });
+      expect(res.taxes).toHaveLength(1);
+      expect(res.taxes[0].applied).toBe(true);
+    });
+
+    it('respecte entityType et validFrom/To même en mode pédagogique', () => {
+      const futureTax: TenantTaxInput = {
+        ...tvaFixture, appliedToPrice: false,
+        validFrom: new Date('2099-01-01'),
+      };
+      const res = computeTaxes({
+        subtotal: 1000, currency: 'XAF', entityType: 'TICKET',
+        taxes: [futureTax], context: 'PRICE', includeNonApplied: true,
+      });
+      // Taxe future exclue même en mode pédagogique (pas encore active).
+      expect(res.taxes).toHaveLength(0);
+    });
+  });
 });

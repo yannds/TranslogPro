@@ -29,9 +29,24 @@ export interface TenantTaxInput {
   appliesTo: string[];  // ['TICKET', 'PARCEL', 'SUBSCRIPTION', 'ALL']
   sortOrder: number;
   enabled:   boolean;
+  /** Réellement appliquée au prix facturé. Si false, ignorée en context PRICE. */
+  appliedToPrice?:          boolean;
+  /** Prise en compte par le simulateur de prix. Si false, ignorée en RECOMMENDATION. */
+  appliedToRecommendation?: boolean;
   validFrom?: Date | null;
   validTo?:   Date | null;
 }
+
+/**
+ * Contexte d'application.
+ *   - PRICE          : prix facturé au client. Filtre sur `appliedToPrice`.
+ *   - RECOMMENDATION : simulateur de prix, break-even. Filtre sur `appliedToRecommendation`.
+ *
+ * Une même taxe peut être dans un contexte mais pas l'autre — ex: TVA saisie
+ * mais non appliquée au prix (pédagogique) mais toujours prise en compte par
+ * le simulateur qui anticipe "si tu l'actives demain".
+ */
+export type TaxContext = 'PRICE' | 'RECOMMENDATION';
 
 export interface TaxLine {
   code:   string;
@@ -44,6 +59,13 @@ export interface TaxLine {
   amount: number;
   /** Base sur laquelle la taxe a été appliquée (audit trail). */
   appliedOn: number;
+  /**
+   * True = intégrée au `taxTotal` / `total`.
+   * False = calculée à titre pédagogique (affichage grisé "serait X XOF")
+   *         mais pas additionnée au total. Utilisé quand `includeNonApplied`
+   *         est vrai dans `computeTaxes`.
+   */
+  applied: boolean;
 }
 
 export interface TaxComputation {
@@ -60,6 +82,15 @@ export interface ComputeTaxesInput {
   entityType: string;           // 'TICKET' | 'PARCEL' | 'SUBSCRIPTION' | 'INVOICE' | 'CUSTOM'
   taxes:      TenantTaxInput[]; // liste complète du tenant, le filtrage se fait ici
   at?:        Date;             // date effective du calcul (défaut = now)
+  /** Défaut = 'PRICE'. Détermine le filtre `appliedToPrice`/`appliedToRecommendation`. */
+  context?:   TaxContext;
+  /**
+   * Si true, les taxes enabled mais non-appliquées dans le context courant
+   * sont incluses dans `taxes[]` avec `applied=false` et un montant calculé
+   * (pédagogique). Elles ne sont PAS additionnées au `taxTotal` / `total`.
+   * Utilisé par l'UI caissier pour afficher "serait X XOF en grisé".
+   */
+  includeNonApplied?: boolean;
 }
 
 /**
@@ -68,17 +99,22 @@ export interface ComputeTaxesInput {
  *   - appliesTo contient entityType ou 'ALL'
  *   - validFrom ≤ at (ou null)
  *   - validTo   > at (ou null)
+ *   - selon le context : appliedToPrice ou appliedToRecommendation
+ *     (absent = true par défaut — rétro-compat avec les taxes historiques).
  */
 export function filterApplicableTaxes(
   taxes:      TenantTaxInput[],
   entityType: string,
   at:         Date,
+  context:    TaxContext = 'PRICE',
 ): TenantTaxInput[] {
   return taxes.filter(t => {
     if (!t.enabled) return false;
     if (!t.appliesTo.includes(entityType) && !t.appliesTo.includes('ALL')) return false;
     if (t.validFrom && at < t.validFrom) return false;
     if (t.validTo   && at >= t.validTo)   return false;
+    if (context === 'PRICE'          && t.appliedToPrice          === false) return false;
+    if (context === 'RECOMMENDATION' && t.appliedToRecommendation === false) return false;
     return true;
   });
 }
@@ -116,8 +152,9 @@ function round2(n: number): number {
  * Retourne subtotal, liste détaillée des taxes appliquées, total taxes, TTC.
  */
 export function computeTaxes(input: ComputeTaxesInput): TaxComputation {
-  const at = input.at ?? new Date();
-  const applicable = filterApplicableTaxes(input.taxes, input.entityType, at)
+  const at      = input.at ?? new Date();
+  const context = input.context ?? 'PRICE';
+  const applied = filterApplicableTaxes(input.taxes, input.entityType, at, context)
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -125,7 +162,7 @@ export function computeTaxes(input: ComputeTaxesInput): TaxComputation {
   const lines: TaxLine[] = [];
   let cumul = 0;
 
-  for (const t of applicable) {
+  for (const t of applied) {
     const { amount, appliedOn } = computeTaxAmount(t, subtotal, cumul);
     lines.push({
       code:      t.code,
@@ -136,8 +173,44 @@ export function computeTaxes(input: ComputeTaxesInput): TaxComputation {
       rate:      t.rate,
       amount,
       appliedOn,
+      applied:   true,
     });
     cumul += amount;
+  }
+
+  // Mode pédagogique : inclure les taxes enabled du bon entityType mais
+  // exclues par le filtrage context (ex: appliedToPrice=false en PRICE).
+  // Montant calculé sur `subtotal` seul (pas en cascade — cascade réservée
+  // aux taxes vraiment appliquées). Pas incluses dans taxTotal/total.
+  if (input.includeNonApplied) {
+    const appliedCodes = new Set(applied.map(t => t.code));
+    const candidates   = input.taxes.filter(t => {
+      if (!t.enabled) return false;
+      if (!t.appliesTo.includes(input.entityType) && !t.appliesTo.includes('ALL')) return false;
+      if (t.validFrom && at < t.validFrom) return false;
+      if (t.validTo   && at >= t.validTo)   return false;
+      return !appliedCodes.has(t.code);
+    });
+    for (const t of candidates) {
+      const amount = t.kind === 'FIXED' ? t.rate : subtotal * t.rate;
+      lines.push({
+        code:      t.code,
+        label:     t.label,
+        labelKey:  t.labelKey ?? null,
+        base:      t.base,
+        kind:      t.kind,
+        rate:      t.rate,
+        amount:    round2(amount),
+        appliedOn: subtotal,
+        applied:   false,
+      });
+    }
+    // Tri stable par sortOrder pour que le breakdown pédagogique reste lisible
+    lines.sort((a, b) => {
+      const ai = input.taxes.find(t => t.code === a.code)?.sortOrder ?? 0;
+      const bi = input.taxes.find(t => t.code === b.code)?.sortOrder ?? 0;
+      return ai - bi;
+    });
   }
 
   const taxTotal = round2(cumul);

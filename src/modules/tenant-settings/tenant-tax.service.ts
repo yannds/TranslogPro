@@ -17,6 +17,13 @@ export interface CreateTenantTaxDto {
   appliesTo?: string[];
   sortOrder?: number;
   enabled?:   boolean;
+  /** Appliquée au prix facturé. Si false, la taxe est visible (UI pédagogique
+   *  grisée) mais n'entre pas dans le total payé par le client. */
+  appliedToPrice?:          boolean;
+  /** Prise en compte par le simulateur de prix recommandé (module rentabilité).
+   *  Permet de projeter "que se passe-t-il si on active cette taxe ?" sans la
+   *  facturer. */
+  appliedToRecommendation?: boolean;
   validFrom?: string;
   validTo?:   string;
 }
@@ -37,17 +44,23 @@ export class TenantTaxService {
       return await this.prisma.tenantTax.create({
         data: {
           tenantId,
-          code:      dto.code.trim().toUpperCase(),
-          label:     dto.label.trim(),
-          labelKey:  dto.labelKey,
-          rate:      dto.rate,
-          kind:      dto.kind ?? 'PERCENT',
-          base:      dto.base ?? 'SUBTOTAL',
-          appliesTo: dto.appliesTo ?? ['ALL'],
-          sortOrder: dto.sortOrder ?? 0,
-          enabled:   dto.enabled ?? true,
-          validFrom: dto.validFrom ? new Date(dto.validFrom) : null,
-          validTo:   dto.validTo   ? new Date(dto.validTo)   : null,
+          code:                    dto.code.trim().toUpperCase(),
+          label:                   dto.label.trim(),
+          labelKey:                dto.labelKey,
+          rate:                    dto.rate,
+          kind:                    dto.kind ?? 'PERCENT',
+          base:                    dto.base ?? 'SUBTOTAL',
+          appliesTo:               dto.appliesTo ?? ['ALL'],
+          sortOrder:               dto.sortOrder ?? 0,
+          enabled:                 dto.enabled ?? true,
+          appliedToPrice:          dto.appliedToPrice ?? true,
+          appliedToRecommendation: dto.appliedToRecommendation ?? true,
+          // isSystemDefault n'est pas exposé à l'API : une taxe créée manuellement
+          // par l'admin est toujours custom (supprimable). Seul l'onboarding/backfill
+          // marque `isSystemDefault=true` pour la TVA.
+          isSystemDefault:         false,
+          validFrom:               dto.validFrom ? new Date(dto.validFrom) : null,
+          validTo:                 dto.validTo   ? new Date(dto.validTo)   : null,
         },
       });
     } catch (err: any) {
@@ -60,20 +73,28 @@ export class TenantTaxService {
     const existing = await this.prisma.tenantTax.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException(`Taxe ${id} introuvable`);
     this.validate({ ...existing, ...dto } as CreateTenantTaxDto);
+    // Une taxe système (TVA seedée) ne peut pas être renommée/recodée — seuls
+    // rate, enabled, appliedToPrice, appliedToRecommendation, validFrom/To sont
+    // modifiables. Ça évite de transformer la TVA en autre chose par erreur.
+    if (existing.isSystemDefault && ('code' in dto)) {
+      throw new BadRequestException('Le code d\'une taxe système ne peut pas être modifié');
+    }
     const res = await this.prisma.tenantTax.updateMany({
       where: { id, tenantId },
       data: {
-        ...('code'      in dto ? { code: dto.code!.trim().toUpperCase() } : {}),
-        ...('label'     in dto ? { label: dto.label!.trim() } : {}),
-        ...('labelKey'  in dto ? { labelKey: dto.labelKey ?? null } : {}),
-        ...('rate'      in dto ? { rate: dto.rate! } : {}),
-        ...('kind'      in dto ? { kind: dto.kind! } : {}),
-        ...('base'      in dto ? { base: dto.base! } : {}),
-        ...('appliesTo' in dto ? { appliesTo: dto.appliesTo! } : {}),
-        ...('sortOrder' in dto ? { sortOrder: dto.sortOrder! } : {}),
-        ...('enabled'   in dto ? { enabled: dto.enabled! } : {}),
-        ...('validFrom' in dto ? { validFrom: dto.validFrom ? new Date(dto.validFrom) : null } : {}),
-        ...('validTo'   in dto ? { validTo:   dto.validTo   ? new Date(dto.validTo)   : null } : {}),
+        ...('code'                    in dto ? { code: dto.code!.trim().toUpperCase() }                              : {}),
+        ...('label'                   in dto ? { label: dto.label!.trim() }                                          : {}),
+        ...('labelKey'                in dto ? { labelKey: dto.labelKey ?? null }                                    : {}),
+        ...('rate'                    in dto ? { rate: dto.rate! }                                                   : {}),
+        ...('kind'                    in dto ? { kind: dto.kind! }                                                   : {}),
+        ...('base'                    in dto ? { base: dto.base! }                                                   : {}),
+        ...('appliesTo'               in dto ? { appliesTo: dto.appliesTo! }                                         : {}),
+        ...('sortOrder'               in dto ? { sortOrder: dto.sortOrder! }                                         : {}),
+        ...('enabled'                 in dto ? { enabled: dto.enabled! }                                             : {}),
+        ...('appliedToPrice'          in dto ? { appliedToPrice: dto.appliedToPrice! }                               : {}),
+        ...('appliedToRecommendation' in dto ? { appliedToRecommendation: dto.appliedToRecommendation! }             : {}),
+        ...('validFrom'               in dto ? { validFrom: dto.validFrom ? new Date(dto.validFrom) : null }         : {}),
+        ...('validTo'                 in dto ? { validTo:   dto.validTo   ? new Date(dto.validTo)   : null }         : {}),
       },
     });
     if (res.count === 0) throw new NotFoundException(`Taxe ${id} introuvable`);
@@ -83,6 +104,11 @@ export class TenantTaxService {
   async remove(tenantId: string, id: string) {
     const existing = await this.prisma.tenantTax.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException(`Taxe ${id} introuvable`);
+    if (existing.isSystemDefault) {
+      throw new BadRequestException(
+        'Impossible de supprimer une taxe système (TVA). Désactivez-la via `enabled=false` si besoin.',
+      );
+    }
     const res = await this.prisma.tenantTax.deleteMany({ where: { id, tenantId } });
     if (res.count === 0) throw new NotFoundException(`Taxe ${id} introuvable`);
     return { ok: true };
