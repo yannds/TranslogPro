@@ -1,7 +1,62 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint KPI SaaS plateforme).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint 11 — rentabilité pré-trajet + scénarios métier).
+
+### Sprint 11 — Rentabilité pré-trajet + scénarios métier imbriqués (2026-04-20)
+
+**Livraison bout-en-bout demandée par user :** "un truc qui montre si le prix fixé est d'emblée une perte ou à l'équilibre ou au-dessus, dans les KPI du gestionnaire qui programme les trajets, en permissions et non en rôle" + parcours métier chaînés.
+
+Phase 11.A — **Rentabilité pré-trajet** (commit `86b5e44`) :
+- Permission granulaire `data.profitability.read.tenant` (séparée de STATS_READ)
+  mappée sur TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT dans le seed IAM
+- Endpoint `POST /api/v1/tenants/:id/simulate-trip` — retourne :
+  · Coûts détaillés (variable + fixe + total)
+  · Projection (marge nette, tag PROFITABLE / BREAK_EVEN / DEFICIT)
+  · Recommandations : prix break-even au fillRate, fillRate break-even au prix,
+    prix profitable (+seuil tenant), message factuel non-bloquant
+- Composant frontend `TripProfitabilityPanel` réutilisable à monter dans tout
+  formulaire de scheduler (gated par `user.permissions`, pas le rôle)
+- Zéro magic number : `breakEvenThresholdPct` + `agencyCommissionRate` lus
+  depuis `TenantBusinessConfig`
+- +12 unit tests (`simulate-trip.service.spec.ts`)
+
+Phase 11.B + 11.D — **Scénarios colis/voucher/refund** (commit `6782d42`) :
+- `business-scenarios.api.spec.ts` (7 tests imbriqués serial)
+  · SETUP, PARCEL-1 (colis simple), PARCEL-2 (ticket + colis même trip),
+    VOUCHER-1 (issue), VOUCHER-2 (redeem), REFUND-1 (cancel),
+    ANALYTICS-1 (simulate DEFICIT / erreur documentée)
+- Bug détecté & corrigé : schema-DB drift `tenants.estimatedOperationsMonthly`
+  → `prisma db push` appliqué
+
+Phase 11.C — **Scénarios voyageur** (commit `f67421c`) :
+- `traveler-scenarios.api.spec.ts` (5 tests)
+  · BAG-1 (bagage ≤ franchise → pas surcoût), BAG-2 (bagage extra facturé),
+    NOSHOW-1 (mark no-show honore `noShowGraceMinutes`), REBOOK-1 (rebook/later
+    respecte le workflow)
+
+Phase 11.E — **Pricing dynamique** (commit `f67421c`) :
+- `pricing-dynamics.api.spec.ts` (5 tests)
+  · YIELD-1 (yield suggestion structure), PROFIT-LINE-1 (DEFICIT bas / PROFITABLE
+    haut), PROFIT-BUS-1 (erreur claire bus sans costProfile),
+    PROFIT-SUMMARY (endpoint analytics/profitability répond)
+
+Remédiation bug flaky hors scope (commit `f67421c`) :
+- `platform-plans.sa.pw.spec.ts` : utiliser la search DataTableMaster pour
+  forcer la visibilité du slug créé (indépendant de la pagination/ordre)
+
+**Compteurs 5 niveaux post-Sprint 11 :**
+- Unit        : **727/727**   (+12 simulate-trip, autres ajouts tiers)
+- Security    : **172/172**   (+15 tiers)
+- Integration : **62/62**     (+5 tiers)
+- E2E         : **149/149**   (stable)
+- Playwright  : **76 passed** + 4 skipped + **9 failed** sur `platform-kpi.sa.pw.spec.ts` hors scope Sprint 11 — le test référence des sections `pk-northstar` / `pk-*` qui n'existent pas dans la page `/admin/platform/dashboard`. Ticket de suite à ouvrir : soit la page a été régressée, soit le test anticipe une UI non livrée.
+
+**Total tests au vert : 1186.**
+
+**Backup DB pré-Sprint 11 final :** `backups/pre-sprint11-finale-20260420-1129.sql` (17 MB).
+
+### Sprint KPI SaaS plateforme livré (2026-04-20) — dashboard cross-tenant investisseur
 
 ### Sprint KPI SaaS plateforme livré (2026-04-20) — dashboard cross-tenant investisseur
 
