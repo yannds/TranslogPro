@@ -1,7 +1,68 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-19 (workflow-driven).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprint 1 — trajets intermédiaires).
+
+### Ajouts 2026-04-20 — Sprint 1 : trajets intermédiaires bout-en-bout
+
+**Contexte** : première priorité roadmap post-blueprint UX — permettre la recherche/vente de billets sur des segments intermédiaires (ex : Mindouli → Bouansa sur Brazza → Pointe-Noire) alors que jusqu'ici seuls les trajets OD complets étaient listés. Politique tenant configurable en DB (zéro magic number).
+
+Schéma Prisma (`TenantBusinessConfig`) — 5 nouveaux champs :
+- `intermediateBookingEnabled` / `intermediateBookingCutoffMins` / `intermediateMinSegmentMinutes`
+- `intermediateSegmentBlacklist` (JSON) / `intermediateRespectHubRules`
+
+Nouveau helper partagé (`src/core/pricing/segment-price.helper.ts`) :
+- `resolveSegmentPriceFromSnapshot` — fonction pure réutilisable côté search public + future intégration engine, évite la duplication de la logique de résolution de prix.
+
+Services backend :
+- `PublicPortalService.searchTrips()` : matching étendu origin/waypoint/destination + politique tenant appliquée + réponse enrichie (stops[] timeline, boardingStationId/alightingStationId, isIntermediateSegment, isAutoCalculated).
+- `PublicPortalService.createBooking()` : accepte `boardingStationId`/`alightingStationId` optionnels (défaut OD), validation serveur (station sur route + ordre asc + policy + cutoff + blacklist), pricePaid = segment résolu.
+
+Nouveaux fichiers tests (40 tests) :
+- `test/unit/pricing/segment-price.helper.spec.ts` (18 tests — helper pur)
+- `test/unit/public-portal/search-trips-intermediate.service.spec.ts` (10 tests — matching + policy)
+- `test/security/intermediate-booking-isolation.spec.ts` (7 tests — cross-tenant + createBooking guards)
+- `test/integration/public-portal/search-trips-intermediate.integration-spec.ts` (5 tests — DB réelle + isolation tenant confirmée)
+
+**Compteurs 5 niveaux post-Sprint 1 :**
+- Unit : **611/611** (+28)
+- Security : **157/157** (+7)
+- Integration : **57/57** (+5)
+- E2E : **149/149** (stable)
+- Playwright : **50/50** (stable)
+- **TOTAL : 1024/1024 — zéro régression**
+
+Commits : `929ddd3` (backend + unit + security) + commit final Sprint 1.7 (intégration).
+
+Remédiation Sprint 0 : `9f85ab4` — playwright TFD-1 upsert Staff idempotent (collision avec auto-backfillStaffFromUsers).
+
+### Ajouts 2026-04-19 — Parcours E2E portail SaaS (landing → welcome) + helper cleanup tenants
+
+**Contexte** : couverture E2E Playwright du chemin critique prospect → tenant opérationnel, des deux côtés du wizard onboarding (TICKETING et PARCELS). Bug Rules-of-Hooks découvert et corrigé dans `<StepPlan>` (`useMemo` après early-returns → crash sous-arbre quand `plans` passait de `null` à array).
+
+Nouveaux fichiers :
+
+- `test/playwright/saas-journey.public.pw.spec.ts` — 2 tests (projet `public`) :
+  · **TICKETING** : landing apex → `/signup` → wizard 3 étapes (admin/company/plan) → `/api/public/signup` → sign-in API cross-subdomain → `/onboarding` → brand → agency → station → **route** → team (skip) → `/welcome` → reload ne re-déclenche pas le wizard → 0 pageerror JS
+  · **PARCELS** : même parcours mais sélection radio `activity=PARCELS` à l'étape 2 signup → onboarding avec étape 4 = **parcel-info** (encart info, pas d'API) au lieu de route
+  · Helpers partagés : `signupWizard`, `loginAndReachOnboarding`, `onboardingStepBrand/Agency/Station/TeamSkipToWelcome`, `attachErrorCapture`
+- `scripts/cleanup-e2e-tenants.ts` — module dual-use :
+  · `deleteTenantBySlug(slug, prisma?)` importé par le spec → cleanup après chaque test
+  · `deleteTenantsByPrefix(prefix)` + CLI `npx ts-node scripts/cleanup-e2e-tenants.ts pw-saas-` pour purge batch en CI
+  · Technique : `SET LOCAL session_replication_role = 'replica'` dans une transaction → DELETE sur `tenants` sans bloquer sur les FK tenant-scoped non-cascade
+  · Whitelist de préfixes (`pw-saas-`, `pw-a-`, `pw-e2e-`, `e2e-`) + refus du tenant plateforme — garde-fou anti-purge accidentelle
+
+Fix livré en sillage :
+
+- `frontend/components/public/PublicSignup.tsx` — `<StepPlan>` : `useMemo(numberFmt)` remonté avant les early-returns conditionnels (violation Rules of Hooks qui crashait le sous-arbre quand `plans` passait de `null` → array).
+
+**Commande** :
+```bash
+npm run test:pw -- test/playwright/saas-journey.public.pw.spec.ts --project=public
+npx ts-node scripts/cleanup-e2e-tenants.ts pw-saas-   # purge batch résidus
+```
+
+**Résultat** : **2 tests passed (~11 s)**, stable sur 4 runs consécutifs, 0 résidu DB après run (vérifié par query `tenant` WHERE slug LIKE 'pw-saas-%').
 
 ### Ajouts 2026-04-19 — Chantier workflow-driven (ADR-15/16 full enforcement + scénarios incident/hub/voucher)
 
@@ -96,6 +157,7 @@ Nouvelles suites autour du portail plateforme et du self-service utilisateur :
 | **Unit complet** | `npx jest --config jest.unit.config.ts` | 57 | 583 | ✅ 583/583 PASS (incl. 28 nouvelles workflow-driven 2026-04-19) |
 | **E2E — Endpoints** (test/e2e/) | `npm run test:e2e` | 1 | 124 | ✅ PASS (à revérifier après migration DB workflow) |
 | **Integration** (test/integration/) | `npm run test:integration -- --runInBand` | 4 | 36 | ✅ PASS (à revérifier après migration DB workflow) |
+| **Playwright portail SaaS** (landing → welcome) | `npm run test:pw -- --project=public saas-journey` | 1 | 2 | ✅ PASS (TICKETING + PARCELS, cleanup tenants auto) |
 
 **Total validé 2026-04-19 post-workflow : 583 tests unit / 0 failure**
 
