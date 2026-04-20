@@ -51,7 +51,14 @@ test.describe('[pw:sa] Platform Plans — CRUD', () => {
     await dialog.getByRole('button').filter({ hasText: /Créer$|Create$|common\.create/i }).first().click();
 
     await expect(dialog).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(slug)).toBeVisible();
+
+    // refetch() après handleCreate est async. On recherche d'abord le slug via
+    // la barre de recherche DataTableMaster pour éviter un potentiel problème
+    // de pagination/scroll (le slug peut être sur une page suivante). Si
+    // l'UI filtre côté client, cela force la visibilité peu importe l'ordre.
+    const search = page.getByPlaceholder(/Rechercher/i).first();
+    await search.fill(slug);
+    await expect(page.getByText(slug)).toBeVisible({ timeout: 10_000 });
 
     cleanupRegister(async () => {
       const list = await apiRequest.get('/api/platform/plans');
