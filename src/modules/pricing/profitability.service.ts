@@ -215,6 +215,169 @@ export class ProfitabilityService {
     };
   }
 
+  // ── Simulation pré-trajet (Sprint 11.A) ─────────────────────────────────
+  //
+  // Permet au gestionnaire qui programme un trajet de voir IMMÉDIATEMENT la
+  // rentabilité estimée + les seuils de break-even, AVANT d'avoir vendu un
+  // seul billet. Non-bloquant : le résultat est indicatif, l'admin reste
+  // souverain sur sa décision de programmation.
+  //
+  // Deux axes d'aide à la décision renvoyés :
+  //   · À fillRate donné → quel prix billet minimum / idéal ?
+  //   · À prix billet donné → quel fillRate minimum / idéal ?
+
+  async simulateTrip(tenantId: string, dto: {
+    routeId:      string;
+    busId:        string;
+    ticketPrice?: number;
+    fillRate?:    number;
+  }) {
+    const [route, bus, bizConfig] = await Promise.all([
+      this.prisma.route.findFirst({ where: { id: dto.routeId, tenantId } }),
+      this.prisma.bus.findFirst({
+        where:   { id: dto.busId, tenantId },
+        include: { costProfile: true },
+      }),
+      this.prisma.tenantBusinessConfig.findUnique({ where: { tenantId } }),
+    ]);
+    if (!route) throw new NotFoundException(`Route ${dto.routeId} introuvable`);
+    if (!bus)   throw new NotFoundException(`Bus ${dto.busId} introuvable`);
+    if (!bus.costProfile) {
+      throw new BadRequestException(
+        `Bus ${dto.busId} n'a pas de profil de coûts — configurez-le avant la simulation (PUT /buses/:id/cost-profile)`,
+      );
+    }
+
+    const constants: BusinessConstants = bizConfig
+      ? {
+          daysPerYear:           bizConfig.daysPerYear,
+          breakEvenThresholdPct: bizConfig.breakEvenThresholdPct,
+          agencyCommissionRate:  bizConfig.agencyCommissionRate,
+        }
+      : DEFAULT_BUSINESS_CONSTANTS;
+
+    const cp = bus.costProfile;
+    const profile: CostInputProfile = {
+      fuelConsumptionPer100Km: cp.fuelConsumptionPer100Km,
+      fuelPricePerLiter:       cp.fuelPricePerLiter,
+      adBlueCostPerLiter:      cp.adBlueCostPerLiter,
+      adBlueRatioFuel:         cp.adBlueRatioFuel,
+      maintenanceCostPerKm:    cp.maintenanceCostPerKm,
+      stationFeePerDeparture:  cp.stationFeePerDeparture,
+      driverAllowancePerTrip:  cp.driverAllowancePerTrip,
+      tollFeesPerTrip:         cp.tollFeesPerTrip,
+      driverMonthlySalary:     cp.driverMonthlySalary,
+      annualInsuranceCost:     cp.annualInsuranceCost,
+      monthlyAgencyFees:       cp.monthlyAgencyFees,
+      purchasePrice:           cp.purchasePrice,
+      depreciationYears:       cp.depreciationYears,
+      residualValue:           cp.residualValue,
+      avgTripsPerMonth:        cp.avgTripsPerMonth,
+    };
+
+    const costs = this.calculator.computeCosts(route.distanceKm, profile);
+
+    const ticketPrice = dto.ticketPrice ?? route.basePrice;
+    const fillRate   = Math.max(0, Math.min(1, dto.fillRate ?? 0.7));
+    const totalSeats = bus.capacity;
+    const bookedSeats = Math.round(totalSeats * fillRate);
+    const ticketRevenue = ticketPrice * bookedSeats;
+    const totalRevenue  = ticketRevenue; // Parcel ignoré en simulation
+
+    const margins = this.calculator.computeMargins(
+      costs, totalRevenue, ticketRevenue,
+      totalSeats, bookedSeats, ticketPrice,
+      constants,
+    );
+
+    // ─── Recommandations break-even & profitable ──────────────────────────
+    //
+    // Modèle simplifié (pas de parcel) :
+    //   netTenantRevenue = ticketPrice × fillRate × totalSeats × (1 − commissionRate)
+    //   netMargin        = netTenantRevenue − totalCost
+    //
+    // breakEven (netMargin = 0) :
+    //   breakEvenPrice(fillRate)     = totalCost / (fillRate × totalSeats × (1 − commissionRate))
+    //   breakEvenFillRate(price)     = totalCost / (price × totalSeats × (1 − commissionRate))
+    //
+    // Profitable (netMargin / totalCost > threshold) :
+    //   profitablePrice(fillRate)    = (1 + t) × breakEvenPrice
+    //   profitableFillRate(price)    = (1 + t) × breakEvenFillRate
+    const commissionFactor = 1 - constants.agencyCommissionRate;
+    const t = constants.breakEvenThresholdPct;
+
+    const seatsAtFillRate = totalSeats * fillRate;
+    const breakEvenPriceAtFillRate = (seatsAtFillRate > 0 && commissionFactor > 0)
+      ? Math.ceil(costs.totalCost / (seatsAtFillRate * commissionFactor))
+      : null;
+    const profitablePriceAtFillRate = breakEvenPriceAtFillRate != null
+      ? Math.ceil(breakEvenPriceAtFillRate * (1 + t))
+      : null;
+
+    // fillRate basé sur le nombre ENTIER de sièges (Math.ceil) : un fillRate
+    // fractionnaire produit bookedSeats = Math.round(…) et potentiellement
+    // un netMargin < 0 si on arrondit à l'inférieur. On garantit donc que le
+    // fillRate suggéré couvre effectivement le break-even.
+    const breakEvenSeatsAtPrice = (ticketPrice > 0 && commissionFactor > 0)
+      ? Math.ceil(costs.totalCost / (ticketPrice * commissionFactor))
+      : null;
+    const breakEvenFillRateAtPrice = (breakEvenSeatsAtPrice != null && totalSeats > 0)
+      ? Math.min(1, breakEvenSeatsAtPrice / totalSeats)
+      : null;
+    const profitableSeatsAtPrice = (breakEvenSeatsAtPrice != null)
+      ? Math.min(totalSeats, Math.ceil(breakEvenSeatsAtPrice * (1 + t)))
+      : null;
+    const profitableFillRateAtPrice = (profitableSeatsAtPrice != null && totalSeats > 0)
+      ? Math.min(1, profitableSeatsAtPrice / totalSeats)
+      : null;
+
+    // Message de synthèse pour le gestionnaire — lisible, factuel, pas de jugement
+    let primaryMessage: string;
+    if (margins.profitabilityTag === 'PROFITABLE') {
+      primaryMessage = `À ${Math.round(fillRate * 100)}% de remplissage et ${ticketPrice} au billet, la ligne est RENTABLE (marge nette ${Math.round(margins.netMarginRate * 100)}%).`;
+    } else if (margins.profitabilityTag === 'BREAK_EVEN') {
+      primaryMessage = `À ces hypothèses, vous êtes à l'équilibre (±${Math.round(t * 100)}%).`;
+    } else {
+      primaryMessage = breakEvenFillRateAtPrice != null
+        ? `DÉFICIT estimé. Pour break-even à ${ticketPrice}/billet, il faut ${Math.round((breakEvenFillRateAtPrice ?? 0) * 100)}% de remplissage minimum, ou remonter le prix à ${breakEvenPriceAtFillRate}.`
+        : `DÉFICIT estimé — vérifiez le profil de coûts du bus.`;
+    }
+
+    return {
+      input: { routeId: dto.routeId, busId: dto.busId, ticketPrice, fillRate },
+      costs: {
+        totalVariableCost: costs.totalVariableCost,
+        totalFixedCost:    costs.totalFixedCost,
+        totalCost:         costs.totalCost,
+      },
+      projected: {
+        totalSeats, bookedSeats, ticketPrice, fillRate,
+        ticketRevenue, parcelRevenue: 0, totalRevenue,
+        operationalMargin:     margins.operationalMargin,
+        operationalMarginRate: margins.operationalMarginRate,
+        agencyCommission:      margins.agencyCommission,
+        netTenantRevenue:      margins.netTenantRevenue,
+        netMargin:             margins.netMargin,
+        netMarginRate:         margins.netMarginRate,
+        breakEvenSeats:        margins.breakEvenSeats,
+        profitabilityTag:      margins.profitabilityTag,
+      },
+      recommendations: {
+        breakEvenPriceAtFillRate,
+        profitablePriceAtFillRate,
+        breakEvenFillRateAtPrice,
+        profitableFillRateAtPrice,
+        breakEvenSeatsAtPrice,
+        profitabilityThresholdPct: t,
+        primaryMessage,
+      },
+      thresholds: {
+        breakEvenThresholdPct: t,
+        agencyCommissionRate:  constants.agencyCommissionRate,
+      },
+    };
+  }
+
   // ── Helpers privés ──────────────────────────────────────────────────────────
 
   private async computeRevenue(tenantId: string, tripId: string, busCapacity: number) {

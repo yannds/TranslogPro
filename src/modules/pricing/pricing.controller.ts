@@ -77,6 +77,28 @@ export class PricingController {
     return this.yield_.calculateSuggestedPrice(tenantId, tripId);
   }
 
+  /**
+   * Simulation pré-trajet (Sprint 11.A) — le gestionnaire saisit route + bus +
+   * prix envisagé + fillRate estimé, et reçoit :
+   *   · Coûts détaillés + marge estimée
+   *   · Tag PROFITABLE / BREAK_EVEN / DEFICIT
+   *   · Prix break-even / profitable au fillRate fourni
+   *   · fillRate break-even / profitable au prix fourni
+   *   · Message d'orientation factuel (non-bloquant)
+   *
+   * Permission granulaire : `data.profitability.read.tenant`.
+   * Par défaut mappée sur TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT (admins qui
+   * programment des trajets ou auditent la rentabilité).
+   */
+  @Post('simulate-trip')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simulateTrip(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; busId: string; ticketPrice?: number; fillRate?: number },
+  ) {
+    return this.profitability.simulateTrip(tenantId, dto);
+  }
+
   // ── Dashboard décideur ───────────────────────────────────────────────────────
 
   @Get('analytics/profitability')
