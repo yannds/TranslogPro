@@ -19,10 +19,12 @@ import { LogOut, Sun, Moon, UserCircle2 } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation }      from '../../lib/hooks/useNavigation';
+import { useLockedViewport } from '../../lib/hooks/useLockedViewport';
 import { useTheme }           from '../theme/ThemeProvider';
 import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
 import { PageRouter }         from '../dashboard/PageRouter';
 import { SuspendedScreen }    from '../billing/SuspendedScreen';
+import { OfflineBanner }      from '../offline/OfflineBanner';
 import type { PortalNavConfig, ResolvedNavItem } from '../../lib/navigation/nav.types';
 
 function PageLoadingFallback() {
@@ -67,6 +69,11 @@ export interface PortalShellProps {
 }
 
 export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalShellProps) {
+  // Garde-fou scroll : verrouille <html>/<body> pendant que ce shell est monté.
+  // Sinon un composant tiers peut étendre le scroll area du document et faire
+  // dériver tout le SPA en bloc (sidebar + main) au moindre scroll.
+  useLockedViewport();
+
   const { user: authUser, logout } = useAuth();
   const { theme, toggle }          = useTheme();
   const { t }                      = useI18n();
@@ -179,11 +186,16 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto t-app" role="main">
-        <Suspense fallback={<PageLoadingFallback />}>
-          <PageRouter activeId={activeId} />
-        </Suspense>
-      </main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Bandeau offline / outbox — placé dans le shell pour rester au-dessus
+            du <main> scrollable sans étendre la hauteur document. */}
+        <OfflineBanner />
+        <main className="flex-1 overflow-y-auto t-app" role="main">
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PageRouter activeId={activeId} />
+          </Suspense>
+        </main>
+      </div>
 
       {/* Verrou SUSPENDED — commun à tous les portails (driver, station-agent,
           quai-agent) qui dérivent de PortalShell. AdminDashboard a sa propre

@@ -10,6 +10,7 @@ import { LogOut, Sun, Moon, Menu, X, UserCircle2 } from 'lucide-react';
 import { useAuth }            from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation } from '../../lib/hooks/useNavigation';
+import { useLockedViewport } from '../../lib/hooks/useLockedViewport';
 import { useTheme }           from '../theme/ThemeProvider';
 import { ADMIN_NAV, PLATFORM_NAV } from '../../lib/navigation/nav.config';
 import { resolveHost }         from '../../lib/tenancy/host';
@@ -20,6 +21,7 @@ import { TenantScopeSelector } from '../platform/TenantScopeSelector';
 import { ImpersonationBanner } from '../platform/ImpersonationBanner';
 import { TrialBanner }         from '../billing/TrialBanner';
 import { SuspendedScreen }     from '../billing/SuspendedScreen';
+import { OfflineBanner }       from '../offline/OfflineBanner';
 
 function PageLoadingFallback() {
   return (
@@ -57,6 +59,11 @@ function SidebarSection({ title, items, activeHref }: SidebarSectionProps) {
 }
 
 export function AdminDashboard() {
+  // Garde-fou scroll : verrouille <html>/<body> pendant que ce shell est monté.
+  // Sinon un composant tiers peut étendre le scroll area du document et faire
+  // dériver tout le SPA en bloc (sidebar + main) au moindre scroll.
+  useLockedViewport();
+
   const { user: authUser, logout } = useAuth();
   const { theme, toggle }          = useTheme();
   const { t }                      = useI18n();
@@ -222,16 +229,26 @@ export function AdminDashboard() {
           {logo}
         </div>
 
+        {/* Bandeau offline / outbox — visible ssi browser offline ou mutations
+            en attente de sync. Placé ici (dans le shell, au-dessus du <main>
+            scrollable) pour ne pas étendre la hauteur document et casser
+            l'ancrage h-screen. */}
+        <OfflineBanner />
+
         {/* Banner d'impersonation — présent ssi session JIT active (présence
             de user.impersonation dans /api/auth/me). Chrono persistant, bouton
             Terminer self-service, auto-revoke sur pagehide. */}
         <ImpersonationBanner />
 
         {/* Bannière trial — visible seulement pour les tenants en phase
-            d'essai avec <= 14 jours restants. Masquée 24h au dismiss. */}
-        <div className="px-4 pt-3 sm:px-6">
-          <TrialBanner />
-        </div>
+            d'essai avec <= 14 jours restants. Masquée 24h au dismiss.
+            Ne monter que pour les utilisateurs qui peuvent gérer la facturation :
+            évite un 403 bruyant dans la console pour les agents/caissiers. */}
+        {permissions.includes('control.settings.manage.tenant') && (
+          <div className="px-4 pt-3 sm:px-6">
+            <TrialBanner />
+          </div>
+        )}
 
         {/* Bandeau staff plateforme — visible uniquement si tenantId === PLATFORM.
             Permet de scoper les pages tenant-scoped (Trips, Fleet, Cashier, …)

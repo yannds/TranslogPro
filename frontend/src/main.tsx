@@ -135,8 +135,6 @@ startSyncLoop();
 import { installGlobalErrorCapture } from '../lib/telemetry/telemetry';
 installGlobalErrorCapture();
 
-import { OfflineBanner } from '../components/offline/OfflineBanner';
-
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable dans index.html');
 
@@ -159,7 +157,6 @@ reactRoot.render(
           <AuthProvider>
             <TenantConfigBridge />
             <TenantScopeProvider>
-            <OfflineBanner />
             <Routes>
               {/* Authentification */}
               <Route path="/login" element={<LoginPage />} />

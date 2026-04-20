@@ -568,6 +568,11 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
                   <Inp label={t('portail.emailOptional')} ph="jean@exemple.com" type="email" value={pax.email || ''} set={v => updatePassenger(idx, { email: v })} />
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
+                    {/* TODO S2: consommer l'endpoint public `/p/:slug/fare-classes`
+                        (à créer) pour que le portail voyageur reflète les
+                        TenantFareClass configurées par le tenant. Pour S1, on
+                        reste sur STANDARD/VIP qui sont seedés par défaut pour
+                        tous les tenants et couvrent 99% des cas. */}
                     <div className="grid grid-cols-2 gap-3">{(['STANDARD', 'VIP'] as const).map(type => (
                       <button key={type} onClick={() => updatePassenger(idx, { seatType: type })} className={cn('relative p-3 sm:p-4 rounded-2xl border-2 text-sm font-medium transition-all text-left',
                         pax.seatType === type ? (type === 'VIP' ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-900 dark:border-white bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white') : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300')}>
