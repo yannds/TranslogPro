@@ -19,6 +19,8 @@ import { IStorageService, STORAGE_SERVICE, DocumentType } from '../../infrastruc
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
 import { NotificationService } from '../notification/notification.service';
+import { CustomerResolverService } from '../crm/customer-resolver.service';
+import { CustomerClaimService }    from '../crm/customer-claim.service';
 import { v4 as uuidv4 } from 'uuid';
 import {
   RouteSnapshot,
@@ -43,6 +45,8 @@ export class PublicPortalService {
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
     private readonly notification: NotificationService,
+    private readonly crmResolver: CustomerResolverService,
+    private readonly crmClaim:    CustomerClaimService,
   ) {}
 
   // ─── Tenant resolution ────────────────────────────────────────────────────
@@ -867,7 +871,7 @@ export class PublicPortalService {
       });
       const bookedNames = new Set((existingNames as Array<{ passengerName: string }>).map(r => r.passengerName.toLowerCase()));
 
-      const created: Array<{ id: string; seatNumber: string | null; fareClass: string; pricePaid: number; wantsSeatSelection: boolean; passengerIdx: number }> = [];
+      const created: Array<{ id: string; seatNumber: string | null; fareClass: string; pricePaid: number; wantsSeatSelection: boolean; passengerIdx: number; customerId: string | null }> = [];
 
       for (let i = 0; i < dto.passengers.length; i++) {
         const pax = dto.passengers[i];
@@ -925,14 +929,24 @@ export class PublicPortalService {
         const seatSurcharge = (wantsSeat && isNumbered && seatFee > 0) ? seatFee : 0;
         const pricePaid = segmentBasePrice + seatSurcharge;
 
+        // ── Résolution CRM passager (shadow si inconnu) ─────────────────
+        const crmRes = await this.crmResolver.resolveOrCreate(
+          tenant.id,
+          { name: passengerName, phone: pax.phone, email: pax.email },
+          tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2],
+        );
+
         const ticketId = uuidv4();
         const t = await tx.ticket.create({
           data: {
             id:                 ticketId,
             tenantId:           tenant.id,
             tripId:             dto.tripId,
-            passengerId:        'portal-anonymous',
+            passengerId:        null,
             passengerName,
+            passengerPhone:     pax.phone?.trim() || null,
+            passengerEmail:     pax.email?.trim() || null,
+            customerId:         crmRes?.customer.id ?? null,
             seatNumber,
             boardingStationId,
             alightingStationId,
@@ -946,18 +960,26 @@ export class PublicPortalService {
           },
         });
 
+        if (crmRes?.customer.id) {
+          await this.crmResolver.bumpCounters(
+            tx as unknown as { customer: { update: Function } },
+            crmRes.customer.id, 'ticket',
+            BigInt(Math.round(pricePaid * 100)),
+          );
+        }
+
         const event: DomainEvent = {
           id:            uuidv4(),
           type:          EventTypes.TICKET_ISSUED,
           tenantId:      tenant.id,
           aggregateId:   t.id,
           aggregateType: 'Ticket',
-          payload:       { ticketId: t.id, tripId: dto.tripId, price: pricePaid, source: 'portal' },
+          payload:       { ticketId: t.id, tripId: dto.tripId, price: pricePaid, source: 'portal', customerId: crmRes?.customer.id ?? null },
           occurredAt:    new Date(),
         };
-        await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+        await this.eventBus.publish(event, tx as any);
 
-        created.push({ id: t.id, seatNumber, fareClass, pricePaid, wantsSeatSelection: wantsSeat, passengerIdx: i });
+        created.push({ id: t.id, seatNumber, fareClass, pricePaid, wantsSeatSelection: wantsSeat, passengerIdx: i, customerId: crmRes?.customer.id ?? null });
       }
 
       return created;
@@ -1020,6 +1042,18 @@ export class PublicPortalService {
     );
 
     const totalPrice = tickets.reduce((sum, tk) => sum + tk.pricePaid, 0);
+
+    // Émission magic link + recompute segments CRM (fire-and-forget, hors tx).
+    // Dédupe par customerId pour n'émettre qu'un lien par client unique.
+    const uniqueCustomerIds = Array.from(new Set(
+      tickets.map(tk => tk.customerId).filter((x): x is string => !!x),
+    ));
+    for (const cid of uniqueCustomerIds) {
+      void this.crmClaim.issueToken(tenant.id, cid).catch(err =>
+        this.logger.warn(`[CRM Claim] issueToken failed: ${err?.message ?? err}`),
+      );
+      void this.crmResolver.recomputeSegmentsFor(tenant.id, cid);
+    }
 
     // Résoudre les libellés des gares de montée/descente pour la réponse
     const boardingLabel = boardingStationId === trip.route.originId
@@ -1152,15 +1186,29 @@ export class PublicPortalService {
     const parcelId = uuidv4();
 
     const parcel = await this.prisma.transact(async (tx) => {
+      // ── Résolution CRM expéditeur + destinataire (shadow si inconnus) ──
+      const senderRes = await this.crmResolver.resolveOrCreate(
+        tenant.id,
+        { name: dto.senderName, phone: dto.senderPhone },
+        tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2],
+      );
+      const recipientRes = await this.crmResolver.resolveOrCreate(
+        tenant.id,
+        { name: dto.recipientName, phone: dto.recipientPhone },
+        tx as unknown as Parameters<typeof this.crmResolver.resolveOrCreate>[2],
+      );
+
       const created = await tx.parcel.create({
         data: {
-          id:            parcelId,
-          tenantId:      tenant.id,
+          id:                  parcelId,
+          tenantId:            tenant.id,
           trackingCode,
-          senderId:      'portal-anonymous',
-          weight:        dto.weightKg ?? 0,
-          price:         0,
-          destinationId: destination.id,
+          senderId:            null,
+          senderCustomerId:    senderRes?.customer.id ?? null,
+          recipientCustomerId: recipientRes?.customer.id ?? null,
+          weight:              dto.weightKg ?? 0,
+          price:               0,
+          destinationId:       destination.id,
           recipientInfo: {
             name:        dto.recipientName,
             phone:       dto.recipientPhone,
@@ -1175,19 +1223,51 @@ export class PublicPortalService {
         },
       });
 
+      if (senderRes?.customer.id) {
+        await this.crmResolver.bumpCounters(
+          tx as unknown as { customer: { update: Function } },
+          senderRes.customer.id, 'parcel',
+        );
+      }
+      if (recipientRes?.customer.id && recipientRes.customer.id !== senderRes?.customer.id) {
+        await this.crmResolver.bumpCounters(
+          tx as unknown as { customer: { update: Function } },
+          recipientRes.customer.id, 'parcel',
+        );
+      }
+
       const event: DomainEvent = {
         id:            uuidv4(),
         type:          EventTypes.PARCEL_REGISTERED,
         tenantId:      tenant.id,
         aggregateId:   created.id,
         aggregateType: 'Parcel',
-        payload:       { parcelId: created.id, trackingCode, source: 'portal' },
+        payload:       {
+          parcelId: created.id,
+          trackingCode,
+          source: 'portal',
+          senderCustomerId:    senderRes?.customer.id ?? null,
+          recipientCustomerId: recipientRes?.customer.id ?? null,
+        },
         occurredAt:    new Date(),
       };
-      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+      await this.eventBus.publish(event, tx as any);
 
       return created;
     });
+
+    // Émission magic link + recompute segments CRM (fire-and-forget, hors tx).
+    const postTx = (cid: string | null | undefined) => {
+      if (!cid) return;
+      void this.crmClaim.issueToken(tenant.id, cid).catch(err =>
+        this.logger.warn(`[CRM Claim] issueToken failed: ${err?.message ?? err}`),
+      );
+      void this.crmResolver.recomputeSegmentsFor(tenant.id, cid);
+    };
+    postTx(parcel.senderCustomerId);
+    if (parcel.recipientCustomerId !== parcel.senderCustomerId) {
+      postTx(parcel.recipientCustomerId);
+    }
 
     this.logger.log(
       `[Portal] Parcel pickup request created: ${parcel.id} tracking=${trackingCode} tenant=${tenant.slug}`,

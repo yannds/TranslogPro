@@ -5,10 +5,11 @@ import { WhiteLabelModule }       from '../white-label/white-label.module';
 import { DocumentsModule }        from '../documents/documents.module';
 import { SavModule }              from '../sav/sav.module';
 import { NotificationModule }     from '../notification/notification.module';
+import { CrmModule }              from '../crm/crm.module';
 import { QrService }              from '../../core/security/qr/qr.service';
 
 @Module({
-  imports:     [WhiteLabelModule, DocumentsModule, SavModule, NotificationModule],
+  imports:     [WhiteLabelModule, DocumentsModule, SavModule, NotificationModule, CrmModule],
   controllers: [PublicPortalController],
   providers:   [PublicPortalService, QrService],
 })
