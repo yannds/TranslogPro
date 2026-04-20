@@ -293,14 +293,15 @@ reactRoot.render(
               {/* Fallback toutes les routes inconnues */}
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
+            {/* Toaster global — monté sous I18nProvider + ThemeProvider (pour
+                que useI18n / useTheme fonctionnent) et hors du switch <Routes>
+                pour rester visible quelle que soit la page. notify.* dispatche
+                depuis n'importe quel composant. */}
+            <NotifyToaster />
             </TenantScopeProvider>
           </AuthProvider>
           </I18nProvider>
         </TenantConfigProvider>
-        {/* Toaster global — monté une seule fois à la racine pour que
-            notify.* dispatche depuis n'importe quel composant. Le bouton
-            « Fermer tout » flotte sur tous les portails. */}
-        <NotifyToaster />
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
