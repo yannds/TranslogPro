@@ -40,24 +40,41 @@ type PaymentMethod = 'CASH' | 'MOBILE_MONEY' | 'CARD';
 
 interface Station { id: string; name: string; city: string | null; }
 interface TripHit {
-  id:                 string;
-  departureScheduled: string;
-  arrivalScheduled:   string;
-  price:              number;
-  currency:           string;
-  route: { origin: { name: string }; destination: { name: string } };
-  bus:  { model: string | null; plate: string };
-  seatsAvailable:     number;
+  id:            string;
+  departure:     string;
+  arrival:       string;
+  departureTime: string;
+  arrivalTime:   string;
+  price:         number;
+  availableSeats: number;
+  busType:       string;
+  busModel:      string;
+  canBook:       boolean;
 }
 interface Seat {
   row: number;
   col: number;
   label: string;
   occupied: boolean;
+  disabled: boolean;
 }
-interface SeatmapRes {
+interface SeatmapApiRes {
+  seatingMode: 'FREE' | 'ASSIGNED';
+  seatLayout: { rows: number; cols: number; aisleAfter?: number; disabled?: string[] } | null;
+  occupiedSeats: string[];
+  availableCount: number;
+  totalCount: number;
+  seatSelectionFee: number;
+  isFullVip: boolean;
+  vipSeats: string[];
+}
+interface Seatmap {
+  seatingMode: 'FREE' | 'ASSIGNED';
   capacity: number;
-  layout: Seat[]; // peut être simplifié — on tolère une grille 4 cols
+  layout: Seat[];
+  aisleAfter?: number;
+  seatSelectionFee: number;
+  availableCount: number;
 }
 interface BookingRes {
   bookingId:   string;
@@ -96,7 +113,7 @@ export function CustomerBookingScreen() {
   const [searching, setSearching] = useState(false);
 
   // Step 3 : passager + seatmap
-  const [seatmap, setSeatmap]     = useState<SeatmapRes | null>(null);
+  const [seatmap, setSeatmap]     = useState<Seatmap | null>(null);
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
@@ -123,13 +140,16 @@ export function CustomerBookingScreen() {
 
   async function searchTrips() {
     if (!originId || !destId) return;
+    const originStation = stations.find(s => s.id === originId);
+    const destStation   = stations.find(s => s.id === destId);
+    if (!originStation || !destStation) return;
     setSearching(true);
     try {
       const qs = new URLSearchParams({
-        origin:      originId,
-        destination: destId,
+        departure:  originStation.name,
+        arrival:    destStation.name,
         date,
-        pax: String(pax),
+        passengers: String(pax),
       });
       const res = await apiGet<TripHit[]>(
         `/api/public/${slug}/portal/trips/search?${qs.toString()}`,
@@ -145,13 +165,14 @@ export function CustomerBookingScreen() {
   }
 
   async function loadSeatmap(tripId: string) {
+    const empty: Seatmap = { seatingMode: 'FREE', capacity: 0, layout: [], seatSelectionFee: 0, availableCount: 0 };
     try {
-      const res = await apiGet<SeatmapRes>(
+      const res = await apiGet<SeatmapApiRes>(
         `/api/public/${slug}/portal/trips/${tripId}/seats`,
         { skipAuthRedirect: true },
       );
-      setSeatmap(res ?? { capacity: 0, layout: [] });
-    } catch { setSeatmap({ capacity: 0, layout: [] }); }
+      setSeatmap(res ? buildSeatmap(res) : empty);
+    } catch { setSeatmap(empty); }
   }
 
   async function confirmBooking() {
@@ -164,9 +185,10 @@ export function CustomerBookingScreen() {
           firstName:          firstName.trim(),
           lastName:           lastName.trim(),
           phone:              phone.trim(),
-          email:              user?.email ?? null,
+          ...(user?.email ? { email: user.email } : {}),
+          seatType:           'STANDARD' as const,
           wantsSeatSelection: Boolean(selectedSeat),
-          seatNumber:         selectedSeat ?? undefined,
+          ...(selectedSeat ? { seatNumber: selectedSeat } : {}),
         }],
         paymentMethod: payment,
       };
@@ -326,18 +348,18 @@ export function CustomerBookingScreen() {
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: colors.text, fontWeight: '700' }}>
-                      {tr.route.origin.name} → {tr.route.destination.name}
+                      {tr.departure} → {tr.arrival}
                     </Text>
                     <Text style={{ color: colors.primary, fontWeight: '800' }}>
-                      {tr.price.toLocaleString(lang)} {tr.currency}
+                      {tr.price.toLocaleString(lang)}
                     </Text>
                   </View>
                   <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                    {new Date(tr.departureScheduled).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(tr.departureTime).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}
                     {' → '}
-                    {new Date(tr.arrivalScheduled).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}
-                    {' · '} {tr.bus.model ?? tr.bus.plate}
-                    {' · '} {tr.seatsAvailable} {L('places', 'seats')}
+                    {new Date(tr.arrivalTime).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}
+                    {' · '} {tr.busModel || tr.busType}
+                    {' · '} {tr.availableSeats} {L('places', 'seats')}
                   </Text>
                 </Pressable>
               );
@@ -406,15 +428,15 @@ export function CustomerBookingScreen() {
           <>
             <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               <Text style={{ color: colors.text, fontWeight: '700' }}>
-                {selectedTrip?.route.origin.name} → {selectedTrip?.route.destination.name}
+                {selectedTrip?.departure} → {selectedTrip?.arrival}
               </Text>
               {selectedTrip && (
                 <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                  {new Date(selectedTrip.departureScheduled).toLocaleString(lang)}
+                  {new Date(selectedTrip.departureTime).toLocaleString(lang)}
                 </Text>
               )}
               <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 20, marginTop: 10 }}>
-                {(selectedTrip?.price ?? 0).toLocaleString(lang)} {selectedTrip?.currency ?? ''}
+                {(selectedTrip?.price ?? 0).toLocaleString(lang)}
               </Text>
             </View>
             <Text style={[styles.label, { color: colors.text }]}>
@@ -507,6 +529,32 @@ export function CustomerBookingScreen() {
   );
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function buildSeatmap(res: SeatmapApiRes): Seatmap {
+  const layout: Seat[] = [];
+  if (res.seatLayout) {
+    const { rows, cols, disabled = [] } = res.seatLayout;
+    const disabledSet = new Set(disabled);
+    const occupiedSet = new Set(res.occupiedSeats);
+    for (let row = 1; row <= rows; row++) {
+      for (let col = 1; col <= cols; col++) {
+        const label = `${row}-${col}`;
+        if (disabledSet.has(label)) continue;
+        layout.push({ row, col, label, occupied: occupiedSet.has(label), disabled: false });
+      }
+    }
+  }
+  return {
+    seatingMode:      res.seatingMode,
+    capacity:         res.totalCount,
+    layout,
+    aisleAfter:       res.seatLayout?.aisleAfter,
+    seatSelectionFee: res.seatSelectionFee,
+    availableCount:   res.availableCount,
+  };
+}
+
 // ─── SubComponents ─────────────────────────────────────────────────────────
 
 function StationPicker({
@@ -526,11 +574,11 @@ function StationPicker({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
       >
-        {stations.map(s => {
+        {stations.map((s, index) => {
           const selected = value === s.id;
           return (
             <Pressable
-              key={s.id}
+              key={`${s.id ?? 'station'}-${index}`}
               onPress={() => onChange(s.id)}
               accessibilityRole="radio"
               accessibilityState={{ selected }}

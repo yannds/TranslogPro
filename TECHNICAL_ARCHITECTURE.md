@@ -1146,10 +1146,33 @@ export class PermissionGuard implements CanActivate {
 **Seed IAM — appelé par OnboardingService :**
 ```
 prisma/seeds/iam.seed.ts
-  → insère 9 rôles (isSystem=true) avec leurs RolePermission
+  → insère 11 rôles système par défaut (isSystem=true) avec leurs RolePermission :
+      TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT, CASHIER, DRIVER, HOSTESS,
+      MECHANIC, AGENT_QUAI, DISPATCHER, CUSTOMER, PUBLIC_REPORTER
   → exécuté atomiquement dans la transaction de provisioning tenant
   → idempotent : upsert sur Role.name @unique([tenantId, name])
+  → le runner standalone (main()) est guardé par `require.main === module` pour
+    permettre l'import du module (TENANT_ROLES) dans les tests unitaires sans
+    déclencher d'opérations Prisma
 ```
+
+**Contrat RBAC — permissions granulaires, jamais de rôle en dur :**
+
+Le backend (`@RequirePermission('x.y.z')`), la navigation (`nav.config.ts anyOf: […]`)
+et le gating UI (`user.permissions.includes(...)`) vérifient **uniquement des permissions**.
+Les rôles ne sont que des groupements par défaut — chaque tenant peut rebattre la
+matrice via `/admin/iam/roles`.
+
+Exemple de split lecture/écriture (Taxes & Fiscalité, sprint 2026-04-20) :
+
+| Permission | Scope | Rôles seedés par défaut | Usage |
+|---|---|---|---|
+| `data.tax.read.tenant` | tenant | TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT, CASHIER | Lecture grille fiscale (caissier voit les taxes appliquées au ticket POS) |
+| `control.tax.manage.tenant` | tenant | TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT | CRUD TenantTax (ajouter taxe éco, changer taux TVA 18%→20%, cascade…) |
+
+Ce split permet à un comptable de gérer la fiscalité au jour le jour sans toucher
+aux autres paramètres tenant (`control.settings.manage.tenant` reste réservé
+admin/gérant pour company/payment/branding/portal).
 
 ### 8.6 RGPD — Points de Conformité
 
@@ -1703,6 +1726,19 @@ Sections et items ajoutés :
 - Litiges & Sinistres `/admin/qhse/disputes` (`QHSE_MANAGE`)
 - Procédures QHSE `/admin/qhse/procedures` (`QHSE_MANAGE`)
 - Configuration QHSE `/admin/qhse/config` (`QHSE_MANAGE`)
+
+**Configuration (sprint orphans 2026-04-20) :**
+- Taxes & Fiscalité `/admin/settings/taxes` (`TAX_READ`, `TAX_MANAGE`) — CRUD TenantTax
+- Configuration paiement `/admin/settings/payment` (`SETTINGS_MANAGE`) — TTL intent, MoMo timeouts, webhooks (précédemment orpheline)
+
+**Affichage & Gare (sprint orphans 2026-04-20) :**
+- Annonces gare `/admin/display/announcements` (`ANNOUNCEMENT_MANAGE`, `ANNOUNCEMENT_READ`) — branchée au vrai composant `PageAnnouncements` (auparavant rendait un `PageWip` placeholder)
+
+> **Contrat orphelins** : toute page ajoutée dans `frontend/components/pages/` doit dans
+> la même PR (1) être importée en lazy dans `PageRouter.tsx`, (2) avoir un `case 'x':`
+> retournant le composant, (3) une entrée nav dans `nav.config.ts` avec `href`, `icon`
+> et `anyOf: [permissions]`. Un audit croisé a été rajouté à la check-list sprint
+> pour détecter les composants créés mais non référencés.
 
 ---
 

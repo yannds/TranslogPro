@@ -27,6 +27,9 @@ prisma/migrations/*.sql.bak
 # Backups locaux (dumps DB pré-migration, non versionnés)
 backups/
 
+# Claude Code runtime lock (sessionId + pid — ne pas versionner)
+.claude/scheduled_tasks.lock
+
 # Logs
 logs/
 *.log

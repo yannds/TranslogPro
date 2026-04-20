@@ -211,7 +211,9 @@ export class FlightDeckService {
     const trip = await this.prisma.trip.findFirst({
       where:  { id: tripId, tenantId },
       select: {
-        id: true, status: true, departureScheduled: true,
+        id: true, status: true,
+        departureScheduled: true, arrivalScheduled: true,
+        departureActual: true, arrivalActual: true,
         bus: { select: { capacity: true } },
       },
     });
@@ -245,22 +247,84 @@ export class FlightDeckService {
       }),
     ]);
 
-    // Retard : minutes écoulées depuis l'heure prévue si elle est dépassée et
-    // que le trajet n'est pas encore marqué COMPLETED. Permet aux écrans
-    // BusScreen/QuaiScreen d'afficher un badge + d'injecter une alerte dans le
-    // ticker sans recalculer côté frontend.
-    const scheduled = trip.departureScheduled ? trip.departureScheduled.getTime() : null;
-    const nowMs     = Date.now();
-    const isTerminal = trip.status === 'COMPLETED' || trip.status === 'CANCELLED';
-    const delayMinutes = scheduled && !isTerminal && nowMs > scheduled
-      ? Math.floor((nowMs - scheduled) / 60_000)
-      : 0;
+    // ─── Calcul Prévu / Estimé / Effectif ────────────────────────────────
+    //
+    // Quatre états selon les horodatages effectifs (cf. transitionTripStatus
+    // qui stampe departureActual à IN_PROGRESS, arrivalActual à COMPLETED) :
+    //
+    //   1. Pas encore parti (departureActual = null)
+    //      → delay rolling = max(0, now - scheduledDeparture)
+    //      → estimatedDeparture / Arrival = scheduled + delay (rolling, suit
+    //        le retard accumulé tant que le bus n'est pas parti)
+    //
+    //   2. Parti, pas encore arrivé (departureActual ≠ null, arrivalActual = null)
+    //      → delay FIGÉ = departureActual - scheduledDeparture
+    //      → estimatedDeparture FIGÉ = departureActual (= heure réelle clic
+    //        "Démarrer le trajet")
+    //      → estimatedArrival FIGÉ = arrivalScheduled + delay (= on shift
+    //        l'arrivée du retard observé au départ, durée trajet conservée)
+    //
+    //   3. Arrivé (arrivalActual ≠ null)
+    //      → delay FIGÉ = departureActual - scheduledDeparture (si départ
+    //        effectif connu, sinon arrivalActual - arrivalScheduled)
+    //      → estimatedArrival FIGÉ = arrivalActual (heure réelle d'arrivée)
+    //
+    //   4. CANCELLED → pas de calcul, delay = 0, estimés = null
+    //
+    // C'est ce qui évite que les écrans continuent de "courir" après le
+    // départ effectif — la valeur est figée et fiable.
+    const scheduledDepMs = trip.departureScheduled?.getTime() ?? null;
+    const scheduledArrMs = trip.arrivalScheduled?.getTime() ?? null;
+    const actualDepMs    = trip.departureActual?.getTime() ?? null;
+    const actualArrMs    = trip.arrivalActual?.getTime() ?? null;
+    const nowMs          = Date.now();
+    const isCancelled    = trip.status === 'CANCELLED';
+
+    let delayMinutes = 0;
+    let estimatedDepartureMs: number | null = null;
+    let estimatedArrivalMs:   number | null = null;
+
+    if (isCancelled) {
+      // État 4 — rien à projeter
+    } else if (actualArrMs && scheduledArrMs) {
+      // État 3 — arrivée figée à l'heure réelle
+      const refDepMs = actualDepMs ?? scheduledDepMs;
+      delayMinutes = refDepMs && scheduledDepMs && refDepMs > scheduledDepMs
+        ? Math.floor((refDepMs - scheduledDepMs) / 60_000)
+        : 0;
+      estimatedDepartureMs = actualDepMs;
+      estimatedArrivalMs   = actualArrMs;
+    } else if (actualDepMs && scheduledDepMs) {
+      // État 2 — départ figé, arrivée projetée par shift
+      delayMinutes = actualDepMs > scheduledDepMs
+        ? Math.floor((actualDepMs - scheduledDepMs) / 60_000)
+        : 0;
+      estimatedDepartureMs = actualDepMs;
+      estimatedArrivalMs   = scheduledArrMs ? scheduledArrMs + delayMinutes * 60_000 : null;
+    } else if (scheduledDepMs) {
+      // État 1 — rolling, recalcule en temps réel
+      delayMinutes = nowMs > scheduledDepMs
+        ? Math.floor((nowMs - scheduledDepMs) / 60_000)
+        : 0;
+      estimatedDepartureMs = delayMinutes > 0 ? scheduledDepMs + delayMinutes * 60_000 : null;
+      estimatedArrivalMs   = scheduledArrMs && delayMinutes > 0
+        ? scheduledArrMs + delayMinutes * 60_000 : null;
+    }
 
     return {
       tripId:              trip.id,
       tripStatus:          trip.status,
       scheduledDeparture:  trip.departureScheduled?.toISOString() ?? null,
+      estimatedDeparture:  estimatedDepartureMs ? new Date(estimatedDepartureMs).toISOString() : null,
+      actualDeparture:     trip.departureActual?.toISOString() ?? null,
+      scheduledArrival:    trip.arrivalScheduled?.toISOString() ?? null,
+      estimatedArrival:    estimatedArrivalMs ? new Date(estimatedArrivalMs).toISOString() : null,
+      actualArrival:       trip.arrivalActual?.toISOString() ?? null,
       delayMinutes,
+      // Indique au client si l'estimation est figée (départ effectif connu)
+      // ou rolling (encore en attente). Permet de cacher la mention "se met
+      // à jour" et d'afficher "Effectif" au lieu de "Estimé" si désiré.
+      isFrozen:            actualDepMs !== null,
       passengersOnBoard,
       passengersCheckedIn,
       passengersConfirmed,
@@ -511,6 +575,29 @@ export class FlightDeckService {
       );
     }
 
+    // ── Guard métier : pas de départ effectif sans manifest signé ───────────
+    // BOARDING → IN_PROGRESS exige qu'AU MOINS UN manifest (kind ALL ou
+    // PASSENGERS+PARCELS) soit en statut SIGNED pour ce trajet. Cela évite
+    // qu'un chauffeur démarre par erreur sans avoir attesté le contenu du bus
+    // (responsabilité réglementaire). Le manifest peut être signé par lui ou
+    // par un agent quai/gare disposant de la perm — le scope est tenant+tripId.
+    //
+    // On bloque uniquement la transition IN_PROGRESS finale ; ouvrir
+    // l'embarquement (BOARDING) reste libre car le manifest se signe
+    // typiquement pendant cette phase.
+    if (nextStatus === 'IN_PROGRESS') {
+      const signed = await this.prisma.manifest.findFirst({
+        where:  { tenantId, tripId, status: 'SIGNED' },
+        select: { id: true, kind: true, signedAt: true },
+      });
+      if (!signed) {
+        throw new BadRequestException(
+          'MANIFEST_NOT_SIGNED: Aucun manifest signé pour ce trajet — ' +
+          'générez et signez le manifest depuis l\'écran Manifest avant de démarrer le trajet.',
+        );
+      }
+    }
+
     // Acteur synthétique si actor absent (rétro-compat — le controller devrait
     // désormais passer user). La perm requise par le blueprint sera vérifiée
     // côté engine (data.trip.update.agency / data.trip.report.own).
@@ -528,9 +615,16 @@ export class FlightDeckService {
         {
           aggregateType: 'Trip',
           persist: async (entity, state, p) => {
+            // Horodatage effectif du départ / arrivée — fige l'estimation
+            // côté UI dès que le chauffeur clique. Idempotent : on ne re-stamp
+            // pas si déjà posé (cas où une transition COMPLETED arrive avant
+            // IN_PROGRESS via planning multi-actions).
+            const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+            if (state === 'IN_PROGRESS') data.departureActual = new Date();
+            if (state === 'COMPLETED')   data.arrivalActual   = new Date();
             return p.trip.update({
               where: { id: entity.id },
-              data:  { status: state, version: { increment: 1 } },
+              data,
             }) as Promise<typeof entity>;
           },
         },

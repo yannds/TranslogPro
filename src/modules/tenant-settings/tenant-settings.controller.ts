@@ -12,8 +12,11 @@ import { IntegrationsService, UpdateIntegrationModeDto } from './integrations.se
  *   - /tenants/:tenantId/settings/payment     (GET/PATCH TenantPaymentConfig)
  *   - /tenants/:tenantId/settings/integrations (GET + PATCH mode + POST healthcheck)
  *
- * Permission : SETTINGS_MANAGE_TENANT pour taxes/payment,
- *              INTEGRATION_SETUP_TENANT pour les integrations.
+ * Permissions :
+ *   - taxes  : TAX_READ_TENANT (GET) / TAX_MANAGE_TENANT (POST/PATCH/DELETE)
+ *              — lecture séparée pour caissier/comptable, écriture pour admin/comptable/gérant.
+ *   - payment: SETTINGS_MANAGE_TENANT (GET/PATCH).
+ *   - integrations : INTEGRATION_SETUP_TENANT.
  *
  * Les secrets ne transitent JAMAIS par ces endpoints — uniquement via Vault.
  */
@@ -27,19 +30,19 @@ export class TenantSettingsController {
 
   // ── Taxes ──────────────────────────────────────────────────────────────────
   @Get('taxes')
-  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  @RequirePermission(Permission.TAX_READ_TENANT)
   listTaxes(@Param('tenantId') tenantId: string) {
     return this.taxes.list(tenantId);
   }
 
   @Post('taxes')
-  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  @RequirePermission(Permission.TAX_MANAGE_TENANT)
   createTax(@Param('tenantId') tenantId: string, @Body() dto: CreateTenantTaxDto) {
     return this.taxes.create(tenantId, dto);
   }
 
   @Patch('taxes/:id')
-  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  @RequirePermission(Permission.TAX_MANAGE_TENANT)
   updateTax(
     @Param('tenantId') tenantId: string,
     @Param('id') id: string,
@@ -49,7 +52,7 @@ export class TenantSettingsController {
   }
 
   @Delete('taxes/:id')
-  @RequirePermission(Permission.SETTINGS_MANAGE_TENANT)
+  @RequirePermission(Permission.TAX_MANAGE_TENANT)
   removeTax(@Param('tenantId') tenantId: string, @Param('id') id: string) {
     return this.taxes.remove(tenantId, id);
   }

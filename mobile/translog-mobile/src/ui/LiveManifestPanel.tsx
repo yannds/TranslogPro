@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { apiGet } from '../api/client';
 import { useTheme } from '../theme/ThemeProvider';
+import { EtaTime } from './EtaTime';
 
 // ─── Types API ────────────────────────────────────────────────────────────
 
@@ -44,6 +45,12 @@ interface LiveStats {
   parcelsLoaded:       number;
   parcelsTotal:        number;
   busCapacity:         number;
+  // Heures Prévu/Estimé exposées par le backend (cf. getTripLiveStats).
+  scheduledDeparture?: string | null;
+  estimatedDeparture?: string | null;
+  scheduledArrival?:   string | null;
+  estimatedArrival?:   string | null;
+  delayMinutes?:       number;
 }
 
 interface ParcelRow {
@@ -51,11 +58,7 @@ interface ParcelRow {
   trackingCode: string;
   status:       string;
   weight?:      number;
-  destination?: { id: string; name: string } | null;
-}
-
-interface TripWithShipments {
-  shipments?: Array<{ parcels: ParcelRow[] }>;
+  destination?: { id: string; name: string; city?: string | null } | null;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────
@@ -83,23 +86,26 @@ export function LiveManifestPanel({ tenantId, tripId, pollMs = 5000, lang = 'fr'
 
   const passengersUrl = `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/passengers`;
   const statsUrl      = `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/live-stats`;
-  const tripUrl       = `/api/tenants/${tenantId}/trips/${tripId}`;
+  // Endpoint dédié qui renvoie une liste de parcels enrichie (id, code,
+  // statut, destination, poids). Remplace l'ancien `trip.findOne` qui ne
+  // chargeait que `_count.shipments` → liste parcels toujours vide.
+  const parcelsUrl    = `/api/tenants/${tenantId}/flight-deck/trips/${tripId}/parcels`;
 
   const refresh = useCallback(async () => {
     if (!tenantId || !tripId) return;
     try {
-      const [pax, st, tr] = await Promise.all([
-        apiGet<ManifestPassenger[]>(passengersUrl,  { skipAuthRedirect: true }).catch(() => null),
-        apiGet<LiveStats>(statsUrl,                 { skipAuthRedirect: true }).catch(() => null),
-        apiGet<TripWithShipments>(tripUrl,          { skipAuthRedirect: true }).catch(() => null),
+      const [pax, st, pcl] = await Promise.all([
+        apiGet<ManifestPassenger[]>(passengersUrl, { skipAuthRedirect: true }).catch(() => null),
+        apiGet<LiveStats>(statsUrl,                { skipAuthRedirect: true }).catch(() => null),
+        apiGet<ParcelRow[]>(parcelsUrl,            { skipAuthRedirect: true }).catch(() => null),
       ]);
       if (pax) setPassengers(pax);
       if (st)  setStats(st);
-      if (tr)  setParcels((tr.shipments ?? []).flatMap(s => s.parcels ?? []));
+      if (pcl) setParcels(pcl);
     } finally {
       setLoading(false);
     }
-  }, [tenantId, tripId, passengersUrl, statsUrl, tripUrl]);
+  }, [tenantId, tripId, passengersUrl, statsUrl, parcelsUrl]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -144,6 +150,43 @@ export function LiveManifestPanel({ tenantId, tripId, pollMs = 5000, lang = 'fr'
 
   return (
     <View style={{ gap: 12 }}>
+      {/* Bandeau Prévu / Estimé — visible dès qu'un retard est observé.
+          Source backend : getTripLiveStats expose scheduledArrival +
+          estimatedArrival + delayMinutes. Affiché en stacked pour
+          maximiser la lisibilité dans la card du manifest. */}
+      {stats && (stats.scheduledDeparture || stats.scheduledArrival) && (
+        <View style={[styles.etaCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          {stats.scheduledDeparture && (
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.etaLabel, { color: colors.textMuted }]}>
+                {L('Départ', 'Departure')}
+              </Text>
+              <EtaTime
+                scheduled={stats.scheduledDeparture}
+                estimated={stats.estimatedDeparture}
+                delayMinutes={stats.delayMinutes ?? 0}
+                layout="stacked"
+                lang={lang}
+              />
+            </View>
+          )}
+          {stats.scheduledArrival && (
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.etaLabel, { color: colors.textMuted }]}>
+                {L('Arrivée', 'Arrival')}
+              </Text>
+              <EtaTime
+                scheduled={stats.scheduledArrival}
+                estimated={stats.estimatedArrival}
+                delayMinutes={stats.delayMinutes ?? 0}
+                layout="stacked"
+                lang={lang}
+              />
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Compteurs */}
       <View style={styles.statsRow}>
         <Stat
@@ -369,5 +412,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
+  },
+  etaCard: {
+    flexDirection: 'row',
+    gap: 16,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  etaLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
 });

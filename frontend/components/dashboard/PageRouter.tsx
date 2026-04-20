@@ -67,6 +67,8 @@ const LazyDriverScoring    = lazy(() => import('../pages/PageDriverScoring').the
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(m => ({ default: m.PageTenantPayment })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAnnouncements  = lazy(() => import('../pages/PageAnnouncements').then(m => ({ default: m.PageAnnouncements })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIntegrations   = lazy(() => import('../pages/PageIntegrations').then(m => ({ default: m.PageIntegrations })));
@@ -356,7 +358,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'display-screens':     return <LazyDisplayGare />;
     case 'display-quais':       return <LazyDisplayQuai />;
     case 'display-bus':         return <LazyDisplayBus />;
-    case 'display-announcements': return <PageWip title={t('router.stationAnnounce')} />;
+    case 'display-announcements': return <LazyAnnouncements />;
     case 'safety-incidents':    return <PageSafety />;
     case 'safety-monitor':      return <PageWip title={t('router.liveMonitor')} />;
     case 'safety-sos':          return <PageWip title={t('router.sosAlerts')} />;

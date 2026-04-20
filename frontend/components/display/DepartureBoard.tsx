@@ -30,9 +30,17 @@ type BoardMode = 'DEPARTURES' | 'ARRIVALS';
 
 interface BoardRow {
   id:              string;
-  scheduledAt:     string;   // "HH:MM"
+  scheduledAt:     string;   // "HH:MM" — heure prévue d'origine (jamais modifiée)
   dateISO?:        string;   // "YYYY-MM-DD" — pour le séparateur de jour
   delayMin?:       number;
+  // Heure estimée ou effective (HH:MM). Si fourni ET ≠ scheduledAt, le rendu
+  // barre l'heure prévue et met en avant cette valeur. Couvre les 2 cas :
+  //   - "Estimé" (rolling) avant départ
+  //   - "Effectif" (figé) après départ
+  estimatedAt?:    string;
+  // Vrai si l'estimation est figée (départ effectif connu — bus parti). Sert
+  // au tableau gare destinataire pour afficher "Parti avec Xh de retard".
+  isFrozen?:       boolean;
   cityId:          string;   // résolu en nom via tenant cities
   cityName:        string;   // nom affiché (destination en départ, origine en arrivée)
   originName?:     string;   // ville d'origine (pour colonne Provenance en mode all)
@@ -90,6 +98,35 @@ const DEMO_ARRIVALS: BoardRow[] = [
 
 // ─── API Trip → BoardRow mapper ──────────────────────────────────────────────
 
+/**
+ * Format compact d'une durée en minutes pour affichage retard.
+ *   45  → "45 min"
+ *   80  → "1h20"
+ *   625 → "10h25"
+ * Lecture rapide pour écrans publics — règle "+X" est ajoutée par le caller.
+ */
+function formatDelayCompact(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return `${h}h${String(rest).padStart(2, '0')}`;
+}
+
+/**
+ * "HH:MM" + minutes → "HH:MM" décalé (modulo 24h). Utilisé pour calculer
+ * estimatedAt côté client à partir de scheduledAt + delayMin quand l'API
+ * renvoie le format texte historique sans champ explicite.
+ */
+function shiftHHMM(hhmm: string, addMinutes: number): string {
+  const [h, m] = hhmm.split(':').map((v) => parseInt(v, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const total = h * 60 + m + addMinutes;
+  const hh = String(Math.floor((total / 60) % 24)).padStart(2, '0');
+  const mm = String(((total % 60) + 60) % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 function tripToBoardRow(trip: any, mode: BoardMode = 'DEPARTURES'): BoardRow {
   const isDeparture = mode === 'DEPARTURES';
   const origin      = trip.route?.origin;
@@ -104,10 +141,57 @@ function tripToBoardRow(trip: any, mode: BoardMode = 'DEPARTURES'): BoardRow {
   const destCity   = (destination?.city ?? destination?.name ?? '—').toUpperCase();
 
   const depDate = new Date(trip.departureScheduled);
+  const arrDate = trip.arrivalScheduled ? new Date(trip.arrivalScheduled) : null;
+  // Heure de référence à afficher selon le mode :
+  //   DEPARTURES → heure de départ
+  //   ARRIVALS   → heure d'arrivée (à la gare destinataire)
+  const refScheduled = isDeparture ? depDate : (arrDate ?? depDate);
+  const fmtTime = (d: Date) => d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  // Estimés / réels — calcul client identique au backend
+  // (FlightDeckService.getTripLiveStats / DisplayService) puisque l'endpoint
+  // /display renvoie les trips bruts sans champs computed.
+  // Logique 4 états :
+  //   1. Pas parti           → delay rolling = now - scheduledDep (max 0)
+  //   2. Parti, pas arrivé   → delay FIGÉ = departureActual - scheduledDep
+  //   3. Arrivé              → delay FIGÉ = departureActual - scheduledDep
+  //   4. CANCELLED / no sched → 0
+  const departureActual = trip.departureActual ? new Date(trip.departureActual) : null;
+  const arrivalActual   = trip.arrivalActual   ? new Date(trip.arrivalActual)   : null;
+  const isFrozen        = !!departureActual;
+  const isCancelled     = trip.status === 'CANCELLED';
+
+  let delayMin = 0;
+  if (!isCancelled && trip.departureScheduled) {
+    const schedDepMs = new Date(trip.departureScheduled).getTime();
+    if (departureActual) {
+      delayMin = departureActual.getTime() > schedDepMs
+        ? Math.floor((departureActual.getTime() - schedDepMs) / 60_000) : 0;
+    } else {
+      delayMin = Date.now() > schedDepMs
+        ? Math.floor((Date.now() - schedDepMs) / 60_000) : 0;
+    }
+  }
+
+  // Heure estimée à afficher selon le mode :
+  //   DEPARTURES → departureActual si parti, sinon scheduled + delay (rolling)
+  //   ARRIVALS   → arrivalActual si arrivé, sinon arrivalScheduled + delay (figé ou rolling)
+  let estimatedAt: string | undefined;
+  if (isDeparture) {
+    if (departureActual)              estimatedAt = fmtTime(departureActual);
+    else if (delayMin > 0)            estimatedAt = shiftHHMM(fmtTime(depDate), delayMin);
+  } else {
+    if (arrivalActual)                estimatedAt = fmtTime(arrivalActual);
+    else if (arrDate && delayMin > 0) estimatedAt = shiftHHMM(fmtTime(arrDate), delayMin);
+  }
+
   return {
     id:              trip.id,
-    scheduledAt:     depDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    dateISO:         depDate.toISOString().slice(0, 10),
+    scheduledAt:     fmtTime(refScheduled),
+    estimatedAt,
+    isFrozen,
+    delayMin:        delayMin > 0 ? delayMin : undefined,
+    dateISO:         refScheduled.toISOString().slice(0, 10),
     cityName:        (target?.city ?? target?.name ?? '—').toUpperCase(),
     cityId:          target?.id ?? '',
     originName:      originCity,
@@ -401,17 +485,42 @@ function BoardRowItem({
       aria-label={`${row.scheduledAt} ${row.cityName} ${cfg?.label[lang] ?? row.statusId}`}
       className={rowBaseClass}
     >
-      {/* Heure */}
+      {/* Heure — Prévu / Estimé.
+          Quand estimatedAt diffère du scheduledAt, on barre la prévue et on
+          met l'estimée en orange (gros). Si isFrozen, label devient "Parti à"
+          au lieu de "Estimé" — clair pour le voyageur sur le quai. */}
       <div role="cell">
-        <p className={cn(
-          'text-xl xl:text-2xl font-black tabular-nums leading-none',
-          isTerminal ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white',
-        )}>
-          {row.scheduledAt}
-        </p>
+        {(() => {
+          const hasEstimate = !!row.estimatedAt && row.estimatedAt !== row.scheduledAt;
+          if (!hasEstimate) {
+            return (
+              <p className={cn(
+                'text-xl xl:text-2xl font-black tabular-nums leading-none',
+                isTerminal ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white',
+              )}>
+                {row.scheduledAt}
+              </p>
+            );
+          }
+          return (
+            <div className="flex flex-col leading-none">
+              <p className="text-xs xl:text-sm font-bold tabular-nums text-slate-400 dark:text-slate-500 line-through">
+                {row.scheduledAt}
+              </p>
+              <p className="text-xl xl:text-2xl font-black tabular-nums text-orange-500 mt-0.5">
+                {row.estimatedAt}
+              </p>
+              {row.isFrozen && (
+                <p className="text-[10px] xl:text-xs text-orange-500 font-bold uppercase tracking-wide mt-0.5">
+                  {lang === 'en' ? 'Departed' : 'Parti'}
+                </p>
+              )}
+            </div>
+          );
+        })()}
         {row.delayMin != null && row.delayMin > 0 && (
           <p className="text-xs text-orange-400 font-semibold mt-0.5" aria-label={`Retard ${row.delayMin} min`}>
-            +{row.delayMin}&nbsp;min
+            +{formatDelayCompact(row.delayMin)}
           </p>
         )}
       </div>

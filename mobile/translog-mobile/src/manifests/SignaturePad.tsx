@@ -80,21 +80,28 @@ export const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(funct
       }
     },
     onPanResponderRelease: () => {
-      const count = activePath.current.split(' ').length;
+      // CRITIQUE — on capture activePath.current AVANT toute mutation, sinon
+      // l'updater de setPaths (asynchrone, exécuté après le handler) lirait
+      // une valeur vide. Symptôme : la signature s'efface visuellement dès
+      // qu'on relâche le doigt/souris.
+      const finalPath = activePath.current;
+      activePath.current = '';
+      const count = finalPath.split(' ').length;
       if (count < MIN_POINTS) {
         // Trop court pour être significatif → drop pour éviter un point parasite.
-        setPaths(prev => prev.slice(0, Math.max(0, prev.length - 1)));
-      } else {
-        setPaths(prev => {
-          const rest = prev.slice(0, Math.max(0, prev.length - 1));
-          const merged = [...rest, { d: activePath.current, points: count }];
-          onChange?.(merged.length > 0);
-          return merged;
-        });
+        setPaths(prev => [...prev.slice(0, Math.max(0, prev.length - 1)), { d: '', points: 0 }]);
+        return;
       }
-      activePath.current = '';
-      // Commit de la path (nouvelle entrée pour le prochain trait)
-      setPaths(prev => [...prev, { d: '', points: 0 }]);
+      // Un seul setPaths qui (a) commit le trait final figé et (b) ajoute le
+      // placeholder vide pour le prochain trait — évite tout risque de race
+      // entre 2 setState séparés.
+      setPaths(prev => {
+        const rest = prev.slice(0, Math.max(0, prev.length - 1));
+        return [...rest, { d: finalPath, points: count }, { d: '', points: 0 }];
+      });
+      // Notifie le parent APRÈS le setState (jamais dans l'updater) pour
+      // éviter "Cannot update a component while rendering a different one".
+      onChange?.(true);
     },
   })).current;
 

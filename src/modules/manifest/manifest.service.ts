@@ -371,6 +371,7 @@ export class ManifestService {
     storageKey: string | null; signedPdfStorageKey: string | null;
     passengerCount: number; parcelCount: number;
     signedAt: Date | null; signedById: string | null;
+    signatureSvg?: string | null;
     generatedAt: Date; generatedById: string;
     version: number;
   }) {
@@ -386,6 +387,11 @@ export class ManifestService {
       parcelCount:         m.parcelCount,
       signedAt:            m.signedAt,
       signedById:          m.signedById,
+      // Exposé au client : permet d'afficher la signature comme preuve visuelle
+      // après recharge (sinon perdue côté UI). La taille est bornée à 256 KB
+      // côté service au moment de la signature, donc safe à inclure dans la
+      // réponse JSON.
+      signatureSvg:        m.signatureSvg ?? null,
       generatedAt:         m.generatedAt,
       generatedById:       m.generatedById,
       version:             m.version,

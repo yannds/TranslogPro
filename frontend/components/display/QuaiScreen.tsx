@@ -410,9 +410,34 @@ export function QuaiScreen(props: Partial<QuaiScreenProps> = {}) {
           <div className="text-right flex flex-col items-end gap-2">
             <div>
               <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t('col.time')}</p>
-              <p className="text-6xl xl:text-7xl font-black text-[var(--color-primary)] tabular-nums leading-none">
-                {p.departureTime}
-              </p>
+              {/* Convention "Prévu / Estimé" : si delay > 0, on barre l'heure
+                  prévue et on affiche l'estimée en orange juste en-dessous —
+                  lecture instantanée pour les voyageurs sur quai. */}
+              {delayMinutes > 0 ? (
+                <div className="flex flex-col items-end leading-none">
+                  <p className="text-2xl xl:text-3xl font-bold text-slate-400 dark:text-slate-500 tabular-nums line-through">
+                    {p.departureTime}
+                  </p>
+                  <p className="text-6xl xl:text-7xl font-black text-amber-500 tabular-nums leading-none mt-1">
+                    {(() => {
+                      // departureTime est "HH:MM" — on rajoute delayMinutes minutes.
+                      const [h, m] = p.departureTime.split(':').map((v) => parseInt(v, 10));
+                      if (Number.isNaN(h) || Number.isNaN(m)) return p.departureTime;
+                      const total = h * 60 + m + delayMinutes;
+                      const hh = String(Math.floor((total / 60) % 24)).padStart(2, '0');
+                      const mm = String(total % 60).padStart(2, '0');
+                      return `${hh}:${mm}`;
+                    })()}
+                  </p>
+                  <p className="text-[10px] xl:text-xs text-amber-500 font-bold uppercase tracking-widest mt-1">
+                    {lang === 'en' ? 'Estimated' : 'Estimé'}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-6xl xl:text-7xl font-black text-[var(--color-primary)] tabular-nums leading-none">
+                  {p.departureTime}
+                </p>
+              )}
             </div>
             {/* Météo destination mini */}
             {weather && (

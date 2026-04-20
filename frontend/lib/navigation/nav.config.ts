@@ -151,6 +151,9 @@ const P = {
   INVOICE_CREATE:        'data.invoice.create.agency',
   INVOICE_READ:          'data.invoice.read.agency',
   INVOICE_READ_TENANT:   'data.invoice.read.tenant',
+  // Taxes & Fiscalité
+  TAX_READ:              'data.tax.read.tenant',
+  TAX_MANAGE:            'control.tax.manage.tenant',
   // Quais & Annonces
   PLATFORM_MANAGE:       'control.platform.manage.tenant',
   PLATFORM_READ:         'data.platform.read.agency',
@@ -586,7 +589,7 @@ export const ADMIN_NAV: PortalNavConfig = {
     {
       id: 'config',
       title: 'nav.configuration',
-      anyOf: [P.WORKFLOW_STUDIO_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP, P.IAM_MANAGE, P.TEMPLATE_WRITE, P.IAM_AUDIT, P.AGENCY_MANAGE, P.AGENCY_READ],
+      anyOf: [P.WORKFLOW_STUDIO_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP, P.IAM_MANAGE, P.TEMPLATE_WRITE, P.IAM_AUDIT, P.AGENCY_MANAGE, P.AGENCY_READ, P.TAX_READ, P.TAX_MANAGE],
       items: [
         {
           kind: 'group',
@@ -634,6 +637,29 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.business_rules',
           href: '/admin/settings/rules',
           icon: 'ScrollText',
+          anyOf: [P.SETTINGS_MANAGE],
+        },
+        {
+          // Taxes & fiscalité — CRUD TenantTax (TVA, timbre, taxes locales).
+          // Lecture seule pour caissier (data.tax.read.tenant) ; écriture
+          // (création/édition/suppression) pour admin tenant, gérant agence,
+          // comptable. Permissions configurables via /admin/iam/roles.
+          kind: 'leaf',
+          id: 'tenant-taxes',
+          label: 'nav.taxes_fiscality',
+          href: '/admin/settings/taxes',
+          icon: 'Calculator',
+          anyOf: [P.TAX_READ, P.TAX_MANAGE],
+        },
+        {
+          // Configuration paiement tenant — TTL intent, timeouts MoMo, retries
+          // webhook, seuil MFA refund, surcharges client. Les secrets et
+          // toggles LIVE des providers se gèrent via /admin/integrations.
+          kind: 'leaf',
+          id: 'tenant-payment',
+          label: 'nav.payment_settings',
+          href: '/admin/settings/payment',
+          icon: 'CreditCard',
           anyOf: [P.SETTINGS_MANAGE],
         },
         {

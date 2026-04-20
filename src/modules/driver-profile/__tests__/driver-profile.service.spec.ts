@@ -73,6 +73,10 @@ function makePrisma(opts: {
 
 const mockStorage  = {} as any;
 const mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) } as any;
+// Le service accepte WorkflowEngine en 4e arg (transitions Driver/Staff workflow).
+// Stub minimal — les specs ne testent pas les transitions ; on retourne juste
+// un shape compatible pour passer le constructor type-check.
+const mockWorkflow = { transition: jest.fn() } as any;
 
 const TENANT_ID = 'tenant-1';
 const STAFF_ID  = 'staff-1';
@@ -84,7 +88,7 @@ describe('DriverProfileService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    svc = new DriverProfileService(makePrisma(), mockStorage, mockEventBus);
+    svc = new DriverProfileService(makePrisma(), mockStorage, mockEventBus, mockWorkflow);
   });
 
   // ── _computeLicenseStatus ──────────────────────────────────────────────────
@@ -111,7 +115,7 @@ describe('DriverProfileService', () => {
     it('canDrive=false et restRemainingMinutes > 0 si période ouverte récente', async () => {
       const startedAt = new Date(Date.now() - 60 * 60_000); // 60 min ago
       const prisma = makePrisma({ openRestPeriod: { id: 'rp-1', startedAt, endedAt: null } });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const result = await svc.checkRestCompliance(TENANT_ID, STAFF_ID);
       expect(result.canDrive).toBe(false);
@@ -125,7 +129,7 @@ describe('DriverProfileService', () => {
         openRestPeriod: { id: 'rp-1', startedAt, endedAt: null },
         // minRest=480 → 600 > 480 → canDrive=true
       });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const result = await svc.checkRestCompliance(TENANT_ID, STAFF_ID);
       expect(result.canDrive).toBe(true);
@@ -134,7 +138,7 @@ describe('DriverProfileService', () => {
 
     it('canDrive=true si aucun historique de repos (premier trajet)', async () => {
       const prisma = makePrisma({ openRestPeriod: null, lastRestPeriod: null });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const result = await svc.checkRestCompliance(TENANT_ID, STAFF_ID);
       expect(result.canDrive).toBe(true);
@@ -147,7 +151,7 @@ describe('DriverProfileService', () => {
         openRestPeriod: null,
         lastRestPeriod: { id: 'rp-0', startedAt: new Date(), endedAt },
       });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const result = await svc.checkRestCompliance(TENANT_ID, STAFF_ID);
       expect(result.canDrive).toBe(false);
@@ -159,7 +163,7 @@ describe('DriverProfileService', () => {
   describe('evaluateRemediationForDriver()', () => {
     it('retourne tableau vide si aucune règle définie pour le tenant', async () => {
       const prisma = makePrisma({ remediationRules: [] });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const triggered = await svc.evaluateRemediationForDriver(TENANT_ID, STAFF_ID, 85);
       expect(triggered).toHaveLength(0);
@@ -169,7 +173,7 @@ describe('DriverProfileService', () => {
       // DB filter scoreBelowThreshold >= currentScore is done by Prisma.
       // When mock returns [] it means no matching rules (score above threshold).
       const prisma = makePrisma({ remediationRules: [] });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const triggered = await svc.evaluateRemediationForDriver(TENANT_ID, STAFF_ID, 85);
       expect(triggered).toHaveLength(0);
@@ -185,7 +189,7 @@ describe('DriverProfileService', () => {
         remediationRules: [rule],
         activeRemediations: [], // aucun doublon
       });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const triggered = await svc.evaluateRemediationForDriver(TENANT_ID, STAFF_ID, 65);
       expect(triggered).toHaveLength(1);
@@ -203,7 +207,7 @@ describe('DriverProfileService', () => {
           { id: 'action-existing', ruleId: 'rule-1', staffId: STAFF_ID, status: 'PENDING' },
         ],
       });
-      svc = new DriverProfileService(prisma, mockStorage, mockEventBus);
+      svc = new DriverProfileService(prisma, mockStorage, mockEventBus, mockWorkflow);
 
       const triggered = await svc.evaluateRemediationForDriver(TENANT_ID, STAFF_ID, 65);
       // Doublon ignoré → aucune nouvelle action créée

@@ -79,10 +79,14 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
     permissions,
     t,
     enabledModules: authUser?.enabledModules ?? [],
-    currentHref:    location.pathname,
+    // Inclure la query string : sinon les items dont les hrefs ne diffèrent
+    // que par `?type=ticket` vs `?type=parcel` (drv-scan / drv-scan-parcel,
+    // qa-scan / qa-scan-parcel) collapsent sur le même path et activeId
+    // tombe à null → fallback dashboard du portail.
+    currentHref:    location.pathname + location.search,
   });
 
-  const activeHref = location.pathname;
+  const activeHref = location.pathname + location.search;
 
   const sidebarContent = useMemo(() => (
     <nav

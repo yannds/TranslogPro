@@ -517,12 +517,36 @@ export function BusScreen({
               label={t('ui.passed_stops')}
               value={`${passed}/${stops.length}`}
             />
-            <StatCard
-              icon="⏱"
-              label={t('col.eta')}
-              value={stops[stops.length - 1].scheduledAt}
-              sub={stops[stops.length - 1].cityName}
-            />
+            {/* ETA — recalcule en orange si retard observé. La valeur de
+                base reste l'heure prévue (`scheduledAt`) ; on rajoute
+                lateMinutes pour obtenir l'estimée. Le sub-libellé bascule
+                de "ville" → "Estimé · +Xh" pour signaler la dynamique. */}
+            {(() => {
+              const sched = stops[stops.length - 1].scheduledAt;
+              const city  = stops[stops.length - 1].cityName;
+              if (lateMinutes <= 0) {
+                return (
+                  <StatCard
+                    icon="⏱"
+                    label={t('col.eta')}
+                    value={sched}
+                    sub={city}
+                  />
+                );
+              }
+              const [h, m] = sched.split(':').map((v) => parseInt(v, 10));
+              const total = (Number.isNaN(h) ? 0 : h) * 60 + (Number.isNaN(m) ? 0 : m) + lateMinutes;
+              const hh = String(Math.floor((total / 60) % 24)).padStart(2, '0');
+              const mm = String(total % 60).padStart(2, '0');
+              return (
+                <StatCard
+                  icon="⏱"
+                  label={t('col.eta')}
+                  value={`${hh}:${mm}`}
+                  sub={`${city} · ${lang === 'en' ? 'Estimated' : 'Estimé'}`}
+                />
+              );
+            })()}
           </div>
 
           {/* Infos véhicule */}

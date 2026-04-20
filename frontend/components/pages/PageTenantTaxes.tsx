@@ -2,7 +2,9 @@
  * PageTenantTaxes — CRUD des taxes tenant (TVA, timbre, taxe gare, …).
  *
  * Endpoint : /api/v1/tenants/:tenantId/settings/taxes
- * Permission : control.settings.manage.tenant
+ * Permissions :
+ *   - data.tax.read.tenant     : lecture (tous rôles avec accès, ex. caissier)
+ *   - control.tax.manage.tenant: écriture (création/édition/suppression)
  *
  * WCAG AA + dark/light + i18n (clés `tenantSettings.taxes.*`).
  * Desktop-first : DataTableMaster + modale d'édition riche.
@@ -48,6 +50,7 @@ export function PageTenantTaxes() {
   const { t } = useI18n();
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
+  const canManage = (user?.permissions ?? []).includes('control.tax.manage.tenant');
   const { data, loading, error, refetch } = useFetch<TenantTax[]>(
     tenantId ? `/api/v1/tenants/${tenantId}/settings/taxes` : null,
   );
@@ -86,11 +89,15 @@ export function PageTenantTaxes() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t('tenantSettings.taxes.title')}</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{t('tenantSettings.taxes.subtitle')}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {canManage ? t('tenantSettings.taxes.subtitle') : t('tenantSettings.taxes.subtitleReadOnly')}
+          </p>
         </div>
-        <Button onClick={openNew} leftIcon={<Plus className="w-4 h-4" aria-hidden="true" />}>
-          {t('tenantSettings.taxes.add')}
-        </Button>
+        {canManage && (
+          <Button onClick={openNew} leftIcon={<Plus className="w-4 h-4" aria-hidden="true" />}>
+            {t('tenantSettings.taxes.add')}
+          </Button>
+        )}
       </header>
 
       {error && <ErrorAlert error={error} />}
@@ -130,12 +137,18 @@ export function PageTenantTaxes() {
                   </Badge>
                 </td>
                 <td className="px-3 py-2 text-right space-x-1">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label={t('common.edit')}>
-                    <Pencil className="w-4 h-4" aria-hidden="true" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
-                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                  </Button>
+                  {canManage ? (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label={t('common.edit')}>
+                        <Pencil className="w-4 h-4" aria-hidden="true" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
+                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{t('common.readOnly')}</span>
+                  )}
                 </td>
               </tr>
             ))}

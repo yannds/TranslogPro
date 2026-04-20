@@ -17,7 +17,7 @@ import {
   Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
   PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
   UserCheck, Bug, RefreshCw, Coffee, GraduationCap, ClipboardCheck,
-  AlertOctagon, Gavel, FileText, Trophy, type LucideIcon,
+  AlertOctagon, Gavel, FileText, Trophy, Calculator, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -32,7 +32,7 @@ export const ICONS: Record<string, LucideIcon> = {
   Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
   Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
   PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
-  UserCheck, Bug, RefreshCw, Trophy,
+  UserCheck, Bug, RefreshCw, Trophy, Calculator,
   // Aliases métier
   Steer: Bus, CalendarRange: CalendarDays, CalendarClock: CalendarDays,
   FileType: ScrollText, List: ClipboardList, PackagePlus: Package,

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, SafeAreaView, ScrollView, Pressable, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import * as Location from 'expo-location';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import { apiGet, apiPost } from '../api/client';
@@ -43,13 +44,16 @@ interface TripItem {
 }
 
 interface Manifest {
-  id:              string;
-  tripId:          string;
-  status:          string;
-  passengerCount:  number;
-  parcelCount:     number;
-  signedAt:        string | null;
-  signatureSvg:    string | null;
+  id:                   string;
+  tripId:               string;
+  status:               string;
+  kind?:                string;
+  passengerCount:       number;
+  parcelCount:          number;
+  signedAt:             string | null;
+  signatureSvg:         string | null;
+  storageKey?:          string | null;
+  signedPdfStorageKey?: string | null;
 }
 
 function validCoord(v: number, min: number, max: number): boolean {
@@ -129,6 +133,37 @@ export function QuaiManifestScreen() {
       const all = existing.find(m => m.status !== 'REJECTED') ?? null;
       setManifest(all);
     } catch { /* pas de manifest pré-existant */ }
+  }
+
+  /**
+   * Ouvre le PDF figé du manifeste signé. Le backend renvoie une URL S3 signée
+   * (validité courte) — on la passe à Linking pour que le viewer natif (Safari
+   * iOS / Chrome Android / browser sur Web) prenne le relais.
+   *
+   * Pré-condition : manifest.signedPdfStorageKey != null. Le bouton est masqué
+   * sinon. Si la régénération PDF a foiré (le service la fait en best-effort),
+   * un POST /backfill-signed-pdfs côté admin la relance.
+   */
+  async function downloadManifest() {
+    if (!manifest?.id) return;
+    try {
+      const Linking = await import('react-native').then(m => m.Linking);
+      const res = await apiGet<string | { downloadUrl?: string }>(
+        `/api/tenants/${tenantId}/manifests/${manifest.id}/download`,
+        { skipAuthRedirect: true },
+      );
+      const url = typeof res === 'string' ? res : res?.downloadUrl;
+      if (!url) {
+        Alert.alert(L('PDF indisponible', 'PDF unavailable'),
+          L('Le PDF figé n\'est pas encore généré. Réessayez dans un instant.',
+            'The signed PDF is not yet generated. Try again in a moment.'));
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert(L('Erreur téléchargement', 'Download error'),
+        e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function generateManifest() {
@@ -304,6 +339,45 @@ export function QuaiManifestScreen() {
                     {L('Signé', 'Signed')} {new Date(manifest.signedAt).toLocaleString(lang)}
                   </Text>
                 )}
+
+                {/* Preuve visuelle — affichage de la signature SVG après commit.
+                    Sans ce rendu, le pad est vidé après signature et la
+                    section signature est masquée → l'utilisateur perçoit
+                    que sa signature a "disparu". On la garde visible comme
+                    attestation. Le SVG vient soit de la sign() locale (état
+                    optimiste), soit du serveur après reload (toDto inclut
+                    signatureSvg depuis 2026-04-19). */}
+                {manifest.status === 'SIGNED' && manifest.signatureSvg && (
+                  <View style={[styles.signatureBox, { borderColor: colors.border, backgroundColor: '#ffffff' }]}>
+                    <SvgXml xml={manifest.signatureSvg} width="100%" height={120} />
+                  </View>
+                )}
+
+                {/* Téléchargement PDF — visible dès qu'un PDF figé existe.
+                    Si le manifeste vient juste d'être signé et que la
+                    génération PDF tarde (queue, retries), on affiche un état
+                    "PDF en préparation" plutôt qu'un bouton mort. */}
+                {manifest.status === 'SIGNED' && (
+                  manifest.signedPdfStorageKey ? (
+                    <Pressable
+                      onPress={downloadManifest}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [
+                        styles.primaryBtn,
+                        { backgroundColor: colors.primary, marginTop: 10, opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      <Text style={{ color: colors.primaryFg, fontWeight: '700' }}>
+                        📄  {L('Voir / télécharger le PDF', 'View / download PDF')}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>
+                      ⏳ {L('PDF en préparation… (réessayer dans 1 min)',
+                            'PDF being generated… (retry in 1 min)')}
+                    </Text>
+                  )
+                )}
               </View>
             ) : (
               <Pressable
@@ -401,4 +475,5 @@ const styles = StyleSheet.create({
   card:       { padding: 14, borderRadius: 12, borderWidth: 1, gap: 4 },
   ghostBtn:   { marginTop: 8, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  signatureBox: { marginTop: 10, borderRadius: 10, borderWidth: 1, padding: 8, minHeight: 130, alignItems: 'center', justifyContent: 'center' },
 });

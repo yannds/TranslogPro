@@ -67,13 +67,14 @@ async function bootstrap() {
   app.enableCors({
     origin: isDev
       ? (origin, cb) => {
-          // Dev : autorise les sources connues — Vite (5173/5174), Expo web (8081),
-          // et tout sous-domaine .translog.test:PORT (tenant subdomains locaux).
+          // Dev : autorise les sources connues — Vite (5173/5174), Expo Metro (8081),
+          // Expo web (19006), et tout sous-domaine .translog.test:PORT.
           if (!origin) return cb(null, true); // requêtes same-origin / curl
           const allowed =
             origin === 'http://localhost:5173' ||
             origin === 'http://localhost:5174' ||
             origin === 'http://localhost:8081' ||
+            origin === 'http://localhost:19006' ||
             /^https?:\/\/[^/]+\.translog\.test(?::\d+)?$/.test(origin);
           cb(null, allowed);
         }

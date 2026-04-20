@@ -806,8 +806,20 @@ data.session.revoke.tenant      Révoquer sessions d'un utilisateur suspect
 control.workflow.config.tenant  Définir états et transitions
 control.workflow.override.global (SuperAdmin) Forcer une transition bloquée
 control.module.install.tenant   Activer/Désactiver modules
-control.settings.manage.tenant  Paramètres globaux
+control.settings.manage.tenant  Paramètres globaux (company, payment, portal, branding, templates…)
 ```
+
+**Taxes & Fiscalité (CRUD TenantTax — TVA, timbre, taxes locales)**
+```
+data.tax.read.tenant            Lecture de la grille fiscale tenant (caissier, comptable)
+control.tax.manage.tenant       Création/édition/suppression de taxes (admin, gérant, comptable)
+```
+Permissions séparées lecture/écriture : un caissier doit pouvoir voir la grille appliquée
+au ticket POS sans pouvoir la modifier. Le comptable (nouveau rôle `ACCOUNTANT`) gère
+la fiscalité au jour le jour (changement de taux, ajout taxe éco, centime additionnel…).
+Base de calcul configurable par taxe : `SUBTOTAL` (sur HT) ou `TOTAL_AFTER_PREVIOUS`
+(cascade après une autre taxe, ex. taxe municipale après TVA), plus `sortOrder`
+pour la cascade. UI : `/admin/settings/taxes`.
 
 **Trajets & Planification**
 ```
@@ -968,15 +980,22 @@ model RolePermission {
 **Rôles par défaut seedés — par tenant client (seedTenantRoles) :**
 | Rôle | Profil | Permissions clés |
 |---|---|---|
-| `TENANT_ADMIN` | Admin tenant | `control.*.tenant` + `data.*.tenant` + `control.iam.manage.tenant` |
-| `AGENCY_MANAGER` | Manager agence | `data.ticket.*agency` + `data.cashier.*` + `data.parcel.*agency` |
-| `CASHIER` | Caissier | `data.ticket.create.agency` + `data.cashier.*own` |
+| `TENANT_ADMIN` | Admin tenant | `control.*.tenant` + `data.*.tenant` + `control.iam.manage.tenant` + `control.tax.manage.tenant` |
+| `AGENCY_MANAGER` | Manager/Gérant agence | `data.ticket.*agency` + `data.cashier.*` + `data.parcel.*agency` + `control.tax.manage.tenant` |
+| `ACCOUNTANT` | Comptable | `control.tax.manage.tenant` + `data.invoice.read.tenant` + `data.refund.approve.tenant` + `control.stats.read.tenant` (read-only sur opérationnel) |
+| `CASHIER` | Caissier | `data.ticket.create.agency` + `data.cashier.*own` + `data.tax.read.tenant` (lecture seule fiscalité) |
 | `DRIVER` | Chauffeur | `data.trip.read.own` + `data.trip.report.own` + `data.trip.check.own` |
 | `HOSTESS` | Hôtesse/Agent quai | `data.ticket.scan.agency` + `data.traveler.verify.agency` |
+| `AGENT_QUAI` | Agent de quai | `control.quai.manage.tenant` + `data.parcel.*agency` + `data.manifest.*agency` + hub fret |
 | `MECHANIC` | Mécanicien | `data.maintenance.*own` |
 | `DISPATCHER` | Superviseur dispatch | `control.safety.monitor.global` + tracking global |
 | `CUSTOMER` | Client (voyageur + expéditeur) | `data.feedback.submit.own` + `data.ticket.read.own` + `data.parcel.read.own` + `data.parcel.track.own` + `data.shipment.read.own` + `data.sav.report.own` |
 | `PUBLIC_REPORTER` | Citoyen anonyme | `data.feedback.submit.own` |
+
+> **Règle d'or** : les rôles ne sont que des **préréglages de permissions** seedés par défaut.
+> Chaque tenant peut personnaliser la matrice `RolePermission` via `/admin/iam/roles` (droit
+> `control.iam.manage.tenant`). Le backend ne code **jamais** contre un nom de rôle — tous
+> les guards, toute la navigation et le gating UI passent par des permissions granulaires.
 
 ### V.4 Architecture IAM Transverse — Tenant Plateforme (§IV.12)
 

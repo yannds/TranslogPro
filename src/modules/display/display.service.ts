@@ -67,6 +67,7 @@ export class DisplayService {
     };
     const selectClause = {
       id: true, status: true, departureScheduled: true, arrivalScheduled: true,
+      departureActual: true, arrivalActual: true,
       displayNote: true, displayColor: true,
       route: {
         select: {
@@ -306,14 +307,36 @@ export class DisplayService {
     // statusId affiché = statut du trip si présent, sinon statut du quai
     const statusId = trip?.status ?? platform.status;
 
-    // Retard en minutes — basé sur l'écart now vs departureScheduled dès que
-    // l'heure est dépassée et tant que le trajet n'est pas terminé. QuaiScreen
-    // affiche un badge rouge et pousse un message dans le ticker si > 0.
-    const scheduled = trip?.departureScheduled ? trip.departureScheduled.getTime() : null;
-    const isTerminal = statusId === 'COMPLETED' || statusId === 'CANCELLED';
-    const delayMinutes = scheduled && !isTerminal && Date.now() > scheduled
-      ? Math.floor((Date.now() - scheduled) / 60_000)
-      : 0;
+    // ─── Calcul Prévu / Estimé / Effectif (logique 4 états) ─────────────
+    // Identique à FlightDeckService.getTripLiveStats : avant départ on roule
+    // en temps réel, dès qu'on a un departureActual on FIGE l'estimation.
+    // Cf. doc inline dans flight-deck.service.ts pour le détail.
+    const scheduledDepMs = trip?.departureScheduled?.getTime() ?? null;
+    const scheduledArrMs = trip?.arrivalScheduled?.getTime() ?? null;
+    const actualDepMs    = trip?.departureActual?.getTime() ?? null;
+    const actualArrMs    = trip?.arrivalActual?.getTime() ?? null;
+    const isCancelled    = statusId === 'CANCELLED';
+
+    let delayMinutes = 0;
+    let estimatedDepartureMs: number | null = null;
+    let estimatedArrivalMs:   number | null = null;
+
+    if (isCancelled || !scheduledDepMs) {
+      // pas de calcul
+    } else if (actualArrMs && scheduledArrMs) {
+      const refDep = actualDepMs ?? scheduledDepMs;
+      delayMinutes = refDep > scheduledDepMs ? Math.floor((refDep - scheduledDepMs) / 60_000) : 0;
+      estimatedDepartureMs = actualDepMs;
+      estimatedArrivalMs   = actualArrMs;
+    } else if (actualDepMs) {
+      delayMinutes = actualDepMs > scheduledDepMs ? Math.floor((actualDepMs - scheduledDepMs) / 60_000) : 0;
+      estimatedDepartureMs = actualDepMs;
+      estimatedArrivalMs   = scheduledArrMs ? scheduledArrMs + delayMinutes * 60_000 : null;
+    } else {
+      delayMinutes = Date.now() > scheduledDepMs ? Math.floor((Date.now() - scheduledDepMs) / 60_000) : 0;
+      estimatedDepartureMs = delayMinutes > 0 ? scheduledDepMs + delayMinutes * 60_000 : null;
+      estimatedArrivalMs   = scheduledArrMs && delayMinutes > 0 ? scheduledArrMs + delayMinutes * 60_000 : null;
+    }
 
     return {
       id:                    platform.id,
@@ -334,6 +357,15 @@ export class DisplayService {
         ? new Date(trip.departureScheduled).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         : '',
       departAt:              trip?.departureScheduled?.toISOString() ?? null,
+      // Champs Prévu / Estimé / Effectif consommés par DepartureBoard,
+      // QuaiScreen, BusScreen pour figer l'affichage après départ.
+      scheduledDeparture:    trip?.departureScheduled?.toISOString() ?? null,
+      estimatedDeparture:    estimatedDepartureMs ? new Date(estimatedDepartureMs).toISOString() : null,
+      actualDeparture:       trip?.departureActual?.toISOString() ?? null,
+      scheduledArrival:      trip?.arrivalScheduled?.toISOString() ?? null,
+      estimatedArrival:      estimatedArrivalMs ? new Date(estimatedArrivalMs).toISOString() : null,
+      actualArrival:         trip?.arrivalActual?.toISOString() ?? null,
+      isFrozen:              actualDepMs !== null,
       busPlate:              trip?.bus?.plateNumber ?? '—',
       busModel:              trip?.bus?.model ?? '',
       driverName:            driver?.user?.name ?? '',

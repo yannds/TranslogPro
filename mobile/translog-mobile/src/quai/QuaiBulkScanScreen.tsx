@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, SafeAreaView, Pressable, StyleSheet, FlatList, Alert, Platform,
+  View, Text, SafeAreaView, Pressable, StyleSheet, FlatList, Modal,
 } from 'react-native';
 import { useNavigation, useRoute, type NavigationProp } from '@react-navigation/native';
 import { apiGet, apiPost, ApiError } from '../api/client';
@@ -58,14 +58,21 @@ export function QuaiBulkScanScreen() {
   const [history, setHistory]         = useState<ScanResult[]>([]);
   const [ok, setOk]                   = useState(0);
   const [ko, setKo]                   = useState(0);
-  // Mode scan : dicté par defaultIntent du route param (board pour le driver,
-  // check-in par défaut agent quai). Si perm+blueprint autorise les 2 via
-  // capabilities, un toggle apparaît pour basculer sans quitter l'écran.
+  // Type scanné — billet (passagers) OU colis. Pas de magic dépendant de
+  // routeParam : par défaut on prend `defaultType` ou 'ticket'. Le toggle Type
+  // est toujours rendu (l'agent / chauffeur enchaîne sans quitter l'écran).
+  const [scanType, setScanType] = useState<'ticket' | 'parcel'>(
+    ((useRoute().params ?? {}) as { defaultType?: 'ticket' | 'parcel' }).defaultType ?? 'ticket',
+  );
+  // Mode action ticket : check-in (gare) | board (bus). Ignoré quand scanType=parcel.
   const [mode, setMode] = useState<'check-in' | 'board'>(routeParams.defaultIntent ?? 'check-in');
   const [caps, setCaps] = useState<{ canCheckIn: boolean; canBoard: boolean } | null>(null);
 
   const recentTokens = useRef<Map<string, number>>(new Map());
   const { toast, show } = useScanFeedback();
+  // Modal de confirmation sortie (cross-platform : Alert.alert ne fonctionne
+  // pas fiablement sur Expo Web, et un window.confirm brouille l'UX sur natif).
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -85,28 +92,150 @@ export function QuaiBulkScanScreen() {
 
   /**
    * Extrait un code exploitable depuis n'importe quel format QR :
-   * - URL publique `/verify/ticket/:id?q=TOKEN` → renvoie TOKEN
+   * - URL publique `/verify/{ticket|parcel}/:id?q=TOKEN` → renvoie TOKEN
    * - URL sans q → renvoie id
    * - Token brut ou id direct → renvoie tel quel
+   *
+   * Le même format de QR sert aux 2 entités, le préfixe d'URL change
+   * (ticket vs parcel) mais on extrait l'identifiant de la même façon.
    */
   function parseQrToken(raw: string): string {
     const trimmed = raw.trim();
-    const withQ   = trimmed.match(/\/verify\/ticket\/[^?]+\?q=([^&]+)/);
+    const withQ   = trimmed.match(/\/verify\/(?:ticket|parcel)\/[^?]+\?q=([^&]+)/);
     if (withQ) return decodeURIComponent(withQ[1]);
-    const idOnly  = trimmed.match(/\/verify\/ticket\/([^/?]+)/);
+    const idOnly  = trimmed.match(/\/verify\/(?:ticket|parcel)\/([^/?]+)/);
     if (idOnly) return decodeURIComponent(idOnly[1]);
     return trimmed;
   }
 
   /**
-   * Mode rafale : chaque scan avance d'une étape dans le blueprint Traveler.
-   * - CONFIRMED → CHECK_IN (agent gare enregistre le passager)
-   * - CHECKED_IN → BOARD   (2e scan = embarquement bus, fallback si pas de chauffeur)
-   *
-   * Remplace l'ancien flow `/tickets/verify-qr` (Ticket.BOARDED hors blueprint
-   * Traveler) par `/scan/ticket` → transition via WorkflowEngine. Résultat :
-   * les compteurs QuaiScreen / BusScreen / manifeste live réagissent en direct.
+   * Scan rafale ticket : mappe `nextAction` du lookup `/scan/ticket` vers la
+   * bonne transition Traveler (CHECK_IN ou BOARD).
    */
+  async function handleTicketScan(code: string, id: string, now: number) {
+    if (!online) {
+      await enqueueMutation({
+        tenantId, kind: 'scan.ticket.offline', method: 'POST',
+        url:  `/api/tenants/${tenantId}/scan/ticket?code=${encodeURIComponent(code)}&intent=${mode}`,
+        body: {}, idempotencyKey: `scan-ticket:${code}`,
+      });
+      setHistory(prev => [{ id, at: now, outcome: 'QUEUED' as const, message: L('Mis en file', 'Queued') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('En file — resync bientôt', 'Queued — syncs soon'), true);
+      return;
+    }
+
+    const lookupUrl = `/api/tenants/${tenantId}/scan/ticket?code=${encodeURIComponent(code)}&intent=${mode}`;
+    const lookup = await apiGet<{
+      ticket:   { id: string; passengerName: string };
+      trip:     { id: string } | null;
+      nextAction: 'CHECK_IN' | 'BOARD' | 'ALREADY_CHECKED_IN' | 'ALREADY_BOARDED' | 'TICKET_CANCELLED' | 'TICKET_EXPIRED' | 'TICKET_PENDING';
+    }>(lookupUrl, { skipAuthRedirect: true });
+
+    if (lookup.nextAction === 'ALREADY_CHECKED_IN') {
+      setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: L('Déjà enregistré', 'Already checked in') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('ℹ Déjà enregistré', 'ℹ Already checked in'), true, 'info');
+      return;
+    }
+    if (lookup.nextAction === 'ALREADY_BOARDED') {
+      setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: L('Déjà embarqué', 'Already boarded') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('⚠ Déjà embarqué', '⚠ Already boarded'), false, 'warning');
+      return;
+    }
+    if (lookup.nextAction === 'TICKET_CANCELLED' || lookup.nextAction === 'TICKET_EXPIRED' || lookup.nextAction === 'TICKET_PENDING') {
+      const msg = lookup.nextAction === 'TICKET_CANCELLED' ? L('Annulé', 'Cancelled')
+                : lookup.nextAction === 'TICKET_EXPIRED'   ? L('Expiré', 'Expired')
+                :                                            L('En attente', 'Pending');
+      setKo(n => n + 1);
+      setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: msg }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(`✗ ${msg}`, false);
+      return;
+    }
+
+    const tripIdFromLookup = lookup.trip?.id;
+    if (!tripIdFromLookup) {
+      setKo(n => n + 1);
+      showToast(L('✗ Trajet inconnu', '✗ Unknown trip'), false);
+      return;
+    }
+
+    const txUrl = lookup.nextAction === 'CHECK_IN'
+      ? `/api/tenants/${tenantId}/flight-deck/trips/${tripIdFromLookup}/passengers/${lookup.ticket.id}/check-in`
+      : `/api/tenants/${tenantId}/flight-deck/trips/${tripIdFromLookup}/passengers/${lookup.ticket.id}/board`;
+    const method = lookup.nextAction === 'CHECK_IN' ? 'POST' : 'PATCH';
+    const idempotencyKey = `${lookup.nextAction === 'CHECK_IN' ? 'check-in' : 'board'}:${lookup.ticket.id}`;
+
+    if (method === 'POST') {
+      await apiPost(txUrl, {}, { skipAuthRedirect: true, headers: { 'Idempotency-Key': idempotencyKey } });
+    } else {
+      await (await import('../api/client')).apiPatch(txUrl, {}, { skipAuthRedirect: true, headers: { 'Idempotency-Key': idempotencyKey } });
+    }
+
+    setOk(n => n + 1);
+    const label = lookup.nextAction === 'CHECK_IN' ? L('Enregistré', 'Checked in') : L('Embarqué', 'Boarded');
+    setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: `${label} — ${lookup.ticket.passengerName}` }, ...prev].slice(0, HISTORY_LIMIT));
+    showToast(`✓ ${label}`, true);
+  }
+
+  /**
+   * Scan rafale colis : `/scan/parcel` lookup → mappe `nextAction` (LOAD /
+   * ARRIVE / DELIVER / ALREADY_*) vers `POST /parcels/:id/scan { action }`.
+   * Le backend rejette LOAD si `Trip.freightClosedAt` est posé.
+   */
+  async function handleParcelScan(code: string, id: string, now: number) {
+    if (!online) {
+      await enqueueMutation({
+        tenantId, kind: 'scan.parcel.offline', method: 'POST',
+        url:  `/api/tenants/${tenantId}/scan/parcel?code=${encodeURIComponent(code)}`,
+        body: {}, idempotencyKey: `scan-parcel:${code}`,
+      });
+      setHistory(prev => [{ id, at: now, outcome: 'QUEUED' as const, message: L('Mis en file', 'Queued') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('En file — resync bientôt', 'Queued — syncs soon'), true);
+      return;
+    }
+
+    const lookupUrl = `/api/tenants/${tenantId}/scan/parcel?code=${encodeURIComponent(code)}`;
+    const lookup = await apiGet<{
+      parcel: { id: string; trackingCode: string };
+      nextAction: 'LOAD' | 'ARRIVE' | 'DELIVER' | 'ALREADY_LOADED' | 'ALREADY_DELIVERED' | 'CANCELLED' | 'NEEDS_SHIPMENT' | 'PACK';
+    }>(lookupUrl, { skipAuthRedirect: true });
+
+    // Cas idempotents / refus métier — pas d'appel transition.
+    if (lookup.nextAction === 'ALREADY_LOADED') {
+      setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: L('Déjà chargé', 'Already loaded') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('ℹ Déjà chargé', 'ℹ Already loaded'), true, 'info');
+      return;
+    }
+    if (lookup.nextAction === 'ALREADY_DELIVERED') {
+      setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: L('Déjà livré', 'Already delivered') }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(L('ℹ Déjà livré', 'ℹ Already delivered'), true, 'info');
+      return;
+    }
+    if (lookup.nextAction === 'CANCELLED' || lookup.nextAction === 'NEEDS_SHIPMENT' || lookup.nextAction === 'PACK') {
+      const msg = lookup.nextAction === 'CANCELLED'      ? L('Annulé / perdu', 'Cancelled / lost')
+                : lookup.nextAction === 'NEEDS_SHIPMENT' ? L('Pas de shipment', 'No shipment')
+                :                                          L('À empaqueter', 'To pack');
+      setKo(n => n + 1);
+      setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: msg }, ...prev].slice(0, HISTORY_LIMIT));
+      showToast(`✗ ${msg}`, false);
+      return;
+    }
+
+    // Transition exécutable.
+    const action = lookup.nextAction; // LOAD | ARRIVE | DELIVER
+    const txUrl = `/api/tenants/${tenantId}/parcels/${lookup.parcel.id}/scan`;
+    await apiPost(txUrl, { action }, {
+      skipAuthRedirect: true,
+      headers: { 'Idempotency-Key': `parcel-${action.toLowerCase()}:${lookup.parcel.id}` },
+    });
+
+    setOk(n => n + 1);
+    const label = action === 'LOAD'    ? L('Chargé', 'Loaded')
+                : action === 'ARRIVE'  ? L('Arrivé', 'Arrived')
+                :                        L('Livré', 'Delivered');
+    setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: `${label} — ${lookup.parcel.trackingCode}` }, ...prev].slice(0, HISTORY_LIMIT));
+    showToast(`✓ ${label}`, true);
+  }
+
   const onScanned = useCallback(async (token: string) => {
     const tk = token.trim();
     if (!tk) return;
@@ -121,110 +250,32 @@ export function QuaiBulkScanScreen() {
     const id = `${now}-${tk.slice(-6)}`;
 
     try {
-      // Offline : queue un scan opaque — quand la connexion revient l'outbox
-      // replay appelle /scan/ticket et déclenche la bonne transition.
-      if (!online) {
-        await enqueueMutation({
-          tenantId, kind: 'scan.ticket.offline', method: 'POST',
-          url:  `/api/tenants/${tenantId}/scan/ticket?code=${encodeURIComponent(code)}&intent=${mode}`,
-          body: {}, idempotencyKey: `scan-ticket:${code}`,
-        });
-        setHistory(prev => [{ id, at: now, outcome: 'QUEUED' as const, message: L('Mis en file', 'Queued') }, ...prev].slice(0, HISTORY_LIMIT));
-        showToast(L('En file — resync bientôt', 'Queued — syncs soon'), true);
-        return;
-      }
-
-      const lookupUrl = `/api/tenants/${tenantId}/scan/ticket?code=${encodeURIComponent(code)}&intent=${mode}`;
-      const lookup = await apiGet<{
-        ticket:   { id: string; passengerName: string };
-        trip:     { id: string } | null;
-        nextAction: 'CHECK_IN' | 'BOARD' | 'ALREADY_CHECKED_IN' | 'ALREADY_BOARDED' | 'TICKET_CANCELLED' | 'TICKET_EXPIRED' | 'TICKET_PENDING';
-      }>(lookupUrl, { skipAuthRedirect: true });
-
-      // Refus métier = feedback rapide, pas de transition tentée.
-      if (lookup.nextAction === 'ALREADY_CHECKED_IN') {
-        setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: L('Déjà enregistré', 'Already checked in') }, ...prev].slice(0, HISTORY_LIMIT));
-        showToast(L('ℹ Déjà enregistré', 'ℹ Already checked in'), true, 'info');
-        return;
-      }
-      if (lookup.nextAction === 'ALREADY_BOARDED') {
-        setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: L('Déjà embarqué', 'Already boarded') }, ...prev].slice(0, HISTORY_LIMIT));
-        // Warning (pas error) : idempotent, le passager EST bien à bord.
-        showToast(L('⚠ Déjà embarqué', '⚠ Already boarded'), false, 'warning');
-        return;
-      }
-      if (lookup.nextAction === 'TICKET_CANCELLED' || lookup.nextAction === 'TICKET_EXPIRED' || lookup.nextAction === 'TICKET_PENDING') {
-        const msg = lookup.nextAction === 'TICKET_CANCELLED' ? L('Annulé', 'Cancelled')
-                  : lookup.nextAction === 'TICKET_EXPIRED'   ? L('Expiré', 'Expired')
-                  :                                            L('En attente', 'Pending');
-        setKo(n => n + 1);
-        setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: msg }, ...prev].slice(0, HISTORY_LIMIT));
-        showToast(`✗ ${msg}`, false);
-        return;
-      }
-
-      const tripIdFromLookup = lookup.trip?.id;
-      if (!tripIdFromLookup) {
-        setKo(n => n + 1);
-        showToast(L('✗ Trajet inconnu', '✗ Unknown trip'), false);
-        return;
-      }
-
-      const txUrl = lookup.nextAction === 'CHECK_IN'
-        ? `/api/tenants/${tenantId}/flight-deck/trips/${tripIdFromLookup}/passengers/${lookup.ticket.id}/check-in`
-        : `/api/tenants/${tenantId}/flight-deck/trips/${tripIdFromLookup}/passengers/${lookup.ticket.id}/board`;
-      const method = lookup.nextAction === 'CHECK_IN' ? 'POST' : 'PATCH';
-      const idempotencyKey = `${lookup.nextAction === 'CHECK_IN' ? 'check-in' : 'board'}:${lookup.ticket.id}`;
-
-      if (method === 'POST') {
-        await apiPost(txUrl, {}, { skipAuthRedirect: true, headers: { 'Idempotency-Key': idempotencyKey } });
+      if (scanType === 'parcel') {
+        await handleParcelScan(code, id, now);
       } else {
-        await (await import('../api/client')).apiPatch(txUrl, {}, { skipAuthRedirect: true, headers: { 'Idempotency-Key': idempotencyKey } });
+        await handleTicketScan(code, id, now);
       }
-
-      setOk(n => n + 1);
-      const label = lookup.nextAction === 'CHECK_IN'
-        ? L('Enregistré', 'Checked in')
-        : L('Embarqué', 'Boarded');
-      setHistory(prev => [{ id, at: now, outcome: 'OK' as const, message: `${label} — ${lookup.ticket.passengerName}` }, ...prev].slice(0, HISTORY_LIMIT));
-      showToast(`✓ ${label}`, true);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e instanceof Error ? e.message : String(e));
       setKo(n => n + 1);
       setHistory(prev => [{ id, at: now, outcome: 'KO' as const, message: msg }, ...prev].slice(0, HISTORY_LIMIT));
       showToast(`✗ ${msg}`, false);
     }
-  }, [tenantId, online, mode]);
+  }, [tenantId, online, mode, scanType]);
 
   /**
    * Retour arrière — demande confirmation si des scans ont été faits.
    *
-   * Sur **web (Expo Web)**, `Alert.alert` est no-op silencieux : le user
-   * cliquait back, rien ne s'affichait, il restait bloqué. On utilise donc
-   * `window.confirm` natif du navigateur comme fallback — bloquant, universel,
-   * et visuellement présent. Sur natif iOS/Android, `Alert.alert` marche
-   * normalement. Pattern à répliquer partout où on avait un dialog critique
-   * (cf. ScanFeedback pour les toasts non-bloquants).
+   * Cross-platform : on utilise un <Modal /> React Native (fonctionne sur
+   * iOS/Android/Web sans dépendre du polyfill de Alert.alert qui est cassé
+   * sur Expo Web). Sans scans, retour direct sans confirmation.
    */
   function handleExit() {
     if (ok + ko === 0) {
       nav.goBack();
       return;
     }
-    const title   = L('Quitter le mode rafale ?', 'Exit bulk mode?');
-    const message = L(
-      `${ok + ko} scans — l'historique sera perdu à la prochaine ouverture.`,
-      `${ok + ko} scans — history is lost on next open.`,
-    );
-    if (Platform.OS === 'web') {
-      const confirmed = typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`);
-      if (confirmed) nav.goBack();
-      return;
-    }
-    Alert.alert(title, message, [
-      { text: L('Annuler', 'Cancel'), style: 'cancel' },
-      { text: L('Quitter', 'Exit'), style: 'destructive', onPress: () => nav.goBack() },
-    ]);
+    setExitConfirmOpen(true);
   }
 
   return (
@@ -235,7 +286,7 @@ export function QuaiBulkScanScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[styles.h1, { color: colors.text }]}>
-            {L('Scan rafale', 'Bulk scan')}
+            {scanType === 'parcel' ? L('Scan rafale colis', 'Bulk parcel scan') : L('Scan rafale', 'Bulk scan')}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>
             {L('OK', 'OK')} : {ok}  ·  {L('Refus', 'Refused')} : {ko}
@@ -261,9 +312,48 @@ export function QuaiBulkScanScreen() {
         </View>
       )}
 
-      {/* Toggle Check-in / Board — visible seulement si perm + blueprint
-          autorisent les deux. Par défaut check-in (UX agent gare). */}
-      {caps?.canCheckIn && caps?.canBoard && (
+      {/* Toggle Type — Billet vs Colis. Toujours rendu : un agent quai ou
+          chauffeur enchaîne fréquemment les deux dans la même session
+          (passagers PUIS colis avant départ). Les deux scans utilisent le
+          même bandeau caméra ; on bascule juste l'endpoint cible. */}
+      <View style={styles.modeRow}>
+        <Pressable
+          onPress={() => setScanType('ticket')}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: scanType === 'ticket' }}
+          style={[
+            styles.modeBtn,
+            {
+              backgroundColor: scanType === 'ticket' ? colors.primary : colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={{ color: scanType === 'ticket' ? colors.primaryFg : colors.text, fontWeight: '700', fontSize: 13 }}>
+            🎫 {L('Billets', 'Tickets')}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setScanType('parcel')}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: scanType === 'parcel' }}
+          style={[
+            styles.modeBtn,
+            {
+              backgroundColor: scanType === 'parcel' ? colors.primary : colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={{ color: scanType === 'parcel' ? colors.primaryFg : colors.text, fontWeight: '700', fontSize: 13 }}>
+            📦 {L('Colis', 'Parcels')}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Toggle Check-in / Board — visible seulement si scanType=ticket ET perm
+          + blueprint autorisent les deux. Par défaut check-in (UX agent gare). */}
+      {scanType === 'ticket' && caps?.canCheckIn && caps?.canBoard && (
         <View style={styles.modeRow}>
           <Pressable
             onPress={() => setMode('check-in')}
@@ -345,6 +435,55 @@ export function QuaiBulkScanScreen() {
         onClose={() => setScannerOpen(false)}
         persistent
       />
+
+      {/* Modal de confirmation sortie — cross-platform fiable, remplace
+          Alert.alert qui est cassé sur Expo Web. */}
+      <Modal
+        visible={exitConfirmOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExitConfirmOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {L('Quitter le mode rafale ?', 'Exit bulk mode?')}
+            </Text>
+            <Text style={[styles.modalBody, { color: colors.textMuted }]}>
+              {L(
+                `${ok + ko} scans — l'historique sera perdu à la prochaine ouverture.`,
+                `${ok + ko} scans — history is lost on next open.`,
+              )}
+            </Text>
+            <View style={styles.modalRow}>
+              <Pressable
+                onPress={() => setExitConfirmOpen(false)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.modalBtn,
+                  { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {L('Annuler', 'Cancel')}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setExitConfirmOpen(false); nav.goBack(); }}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.modalBtn,
+                  { backgroundColor: colors.danger, borderColor: colors.danger, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>
+                  {L('Quitter', 'Exit')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -357,6 +496,12 @@ const styles = StyleSheet.create({
   toggleBtn: { paddingHorizontal: 12, height: 40, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   modeRow:   { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8 },
   modeBtn:   { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard:     { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 20, gap: 14 },
+  modalTitle:    { fontSize: 16, fontWeight: '800' },
+  modalBody:     { fontSize: 14, lineHeight: 20 },
+  modalRow:      { flexDirection: 'row', gap: 10, marginTop: 4 },
+  modalBtn:      { flex: 1, minHeight: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   banner:    { marginHorizontal: 16, padding: 10, borderRadius: 8 },
   toast:     { marginHorizontal: 16, padding: 12, borderRadius: 8, borderWidth: 1 },
   row:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8, borderWidth: 1 },

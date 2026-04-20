@@ -31,6 +31,7 @@ import { Button }                        from '../ui/Button';
 import { ErrorAlert }                    from '../ui/ErrorAlert';
 import { Skeleton }                      from '../ui/Skeleton';
 import { inputClass as inp }             from '../ui/inputClass';
+import { SignatureDialog }               from '../ui/SignatureDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,17 +139,25 @@ export function PageManifests() {
     finally { setBusyKind(null); }
   }, [tripId, base]);
 
-  const handleSign = useCallback(async (kind: ManifestKind) => {
+  // ouvre la SignatureDialog ; le commit réel passe par signWithSvg.
+  const [signingKind, setSigningKind] = useState<ManifestKind | null>(null);
+
+  const signWithSvg = useCallback(async (kind: ManifestKind, signatureSvg: string | null) => {
     const current = state[kind].manifest;
     if (!current?.id) return;
     setBusyKind(kind); setError(null);
     try {
-      const m = await apiPost<ManifestDto>(`${base}/manifests/${current.id}/sign`, {});
+      const body = signatureSvg ? { signatureSvg } : {};
+      const m = await apiPost<ManifestDto>(`${base}/manifests/${current.id}/sign`, body);
       setState(prev => ({ ...prev, [kind]: { manifest: m } }));
       refetchList();
     } catch (err) { setError((err as Error).message); }
-    finally { setBusyKind(null); }
+    finally { setBusyKind(null); setSigningKind(null); }
   }, [state, base, refetchList]);
+
+  const handleSign = useCallback((kind: ManifestKind) => {
+    setSigningKind(kind);
+  }, []);
 
   const handleDownload = useCallback(async (kind: ManifestKind) => {
     const current = state[kind].manifest;
@@ -224,6 +233,17 @@ export function PageManifests() {
           ))}
         </div>
       )}
+
+      {/* Signature tactile (SVG path) — l'admin/agent gare signe avec la souris
+          ou un stylet ; le SVG capturé est posté à /sign. La dialog se ferme
+          dès que la signature commit. Un fallback "Signer sans dessin" envoie
+          un body vide (le backend l'accepte). */}
+      <SignatureDialog
+        open={signingKind !== null}
+        title={t('manifests.signTitle') || 'Signer le manifeste'}
+        onClose={() => setSigningKind(null)}
+        onConfirm={async (svg) => { if (signingKind) await signWithSvg(signingKind, svg); }}
+      />
     </main>
   );
 }

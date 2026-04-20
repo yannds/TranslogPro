@@ -34,6 +34,7 @@ type ManifestKind = 'PASSENGERS' | 'PARCELS';
 const KINDS: readonly ManifestKind[] = ['PASSENGERS', 'PARCELS'] as const;
 
 interface SignedManifestEntry {
+  id?:                 string;
   kind:                ManifestKind | 'ALL';
   signedPdfStorageKey: string | null;
   signedAt:            string;
@@ -256,10 +257,12 @@ export function PageQuaiManifest() {
 
   const handleDownload = useCallback(async (kind: ManifestKind) => {
     const signed = state[kind].signed;
-    if (!signed?.signedPdfStorageKey) return;
+    if (!signed?.signedPdfStorageKey || !signed?.id) return;
     try {
+      // L'endpoint attend l'id du manifest, pas la storageKey du PDF.
+      // Bug historique : passait signedPdfStorageKey → 404.
       const res = await apiFetch<string | { downloadUrl?: string }>(
-        `${base}/manifests/${encodeURIComponent(signed.signedPdfStorageKey)}/download`,
+        `${base}/manifests/${signed.id}/download`,
       );
       const url = typeof res === 'string' ? res : res?.downloadUrl;
       if (url) window.open(url, '_blank', 'noopener,noreferrer');
