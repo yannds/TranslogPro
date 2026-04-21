@@ -92,9 +92,10 @@ export async function apiFetch<T = unknown>(
 
   if (res.status === 401) {
     if (!skipRedirectOn401 && typeof window !== 'undefined') {
-      // Éviter de rediriger si on est déjà sur /login (prévient la boucle infinie)
+      // Dispatch un événement — l'AuthProvider navigue via React Router
+      // (évite le hard-reload qui crée une boucle infinie de rechargements)
       if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
       }
     }
     throw new ApiError(401, null, 'Session expirée');

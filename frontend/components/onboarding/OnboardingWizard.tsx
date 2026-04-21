@@ -21,6 +21,7 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { useAuth } from '../../lib/auth/auth.context';
 import { apiFetch, ApiError } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { CityPicker } from '../ui/CityPicker';
 
 type Activity = 'TICKETING' | 'PARCELS' | 'MIXED' | null;
 
@@ -294,6 +295,7 @@ function StepStation({
   onSaved, onSkip, onBack,
 }: Omit<StepProps, 'onSaved'> & { onSaved: (stationId: string) => void }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [type, setType] = useState<'PRINCIPALE' | 'RELAIS'>('PRINCIPALE');
@@ -323,9 +325,15 @@ function StepStation({
             required maxLength={120} className={inputCls()}
           />
         </Field>
-        <Field id="station-city" label={t('onb.station.city')}>
-          <input id="station-city" type="text" value={city} onChange={e => setCity(e.target.value)}
-            required maxLength={120} className={inputCls()}
+        <Field id="station-city" label={t('onb.station.city')} hint={t('onb.cityHint')}>
+          <CityPicker
+            id="station-city"
+            tenantId={user?.effectiveTenantId ?? ''}
+            value={city}
+            onChange={setCity}
+            placeholder={t('onb.station.cityPlaceholder')}
+            required
+            disabled={saving}
           />
         </Field>
         <Field id="station-type" label={t('onb.station.type')}>
@@ -347,6 +355,7 @@ function StepRoute({
   originStationId, currency, onSaved, onSkip, onBack,
 }: StepProps & { originStationId: string | null; currency: string }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [destName, setDestName]     = useState('');
   const [destCity, setDestCity]     = useState('');
   const [price,    setPrice]        = useState('');
@@ -384,9 +393,15 @@ function StepRoute({
             required maxLength={120} className={inputCls()}
           />
         </Field>
-        <Field id="route-dest-city" label={t('onb.route.destCity')}>
-          <input id="route-dest-city" type="text" value={destCity} onChange={e => setDestCity(e.target.value)}
-            required maxLength={120} className={inputCls()}
+        <Field id="route-dest-city" label={t('onb.route.destCity')} hint={t('onb.cityHint')}>
+          <CityPicker
+            id="route-dest-city"
+            tenantId={user?.effectiveTenantId ?? ''}
+            value={destCity}
+            onChange={setDestCity}
+            placeholder={t('onb.route.destCityPlaceholder')}
+            required
+            disabled={saving}
           />
         </Field>
         <Field id="route-price" label={t('onb.route.price')} hint={t('onb.route.priceHint').replace('{currency}', currency)}>

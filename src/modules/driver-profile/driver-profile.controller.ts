@@ -40,15 +40,6 @@ export class DriverProfileController {
 
   // ─── Scoring conducteur (Sprint 9) ────────────────────────────────────────
 
-  @Get('scoring/:staffId')
-  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
-  getScore(
-    @TenantId() tenantId: string,
-    @Param('staffId') staffId: string,
-  ) {
-    return this.scoring.recomputeForDriver(tenantId, staffId);
-  }
-
   @Get('scoring/leaderboard')
   @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
   getLeaderboard(
@@ -63,6 +54,15 @@ export class DriverProfileController {
   @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
   recomputeAll(@TenantId() tenantId: string) {
     return this.scoring.recomputeForTenant(tenantId).then(count => ({ recomputed: count }));
+  }
+
+  @Get('scoring/:staffId')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getScore(
+    @TenantId() tenantId: string,
+    @Param('staffId') staffId: string,
+  ) {
+    return this.scoring.recomputeForDriver(tenantId, staffId);
   }
 
   // ── Stats (KPIs) ───────────────────────────────────────────────────────────

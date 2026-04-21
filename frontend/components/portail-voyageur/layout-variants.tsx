@@ -206,15 +206,17 @@ export function HorizonHero({ scenes, searchForm, title, subtitle, stats }: Vari
       <div className="relative z-10 text-center px-4 max-w-2xl mx-auto">
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight">{title}</h1>
         <p className="text-sm sm:text-lg text-white/50 mt-4 max-w-md mx-auto leading-relaxed font-light">{subtitle}</p>
-        {/* Stats row — minimal */}
-        <div className="flex items-center justify-center gap-8 mt-8">
-          {stats.map(s => (
-            <div key={s.label} className="text-center">
-              <p className="text-2xl sm:text-3xl font-black text-white">{s.value}</p>
-              <p className="text-[9px] text-white/30 uppercase tracking-[0.2em] mt-1">{s.label}</p>
-            </div>
-          ))}
-        </div>
+        {/* Stats row — masqué si aucune stat configurée */}
+        {stats.length > 0 && (
+          <div className="flex items-center justify-center gap-8 mt-8">
+            {stats.map(s => (
+              <div key={s.label} className="text-center">
+                <p className="text-2xl sm:text-3xl font-black text-white">{s.value}</p>
+                <p className="text-[9px] text-white/30 uppercase tracking-[0.2em] mt-1">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {/* Carousel dots — bottom center, minimal lines */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3">
@@ -412,15 +414,16 @@ export function VividHero({ scenes, searchForm, title, subtitle, stats, accent, 
           <div className="mt-8 bg-slate-50 dark:bg-slate-900 rounded-3xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/50">
             {searchForm}
           </div>
-          {/* Stats */}
-          <div className="flex items-center gap-6 sm:gap-10 mt-8">
-            {stats.map(s => (
-              <div key={s.label}>
-                <p className="text-xl sm:text-2xl font-black" style={{ color: accent }}>{s.value}</p>
-                <p className="text-[9px] text-slate-400 uppercase tracking-[0.15em] mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
+          {stats.length > 0 && (
+            <div className="flex items-center gap-6 sm:gap-10 mt-8">
+              {stats.map(s => (
+                <div key={s.label}>
+                  <p className="text-xl sm:text-2xl font-black" style={{ color: accent }}>{s.value}</p>
+                  <p className="text-[9px] text-slate-400 uppercase tracking-[0.15em] mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {/* Right: decorative gradient panel */}
         <div className="hidden lg:block relative">
@@ -663,17 +666,19 @@ export function PrestigeHero({ scenes, searchForm, title, subtitle, stats, accen
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-3xl">{title}</h1>
           <p className="text-sm sm:text-lg text-white/50 mt-3 max-w-lg leading-relaxed">{subtitle}</p>
           {/* Stats */}
-          <div className="flex items-center gap-8 sm:gap-12 mt-8">
-            {stats.map((s, i) => (
-              <div key={s.label} className="flex items-center gap-4">
-                <div className="text-center">
-                  <p className="text-xl sm:text-2xl font-black text-white">{s.value}</p>
-                  <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] mt-0.5">{s.label}</p>
+          {stats.length > 0 && (
+            <div className="flex items-center gap-8 sm:gap-12 mt-8">
+              {stats.map((s, i) => (
+                <div key={s.label} className="flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-xl sm:text-2xl font-black text-white">{s.value}</p>
+                    <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] mt-0.5">{s.label}</p>
+                  </div>
+                  {i < stats.length - 1 && <div className="w-[1px] h-8 bg-white/10" />}
                 </div>
-                {i < stats.length - 1 && <div className="w-[1px] h-8 bg-white/10" />}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         {/* Carousel dots — gold bars */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">

@@ -222,15 +222,22 @@ export class RouteService {
   }
 
   async setWaypoints(tenantId: string, routeId: string, waypoints: {
-    stationId: string; order: number; distanceFromOriginKm: number;
+    kind?: string; stationId?: string; name?: string;
+    order: number; distanceFromOriginKm: number;
     tollCostXaf?: number; checkpointCosts?: unknown[];
     isMandatoryStop?: boolean; estimatedWaitTime?: number;
   }[]) {
     await this.findOne(tenantId, routeId);
 
-    // Vérifier que toutes les stations existent
+    // Invariant : STATION exige stationId, les autres kinds exigent name
     for (const wp of waypoints) {
-      await this.assertStationBelongsToTenant(tenantId, wp.stationId);
+      const kind = wp.kind ?? 'STATION';
+      if (kind === 'STATION') {
+        if (!wp.stationId) throw new BadRequestException(`Waypoint order ${wp.order} : stationId requis pour kind STATION`);
+        await this.assertStationBelongsToTenant(tenantId, wp.stationId);
+      } else {
+        if (!wp.name) throw new BadRequestException(`Waypoint order ${wp.order} : name requis pour kind ${kind}`);
+      }
     }
 
     // Remplacer tous les waypoints (atomique) — defense-in-depth via FK tenantId
@@ -240,7 +247,9 @@ export class RouteService {
         await tx.waypoint.createMany({
           data: waypoints.map(wp => ({
             routeId,
-            stationId:            wp.stationId,
+            kind:                 (wp.kind ?? 'STATION') as any,
+            stationId:            wp.stationId ?? null,
+            name:                 wp.name ?? null,
             order:                wp.order,
             distanceFromOriginKm: wp.distanceFromOriginKm,
             tollCostXaf:          wp.tollCostXaf ?? 0,
@@ -316,12 +325,15 @@ export class RouteService {
     const basePrice  = route.basePrice  || 0;
 
     // Tableau ordonné : [{ stationId, distanceFromOriginKm }]
+    // Seuls les waypoints STATION entrent dans la matrice de prix — les péages/contrôles sont exclus.
     const stops = [
       { stationId: route.originId, distanceFromOriginKm: 0 },
-      ...route.waypoints.map(w => ({
-        stationId:            w.stationId,
-        distanceFromOriginKm: w.distanceFromOriginKm,
-      })),
+      ...route.waypoints
+        .filter(w => !w.kind || w.kind === 'STATION')
+        .map(w => ({
+          stationId:            w.stationId as string,
+          distanceFromOriginKm: w.distanceFromOriginKm,
+        })),
       { stationId: route.destinationId, distanceFromOriginKm: totalKm },
     ];
 

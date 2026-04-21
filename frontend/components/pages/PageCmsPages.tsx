@@ -62,12 +62,13 @@ function isSystemSlug(slug: string): slug is SystemSlug {
 
 /** Limites de caractères par champ */
 const CMS_LIMITS = {
-  hero:    { title: 60, subtitle: 200, trustedBy: 100 },
+  hero:    { title: 60, subtitle: 200, trustedBy: 100, statValue: 20, statLabel: 30 },
   about:   { description: 500, featureTitle: 30, featureDesc: 80 },
   contact: { hours: 100 },
 } as const;
 
-interface HeroCms    { title: string; subtitle: string; trustedBy: string }
+interface HeroStat   { value: string; label: string }
+interface HeroCms    { title: string; subtitle: string; trustedBy: string; stats?: HeroStat[] }
 interface AboutFeature { icon: string; title: string; description: string }
 interface AboutCms   { description: string; features: AboutFeature[] }
 interface ContactCms { hours: string }
@@ -117,14 +118,37 @@ function LimitedInput({ label, value, onChange, maxLen, multiline }: {
 
 // ─── Éditeur structuré Hero ─────────────────────────────────────────────────
 
+const DEFAULT_STATS: HeroStat[] = [
+  { value: '', label: '' },
+  { value: '', label: '' },
+  { value: '', label: '' },
+];
+
 function HeroEditor({ content, onChange }: { content: string; onChange: (c: string) => void }) {
-  const data = parseJson<HeroCms>(content, { title: '', subtitle: '', trustedBy: '' });
+  const { t } = useI18n();
+  const data = parseJson<HeroCms>(content, { title: '', subtitle: '', trustedBy: '', stats: DEFAULT_STATS });
+  const stats = data.stats ?? DEFAULT_STATS;
   const upd = (patch: Partial<HeroCms>) => onChange(JSON.stringify({ ...data, ...patch }));
+  const updStat = (idx: number, patch: Partial<HeroStat>) => {
+    const next = stats.map((s, i) => i === idx ? { ...s, ...patch } : s);
+    upd({ stats: next });
+  };
   return (
     <div className="space-y-4">
       <LimitedInput label="Titre principal" value={data.title} onChange={v => upd({ title: v })} maxLen={CMS_LIMITS.hero.title} />
       <LimitedInput label="Sous-titre" value={data.subtitle} onChange={v => upd({ subtitle: v })} maxLen={CMS_LIMITS.hero.subtitle} multiline />
       <LimitedInput label="Badge confiance" value={data.trustedBy} onChange={v => upd({ trustedBy: v })} maxLen={CMS_LIMITS.hero.trustedBy} />
+      <div>
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('cms.heroStats')}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {stats.slice(0, 3).map((s, i) => (
+            <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 bg-slate-50 dark:bg-slate-800/50">
+              <LimitedInput label={t('cms.heroStatValue')} value={s.value} onChange={v => updStat(i, { value: v })} maxLen={CMS_LIMITS.hero.statValue} />
+              <LimitedInput label={t('cms.heroStatLabel')} value={s.label} onChange={v => updStat(i, { label: v })} maxLen={CMS_LIMITS.hero.statLabel} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -212,9 +236,14 @@ export function PageCmsPages() {
     try {
       const data = JSON.parse(editing.content || '{}');
       if (editing.slug === 'hero') {
-        return (data.title?.length ?? 0) <= CMS_LIMITS.hero.title
-          && (data.subtitle?.length ?? 0) <= CMS_LIMITS.hero.subtitle
-          && (data.trustedBy?.length ?? 0) <= CMS_LIMITS.hero.trustedBy;
+        if ((data.title?.length ?? 0) > CMS_LIMITS.hero.title) return false;
+        if ((data.subtitle?.length ?? 0) > CMS_LIMITS.hero.subtitle) return false;
+        if ((data.trustedBy?.length ?? 0) > CMS_LIMITS.hero.trustedBy) return false;
+        for (const s of (data.stats ?? [])) {
+          if ((s.value?.length ?? 0) > CMS_LIMITS.hero.statValue) return false;
+          if ((s.label?.length ?? 0) > CMS_LIMITS.hero.statLabel) return false;
+        }
+        return true;
       }
       if (editing.slug === 'about') {
         if ((data.description?.length ?? 0) > CMS_LIMITS.about.description) return false;

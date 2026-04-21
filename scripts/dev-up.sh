@@ -113,7 +113,7 @@ ok "CA mkcert trustée (keychain macOS)"
 # ─── 3. Génération des certs ──────────────────────────────────────
 mkdir -p "$CERT_DIR"
 if [[ ! -f "$CERT_DIR/dev.crt" || ! -f "$CERT_DIR/dev.key" ]]; then
-  info "Génération des certs wildcard *.$PLATFORM_BASE_DOMAIN…"
+  info "Génération des certs wildcard *.${PLATFORM_BASE_DOMAIN}…"
   mkcert \
     -cert-file "$CERT_DIR/dev.crt" \
     -key-file  "$CERT_DIR/dev.key" \
@@ -171,7 +171,7 @@ if [[ -f .env ]]; then
 
   # Seed tenant_domains shell-templated sur $PLATFORM_BASE_DOMAIN — 1 ligne
   # par tenant. TenantResolverService matchera ainsi via le header Host.
-  info "Seed tenant_domains pour *.$PLATFORM_BASE_DOMAIN…"
+  info "Seed tenant_domains pour *.${PLATFORM_BASE_DOMAIN}…"
   "$SCRIPT_DIR/seed-tenant-domains.sh" >/dev/null
   ok "tenant_domains seedés ($PLATFORM_BASE_DOMAIN)"
 
@@ -187,6 +187,17 @@ if [[ -f .env ]]; then
       vault kv put secret/platform/impersonation_key \
       KEY="dev-imp-$(openssl rand -hex 32)" >/dev/null
     ok "Clé impersonation provisionnée"
+  fi
+
+  info "Vault : provision secret/platform/redis…"
+  if docker exec -e VAULT_TOKEN=dev-root-token translog-vault \
+      vault kv get secret/platform/redis >/dev/null 2>&1; then
+    ok "Config Redis déjà présente"
+  else
+    docker exec -e VAULT_TOKEN=dev-root-token translog-vault \
+      vault kv put secret/platform/redis \
+      HOST="localhost" PORT="6379" PASSWORD="redis_password" >/dev/null
+    ok "Config Redis provisionnée"
   fi
 else
   warn ".env absent — skip migrations et seed. Crée .env puis relance."
@@ -239,6 +250,12 @@ $(ok "Setup terminé ✨")
 
     Fenêtre 2 (InPrivate) → https://citybus-congo.$PLATFORM_BASE_DOMAIN/login
                             admin@tenant2.dev  /  Admin1234!
+
+    Fenêtre 3             → https://horizon-voyages.$PLATFORM_BASE_DOMAIN/login
+                            admin@tenant3.dev  /  Admin1234!
+
+    Fenêtre 4             → https://dsexpress.$PLATFORM_BASE_DOMAIN/login
+                            zoec@ds.cg  /  Admin1234!
 
     Super-admin           → https://$ADMIN_SUBDOMAIN.$PLATFORM_BASE_DOMAIN/login
                             superadmin@translogpro.io  /  Admin1234!

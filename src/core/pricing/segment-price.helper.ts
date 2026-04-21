@@ -10,7 +10,9 @@
  */
 
 export interface WaypointSnapshot {
-  stationId:            string;
+  kind?:                string;        // WaypointKind — absent = STATION (rétro-compat)
+  stationId?:           string | null; // présent si kind = STATION
+  name?:                string;   // présent si kind ≠ STATION
   distanceFromOriginKm: number;
   tollCostXaf?:         number;
   checkpointCosts?:     unknown; // JSON array

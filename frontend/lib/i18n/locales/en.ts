@@ -322,6 +322,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "addressLabel": "Address",
     "hoursLabel": "Hours",
     "defaultHours": "Mon-Sat: 6 AM — 8 PM",
+    "contactNotConfigured": "Contact details not yet filled in — complete your company profile in settings.",
     "footerAbout": "Your trusted travel partner. Book your tickets online with ease.",
     "footerLinks": "Navigation",
     "footerLegal": "Legal",
@@ -460,7 +461,10 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "newsCmsToggleDesc": "Enable the news feed on the public portal (visible in the footer)",
     "publish": "Publish",
     "unpublish": "Unpublish",
-    "systemPage": "System page — structured content"
+    "systemPage": "System page — structured content",
+    "heroStats": "Statistics (section hidden if all empty)",
+    "heroStatValue": "Value (e.g. 50K+)",
+    "heroStatLabel": "Label (e.g. Passengers)"
   },
   "portalAdmin": {
     "title": "Visitor Portal",
@@ -3548,6 +3552,10 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "ok": "OK",
     "notConfigured": "Not configured",
     "savePrices": "Save prices",
+    "kindLabel": "Point type",
+    "kindStation": "Station stop",
+    "pointName": "Point name",
+    "pointNamePlaceholder": "e.g. Nganga checkpoint",
     "cpPeage": "Toll",
     "cpPolice": "Police",
     "cpDouane": "Customs",
@@ -3742,12 +3750,32 @@ const en: Record<string, Record<string, LocaleValue>> = {
   },
   "safety": {
     "title": "Safety & Incidents",
-    "activeAlert": "Active alert",
-    "ago18min": "18 min ago",
-    "alertDesc1": "Emergency braking detected by GPS unit. Driver contacted, no injuries reported. Automatic report in progress.",
-    "report": "Report",
-    "ago1h42": "1h42 ago",
-    "reportDesc1": "Passenger reports aggressive behavior from another traveler. Station agent notified, situation defused."
+    "loading": "Loading incidents…",
+    "noIncidents": "No active incidents",
+    "noIncidentsDesc": "All incidents are resolved. Everything is fine.",
+    "activeCount": "{count} active incident(s)",
+    "sosLabel": "SOS",
+    "locationLabel": "Location",
+    "tripLabel": "Trip",
+    "severity": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "CRITICAL": "Critical"
+    },
+    "type": {
+      "MECHANICAL": "Mechanical",
+      "SECURITY": "Security",
+      "HEALTH": "Health",
+      "LOST_OBJECT": "Lost object",
+      "SOS": "SOS",
+      "ACCIDENT": "Accident"
+    },
+    "status": {
+      "OPEN": "Open",
+      "ASSIGNED": "Assigned",
+      "IN_PROGRESS": "In progress"
+    }
   },
   "screensDemo": {
     "toolbarTitle": "TranslogPro — Interface Demo",
@@ -5589,8 +5617,11 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "station.intro":     "Your first point of sale or station — where your customers check in.",
     "station.name":      "Point of sale name",
     "station.namePlaceholder":"e.g. Central Station Dakar",
-    "station.city":      "City",
-    "station.type":      "Type",
+    "station.city":          "City",
+    "station.cityPlaceholder":"e.g. Brazzaville",
+    "route.destCityPlaceholder":"e.g. Pointe-Noire",
+    "cityHint":              "Type a few letters to validate the city via geolocation.",
+    "station.type":          "Type",
     "station.typePrincipale":"Main station",
     "station.typeRelais":"Relay point",
     "route.intro":       "Create your first route — you can add hundreds more later.",

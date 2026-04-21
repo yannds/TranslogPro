@@ -64,7 +64,8 @@ L.Marker.prototype.options.icon = defaultIcon;
 
 interface CmsPage { slug: string; title: string; content: string; locale: string }
 
-interface HeroCms { title: string; subtitle: string; trustedBy: string }
+interface HeroStat { value: string; label: string }
+interface HeroCms { title: string; subtitle: string; trustedBy: string; stats?: HeroStat[] }
 interface AboutFeature { icon: string; title: string; description: string }
 interface AboutCms { description: string; features: AboutFeature[] }
 interface ContactCms { hours: string }
@@ -797,8 +798,12 @@ function NearbyStations({ stations, t }: { stations: StationInfo[]; t: (k: strin
     );
   }, []);
 
-  // All stations with coordinates
-  const geoStations = stations.filter(s => s.coordinates);
+  // All stations with valid numeric coordinates
+  const geoStations = stations.filter(s =>
+    s.coordinates != null &&
+    typeof s.coordinates.lat === 'number' && isFinite(s.coordinates.lat) &&
+    typeof s.coordinates.lng === 'number' && isFinite(s.coordinates.lng),
+  );
 
   // Filtered + sorted
   const displayed = pos
@@ -1711,7 +1716,7 @@ export function PortailVoyageur() {
             </div>
           </form>
         );
-        const heroStats = [{ value: '50K+', label: t('portail.statPassengers') }, { value: '120+', label: t('portail.statRoutes') }, { value: '99%', label: t('portail.statSatisfaction') }];
+        const heroStats = (heroCms?.stats ?? []).filter(s => s.value.trim() !== '');
         const hTitle    = heroCms?.title     || t('portail.heroTitle');
         const hSubtitle = heroCms?.subtitle  || t('portail.heroSubtitle');
         const hTrusted  = heroCms?.trustedBy || t('portail.trustedBy');
@@ -1728,9 +1733,11 @@ export function PortailVoyageur() {
               <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight max-w-2xl">{hTitle}</h1>
               <p className="text-base sm:text-xl text-slate-400 mt-3 sm:mt-4 max-w-xl leading-relaxed">{hSubtitle}</p>
               <div className="mt-8 sm:mt-10 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/20 border border-white/5">{searchFormEl}</div>
-              <div className="flex items-center justify-center gap-6 sm:gap-12 mt-8 sm:mt-10 text-center">
-                {heroStats.map(s => <div key={s.label}><p className="text-xl sm:text-3xl font-black text-white">{s.value}</p><p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wider">{s.label}</p></div>)}
-              </div>
+              {heroStats.length > 0 && (
+                <div className="flex items-center justify-center gap-6 sm:gap-12 mt-8 sm:mt-10 text-center">
+                  {heroStats.map(s => <div key={s.label}><p className="text-xl sm:text-3xl font-black text-white">{s.value}</p><p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wider">{s.label}</p></div>)}
+                </div>
+              )}
             </div>
           </HeroCarousel>
         );
@@ -1820,12 +1827,25 @@ export function PortailVoyageur() {
         {section === 'contact' && (
           <div className="max-w-2xl mx-auto"><STitle title={t('portail.contactTitle')} />
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700/50">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">{[
-                { i: '\u2706', l: t('portail.phoneLabel'), v: cfg.data?.tenant?.contact?.phone || '+242 06 000 00 00' },
-                { i: '@', l: t('portail.emailLabel'), v: cfg.data?.tenant?.contact?.email || 'contact@transcongo.cg' },
-                { i: '\u2302', l: t('portail.addressLabel'), v: cfg.data?.tenant?.contact?.address || 'Av. de la Paix, Brazzaville' },
-                { i: '\u231A', l: t('portail.hoursLabel'), v: contactCms?.hours || t('portail.defaultHours') },
-              ].map(c => <div key={c.l} className="flex items-start gap-4"><div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center text-amber-600 font-bold shrink-0">{c.i}</div><div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{c.l}</p><p className="text-sm font-semibold text-slate-900 dark:text-white mt-1">{c.v}</p></div></div>)}</div></div></div>
+              {(() => {
+                const addressVal = cfg.data?.tenant?.contact?.address
+                  || [cfg.data?.tenant?.city, cfg.data?.tenant?.country].filter(Boolean).join(', ');
+                const items = [
+                  { i: '\u2706', l: t('portail.phoneLabel'),   v: cfg.data?.tenant?.contact?.phone || '' },
+                  { i: '@',      l: t('portail.emailLabel'),    v: cfg.data?.tenant?.contact?.email || '' },
+                  { i: '\u2302', l: t('portail.addressLabel'), v: addressVal || '' },
+                  { i: '\u231A', l: t('portail.hoursLabel'),   v: contactCms?.hours || '' },
+                ].filter(c => c.v.trim() !== '');
+                if (items.length === 0) return (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">{t('portail.contactNotConfigured')}</p>
+                );
+                return <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">{items.map(c => (
+                  <div key={c.l} className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl [background:var(--portal-accent-light)] flex items-center justify-center text-amber-600 font-bold shrink-0">{c.i}</div>
+                    <div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{c.l}</p><p className="text-sm font-semibold text-slate-900 dark:text-white mt-1">{c.v}</p></div>
+                  </div>
+                ))}</div>;
+              })()}</div></div>
         )}
 
         {/* ── Actualités (news list) — footer-only section ────── */}

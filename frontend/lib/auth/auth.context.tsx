@@ -12,7 +12,7 @@ import {
   createContext, useContext, useState, useEffect, useCallback,
   type ReactNode,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch, ApiError } from '../api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,6 +106,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user,    setUser]    = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Écoute l'événement dispatché par apiFetch quand une réponse 401 est reçue.
+  // Navigation React Router → pas de hard-reload → pas de boucle de rechargements.
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      navigate('/login', { state: { from: location } });
+    };
+    window.addEventListener('auth:session-expired', handler);
+    return () => window.removeEventListener('auth:session-expired', handler);
+  }, [navigate, location]);
 
   // Vérification de session au montage — skipRedirectOn401 évite la boucle infinie.
   // On ne clear user QUE sur un vrai 401 : une erreur réseau transitoire (backend

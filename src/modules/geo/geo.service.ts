@@ -24,6 +24,35 @@ const REQUEST_TIMEOUT = 5_000;
 const Q_MIN           = 3;
 const Q_MAX           = 120;
 
+/**
+ * Bounding boxes by ISO 3166-1 alpha-2 (uppercase).
+ * Format : [lngMin, latMax, lngMax, latMin]  →  Nominatim viewbox=x1,y1,x2,y2
+ * Used to bias search results toward the tenant's operating country without
+ * excluding international destinations (bounded=0, the Nominatim default).
+ */
+export const COUNTRY_BBOX: Record<string, [number, number, number, number]> = {
+  CG: [11.0,   3.7, 18.7,  -5.1],   // Republic of Congo
+  CD: [12.2,   5.4, 31.3, -13.5],   // DR Congo
+  SN: [-17.5, 16.7, -11.4, 12.3],   // Senegal
+  CI: [ -8.6, 10.7,  -2.5,  4.4],   // Côte d'Ivoire
+  CM: [  8.5, 13.1,  16.2,  1.7],   // Cameroon
+  GA: [  8.7,  2.3,  14.5, -3.9],   // Gabon
+  BJ: [  0.8, 12.4,   3.9,  6.2],   // Benin
+  TG: [ -0.1, 11.1,   1.8,  6.1],   // Togo
+  GH: [ -3.3, 11.2,   1.2,  4.7],   // Ghana
+  NG: [  2.7, 14.0,  14.7,  4.3],   // Nigeria
+  ML: [ -4.2, 25.0,   4.3, 10.1],   // Mali
+  BF: [ -5.5, 15.1,   2.4,  9.4],   // Burkina Faso
+  GN: [-15.1, 12.7,  -7.6,  7.2],   // Guinea
+  MR: [-17.1, 27.3,  -4.8, 14.7],   // Mauritania
+  MA: [-13.2, 36.1,  -1.0, 21.3],   // Morocco
+  TN: [  7.5, 37.6,  11.6, 30.2],   // Tunisia
+  DZ: [ -8.7, 37.1,   9.0, 18.9],   // Algeria
+  FR: [ -5.1, 51.1,   9.6, 42.3],   // France
+  BE: [  2.5, 51.5,   6.4, 49.5],   // Belgium
+  CH: [  5.9, 47.8,  10.5, 45.8],   // Switzerland
+};
+
 @Injectable()
 export class GeoService {
   private readonly log = new Logger(GeoService.name);
@@ -32,10 +61,12 @@ export class GeoService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  async search(rawQuery: string): Promise<GeoSearchResult[]> {
+  async search(rawQuery: string, countryCode?: string): Promise<GeoSearchResult[]> {
     const q = this.sanitize(rawQuery);
+    const cc = countryCode?.trim().toUpperCase() || undefined;
+    const bbox = cc ? COUNTRY_BBOX[cc] : undefined;
 
-    const cacheKey = `geo:search:${createHash('sha1').update(q).digest('hex')}`;
+    const cacheKey = `geo:search:${createHash('sha1').update(`${cc ?? ''}:${q}`).digest('hex')}`;
     try {
       const cached = await this.redis.get(cacheKey);
       if (cached) return JSON.parse(cached) as GeoSearchResult[];
@@ -48,6 +79,9 @@ export class GeoService {
     url.searchParams.set('format', 'jsonv2');
     url.searchParams.set('limit', String(MAX_RESULTS));
     url.searchParams.set('addressdetails', '1');
+    // viewbox biases results toward the tenant's country; bounded defaults to 0
+    // so international destinations (e.g. Abidjan searched from Senegal) still appear.
+    if (bbox) url.searchParams.set('viewbox', `${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);

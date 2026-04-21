@@ -842,6 +842,16 @@ model ImpersonationSession {
 // SECTION 6 : GÉOGRAPHIE & INFRASTRUCTURE
 // ─────────────────────────────────────────────────────────────
 
+enum WaypointKind {
+  STATION      // arrêt passager — stationId requis
+  PEAGE        // poste de péage
+  POLICE       // contrôle de police
+  DOUANE       // douane
+  EAUX_FORETS  // eaux et forêts
+  FRONTIERE    // poste frontière
+  AUTRE        // autre point de contrôle
+}
+
 model Station {
   id          String @id @default(cuid())
   tenantId    String
@@ -916,24 +926,25 @@ model Route {
 }
 
 model Waypoint {
-  id                   String  @id @default(cuid())
+  id                   String       @id @default(cuid())
   routeId              String
-  stationId            String
+  kind                 WaypointKind @default(STATION)
+  // STATION : stationId requis. Autres kinds : name requis, stationId null.
+  stationId            String?
+  name                 String?      // libellé affiché pour les points de contrôle (péage, police…)
   order                Int
-  distanceFromOriginKm Float   @default(0) // km depuis l'origine
-  tollCostXaf          Float   @default(0) // péages entre le waypoint précédent et celui-ci
-  checkpointCosts      Json    @default("[]")
-  // Array de charges intermédiaires entre le waypoint précédent et celui-ci.
-  // Format : [{ type: "PEAGE"|"POLICE"|"DOUANE"|"EAUX_FORETS"|"FRONTIERE"|"AUTRE",
-  //             name: "Poste Nganga", costXaf: 500 }]
-  // costXaf = 0 si le point de contrôle n'implique pas de frais pour le bus.
-  isMandatoryStop      Boolean @default(false)
-  estimatedWaitTime    Int? // minutes
-  isAlertZone          Boolean @default(false)
+  distanceFromOriginKm Float        @default(0)
+  // Coût supporté par le bus à ce point (péage, taxe, etc.) — utilisé dans sumSegmentCharges.
+  tollCostXaf          Float        @default(0)
+  // Détail fin des coûts sur ce point (rétro-compat legacy, peut rester vide sur les nouveaux kinds).
+  checkpointCosts      Json         @default("[]")
+  isMandatoryStop      Boolean      @default(false) // ignoré pour les kinds non-STATION
+  estimatedWaitTime    Int?         // minutes — utile aussi pour DOUANE/FRONTIERE
+  isAlertZone          Boolean      @default(false)
   alertDescription     String?
 
-  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  station Station @relation(fields: [stationId], references: [id])
+  route   Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  station Station? @relation(fields: [stationId], references: [id])
 
   @@unique([routeId, order])
   @@map("waypoints")

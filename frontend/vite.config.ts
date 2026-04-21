@@ -85,7 +85,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: ['.translog.test', 'localhost', '127.0.0.1'],
-    hmr: { protocol: 'wss', clientPort: 443 },
+    hmr: true,
     proxy: {
       '/api': {
         target:       'http://localhost:3000',

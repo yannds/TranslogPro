@@ -241,7 +241,9 @@ export function PageStations() {
           <div className="min-w-0">
             <p className="text-sm font-medium t-text truncate">{row.name}</p>
             <p className="text-[11px] t-text-2 truncate tabular-nums">
-              {row.coordinates.lat.toFixed(4)}, {row.coordinates.lng.toFixed(4)}
+              {row.coordinates?.lat != null && row.coordinates?.lng != null
+                ? `${row.coordinates.lat.toFixed(4)}, ${row.coordinates.lng.toFixed(4)}`
+                : '—'}
             </p>
           </div>
         </div>

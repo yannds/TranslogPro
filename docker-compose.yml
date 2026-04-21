@@ -40,7 +40,7 @@ services:
   # Image : edoburu/pgbouncer — pinning version explicite pour reproductibilité
   # (audit sécu : `latest` interdit en prod, CVE non traçables).
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.1
+    image: edoburu/pgbouncer:v1.25.1-p0
     container_name: translog-pgbouncer
     restart: unless-stopped
     environment:

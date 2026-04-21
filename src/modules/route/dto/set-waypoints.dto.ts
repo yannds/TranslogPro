@@ -1,8 +1,18 @@
 import { Type } from 'class-transformer';
 import {
-  IsArray, IsBoolean, IsNumber, IsOptional, IsString,
-  Min, ValidateNested,
+  IsArray, IsBoolean, IsEnum, IsNumber, IsOptional, IsString,
+  Min, ValidateIf, ValidateNested,
 } from 'class-validator';
+
+export enum WaypointKind {
+  STATION     = 'STATION',
+  PEAGE       = 'PEAGE',
+  POLICE      = 'POLICE',
+  DOUANE      = 'DOUANE',
+  EAUX_FORETS = 'EAUX_FORETS',
+  FRONTIERE   = 'FRONTIERE',
+  AUTRE       = 'AUTRE',
+}
 
 export class CheckpointCostDto {
   @IsString()
@@ -17,8 +27,19 @@ export class CheckpointCostDto {
 }
 
 export class WaypointItemDto {
+  @IsEnum(WaypointKind)
+  @IsOptional()
+  kind?: WaypointKind;
+
+  /** Requis si kind = STATION (ou absent — défaut STATION). */
+  @ValidateIf(o => !o.kind || o.kind === WaypointKind.STATION)
   @IsString()
-  stationId: string;
+  stationId?: string;
+
+  /** Requis si kind ≠ STATION. */
+  @ValidateIf(o => o.kind && o.kind !== WaypointKind.STATION)
+  @IsString()
+  name?: string;
 
   @IsNumber()
   @Min(1)

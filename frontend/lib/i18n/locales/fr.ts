@@ -175,6 +175,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "addressLabel": "Adresse",
     "hoursLabel": "Horaires",
     "defaultHours": "Lun-Sam : 06h — 20h",
+    "contactNotConfigured": "Coordonnées non encore renseignées — complétez votre fiche entreprise dans les paramètres.",
     "footerAbout": "Votre partenaire de voyage de confiance. Réservez vos billets en ligne en toute simplicité.",
     "footerLinks": "Navigation",
     "footerLegal": "Informations légales",
@@ -313,7 +314,10 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "newsCmsToggleDesc": "Activer le flux d'actualités sur le portail public (visible dans le footer)",
     "publish": "Publier",
     "unpublish": "Retirer",
-    "systemPage": "Page système — contenu structuré"
+    "systemPage": "Page système — contenu structuré",
+    "heroStats": "Statistiques (section masquée si toutes vides)",
+    "heroStatValue": "Valeur (ex : 50K+)",
+    "heroStatLabel": "Libellé (ex : Voyageurs)"
   },
   "portalAdmin": {
     "title": "Portail Visiteur",
@@ -3552,6 +3556,10 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "ok": "OK",
     "notConfigured": "Non configuré",
     "savePrices": "Enregistrer les tarifs",
+    "kindLabel": "Type de point",
+    "kindStation": "Arrêt gare",
+    "pointName": "Nom du point",
+    "pointNamePlaceholder": "ex. Poste de Nganga",
     "cpPeage": "Péage",
     "cpPolice": "Police",
     "cpDouane": "Douane",
@@ -3746,12 +3754,32 @@ const fr: Record<string, Record<string, LocaleValue>> = {
   },
   "safety": {
     "title": "Sécurité & Incidents",
-    "activeAlert": "Alerte active",
-    "ago18min": "Il y a 18 min",
-    "alertDesc1": "Freinage d'urgence détecté par le boîtier GPS. Chauffeur contacté, aucun blessé signalé. Rapport automatique en cours.",
-    "report": "Signalement",
-    "ago1h42": "Il y a 1h42",
-    "reportDesc1": "Passager signale comportement agressif d'un autre voyageur. Agent de gare prévenu, situation désamorcée."
+    "loading": "Chargement des incidents…",
+    "noIncidents": "Aucun incident actif",
+    "noIncidentsDesc": "Tous les incidents sont résolus. Tout va bien.",
+    "activeCount": "{count} incident(s) actif(s)",
+    "sosLabel": "SOS",
+    "locationLabel": "Lieu",
+    "tripLabel": "Trajet",
+    "severity": {
+      "LOW": "Faible",
+      "MEDIUM": "Moyen",
+      "HIGH": "Élevé",
+      "CRITICAL": "Critique"
+    },
+    "type": {
+      "MECHANICAL": "Mécanique",
+      "SECURITY": "Sécurité",
+      "HEALTH": "Santé",
+      "LOST_OBJECT": "Objet perdu",
+      "SOS": "SOS",
+      "ACCIDENT": "Accident"
+    },
+    "status": {
+      "OPEN": "Ouvert",
+      "ASSIGNED": "Assigné",
+      "IN_PROGRESS": "En cours"
+    }
   },
   "screensDemo": {
     "toolbarTitle": "TranslogPro — Démonstration interfaces",
@@ -5608,8 +5636,11 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "station.intro":     "Votre premier point de vente ou gare — celui où vos clients arrivent.",
     "station.name":      "Nom du point de vente",
     "station.namePlaceholder":"ex : Gare Centrale Dakar",
-    "station.city":      "Ville",
-    "station.type":      "Type",
+    "station.city":          "Ville",
+    "station.cityPlaceholder":"ex : Brazzaville",
+    "route.destCityPlaceholder":"ex : Pointe-Noire",
+    "cityHint":              "Tapez les premières lettres pour valider la ville via géolocalisation.",
+    "station.type":          "Type",
     "station.typePrincipale":"Gare principale",
     "station.typeRelais":"Point-relais",
     "route.intro":       "Créez votre premier trajet — vous pourrez en ajouter des centaines plus tard.",

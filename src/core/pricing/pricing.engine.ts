@@ -287,7 +287,7 @@ export class PricingEngine {
     fromId:   string,
     toId:     string,
     route:    { basePrice: number; distanceKm: number; allowProportionalFallback: boolean;
-                waypoints: { stationId: string; distanceFromOriginKm: number;
+                waypoints: { stationId?: string | null; distanceFromOriginKm: number;
                              tollCostXaf?: number; checkpointCosts?: unknown; order?: number }[];
                 originId: string; destinationId: string },
   ): Promise<{ price: number; isAutoCalculated: boolean; segmentCharges: number; warnings: string[] }> {
@@ -343,7 +343,7 @@ export class PricingEngine {
     fromId: string,
     toId:   string,
     route:  { originId: string; destinationId: string; distanceKm: number;
-              waypoints: { stationId: string; distanceFromOriginKm: number;
+              waypoints: { stationId?: string | null; distanceFromOriginKm: number;
                            tollCostXaf?: number; checkpointCosts?: unknown; order?: number }[] },
   ): number {
     const fromDist = this.stationDistance(fromId, route);
@@ -367,7 +367,7 @@ export class PricingEngine {
   private stationDistance(
     stationId: string,
     route: { originId: string; destinationId: string; distanceKm: number;
-             waypoints: { stationId: string; distanceFromOriginKm: number }[] },
+             waypoints: { stationId?: string | null; distanceFromOriginKm: number }[] },
   ): number {
     if (stationId === route.originId) return 0;
     if (stationId === route.destinationId) return route.distanceKm;

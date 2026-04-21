@@ -36,14 +36,16 @@ interface StationLite {
 
 interface WaypointData {
   id?:                  string;
-  stationId:            string;
+  kind:                 string;        // WaypointKind — 'STATION' | 'PEAGE' | 'POLICE' | …
+  stationId?:           string;        // présent si kind = STATION
+  name?:                string;        // présent si kind ≠ STATION
   order:                number;
   distanceFromOriginKm: number;
   tollCostXaf:          number;
   checkpointCosts:      CheckpointCost[];
   isMandatoryStop:      boolean;
   estimatedWaitTime?:   number | null;
-  station?:             { id: string; name: string; city: string };
+  station?:             { id: string; name: string; city: string } | null;
 }
 
 interface CheckpointCost {
@@ -60,6 +62,13 @@ const CHECKPOINT_TYPES = [
   { value: 'FRONTIERE',   labelKey: 'routeDetail.cpFrontiere' as const,  icon: Flag },
   { value: 'AUTRE',       labelKey: 'routeDetail.cpAutre' as const,      icon: CircleDot },
 ] as const;
+
+const KIND_OPTIONS = [
+  { value: 'STATION',     labelKey: 'routeDetail.kindStation' as const,  icon: MapPin },
+  ...CHECKPOINT_TYPES,
+] as const;
+
+type WaypointKindValue = typeof KIND_OPTIONS[number]['value'];
 
 interface SegmentPriceRow {
   id?:           string;
@@ -126,7 +135,9 @@ export function RouteDetailDialog({
   const [editingIdx,     setEditingIdx]     = useState<number | null>(null);
 
   // New / edit waypoint form
+  const [newKind,              setNewKind]              = useState<WaypointKindValue>('STATION');
   const [newStationId,         setNewStationId]         = useState('');
+  const [newName,              setNewName]              = useState('');
   const [newDistanceKm,        setNewDistanceKm]        = useState('');
   const [newTollCostXaf,       setNewTollCostXaf]       = useState('0');
   const [newIsMandatory,       setNewIsMandatory]       = useState(false);
@@ -176,7 +187,7 @@ export function RouteDetailDialog({
     const ids = new Set<string>();
     if (route.originId) ids.add(route.originId);
     if (route.destinationId) ids.add(route.destinationId);
-    waypoints.forEach(wp => ids.add(wp.stationId));
+    waypoints.forEach(wp => { if (wp.kind === 'STATION' && wp.stationId) ids.add(wp.stationId); });
     return ids;
   }, [route, waypoints]);
 
@@ -205,7 +216,9 @@ export function RouteDetailDialog({
   };
 
   const resetNewForm = () => {
+    setNewKind('STATION');
     setNewStationId('');
+    setNewName('');
     setNewDistanceKm('');
     setNewTollCostXaf('0');
     setNewIsMandatory(false);
@@ -215,10 +228,14 @@ export function RouteDetailDialog({
   };
 
   const addWaypoint = () => {
-    if (!newStationId || !newDistanceKm) return;
-    const station = stations.find(s => s.id === newStationId);
+    const isStation = newKind === 'STATION';
+    if (isStation && (!newStationId || !newDistanceKm)) return;
+    if (!isStation && (!newName.trim() || !newDistanceKm)) return;
+    const station = isStation ? stations.find(s => s.id === newStationId) : undefined;
     const newWp: WaypointData = {
-      stationId:            newStationId,
+      kind:                 newKind,
+      stationId:            isStation ? newStationId : undefined,
+      name:                 isStation ? undefined : newName.trim(),
       order:                waypoints.length + 1,
       distanceFromOriginKm: Number(newDistanceKm),
       tollCostXaf:          Number(newTollCostXaf) || 0,
@@ -235,7 +252,9 @@ export function RouteDetailDialog({
 
   const startEditWaypoint = (idx: number) => {
     const wp = waypoints[idx];
-    setNewStationId(wp.stationId);
+    setNewKind((wp.kind ?? 'STATION') as WaypointKindValue);
+    setNewStationId(wp.stationId ?? '');
+    setNewName(wp.name ?? '');
     setNewDistanceKm(String(wp.distanceFromOriginKm));
     setNewTollCostXaf(String(wp.tollCostXaf));
     setNewIsMandatory(wp.isMandatoryStop);
@@ -246,17 +265,22 @@ export function RouteDetailDialog({
   };
 
   const applyEditWaypoint = () => {
-    if (editingIdx === null || !newStationId || !newDistanceKm) return;
-    const station = stations.find(s => s.id === newStationId);
+    if (editingIdx === null || !newDistanceKm) return;
+    const isStation = newKind === 'STATION';
+    if (isStation && !newStationId) return;
+    if (!isStation && !newName.trim()) return;
+    const station = isStation ? stations.find(s => s.id === newStationId) : undefined;
     setWaypoints(prev => prev.map((wp, i) => i === editingIdx ? {
       ...wp,
-      stationId:            newStationId,
+      kind:                 newKind,
+      stationId:            isStation ? newStationId : undefined,
+      name:                 isStation ? undefined : newName.trim(),
       distanceFromOriginKm: Number(newDistanceKm),
       tollCostXaf:          Number(newTollCostXaf) || 0,
-      checkpointCosts:      newCheckpoints,
-      isMandatoryStop:      newIsMandatory,
+      checkpointCosts:      isStation ? newCheckpoints : [],
+      isMandatoryStop:      isStation ? newIsMandatory : false,
       estimatedWaitTime:    newEstimatedWait ? Number(newEstimatedWait) : null,
-      station:              station ? { id: station.id, name: station.name, city: station.city } : undefined,
+      station:              station ? { id: station.id, name: station.name, city: station.city } : null,
     } : wp));
     resetNewForm();
     setWpSuccess(false);
@@ -268,6 +292,7 @@ export function RouteDetailDialog({
     const station = stations.find(s => s.id === stationId);
     if (!station) return;
     const newWp: WaypointData = {
+      kind:                 'STATION',
       stationId,
       order:                waypoints.length + 1,
       distanceFromOriginKm: 0,
@@ -301,7 +326,9 @@ export function RouteDetailDialog({
     try {
       await apiPatch(`${base}/${routeId}/waypoints`, {
         waypoints: waypoints.map((wp, i) => ({
+          kind:                 wp.kind ?? 'STATION',
           stationId:            wp.stationId,
+          name:                 wp.name,
           order:                i + 1,
           distanceFromOriginKm: wp.distanceFromOriginKm,
           tollCostXaf:          wp.tollCostXaf,
@@ -373,28 +400,66 @@ export function RouteDetailDialog({
     ? stations.filter(s => s.id === waypoints[editingIdx].stationId || !usedStationIds.has(s.id))
     : availableForAdd;
 
-  const renderWaypointForm = () => (
+  const renderWaypointForm = () => {
+    const isStation = newKind === 'STATION';
+    const canSubmit = isStation
+      ? (!!newStationId && !!newDistanceKm)
+      : (!!newName.trim() && !!newDistanceKm);
+
+    return (
     <div className="mt-3 p-4 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 space-y-3">
       <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
         {isEditing ? t('routeDetail.editStop') : t('routeDetail.newStop')}
       </h4>
 
+      {/* Kind selector */}
+      <div className="space-y-1">
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+          {t('routeDetail.kindLabel')} <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={newKind}
+          onChange={e => { setNewKind(e.target.value as WaypointKindValue); setNewStationId(''); setNewName(''); }}
+          className={inputClass}
+        >
+          {KIND_OPTIONS.map(k => (
+            <option key={k.value} value={k.value}>{t(k.labelKey)}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-            {t('routeDetail.station')} <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={newStationId}
-            onChange={e => setNewStationId(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">{t('routeDetail.quickAddPlaceholder')}</option>
-            {formStationOptions.map(s => (
-              <option key={s.id} value={s.id}>{stationLabel(s)}</option>
-            ))}
-          </select>
-        </div>
+        {/* Station picker OU champ nom selon le kind */}
+        {isStation ? (
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+              {t('routeDetail.station')} <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={newStationId}
+              onChange={e => setNewStationId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">{t('routeDetail.quickAddPlaceholder')}</option>
+              {formStationOptions.map(s => (
+                <option key={s.id} value={s.id}>{stationLabel(s)}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+              {t('routeDetail.pointName')} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              className={inputClass}
+              placeholder={t('routeDetail.pointNamePlaceholder')}
+            />
+          </div>
+        )}
         <div className="space-y-1">
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
             {t('routeDetail.distanceOrigin')} <span className="text-red-500">*</span>
@@ -433,20 +498,24 @@ export function RouteDetailDialog({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="newIsMandatory"
-          checked={newIsMandatory}
-          onChange={e => setNewIsMandatory(e.target.checked)}
-          className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-        />
-        <label htmlFor="newIsMandatory" className="text-sm text-slate-700 dark:text-slate-300">
-          {t('routeDetail.mandatoryStop')}
-        </label>
-      </div>
+      {/* Arrêt obligatoire — uniquement pour les gares */}
+      {isStation && (
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="newIsMandatory"
+            checked={newIsMandatory}
+            onChange={e => setNewIsMandatory(e.target.checked)}
+            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+          />
+          <label htmlFor="newIsMandatory" className="text-sm text-slate-700 dark:text-slate-300">
+            {t('routeDetail.mandatoryStop')}
+          </label>
+        </div>
+      )}
 
-      {/* Checkpoints sub-form */}
+      {/* Checkpoints sub-form — uniquement pour les gares (legacy JSON) */}
+      {isStation && (
       <div className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -498,6 +567,7 @@ export function RouteDetailDialog({
           </div>
         ))}
       </div>
+      )}
 
       <div className="flex items-center gap-2 pt-2">
         <Button
@@ -507,18 +577,12 @@ export function RouteDetailDialog({
           {t('routeDetail.cancel')}
         </Button>
         {isEditing ? (
-          <Button
-            onClick={applyEditWaypoint}
-            disabled={!newStationId || !newDistanceKm}
-          >
+          <Button onClick={applyEditWaypoint} disabled={!canSubmit}>
             <Save className="w-4 h-4 mr-1.5" aria-hidden />
             {t('routeDetail.saveChanges')}
           </Button>
         ) : (
-          <Button
-            onClick={addWaypoint}
-            disabled={!newStationId || !newDistanceKm}
-          >
+          <Button onClick={addWaypoint} disabled={!canSubmit}>
             <Plus className="w-4 h-4 mr-1.5" aria-hidden />
             {t('routeDetail.add')}
           </Button>
@@ -526,6 +590,7 @@ export function RouteDetailDialog({
       </div>
     </div>
   );
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -571,7 +636,7 @@ export function RouteDetailDialog({
                 {t('routeDetail.stopsTitle')} ({waypoints.length})
               </h3>
               <div className="flex items-center gap-2">
-                {!showAddForm && !isEditing && availableForAdd.length > 0 && (
+                {!showAddForm && !isEditing && (
                   <Button variant="outline" onClick={() => { resetNewForm(); setShowAddForm(true); }}>
                     <Plus className="w-4 h-4 mr-1.5" aria-hidden />
                     {t('routeDetail.addStop')}
@@ -618,26 +683,33 @@ export function RouteDetailDialog({
               </div>
 
               {/* Waypoints */}
-              {waypoints.map((wp, idx) => (
-                <div key={wp.stationId + idx}>
-                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${editingIdx === idx ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
-                    <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-bold shrink-0">
-                      {idx + 1}
+              {waypoints.map((wp, idx) => {
+                const kindMeta = KIND_OPTIONS.find(k => k.value === (wp.kind ?? 'STATION'));
+                const KindIcon = kindMeta?.icon ?? MapPin;
+                const isStation = !wp.kind || wp.kind === 'STATION';
+                return (
+                <div key={(wp.stationId ?? wp.name ?? '') + idx}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${editingIdx === idx ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700' : isStation ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800'}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isStation ? 'bg-slate-300 dark:bg-slate-600' : 'bg-orange-200 dark:bg-orange-700'}`}>
+                      <KindIcon className="w-3.5 h-3.5 text-slate-700 dark:text-slate-200" aria-hidden />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {stationLabel(wp.station)}
+                        {isStation ? stationLabel(wp.station) : wp.name}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {!isStation && kindMeta && (
+                          <Badge variant="warning" size="sm">{t(kindMeta.labelKey)}</Badge>
+                        )}
                         <span className="text-xs text-slate-500">{wp.distanceFromOriginKm} {t('routeDetail.unitKm')}</span>
-                        {wp.isMandatoryStop && <Badge variant="warning" size="sm">{t('routeDetail.mandatoryBadge')}</Badge>}
+                        {isStation && wp.isMandatoryStop && <Badge variant="warning" size="sm">{t('routeDetail.mandatoryBadge')}</Badge>}
                         {(wp.estimatedWaitTime ?? 0) > 0 && (
                           <span className="text-xs text-slate-500">~{wp.estimatedWaitTime} {t('routeDetail.unitMin')}</span>
                         )}
                         {wp.tollCostXaf > 0 && (
                           <Badge variant="default" size="sm">{t('routeDetail.cpPeage')} {formatXof(wp.tollCostXaf)}</Badge>
                         )}
-                        {Array.isArray(wp.checkpointCosts) && wp.checkpointCosts.length > 0 && (
+                        {isStation && Array.isArray(wp.checkpointCosts) && wp.checkpointCosts.length > 0 && (
                           <Badge variant="default" size="sm">
                             {wp.checkpointCosts.length} {wp.checkpointCosts.length > 1 ? t('routeDetail.checkpointsPlural') : t('routeDetail.checkpointSingular')}
                           </Badge>
@@ -691,7 +763,8 @@ export function RouteDetailDialog({
                   {/* Inline edit form for this waypoint */}
                   {editingIdx === idx && renderWaypointForm()}
                 </div>
-              ))}
+              );
+              })}
 
               {/* Destination */}
               <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">

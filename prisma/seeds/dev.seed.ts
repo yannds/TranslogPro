@@ -33,10 +33,12 @@ const prisma = new PrismaClient();
 
 const TENANT1_ID = '11111111-1111-1111-1111-111111111111';
 const TENANT2_ID = '22222222-2222-2222-2222-222222222222';
+const TENANT3_ID = '33333333-3333-3333-3333-333333333333';
 
 const TENANTS = [
-  { id: TENANT1_ID, name: 'TransExpress',  slug: 'trans-express',  adminEmail: 'admin@tenant1.dev' },
-  { id: TENANT2_ID, name: 'CityBus Congo', slug: 'citybus-congo',   adminEmail: 'admin@tenant2.dev' },
+  { id: TENANT1_ID, name: 'TransExpress',    slug: 'trans-express',    adminEmail: 'admin@tenant1.dev' },
+  { id: TENANT2_ID, name: 'CityBus Congo',   slug: 'citybus-congo',    adminEmail: 'admin@tenant2.dev' },
+  { id: TENANT3_ID, name: 'Horizon Voyages', slug: 'horizon-voyages',  adminEmail: 'admin@tenant3.dev' },
 ];
 
 async function hashPwd(plain: string): Promise<string> {
@@ -640,11 +642,13 @@ const DEFAULT_CMS_PAGES = {
       title: 'Voyagez en toute élégance',
       subtitle: 'Réservez vos billets de bus en quelques secondes. Confort, sécurité et ponctualité garantis.',
       trustedBy: 'Des milliers de voyageurs nous font confiance',
+      stats: [{ value: '', label: '' }, { value: '', label: '' }, { value: '', label: '' }],
     },
     en: {
       title: 'Travel in Style',
       subtitle: 'Book your bus tickets in seconds. Comfort, safety, and punctuality guaranteed.',
       trustedBy: 'Thousands of travelers trust us',
+      stats: [{ value: '', label: '' }, { value: '', label: '' }, { value: '', label: '' }],
     },
   },
   about: {
@@ -781,7 +785,7 @@ async function main() {
   await activateAllModules(TENANT1_ID);
 
   // ── 4b. Types de documents véhicule par défaut ─────────────────────────────
-  for (const tid of [TENANT1_ID, TENANT2_ID]) {
+  for (const tid of [TENANT1_ID, TENANT2_ID, TENANT3_ID]) {
     const dtCount = await seedDefaultVehicleDocumentTypes(prisma, tid);
     if (dtCount > 0) console.log(`[Dev Seed] ✅ ${dtCount} types documents véhicule pour tenant ${tid}`);
   }
@@ -832,6 +836,7 @@ async function main() {
   console.log('  │ superadmin@translogpro.io          │ Admin1234! │ SUPER_ADMIN      │');
   console.log('  │ admin@tenant1.dev                  │ Admin1234! │ TENANT_ADMIN     │');
   console.log('  │ admin@tenant2.dev                  │ Admin1234! │ TENANT_ADMIN     │');
+  console.log('  │ admin@tenant3.dev                  │ Admin1234! │ TENANT_ADMIN     │');
   console.log('  │ driver@tenant1.dev                 │ Admin1234! │ DRIVER (profil)  │');
   console.log('  └────────────────────────────────────┴────────────┴──────────────────┘');
 }

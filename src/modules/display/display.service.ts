@@ -293,7 +293,8 @@ export class DisplayService {
       : [0, 0, 0, 0, 0];
 
     const via = trip?.route?.waypoints
-      ?.map(w => w.station.city || w.station.name)
+      ?.filter(w => !w.kind || w.kind === 'STATION')
+      .map(w => w.station?.city || w.station?.name)
       .filter(Boolean)
       .join(' · ') ?? '';
 

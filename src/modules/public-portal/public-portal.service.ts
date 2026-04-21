@@ -375,6 +375,7 @@ export class PublicPortalService {
         originId:                  trip.route.originId,
         destinationId:             trip.route.destinationId,
         waypoints: trip.route.waypoints.map(w => ({
+          kind:                 w.kind,
           stationId:            w.stationId,
           distanceFromOriginKm: w.distanceFromOriginKm,
           tollCostXaf:          w.tollCostXaf,
@@ -449,8 +450,8 @@ export class PublicPortalService {
       distanceKm:    number;
       origin:        { id: string; name: string; city: string | null };
       destination:   { id: string; name: string; city: string | null };
-      waypoints:     Array<{ order: number; distanceFromOriginKm: number;
-                             station: { id: string; name: string; city: string | null } }>;
+      waypoints:     Array<{ kind?: string; order: number; distanceFromOriginKm: number;
+                             station: { id: string; name: string; city: string | null } | null }>;
     };
   }) {
     const seq = [
@@ -461,12 +462,13 @@ export class PublicPortalService {
         distanceFromOriginKm: 0,
       },
       ...trip.route.waypoints
+        .filter(wp => !wp.kind || wp.kind === 'STATION')
         .slice()
         .sort((a, b) => a.order - b.order)
         .map(wp => ({
-          stationId:            wp.station.id,
-          name:                 wp.station.name,
-          city:                 wp.station.city,
+          stationId:            wp.station!.id,
+          name:                 wp.station!.name,
+          city:                 wp.station!.city,
           distanceFromOriginKm: wp.distanceFromOriginKm,
         })),
       {
@@ -793,7 +795,9 @@ export class PublicPortalService {
     const routeStationIds = new Set<string>([
       trip.route.originId,
       trip.route.destinationId,
-      ...trip.route.waypoints.map(w => w.stationId),
+      ...trip.route.waypoints
+        .filter(w => !w.kind || w.kind === 'STATION')
+        .map(w => w.stationId as string),
     ]);
     if (!routeStationIds.has(boardingStationId) || !routeStationIds.has(alightingStationId)) {
       throw new BadRequestException('Boarding or alighting station not on this route');
@@ -1086,13 +1090,13 @@ export class PublicPortalService {
     // Résoudre les libellés des gares de montée/descente pour la réponse
     const boardingLabel = boardingStationId === trip.route.originId
       ? (trip.route.origin.city || trip.route.origin.name)
-      : (trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station.city
-         || trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station.name
+      : (trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station?.city
+         || trip.route.waypoints.find(w => w.stationId === boardingStationId)?.station?.name
          || '');
     const alightingLabel = alightingStationId === trip.route.destinationId
       ? (trip.route.destination.city || trip.route.destination.name)
-      : (trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station.city
-         || trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station.name
+      : (trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station?.city
+         || trip.route.waypoints.find(w => w.stationId === alightingStationId)?.station?.name
          || '');
 
     return {

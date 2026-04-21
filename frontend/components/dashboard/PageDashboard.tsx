@@ -144,8 +144,8 @@ export function PageDashboard() {
                 showTopLines && 'lg:col-span-2',
               )}
             >
-              <h2 id="dashboard-chart-title" className="sr-only">{t('dashboard.salesPerHour')}</h2>
-              <MiniBarChart label={t('dashboard.salesPerHour')} data={hourlyChart} />
+              <h2 id="dashboard-chart-title" className="sr-only">{t('dashboard.revenue7d')}</h2>
+              <MiniBarChart label={t('dashboard.revenue7d')} data={hourlyChart} />
             </section>
           )}
 
