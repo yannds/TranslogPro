@@ -93,7 +93,7 @@ vault kv put secret/platform/db \
   DATABASE_URL_DIRECT="postgresql://app_user:app_password@postgres:5432/translog?schema=public"
 
 vault kv put secret/platform/redis \
-  REDIS_URL="redis://:redis_password@redis:6379"
+  HOST="localhost" PORT="6379" PASSWORD="redis_password"
 
 vault kv put secret/platform/minio \
   ENDPOINT="minio" \
