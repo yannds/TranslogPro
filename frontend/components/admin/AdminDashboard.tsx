@@ -387,16 +387,6 @@ function BottomBar({ collapsed, authUser, onLogout, permissions, unreadCount }: 
         )}
       </button>
 
-      {/* UserMenu — avatar + Mon compte + Déconnexion */}
-      <UserMenu
-        name={name}
-        email={authUser?.email ?? undefined}
-        role={role ?? undefined}
-        initials={initials}
-        collapsed={collapsed}
-        onLogout={onLogout}
-      />
-
       {/* Aide & Support — accordion avec sous-menus */}
       {canSupport && (
         <div className="w-full">
@@ -442,6 +432,16 @@ function BottomBar({ collapsed, authUser, onLogout, permissions, unreadCount }: 
           )}
         </div>
       )}
+
+      {/* UserMenu — avatar + Mon compte + Déconnexion */}
+      <UserMenu
+        name={name}
+        email={authUser?.email ?? undefined}
+        role={role ?? undefined}
+        initials={initials}
+        collapsed={collapsed}
+        onLogout={onLogout}
+      />
     </div>
   );
 }
