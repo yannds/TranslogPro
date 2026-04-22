@@ -196,6 +196,8 @@ const LazyAiPricing           = lazy(() => import('../pages/PageAiPricing').then
 const LazyReports             = lazy(() => import('../pages/PageReports').then(m => ({ default: m.PageReports })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyNotifications       = lazy(() => import('../pages/PageNotifications').then(m => ({ default: m.PageNotifications })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPageAccount         = lazy(() => import('../pages/PageAccount').then(m => ({ default: m.PageAccount })));
 
 // ── Portail Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ────────────────
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -431,6 +433,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── Divers ─────────────────────────────────────────────────────────────
     case 'notifications':       return <LazyNotifications />;
+    case 'account':             return <LazyPageAccount />;
 
     default:                    return <PageDashboard />;
   }

@@ -66,7 +66,8 @@ export class GeoService {
     const cc = countryCode?.trim().toUpperCase() || undefined;
     const bbox = cc ? COUNTRY_BBOX[cc] : undefined;
 
-    const cacheKey = `geo:search:${createHash('sha1').update(`${cc ?? ''}:${q}`).digest('hex')}`;
+    // v2: cache key versionnée pour invalider les anciens résultats sans countrycodes
+    const cacheKey = `geo:search:v2:${createHash('sha1').update(`${cc ?? ''}:${q}`).digest('hex')}`;
     try {
       const cached = await this.redis.get(cacheKey);
       if (cached) return JSON.parse(cached) as GeoSearchResult[];
@@ -79,8 +80,9 @@ export class GeoService {
     url.searchParams.set('format', 'jsonv2');
     url.searchParams.set('limit', String(MAX_RESULTS));
     url.searchParams.set('addressdetails', '1');
-    // viewbox biases results toward the tenant's country; bounded defaults to 0
-    // so international destinations (e.g. Abidjan searched from Senegal) still appear.
+    // Restrict to tenant's operating country (prevents returning results from
+    // neighbouring countries for same-name addresses, e.g. Kintélé CG vs GA).
+    if (cc) url.searchParams.set('countrycodes', cc.toLowerCase());
     if (bbox) url.searchParams.set('viewbox', `${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`);
 
     const controller = new AbortController();
@@ -111,7 +113,7 @@ export class GeoService {
       clearTimeout(timer);
     }
 
-    const results = this.normalize(raw);
+    const results = this.normalize(raw, cc);
     this.redis.setex(cacheKey, CACHE_TTL_SEC, JSON.stringify(results))
       .catch(() => { /* non-critical */ });
     return results;
@@ -129,7 +131,7 @@ export class GeoService {
     return cleaned;
   }
 
-  private normalize(raw: unknown): GeoSearchResult[] {
+  private normalize(raw: unknown, cc?: string): GeoSearchResult[] {
     if (!Array.isArray(raw)) return [];
     const out: GeoSearchResult[] = [];
     for (const item of raw) {
@@ -145,6 +147,9 @@ export class GeoService {
         !Number.isFinite(lat) || !Number.isFinite(lng) ||
         lat < -90 || lat > 90 || lng < -180 || lng > 180
       ) continue;
+      // Defense-in-depth: drop results from a different country even if Nominatim
+      // returns them despite the countrycodes= filter.
+      if (cc && countryCode && countryCode !== cc) continue;
       out.push({ displayName: displayName.slice(0, 240), lat, lng, countryCode });
       if (out.length >= MAX_RESULTS) break;
     }

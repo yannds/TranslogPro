@@ -55,6 +55,8 @@ export type NavItem = NavLeaf | NavGroup;
 export interface NavSection {
   id:            string;
   title?:        Label;           // undefined = pas de titre (section anonyme)
+  /** Lucide icon name — affiché comme icône L0 dans la sidebar accordion */
+  icon?:         string;
   items:         NavItem[];
   /** La section est visible si le user a AU MOINS UNE de ces permissions */
   anyOf?:        string[];
@@ -74,6 +76,7 @@ export interface PortalNavConfig {
 export interface ResolvedNavSection {
   id:            string;
   title?:        string;
+  icon?:         string;
   items:         ResolvedNavItem[];
 }
 

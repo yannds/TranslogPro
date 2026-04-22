@@ -11,13 +11,17 @@ import {
   LayoutDashboard, Bell, MapPin, Ticket, Package, MessageSquareWarning,
   Landmark, Tags, Receipt, BarChart3, Brain, Bus, Wrench, Users, Users2,
   Megaphone, Star, MessageCircle, Monitor, ShieldAlert, GitFork, Puzzle,
-  Palette, Link2, ShieldCheck, Building2, Terminal, TrendingUp, Activity,
+  Palette, Link2, ShieldCheck, Building2, Building, Terminal, TrendingUp, Activity,
   CalendarDays, Route, AlertTriangle, ScanLine, ClipboardList, Truck,
   Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
   Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
   PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
   UserCheck, Bug, RefreshCw, Coffee, GraduationCap, ClipboardCheck,
-  AlertOctagon, Gavel, FileText, Trophy, Calculator, type LucideIcon,
+  AlertOctagon, Gavel, FileText, Trophy, Calculator,
+  // Nouveaux — sections L0 + groupes L1 refonte nav 2026-04-22
+  Crown, SlidersHorizontal, Gift, LineChart, Wallet, Globe, UsersRound,
+  Plus, Gauge, Newspaper, LifeBuoy,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -27,12 +31,15 @@ export const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard, Bell, MapPin, Ticket, Package, MessageSquareWarning,
   Landmark, Tags, Receipt, BarChart3, Brain, Bus, Wrench, Users, Users2,
   Megaphone, Star, MessageCircle, Monitor, ShieldAlert, GitFork, Puzzle,
-  Palette, Link2, ShieldCheck, Building2, Terminal, TrendingUp, Activity,
+  Palette, Link2, ShieldCheck, Building2, Building, Terminal, TrendingUp, Activity,
   CalendarDays, Route, AlertTriangle, ScanLine, ClipboardList, Truck,
   Boxes, FileWarning, Flag, RotateCcw, Grid3x3, Percent, FileBarChart,
   Zap, LayoutGrid, Clock, MapPinned, Volume2, Radar, Siren, ScrollText,
   PlayCircle, Store, PenLine, User, Shield, BookOpen, KeyRound, UserCog,
   UserCheck, Bug, RefreshCw, Trophy, Calculator,
+  // Sections L0 + groupes L1 (refonte nav 2026-04-22)
+  Crown, SlidersHorizontal, Gift, LineChart, Wallet, Globe, UsersRound,
+  Plus, Gauge, Newspaper, LifeBuoy,
   // Aliases métier
   Steer: Bus, CalendarRange: CalendarDays, CalendarClock: CalendarDays,
   FileType: ScrollText, List: ClipboardList, PackagePlus: Package,

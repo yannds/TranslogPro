@@ -26,12 +26,26 @@ import { Badge }                   from '../ui/Badge';
 import { ErrorAlert }              from '../ui/ErrorAlert';
 import { inputClass }              from '../ui/inputClass';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+type Coords = { lat: number; lng: number };
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StationLite {
-  id:   string;
-  name: string;
-  city: string;
+  id:            string;
+  name:          string;
+  city:          string;
+  coordinates?:  Coords | null;
 }
 
 interface WaypointData {
@@ -87,8 +101,8 @@ interface RouteDetail {
   destinationId: string;
   distanceKm:    number;
   basePrice:     number;
-  origin?:       { id: string; name: string; city: string } | null;
-  destination?:  { id: string; name: string; city: string } | null;
+  origin?:       { id: string; name: string; city: string; coordinates?: Coords | null } | null;
+  destination?:  { id: string; name: string; city: string; coordinates?: Coords | null } | null;
   waypoints:     WaypointData[];
   segmentPrices: SegmentPriceRow[];
 }
@@ -291,11 +305,17 @@ export function RouteDetailDialog({
     if (!stationId) return;
     const station = stations.find(s => s.id === stationId);
     if (!station) return;
+    let distKm = 0;
+    if (route?.origin?.coordinates && station.coordinates) {
+      const { lat: lat1, lng: lng1 } = route.origin.coordinates as Coords;
+      const { lat: lat2, lng: lng2 } = station.coordinates;
+      distKm = Math.round(haversineKm(lat1, lng1, lat2, lng2));
+    }
     const newWp: WaypointData = {
       kind:                 'STATION',
       stationId,
       order:                waypoints.length + 1,
-      distanceFromOriginKm: 0,
+      distanceFromOriginKm: distKm,
       tollCostXaf:          0,
       checkpointCosts:      [],
       isMandatoryStop:      false,
@@ -437,7 +457,19 @@ export function RouteDetailDialog({
             </label>
             <select
               value={newStationId}
-              onChange={e => setNewStationId(e.target.value)}
+              onChange={e => {
+                const sid = e.target.value;
+                setNewStationId(sid);
+                // Toujours recalculer quand la gare change (si coords disponibles)
+                if (sid && route?.origin?.coordinates) {
+                  const sel = stations.find(s => s.id === sid);
+                  if (sel?.coordinates) {
+                    const { lat: lat1, lng: lng1 } = route.origin.coordinates as Coords;
+                    const { lat: lat2, lng: lng2 } = sel.coordinates;
+                    setNewDistanceKm(String(Math.round(haversineKm(lat1, lng1, lat2, lng2))));
+                  }
+                }
+              }}
               className={inputClass}
             >
               <option value="">{t('routeDetail.quickAddPlaceholder')}</option>

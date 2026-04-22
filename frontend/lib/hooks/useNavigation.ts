@@ -127,6 +127,7 @@ function resolveSection(section: NavSection, perms: Set<string>, modules: Set<st
   return {
     id:    section.id,
     title: section.title ? resolveLabel(section.title, t) : undefined,
+    icon:  section.icon,
     items,
   };
 }

@@ -169,14 +169,35 @@ const P = {
 };
 
 // ─── Portail Admin ─────────────────────────────────────────────────────────────
+// Structure L0 → L1 → L2 :
+//   NavSection (icon + title, accordion L0)
+//   └── NavGroup  (icon + label, accordion L1)
+//        └── NavLeaf (lien final L2)
+//
+// Notifications et Aide & Support sont dans la bottom bar d'AdminDashboard
+// (pas dans la nav — toujours visibles pour tout staff connecté).
+//
+// Adaptation par rôle : automatique via anyOf permissions.
+// Caissier → voit COMMERCE (ventes/caisse) + TABLEAU DE BORD uniquement.
+// Chauffeur → ne rentre pas dans ce portail (utilise DRIVER_NAV).
+// Agency Manager → voit OPÉRATIONS + COMMERCE + RESSOURCES + ANALYTICS.
+// Tenant Admin → voit tout.
 
 export const ADMIN_NAV: PortalNavConfig = {
   portalId: 'admin',
   sections: [
 
-    // ── Vue d'ensemble ───────────────────────────────────────────────────────
+    // ── Tableau de bord ──────────────────────────────────────────────────────
+    // Section à item unique → rendu direct (pas d'accordion).
     {
-      id: 'overview',
+      id: 'dashboard',
+      title: 'nav.dashboard',
+      icon: 'LayoutDashboard',
+      anyOf: [
+        P.STATS_READ, P.TRIP_UPDATE, P.TICKET_READ_TENANT,
+        P.CASHIER_OPEN, P.CASHIER_TX, P.TICKET_CREATE,
+        P.PARCEL_CREATE, P.STAFF_READ, P.DRIVER_PROFILE,
+      ],
       items: [
         {
           kind: 'leaf',
@@ -184,61 +205,40 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.dashboard',
           href: '/admin',
           icon: 'LayoutDashboard',
-          anyOf: [P.STATS_READ, P.TRIP_UPDATE, P.TICKET_READ_TENANT],
-        },
-        {
-          kind: 'leaf',
-          id: 'notifications',
-          label: 'nav.notifications',
-          href: '/admin/notifications',
-          icon: 'Bell',
-          // tous les admins
-          anyOf: [P.STATS_READ, P.TRIP_UPDATE, P.IAM_MANAGE],
-        },
-        {
-          kind: 'leaf',
-          id: 'support',
-          label: 'nav.contact_support',
-          href: '/admin/support',
-          icon: 'LifeBuoy',
-          // Tout staff tenant avec au moins la perm "créer ticket" voit l'item.
-          anyOf: [P.SUPPORT_CREATE_TENANT, P.SUPPORT_READ_TENANT],
+          anyOf: [
+            P.STATS_READ, P.TRIP_UPDATE, P.TICKET_READ_TENANT,
+            P.CASHIER_OPEN, P.CASHIER_TX, P.TICKET_CREATE,
+            P.PARCEL_CREATE, P.STAFF_READ, P.DRIVER_PROFILE,
+          ],
         },
       ],
     },
 
-    // ── Opérations ───────────────────────────────────────────────────────────
+    // ── OPÉRATIONS ───────────────────────────────────────────────────────────
+    // Icône : Route — les routes/trajets sont l'essence du transport.
+    // Profil cashier : ne voit aucun groupe (pas de perm trip/parcel/display).
+    // Profil supervisor : voit Flux Passagers + Logistique + Affichage.
     {
-      id: 'ops',
+      id: 'operations',
       title: 'nav.operations',
-      anyOf: [P.TRIP_CREATE, P.TRIP_UPDATE, P.TICKET_CREATE, P.TICKET_READ_TENANT, P.PARCEL_CREATE, P.MANIFEST_GENERATE, P.SAV_CLAIM],
+      icon: 'Route',
+      anyOf: [
+        P.TRIP_CREATE, P.TRIP_UPDATE, P.ROUTE_MANAGE, P.TRIP_DELAY,
+        P.PARCEL_CREATE, P.PARCEL_UPDATE_AGENCY, P.SHIPMENT_GROUP, P.MANIFEST_GENERATE,
+        P.STATION_MANAGE, P.STATION_READ, P.PLATFORM_MANAGE, P.PLATFORM_READ,
+        P.DISPLAY_UPDATE, P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ,
+      ],
       items: [
         {
           kind: 'group',
-          id: 'trips',
-          label: 'nav.trips_planning',
-          icon: 'MapPin',
+          id: 'passenger-flow',
+          label: { fr: 'Flux Passagers', en: 'Passenger Flow' },
+          icon: 'Users',
           anyOf: [P.TRIP_CREATE, P.TRIP_UPDATE, P.ROUTE_MANAGE, P.TRIP_DELAY, P.TRIP_CANCEL],
           children: [
-            { kind: 'leaf', id: 'trips-list',     label: 'nav.today_s_trips',    href: '/admin/trips',          icon: 'List',        anyOf: [P.TRIP_UPDATE, P.TRIP_CREATE] },
-            { kind: 'leaf', id: 'trips-planning', label: 'nav.weekly_planning', href: '/admin/trips/planning', icon: 'CalendarDays', anyOf: [P.TRIP_CREATE, P.ROUTE_MANAGE] },
-            { kind: 'leaf', id: 'stations',       label: 'nav.stations',   href: '/admin/stations',       icon: 'MapPin',      anyOf: [P.STATION_MANAGE, P.STATION_READ] },
-            { kind: 'leaf', id: 'platforms',      label: 'nav.platform_management', href: '/admin/platforms',  icon: 'MapPinned', anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ] },
-            { kind: 'leaf', id: 'routes',         label: 'nav.routes_lines',    href: '/admin/routes',         icon: 'Route',       anyOf: [P.ROUTE_MANAGE] },
-            { kind: 'leaf', id: 'trips-delays',   label: 'nav.delays_alerts',  href: '/admin/trips/delays',   icon: 'AlertTriangle', anyOf: [P.TRIP_DELAY, P.TRIP_UPDATE] },
-          ],
-        },
-        {
-          kind: 'group',
-          id: 'ticketing',
-          label: 'nav.ticketing',
-          icon: 'Ticket',
-          anyOf: [P.TICKET_CREATE, P.TICKET_READ_AGENCY, P.TICKET_READ_TENANT, P.TICKET_CANCEL],
-          children: [
-            { kind: 'leaf', id: 'tickets-new',    label: 'nav.sell_ticket',   href: '/admin/tickets/new',    icon: 'Plus',        anyOf: [P.TICKET_CREATE] },
-            { kind: 'leaf', id: 'tickets-list',   label: 'nav.issued_tickets',       href: '/admin/tickets',        icon: 'List',        anyOf: [P.TICKET_READ_AGENCY, P.TICKET_READ_TENANT] },
-            { kind: 'leaf', id: 'tickets-cancel', label: 'nav.cancellations',        href: '/admin/tickets/cancel', icon: 'XCircle',     anyOf: [P.TICKET_CANCEL] },
-            { kind: 'leaf', id: 'manifests',      label: 'nav.manifests',         href: '/admin/manifests',      icon: 'ClipboardList', anyOf: [P.MANIFEST_GENERATE, P.MANIFEST_READ_OWN] },
+            { kind: 'leaf', id: 'trips-list',     label: 'nav.today_s_trips',    href: '/admin/trips',          icon: 'List',          anyOf: [P.TRIP_UPDATE, P.TRIP_CREATE] },
+            { kind: 'leaf', id: 'trips-planning', label: 'nav.weekly_planning',  href: '/admin/trips/planning', icon: 'CalendarDays',  anyOf: [P.TRIP_CREATE, P.ROUTE_MANAGE] },
+            { kind: 'leaf', id: 'trips-delays',   label: 'nav.delays_alerts',    href: '/admin/trips/delays',   icon: 'AlertTriangle', anyOf: [P.TRIP_DELAY, P.TRIP_UPDATE] },
           ],
         },
         {
@@ -246,153 +246,148 @@ export const ADMIN_NAV: PortalNavConfig = {
           id: 'logistics',
           label: 'nav.parcels_logistics',
           icon: 'Package',
-          anyOf: [P.PARCEL_CREATE, P.PARCEL_UPDATE_AGENCY, P.PARCEL_UPDATE_TENANT, P.SHIPMENT_GROUP],
+          anyOf: [P.PARCEL_CREATE, P.PARCEL_UPDATE_AGENCY, P.PARCEL_UPDATE_TENANT, P.SHIPMENT_GROUP, P.MANIFEST_GENERATE],
           children: [
-            { kind: 'leaf', id: 'parcel-new',     label: 'nav.register_parcel', href: '/admin/parcels/new',  icon: 'PackagePlus', anyOf: [P.PARCEL_CREATE] },
-            { kind: 'leaf', id: 'parcels-list',   label: 'nav.track_parcels',         href: '/admin/parcels',       icon: 'Truck',       anyOf: [P.PARCEL_UPDATE_AGENCY, P.PARCEL_UPDATE_TENANT] },
-            { kind: 'leaf', id: 'shipments',      label: 'nav.group_shipments', href: '/admin/shipments',    icon: 'Boxes',       anyOf: [P.SHIPMENT_GROUP] },
+            { kind: 'leaf', id: 'parcel-new',   label: 'nav.register_parcel',   href: '/admin/parcels/new',  icon: 'PackagePlus',   anyOf: [P.PARCEL_CREATE] },
+            { kind: 'leaf', id: 'parcels-list', label: 'nav.track_parcels',     href: '/admin/parcels',      icon: 'Truck',         anyOf: [P.PARCEL_UPDATE_AGENCY, P.PARCEL_UPDATE_TENANT] },
+            { kind: 'leaf', id: 'shipments',    label: 'nav.group_shipments',   href: '/admin/shipments',    icon: 'Boxes',         anyOf: [P.SHIPMENT_GROUP] },
+            { kind: 'leaf', id: 'manifests',    label: 'nav.manifests',         href: '/admin/manifests',    icon: 'ClipboardList', anyOf: [P.MANIFEST_GENERATE, P.MANIFEST_READ_OWN] },
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'infrastructure',
+          label: { fr: 'Infrastructure & Info', en: 'Infrastructure & Info' },
+          icon: 'MapPin',
+          anyOf: [P.STATION_MANAGE, P.STATION_READ, P.ROUTE_MANAGE, P.PLATFORM_MANAGE, P.PLATFORM_READ],
+          children: [
+            { kind: 'leaf', id: 'stations',  label: 'nav.stations',            href: '/admin/stations',   icon: 'MapPin',    anyOf: [P.STATION_MANAGE, P.STATION_READ] },
+            { kind: 'leaf', id: 'platforms', label: 'nav.platform_management', href: '/admin/platforms',  icon: 'MapPinned', anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ] },
+            { kind: 'leaf', id: 'routes',    label: 'nav.routes_lines',        href: '/admin/routes',     icon: 'Route',     anyOf: [P.ROUTE_MANAGE] },
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'display',
+          label: 'nav.display_station',
+          icon: 'Monitor',
+          anyOf: [P.DISPLAY_UPDATE, P.PLATFORM_MANAGE, P.PLATFORM_READ, P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ],
+          children: [
+            { kind: 'leaf', id: 'display-screens',       label: 'nav.screens_displays',      href: '/admin/display',               icon: 'Monitor',  anyOf: [P.DISPLAY_UPDATE] },
+            { kind: 'leaf', id: 'display-quais',         label: 'nav.platform_display',      href: '/admin/display/quais',         icon: 'MapPinned', anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ, P.TRIP_UPDATE, P.DISPLAY_UPDATE] },
+            { kind: 'leaf', id: 'display-bus',           label: 'nav.bus_onboard_display',   href: '/admin/display/bus',           icon: 'Bus',      anyOf: [P.DISPLAY_UPDATE, P.FLEET_MANAGE, P.FLEET_STATUS] },
+            { kind: 'leaf', id: 'display-announcements', label: 'nav.station_announcements', href: '/admin/display/announcements', icon: 'Volume2',  anyOf: [P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ, P.DISPLAY_UPDATE] },
+          ],
+        },
+      ],
+    },
+
+    // ── COMMERCE & SAV ───────────────────────────────────────────────────────
+    // Icône : Ticket — le billet est le cœur du commerce transport.
+    // Profil cashier : voit uniquement Ventes & Caisse (ses perms).
+    // Profil supervisor : voit Ventes + SAV.
+    {
+      id: 'commerce',
+      title: { fr: 'Commerce & SAV', en: 'Commerce & Customer Service' },
+      icon: 'Ticket',
+      anyOf: [
+        P.TICKET_CREATE, P.TICKET_READ_AGENCY, P.TICKET_READ_TENANT,
+        P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE,
+        P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER, P.REFUND_READ,
+        P.VOUCHER_READ_TENANT, P.VOUCHER_ISSUE_AGENCY,
+        P.CRM_READ, P.CAMPAIGN_MANAGE,
+      ],
+      items: [
+        {
+          kind: 'group',
+          id: 'sales-cashier',
+          label: { fr: 'Ventes & Caisse', en: 'Sales & Cashier' },
+          icon: 'Landmark',
+          anyOf: [
+            P.TICKET_CREATE, P.TICKET_READ_AGENCY, P.TICKET_READ_TENANT,
+            P.TICKET_CANCEL, P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE,
+          ],
+          children: [
+            { kind: 'leaf', id: 'tickets-new',        label: 'nav.sell_ticket',        href: '/admin/tickets/new',        icon: 'Plus',          anyOf: [P.TICKET_CREATE] },
+            { kind: 'leaf', id: 'tickets-list',       label: 'nav.issued_tickets',     href: '/admin/tickets',            icon: 'List',          anyOf: [P.TICKET_READ_AGENCY, P.TICKET_READ_TENANT] },
+            { kind: 'leaf', id: 'tickets-cancel',     label: 'nav.cancellations',      href: '/admin/tickets/cancel',     icon: 'XCircle',       anyOf: [P.TICKET_CANCEL] },
+            { kind: 'leaf', id: 'cashier',            label: 'nav.cashier',            href: '/admin/cashier',            icon: 'Landmark',      anyOf: [P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE] },
+            { kind: 'leaf', id: 'cash-discrepancies', label: 'nav.cash_discrepancies', href: '/admin/cash-discrepancies', icon: 'AlertTriangle', anyOf: [P.CASHIER_CLOSE, P.STATS_READ] },
           ],
         },
         {
           kind: 'group',
           id: 'sav',
-          label: 'nav.after_sales_claims',
-          icon: 'MessageSquareWarning',
-          anyOf: [P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER, P.REFUND_READ],
+          label: { fr: 'Support & SAV', en: 'Support & Customer Service' },
+          icon: 'LifeBuoy',
+          anyOf: [P.SAV_CLAIM, P.SAV_REPORT, P.SAV_DELIVER, P.REFUND_READ, P.VOUCHER_READ_TENANT, P.VOUCHER_ISSUE_AGENCY],
           moduleKey: 'SAV_MODULE',
           children: [
-            { kind: 'leaf', id: 'sav-claims',    label: 'nav.claims',        href: '/admin/sav/claims',    icon: 'FileWarning', anyOf: [P.SAV_CLAIM] },
-            { kind: 'leaf', id: 'sav-reports',   label: 'nav.reports',        href: '/admin/sav/reports',   icon: 'Flag',        anyOf: [P.SAV_REPORT] },
-            { kind: 'leaf', id: 'sav-returns',   label: 'nav.refunds',      href: '/admin/sav/returns',   icon: 'RotateCcw',   anyOf: [P.REFUND_READ] },
-            { kind: 'leaf', id: 'vouchers',      label: 'nav.vouchers',     href: '/admin/sav/vouchers',  icon: 'Ticket',      anyOf: [P.VOUCHER_READ_TENANT, P.VOUCHER_ISSUE_AGENCY] },
+            { kind: 'leaf', id: 'sav-claims',  label: 'nav.claims',   href: '/admin/sav/claims',   icon: 'FileWarning', anyOf: [P.SAV_CLAIM] },
+            { kind: 'leaf', id: 'sav-reports', label: 'nav.reports',  href: '/admin/sav/reports',  icon: 'Flag',        anyOf: [P.SAV_REPORT] },
+            { kind: 'leaf', id: 'sav-returns', label: 'nav.refunds',  href: '/admin/sav/returns',  icon: 'RotateCcw',   anyOf: [P.REFUND_READ] },
+            { kind: 'leaf', id: 'vouchers',    label: 'nav.vouchers', href: '/admin/sav/vouchers', icon: 'Gift',        anyOf: [P.VOUCHER_READ_TENANT, P.VOUCHER_ISSUE_AGENCY] },
           ],
-        },
-      ],
-    },
-
-    // ── Finance ──────────────────────────────────────────────────────────────
-    {
-      id: 'finance',
-      title: 'nav.finance',
-      anyOf: [P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE, P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ, P.INVOICE_PRINT],
-      items: [
-        {
-          kind: 'leaf',
-          id: 'cashier',
-          label: 'nav.cashier',
-          href: '/admin/cashier',
-          icon: 'Landmark',
-          anyOf: [P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE],
-        },
-        {
-          kind: 'leaf',
-          id: 'cash-discrepancies',
-          label: 'nav.cash_discrepancies',
-          href: '/admin/cash-discrepancies',
-          icon: 'AlertTriangle',
-          // Audit des écarts de clôture — même perm que close + read tenant analytics
-          anyOf: [P.CASHIER_CLOSE, P.STATS_READ],
         },
         {
           kind: 'group',
-          id: 'pricing',
-          label: 'nav.pricing',
-          icon: 'Tags',
-          anyOf: [P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ, P.TARIFF_MANAGE, P.TARIFF_READ, P.PROMOTION_MANAGE],
+          id: 'crm',
+          label: { fr: 'CRM & Marketing', en: 'CRM & Marketing' },
+          icon: 'Users2',
+          anyOf: [P.CRM_READ, P.CAMPAIGN_MANAGE],
+          moduleKey: 'CRM',
           children: [
-            { kind: 'leaf', id: 'pricing-grid',   label: 'nav.pricing_grid',        href: '/admin/pricing',        icon: 'Grid3x3',     anyOf: [P.TARIFF_MANAGE, P.TARIFF_READ, P.PRICING_MANAGE, P.PRICING_READ] },
-            { kind: 'leaf', id: 'pricing-yield',  label: 'nav.yield_management',    href: '/admin/pricing/yield',  icon: 'TrendingUp',  anyOf: [P.PRICING_YIELD], moduleKey: 'YIELD_ENGINE' },
-            { kind: 'leaf', id: 'pricing-promo',  label: 'nav.promotions',          href: '/admin/pricing/promo',  icon: 'Percent',     anyOf: [P.PROMOTION_MANAGE, P.PROMOTION_READ] },
+            { kind: 'leaf', id: 'crm-clients',   label: 'nav.customers_crm',   href: '/admin/crm',           icon: 'Users2',        anyOf: [P.CRM_READ] },
+            { kind: 'leaf', id: 'crm-campaigns', label: 'nav.campaigns',       href: '/admin/crm/campaigns', icon: 'Megaphone',     anyOf: [P.CAMPAIGN_MANAGE] },
+            { kind: 'leaf', id: 'crm-loyalty',   label: 'nav.loyalty_program', href: '/admin/crm/loyalty',   icon: 'Star',          anyOf: [P.CRM_READ], wip: true },
+            { kind: 'leaf', id: 'crm-feedback',  label: 'nav.reviews_feedback',href: '/admin/crm/feedback',  icon: 'MessageCircle', anyOf: [P.CRM_READ] },
           ],
-        },
-        {
-          kind: 'leaf',
-          id: 'invoices',
-          label: 'nav.invoicing',
-          href: '/admin/invoices',
-          icon: 'Receipt',
-          anyOf: [P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE],
         },
       ],
     },
 
-    // ── Intelligence & Analytics ─────────────────────────────────────────────
+    // ── RESSOURCES ───────────────────────────────────────────────────────────
+    // Icône : Bus — le véhicule EST la ressource principale en transport.
+    // Flotte + Personnel + Maintenance : tout ce qui fait rouler le bus.
+    // Crew (planning, calendrier, briefing) aplati dans Personnel & Équipages.
     {
-      id: 'intelligence',
-      title: 'nav.intelligence',
-      anyOf: [P.STATS_READ],
+      id: 'resources',
+      title: { fr: 'Ressources', en: 'Resources' },
+      icon: 'Bus',
+      anyOf: [
+        P.FLEET_MANAGE, P.FLEET_LAYOUT, P.FLEET_STATUS, P.FLEET_TRACKING,
+        P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE,
+        P.DRIVER_MANAGE, P.DRIVER_PROFILE, P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ,
+      ],
       items: [
-        {
-          kind: 'leaf',
-          id: 'analytics',
-          label: 'nav.analytics',
-          href: '/admin/analytics',
-          icon: 'BarChart3',
-          anyOf: [P.STATS_READ],
-        },
-        {
-          // KPI saisonniers — Sprint 4. Agrégats par mois/année/weekend avec
-          // comparaisons M-1, M-3, YoY selon l'historique disponible.
-          kind: 'leaf',
-          id: 'seasonality',
-          label: 'nav.seasonality',
-          href: '/admin/analytics/seasonality',
-          icon: 'CalendarRange',
-          anyOf: [P.STATS_READ],
-        },
         {
           kind: 'group',
-          id: 'ai',
-          label: 'nav.ai_recommendations',
-          icon: 'Brain',
-          anyOf: [P.STATS_READ],
+          id: 'fleet',
+          label: { fr: 'Flotte (Garage)', en: 'Fleet (Garage)' },
+          icon: 'Truck',
+          anyOf: [P.FLEET_MANAGE, P.FLEET_LAYOUT, P.FLEET_STATUS, P.FLEET_TRACKING, P.FLEET_TRACKING_CREATE],
           children: [
-            { kind: 'leaf', id: 'ai-routes',      label: 'nav.route_profitability',    href: '/admin/ai/routes',      icon: 'TrendingUp',  anyOf: [P.STATS_READ] },
-            { kind: 'leaf', id: 'ai-fleet',       label: 'nav.fleet_optimization', href: '/admin/ai/fleet',       icon: 'Bus',         anyOf: [P.STATS_READ, P.FLEET_MANAGE] },
-            { kind: 'leaf', id: 'ai-demand',      label: 'nav.demand_forecast',  href: '/admin/ai/demand',      icon: 'Activity',    anyOf: [P.STATS_READ] },
-            { kind: 'leaf', id: 'ai-pricing',     label: 'nav.dynamic_pricing',   href: '/admin/ai/pricing',     icon: 'Zap',         anyOf: [P.PRICING_YIELD, P.STATS_READ] },
+            { kind: 'leaf', id: 'fleet-vehicles', label: 'nav.vehicles',              href: '/admin/fleet',          icon: 'Bus',        anyOf: [P.FLEET_MANAGE, P.FLEET_STATUS] },
+            { kind: 'leaf', id: 'fleet-tracking', label: 'nav.mileage_fuel',          href: '/admin/fleet/tracking', icon: 'Gauge',      anyOf: [P.FLEET_MANAGE, P.FLEET_STATUS, P.FLEET_TRACKING, P.FLEET_TRACKING_CREATE] },
+            { kind: 'leaf', id: 'fleet-seats',    label: 'nav.seat_plans',            href: '/admin/fleet/seats',    icon: 'LayoutGrid', anyOf: [P.FLEET_LAYOUT] },
+            { kind: 'leaf', id: 'fleet-docs',     label: 'nav.documents_consumables', href: '/admin/fleet-docs',     icon: 'FileCheck',  anyOf: [P.FLEET_MANAGE, P.DRIVER_MANAGE], moduleKey: 'FLEET_DOCS' },
           ],
         },
         {
-          kind: 'leaf',
-          id: 'reports',
-          label: 'nav.periodic_reports',
-          href: '/admin/reports',
-          icon: 'FileBarChart',
-          anyOf: [P.STATS_READ],
-        },
-      ],
-    },
-
-    // ── Flotte ───────────────────────────────────────────────────────────────
-    {
-      id: 'fleet',
-      title: 'nav.fleet',
-      anyOf: [P.FLEET_MANAGE, P.FLEET_LAYOUT, P.FLEET_STATUS, P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE, P.DRIVER_MANAGE],
-      items: [
-        {
-          kind: 'leaf',
-          id: 'fleet-vehicles',
-          label: 'nav.vehicles',
-          href: '/admin/fleet',
-          icon: 'Bus',
-          anyOf: [P.FLEET_MANAGE, P.FLEET_STATUS],
-        },
-        {
-          kind: 'leaf',
-          id: 'fleet-tracking',
-          label: 'nav.mileage_fuel',
-          href: '/admin/fleet/tracking',
-          icon: 'Gauge',
-          anyOf: [P.FLEET_MANAGE, P.FLEET_STATUS, P.FLEET_TRACKING, P.FLEET_TRACKING_CREATE],
-        },
-        {
-          kind: 'leaf',
-          id: 'fleet-seats',
-          label: 'nav.seat_plans',
-          href: '/admin/fleet/seats',
-          icon: 'LayoutGrid',
-          anyOf: [P.FLEET_LAYOUT],
+          // crew.children aplanis ici — plus de groupe imbriqué dans un groupe.
+          kind: 'group',
+          id: 'staff-crew',
+          label: { fr: 'Personnel & Équipages', en: 'Staff & Crew' },
+          icon: 'UsersRound',
+          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
+          children: [
+            { kind: 'leaf', id: 'staff-list',      label: 'nav.all_staff',               href: '/admin/staff',                icon: 'Users',          anyOf: [P.STAFF_MANAGE, P.STAFF_READ] },
+            { kind: 'leaf', id: 'drivers',         label: 'nav.drivers',                 href: '/admin/drivers',              icon: 'Steer',          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE], moduleKey: 'DRIVER_PROFILE' },
+            { kind: 'leaf', id: 'driver-scoring',  label: 'nav.driver_scoring',          href: '/admin/drivers/scoring',      icon: 'Trophy',         anyOf: [P.DRIVER_PROFILE, P.STAFF_MANAGE, P.CREW_MANAGE], moduleKey: 'DRIVER_PROFILE' },
+            { kind: 'leaf', id: 'crew-planning',   label: 'nav.crew_planning',           href: '/admin/crew/planning',        icon: 'CalendarRange',  anyOf: [P.CREW_MANAGE], moduleKey: 'CREW_BRIEFING' },
+            { kind: 'leaf', id: 'driver-calendar', label: 'nav.driver_calendar',         href: '/admin/crew/driver-calendar', icon: 'CalendarDays',   anyOf: [P.TRIP_READ_TENANT, P.CREW_MANAGE, P.STAFF_READ] },
+            { kind: 'leaf', id: 'crew-briefing',   label: 'nav.pre_departure_briefings', href: '/admin/crew/briefing',        icon: 'ClipboardCheck', anyOf: [P.CREW_MANAGE], moduleKey: 'CREW_BRIEFING' },
+          ],
         },
         {
           kind: 'group',
@@ -402,381 +397,180 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.MAINTENANCE_APPROVE, P.MAINTENANCE_UPDATE],
           moduleKey: 'GARAGE_PRO',
           children: [
-            { kind: 'leaf', id: 'maintenance-list',     label: 'nav.maintenance_sheets',  href: '/admin/maintenance',          icon: 'ClipboardCheck', anyOf: [P.MAINTENANCE_APPROVE] },
-            { kind: 'leaf', id: 'maintenance-planning', label: 'nav.garage_planning',         href: '/admin/maintenance/planning', icon: 'CalendarClock',  anyOf: [P.MAINTENANCE_APPROVE] },
-            { kind: 'leaf', id: 'maintenance-alerts',   label: 'nav.technical_alerts',      href: '/admin/maintenance/alerts',   icon: 'AlertCircle',    anyOf: [P.MAINTENANCE_APPROVE, P.FLEET_STATUS] },
+            { kind: 'leaf', id: 'maintenance-list',     label: 'nav.maintenance_sheets', href: '/admin/maintenance',          icon: 'ClipboardCheck', anyOf: [P.MAINTENANCE_APPROVE] },
+            { kind: 'leaf', id: 'maintenance-planning', label: 'nav.garage_planning',    href: '/admin/maintenance/planning', icon: 'CalendarClock',  anyOf: [P.MAINTENANCE_APPROVE] },
+            { kind: 'leaf', id: 'maintenance-alerts',   label: 'nav.technical_alerts',   href: '/admin/maintenance/alerts',   icon: 'AlertCircle',    anyOf: [P.MAINTENANCE_APPROVE, P.FLEET_STATUS] },
           ],
-        },
-        {
-          kind: 'leaf',
-          id: 'fleet-docs',
-          label: 'nav.documents_consumables',
-          icon: 'FileCheck',
-          href: '/admin/fleet-docs',
-          anyOf: [P.FLEET_MANAGE, P.DRIVER_MANAGE],
-          moduleKey: 'FLEET_DOCS',
         },
       ],
     },
 
-    // ── Personnel & Équipages ─────────────────────────────────────────────────
+    // ── STRATÉGIE & PRIX ─────────────────────────────────────────────────────
+    // Icône : TrendingUp — tarification et rentabilité.
+    // Facturation + Taxes déplacées ici depuis l'ancienne section Finance.
     {
-      id: 'staff',
-      title: 'nav.staff',
-      anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.STAFF_READ, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
+      id: 'strategy',
+      title: { fr: 'Stratégie & Prix', en: 'Strategy & Pricing' },
+      icon: 'TrendingUp',
+      anyOf: [
+        P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ,
+        P.TARIFF_MANAGE, P.TARIFF_READ, P.PROMOTION_MANAGE, P.PROMOTION_READ,
+        P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE, P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE,
+        P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE,
+        P.TAX_READ, P.TAX_MANAGE,
+      ],
       items: [
         {
-          kind: 'leaf',
-          id: 'drivers',
-          label: 'nav.drivers',
-          icon: 'Steer',
-          href: '/admin/drivers',
-          anyOf: [P.CREW_MANAGE, P.STAFF_MANAGE, P.DRIVER_MANAGE, P.DRIVER_PROFILE],
-          moduleKey: 'DRIVER_PROFILE',
-        },
-        {
-          // Leaderboard scoring conducteur (Sprint 9) — DriverScoringService
-          kind: 'leaf',
-          id: 'driver-scoring',
-          label: 'nav.driver_scoring',
-          icon: 'Trophy',
-          href: '/admin/drivers/scoring',
-          anyOf: [P.DRIVER_PROFILE, P.STAFF_MANAGE, P.CREW_MANAGE],
-          moduleKey: 'DRIVER_PROFILE',
-        },
-        {
-          kind: 'leaf',
-          id: 'staff-list',
-          label: 'nav.all_staff',
-          href: '/admin/staff',
-          icon: 'Users',
-          anyOf: [P.STAFF_MANAGE, P.STAFF_READ],
+          kind: 'group',
+          id: 'pricing',
+          label: 'nav.pricing',
+          icon: 'Tags',
+          anyOf: [
+            P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ,
+            P.TARIFF_MANAGE, P.TARIFF_READ, P.PROMOTION_MANAGE, P.PROMOTION_READ,
+            P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE, P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE,
+          ],
+          children: [
+            { kind: 'leaf', id: 'pricing-grid',        label: 'nav.pricing_grid',     href: '/admin/pricing',               icon: 'Grid3x3',    anyOf: [P.TARIFF_MANAGE, P.TARIFF_READ, P.PRICING_MANAGE, P.PRICING_READ] },
+            { kind: 'leaf', id: 'pricing-yield',       label: 'nav.yield_management', href: '/admin/pricing/yield',         icon: 'TrendingUp', anyOf: [P.PRICING_YIELD], moduleKey: 'YIELD_ENGINE' },
+            { kind: 'leaf', id: 'pricing-promo',       label: 'nav.promotions',       href: '/admin/pricing/promo',         icon: 'Percent',    anyOf: [P.PROMOTION_MANAGE, P.PROMOTION_READ] },
+            { kind: 'leaf', id: 'tenant-fare-classes', label: 'nav.fare_classes',     href: '/admin/settings/fare-classes', icon: 'Tags',       anyOf: [P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE] },
+            { kind: 'leaf', id: 'peak-periods',        label: 'nav.peak_periods',     href: '/admin/settings/peak-periods', icon: 'Calendar',   anyOf: [P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE] },
+          ],
         },
         {
           kind: 'group',
-          id: 'crew',
-          label: 'nav.crews',
-          icon: 'UsersRound',
-          anyOf: [P.CREW_MANAGE],
-          moduleKey: 'CREW_BRIEFING',
+          id: 'finance-taxes',
+          label: { fr: 'Finance & Taxes', en: 'Finance & Taxes' },
+          icon: 'Receipt',
+          anyOf: [
+            P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE,
+            P.TAX_READ, P.TAX_MANAGE, P.SETTINGS_MANAGE,
+          ],
           children: [
-            { kind: 'leaf', id: 'crew-planning',   label: 'nav.crew_planning',  href: '/admin/crew/planning',  icon: 'CalendarRange',  anyOf: [P.CREW_MANAGE] },
-            { kind: 'leaf', id: 'driver-calendar', label: 'nav.driver_calendar', href: '/admin/crew/driver-calendar', icon: 'CalendarDays', anyOf: [P.TRIP_READ_TENANT, P.CREW_MANAGE, P.STAFF_READ] },
-            { kind: 'leaf', id: 'crew-briefing',   label: 'nav.pre_departure_briefings', href: '/admin/crew/briefing', icon: 'ClipboardCheck', anyOf: [P.CREW_MANAGE] },
+            { kind: 'leaf', id: 'invoices',       label: 'nav.invoicing',         href: '/admin/invoices',         icon: 'Receipt',    anyOf: [P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE] },
+            { kind: 'leaf', id: 'tenant-taxes',   label: 'nav.taxes_fiscality',   href: '/admin/settings/taxes',   icon: 'Calculator', anyOf: [P.TAX_READ, P.TAX_MANAGE] },
+            { kind: 'leaf', id: 'tenant-payment', label: 'nav.payment_settings',  href: '/admin/settings/payment', icon: 'CreditCard', anyOf: [P.SETTINGS_MANAGE] },
           ],
         },
       ],
     },
 
-    // ── QHSE & Sécurité opérationnelle ────────────────────────────────────────
+    // ── QHSE & SÉCURITÉ ──────────────────────────────────────────────────────
+    // Icône : ShieldCheck — sécurité et conformité opérationnelle.
+    // Incidents de sécurité + QHSE regroupés (tous liés aux risques terrain).
     {
       id: 'qhse',
       title: 'nav.qhse',
-      anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT],
+      icon: 'ShieldCheck',
+      anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT, P.SAFETY_MONITOR, P.SAV_REPORT],
       items: [
         {
-          kind: 'leaf',
-          id: 'qhse',
-          label: 'nav.qhse_accidents',
+          kind: 'group',
+          id: 'risks-audit',
+          label: { fr: 'Risques & Audit', en: 'Risks & Audit' },
           icon: 'AlertOctagon',
-          href: '/admin/qhse',
-          anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT],
-          moduleKey: 'QHSE',
+          anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT, P.SAFETY_MONITOR, P.SAV_REPORT],
+          children: [
+            { kind: 'leaf', id: 'qhse',             label: 'nav.qhse_accidents', href: '/admin/qhse',             icon: 'AlertOctagon', anyOf: [P.QHSE_MANAGE, P.ACCIDENT_REPORT], moduleKey: 'QHSE' },
+            { kind: 'leaf', id: 'safety-incidents', label: 'nav.incidents',      href: '/admin/safety/incidents', icon: 'ShieldAlert',  anyOf: [P.SAFETY_MONITOR, P.SAV_REPORT] },
+            { kind: 'leaf', id: 'safety-monitor',   label: 'nav.live_monitoring',href: '/admin/safety',           icon: 'Radar',        anyOf: [P.SAFETY_MONITOR] },
+            { kind: 'leaf', id: 'safety-sos',       label: 'nav.sos_alerts',     href: '/admin/safety/sos',       icon: 'Siren',        anyOf: [P.SAFETY_MONITOR] },
+          ],
         },
       ],
     },
 
-    // ── Commercial & CRM ─────────────────────────────────────────────────────
+    // ── ANALYTICS & BI ───────────────────────────────────────────────────────
+    // Icône : BarChart3 — données et prévisions.
+    // Note : PageAnalytics a des données mock (REVENUE, PASSENGERS_BY_LINE,
+    // TICKETS_BY_CHANNEL, PARCELS_BY_WEIGHT) — à remplacer par API.
+    // PageAiRoutes utilise déjà /api/tenants/:id/analytics/ai-routes.
     {
-      id: 'crm',
-      title: 'nav.commercial',
-      anyOf: [P.CRM_READ, P.CAMPAIGN_MANAGE],
-      moduleKey: 'CRM',
+      id: 'analytics',
+      title: 'nav.intelligence',
+      icon: 'BarChart3',
+      anyOf: [P.STATS_READ],
       items: [
         {
-          kind: 'leaf',
-          id: 'crm-clients',
-          label: 'nav.customers_crm',
-          href: '/admin/crm',
-          icon: 'Users2',
-          anyOf: [P.CRM_READ],
+          kind: 'group',
+          id: 'performance',
+          label: { fr: 'Pilotage Performance', en: 'Performance Tracking' },
+          icon: 'LineChart',
+          anyOf: [P.STATS_READ],
+          children: [
+            { kind: 'leaf', id: 'analytics',   label: 'nav.analytics',        href: '/admin/analytics',            icon: 'BarChart3',    anyOf: [P.STATS_READ] },
+            { kind: 'leaf', id: 'seasonality', label: 'nav.seasonality',      href: '/admin/analytics/seasonality',icon: 'CalendarRange',anyOf: [P.STATS_READ] },
+            { kind: 'leaf', id: 'reports',     label: 'nav.periodic_reports', href: '/admin/reports',              icon: 'FileBarChart', anyOf: [P.STATS_READ] },
+          ],
         },
         {
-          kind: 'leaf',
-          id: 'crm-campaigns',
-          label: 'nav.campaigns',
-          href: '/admin/crm/campaigns',
-          icon: 'Megaphone',
-          anyOf: [P.CAMPAIGN_MANAGE],
-        },
-        {
-          kind: 'leaf',
-          id: 'crm-loyalty',
-          label: 'nav.loyalty_program',
-          href: '/admin/crm/loyalty',
-          icon: 'Star',
-          anyOf: [P.CRM_READ], wip: true,
-        },
-        {
-          kind: 'leaf',
-          id: 'crm-feedback',
-          label: 'nav.reviews_feedback',
-          href: '/admin/crm/feedback',
-          icon: 'MessageCircle',
-          anyOf: [P.CRM_READ],
+          kind: 'group',
+          id: 'ai',
+          label: 'nav.ai_recommendations',
+          icon: 'Brain',
+          anyOf: [P.STATS_READ],
+          children: [
+            { kind: 'leaf', id: 'ai-routes',  label: 'nav.route_profitability', href: '/admin/ai/routes',  icon: 'TrendingUp', anyOf: [P.STATS_READ] },
+            { kind: 'leaf', id: 'ai-fleet',   label: 'nav.fleet_optimization',  href: '/admin/ai/fleet',   icon: 'Bus',        anyOf: [P.STATS_READ, P.FLEET_MANAGE] },
+            { kind: 'leaf', id: 'ai-demand',  label: 'nav.demand_forecast',     href: '/admin/ai/demand',  icon: 'Activity',   anyOf: [P.STATS_READ] },
+            { kind: 'leaf', id: 'ai-pricing', label: 'nav.dynamic_pricing',     href: '/admin/ai/pricing', icon: 'Zap',        anyOf: [P.PRICING_YIELD, P.STATS_READ] },
+          ],
         },
       ],
     },
 
-    // ── Affichage & Gare ─────────────────────────────────────────────────────
-    {
-      id: 'display',
-      title: 'nav.display_station',
-      anyOf: [P.DISPLAY_UPDATE, P.TRIP_UPDATE, P.PLATFORM_MANAGE, P.PLATFORM_READ, P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ],
-      items: [
-        {
-          kind: 'leaf',
-          id: 'display-screens',
-          label: 'nav.screens_displays',
-          href: '/admin/display',
-          icon: 'Monitor',
-          anyOf: [P.DISPLAY_UPDATE],
-        },
-        {
-          kind: 'leaf',
-          id: 'display-quais',
-          label: 'nav.platform_display',
-          href: '/admin/display/quais',
-          icon: 'MapPinned',
-          anyOf: [P.PLATFORM_MANAGE, P.PLATFORM_READ, P.TRIP_UPDATE, P.DISPLAY_UPDATE],
-        },
-        {
-          kind: 'leaf',
-          id: 'display-bus',
-          label: 'nav.bus_onboard_display',
-          href: '/admin/display/bus',
-          icon: 'Bus',
-          anyOf: [P.DISPLAY_UPDATE, P.FLEET_MANAGE, P.FLEET_STATUS],
-        },
-        {
-          kind: 'leaf',
-          id: 'display-announcements',
-          label: 'nav.station_announcements',
-          href: '/admin/display/announcements',
-          icon: 'Volume2',
-          anyOf: [P.ANNOUNCEMENT_MANAGE, P.ANNOUNCEMENT_READ, P.DISPLAY_UPDATE],
-        },
-      ],
-    },
-
-    // ── Sécurité & Incidents ─────────────────────────────────────────────────
-    {
-      id: 'safety',
-      title: 'nav.security',
-      anyOf: [P.SAFETY_MONITOR, P.SAV_REPORT],
-      items: [
-        {
-          kind: 'leaf',
-          id: 'safety-incidents',
-          label: 'nav.incidents',
-          href: '/admin/safety/incidents',
-          icon: 'ShieldAlert',
-          anyOf: [P.SAFETY_MONITOR, P.SAV_REPORT],
-        },
-        {
-          kind: 'leaf',
-          id: 'safety-monitor',
-          label: 'nav.live_monitoring',
-          href: '/admin/safety',
-          icon: 'Radar',
-          anyOf: [P.SAFETY_MONITOR],
-        },
-        {
-          kind: 'leaf',
-          id: 'safety-sos',
-          label: 'nav.sos_alerts',
-          href: '/admin/safety/sos',
-          icon: 'Siren',
-          anyOf: [P.SAFETY_MONITOR],
-        },
-      ],
-    },
-
-    // ── Configuration ────────────────────────────────────────────────────────
+    // ── CONFIGURATION ────────────────────────────────────────────────────────
+    // Icône : SlidersHorizontal — paramètres et configuration tenant.
+    // Workflow Studio + Documents + Structure + IAM + Écosystème & Portail.
     {
       id: 'config',
       title: 'nav.configuration',
-      anyOf: [P.WORKFLOW_STUDIO_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP, P.IAM_MANAGE, P.TEMPLATE_WRITE, P.IAM_AUDIT, P.AGENCY_MANAGE, P.AGENCY_READ, P.TAX_READ, P.TAX_MANAGE],
+      icon: 'SlidersHorizontal',
+      anyOf: [
+        P.WORKFLOW_STUDIO_READ, P.WORKFLOW_STUDIO_WRITE, P.WORKFLOW_SIMULATE,
+        P.MODULE_INSTALL, P.SETTINGS_MANAGE, P.INTEGRATION_SETUP,
+        P.IAM_MANAGE, P.IAM_AUDIT,
+        P.TEMPLATE_WRITE, P.TEMPLATE_READ,
+        P.AGENCY_MANAGE, P.AGENCY_READ,
+      ],
       items: [
         {
           kind: 'group',
           id: 'workflow-studio',
           label: 'nav.workflow_studio',
           icon: 'GitFork',
-          anyOf: [P.WORKFLOW_STUDIO_READ, P.WORKFLOW_STUDIO_WRITE, P.WORKFLOW_SIMULATE],
+          anyOf: [P.WORKFLOW_STUDIO_READ, P.WORKFLOW_STUDIO_WRITE, P.WORKFLOW_SIMULATE, P.WORKFLOW_MARKETPLACE],
           moduleKey: 'WORKFLOW_STUDIO',
           children: [
-            { kind: 'leaf', id: 'wf-designer',    label: 'nav.workflow_editor',  href: '/admin/workflow-studio',            icon: 'PenLine',       anyOf: [P.WORKFLOW_STUDIO_WRITE] },
-            { kind: 'leaf', id: 'wf-blueprints',  label: 'nav.blueprints',            href: '/admin/workflow-studio/blueprints', icon: 'ScrollText',    anyOf: [P.WORKFLOW_STUDIO_READ] },
-            { kind: 'leaf', id: 'wf-marketplace', label: 'nav.marketplace',           href: '/admin/workflow-studio/market',     icon: 'Store',         anyOf: [P.WORKFLOW_MARKETPLACE] },
-            { kind: 'leaf', id: 'wf-simulate',    label: 'nav.simulator',            href: '/admin/workflow-studio/simulate',   icon: 'PlayCircle',    anyOf: [P.WORKFLOW_SIMULATE] },
+            { kind: 'leaf', id: 'wf-designer',    label: 'nav.workflow_editor', href: '/admin/workflow-studio',            icon: 'PenLine',    anyOf: [P.WORKFLOW_STUDIO_WRITE] },
+            { kind: 'leaf', id: 'wf-blueprints',  label: 'nav.blueprints',      href: '/admin/workflow-studio/blueprints', icon: 'ScrollText', anyOf: [P.WORKFLOW_STUDIO_READ] },
+            { kind: 'leaf', id: 'wf-marketplace', label: 'nav.marketplace',     href: '/admin/workflow-studio/market',     icon: 'Store',      anyOf: [P.WORKFLOW_MARKETPLACE] },
+            { kind: 'leaf', id: 'wf-simulate',    label: 'nav.simulator',       href: '/admin/workflow-studio/simulate',   icon: 'PlayCircle', anyOf: [P.WORKFLOW_SIMULATE] },
           ],
-        },
-        {
-          kind: 'leaf',
-          id: 'agencies',
-          label: 'nav.agencies',
-          href: '/admin/settings/agencies',
-          icon: 'Building2',
-          anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ],
-        },
-        {
-          kind: 'leaf',
-          id: 'modules',
-          label: 'nav.modules_extensions',
-          href: '/admin/modules',
-          icon: 'Puzzle',
-          anyOf: [P.MODULE_INSTALL],
-        },
-        {
-          kind: 'leaf',
-          id: 'tenant-company',
-          label: 'nav.company_info',
-          href: '/admin/settings/company',
-          icon: 'Building2',
-          anyOf: [P.SETTINGS_MANAGE],
-        },
-        {
-          // Règles métier tenant — politique annulation, no-show, compensation
-          // incident, colis hubs. Tous les paramètres pilotables via UI.
-          kind: 'leaf',
-          id: 'tenant-rules',
-          label: 'nav.business_rules',
-          href: '/admin/settings/rules',
-          icon: 'ScrollText',
-          anyOf: [P.SETTINGS_MANAGE],
-        },
-        {
-          // Taxes & fiscalité — CRUD TenantTax (TVA, timbre, taxes locales).
-          // Lecture seule pour caissier (data.tax.read.tenant) ; écriture
-          // (création/édition/suppression) pour admin tenant, gérant agence,
-          // comptable. Permissions configurables via /admin/iam/roles.
-          kind: 'leaf',
-          id: 'tenant-taxes',
-          label: 'nav.taxes_fiscality',
-          href: '/admin/settings/taxes',
-          icon: 'Calculator',
-          anyOf: [P.TAX_READ, P.TAX_MANAGE],
-        },
-        {
-          // Classes de voyage — CRUD TenantFareClass (STANDARD/CONFORT/VIP/…).
-          // Lecture : caissier/agent (pour lister à la vente) ; écriture :
-          // TENANT_ADMIN/ACCOUNTANT. Les classes isSystemDefault ne sont
-          // pas supprimables (protection historique des tickets vendus).
-          kind: 'leaf',
-          id: 'tenant-fare-classes',
-          label: 'nav.fare_classes',
-          href: '/admin/settings/fare-classes',
-          icon: 'Tags',
-          anyOf: [P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE],
-        },
-        {
-          // Périodes peak — calendrier saisonnier pilotant la 5ème règle du
-          // yield management (priorité max sur golden-day / fill-rate).
-          // Fériés, vacances scolaires, creux typiques. Seed auto par pays.
-          kind: 'leaf',
-          id: 'peak-periods',
-          label: 'nav.peak_periods',
-          href: '/admin/settings/peak-periods',
-          icon: 'Calendar',
-          anyOf: [P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE],
-        },
-        {
-          // Configuration paiement tenant — TTL intent, timeouts MoMo, retries
-          // webhook, seuil MFA refund, surcharges client. Les secrets et
-          // toggles LIVE des providers se gèrent via /admin/integrations.
-          kind: 'leaf',
-          id: 'tenant-payment',
-          label: 'nav.payment_settings',
-          href: '/admin/settings/payment',
-          icon: 'CreditCard',
-          anyOf: [P.SETTINGS_MANAGE],
-        },
-        {
-          kind: 'leaf',
-          id: 'white-label',
-          label: 'nav.white_label_theme',
-          href: '/admin/settings/branding',
-          icon: 'Palette',
-          anyOf: [P.SETTINGS_MANAGE],
-          moduleKey: 'WHITE_LABEL',
         },
         {
           kind: 'group',
-          id: 'portal-group',
-          label: 'nav.visitor_portal',
-          icon: 'Globe',
+          id: 'documents',
+          label: { fr: 'Documents Officiels', en: 'Official Documents' },
+          icon: 'FileText',
+          anyOf: [P.TEMPLATE_WRITE, P.TEMPLATE_READ],
           children: [
-            {
-              kind: 'leaf',
-              id: 'portal-admin',
-              label: 'nav.portal_settings',
-              href: '/admin/settings/portal',
-              icon: 'Settings',
-              anyOf: [P.SETTINGS_MANAGE],
-            },
-            {
-              kind: 'leaf',
-              id: 'portal-marketplace',
-              label: 'nav.portal_marketplace',
-              href: '/admin/settings/portal/marketplace',
-              icon: 'Store',
-              anyOf: [P.SETTINGS_MANAGE],
-            },
-            {
-              kind: 'leaf',
-              id: 'cms-pages',
-              label: 'nav.cms_pages',
-              href: '/admin/settings/portal/pages',
-              icon: 'FileText',
-              anyOf: [P.SETTINGS_MANAGE],
-            },
-            {
-              kind: 'leaf',
-              id: 'cms-posts',
-              label: 'nav.cms_posts',
-              href: '/admin/settings/portal/posts',
-              icon: 'Newspaper',
-              anyOf: [P.SETTINGS_MANAGE],
-            },
+            { kind: 'leaf', id: 'documents-templates', label: 'nav.document_templates', href: '/admin/templates', icon: 'FileType', anyOf: [P.TEMPLATE_WRITE, P.TEMPLATE_READ] },
           ],
         },
         {
-          kind: 'leaf',
-          id: 'integrations',
-          label: 'nav.api_integrations',
-          href: '/admin/integrations',
-          icon: 'Link2',
-          anyOf: [P.INTEGRATION_SETUP],
-        },
-        {
-          // Abonnement SaaS — page self-service (plan, factures, auto-renew,
-          // résiliation). Visible uniquement pour le tenant admin via
-          // SETTINGS_MANAGE (même gate que les autres réglages plateforme).
-          kind: 'leaf',
-          id: 'tenant-billing',
-          label: 'nav.billing',
-          href: '/admin/billing',
-          icon: 'CreditCard',
-          anyOf: [P.SETTINGS_MANAGE],
-        },
-        {
-          kind: 'leaf',
-          id: 'documents-templates',
-          label: 'nav.document_templates',
-          href: '/admin/templates',
-          icon: 'FileType',
-          anyOf: [P.TEMPLATE_WRITE, P.TEMPLATE_READ],
+          kind: 'group',
+          id: 'structure',
+          label: { fr: 'Structure', en: 'Structure' },
+          icon: 'Building2',
+          anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE],
+          children: [
+            { kind: 'leaf', id: 'agencies',      label: 'nav.agencies',         href: '/admin/settings/agencies', icon: 'Building2', anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ] },
+            { kind: 'leaf', id: 'modules',       label: 'nav.modules_extensions',href: '/admin/modules',          icon: 'Puzzle',    anyOf: [P.MODULE_INSTALL] },
+            { kind: 'leaf', id: 'tenant-company',label: 'nav.company_info',     href: '/admin/settings/company',  icon: 'Building',  anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'tenant-rules',  label: 'nav.business_rules',   href: '/admin/settings/rules',    icon: 'ScrollText',anyOf: [P.SETTINGS_MANAGE] },
+          ],
         },
         {
           kind: 'group',
@@ -785,23 +579,38 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'ShieldCheck',
           anyOf: [P.IAM_MANAGE, P.IAM_AUDIT],
           children: [
-            { kind: 'leaf', id: 'iam-users',  label: 'nav.users', href: '/admin/iam/users',  icon: 'User',       anyOf: [P.IAM_MANAGE] },
-            { kind: 'leaf', id: 'iam-roles',  label: 'nav.roles',        href: '/admin/iam/roles',  icon: 'Shield',     anyOf: [P.IAM_MANAGE] },
-            { kind: 'leaf', id: 'iam-audit',  label: 'nav.access_log', href: '/admin/iam/audit',  icon: 'BookOpen',   anyOf: [P.IAM_AUDIT] },
-            { kind: 'leaf', id: 'iam-sessions', label: 'nav.sessions',   href: '/admin/iam/sessions', icon: 'KeyRound',  anyOf: [P.IAM_MANAGE] },
+            { kind: 'leaf', id: 'iam-users',    label: 'nav.users',      href: '/admin/iam/users',    icon: 'User',     anyOf: [P.IAM_MANAGE] },
+            { kind: 'leaf', id: 'iam-roles',    label: 'nav.roles',      href: '/admin/iam/roles',    icon: 'Shield',   anyOf: [P.IAM_MANAGE] },
+            { kind: 'leaf', id: 'iam-audit',    label: 'nav.access_log', href: '/admin/iam/audit',    icon: 'BookOpen', anyOf: [P.IAM_AUDIT] },
+            { kind: 'leaf', id: 'iam-sessions', label: 'nav.sessions',   href: '/admin/iam/sessions', icon: 'KeyRound', anyOf: [P.IAM_MANAGE] },
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'ecosystem',
+          label: { fr: 'Écosystème & Portail', en: 'Ecosystem & Portal' },
+          icon: 'Globe',
+          anyOf: [P.INTEGRATION_SETUP, P.SETTINGS_MANAGE],
+          children: [
+            { kind: 'leaf', id: 'integrations',      label: 'nav.api_integrations',  href: '/admin/integrations',               icon: 'Link2',    anyOf: [P.INTEGRATION_SETUP] },
+            { kind: 'leaf', id: 'tenant-billing',    label: 'nav.billing',           href: '/admin/billing',                    icon: 'Wallet',   anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'white-label',       label: 'nav.white_label_theme', href: '/admin/settings/branding',          icon: 'Palette',  anyOf: [P.SETTINGS_MANAGE], moduleKey: 'WHITE_LABEL' },
+            { kind: 'leaf', id: 'portal-admin',      label: 'nav.portal_settings',   href: '/admin/settings/portal',            icon: 'Settings', anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'portal-marketplace',label: 'nav.portal_marketplace',href: '/admin/settings/portal/marketplace',icon: 'Store',    anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'cms-pages',         label: 'nav.cms_pages',         href: '/admin/settings/portal/pages',      icon: 'FileText', anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'cms-posts',         label: 'nav.cms_posts',         href: '/admin/settings/portal/posts',      icon: 'Newspaper',anyOf: [P.SETTINGS_MANAGE] },
           ],
         },
       ],
     },
 
-    // ── Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ───────────────────
-    // Tous les rôles système du tenant plateforme y accèdent. Chaque item est
-    // gaté par sa permission dédiée — la nav se compose donc automatiquement
-    // selon le plan de données (data/control) de l'acteur : un L1 ne verra que
-    // l'impersonation, un L2 y ajoute le debug, un SA voit tout.
+    // ── PLATEFORME (SUPER_ADMIN / SUPPORT L1-L2) ─────────────────────────────
+    // Icône : Crown — panneau de contrôle plateforme, réservé super admins.
+    // Composé automatiquement selon les permissions globales de l'acteur.
     {
       id: 'platform',
       title: 'nav.platform',
+      icon: 'Crown',
       anyOf: [
         P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH,
         P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
@@ -817,7 +626,6 @@ export const ADMIN_NAV: PortalNavConfig = {
           label: 'nav.platform_dashboard',
           href: '/admin/platform/dashboard',
           icon: 'LayoutDashboard',
-          // Visible dès qu'une permission plateforme est présente (tous les rôles).
           anyOf: [
             P.TENANT_MANAGE, P.PLATFORM_STAFF, P.IMPERSONATION_SWITCH,
             P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY,
@@ -937,10 +745,24 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Terminal',
           anyOf: [P.WORKFLOW_DEBUG, P.OUTBOX_REPLAY],
           children: [
-            { kind: 'leaf', id: 'debug-workflow', label: 'nav.workflow_debug',   href: '/admin/platform/debug/workflow', icon: 'Bug',     anyOf: [P.WORKFLOW_DEBUG] },
-            { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',    href: '/admin/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
+            { kind: 'leaf', id: 'debug-workflow', label: 'nav.workflow_debug', href: '/admin/platform/debug/workflow', icon: 'Bug',       anyOf: [P.WORKFLOW_DEBUG] },
+            { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',  href: '/admin/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
           ],
         },
+      ],
+    },
+
+    // ── Utilitaire (invisible — hrefs réservés pour le bottom bar) ──────────────
+    // anyOf contient une permission impossible → section jamais rendue dans le
+    // sidebar. findActiveIdInConfig parcourt le config brut et trouve quand même
+    // ces hrefs pour que PageRouter resolve correctement.
+    {
+      id: '_utility',
+      anyOf: ['___never___'],
+      items: [
+        { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/admin/notifications', icon: 'Bell' },
+        { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/admin/support',   icon: 'LifeBuoy' },
+        { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/admin/account',  icon: 'UserCircle2' },
       ],
     },
 
@@ -1081,6 +903,11 @@ export const PLATFORM_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'debug-outbox',   label: 'nav.outbox_replay',  href: '/admin/platform/debug/outbox',   icon: 'RefreshCw', anyOf: [P.OUTBOX_REPLAY] },
       ],
     },
+    { id: '_utility', anyOf: ['___never___'], items: [
+      { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/admin/notifications', icon: 'Bell' },
+      { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/admin/support',   icon: 'LifeBuoy' },
+      { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/admin/account',  icon: 'UserCircle2' },
+    ]},
   ],
 };
 

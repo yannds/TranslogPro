@@ -211,9 +211,9 @@ export class RouteService {
     const route = await this.prisma.route.findFirst({
       where: { id, tenantId },
       include: {
-        origin:      { select: { id: true, name: true, city: true } },
-        destination: { select: { id: true, name: true, city: true } },
-        waypoints:   { include: { station: { select: { id: true, name: true, city: true } } }, orderBy: { order: 'asc' } },
+        origin:      { select: { id: true, name: true, city: true, coordinates: true } },
+        destination: { select: { id: true, name: true, city: true, coordinates: true } },
+        waypoints:   { include: { station: { select: { id: true, name: true, city: true, coordinates: true } } }, orderBy: { order: 'asc' } },
         segmentPrices: true,
       },
     });
@@ -404,7 +404,7 @@ export class RouteService {
   listStations(tenantId: string) {
     return this.prisma.station.findMany({
       where:   { tenantId },
-      select:  { id: true, name: true, city: true, type: true },
+      select:  { id: true, name: true, city: true, type: true, coordinates: true },
       orderBy: [{ city: 'asc' }, { name: 'asc' }],
     });
   }

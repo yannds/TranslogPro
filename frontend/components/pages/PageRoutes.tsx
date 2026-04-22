@@ -35,10 +35,20 @@ import { RouteDetailDialog }                from './RouteDetailDialog';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StationLite {
-  id:   string;
-  name: string;
-  city: string;
-  type?: string;
+  id:           string;
+  name:         string;
+  city:         string;
+  type?:        string;
+  coordinates?: { lat: number; lng: number } | null;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 interface RouteRow {
@@ -131,7 +141,16 @@ function RouteForm({
             {t('routes.origin')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.originId}
-            onChange={e => patch({ originId: e.target.value })}
+            onChange={e => {
+              const newId = e.target.value;
+              const dest  = stations?.find(s => s.id === f.destinationId);
+              const orig  = stations?.find(s => s.id === newId);
+              if (orig?.coordinates && dest?.coordinates) {
+                patch({ originId: newId, distanceKm: String(Math.round(haversineKm(orig.coordinates.lat, orig.coordinates.lng, dest.coordinates.lat, dest.coordinates.lng))) });
+              } else {
+                patch({ originId: newId });
+              }
+            }}
             className={inp} disabled={busy}>
             <option value="">{t('common.select')}</option>
             {stations.map(s => (
@@ -145,7 +164,16 @@ function RouteForm({
             {t('routes.destination')} <span aria-hidden className="text-red-500">*</span>
           </label>
           <select required value={f.destinationId}
-            onChange={e => patch({ destinationId: e.target.value })}
+            onChange={e => {
+              const newId = e.target.value;
+              const orig  = stations?.find(s => s.id === f.originId);
+              const dest  = stations?.find(s => s.id === newId);
+              if (orig?.coordinates && dest?.coordinates) {
+                patch({ destinationId: newId, distanceKm: String(Math.round(haversineKm(orig.coordinates.lat, orig.coordinates.lng, dest.coordinates.lat, dest.coordinates.lng))) });
+              } else {
+                patch({ destinationId: newId });
+              }
+            }}
             className={inp} disabled={busy}>
             <option value="">{t('common.select')}</option>
             {stations.map(s => (
