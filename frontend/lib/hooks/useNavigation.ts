@@ -135,18 +135,30 @@ function resolveSection(section: NavSection, perms: Set<string>, modules: Set<st
 /** Trouve l'id de l'item actif en comparant href avec currentHref.
  *  Les enfants sont testés EN PREMIER : le groupe hérite du href du premier
  *  enfant, donc il faut éviter qu'il "vole" le match avant l'enfant réel.
+ *
+ *  Règle de matching :
+ *  - Si le nav href contient un `?` (ex: /driver/scan?type=ticket) → exact match requis.
+ *  - Sinon → on ignore la query string de currentHref (pathname only).
+ *    Permet à navigate('/admin/fleet/seats?busId=xxx') de matcher '/admin/fleet/seats'.
  */
+function matchesHref(navHref: string, currentHref: string): boolean {
+  if (navHref.includes('?')) {
+    return navHref === currentHref;
+  }
+  return navHref === currentHref.split('?')[0];
+}
+
 function findActiveId(sections: ResolvedNavSection[], currentHref: string): string | null {
   for (const section of sections) {
     for (const item of section.items) {
       // 1. Chercher dans les enfants d'abord
       if (item.children) {
         for (const child of item.children) {
-          if (child.href === currentHref) return child.id;
+          if (matchesHref(child.href, currentHref)) return child.id;
         }
       }
       // 2. Tester l'item lui-même seulement si pas d'enfant correspondant
-      if (!item.children && item.href === currentHref) return item.id;
+      if (!item.children && matchesHref(item.href, currentHref)) return item.id;
     }
   }
   return null;
@@ -161,9 +173,9 @@ function findActiveIdInConfig(config: PortalNavConfig, currentHref: string): str
     for (const item of section.items) {
       if (item.kind === 'group') {
         for (const child of item.children) {
-          if (child.href === currentHref) return child.id;
+          if (matchesHref(child.href, currentHref)) return child.id;
         }
-      } else if (item.href === currentHref) {
+      } else if (matchesHref(item.href, currentHref)) {
         return item.id;
       }
     }

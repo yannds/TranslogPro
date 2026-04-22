@@ -952,6 +952,11 @@ export const STATION_AGENT_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'sa-sav',      label: 'nav.report_incident', href: '/agent/sav',    icon: 'MessageSquareWarning', anyOf: [P.SAV_REPORT] },
       ],
     },
+    { id: '_utility', anyOf: ['___never___'], items: [
+      { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/agent/notifications', icon: 'Bell' },
+      { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/agent/support',     icon: 'LifeBuoy' },
+      { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/agent/account',     icon: 'UserCircle2' },
+    ]},
   ],
 };
 
@@ -992,6 +997,11 @@ export const QUAI_AGENT_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'qa-sav',      label: 'nav.report_incident', href: '/quai/sav',     icon: 'AlertTriangle',   anyOf: [P.SAV_REPORT] },
       ],
     },
+    { id: '_utility', anyOf: ['___never___'], items: [
+      { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/quai/notifications', icon: 'Bell' },
+      { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/quai/support',     icon: 'LifeBuoy' },
+      { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/quai/account',     icon: 'UserCircle2' },
+    ]},
   ],
 };
 
@@ -1036,6 +1046,11 @@ export const DRIVER_NAV: PortalNavConfig = {
         { kind: 'leaf', id: 'drv-feedback', label: 'nav.traveler_feedback', href: '/driver/feedback',    icon: 'Star',          anyOf: [P.FEEDBACK_SUBMIT] },
       ],
     },
+    { id: '_utility', anyOf: ['___never___'], items: [
+      { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/driver/notifications', icon: 'Bell' },
+      { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/driver/support',     icon: 'LifeBuoy' },
+      { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/driver/account',     icon: 'UserCircle2' },
+    ]},
   ],
 };
 

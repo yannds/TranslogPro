@@ -12,7 +12,7 @@
  * ACCOUNTANT). Le composant ne vérifie pas la permission lui-même — l'API renvoie
  * 403 si non autorisé ; le parent (PageRoutes) peut masquer le composant si besoin.
  */
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { Calculator, TrendingUp, TrendingDown, Scale, Loader2, AlertTriangle } from 'lucide-react';
 import { apiPost } from '../../lib/api';
 import { useFetch } from '../../lib/hooks/useFetch';
@@ -94,8 +94,8 @@ export function PricingSimulatorCard({ tenantId, routeId, basePrice, currency }:
   );
   const fmt = (n: number) => `${formatter.format(n)} ${currency}`;
 
-  async function handleSimulate(e: FormEvent) {
-    e.preventDefault();
+  async function handleSimulate(e?: FormEvent) {
+    e?.preventDefault();
     if (!busId) {
       setError(t('routes.simulator.errBusRequired'));
       return;
@@ -134,7 +134,7 @@ export function PricingSimulatorCard({ tenantId, routeId, basePrice, currency }:
         {t('routes.simulator.help')}
       </p>
 
-      <form onSubmit={handleSimulate} className="grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-3 items-end">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-3 items-end">
         <label className="block">
           <span className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
             {t('routes.simulator.bus')} <span aria-hidden className="text-red-500">*</span>
@@ -166,11 +166,11 @@ export function PricingSimulatorCard({ tenantId, routeId, basePrice, currency }:
             disabled={loading}
           />
         </label>
-        <Button type="submit" disabled={loading || !busId}>
+        <Button type="button" onClick={() => void handleSimulate()} disabled={loading || !busId}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" aria-hidden />}
           <span className="ml-1.5">{loading ? t('routes.simulator.simulating') : t('routes.simulator.simulate')}</span>
         </Button>
-      </form>
+      </div>
 
       {error && (
         <div role="alert" className="flex items-start gap-2 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
