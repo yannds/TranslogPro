@@ -97,14 +97,47 @@ export interface CrmClient {
   tier:   string;
 }
 
-// ─── IA / Lignes rentables ────────────────────────────────────────────────────
+// ─── IA / Yield management ───────────────────────────────────────────────────
 
 export interface AiRoute {
-  route:   string;
-  score:   number;
-  marge:   string;
-  freq:    string;
-  conseil: string;
+  route:        string;
+  score:        number;
+  marge:        string;
+  fillRate:     number;
+  trips:        number;
+  conseil:      string;
+  isBlackRoute: boolean;
+}
+
+export interface FleetAdvice {
+  id:       string;
+  category: 'rightsize' | 'assignment' | 'maintenance';
+  vehicle:  string;
+  title:    string;
+  detail:   string;
+  impact:   string;
+  score:    number;
+}
+
+export interface PricingSuggestion {
+  id:            string;
+  route:         string;
+  slot:          string;
+  currentFare:   number;
+  suggested:     number;
+  fillRate:       number;
+  revenueImpact: number;
+  confidence:    number;
+  rationale:     string;
+}
+
+export interface Report {
+  id:     string;
+  title:  string;
+  period: 'daily' | 'weekly' | 'monthly';
+  date:   string;
+  amount: number;
+  status: 'ready' | 'discrepancy';
 }
 
 // ─── Écrans d'affichage ───────────────────────────────────────────────────────

@@ -135,6 +135,23 @@ async function bootstrapPlatformSecrets(): Promise<void> {
     JWT_SECRET:     randomBase64(32),
   });
 
+  // OAuth 2.0 providers — credentials à remplacer dans la console OAuth de chaque fournisseur
+  await upsertSecret('platform/auth/google', {
+    CLIENT_ID:     'GOOGLE_CLIENT_ID_HERE',
+    CLIENT_SECRET: 'GOOGLE_CLIENT_SECRET_HERE',
+  });
+
+  await upsertSecret('platform/auth/facebook', {
+    CLIENT_ID:     'FACEBOOK_APP_ID_HERE',
+    CLIENT_SECRET: 'FACEBOOK_APP_SECRET_HERE',
+  });
+
+  await upsertSecret('platform/auth/microsoft', {
+    CLIENT_ID:      'MICROSOFT_CLIENT_ID_HERE',
+    CLIENT_SECRET:  'MICROSOFT_CLIENT_SECRET_HERE',
+    TENANT_SEGMENT: 'common',
+  });
+
   console.log('\n[VAULT] Platform secrets OK');
 }
 
@@ -209,8 +226,9 @@ async function main(): Promise<void> {
     console.log('   1. Remplacer les clés Flutterwave/Paystack par les vraies valeurs');
     console.log('   2. Remplacer les credentials Twilio par les vrais comptes');
     console.log('   3. Remplacer OPENWEATHERMAP_API_KEY_HERE');
-    console.log('   4. Exécuter: npx prisma migrate deploy');
-    console.log('   5. Pour chaque tenant: ts-node scripts/vault-bootstrap.ts --tenant <id>');
+    console.log('   4. Remplacer GOOGLE/FACEBOOK/MICROSOFT OAuth credentials');
+    console.log('   5. Exécuter: npx prisma migrate deploy');
+    console.log('   6. Pour chaque tenant: ts-node scripts/vault-bootstrap.ts --tenant <id>');
     console.log('═══════════════════════════════════════════════════════════\n');
   }
 }

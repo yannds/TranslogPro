@@ -79,7 +79,12 @@ export class VaultService implements ISecretService {
       const result = await this.client.read(`secret/data/${path}`);
       return result.data.data as T;
     } catch (err) {
-      this.logger.error(`Failed to read secret at path: ${path}`, err);
+      const msg = (err as Error)?.message ?? '';
+      if (msg.includes('404') || msg.includes('Status 404')) {
+        this.logger.warn(`Secret not found at path: ${path} (provider may be unconfigured)`);
+      } else {
+        this.logger.error(`Failed to read secret at path: ${path}`, err);
+      }
       throw new Error(`Vault secret read failed: ${path}`);
     }
   }

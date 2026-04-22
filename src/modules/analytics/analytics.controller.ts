@@ -174,6 +174,34 @@ export class AnalyticsController {
     return this.analyticsService.getCustomerSegmentation(tenantId);
   }
 
+  /** Recommandations IA — rentabilité des lignes (90j, TripAnalytics). */
+  @Get('ai-routes')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  aiRoutes(@TenantId() tenantId: string) {
+    return this.analyticsService.getAiRoutes(tenantId);
+  }
+
+  /** Recommandations IA — optimisation flotte (rightsizing, réaffectation, maintenance). */
+  @Get('ai-fleet')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  aiFleet(@TenantId() tenantId: string) {
+    return this.analyticsService.getAiFleet(tenantId);
+  }
+
+  /** Suggestions tarifaires dynamiques par ligne et créneau (yield, 30j). */
+  @Get('ai-pricing')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  aiPricing(@TenantId() tenantId: string) {
+    return this.analyticsService.getAiPricing(tenantId);
+  }
+
+  /** Rapports périodiques — journaux de caisse + récapitulatifs mensuels réels (30j/90j). */
+  @Get('reports')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  reports(@TenantId() tenantId: string) {
+    return this.analyticsService.getReports(tenantId);
+  }
+
   @Get('top-routes')
   @RequirePermission(Permission.STATS_READ_TENANT)
   topRoutes(

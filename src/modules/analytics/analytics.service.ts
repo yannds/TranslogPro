@@ -490,6 +490,304 @@ export class AnalyticsService {
     };
   }
 
+  // ─── AI / Yield Management ────────────────────────────────────────────────────
+
+  private static readonly DAY_MS = 24 * 60 * 60 * 1_000;
+
+  /**
+   * Classement des lignes par score de rentabilité (90 derniers jours).
+   * Source : TripAnalytics (pré-agrégé par le cron nuit).
+   * Score = fillRate*60 + ratio_trips_rentables*30 + fréquence*10 (sur 100).
+   */
+  async getAiRoutes(tenantId: string) {
+    const since = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
+
+    const [analytics, blackRows] = await Promise.all([
+      this.prisma.tripAnalytics.groupBy({
+        by:     ['routeId'],
+        where:  { tenantId, tripDate: { gte: since } },
+        _avg:   { avgFillRate: true, avgNetMargin: true, avgTicketRevenue: true },
+        _sum:   { tripCount: true, profitableCount: true },
+        orderBy: { _avg: { avgFillRate: 'desc' } },
+        take:   10,
+      }),
+      this.prisma.tripAnalytics.groupBy({
+        by:     ['routeId'],
+        where:  { tenantId, tripDate: { gte: since }, isBlackRoute: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    if (analytics.length === 0) return [];
+
+    const blackSet  = new Set(blackRows.map(r => r.routeId));
+    const routeIds  = analytics.map(a => a.routeId);
+    const routes    = await this.prisma.route.findMany({
+      where:   { id: { in: routeIds }, tenantId },
+      include: {
+        origin:      { select: { name: true } },
+        destination: { select: { name: true } },
+      },
+    });
+    const routeMap = new Map(routes.map(r => [r.id, r]));
+
+    return analytics.map(a => {
+      const fillRate       = a._avg.avgFillRate       ?? 0;
+      const ticketRevenue  = a._avg.avgTicketRevenue  ?? 0;
+      const netMargin      = a._avg.avgNetMargin      ?? 0;
+      const tripCount      = a._sum.tripCount         ?? 0;
+      const profitCount    = a._sum.profitableCount   ?? 0;
+      const profitRatio    = tripCount > 0 ? profitCount / tripCount : 0;
+      const freqScore      = Math.min(1, tripCount / 90);
+      const score          = Math.max(0, Math.min(100,
+        Math.round(fillRate * 60 + profitRatio * 30 + freqScore * 10)));
+      const margePct       = ticketRevenue > 0
+        ? Math.round((netMargin / ticketRevenue) * 100)
+        : 0;
+      const route          = routeMap.get(a.routeId);
+      const isBlack        = blackSet.has(a.routeId);
+      const fillPct        = Math.round(fillRate * 100);
+      let conseil: string;
+      if (isBlack || margePct < 0) {
+        conseil = `Ligne déficitaire sur 90j. Revoir la fréquence ou les coûts d'exploitation.`;
+      } else if (fillRate >= 0.85) {
+        conseil = `Taux remplissage ${fillPct}% — ligne saturée. Ajouter des départs ou un bus supplémentaire.`;
+      } else if (fillRate >= 0.65) {
+        conseil = `Taux remplissage ${fillPct}%. Optimiser les créneaux horaires pour capter les pics de demande.`;
+      } else {
+        conseil = `Remplissage modéré (${fillPct}%). Actions commerciales recommandées pour booster la fréquentation.`;
+      }
+      return {
+        route:        route ? `${route.origin.name} → ${route.destination.name}` : a.routeId,
+        score,
+        marge:        margePct >= 0 ? `+${margePct}%` : `${margePct}%`,
+        fillRate:     fillPct,
+        trips:        tripCount,
+        conseil,
+        isBlackRoute: isBlack,
+      };
+    }).sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Recommandations d'optimisation flotte (90 derniers jours).
+   * Génère 3 catégories : rightsizing (capacité vs remplissage), réaffectation
+   * (marge négative), maintenance préventive (km élevés).
+   */
+  async getAiFleet(tenantId: string) {
+    const since = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
+
+    const busAnalytics = await this.prisma.tripAnalytics.groupBy({
+      by:    ['busId'],
+      where: { tenantId, tripDate: { gte: since } },
+      _avg:  { avgFillRate: true, avgNetMargin: true },
+      _sum:  { tripCount: true },
+    });
+
+    if (busAnalytics.length === 0) return [];
+
+    const busIds = busAnalytics.map(a => a.busId);
+    const buses  = await this.prisma.bus.findMany({
+      where:  { id: { in: busIds }, tenantId },
+      select: {
+        id: true, plateNumber: true, model: true, capacity: true,
+        type: true, currentOdometerKm: true,
+      },
+    });
+    const busMap = new Map(buses.map(b => [b.id, b]));
+    const advices: {
+      id: string; category: 'rightsize' | 'assignment' | 'maintenance';
+      vehicle: string; title: string; detail: string; impact: string; score: number;
+    }[] = [];
+
+    for (const a of busAnalytics) {
+      const bus       = busMap.get(a.busId);
+      if (!bus) continue;
+      const fillRate  = a._avg.avgFillRate  ?? 0;
+      const margin    = a._avg.avgNetMargin ?? 0;
+      const trips     = a._sum.tripCount    ?? 0;
+      const fillPct   = Math.round(fillRate * 100);
+
+      if (bus.capacity > 35 && fillRate < 0.62) {
+        const fuelSave = Math.round((1 - fillRate) * 12);
+        advices.push({
+          id:       `rightsize-${bus.id}`,
+          category: 'rightsize',
+          vehicle:  bus.plateNumber,
+          title:    `Réduire la capacité — passer à un 30 places`,
+          detail:   `Taux remplissage moyen ${fillPct}% sur 90j avec un ${bus.capacity} places. Un bus 30 places couvrirait la demande.`,
+          impact:   `+${fuelSave}% économie carburant estimée`,
+          score:    Math.min(95, Math.round(85 - fillRate * 50)),
+        });
+      } else if (margin < 0 && trips >= 5) {
+        advices.push({
+          id:       `assign-${bus.id}`,
+          category: 'assignment',
+          vehicle:  bus.plateNumber,
+          title:    `Réaffecter sur une ligne rentable`,
+          detail:   `Marge nette négative sur 90j. Réaffecter ce bus sur une ligne à fort taux de remplissage optimiserait le ROI.`,
+          impact:   `Potentiel +12–18% marge nette`,
+          score:    Math.min(90, Math.round(55 + Math.min(25, trips / 3))),
+        });
+      } else if (bus.currentOdometerKm && bus.currentOdometerKm > 80_000) {
+        const kmStr = Math.round(bus.currentOdometerKm).toLocaleString('fr-FR');
+        advices.push({
+          id:       `maint-${bus.id}`,
+          category: 'maintenance',
+          vehicle:  bus.plateNumber,
+          title:    `Maintenance préventive recommandée`,
+          detail:   `${kmStr} km au compteur. Planifier une révision complète pour réduire le risque de panne en route.`,
+          impact:   `-15% risque immobilisation non planifiée`,
+          score:    Math.min(88, Math.round(55 + Math.min(33, (bus.currentOdometerKm - 80_000) / 5_000))),
+        });
+      }
+    }
+
+    return advices.sort((a, b) => b.score - a.score).slice(0, 8);
+  }
+
+  /**
+   * Suggestions tarifaires dynamiques (yield management) — 30 derniers jours.
+   * Analyse fillRate par route + jour de semaine depuis TripAnalytics.
+   * Haute demande (>85%) → hausse modérée. Faible demande (<55%) → baisse.
+   * Seuil de confiance minimum 60 — suggestions en dessous exclues.
+   */
+  async getAiPricing(tenantId: string) {
+    const since = new Date(Date.now() - 30 * AnalyticsService.DAY_MS);
+    const DAY_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
+
+    const analytics = await this.prisma.tripAnalytics.groupBy({
+      by:     ['routeId', 'dayOfWeek'],
+      where:  { tenantId, tripDate: { gte: since } },
+      _avg:   { avgFillRate: true, referencePrice: true },
+      _sum:   { tripCount: true },
+      having: { tripCount: { _sum: { gte: 3 } } },
+    });
+
+    if (analytics.length === 0) return [];
+
+    const routeIds = [...new Set(analytics.map(a => a.routeId))];
+    const routes   = await this.prisma.route.findMany({
+      where:   { id: { in: routeIds }, tenantId },
+      include: {
+        origin:      { select: { name: true } },
+        destination: { select: { name: true } },
+      },
+    });
+    const routeMap = new Map(routes.map(r => [r.id, r]));
+    const suggestions: {
+      id: string; route: string; slot: string;
+      currentFare: number; suggested: number;
+      fillRate: number; revenueImpact: number; confidence: number; rationale: string;
+    }[] = [];
+
+    for (const a of analytics) {
+      const fillRate   = a._avg.avgFillRate    ?? 0;
+      const refPrice   = a._avg.referencePrice ?? 0;
+      if (refPrice <= 0) continue;
+      const route = routeMap.get(a.routeId);
+      if (!route) continue;
+      const routeName = `${route.origin.name} → ${route.destination.name}`;
+      const day       = DAY_FR[a.dayOfWeek] ?? `J${a.dayOfWeek}`;
+      const fillPct   = Math.round(fillRate * 100);
+      let suggested: number;
+      let revenueImpact: number;
+      let confidence: number;
+      let rationale: string;
+
+      if (fillRate >= 0.85) {
+        const pct  = fillRate >= 0.95 ? 0.15 : 0.10;
+        suggested  = Math.round(refPrice * (1 + pct) / 100) * 100;
+        revenueImpact = Math.round(pct * 100 * 0.8);
+        confidence = Math.round(Math.min(95, fillRate * 105));
+        rationale  = `Taux remplissage ${fillPct}% ce jour — forte demande. Hausse modérée absorbée sans perte de volume.`;
+      } else if (fillRate <= 0.55) {
+        const drop = 0.08 + (0.55 - fillRate) * 0.15;
+        suggested  = Math.round(refPrice * (1 - drop) / 100) * 100;
+        revenueImpact = Math.round(drop * 100 * 0.55);
+        confidence = Math.round(Math.max(60, 75 - (0.55 - fillRate) * 80));
+        rationale  = `Taux remplissage ${fillPct}% — faible demande. Réduction attire des voyageurs supplémentaires.`;
+      } else {
+        continue;
+      }
+
+      if (confidence < 60) continue;
+      suggestions.push({
+        id:           `${a.routeId}-${a.dayOfWeek}`,
+        route:        routeName,
+        slot:         day,
+        currentFare:  Math.round(refPrice),
+        suggested,
+        fillRate:     fillPct,
+        revenueImpact,
+        confidence,
+        rationale,
+      });
+    }
+
+    return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 8);
+  }
+
+  /**
+   * Rapports périodiques — liste dérivée des données réelles DB (30 derniers jours).
+   * Inclut : journaux de caisse clôturés + récapitulatifs mensuels de transactions.
+   */
+  async getReports(tenantId: string) {
+    const since30 = new Date(Date.now() - 30 * AnalyticsService.DAY_MS);
+    const since90 = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
+
+    const [cashCloses, transactions] = await Promise.all([
+      this.prisma.cashRegister.findMany({
+        where:   { tenantId, status: { in: ['CLOSED', 'DISCREPANCY'] }, closedAt: { gte: since30 } },
+        orderBy: { closedAt: 'desc' },
+        take:    15,
+        select:  { id: true, closedAt: true, finalBalance: true, initialBalance: true, status: true },
+      }),
+      this.prisma.transaction.findMany({
+        where:  { tenantId, createdAt: { gte: since90 } },
+        select: { amount: true, createdAt: true },
+      }),
+    ]);
+
+    const reports: {
+      id: string; title: string; period: 'daily' | 'weekly' | 'monthly';
+      date: string; amount: number; status: 'ready' | 'discrepancy';
+    }[] = [];
+
+    for (const c of cashCloses) {
+      if (!c.closedAt) continue;
+      const d = c.closedAt;
+      const fmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+      reports.push({
+        id:     c.id,
+        title:  `Journal de caisse — ${fmt}`,
+        period: 'daily',
+        date:   this.dayKey(d),
+        amount: c.finalBalance ?? 0,
+        status: c.status === 'DISCREPANCY' ? 'discrepancy' : 'ready',
+      });
+    }
+
+    // Monthly revenue summaries from transactions (last 3 months)
+    const byMonth = new Map<string, number>();
+    for (const tx of transactions) {
+      const month = tx.createdAt.toISOString().slice(0, 7);
+      byMonth.set(month, (byMonth.get(month) ?? 0) + tx.amount);
+    }
+    for (const [month, total] of [...byMonth.entries()].sort().reverse().slice(0, 3)) {
+      reports.push({
+        id:     `monthly-${month}`,
+        title:  `Récapitulatif mensuel — ${month}`,
+        period: 'monthly',
+        date:   `${month}-01`,
+        amount: total,
+        status: 'ready',
+      });
+    }
+
+    return reports.sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   /**
    * Top routes par revenu sur une période.
    */
