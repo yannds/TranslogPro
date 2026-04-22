@@ -917,7 +917,9 @@ export const STATION_AGENT_NAV: PortalNavConfig = {
   portalId: 'station-agent',
   sections: [
     {
-      id: 'main',
+      id:    'main',
+      title: { fr: 'Guichet', en: 'Counter' },
+      icon:  'Ticket',
       items: [
         { kind: 'leaf', id: 'sa-home',     label: 'nav.overview', href: '/agent',          icon: 'LayoutDashboard', anyOf: [P.TICKET_CREATE, P.TICKET_SCAN] },
         { kind: 'leaf', id: 'sa-sell',     label: 'nav.sell_ticket',   href: '/agent/sell',     icon: 'Ticket',          anyOf: [P.TICKET_CREATE] },
@@ -928,8 +930,9 @@ export const STATION_AGENT_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'sa-ops',
+      id:    'sa-ops',
       title: 'nav.cashier_finance',
+      icon:  'Landmark',
       anyOf: [P.CASHIER_OPEN, P.CASHIER_TX, P.CASHIER_CLOSE],
       items: [
         { kind: 'leaf', id: 'sa-cashier',  label: 'nav.cashier',          href: '/agent/cashier',  icon: 'Landmark',        anyOf: [P.CASHIER_OPEN, P.CASHIER_TX] },
@@ -937,16 +940,18 @@ export const STATION_AGENT_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'sa-display',
+      id:    'sa-display',
       title: 'nav.display',
+      icon:  'Monitor',
       anyOf: [P.DISPLAY_UPDATE],
       items: [
         { kind: 'leaf', id: 'sa-display',  label: 'nav.station_screens',     href: '/agent/display',  icon: 'Monitor',         anyOf: [P.DISPLAY_UPDATE] },
       ],
     },
     {
-      id: 'sa-sav',
+      id:    'sa-sav',
       title: 'nav.after_sales',
+      icon:  'LifeBuoy',
       anyOf: [P.SAV_REPORT, P.SAV_DELIVER],
       items: [
         { kind: 'leaf', id: 'sa-sav',      label: 'nav.report_incident', href: '/agent/sav',    icon: 'MessageSquareWarning', anyOf: [P.SAV_REPORT] },
@@ -966,7 +971,9 @@ export const QUAI_AGENT_NAV: PortalNavConfig = {
   portalId: 'quai-agent',
   sections: [
     {
-      id: 'qa-main',
+      id:    'qa-main',
+      title: { fr: 'Quai', en: 'Platform' },
+      icon:  'Truck',
       items: [
         { kind: 'leaf', id: 'qa-home',     label: 'nav.my_platform',        href: '/quai',           icon: 'LayoutDashboard', anyOf: [P.TRIP_UPDATE, P.MANIFEST_SIGN] },
         // Même composant PageQuaiScan, pré-routé via `?type=` pour que l'agent
@@ -981,8 +988,9 @@ export const QUAI_AGENT_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'qa-ops',
+      id:    'qa-ops',
       title: 'nav.operations',
+      icon:  'Route',
       anyOf: [P.TRIP_DELAY, P.DISPLAY_UPDATE],
       items: [
         { kind: 'leaf', id: 'qa-delay',    label: 'nav.declare_delay', href: '/quai/delay',     icon: 'Clock',           anyOf: [P.TRIP_DELAY] },
@@ -990,8 +998,9 @@ export const QUAI_AGENT_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'qa-sav',
+      id:    'qa-sav',
       title: 'nav.after_sales',
+      icon:  'LifeBuoy',
       anyOf: [P.SAV_REPORT],
       items: [
         { kind: 'leaf', id: 'qa-sav',      label: 'nav.report_incident', href: '/quai/sav',     icon: 'AlertTriangle',   anyOf: [P.SAV_REPORT] },
@@ -1011,7 +1020,9 @@ export const DRIVER_NAV: PortalNavConfig = {
   portalId: 'driver',
   sections: [
     {
-      id: 'drv-main',
+      id:    'drv-main',
+      title: { fr: 'Mon service', en: 'My Service' },
+      icon:  'MapPin',
       items: [
         { kind: 'leaf', id: 'drv-home',     label: 'nav.my_trip',       href: '/driver',              icon: 'MapPin',        anyOf: [P.TRIP_READ_OWN, P.TRIP_CHECK_OWN] },
         { kind: 'leaf', id: 'drv-manifest', label: 'nav.manifest',        href: '/driver/manifest',     icon: 'ClipboardList', anyOf: [P.MANIFEST_READ_OWN] },
@@ -1028,8 +1039,9 @@ export const DRIVER_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'drv-ops',
+      id:    'drv-ops',
       title: 'nav.operations',
+      icon:  'Route',
       anyOf: [P.TRIP_REPORT_OWN, P.MAINTENANCE_UPDATE],
       items: [
         { kind: 'leaf', id: 'drv-report',   label: 'nav.trip_report', href: '/driver/report',      icon: 'FileText',      anyOf: [P.TRIP_REPORT_OWN] },
@@ -1037,8 +1049,9 @@ export const DRIVER_NAV: PortalNavConfig = {
       ],
     },
     {
-      id: 'drv-personal',
+      id:    'drv-personal',
       title: 'nav.my_space',
+      icon:  'User',
       items: [
         { kind: 'leaf', id: 'drv-schedule', label: 'nav.my_schedule',      href: '/driver/schedule',    icon: 'Calendar' },
         { kind: 'leaf', id: 'drv-docs',     label: 'nav.my_documents',     href: '/driver/documents',   icon: 'FileCheck',     anyOf: [P.DRIVER_REST_OWN, P.DRIVER_PROFILE] },

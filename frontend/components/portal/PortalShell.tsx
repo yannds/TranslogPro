@@ -2,14 +2,15 @@
  * PortalShell — Enveloppe générique pour les portails contextuels
  * (driver, station-agent, quai-agent).
  *
- * Structure identique à AdminDashboard :
+ * Structure et rendu identiques à AdminDashboard :
  *   1. Logo (haut)
- *   2. Nav scrollable (milieu)
+ *   2. Nav scrollable avec accordéons L0 (icône+titre) → L1 (SidebarNavItem)
  *   3. BottomBar : Bell · Thème · Aide & Support · UserMenu (bas)
  *   4. Bouton collapse (très bas)
  *
- * Les paths account/support/notifications sont lus depuis la section _utility
- * du config passé en props — évite tout hardcoding dans le shell.
+ * Sections sans titre → rendu direct (pas d'accordéon), identique à la section
+ * Dashboard dans AdminDashboard.
+ * Sections avec titre + icon → accordéon cliquable, même comportement admin.
  */
 
 import { useMemo, useState, useRef, useEffect, Suspense } from 'react';
@@ -19,18 +20,19 @@ import {
   ChevronDown, ChevronsLeft, ChevronsRight,
   BookOpen, FileText,
 } from 'lucide-react';
-import { useAuth }            from '../../lib/auth/auth.context';
-import { useI18n }            from '../../lib/i18n/useI18n';
-import { useNavigation }      from '../../lib/hooks/useNavigation';
-import { useLockedViewport }  from '../../lib/hooks/useLockedViewport';
+import { useAuth }             from '../../lib/auth/auth.context';
+import { useI18n }             from '../../lib/i18n/useI18n';
+import { useNavigation }       from '../../lib/hooks/useNavigation';
+import { useLockedViewport }   from '../../lib/hooks/useLockedViewport';
 import { useSidebarCollapsed } from '../../lib/hooks/useSidebarCollapsed';
-import { useTheme }           from '../theme/ThemeProvider';
-import { SidebarNavItem }     from '../dashboard/SidebarNavItem';
-import { PageRouter }         from '../dashboard/PageRouter';
-import { SuspendedScreen }    from '../billing/SuspendedScreen';
-import { OfflineBanner }      from '../offline/OfflineBanner';
-import { cn }                 from '../../lib/utils';
-import type { PortalNavConfig, ResolvedNavItem, NavLeaf } from '../../lib/navigation/nav.types';
+import { useTheme }            from '../theme/ThemeProvider';
+import { NavIcon }             from '../dashboard/NavIcon';
+import { SidebarNavItem }      from '../dashboard/SidebarNavItem';
+import { PageRouter }          from '../dashboard/PageRouter';
+import { SuspendedScreen }     from '../billing/SuspendedScreen';
+import { OfflineBanner }       from '../offline/OfflineBanner';
+import { cn }                  from '../../lib/utils';
+import type { PortalNavConfig, ResolvedNavSection, NavLeaf } from '../../lib/navigation/nav.types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,8 +48,17 @@ function PageLoadingFallback() {
   );
 }
 
-/** Extrait les hrefs utilitaires (account, support, notifications) depuis la
- *  section _utility du config. Fallback sur des paths génériques si absents. */
+function isSingleLeaf(section: ResolvedNavSection): boolean {
+  return section.items.length === 1 && !section.items[0]?.children;
+}
+
+function isSectionActive(section: ResolvedNavSection, activeHref: string): boolean {
+  return section.items.some(
+    item => item.href === activeHref || item.children?.some(c => c.href === activeHref),
+  );
+}
+
+/** Extrait les hrefs utilitaires depuis la section _utility du config. */
 function getUtilityHrefs(config: PortalNavConfig): { account: string; support: string; notifications: string } {
   const section = config.sections.find(s => s.id === '_utility');
   const items = (section?.items ?? []) as NavLeaf[];
@@ -58,39 +69,163 @@ function getUtilityHrefs(config: PortalNavConfig): { account: string; support: s
   };
 }
 
-// ─── SidebarSection ───────────────────────────────────────────────────────────
+// ─── SidebarSection — Accordéon L0 (identique à AdminDashboard) ───────────────
 
 interface SidebarSectionProps {
-  title?:          string;
-  items:           ResolvedNavItem[];
+  section:         ResolvedNavSection;
   activeHref:      string;
   collapsed:       boolean;
   onRequestExpand: () => void;
 }
 
-function SidebarSection({ title, items, activeHref, collapsed, onRequestExpand }: SidebarSectionProps) {
+function SidebarSection({ section, activeHref, collapsed, onRequestExpand }: SidebarSectionProps) {
+  const navigate = useNavigate();
+  const active   = isSectionActive(section, activeHref);
+
+  // Section à item unique : rendu direct (même comportement que Dashboard dans admin)
+  if (isSingleLeaf(section)) {
+    const leaf = section.items[0]!;
+    const isLeafActive = leaf.href === activeHref;
+
+    if (collapsed) {
+      return (
+        <li>
+          <button
+            onClick={() => navigate(leaf.href)}
+            title={section.title ?? leaf.label}
+            aria-label={section.title ?? leaf.label}
+            aria-current={isLeafActive ? 'page' : undefined}
+            className={cn(
+              'w-full flex items-center justify-center rounded-xl py-2.5 transition-colors',
+              isLeafActive ? 't-nav-active' : cn('t-nav-text', 't-nav-hover'),
+            )}
+          >
+            <NavIcon name={section.icon ?? leaf.icon} className="w-5 h-5" />
+          </button>
+        </li>
+      );
+    }
+
+    return (
+      <li>
+        <button
+          onClick={() => navigate(leaf.href)}
+          aria-current={isLeafActive ? 'page' : undefined}
+          className={cn(
+            'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors text-left',
+            isLeafActive ? 't-nav-active' : cn('t-nav-text', 't-nav-hover'),
+          )}
+        >
+          <NavIcon name={section.icon ?? leaf.icon} className="w-5 h-5 shrink-0" />
+          <span className="flex-1 truncate">{section.title ?? leaf.label}</span>
+        </button>
+      </li>
+    );
+  }
+
+  // Section sans titre (anonyme) : rendu plat avec séparateur
+  if (!section.title) {
+    return (
+      <li>
+        <ul role="list" className="space-y-0.5">
+          {section.items.map(item => (
+            <SidebarNavItem
+              key={item.id}
+              item={item}
+              activeHref={activeHref}
+              collapsed={collapsed}
+              onRequestExpand={onRequestExpand}
+            />
+          ))}
+        </ul>
+      </li>
+    );
+  }
+
+  // Section multi-items avec titre : accordéon L0 (identique AdminDashboard)
   return (
-    <div>
-      {title && !collapsed && (
-        <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest t-text-2">
-          {title}
-        </div>
+    <SidebarSectionAccordion
+      section={section}
+      activeHref={activeHref}
+      active={active}
+      collapsed={collapsed}
+      onRequestExpand={onRequestExpand}
+    />
+  );
+}
+
+interface SidebarSectionAccordionProps {
+  section:         ResolvedNavSection;
+  activeHref:      string;
+  active:          boolean;
+  collapsed:       boolean;
+  onRequestExpand: () => void;
+}
+
+function SidebarSectionAccordion({
+  section, activeHref, active, collapsed, onRequestExpand,
+}: SidebarSectionAccordionProps) {
+  const [expanded, setExpanded] = useState(active);
+
+  if (collapsed) {
+    return (
+      <li>
+        <button
+          onClick={() => { setExpanded(true); onRequestExpand(); }}
+          title={section.title}
+          aria-label={section.title}
+          className={cn(
+            'relative w-full flex items-center justify-center rounded-xl py-2.5 transition-colors',
+            active ? 't-nav-group-active' : cn('t-nav-text', 't-nav-hover'),
+          )}
+        >
+          <NavIcon name={section.icon ?? 'LayoutDashboard'} className="w-5 h-5" />
+          {active && (
+            <span
+              aria-hidden
+              className="absolute left-0.5 top-1/2 -translate-y-1/2 w-1 h-4 rounded-full bg-teal-500"
+            />
+          )}
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+        className={cn(
+          'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors text-left',
+          active ? 't-nav-group-active' : cn('t-nav-text', 't-nav-hover'),
+        )}
+      >
+        <NavIcon name={section.icon ?? 'LayoutDashboard'} className="w-5 h-5 shrink-0" />
+        <span className="flex-1 truncate">{section.title}</span>
+        <ChevronDown
+          className={cn('w-3.5 h-3.5 shrink-0 transition-transform duration-200', expanded && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+
+      {expanded && (
+        <ul
+          role="list"
+          className="mt-1 ml-2 pl-2 border-l border-slate-700/40 dark:border-slate-600/40 space-y-0.5"
+        >
+          {section.items.map(item => (
+            <SidebarNavItem
+              key={item.id}
+              item={item}
+              activeHref={activeHref}
+              collapsed={false}
+              depth={1}
+            />
+          ))}
+        </ul>
       )}
-      {title && collapsed && (
-        <div className="mx-2 mb-1 h-px bg-slate-200 dark:bg-slate-700/60" aria-hidden />
-      )}
-      <ul role="list" className="space-y-0.5">
-        {items.map(item => (
-          <SidebarNavItem
-            key={item.id}
-            item={item}
-            activeHref={activeHref}
-            collapsed={collapsed}
-            onRequestExpand={onRequestExpand}
-          />
-        ))}
-      </ul>
-    </div>
+    </li>
   );
 }
 
@@ -107,10 +242,10 @@ interface UserMenuProps {
 }
 
 function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogout }: UserMenuProps) {
-  const { t }           = useI18n();
-  const navigate         = useNavigate();
-  const [open, setOpen]  = useState(false);
-  const ref              = useRef<HTMLDivElement>(null);
+  const { t }          = useI18n();
+  const navigate        = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref             = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -202,10 +337,10 @@ interface BottomBarProps {
 }
 
 function BottomBar({ collapsed, authUser, onLogout, utilityHrefs }: BottomBarProps) {
-  const { theme, toggle }           = useTheme();
-  const { t }                       = useI18n();
-  const navigate                    = useNavigate();
-  const [supportExpanded, setSupExp] = useState(false);
+  const { theme, toggle }             = useTheme();
+  const { t }                         = useI18n();
+  const navigate                      = useNavigate();
+  const [supportExpanded, setSupExp]  = useState(false);
 
   const name     = authUser?.name ?? authUser?.email ?? '?';
   const initials = name.slice(0, 2).toUpperCase();
@@ -323,7 +458,7 @@ export interface PortalShellProps {
   ariaNavLabel:      string;
 }
 
-export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalShellProps) {
+export function PortalShell({ config, ariaNavLabel }: PortalShellProps) {
   useLockedViewport();
 
   const { user: authUser, logout } = useAuth();
@@ -344,21 +479,22 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
   const activeHref    = location.pathname + location.search;
   const utilityHrefs  = useMemo(() => getUtilityHrefs(config), [config]);
 
-  const sidebarContent = useMemo(() => (
+  const sidebarNav = useMemo(() => (
     <nav
-      className="flex-1 overflow-y-auto px-2 py-3 space-y-4"
+      className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5"
       aria-label={ariaNavLabel}
     >
-      {sections.map(section => (
-        <SidebarSection
-          key={section.id}
-          title={section.title}
-          items={section.items}
-          activeHref={activeHref}
-          collapsed={collapsed}
-          onRequestExpand={() => setCollapsed(false)}
-        />
-      ))}
+      <ul role="list" className="space-y-0.5">
+        {sections.map(section => (
+          <SidebarSection
+            key={section.id}
+            section={section}
+            activeHref={activeHref}
+            collapsed={collapsed}
+            onRequestExpand={() => setCollapsed(false)}
+          />
+        ))}
+      </ul>
     </nav>
   ), [sections, activeHref, ariaNavLabel, collapsed, setCollapsed]);
 
@@ -393,7 +529,7 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
           {logo}
         </div>
 
-        {sidebarContent}
+        {sidebarNav}
 
         <BottomBar
           collapsed={collapsed}
@@ -424,8 +560,7 @@ export function PortalShell({ config, roleFallbackLabel, ariaNavLabel }: PortalS
 
       {/* Verrou SUSPENDED — commun à tous les portails (driver, station-agent,
           quai-agent) qui dérivent de PortalShell. AdminDashboard a sa propre
-          instance. Ne s'affiche que si user.subscriptionStatus === 'SUSPENDED'
-          et hors des routes exemptées (/admin/billing, /welcome, /login). */}
+          instance. */}
       <SuspendedScreen />
     </div>
   );
