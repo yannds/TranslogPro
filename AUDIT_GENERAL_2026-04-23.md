@@ -693,3 +693,85 @@ Résultat réel : **tous les sprints clos en 1 journée**. Seuls items résiduel
 - 52/55 Playwright API (3 skipped documentés) ✅
 - E2E Jest débloqué ✅
 
+---
+
+## 13. Sprints Caisse & Paiement — 2026-04-24
+
+Ajouts sur la base du gap identifié dans l'audit côté gestion paiement caisse (aucune capture tendered/change, aucune preuve paiement hors-POS, aucun reçu auto, aucun workflow de résolution d'écart). 5 sprints livrés dans la foulée, tests unit verts.
+
+### 13.1 Sprint 1 — Espèces avec tendered/change
+
+- **Schéma** : `Transaction.tenderedAmount`, `Transaction.changeAmount` (nullable, CASH-only).
+- **DTOs** : `RecordTransactionDto` et `ConfirmBatchDto` exposent `tenderedAmount` + `batchTotal`.
+- **Service** : `cashier.service` valide `tendered ≥ amount` (ou `batchTotal` en cas batch), calcule `change` arrondi 2 décimales. Ignoré pour `paymentMethod ≠ CASH`.
+- **UI** : `CashPadDialog.tsx` — raccourcis billets (1 000, 2 000, 5 000, 10 000, 20 000) + bouton "Exact" + calcul live + bloque si insuffisant.
+- **Intégration** : `PageSellTicket.handleRequestConfirm` ouvre le pad si méthode=CASH + caisse ouverte.
+- **i18n** : fr + en (`cashPad.*` — 10 clés).
+- **Tests** : +6 (scénario 10 000 / 8 000 / 2 000 validé).
+
+### 13.2 Sprint 2 — Preuve paiement MoMo/Card/QR saisie caisse
+
+- **Schéma** : `Transaction.proofCode`, `Transaction.proofType` (nullable, non-CASH uniquement).
+- **DTOs** : `CASHIER_PROOF_TYPES = MOMO_CODE | CARD_AUTH | BANK_REF | VOUCHER_CODE | QR_PAYLOAD | OTHER`.
+- **Service** : ignore proof si CASH, persiste sinon. Même code couvre N tickets d'un batch.
+- **UI** : `PaymentProofDialog.tsx` — dropdown type + input code + validation longueur min 4, type par défaut dérivé de la méthode.
+- **Intégration** : `PageSellTicket` route MOBILE_MONEY/CARD/BANK_TRANSFER/VOUCHER/MIXED vers ProofDialog.
+- **i18n** : fr + en (`paymentProof.*` — 18 clés).
+- **Tests** : +4.
+
+### 13.3 Sprint 3 — Reçu de caisse auto (Invoice PAID)
+
+- **Service** : `InvoiceService.createPaidReceiptFromTickets()` — fast-track DRAFT → PAID via WorkflowEngine, **idempotent** par `entityId = batchKey` (ticketIds triés). `lineItems` = 1 entrée par ticket.
+- **Intégration** : `ticketing.confirmBatch` appelle la méthode après enregistrement caisse. Échec = log warn, ne bloque pas la vente.
+- **Module** : `TicketingModule` importe `InvoiceModule`.
+- **Currency** : lue depuis `Tenant.currency`, pas de hardcode.
+- **Tests** : `test/unit/invoice/invoice-receipt.service.spec.ts` (3 tests).
+
+### 13.4 Sprint 4 — Workflow résolution d'écart (DISCREPANCY → CLOSED)
+
+- **Blueprint** : déjà seedé (iam.seed.ts:1062, action `resolve`). Réutilisé tel quel.
+- **Schéma** : `CashRegister.resolutionNote`, `resolvedAt`, `resolvedById`.
+- **DTO** : `ResolveDiscrepancyDto` — note obligatoire 10-1000 caractères.
+- **Service** : `resolveDiscrepancy()` — status check, scope agency, WorkflowEngine, audit level=warn systématique.
+- **Controller** : `PATCH /tenants/:id/cashier/registers/:registerId/resolve`.
+- **UI** : `PageCashDiscrepancies` — rowAction "Résoudre" + Dialog avec textarea justification, aria-invalid, compteur live, refetch auto.
+- **Tests** : +4.
+
+### 13.5 Sprint 5 — Vérification preuve contre provider
+
+- **Schéma** : `Transaction.proofVerifiedStatus` (VERIFIED / FAILED / PENDING), `proofVerifiedAt`.
+- **Service** : `verifyTransactionProof()` — `PaymentProviderRegistry.get(key).verify(proofCode)`, compare amount (tolérance 0.01), idempotent sur VERIFIED, erreur provider → PENDING.
+- **Module** : `CashierModule` importe `PaymentModule`.
+- **Controller** : `PATCH /tenants/:id/cashier/transactions/:txId/verify-proof`.
+- **Audit** : level=warn sur FAILED, info sur VERIFIED.
+- **UI** : reportée — endpoint exposé, UI trigger en v1.1.
+- **Tests** : +7.
+
+### 13.6 Compteurs tests — avant / après
+
+| Suite | Avant | Après |
+|---|---|---|
+| `cashier.service.spec.ts` | 12 tests | **36** (+24) |
+| `invoice-receipt.service.spec.ts` | 0 | **3** (nouveau) |
+| Suites unit | 90 | **94** (+4) |
+| **Total unit** | 941/941 | **954/954** (+13 pass, **0 régression**) |
+
+### 13.7 Fichiers livrés
+
+**Schéma** : `prisma/schema.prisma` — Transaction +6 champs, CashRegister +3 champs.
+
+**Backend nouveaux** : `dto/resolve-discrepancy.dto.ts`, `test/unit/invoice/invoice-receipt.service.spec.ts`.
+
+**Backend modifiés** : `cashier.service.ts`, `cashier.controller.ts`, `cashier.module.ts`, `dto/record-transaction.dto.ts`, `ticketing/dto/issue-ticket.dto.ts`, `ticketing.service.ts`, `ticketing.module.ts`, `invoice.service.ts`, `test/unit/services/cashier.service.spec.ts`, `test/unit/services/ticketing.service.spec.ts`.
+
+**Frontend nouveaux** : `cashier/CashPadDialog.tsx`, `cashier/PaymentProofDialog.tsx`.
+
+**Frontend modifiés** : `PageSellTicket.tsx`, `PageCashDiscrepancies.tsx`, `locales/fr.ts`, `locales/en.ts`.
+
+### 13.8 Backlog résiduel
+
+- UI déclencheur "Vérifier la preuve" admin (endpoint existe) — v1.1
+- Cron polling auto des tx `proofVerifiedStatus=null` hors-CASH — v1.1
+- Extension flow Parcel : `PageParcelNew` n'a pas d'étape paiement aujourd'hui, à câbler quand le tarif colis sera encaissé à la création — v1.0.1
+- i18n 6 autres locales (ar, es, wo, ln, ktu, pt) pour `cashPad.*` + `paymentProof.*` — v1.0.1
+

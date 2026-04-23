@@ -94,14 +94,24 @@ function makeWorkflow(transitionMap: Record<string, string> = {
   reject:  'REJECTED',
   archive: 'ARCHIVED',
 }) {
-  return {
+  const boundPrismaRef: { prisma: any | null } = { prisma: null };
+  return Object.assign({
     transition: jest.fn().mockImplementation(async (entity: any, input: any, config: any) => {
       const toState = transitionMap[input.action] ?? entity.status;
-      // On n'invoque PAS le persist callback (prisma mock tx absent). On se contente
-      // de retourner l'entité avec le nouvel état pour que le service récupère la suite.
+      // Invoque le persist avec le prisma mock bindé au buildService — les
+      // side-effects atomiques (signedAt/signedById/signatureSvg inclus dans la
+      // même UPDATE que le status) deviennent visibles via prisma.manifest.update.
+      if (config?.persist) {
+        const p = boundPrismaRef.prisma ?? {
+          manifest:    { update: jest.fn().mockResolvedValue({ ...entity, status: toState }) },
+          outboxEvent: { create: jest.fn() },
+        };
+        await config.persist({ ...entity, status: entity.status }, toState, p);
+      }
       return { entity: { ...entity, status: toState, version: entity.version + 1 }, toState, fromState: entity.status };
     }),
-  } as unknown as jest.Mocked<WorkflowEngine>;
+    __bindPrisma: (p: any) => { boundPrismaRef.prisma = p; },
+  }) as unknown as jest.Mocked<WorkflowEngine> & { __bindPrisma: (p: any) => void };
 }
 
 function makeDocs() {
@@ -137,6 +147,9 @@ function buildService(opts: {
   const docs     = opts.docs     ?? makeDocs();
   const storage  = opts.storage  ?? makeStorage();
   const eventBus = opts.eventBus ?? makeEventBus();
+  // Le workflow mock relaie le persist callback vers ce prisma — indispensable
+  // pour tester les side-effects atomiques (signatureSvg, signedAt, etc.).
+  (workflow as any).__bindPrisma?.(prisma);
   return {
     service: new ManifestService(prisma, workflow, docs, storage, eventBus),
     prisma, workflow, docs, storage, eventBus,

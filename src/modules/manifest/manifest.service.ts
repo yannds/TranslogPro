@@ -334,10 +334,7 @@ export class ManifestService {
           },
           occurredAt: new Date(),
         };
-        await this.eventBus.publish(
-          event,
-          prisma as unknown as Parameters<typeof this.eventBus.publish>[1],
-        );
+        await this.eventBus.publish(event, prisma as unknown);
         return updated as typeof entity;
       },
     });
