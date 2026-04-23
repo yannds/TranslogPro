@@ -7,6 +7,8 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { FareClassDefault } from '../tenant-settings/tenant-fare-class.service';
+import { RoutingService } from '../routing/routing.service';
+import type { SuggestDistanceResponse } from '../routing/routing.types';
 
 export interface CreateRouteDto {
   name:          string;
@@ -47,7 +49,39 @@ export class RouteService {
   constructor(
     private readonly prisma:         PrismaService,
     private readonly platformConfig: PlatformConfigService,
+    private readonly routing:        RoutingService,
   ) {}
+
+  /**
+   * Suggère une distance entre deux gares en utilisant le provider actif.
+   * Les gares doivent appartenir au tenant et avoir des coordonnées GPS.
+   * Retourne null si l'une des gares n'a pas de coordonnées.
+   */
+  async suggestDistance(
+    tenantId: string,
+    originId: string,
+    destinationId: string,
+  ): Promise<SuggestDistanceResponse | null> {
+    const [originRow, destRow] = await Promise.all([
+      this.prisma.station.findFirst({ where: { id: originId, tenantId }, select: { coordinates: true } }),
+      this.prisma.station.findFirst({ where: { id: destinationId, tenantId }, select: { coordinates: true } }),
+    ]);
+
+    const extractCoords = (row: { coordinates: unknown } | null) => {
+      if (!row?.coordinates || typeof row.coordinates !== 'object') return null;
+      const c = row.coordinates as Record<string, unknown>;
+      const lat = typeof c['lat'] === 'number' ? c['lat'] : null;
+      const lng = typeof c['lng'] === 'number' ? c['lng'] : null;
+      if (lat === null || lng === null) return null;
+      return { lat, lng };
+    };
+
+    const origin = extractCoords(originRow);
+    const dest   = extractCoords(destRow);
+    if (!origin || !dest) return null;
+
+    return this.routing.suggestDistance(origin, dest);
+  }
 
   findAll(tenantId: string) {
     return this.prisma.route.findMany({
@@ -493,6 +527,34 @@ export class RouteService {
     }
 
     return out;
+  }
+
+  /**
+   * Retourne tous les points de contrôle non-STATION existants sur les lignes du tenant,
+   * dédoublonnés par (kind, name). Sert d'autocomplete quand l'admin pose un nouveau
+   * péage/contrôle — il retrouve les postes déjà nommés avec leur coût habituel.
+   */
+  async listCheckpoints(tenantId: string, kind?: string) {
+    const where: Record<string, unknown> = {
+      route: { tenantId },
+      NOT: { kind: 'STATION' },
+    };
+    if (kind) where['kind'] = kind;
+
+    const rows = await this.prisma.waypoint.findMany({
+      where: where as any,
+      select: { kind: true, name: true, tollCostXaf: true, estimatedWaitTime: true },
+      orderBy: { name: 'asc' },
+    });
+
+    // Dédoublonner par (kind, name), garder le tollCostXaf le plus récent
+    const seen = new Map<string, typeof rows[number]>();
+    for (const r of rows) {
+      if (!r.name) continue;
+      const key = `${r.kind}:${r.name.toLowerCase()}`;
+      if (!seen.has(key)) seen.set(key, r);
+    }
+    return Array.from(seen.values());
   }
 
   private async assertStationBelongsToTenant(tenantId: string, stationId: string) {

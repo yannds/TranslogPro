@@ -54,7 +54,9 @@ afterEach(() => {
 
 describe('GeoService.search — viewbox bias', () => {
 
-  it('ajoute viewbox quand un countryCode connu est fourni (SN)', async () => {
+  it('ajoute viewbox + countrycodes + bounded=1 quand un countryCode connu est fourni (SN)', async () => {
+    // Contrat strict (cf. geo.service.ts:83-91) : on filtre côté Nominatim par
+    // countrycodes= ET bounded=1 pour éviter les homonymes cross-pays.
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([DAKAR_RESULT]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
     const svc = new GeoService(redisMock as any);
@@ -62,11 +64,10 @@ describe('GeoService.search — viewbox bias', () => {
     await svc.search('Dakar', 'SN');
 
     const calledUrl = decodeURIComponent(fetchSpy.mock.calls[0][0] as string);
-    expect(calledUrl).toContain('viewbox=');
     const bbox = COUNTRY_BBOX['SN']!;
     expect(calledUrl).toContain(`viewbox=${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`);
-    expect(calledUrl).not.toContain('bounded=1');
-    expect(calledUrl).not.toContain('countrycodes=');
+    expect(calledUrl).toContain('bounded=1');
+    expect(calledUrl).toContain('countrycodes=sn');
   });
 
   it("n'ajoute pas viewbox si le countryCode n'est pas dans le registre", async () => {
@@ -92,17 +93,17 @@ describe('GeoService.search — viewbox bias', () => {
     expect(calledUrl).not.toContain('countrycodes=');
   });
 
-  it('retourne Abidjan depuis un tenant SN — résultat hors-viewbox non bloqué', async () => {
-    // Nominatim avec viewbox+bounded=0 peut renvoyer des résultats hors boîte
-    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([ABIDJAN_RESULT]) } as any);
+  it('isole strictement par pays — un tenant SN cherchant "Abidjan" ne récupère rien (CI hors viewbox+bounded)', async () => {
+    // Contrat strict : avec countrycodes=sn + bounded=1, Nominatim renvoie []
+    // pour une recherche dont le résultat n'est pas dans le pays du tenant.
+    // Empêche les homonymes (ex: Kintélé existe au CG ET au GA).
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
     const svc = new GeoService(redisMock as any);
 
     const results = await svc.search('Abidjan', 'SN');
 
-    expect(results).toHaveLength(1);
-    expect(results[0]!.displayName).toContain('Abidjan');
-    expect(results[0]!.countryCode).toBe('CI');
+    expect(results).toHaveLength(0);
   });
 
   it('utilise le cache Redis si disponible (pas de fetch)', async () => {

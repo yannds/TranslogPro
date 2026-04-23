@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSION_KEY } from '../../../common/decorators/require-permission.decorator';
+import { PUBLIC_ROUTE_KEY } from '../../../common/decorators/public-route.decorator';
 import { Permission, extractScope, PermissionScope } from '../../../common/constants/permissions';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Redis } from 'ioredis';
@@ -71,6 +72,15 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Escape hatch explicite : @PublicRoute('reason') au handler-level
+    // neutralise toute exigence — y compris un @RequirePermission hérité
+    // de la classe. Documente l'intention pour la code review.
+    const publicReason = this.reflector.getAllAndOverride<string>(PUBLIC_ROUTE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (publicReason) return true;
+
     const requiredMeta = this.reflector.getAllAndOverride<Permission | Permission[]>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),

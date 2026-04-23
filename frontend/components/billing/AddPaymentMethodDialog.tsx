@@ -21,8 +21,26 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { cn } from '../../lib/utils';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
 
 type Method = 'CARD' | 'MOBILE_MONEY' | 'BANK_TRANSFER';
+
+/**
+ * Mirror de `getSetupAmount` côté backend
+ * (src/modules/subscription-checkout/subscription-checkout.service.ts).
+ * Fallback XAF quand la devise tenant n'est pas supportée par les PSP.
+ */
+function resolveSetupAmount(tenantCurrency: string): { amount: number; currency: string } {
+  switch (tenantCurrency) {
+    case 'XAF':
+    case 'XOF':
+    case 'NGN': return { amount: 100, currency: tenantCurrency };
+    case 'GHS': return { amount: 1,   currency: tenantCurrency };
+    case 'KES': return { amount: 10,  currency: tenantCurrency };
+    case 'USD': return { amount: 1,   currency: tenantCurrency };
+    default:    return { amount: 100, currency: 'XAF' };
+  }
+}
 
 interface Props {
   open:              boolean;
@@ -36,7 +54,8 @@ interface Props {
 export function AddPaymentMethodDialog({
   open, onOpenChange, subscriptionStatus, defaultMethod = 'CARD',
 }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const { operational } = useTenantConfig();
   const [method,  setMethod]  = useState<Method>(defaultMethod);
   const [phone,   setPhone]   = useState('');
   const [busy,    setBusy]    = useState(false);
@@ -44,6 +63,13 @@ export function AddPaymentMethodDialog({
 
   const useSetup = subscriptionStatus === 'ACTIVE';
   const endpoint = useSetup ? '/api/v1/subscription/setup-intent' : '/api/v1/subscription/checkout';
+
+  const setup = resolveSetupAmount(operational.currency);
+  const setupAmountFormatted = new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR', {
+    style:                 'currency',
+    currency:              setup.currency,
+    maximumFractionDigits: setup.amount < 10 ? 2 : 0,
+  }).format(setup.amount);
 
   async function submit() {
     setError(null);
@@ -120,7 +146,7 @@ export function AddPaymentMethodDialog({
             className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-100"
           >
             <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>{t('addPaymentMethod.refundNote')}</span>
+            <span>{t('addPaymentMethod.refundNote', { amount: setupAmountFormatted })}</span>
           </div>
         )}
 

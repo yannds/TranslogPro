@@ -273,6 +273,23 @@ export class CashierService {
       if (dup) return dup;
     }
 
+    // Espèces : valider tenderedAmount ≥ (batchTotal ?? amount) et calculer
+    // la monnaie rendue. En contexte batch, le total à couvrir est le grand
+    // total des N tickets ; changeAmount est alors stocké sur la 1re transaction.
+    // Non applicable (ignoré) pour autres modes de paiement.
+    let tenderedAmount: number | null = null;
+    let changeAmount:   number | null = null;
+    if (dto.paymentMethod === 'CASH' && dto.tenderedAmount != null) {
+      const toCover = dto.batchTotal ?? dto.amount;
+      if (dto.tenderedAmount < toCover - 0.005) {
+        throw new BadRequestException(
+          `Montant remis (${dto.tenderedAmount}) insuffisant pour couvrir ${toCover}`,
+        );
+      }
+      tenderedAmount = dto.tenderedAmount;
+      changeAmount   = Math.round((dto.tenderedAmount - toCover) * 100) / 100;
+    }
+
     const created = await client.transaction.create({
       data: {
         tenantId,
@@ -280,6 +297,8 @@ export class CashierService {
         type:           dto.type,
         amount:         dto.amount,
         paymentMethod:  dto.paymentMethod,
+        tenderedAmount,
+        changeAmount,
         externalRef:    dto.externalRef,
         metadata: {
           referenceType: dto.referenceType,
@@ -301,6 +320,8 @@ export class CashierService {
         type:          dto.type,
         amount:        dto.amount,
         paymentMethod: dto.paymentMethod,
+        tenderedAmount,
+        changeAmount,
         referenceType: dto.referenceType,
         referenceId:   dto.referenceId,
         externalRef:   dto.externalRef,

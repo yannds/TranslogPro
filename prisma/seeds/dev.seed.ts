@@ -28,6 +28,7 @@ import {
 } from './iam.seed';
 import { seedHtmlTemplates } from './templates.seed';
 import { seedTenantPricingDefaults, readPricingConfig, FareClassDef } from './pricing-defaults.backfill';
+import { seedCmsPages } from './cms-pages.seed';
 
 const prisma = new PrismaClient();
 
@@ -767,6 +768,20 @@ async function main() {
       `[Dev Seed] ✅ Pricing defaults ${t.slug} → BC:${r.businessConfigCreated ? 'created' : 'skip'} ` +
       `TVA:${r.taxCreated ? 'created' : 'skip'} ` +
       `FareClass:+${r.fareClassesCreated} PricingRules(orphelines):+${r.pricingRulesCreated}`,
+    );
+  }
+
+  // ── 2.ter. Pages CMS par défaut pour chaque tenant dev ──────────────────────
+  const CMS_TENANT_PROFILES: Record<string, { companyName: string; city: string; country: string }> = {
+    [TENANT1_ID]: { companyName: 'TransExpress',    city: 'Brazzaville', country: 'Congo' },
+    [TENANT2_ID]: { companyName: 'CityBus Congo',   city: 'Pointe-Noire', country: 'Congo' },
+    [TENANT3_ID]: { companyName: 'Horizon Voyages', city: 'Brazzaville', country: 'Congo' },
+  };
+  for (const t of TENANTS) {
+    const profile = CMS_TENANT_PROFILES[t.id]!;
+    const r = await seedCmsPages(prisma, t.id, profile);
+    console.log(
+      `[Dev Seed] ✅ CMS pages ${t.slug} → pages:${r.pages} posts:${r.posts} config:${r.configCreated ? 'created' : 'skip'}`,
     );
   }
 

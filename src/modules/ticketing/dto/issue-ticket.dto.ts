@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsEnum, IsBoolean, IsArray, IsEmail, ValidateNested, Min, ArrayMinSize } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsNumber, IsEnum, IsBoolean, IsArray, IsEmail, ValidateNested, Min, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum FareClass {
@@ -145,4 +145,12 @@ export class ConfirmBatchDto {
    */
   @IsString() @IsOptional()
   externalRef?: string;
+
+  /**
+   * Espèces uniquement : total remis par le client pour le batch.
+   * Doit couvrir la somme du batch. Le backend calcule la monnaie rendue
+   * (changeAmount) et la stocke sur la première Transaction du batch.
+   */
+  @IsNumber() @Min(0) @IsOptional()
+  tenderedAmount?: number;
 }

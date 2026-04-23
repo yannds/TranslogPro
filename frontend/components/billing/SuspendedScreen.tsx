@@ -18,22 +18,29 @@
  *     SubscriptionReconciliationService.
  */
 import { useLocation, Link } from 'react-router-dom';
-import { Lock, CreditCard, LogOut, ShieldAlert } from 'lucide-react';
+import { Lock, CreditCard, LogOut, ShieldAlert, Download } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 
 /** Routes où l'écran ne se montre PAS — toujours accessibles à l'admin. */
 const ALLOWED_ROUTES = ['/admin/billing', '/welcome', '/login'];
+/** En CANCELLED : seul l'export RGPD est accessible en plus du billing. */
+const CANCELLED_ALLOWED_ROUTES = [...ALLOWED_ROUTES, '/admin/settings/backup'];
 
 export function SuspendedScreen() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const { pathname } = useLocation();
 
-  // Ne s'affiche que si la sub est SUSPENDED, et pas sur les routes exemptées.
-  const status = (user as any)?.subscriptionStatus;
-  if (status !== 'SUSPENDED') return null;
-  if (ALLOWED_ROUTES.some(r => pathname.startsWith(r))) return null;
+  const status = (user as any)?.subscriptionStatus as string | undefined;
+  if (status !== 'SUSPENDED' && status !== 'CANCELLED') return null;
+
+  const allowed = status === 'CANCELLED'
+    ? CANCELLED_ALLOWED_ROUTES
+    : ALLOWED_ROUTES;
+  if (allowed.some(r => pathname.startsWith(r))) return null;
+
+  const isCancelled = status === 'CANCELLED';
 
   return (
     <div
@@ -50,19 +57,21 @@ export function SuspendedScreen() {
           </span>
           <div>
             <h2 id="suspended-title" className="text-lg font-semibold text-slate-900 dark:text-white">
-              {t('suspended.title')}
+              {isCancelled ? t('cancelled.title') : t('suspended.title')}
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('suspended.subtitle')}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {isCancelled ? t('cancelled.subtitle') : t('suspended.subtitle')}
+            </p>
           </div>
         </div>
 
         <p id="suspended-body" className="mt-6 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-          {t('suspended.body')}
+          {isCancelled ? t('cancelled.body') : t('suspended.body')}
         </p>
 
         <div className="mt-5 flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>{t('suspended.dataSafe')}</span>
+          <span>{isCancelled ? t('cancelled.dataSafe') : t('suspended.dataSafe')}</span>
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -74,13 +83,23 @@ export function SuspendedScreen() {
             <LogOut className="h-4 w-4" aria-hidden />
             {t('suspended.logout')}
           </button>
-          <Link
-            to="/admin/billing"
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-red-600 px-5 text-sm font-semibold text-white shadow-lg shadow-red-600/30 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-          >
-            <CreditCard className="h-4 w-4" aria-hidden />
-            {t('suspended.cta')}
-          </Link>
+          {isCancelled ? (
+            <Link
+              to="/admin/settings/backup"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-teal-600 px-5 text-sm font-semibold text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              {t('cancelled.exportCta')}
+            </Link>
+          ) : (
+            <Link
+              to="/admin/billing"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-red-600 px-5 text-sm font-semibold text-white shadow-lg shadow-red-600/30 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+            >
+              <CreditCard className="h-4 w-4" aria-hidden />
+              {t('suspended.cta')}
+            </Link>
+          )}
         </div>
       </div>
     </div>

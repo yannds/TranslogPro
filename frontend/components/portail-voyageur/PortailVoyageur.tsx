@@ -1495,22 +1495,15 @@ export function PortailVoyageur() {
   const stations = stRes.data ?? [];
   const pms = cfg.data?.paymentMethods ?? DEMO_PAYMENT_METHODS; // payment methods fallback OK (country-specific)
 
-  // Derive autocomplete options : villes (PRINCIPALE prioritaires) + noms de gares
-  // intermédiaires (SECONDAIRE / HUB / ESCALE). Le voyageur peut ainsi taper
-  // "Mindouli" et trouver un arrêt intermédiaire sans connaître sa ville. Le
-  // matching côté backend gère indifféremment city OU name, insensible à la casse.
+  // Villes uniquement — le backend matche toutes les gares d'une ville via stopMatches(city).
   const cityOptions: ComboboxOption[] = useMemo(() => {
     const opts = new Map<string, { label: string; importance: number }>();
-    const addOpt = (value: string, label: string, importance: number) => {
-      const key = value.toLowerCase();
-      const prev = opts.get(key);
-      if (!prev || prev.importance < importance) opts.set(key, { label, importance });
-    };
-    // Priorité : PRINCIPALE ville > PRINCIPALE name > autre ville > autre name
     for (const s of stations) {
-      const isPrincipale = s.type === 'PRINCIPALE';
-      if (s.city)               addOpt(s.city, s.city, isPrincipale ? 40 : 20);
-      if (s.name && s.name !== s.city) addOpt(s.name, s.name, isPrincipale ? 30 : 10);
+      if (!s.city) continue;
+      const key = s.city.toLowerCase();
+      const importance = s.type === 'PRINCIPALE' ? 40 : 20;
+      const prev = opts.get(key);
+      if (!prev || prev.importance < importance) opts.set(key, { label: s.city, importance });
     }
     return [...opts.entries()]
       .sort((a, b) => b[1].importance - a[1].importance || a[1].label.localeCompare(b[1].label))

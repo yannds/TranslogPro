@@ -386,6 +386,7 @@ function DriverDetailPanel({ driver, tenantId, licAlerts, overdueTrainings }: {
           entityType="STAFF"
           entityId={driver.id}
           allowedKinds={['CONTRACT', 'ID_CARD', 'LICENSE', 'CERTIFICATE', 'PHOTO', 'OTHER']}
+          readOnly
         />
       </section>
     </div>

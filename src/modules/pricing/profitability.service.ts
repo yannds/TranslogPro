@@ -24,6 +24,55 @@ import {
   DEFAULT_BUSINESS_CONSTANTS,
 } from './interfaces/cost-calculator.interface';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Calcule le total des péages pour un trajet en combinant toutes les sources,
+ * en respectant la même hiérarchie que PricingEngine :
+ *
+ *   routeToll      = pricingOverrides.tolls.override ?? pricingRules.tollsXof ?? 0
+ *   waypointTolls  = Σ(waypoint.tollCostXaf + waypoint.checkpointCosts[].costXaf)
+ *   busToll        = BusCostProfile.tollFeesPerTrip  (vignette/charges véhicule)
+ *   totalToll      = routeToll + waypointTolls + busToll
+ */
+function computeTotalToll(
+  busTollFeesPerTrip: number,
+  pricingOverrides:   unknown,
+  pricingRules:       { rules: unknown } | null,
+  waypoints:          Array<{ tollCostXaf?: number | null; checkpointCosts?: unknown }>,
+): number {
+  // 1. Péage niveau ligne (override > PricingRules > 0)
+  const po = (typeof pricingOverrides === 'object' && pricingOverrides !== null)
+    ? pricingOverrides as Record<string, unknown>
+    : {};
+  const poTolls = po['tolls'] as Record<string, unknown> | undefined;
+  const overrideValue = (poTolls && typeof poTolls['override'] === 'number')
+    ? poTolls['override']
+    : undefined;
+
+  let routeToll = overrideValue ?? 0;
+  if (overrideValue === undefined && pricingRules) {
+    const rules = (typeof pricingRules.rules === 'object' && pricingRules.rules !== null)
+      ? pricingRules.rules as Record<string, unknown>
+      : {};
+    if (typeof rules['tollsXof'] === 'number') routeToll = rules['tollsXof'];
+  }
+
+  // 2. Péages par poste de contrôle / barrière (cumulatifs)
+  let waypointTolls = 0;
+  for (const wp of waypoints) {
+    waypointTolls += wp.tollCostXaf ?? 0;
+    const cc = Array.isArray(wp.checkpointCosts) ? wp.checkpointCosts : [];
+    for (const c of cc) {
+      const cx = (c as { costXaf?: number })?.costXaf;
+      if (typeof cx === 'number') waypointTolls += cx;
+    }
+  }
+
+  // 3. Péage fixe lié au véhicule (vignette, taxe axe, etc.)
+  return routeToll + waypointTolls + busTollFeesPerTrip;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -83,17 +132,21 @@ export class ProfitabilityService {
 
     const trip = await this.prisma.trip.findFirst({
       where:   { id: tripId, tenantId },
-      include: { bus: { include: { costProfile: true } }, route: true },
+      include: {
+        bus:   { include: { costProfile: true } },
+        route: { include: { waypoints: true } },
+      },
     });
     if (!trip)                 throw new NotFoundException(`Trajet ${tripId} introuvable`);
     if (!trip.bus.costProfile) throw new BadRequestException(
       `Bus ${trip.busId} n'a pas de BusCostProfile — configurez-le d'abord`,
     );
 
-    // Charger les constantes tenant (daysPerYear, taux commission…)
-    const bizConfig = await this.prisma.tenantBusinessConfig.findUnique({
-      where: { tenantId },
-    });
+    // Charger les constantes tenant + PricingRules de la ligne (pour tollsXof)
+    const [bizConfig, pricingRules] = await Promise.all([
+      this.prisma.tenantBusinessConfig.findUnique({ where: { tenantId } }),
+      this.prisma.pricingRules.findFirst({ where: { routeId: trip.routeId, tenantId } }),
+    ]);
     const constants: BusinessConstants = bizConfig
       ? {
           daysPerYear:           bizConfig.daysPerYear,
@@ -122,7 +175,13 @@ export class ProfitabilityService {
       avgTripsPerMonth:        cp.avgTripsPerMonth,
     };
 
-    // Déléguer les calculs au moteur pur (pas de Prisma dans le moteur)
+    // Fusionner toutes les sources de péages avant de déléguer au moteur pur
+    profile.tollFeesPerTrip = computeTotalToll(
+      cp.tollFeesPerTrip,
+      trip.route.pricingOverrides,
+      pricingRules,
+      trip.route.waypoints,
+    );
     const costs   = this.calculator.computeCosts(trip.route.distanceKm, profile);
     const revenue = await this.computeRevenue(tenantId, tripId, trip.bus.capacity);
 
@@ -233,7 +292,10 @@ export class ProfitabilityService {
     fillRate?:    number;
   }) {
     const [route, bus, bizConfig] = await Promise.all([
-      this.prisma.route.findFirst({ where: { id: dto.routeId, tenantId } }),
+      this.prisma.route.findFirst({
+        where:   { id: dto.routeId, tenantId },
+        include: { waypoints: true },
+      }),
       this.prisma.bus.findFirst({
         where:   { id: dto.busId, tenantId },
         include: { costProfile: true },
@@ -247,6 +309,10 @@ export class ProfitabilityService {
         `Bus ${dto.busId} n'a pas de profil de coûts — configurez-le avant la simulation (PUT /buses/:id/cost-profile)`,
       );
     }
+
+    const pricingRules = await this.prisma.pricingRules.findFirst({
+      where: { routeId: dto.routeId, tenantId },
+    });
 
     const constants: BusinessConstants = bizConfig
       ? {
@@ -275,6 +341,12 @@ export class ProfitabilityService {
       avgTripsPerMonth:        cp.avgTripsPerMonth,
     };
 
+    profile.tollFeesPerTrip = computeTotalToll(
+      cp.tollFeesPerTrip,
+      route.pricingOverrides,
+      pricingRules,
+      route.waypoints,
+    );
     const costs = this.calculator.computeCosts(route.distanceKm, profile);
 
     const ticketPrice = dto.ticketPrice ?? route.basePrice;

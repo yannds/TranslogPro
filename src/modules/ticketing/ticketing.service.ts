@@ -465,16 +465,26 @@ export class TicketingService {
 
       if (registerId) {
         const method = (dto.paymentMethod ?? 'CASH') as CashierPaymentMethod;
+        // tenderedAmount est un TOTAL batch → stocké uniquement sur la 1re
+        // Transaction avec batchTotal = Σ ticket.pricePaid. Le service calcule
+        // alors changeAmount = tendered - batchTotal (monnaie globale).
+        // Applicable uniquement en espèces.
+        const batchTotal = results.reduce((sum, r) => sum + (r.entity.pricePaid ?? 0), 0);
+        let tenderedBudget = method === 'CASH' ? dto.tenderedAmount : undefined;
         for (const r of results) {
           const ticket = r.entity;
           try {
+            const ticketAmount = ticket.pricePaid ?? 0;
+            const isFirstWithTendered = tenderedBudget != null;
             await this.cashier.recordTransaction(
               tenantId,
               registerId,
               {
                 type:          'TICKET',
-                amount:        ticket.pricePaid ?? 0,
+                amount:        ticketAmount,
                 paymentMethod: method,
+                tenderedAmount: isFirstWithTendered ? tenderedBudget : undefined,
+                batchTotal:     isFirstWithTendered ? batchTotal : undefined,
                 externalRef:   dto.externalRef
                   ? `${dto.externalRef}:${ticket.id}`
                   : `ticket:${ticket.id}`,
@@ -485,6 +495,9 @@ export class TicketingService {
               undefined,
               { skipScopeCheck: false, actorId: actor.id },
             );
+            if (isFirstWithTendered) {
+              tenderedBudget = undefined;
+            }
           } catch (err) {
             // N'invalide pas la confirmation ticket ; l'opérateur peut corriger la caisse.
             this.logger.warn(

@@ -12,7 +12,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  MapPinned, Plus, Pencil, Trash2, LogIn, LogOut, X, Link2,
+  MapPinned, Plus, Pencil, Wrench, Trash2, LogIn, LogOut, X, Link2,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';
@@ -109,6 +109,7 @@ export function PagePlatforms() {
   const { data: stations } = useFetch<StationRow[]>(tenantId ? `/api/tenants/${tenantId}/stations` : null, [tenantId]);
 
   const [showCreate, setShowCreate]     = useState(false);
+  const [editTarget,   setEditTarget]   = useState<PlatformRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PlatformRow | null>(null);
   const [assignTarget, setAssignTarget] = useState<PlatformRow | null>(null);
   const [busy, setBusy]     = useState(false);
@@ -167,6 +168,23 @@ export function PagePlatforms() {
     finally { setBusy(false); }
   };
 
+  const handleEdit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    const fd = new FormData(e.currentTarget);
+    setBusy(true); setActionErr(null);
+    try {
+      await apiPatch(`${base}/${editTarget.id}`, {
+        name:      fd.get('name'),
+        code:      fd.get('code'),
+        capacity:  parseInt(fd.get('capacity') as string) || 1,
+        notes:     fd.get('notes') || null,
+      });
+      setEditTarget(null); refetch();
+    } catch (err) { setActionErr((err as Error).message); }
+    finally { setBusy(false); }
+  };
+
   const handleStatusChange = async (row: PlatformRow, status: string) => {
     try { await apiPatch(`${base}/${row.id}`, { status }); refetch(); }
     catch (err) { setActionErr((err as Error).message); }
@@ -182,6 +200,10 @@ export function PagePlatforms() {
 
   const rowActions: RowAction<PlatformRow>[] = [
     {
+      label: t('common.edit'), icon: <Pencil size={13} />,
+      onClick: (row) => { setEditTarget(row); setActionErr(null); },
+    },
+    {
       label: t('platforms.assignTrip'), icon: <Link2 size={13} />,
       onClick: (row) => { setAssignTarget(row); setActionErr(null); },
       hidden: (row) => row.status === 'MAINTENANCE' || row.status === 'CLOSED' || row.status === 'OCCUPIED',
@@ -192,7 +214,7 @@ export function PagePlatforms() {
       hidden: (row) => row.status !== 'OCCUPIED',
     },
     {
-      label: t('platforms.setMaintenance'), icon: <Pencil size={13} />,
+      label: t('platforms.setMaintenance'), icon: <Wrench size={13} />,
       onClick: (row) => handleStatusChange(row, 'MAINTENANCE'),
       hidden: (row) => row.status === 'MAINTENANCE',
     },
@@ -222,6 +244,7 @@ export function PagePlatforms() {
         data={platforms ?? []}
         loading={loading}
         rowActions={rowActions}
+        onRowClick={(row) => { setEditTarget(row); setActionErr(null); }}
         defaultSort={{ key: 'name', dir: 'asc' }}
         defaultPageSize={25}
         searchPlaceholder={t('platforms.searchPlaceholder')}
@@ -230,6 +253,50 @@ export function PagePlatforms() {
         exportFilename="quais"
         stickyHeader
       />
+
+      {/* Dialog édition */}
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={o => { if (!o) { setEditTarget(null); setActionErr(null); } }}
+        title={editTarget ? `${t('common.edit')} — ${editTarget.name}` : t('common.edit')}
+        size="md"
+      >
+        {editTarget && (
+          <form onSubmit={handleEdit} className="space-y-4">
+            <ErrorAlert error={actionErr} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">{t('platforms.station')}</label>
+                <select name="stationId" defaultValue={editTarget.stationId} className={inp} disabled={busy}>
+                  {(stations ?? []).map(s => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">{t('platforms.name')} <span className="text-red-500">*</span></label>
+                <input name="name" required defaultValue={editTarget.name} className={inp} disabled={busy} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">{t('platforms.code')} <span className="text-red-500">*</span></label>
+                <input name="code" required defaultValue={editTarget.code} className={inp} disabled={busy} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">{t('platforms.capacity')}</label>
+                <input name="capacity" type="number" min="1" defaultValue={editTarget.capacity} className={inp} disabled={busy} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="block text-sm font-medium">{t('platforms.notes')}</label>
+                <input name="notes" defaultValue={editTarget.notes ?? ''} className={inp} disabled={busy} />
+              </div>
+            </div>
+            <FormFooter
+              busy={busy}
+              submitLabel={t('common.save')}
+              pendingLabel={t('common.saving')}
+              onCancel={() => { setEditTarget(null); setActionErr(null); }}
+            />
+          </form>
+        )}
+      </Dialog>
 
       {/* Dialog création */}
       <Dialog open={showCreate} onOpenChange={o => { if (!o) setShowCreate(false); }} title={t('platforms.newPlatform')} size="md">

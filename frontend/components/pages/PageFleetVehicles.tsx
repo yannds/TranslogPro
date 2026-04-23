@@ -584,11 +584,34 @@ function BusCostProfileSection({ tenantId, busId, busHints }: {
     (async () => {
       setLoading(true); setErr(null);
       try {
-        const data = await apiGet<BusCostProfile | null>(base);
+        const data = await apiGet<BusCostProfile & Record<string, unknown> | null>(base);
         if (!cancelled) {
           if (data) {
-            // Sync depuis les données véhicule si le profil a des valeurs à 0
-            const synced = { ...data };
+            // Strip extra DB fields (id, tenantId, busId, updatedAt) before storing
+            const {
+              fuelConsumptionPer100Km, fuelPricePerLiter, adBlueCostPerLiter,
+              adBlueRatioFuel, maintenanceCostPerKm, stationFeePerDeparture,
+              driverAllowancePerTrip, tollFeesPerTrip, driverMonthlySalary,
+              annualInsuranceCost, monthlyAgencyFees, purchasePrice,
+              depreciationYears, residualValue, avgTripsPerMonth,
+            } = data;
+            const synced: BusCostProfile = {
+              fuelConsumptionPer100Km: fuelConsumptionPer100Km ?? 0,
+              fuelPricePerLiter: fuelPricePerLiter ?? 0,
+              adBlueCostPerLiter: adBlueCostPerLiter ?? 0.18,
+              adBlueRatioFuel: adBlueRatioFuel ?? 0.05,
+              maintenanceCostPerKm: maintenanceCostPerKm ?? 0,
+              stationFeePerDeparture: stationFeePerDeparture ?? 0,
+              driverAllowancePerTrip: driverAllowancePerTrip ?? 0,
+              tollFeesPerTrip: tollFeesPerTrip ?? 0,
+              driverMonthlySalary: driverMonthlySalary ?? 0,
+              annualInsuranceCost: annualInsuranceCost ?? 0,
+              monthlyAgencyFees: monthlyAgencyFees ?? 0,
+              purchasePrice: purchasePrice ?? 0,
+              depreciationYears: depreciationYears ?? 10,
+              residualValue: residualValue ?? 0,
+              avgTripsPerMonth: avgTripsPerMonth ?? 30,
+            };
             if (busHints?.fuelConsumptionPer100Km && !synced.fuelConsumptionPer100Km) {
               synced.fuelConsumptionPer100Km = busHints.fuelConsumptionPer100Km;
             }
@@ -622,6 +645,14 @@ function BusCostProfileSection({ tenantId, busId, busHints }: {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!(form.fuelConsumptionPer100Km > 0)) {
+      setErr(t('fleet.costProfile.errFuelConsumptionRequired'));
+      return;
+    }
+    if (!(form.fuelPricePerLiter > 0)) {
+      setErr(t('fleet.costProfile.errFuelPriceRequired'));
+      return;
+    }
     setSaving(true); setErr(null); setSuccess(false);
     try {
       await apiPut(base, form);

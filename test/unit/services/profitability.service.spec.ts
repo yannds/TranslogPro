@@ -52,6 +52,7 @@ const MOCK_TRIP = {
     id:          'route-01',
     distanceKm:  450,
     basePrice:   2000,
+    waypoints:   [], // pas de barrière de péage par défaut dans les fixtures
   },
 };
 
@@ -89,6 +90,9 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
     },
     tenantBusinessConfig: {
       findUnique: jest.fn().mockResolvedValue(null), // → DEFAULT_BUSINESS_CONSTANTS
+    },
+    pricingRules: {
+      findFirst: jest.fn().mockResolvedValue(null),  // pas de règle → defaults
     },
     ticket: {
       aggregate: jest.fn().mockResolvedValue({ _sum: { pricePaid: 75_000 }, _count: { id: 38 } }),

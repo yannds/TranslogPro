@@ -36,6 +36,7 @@ import { ProductTour, isTourDone } from '../tour/ProductTour';
 import { ContextualTip } from '../tour/ContextualTip';
 import { TICKETING_TOUR_ID, TICKETING_TOUR_STEPS } from '../../lib/tour/tours';
 import { YieldSuggestionCard } from '../dashboard/YieldSuggestionCard';
+import { CashPadDialog } from '../cashier/CashPadDialog';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -261,6 +262,9 @@ export function PageSellTicket() {
   const [confirmed,    setConfirmed]    = useState(false);
   const [error,        setError]        = useState<string | null>(null);
 
+  // Cash pad (espèces uniquement) — ouvert avant /batch/confirm, capture tendered.
+  const [cashPadOpen, setCashPadOpen] = useState(false);
+
   // ── Build ordered station list from route ──
   const stations = useMemo<Station[]>(() => {
     if (!route) return [];
@@ -412,7 +416,19 @@ export function PageSellTicket() {
     }
   }
 
-  async function handleConfirm() {
+  function handleRequestConfirm() {
+    if (!batchResult) return;
+    const method = normalizePaymentMethod(paymentMethod);
+    // Espèces + caisse ouverte → passer par le pad pour capturer tendered/change.
+    // Sinon (MoMo/Card/portail) → confirm direct sans tendered.
+    if (method === 'CASH' && openRegister?.id) {
+      setCashPadOpen(true);
+      return;
+    }
+    void doConfirm(undefined);
+  }
+
+  async function doConfirm(tenderedAmount: number | undefined) {
     if (!batchResult) return;
     setConfirming(true);
     setError(null);
@@ -426,6 +442,7 @@ export function PageSellTicket() {
         // Si une caisse est ouverte → tracer la vente dans la caisse courante.
         // Sinon, passer null désactive explicitement l'enregistrement caisse (ex: vente portail).
         cashRegisterId: openRegister?.id ?? null,
+        ...(tenderedAmount != null ? { tenderedAmount } : {}),
       };
 
       if (!online) {
@@ -453,6 +470,7 @@ export function PageSellTicket() {
       await apiPost(`/api/tenants/${tenantId}/tickets/batch/confirm`, body);
       refetchRegister();
       setConfirmed(true);
+      setCashPadOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('sellTicket.errorConfirm'));
     } finally {
@@ -1012,11 +1030,11 @@ export function PageSellTicket() {
                   </CardContent>
                 </Card>
 
-                {/* Confirm button */}
+                {/* Confirm button — pour espèces, ouvre le pad (tendered/change). */}
                 <Button
                   className="w-full"
                   size="lg"
-                  onClick={handleConfirm}
+                  onClick={handleRequestConfirm}
                   loading={confirming}
                   disabled={confirming}
                   leftIcon={<Printer className="w-5 h-5" />}
@@ -1027,6 +1045,17 @@ export function PageSellTicket() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Cash pad dialog — ouvert uniquement si méthode CASH + caisse ouverte. */}
+      {batchResult && (
+        <CashPadDialog
+          open={cashPadOpen}
+          onOpenChange={(o) => !confirming && setCashPadOpen(o)}
+          amountDue={batchResult.pricingSummary.grandTotal}
+          submitting={confirming}
+          onConfirm={(tendered) => doConfirm(tendered)}
+        />
       )}
     </div>
   );

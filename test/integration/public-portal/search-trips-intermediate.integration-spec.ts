@@ -128,16 +128,22 @@ async function createTenantWithRoute(tenantId: string, slug: string) {
     },
   });
 
-  // Trip aujourd'hui départ dans 6h
-  const now = Date.now();
+  // Trip demain à midi local. Ancrage déterministe : évite les dérives timezone
+  // quand le test tourne le soir (trip today+6h pouvait basculer au lendemain
+  // et tomber hors de dayStart/dayEnd) ET satisfait toujours le cutoff
+  // `intermediateBookingCutoffMins=30` (demain midi est >> 30 min de maintenant).
+  const noon = new Date();
+  noon.setDate(noon.getDate() + 1);
+  noon.setHours(12, 0, 0, 0);
+  const arrival = new Date(noon.getTime() + 8 * 3600_000);
   await prismaClient.trip.create({
     data: {
       id: `trip-${tenantId}`, tenantId,
       routeId: `route-${tenantId}`, busId: `bus-${tenantId}`,
       driverId: `staff-${tenantId}-drv`,
       status: 'OPEN',
-      departureScheduled: new Date(now + 6 * 3600_000),
-      arrivalScheduled:   new Date(now + 14 * 3600_000),
+      departureScheduled: noon,
+      arrivalScheduled:   arrival,
       version: 1,
     },
   });
@@ -169,8 +175,19 @@ beforeAll(async () => {
   };
 
   service = new PublicPortalService(
-    prisma, {} as any, {} as any, {} as any, {} as any, {} as any,
-    redisMock as any, {} as any, {} as any, {} as any,
+    prisma,
+    {} as any, // brandService
+    {} as any, // qrService
+    {} as any, // documentsService
+    {} as any, // policyService
+    {} as any, // refundService
+    redisMock as any,
+    {} as any, // storage
+    {} as any, // eventBus
+    {} as any, // notification
+    {} as any, // crmResolver
+    {} as any, // crmClaim
+    {} as any, // announcements
   );
 
   await cleanupTestData();
@@ -185,7 +202,7 @@ afterAll(async () => {
 
 describe('[INTEG] PublicPortalService.searchTrips — intermediate stops (real DB)', () => {
   it('match OD complet : Brazzaville → Pointe-Noire', async () => {
-    const today = new Date().toISOString();
+    const today = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12,0,0,0); return d.toISOString(); })();
     const results = await service.searchTrips(SLUG_A, {
       departure: 'Brazzaville', arrival: 'Pointe-Noire', date: today,
     });
@@ -200,7 +217,7 @@ describe('[INTEG] PublicPortalService.searchTrips — intermediate stops (real D
   });
 
   it('match segment intermédiaire + prix manuel : Mindouli → Bouansa = 4000', async () => {
-    const today = new Date().toISOString();
+    const today = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12,0,0,0); return d.toISOString(); })();
     const results = await service.searchTrips(SLUG_A, {
       departure: 'Mindouli', arrival: 'Bouansa', date: today,
     });
@@ -213,7 +230,7 @@ describe('[INTEG] PublicPortalService.searchTrips — intermediate stops (real D
   });
 
   it('fallback proportionnel : Brazzaville → Mindouli (prix non configuré)', async () => {
-    const today = new Date().toISOString();
+    const today = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12,0,0,0); return d.toISOString(); })();
     const results = await service.searchTrips(SLUG_A, {
       departure: 'Brazzaville', arrival: 'Mindouli', date: today,
     });
@@ -227,7 +244,7 @@ describe('[INTEG] PublicPortalService.searchTrips — intermediate stops (real D
   });
 
   it('cross-tenant isolation : recherche sur tenant-A ne voit pas trip tenant-B', async () => {
-    const today = new Date().toISOString();
+    const today = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12,0,0,0); return d.toISOString(); })();
     const results = await service.searchTrips(SLUG_A, {
       departure: 'Brazzaville', arrival: 'Pointe-Noire', date: today,
     });
@@ -249,7 +266,7 @@ describe('[INTEG] PublicPortalService.searchTrips — intermediate stops (real D
       data:  { intermediateBookingEnabled: false },
     });
 
-    const today = new Date().toISOString();
+    const today = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12,0,0,0); return d.toISOString(); })();
     const resultsB = await service.searchTrips(SLUG_B, {
       departure: 'Mindouli', arrival: 'Bouansa', date: today,
     });

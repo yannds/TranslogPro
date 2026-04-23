@@ -36,7 +36,12 @@ function buildMocks(opts: {
       create:     jest.fn().mockImplementation(async (args: any) => args.data),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       findUnique: jest.fn().mockResolvedValue(opts.tokenRecord ?? null),
+      findFirst:  jest.fn().mockResolvedValue(null),
+      count:      jest.fn().mockResolvedValue(0),
       update:     jest.fn().mockResolvedValue({}),
+    },
+    tenantBusinessConfig: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     ticket:   { count: jest.fn().mockResolvedValue(0) },
     parcel:   { count: jest.fn().mockResolvedValue(0) },

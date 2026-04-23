@@ -82,7 +82,7 @@ describe('GeoService.search', () => {
     expect(String(call[0])).toContain('nominatim.openstreetmap.org/search');
     expect(call[1].headers['User-Agent']).toMatch(/TransLogPro/);
     expect(r.setex).toHaveBeenCalledWith(
-      expect.stringMatching(/^geo:search:[a-f0-9]+$/),
+      expect.stringMatching(/^geo:search:v2:[a-f0-9]+$/),
       3600,
       expect.any(String),
     );

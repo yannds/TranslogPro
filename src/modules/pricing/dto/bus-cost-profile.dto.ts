@@ -36,19 +36,19 @@ export class UpsertBusCostProfileDto {
   tollFeesPerTrip?: number;
 
   /** Salaire mensuel du conducteur affecté (XOF) */
-  @IsNumber() @IsPositive()
+  @IsNumber() @Min(0)
   driverMonthlySalary!: number;
 
   /** Assurance annuelle (XOF) */
-  @IsNumber() @IsPositive()
+  @IsNumber() @Min(0)
   annualInsuranceCost!: number;
 
   /** Frais fixes agence / mois (XOF) — proratisés par trajet */
-  @IsNumber() @IsPositive()
+  @IsNumber() @Min(0)
   monthlyAgencyFees!: number;
 
   /** Prix d'achat du véhicule (XOF) */
-  @IsNumber() @IsPositive()
+  @IsNumber() @Min(0)
   purchasePrice!: number;
 
   /** Durée d'amortissement en années */

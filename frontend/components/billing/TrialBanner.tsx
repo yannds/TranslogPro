@@ -19,9 +19,11 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { cn } from '../../lib/utils';
 
 interface BillingSummary {
-  status:             string; // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED
+  status:             string; // TRIAL | GRACE_PERIOD | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | CHURNED
   trialEndsAt:        string | null;
   trialDaysLeft:      number | null;
+  gracePeriodEndsAt:  string | null;
+  graceDaysLeft:      number | null;
   currentPeriodEnd:   string | null;
   /** Seuil (en jours) au-dessus duquel on n'affiche pas le banner — piloté par
    *  PlatformConfig côté backend, remonté ici pour éviter le magic number UI. */
@@ -49,6 +51,11 @@ export function TrialBanner() {
       .then(setData)
       .catch(() => setData(null));
   }, []);
+
+  // GRACE_PERIOD : trial expiré, délai avant suspension — non dismissable, toujours critique
+  if (data?.status === 'GRACE_PERIOD') {
+    return <GracePeriodBanner daysLeft={data.graceDaysLeft ?? 0} />;
+  }
 
   if (!data || data.status !== 'TRIAL' || !data.plan || dismissed) return null;
   if (data.plan.price <= 0) return null; // plan gratuit ou devis → pas de banner
@@ -241,4 +248,38 @@ function wasDismissedRecently(): boolean {
     if (!raw) return false;
     return Date.now() - Number(raw) < ONE_DAY_MS;
   } catch { return false; }
+}
+
+// ─── GracePeriodBanner ───────────────────────────────────────────────────────
+// Non dismissable — le tenant doit payer pour continuer.
+
+function GracePeriodBanner({ daysLeft }: { daysLeft: number }) {
+  const { t } = useI18n();
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/50 dark:text-red-100"
+    >
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+        <p>
+          <strong className="font-semibold">
+            {daysLeft > 0
+              ? t('billing.grace.daysLeft').replace('{n}', String(daysLeft))
+              : t('billing.grace.lastDay')}
+          </strong>
+          {' — '}
+          {t('billing.grace.body')}
+        </p>
+      </div>
+      <a
+        href="/admin/billing"
+        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+      >
+        <CreditCard className="h-3.5 w-3.5" aria-hidden />
+        {t('billing.grace.cta')}
+      </a>
+    </div>
+  );
 }

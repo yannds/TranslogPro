@@ -35,6 +35,7 @@ describe('ProfitabilityService.simulateTrip', () => {
       findFirst: jest.fn().mockResolvedValue('route' in overrides ? overrides.route : {
         id: 'route-a', tenantId: 'tenant-a',
         distanceKm: 500, basePrice: 15_000,
+        waypoints: [],
       }),
     },
     bus: {
@@ -49,6 +50,9 @@ describe('ProfitabilityService.simulateTrip', () => {
         breakEvenThresholdPct: 0.05,
         agencyCommissionRate:  0.03,
       }),
+    },
+    pricingRules: {
+      findFirst: jest.fn().mockResolvedValue('pricingRules' in overrides ? overrides.pricingRules : null),
     },
   });
 

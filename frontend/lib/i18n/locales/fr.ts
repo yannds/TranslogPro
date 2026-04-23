@@ -3010,6 +3010,19 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "retryNow": "Réessayer",
     "cachedData": "Données affichées depuis le cache local — une actualisation est tentée dès que possible."
   },
+  "cashPad": {
+    "title": "Encaissement espèces",
+    "description": "Saisissez le montant remis par le client pour calculer la monnaie à rendre.",
+    "amountDue": "Montant dû",
+    "tenderedLabel": "Montant remis par le client",
+    "quickAmounts": "Raccourcis billets",
+    "exact": "Exact",
+    "change": "Monnaie à rendre",
+    "insufficient": "Montant insuffisant",
+    "insufficientHint": "Le montant remis doit couvrir le total dû.",
+    "cancel": "Annuler",
+    "confirm": "Valider l'encaissement"
+  },
   "analytics": {
     "title": "Tableaux analytiques",
     "subtitle": "Vue d'ensemble des indicateurs clés sur la période sélectionnée.",
@@ -5030,6 +5043,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "routingKeyConfigured":    "Clé configurée",
     "routingKeyMissing":       "Clé manquante",
     "routingKeySet":           "Configurer / Mettre à jour",
+    "routingKeyConfigure":     "Configurer",
+    "routingKeyReplace":       "Modifier la clé",
     "routingKeyDelete":        "Supprimer la clé",
     "routingKeyDialogTitle":   "Clé API — {{provider}}",
     "routingKeyDialogDesc":    "La clé sera stockée dans Vault. Elle ne sera jamais relue ni affichée.",

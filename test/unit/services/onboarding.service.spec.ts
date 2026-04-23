@@ -64,6 +64,18 @@ function makeTx(userCreateSpy?: jest.Mock) {
     tenantBusinessConfig: { upsert: jest.fn().mockResolvedValue({ id: 'bc-x' }) },
     tenantTax:            { upsert: jest.fn().mockResolvedValue({ id: 'tax-x' }) },
     tenantFareClass:      { upsert: jest.fn().mockResolvedValue({ id: 'fc-x' }) },
+    // CMS seed (Phase 2026-04 — pages publiques about/fleet/contact + post bienvenue)
+    tenantPortalConfig: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      create:     jest.fn().mockResolvedValue({ id: 'tpc-x' }),
+    },
+    tenantPage: {
+      upsert: jest.fn().mockResolvedValue({ id: 'page-x' }),
+    },
+    tenantPost: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create:    jest.fn().mockResolvedValue({ id: 'post-x' }),
+    },
   };
 }
 

@@ -274,4 +274,52 @@ export class NotificationService {
       default:          return false;
     }
   }
+
+  // ── Préférences utilisateur (Module L PRD — UI self-service) ─────────────────
+
+  /**
+   * Retourne les préférences du user. Si aucune n'existe, retourne les
+   * defaults Prisma (sms/whatsapp/push activés, email désactivé) sans
+   * créer la ligne — création paresseuse au premier upsert.
+   */
+  async getPreferences(tenantId: string, userId: string) {
+    const existing = await this.prisma.notificationPreference.findUnique({
+      where: { userId },
+    });
+    if (existing && existing.tenantId === tenantId) return existing;
+    // Defaults alignés sur le schema Prisma — pas de magic number.
+    return {
+      id:       null,
+      userId,
+      tenantId,
+      sms:      true,
+      whatsapp: true,
+      push:     true,
+      email:    false,
+    };
+  }
+
+  /**
+   * Upsert des préférences. Sécurité : on contraint TOUJOURS le tenantId
+   * + userId fournis (le service ne fait jamais confiance à un payload
+   * pour identifier l'utilisateur — c'est l'appelant qui injecte).
+   */
+  async upsertPreferences(
+    tenantId: string,
+    userId:   string,
+    patch:    Partial<{ sms: boolean; whatsapp: boolean; push: boolean; email: boolean }>,
+  ) {
+    return this.prisma.notificationPreference.upsert({
+      where:  { userId },
+      create: {
+        userId,
+        tenantId,
+        sms:      patch.sms      ?? true,
+        whatsapp: patch.whatsapp ?? true,
+        push:     patch.push     ?? true,
+        email:    patch.email    ?? false,
+      },
+      update: patch,
+    });
+  }
 }

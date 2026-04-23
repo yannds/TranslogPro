@@ -3157,6 +3157,19 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "retryNow": "Retry",
     "cachedData": "Showing cached data — a fresh fetch is attempted as soon as possible."
   },
+  "cashPad": {
+    "title": "Cash payment",
+    "description": "Enter the amount tendered by the customer to compute the change to return.",
+    "amountDue": "Amount due",
+    "tenderedLabel": "Tendered by customer",
+    "quickAmounts": "Quick amounts",
+    "exact": "Exact",
+    "change": "Change to return",
+    "insufficient": "Insufficient amount",
+    "insufficientHint": "Tendered amount must cover the total due.",
+    "cancel": "Cancel",
+    "confirm": "Validate payment"
+  },
   "analytics": {
     "title": "Analytics",
     "subtitle": "Overview of key indicators across the selected period.",
@@ -5018,6 +5031,8 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "routingKeyConfigured":    "Key configured",
     "routingKeyMissing":       "Key missing",
     "routingKeySet":           "Configure / Update",
+    "routingKeyConfigure":     "Configure",
+    "routingKeyReplace":       "Change key",
     "routingKeyDelete":        "Delete key",
     "routingKeyDialogTitle":   "API Key — {{provider}}",
     "routingKeyDialogDesc":    "The key will be stored in Vault. It will never be read back or displayed.",

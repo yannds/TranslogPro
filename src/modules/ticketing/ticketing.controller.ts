@@ -5,6 +5,7 @@ import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { PublicRoute } from '../../common/decorators/public-route.decorator';
 import { Permission } from '../../common/constants/permissions';
 
 @Controller('tenants/:tenantId/tickets')
@@ -175,7 +176,8 @@ export class TicketingController {
     return this.ticketingService.findOne(tenantId, id);
   }
 
-  /** Public tracking — aucune auth requise, tenantId depuis path */
+  /** Public tracking — tenantId from path, no PII exposed (anti-enumeration) */
+  @PublicRoute('Public ticket tracking by code — no PII (status only)')
   @Get('track/:code')
   track(@Param('tenantId') tenantId: string, @Param('code') code: string) {
     return this.ticketingService.trackByCode(tenantId, code);

@@ -148,6 +148,15 @@ export function RouteDetailDialog({
   const [showAddForm,    setShowAddForm]    = useState(false);
   const [editingIdx,     setEditingIdx]     = useState<number | null>(null);
 
+  // Checkpoint autocomplete — points de contrôle déjà enregistrés sur ce tenant
+  const [cpSuggestions, setCpSuggestions] = useState<{ kind: string; name: string; tollCostXaf: number; estimatedWaitTime: number | null }[]>([]);
+  useEffect(() => {
+    if (!tenantId) return;
+    apiGet<typeof cpSuggestions>(`${base}/checkpoints`)
+      .then(setCpSuggestions)
+      .catch(() => { /* non-bloquant */ });
+  }, [tenantId, base]);
+
   // New / edit waypoint form
   const [newKind,              setNewKind]              = useState<WaypointKindValue>('STATION');
   const [newStationId,         setNewStationId]         = useState('');
@@ -483,12 +492,29 @@ export function RouteDetailDialog({
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
               {t('routeDetail.pointName')} <span className="text-red-500">*</span>
             </label>
+            {/* datalist filtrée par kind pour l'autocomplete */}
+            <datalist id="cp-suggestions">
+              {cpSuggestions
+                .filter(s => s.kind === newKind)
+                .map((s, i) => <option key={i} value={s.name} />)}
+            </datalist>
             <input
               type="text"
+              list="cp-suggestions"
               value={newName}
-              onChange={e => setNewName(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setNewName(val);
+                // Auto-remplir coût et attente si la valeur correspond exactement à une suggestion
+                const match = cpSuggestions.find(s => s.kind === newKind && s.name === val);
+                if (match) {
+                  setNewTollCostXaf(String(match.tollCostXaf));
+                  if (match.estimatedWaitTime) setNewEstimatedWait(String(match.estimatedWaitTime));
+                }
+              }}
               className={inputClass}
               placeholder={t('routeDetail.pointNamePlaceholder')}
+              autoComplete="off"
             />
           </div>
         )}

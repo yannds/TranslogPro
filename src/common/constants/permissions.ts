@@ -31,6 +31,7 @@ export const P_INTEGRATION_SETUP_TENANT    = 'control.integration.setup.tenant';
 export const P_USER_READ_AGENCY            = 'data.user.read.agency';
 export const P_USER_RESET_PASSWORD_TENANT  = 'control.iam.user.reset-password.tenant';
 export const P_USER_BULK_DELETE_TENANT     = 'control.iam.user.bulk-delete.tenant';
+export const P_BULK_IMPORT_TENANT          = 'control.bulk.import.tenant';
 export const P_SESSION_REVOKE_OWN          = 'data.session.revoke.own';
 export const P_SESSION_REVOKE_TENANT       = 'data.session.revoke.tenant';
 
@@ -351,6 +352,20 @@ export const P_SUPPORT_READ_TENANT             = 'data.support.read.tenant';
 export const P_TENANT_PLAN_READ_TENANT         = 'data.tenant.plan.read.tenant';
 export const P_TENANT_PLAN_CHANGE_TENANT       = 'control.tenant.plan.change.tenant';
 
+// ─── Backup / Restore / RGPD ──────────────────────────────────────────────────
+// backup.read   : lister les BackupJob + lire les manifests
+// backup.create : déclencher un nouveau backup (toutes granularités)
+// backup.restore: lancer une restauration (additive ou replace)
+// backup.delete : supprimer un backup de MinIO (garder l'entrée log)
+// backup.schedule: configurer la planification automatique
+// gdpr.export   : déclencher un export RGPD (données perso + fichiers)
+export const P_BACKUP_READ_TENANT              = 'data.backup.read.tenant';
+export const P_BACKUP_CREATE_TENANT            = 'control.backup.create.tenant';
+export const P_BACKUP_RESTORE_TENANT           = 'control.backup.restore.tenant';
+export const P_BACKUP_DELETE_TENANT            = 'control.backup.delete.tenant';
+export const P_BACKUP_SCHEDULE_TENANT          = 'control.backup.schedule.tenant';
+export const P_GDPR_EXPORT_TENANT              = 'control.gdpr.export.tenant';
+
 // ─── Const object (compile-time lookup) ──────────────────────────────────────
 export const Permission = {
   // IAM
@@ -360,6 +375,7 @@ export const Permission = {
   USER_READ_AGENCY:           P_USER_READ_AGENCY,
   USER_RESET_PASSWORD_TENANT: P_USER_RESET_PASSWORD_TENANT,
   USER_BULK_DELETE_TENANT:    P_USER_BULK_DELETE_TENANT,
+  BULK_IMPORT_TENANT:         P_BULK_IMPORT_TENANT,
   SESSION_REVOKE_OWN:         P_SESSION_REVOKE_OWN,
   SESSION_REVOKE_TENANT:      P_SESSION_REVOKE_TENANT,
   // Workflow
@@ -575,6 +591,13 @@ export const Permission = {
   VOUCHER_CANCEL_TENANT:          P_VOUCHER_CANCEL_TENANT,
   VOUCHER_READ_OWN:               P_VOUCHER_READ_OWN,
   VOUCHER_READ_TENANT:            P_VOUCHER_READ_TENANT,
+  // Backup / Restore / RGPD
+  BACKUP_READ_TENANT:             P_BACKUP_READ_TENANT,
+  BACKUP_CREATE_TENANT:           P_BACKUP_CREATE_TENANT,
+  BACKUP_RESTORE_TENANT:          P_BACKUP_RESTORE_TENANT,
+  BACKUP_DELETE_TENANT:           P_BACKUP_DELETE_TENANT,
+  BACKUP_SCHEDULE_TENANT:         P_BACKUP_SCHEDULE_TENANT,
+  GDPR_EXPORT_TENANT:             P_GDPR_EXPORT_TENANT,
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];

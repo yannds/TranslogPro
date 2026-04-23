@@ -70,6 +70,8 @@ export interface PaymentResult {
   methodLast4?:     string;
   /** Label marque (Visa, Mastercard, MTN, Airtel…) — affichage UI seulement. */
   methodBrand?:     string;
+  /** Téléphone masqué pour MoMo/Wave ("+242 ••••• 567") — affichage UI seulement. */
+  maskedPhone?:     string;
 }
 
 export interface WebhookVerificationResult {
@@ -86,6 +88,7 @@ export interface WebhookVerificationResult {
   methodToken?:   string;
   methodLast4?:   string;
   methodBrand?:   string;
+  maskedPhone?:   string;
 }
 
 export interface RefundDto {

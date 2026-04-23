@@ -5,12 +5,15 @@
  * Structure et rendu identiques à AdminDashboard :
  *   1. Logo (haut)
  *   2. Nav scrollable avec accordéons L0 (icône+titre) → L1 (SidebarNavItem)
- *   3. BottomBar : Bell · Thème · Aide & Support · UserMenu (bas)
+ *   3. BottomBar : Thème · UserMenu consolidé (bas)
  *   4. Bouton collapse (très bas)
  *
  * Sections sans titre → rendu direct (pas d'accordéon), identique à la section
  * Dashboard dans AdminDashboard.
  * Sections avec titre + icon → accordéon cliquable, même comportement admin.
+ *
+ * UserMenu : dropdown consolidé = Notifications (badge unread) + Aide & Support
+ *            + Mon compte + Déconnexion. L'avatar porte la pastille d'unread.
  */
 
 import { useMemo, useState, useRef, useEffect, Suspense } from 'react';
@@ -18,11 +21,11 @@ import { useLocation, useNavigate }   from 'react-router-dom';
 import {
   Sun, Moon, Bell, LifeBuoy, UserCircle2, LogOut,
   ChevronDown, ChevronsLeft, ChevronsRight,
-  BookOpen, FileText,
 } from 'lucide-react';
 import { useAuth }             from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation }       from '../../lib/hooks/useNavigation';
+import { useNotifications }    from '../../lib/hooks/useNotifications';
 import { useLockedViewport }   from '../../lib/hooks/useLockedViewport';
 import { useSidebarCollapsed } from '../../lib/hooks/useSidebarCollapsed';
 import { useTheme }            from '../theme/ThemeProvider';
@@ -117,7 +120,7 @@ function SidebarSection({ section, activeHref, collapsed, onRequestExpand }: Sid
           )}
         >
           <NavIcon name={section.icon ?? leaf.icon} className="w-5 h-5 shrink-0" />
-          <span className="flex-1 truncate">{section.title ?? leaf.label}</span>
+          <span className="flex-1 truncate uppercase tracking-wider">{section.title ?? leaf.label}</span>
         </button>
       </li>
     );
@@ -202,7 +205,7 @@ function SidebarSectionAccordion({
         )}
       >
         <NavIcon name={section.icon ?? 'LayoutDashboard'} className="w-5 h-5 shrink-0" />
-        <span className="flex-1 truncate">{section.title}</span>
+        <span className="flex-1 truncate uppercase tracking-wider">{section.title}</span>
         <ChevronDown
           className={cn('w-3.5 h-3.5 shrink-0 transition-transform duration-200', expanded && 'rotate-180')}
           aria-hidden
@@ -229,20 +232,29 @@ function SidebarSectionAccordion({
   );
 }
 
-// ─── UserMenu — dropdown inline dans le bottom bar ────────────────────────────
+// ─── UserMenu — dropdown consolidé (Notifications + Aide + Compte + Logout) ──
 
 interface UserMenuProps {
-  name:         string;
-  email?:       string;
-  role?:        string;
-  initials:     string;
-  collapsed:    boolean;
-  accountHref:  string;
-  onLogout:     () => void;
+  name:              string;
+  email?:            string;
+  role?:             string;
+  initials:          string;
+  collapsed:         boolean;
+  unreadCount:       number;
+  canSupport:        boolean;
+  accountHref:       string;
+  notificationsHref: string;
+  supportHref:       string;
+  onLogout:          () => void;
 }
 
-function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogout }: UserMenuProps) {
-  const { t }          = useI18n();
+function UserMenu({
+  name, email, role, initials, collapsed,
+  unreadCount, canSupport,
+  accountHref, notificationsHref, supportHref,
+  onLogout,
+}: UserMenuProps) {
+  const { t }           = useI18n();
   const navigate        = useNavigate();
   const [open, setOpen] = useState(false);
   const ref             = useRef<HTMLDivElement>(null);
@@ -255,6 +267,8 @@ function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogou
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
+
+  const itemClass = 'w-full flex items-center gap-2.5 px-3 py-2 text-sm t-nav-text t-nav-hover transition-colors text-left';
 
   return (
     <div ref={ref} className="relative">
@@ -270,11 +284,21 @@ function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogou
           't-nav-text t-nav-hover',
         )}
       >
-        <span
-          className="w-7 h-7 rounded-full bg-teal-600 dark:bg-teal-700 flex items-center justify-center text-white text-[11px] font-bold shrink-0"
-          aria-hidden
-        >
-          {initials}
+        <span className="relative shrink-0">
+          <span
+            className="w-7 h-7 rounded-full bg-teal-600 dark:bg-teal-700 flex items-center justify-center text-white text-[11px] font-bold"
+            aria-hidden
+          >
+            {initials}
+          </span>
+          {unreadCount > 0 && (
+            <span
+              aria-label={t('nav.notifications')}
+              className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white dark:ring-slate-900 flex items-center justify-center"
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </span>
         {!collapsed && (
           <span className="min-w-0 flex-1 text-left">
@@ -295,7 +319,7 @@ function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogou
           role="menu"
           className={cn(
             'absolute bottom-full mb-1 z-50',
-            collapsed ? 'left-full ml-2 w-48' : 'left-0 right-0',
+            collapsed ? 'left-full ml-2 w-56' : 'left-0 right-0',
             'rounded-xl border t-border t-sidebar shadow-lg py-1',
           )}
         >
@@ -306,8 +330,35 @@ function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogou
 
           <button
             role="menuitem"
+            onClick={() => { setOpen(false); navigate(notificationsHref); }}
+            className={itemClass}
+          >
+            <Bell className="w-4 h-4 shrink-0" />
+            <span className="flex-1 truncate">{t('nav.notifications')}</span>
+            {unreadCount > 0 && (
+              <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {canSupport && (
+            <button
+              role="menuitem"
+              onClick={() => { setOpen(false); navigate(supportHref); }}
+              className={itemClass}
+            >
+              <LifeBuoy className="w-4 h-4 shrink-0" />
+              <span className="flex-1 truncate">{t('nav.help_support')}</span>
+            </button>
+          )}
+
+          <div className="my-1 border-t t-border" aria-hidden />
+
+          <button
+            role="menuitem"
             onClick={() => { setOpen(false); navigate(accountHref); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm t-nav-text t-nav-hover transition-colors text-left"
+            className={itemClass}
           >
             <UserCircle2 className="w-4 h-4 shrink-0" />
             {t('account.title')}
@@ -327,32 +378,33 @@ function UserMenu({ name, email, role, initials, collapsed, accountHref, onLogou
   );
 }
 
-// ─── BottomBar ────────────────────────────────────────────────────────────────
+// ─── BottomBar — Theme · UserMenu (consolidé) ────────────────────────────────
 
 interface BottomBarProps {
   collapsed:     boolean;
-  authUser:      { name?: string | null; email?: string | null; roleName?: string | null; userType?: string } | null;
+  authUser:      { name?: string | null; email?: string | null; roleName?: string | null; userType?: string; tenantId?: string } | null;
   onLogout:      () => void;
+  permissions:   string[];
   utilityHrefs:  { account: string; support: string; notifications: string };
 }
 
-function BottomBar({ collapsed, authUser, onLogout, utilityHrefs }: BottomBarProps) {
-  const { theme, toggle }             = useTheme();
-  const { t }                         = useI18n();
-  const navigate                      = useNavigate();
-  const [supportExpanded, setSupExp]  = useState(false);
+function BottomBar({ collapsed, authUser, onLogout, permissions, utilityHrefs }: BottomBarProps) {
+  const { theme, toggle } = useTheme();
+  const { t }             = useI18n();
+  const { notifications } = useNotifications({ tenantId: authUser?.tenantId ?? 'demo' });
+  const unreadCount       = notifications.length;
 
   const name     = authUser?.name ?? authUser?.email ?? '?';
   const initials = name.slice(0, 2).toUpperCase();
   const role     = authUser?.roleName ?? authUser?.userType;
+  const canSupport = permissions.includes('data.support.create.tenant') ||
+                     permissions.includes('data.support.read.tenant');
 
   const btnBase = cn(
     'relative w-full flex items-center text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-xl',
     't-nav-text t-nav-hover',
     collapsed ? 'justify-center py-2.5' : 'gap-3 px-3 py-2',
   );
-
-  const subBtnBase = 'w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg t-nav-text t-nav-hover transition-colors text-left';
 
   return (
     <div
@@ -361,19 +413,6 @@ function BottomBar({ collapsed, authUser, onLogout, utilityHrefs }: BottomBarPro
         collapsed ? 'flex flex-col items-center py-2 gap-1' : 'flex flex-col gap-1 px-2 py-2',
       )}
     >
-      {/* Bell — notifications */}
-      <button
-        onClick={() => navigate(utilityHrefs.notifications)}
-        title={t('nav.notifications')}
-        aria-label={t('nav.notifications')}
-        className={btnBase}
-      >
-        <Bell className="w-4 h-4 shrink-0" />
-        {!collapsed && (
-          <span className="flex-1 truncate text-sm">{t('nav.notifications')}</span>
-        )}
-      </button>
-
       {/* Theme toggle */}
       <button
         onClick={toggle}
@@ -392,58 +431,18 @@ function BottomBar({ collapsed, authUser, onLogout, utilityHrefs }: BottomBarPro
         )}
       </button>
 
-      {/* Aide & Support — accordéon identique à AdminDashboard */}
-      <div className="w-full">
-        <button
-          onClick={collapsed ? () => navigate(utilityHrefs.support) : () => setSupExp(e => !e)}
-          title={collapsed ? t('nav.help_support') : undefined}
-          aria-label={collapsed ? t('nav.help_support') : undefined}
-          aria-expanded={collapsed ? undefined : supportExpanded}
-          className={btnBase}
-        >
-          <LifeBuoy className="w-4 h-4 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="flex-1 truncate text-sm">{t('nav.help_support')}</span>
-              <ChevronDown
-                className={cn('w-3 h-3 shrink-0 transition-transform duration-200', supportExpanded && 'rotate-180')}
-                aria-hidden
-              />
-            </>
-          )}
-        </button>
-        {!collapsed && supportExpanded && (
-          <ul className="mt-0.5 ml-4 pl-2 border-l border-slate-200 dark:border-slate-700 space-y-0.5">
-            <li>
-              <button onClick={() => navigate(utilityHrefs.support)} className={subBtnBase}>
-                <LifeBuoy className="w-3.5 h-3.5 shrink-0" />
-                {t('nav.contact_support')}
-              </button>
-            </li>
-            <li>
-              <button className={subBtnBase} disabled title="Bientôt disponible">
-                <BookOpen className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                <span className="opacity-50">{t('nav.help_center')}</span>
-              </button>
-            </li>
-            <li>
-              <button className={subBtnBase} disabled title="Bientôt disponible">
-                <FileText className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                <span className="opacity-50">{t('nav.documentation')}</span>
-              </button>
-            </li>
-          </ul>
-        )}
-      </div>
-
-      {/* UserMenu — avatar + Mon compte + Déconnexion */}
+      {/* UserMenu consolidé — avatar avec badge + Notifications + Aide + Compte + Logout */}
       <UserMenu
         name={name}
         email={authUser?.email ?? undefined}
         role={role ?? undefined}
         initials={initials}
         collapsed={collapsed}
+        unreadCount={unreadCount}
+        canSupport={canSupport}
         accountHref={utilityHrefs.account}
+        notificationsHref={utilityHrefs.notifications}
+        supportHref={utilityHrefs.support}
         onLogout={onLogout}
       />
     </div>
@@ -535,6 +534,7 @@ export function PortalShell({ config, ariaNavLabel }: PortalShellProps) {
           collapsed={collapsed}
           authUser={authUser}
           onLogout={() => void logout()}
+          permissions={permissions}
           utilityHrefs={utilityHrefs}
         />
 

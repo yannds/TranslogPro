@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import {
   buildActivationEmail, type ActivationDay, type ActivationLocale,
 } from './emails/activation.templates';
@@ -29,14 +30,16 @@ export class ActivationEmailsService {
   private readonly logger = new Logger(ActivationEmailsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: PlatformConfigService,
+    private readonly prisma:    PrismaService,
+    private readonly config:    PlatformConfigService,
+    private readonly appConfig: AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
   @Cron('0 9 * * *') // 09:00 chaque jour — convention de scheduling, pas une valeur métier
   async runDailyDrip(): Promise<void> {
-    if (process.env.ACTIVATION_EMAILS_ENABLED === 'false') {
+    // opt-OUT : on exécute par défaut, on skip uniquement si explicitement `false`.
+    if (this.appConfig.getString('ACTIVATION_EMAILS_ENABLED', '') === 'false') {
       this.logger.log('Skipped — ACTIVATION_EMAILS_ENABLED=false');
       return;
     }
@@ -117,8 +120,7 @@ export class ActivationEmailsService {
     const admin = tenant.users[0];
     if (!admin?.email) { this.logger.warn(`No admin email for tenant=${tenant.slug} — skip ${day}`); return false; }
 
-    const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
-    const tenantUrl  = `https://${tenant.slug}.${baseDomain}`;
+    const tenantUrl  = `https://${tenant.slug}.${this.appConfig.publicBaseDomain}`;
 
     try {
       const tmpl = buildActivationEmail(day, {

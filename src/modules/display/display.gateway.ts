@@ -39,6 +39,7 @@ import { Redis } from 'ioredis';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
+import { websocketCorsConfig } from '../../common/security/cors.helper';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ interface AuthenticatedSocket extends Socket {
 // ─── Gateway ──────────────────────────────────────────────────────────────────
 
 @WebSocketGateway({
-  cors:      { origin: '*' },
+  cors:      websocketCorsConfig(),
   namespace: '/realtime',
 })
 export class DisplayGateway

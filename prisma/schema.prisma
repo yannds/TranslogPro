@@ -132,6 +132,12 @@ model Tenant {
   // Manifest = document récapitulatif d'un trajet — workflow manifest-standard
   manifests Manifest[]
 
+  // ── Backup / Restore / GDPR Export ─────────────────────────────────────────
+  backupJobs      BackupJob[]
+  backupRestores  BackupRestore[]
+  gdprExportJobs  GdprExportJob[]
+  backupSchedule  BackupSchedule?
+
   @@map("tenants")
 }
 
@@ -1753,6 +1759,11 @@ model Transaction {
   type           String // TICKET | PARCEL | LUGGAGE_FEE | REFUND
   amount         Float
   paymentMethod  String // CASH | MOBILE_MONEY
+  // Saisie caisse espèces (CASH uniquement) — billet remis par le client et
+  // monnaie rendue. `changeAmount` est toujours = tenderedAmount - amount (≥ 0).
+  // Nullable car non applicable hors CASH et rétro-compat transactions existantes.
+  tenderedAmount Float?
+  changeAmount   Float?
   externalRef    String? // Référence Flutterwave/Paystack (idempotent)
   metadata       Json     @default("{}")
   createdAt      DateTime @default(now())
@@ -3504,14 +3515,24 @@ model PlatformSubscription {
   id                 String    @id @default(cuid())
   tenantId           String    @unique
   planId             String
-  status             String    @default("TRIAL") // TRIAL | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED
+  // TRIAL → ACTIVE (paiement) | GRACE_PERIOD (trial expiré sans paiement)
+  // GRACE_PERIOD → ACTIVE (paiement) | SUSPENDED (grace expiré)
+  // ACTIVE → PAST_DUE (échec renouvellement) | CANCELLED (résiliation)
+  // PAST_DUE → ACTIVE (paiement) | SUSPENDED (dunning day7 dépassé)
+  // SUSPENDED → ACTIVE (webhook paiement uniquement)
+  // CANCELLED → CHURNED (TTL cancel_data_ttl_days)
+  status             String    @default("TRIAL") // TRIAL | GRACE_PERIOD | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | CHURNED
   startedAt          DateTime  @default(now())
   trialEndsAt        DateTime?
+  // Entrée en GRACE_PERIOD (trial expiré) — point de départ du délai grace_period_days.
+  gracePeriodSince   DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
   renewsAt           DateTime?
   cancelledAt        DateTime?
   cancelReason       String?
+  // Données archivées/supprimées après cancel_data_ttl_days post-CANCELLED.
+  churnedAt          DateTime?
   // Si true, le renewal cron tente un prélèvement automatique avec la dernière
   // méthode de paiement utilisée (SubscriptionRenewalService). Si le PSP exige
   // une nouvelle saisie (carte non tokenisée), l'auto-renew dégrade vers un
@@ -3521,15 +3542,25 @@ model PlatformSubscription {
   // Première entrée en PAST_DUE — point de départ des rappels dunning J+1/J+3/J+7.
   // Remis à null quand la subscription repasse ACTIVE.
   pastDueSince       DateTime?
-  // meta free-form : ID Stripe/PayPal + refs du dernier paiement réussi pour
-  // l'auto-renew :
+  // meta free-form : ID Stripe/PayPal + refs du dernier paiement réussi + vault MoMo/Wave :
   //   {
   //     lastIntentId:          string,
   //     lastMethod:            'CARD'|'MOBILE_MONEY'|...,
-  //     lastCustomerRef:       string,   // ID client côté PSP si fourni
-  //     lastAttemptExternalRef:string,   // ID transaction PSP
+  //     lastCustomerRef:       string,
+  //     lastAttemptExternalRef:string,
   //     lastSuccessAt:         ISO-date,
-  //     dunningSent:           { day1: ISO, day3: ISO, day7: ISO }
+  //     dunningSent:           { day1: ISO, day3: ISO, day7: ISO },
+  //     savedMethod: {
+  //       method:        string,   // 'CARD'|'MOBILE_MONEY'|...
+  //       provider:      string,   // 'stripe'|'wave'|'mtn_momo_cg'|...
+  //       vaultToken:    string,   // token opaque PSP
+  //       label:         string,   // affichage : "Wave +242 ••••• 567" ou "Visa •••• 4242"
+  //       brand:         string|null,  // 'Visa'|'Mastercard'|null
+  //       last4:         string|null,  // '4242'|null (cartes uniquement)
+  //       maskedPhone:   string|null,  // '+242 ••••• 567' (MoMo/Wave uniquement)
+  //       tokenized:     boolean,
+  //       lastSuccessAt: ISO-date|null
+  //     }
   //   }
   externalRefs       Json      @default("{}")
   createdAt          DateTime  @default(now())
@@ -4166,4 +4197,142 @@ model Waitlist {
 
   @@index([createdAt])
   @@map("waitlist")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 31 : BACKUP / RESTORE / GDPR EXPORT
+// ─────────────────────────────────────────────────────────────
+//
+// BackupJob : archive atomique DB + fichiers MinIO. 3 granularités :
+//   MODULE    — tables d'un domaine + FK transitives + fichiers liés
+//   GROUP     — ensemble de modules fonctionnels + leurs fichiers
+//   FULL      — snapshot complet tenant (toutes tables + bucket MinIO)
+//
+// Atomicité : si l'upload DB ou l'upload MinIO échoue, status=FAILED
+// et les deux prefixes sont supprimés. Aucun état partiel visible.
+//
+// GdprExportJob : export RGPD (données perso uniquement) — ZIP signé
+// envoyé par email, valable 24h. Requis par le droit à la portabilité.
+
+model BackupJob {
+  id            String    @id @default(cuid())
+  tenantId      String
+  // MODULE | GROUP | FULL
+  scopeId       String
+  // PENDING | CAPTURING | UPLOADING | SEALING | COMPLETED | FAILED | DELETED
+  status        String    @default("PENDING")
+  // Tables résolues dans l'ordre topologique (restore order)
+  resolvedTables String[] @default([])
+  // { table: count }
+  rowCounts     Json      @default("{}")
+  // [{ key, sha256, entityType, entityId }]
+  fileIndex     Json      @default("[]")
+  // Version migration Prisma au moment du backup (compatibilité restore)
+  schemaVersion String?
+  // Taille totale archive en octets
+  sizeBytes     BigInt?
+  // Chemin MinIO racine : backups/{tenantId}/{id}/
+  storagePath   String?
+  // Manifest sérialisé (JSON — copie de sécurité locale après scellement)
+  manifest      Json?
+  // Message d'erreur si FAILED
+  errorMessage  String?
+  // Phase de progression (pour banner UI en temps réel)
+  phase         String?   // CAPTURING | UPLOADING_DB | UPLOADING_FILES | SEALING
+  phaseProgress Int?      // 0-100
+  // Planification automatique — null = déclenché manuellement
+  scheduledBy   String?   // 'cron' | 'user:{userId}'
+  startedAt     DateTime?
+  completedAt   DateTime?
+  // Soft-delete : données supprimées de MinIO mais entrée conservée en log
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  restores BackupRestore[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("backup_jobs")
+}
+
+model BackupRestore {
+  id           String    @id @default(cuid())
+  tenantId     String
+  backupJobId  String
+  // ADDITIVE (upsert sans écraser) | REPLACE (écrase le scope entier)
+  mode         String    @default("ADDITIVE")
+  // PENDING | RUNNING | COMPLETED | FAILED | ROLLED_BACK
+  status       String    @default("PENDING")
+  // Tables restaurées dans l'ordre (log)
+  restoredTables String[] @default([])
+  filesRestored  Int      @default(0)
+  errorMessage String?
+  // userId qui a déclenché la restauration
+  initiatedBy  String
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  backupJob BackupJob @relation(fields: [backupJobId], references: [id])
+
+  @@index([tenantId, status])
+  @@map("backup_restores")
+}
+
+model GdprExportJob {
+  id          String    @id @default(cuid())
+  tenantId    String
+  // userId qui a demandé l'export (TENANT_ADMIN)
+  requestedBy String
+  // PENDING | GENERATING | COMPLETED | FAILED | EXPIRED
+  status      String    @default("PENDING")
+  // Chemin MinIO du ZIP signé : gdpr-exports/{tenantId}/{id}.zip
+  storagePath String?
+  // Lien téléchargement présigné (valable 24h)
+  downloadUrl String?
+  expiresAt   DateTime?
+  sizeBytes   BigInt?
+  errorMessage String?
+  // Nombre d'entités incluses (log RGPD)
+  entityCounts Json     @default("{}")
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("gdpr_export_jobs")
+}
+
+model BackupSchedule {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  enabled     Boolean  @default(false)
+  // DAILY | WEEKLY | MONTHLY
+  frequency   String   @default("WEEKLY")
+  // Scope par défaut pour la planification automatique
+  scopeId     String   @default("full")
+  // Heure UTC du déclenchement (0-23)
+  hourUtc     Int      @default(2)
+  // Jour de la semaine pour WEEKLY (0=dim, 1=lun … 6=sam)
+  dayOfWeek   Int?
+  // Jour du mois pour MONTHLY (1-28)
+  dayOfMonth  Int?
+  // Rétention : nombre de backups à conserver (les plus anciens sont supprimés)
+  retainCount Int      @default(7)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("backup_schedules")
 }

@@ -77,7 +77,7 @@ export function TripProfitabilityPanel(props: TripProfitabilityPanelProps) {
     setError(null);
     try {
       const res = await apiPost<SimulationResult>(
-        `/api/tenants/${tenantId}/pricing/simulate-trip`,
+        `/api/v1/tenants/${tenantId}/simulate-trip`,
         { routeId, busId, ticketPrice, fillRate },
       );
       setData(res);

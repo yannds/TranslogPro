@@ -6,21 +6,26 @@
  * main : `npx ts-node scripts/seed-e2e.ts`.
  *
  * Comptes créés/garantis :
- *   - e2e-sa@translog.test       (SUPER_ADMIN, tenant plateforme)
- *   - e2e-tenant-admin@e2e.local (TENANT_ADMIN, tenant "pw-e2e-tenant")
+ *   - e2e-sa@translog.test                              (SUPER_ADMIN, tenant plateforme)
+ *   - e2e-tenant-admin@trans-express.translog.test      (TENANT_ADMIN, tenant "trans-express")
+ *   - e2e-tenant-admin@e2e.local                        (TENANT_ADMIN, tenant E2E dédié "pw-e2e-tenant",
+ *                                                        UUID `2d48bdfa-5f6e-433d-ba70-5410ca870865`)
  *
  * Mot de passe commun (DEV SEULEMENT) : Passw0rd!E2E
  *
- * Idempotent : relance sans effet si les users existent déjà.
+ * Idempotent : relance sans effet si les users/tenants existent déjà.
  */
 
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import * as vault from 'node-vault';
 import {
   PLATFORM_TENANT_ID,
   PLATFORM_AGENCY_NAME,
   ensureDefaultAgency,
   seedTenantRoles,
+  backfillDefaultWorkflows,
 } from '../prisma/seeds/iam.seed';
 
 const prisma = new PrismaClient();
@@ -48,6 +53,23 @@ export const E2E = {
       // Tenant existant pré-provisionné par dev.sh (dans /etc/hosts).
       slug: 'trans-express',
     },
+  },
+  /**
+   * Tenant E2E dédié pour les suites *.api.spec.ts qui mutent fortement
+   * l'état (crée agencies/stations/routes/bus/trips). Isolé du tenant
+   * "trans-express" pour ne pas polluer les démos.
+   *
+   * L'UUID est hardcodé dans les specs (business-scenarios, cross-module,
+   * pricing-dynamics, traveler-scenarios, trip-freight-departure) → doit
+   * rester stable.
+   */
+  pwE2ETenant: {
+    id:       '2d48bdfa-5f6e-433d-ba70-5410ca870865',
+    slug:     'pw-e2e-tenant',
+    name:     'Playwright E2E Tenant',
+    hostname: 'pw-e2e-tenant.translog.test',
+    adminEmail: 'e2e-tenant-admin@e2e.local',
+    adminName:  'E2E PW TenantAdmin',
   },
 } as const;
 
@@ -158,6 +180,79 @@ async function ensureTenantAdmin(): Promise<{ userId: string; tenantId: string }
   return { userId: user.id, tenantId: tenant.id };
 }
 
+/**
+ * Provisionne le tenant E2E dédié `pw-e2e-tenant` (UUID hardcodé dans les
+ * specs). Idempotent : crée le tenant + son admin si absents, sinon refresh
+ * le mot de passe seulement.
+ */
+async function ensurePwE2ETenant(): Promise<{ userId: string; tenantId: string }> {
+  const cfg = E2E.pwE2ETenant;
+
+  // 1. Tenant : upsert par UUID stable (différent de findUnique({ slug }) car
+  //    on veut garantir l'UUID exact attendu par les specs).
+  let tenant = await prisma.tenant.findUnique({ where: { id: cfg.id } });
+  if (!tenant) {
+    // Vérifie qu'il n'y a pas déjà un tenant avec ce slug (collision possible)
+    const bySlug = await prisma.tenant.findUnique({ where: { slug: cfg.slug } });
+    if (bySlug) {
+      throw new Error(
+        `[seed-e2e] Tenant slug "${cfg.slug}" existe déjà avec un UUID différent (${bySlug.id}). ` +
+        `Supprimez-le ou alignez l'UUID dans les specs Playwright.`,
+      );
+    }
+    tenant = await prisma.tenant.create({
+      data: {
+        id:       cfg.id,
+        slug:     cfg.slug,
+        name:     cfg.name,
+        country:  'FR',
+        language: 'fr',
+        currency: 'EUR',
+        timezone: 'Europe/Paris',
+        // provisionStatus défaut PENDING — on force ACTIVE car l'env E2E
+        // skip l'onboarding wizard (le tenant est utilisé immédiatement)
+        provisionStatus: 'ACTIVE',
+      },
+    });
+    console.log(`[seed-e2e] Tenant E2E créé : ${tenant.id} (${tenant.slug})`);
+  }
+
+  // 2. Roles + Agency par défaut (idempotent)
+  const roleMap = await seedTenantRoles(prisma, tenant.id);
+  await ensureDefaultAgency(prisma as unknown as never, tenant.id, 'Agence principale');
+
+  const adminRoleId = roleMap.get('TENANT_ADMIN');
+  if (!adminRoleId) throw new Error('[seed-e2e] TENANT_ADMIN role manquant pour pw-e2e-tenant');
+
+  const agency = await prisma.agency.findFirst({ where: { tenantId: tenant.id } });
+  if (!agency) throw new Error('[seed-e2e] Agence manquante après ensureDefaultAgency (pw-e2e-tenant)');
+
+  // 3. User TENANT_ADMIN — refresh password à chaque seed
+  const existing = await prisma.user.findFirst({
+    where: { email: cfg.adminEmail, tenantId: tenant.id },
+  });
+  if (existing) {
+    await ensureAccount(existing.id, cfg.adminEmail, E2E.password);
+    console.log(`[seed-e2e] PW E2E TENANT_ADMIN existant → password refresh (${existing.id})`);
+    return { userId: existing.id, tenantId: tenant.id };
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      agencyId: agency.id,
+      email:    cfg.adminEmail,
+      name:     cfg.adminName,
+      roleId:   adminRoleId,
+      userType: 'STAFF',
+    },
+  });
+  await ensureAccount(user.id, cfg.adminEmail, E2E.password);
+  console.log(`[seed-e2e] PW E2E TENANT_ADMIN créé : ${user.id} (${user.email}) dans tenant ${tenant.slug}`);
+
+  return { userId: user.id, tenantId: tenant.id };
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function ensureE2EPlan(): Promise<void> {
@@ -207,6 +302,33 @@ async function ensureE2ESupportTicket(tenantId: string, reporterUserId: string):
   console.log('[seed-e2e] Ticket E2E créé dans tenant trans-express');
 }
 
+/**
+ * Provisionne la clé HMAC du tenant dans Vault si absente — nécessaire pour
+ * toute signature QR (tickets, manifestes). Sans cette clé, les flows de
+ * rebook/confirm/scan cassent en 500 (Vault secret read failed).
+ * Idempotent : ne régénère jamais la clé si elle existe (casserait les QR émis).
+ */
+async function ensureHmacKey(tenantId: string): Promise<void> {
+  const vaultAddr = process.env.VAULT_ADDR;
+  if (!vaultAddr) {
+    console.warn('[seed-e2e] VAULT_ADDR absent — skip HMAC provisioning');
+    return;
+  }
+  const factory = ((vault as unknown as { default?: typeof vault }).default ?? vault) as unknown as (...args: unknown[]) => {
+    read:  (path: string) => Promise<{ data: { data: Record<string, string> } }>;
+    write: (path: string, data: { data: Record<string, string> }) => Promise<unknown>;
+  };
+  const client = factory({ apiVersion: 'v1', endpoint: vaultAddr, token: process.env.VAULT_TOKEN });
+  const path = `tenants/${tenantId}/hmac`;
+  try {
+    const result = await client.read(`secret/data/${path}`);
+    if (result?.data?.data?.KEY && String(result.data.data.KEY).length >= 32) return;
+  } catch { /* absent → provisionner */ }
+  const key = randomBytes(32).toString('hex');
+  await client.write(`secret/data/${path}`, { data: { KEY: key } });
+  console.log(`[seed-e2e] HMAC key provisioned in Vault for tenant ${tenantId}`);
+}
+
 export async function seedE2E(): Promise<void> {
   console.log('[seed-e2e] Seed comptes E2E (idempotent)…');
   await ensurePlatformSuperAdmin();
@@ -219,6 +341,20 @@ export async function seedE2E(): Promise<void> {
   // Fixtures E2E supplémentaires (dé-skip les tests qui dépendent de données).
   await ensureE2EPlan();
   await ensureE2ESupportTicket(tenantAdmin.tenantId, tenantAdmin.userId);
+
+  // Tenant E2E dédié pour les suites *.api.spec.ts qui mutent fortement
+  // l'état (business-scenarios, cross-module-journey, pricing-dynamics,
+  // traveler-scenarios, trip-freight-departure).
+  const pwE2E = await ensurePwE2ETenant();
+
+  // HMAC Vault pour tous les tenants E2E (tous ceux qui signent des QR)
+  await ensureHmacKey(tenantAdmin.tenantId);
+  await ensureHmacKey(pwE2E.tenantId);
+
+  // Workflow blueprints par défaut (Ticket, Parcel, Trip, Voucher, etc.)
+  // — sans cela toutes les transitions font 400 "aucune WorkflowConfig active".
+  const wf = await backfillDefaultWorkflows(prisma);
+  console.log(`[seed-e2e] Workflow configs backfill : ${wf.rowsCreated} rows sur ${wf.scanned} tenants`);
 
   console.log('[seed-e2e] ✅ Prêt.');
 }

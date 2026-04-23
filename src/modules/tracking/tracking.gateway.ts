@@ -13,6 +13,7 @@ import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { RedisPublisherService } from '../../infrastructure/eventbus/redis-publisher.service';
 import { DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { websocketCorsConfig } from '../../common/security/cors.helper';
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -65,7 +66,7 @@ const GPS_THROTTLE_MS   = 1_000;
  *   driver:{userId}          → chauffeur (émet uniquement)
  */
 @WebSocketGateway({
-  cors:      { origin: '*' },
+  cors:      websocketCorsConfig(),
   namespace: '/gps',
 })
 export class TrackingGateway

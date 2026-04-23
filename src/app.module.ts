@@ -4,6 +4,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule } from '@nestjs/throttler';
 
+// Config global (@Global) — typed access to process.env business variables
+import { AppConfigModule } from './common/config/app-config.module';
+
 // Infrastructure
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretModule } from './infrastructure/secret/secret.module';
@@ -80,6 +83,8 @@ import { TenantIamModule }       from './modules/tenant-iam/tenant-iam.module';
 import { PlatformIamModule }     from './modules/platform-iam/platform-iam.module';
 import { TenantSettingsModule }  from './modules/tenant-settings/tenant-settings.module';
 import { MfaModule }             from './modules/mfa/mfa.module';
+import { SchedulerModule }       from './modules/scheduler/scheduler.module';
+import { QuotaModule }           from './modules/quota/quota.module';
 import { PublicPortalModule }    from './modules/public-portal/public-portal.module';
 import { PublicSignupModule }    from './modules/public-signup/public-signup.module';
 import { OnboardingWizardModule } from './modules/onboarding-wizard/onboarding-wizard.module';
@@ -92,6 +97,8 @@ import { VoucherModule }         from './modules/voucher/voucher.module';
 import { IncidentCompensationModule } from './modules/incident-compensation/incident-compensation.module';
 import { QuaiModule }            from './modules/quai/quai.module';
 import { AnnouncementModule }    from './modules/announcement/announcement.module';
+import { BulkImportModule }      from './modules/bulk-import/bulk-import.module';
+import { BackupModule }          from './modules/backup/backup.module';
 
 // Interceptors
 import { AuditLoggingInterceptor } from './common/interceptors/audit-logging.interceptor';
@@ -100,6 +107,7 @@ import { AuditLoggingInterceptor } from './common/interceptors/audit-logging.int
 import { PermissionGuard }       from './core/iam/guards/permission.guard';
 import { ModuleGuard }           from './core/iam/guards/module.guard';
 import { RedisRateLimitGuard }   from './common/guards/redis-rate-limit.guard';
+import { SubscriptionGuard }     from './common/guards/subscription.guard';
 import { SessionMiddleware }     from './core/iam/middleware/session.middleware';
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
@@ -117,6 +125,9 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 60000, limit: 300 },
     ]),
+
+    // Config typée globale — AVANT tout module qui pourrait en dépendre
+    AppConfigModule,
 
     // Infrastructure (ordre important — SecretModule en premier)
     SecretModule,
@@ -221,6 +232,10 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     // Settings tenant : taxes, payment config, intégrations API
     TenantSettingsModule,
     MfaModule,
+    // Scheduler (Module M PRD) — TripTemplate CRUD + cron récurrence
+    SchedulerModule,
+    // Quota Manager (Module N PRD) — observation runtime quotas Redis
+    QuotaModule,
     // Portail public voyageur — endpoints sans auth, rate-limités
     PublicPortalModule,
     // Signup SaaS public — waitlist, plans, création tenant (rate-limités, honeypot)
@@ -245,8 +260,17 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     VoucherModule,
     // Incident en route — suspend/cancel/major-delay + compensation (refund/voucher/snack) ─ 2026-04-19
     IncidentCompensationModule,
+    // Bulk import — génération templates XLSX + import gares/véhicules/personnel/chauffeurs
+    BulkImportModule,
+    // Backup / Restore / RGPD — sauvegardes tenant (3 granularités), export RGPD
+    BackupModule,
   ],
   providers: [
+    // SubscriptionGuard global — vérifie le statut abonnement AVANT le RBAC.
+    // En SUSPENDED/CANCELLED : seules auth/billing/RGPD passent.
+    // En CHURNED : 403 systématique.
+    // Redis cache TTL 60s — déblocage uniquement via webhook PSP.
+    { provide: APP_GUARD, useClass: SubscriptionGuard },
     // PathTenantMatchGuard global — ferme la fuite cross-tenant sur les
     // endpoints publics dont le tenantId/slug vient du path (display écrans,
     // portail public, track colis). Si req.resolvedHostTenant est présent,

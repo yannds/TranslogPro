@@ -177,13 +177,19 @@ test.describe.serial('[E2E-API] Cross-module journey — Bus → Staff → Trip 
   // ─── [XMOD-2] Trip — création avec driver + bus + route ────────────────
   test('[XMOD-2] crée un Trip avec driver + bus + route', async () => {
     tripId = `${SUITE}-trip`;
+    // Départ à midi local (toujours dans la fenêtre "today" de l'analytics) —
+    // évite la dérive si la suite tourne après 22h (now+2h basculerait sur
+    // le lendemain et XMOD-4 verrait activeTrips=0).
+    const noon = new Date();
+    noon.setHours(12, 0, 0, 0);
+    const arrival = new Date(noon.getTime() + 8 * HOUR_MS);
     const trip = await prisma.trip.create({
       data: {
         id: tripId, tenantId: E2E.TENANT_ID,
         routeId, busId, driverId: driverStaffId,
         status: 'OPEN',
-        departureScheduled: new Date(Date.now() + 2 * HOUR_MS),
-        arrivalScheduled:   new Date(Date.now() + 10 * HOUR_MS),
+        departureScheduled: noon,
+        arrivalScheduled:   arrival,
         version: 1,
       },
     });

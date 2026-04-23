@@ -88,6 +88,7 @@ describe('[SECURITY] Intermediate booking — tenant isolation', () => {
     service = new PublicPortalService(
       prismaMock, {} as any, {} as any, {} as any, {} as any, {} as any,
       redisMock as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any,
     );
   });
 

@@ -5,6 +5,7 @@ import {
   DocumentType,
   SIGNED_URL_TTL_SECONDS,
   SignedUrl,
+  StorageObjectInfo,
 } from './interfaces/storage.interface';
 import { ISecretService, SECRET_SERVICE } from '../secret/interfaces/secret.interface';
 
@@ -81,6 +82,36 @@ export class MinioService implements IStorageService, OnModuleInit {
   async deleteObject(tenantId: string, key: string): Promise<void> {
     const bucket = this.getBucketName(tenantId);
     await this.client.removeObject(bucket, key);
+  }
+
+  async listObjects(tenantId: string, prefix?: string): Promise<StorageObjectInfo[]> {
+    const bucket = this.getBucketName(tenantId);
+    const stream = this.client.listObjectsV2(bucket, prefix ?? '', true);
+    return new Promise<StorageObjectInfo[]>((resolve, reject) => {
+      const results: StorageObjectInfo[] = [];
+      stream.on('data', (obj: Minio.BucketItem) => {
+        if (obj.name) {
+          results.push({
+            key:          obj.name,
+            size:         obj.size ?? 0,
+            etag:         obj.etag ?? '',
+            lastModified: obj.lastModified ?? new Date(),
+          });
+        }
+      });
+      stream.on('end',   () => resolve(results));
+      stream.on('error', reject);
+    });
+  }
+
+  async removeObjectsByPrefix(tenantId: string, prefix: string): Promise<void> {
+    const bucket  = this.getBucketName(tenantId);
+    const objects = await this.listObjects(tenantId, prefix);
+    if (objects.length === 0) return;
+    const keys = objects.map(o => o.key);
+    // Minio removeObjects — string[] (le client MinIO attend une liste de keys)
+    await this.client.removeObjects(bucket, keys);
+    this.logger.debug(`removeObjectsByPrefix prefix=${prefix} count=${keys.length}`);
   }
 
   assertObjectBelongsToTenant(tenantId: string, key: string): boolean {

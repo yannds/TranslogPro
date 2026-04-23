@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param, Body, HttpCode, HttpStatus,
+  Controller, Get, Post, Patch, Delete, Param, Body, HttpCode, HttpStatus, Query, NotFoundException,
 } from '@nestjs/common';
 import {
   RouteService, CreateRouteDto, UpdateRouteDto,
@@ -33,6 +33,40 @@ export class RouteController {
   @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
   listStations(@TenantId() tenantId: string) {
     return this.routes.listStations(tenantId);
+  }
+
+  /**
+   * Autocomplete péages/contrôles — retourne les points non-STATION déjà enregistrés
+   * sur ce tenant (dédoublonnés par kind+name). Utilisé dans RouteDetailDialog.
+   * GET /tenants/:tenantId/routes/checkpoints?kind=PEAGE  (kind optionnel)
+   */
+  @Get('checkpoints')
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  listCheckpoints(@TenantId() tenantId: string, @Query('kind') kind?: string) {
+    return this.routes.listCheckpoints(tenantId, kind);
+  }
+
+  /**
+   * Suggère une distance routière (ou estimation haversine si routing non activé).
+   *
+   * GET /tenants/:tenantId/routes/suggest-distance
+   *   ?originId=<stationId>&destinationId=<stationId>
+   *
+   * Retourne { distanceKm, durationMin, provider, estimated }.
+   * `estimated: true` signifie que la valeur est un calcul ligne droite (haversine).
+   */
+  @Get('suggest-distance')
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  async suggestDistance(
+    @TenantId() tenantId: string,
+    @Query('originId') originId: string,
+    @Query('destinationId') destinationId: string,
+  ) {
+    const result = await this.routes.suggestDistance(tenantId, originId, destinationId);
+    if (!result) {
+      throw new NotFoundException('Coordonnées GPS manquantes sur l\'une des gares.');
+    }
+    return result;
   }
 
   @Get(':id')

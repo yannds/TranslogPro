@@ -19,6 +19,21 @@ import {
   SCOPE_CONTEXT_KEY,
 } from '@/core/iam/guards/permission.guard';
 import { PERMISSION_KEY } from '@/common/decorators/require-permission.decorator';
+import { PUBLIC_ROUTE_KEY } from '@/common/decorators/public-route.decorator';
+
+/**
+ * Helper : stub du reflector qui ne répond qu'au PERMISSION_KEY. Nécessaire
+ * depuis que PermissionGuard check aussi PUBLIC_ROUTE_KEY en premier — un
+ * mockReturnValue global retournerait la perm comme `publicReason`, faisant
+ * bypass le guard.
+ */
+function stubPerm(reflector: Reflector, perm: string | string[] | undefined) {
+  jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: string) => {
+    if (key === PERMISSION_KEY)   return perm as any;
+    if (key === PUBLIC_ROUTE_KEY) return undefined as any;
+    return undefined as any;
+  });
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -60,7 +75,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should allow route without @RequirePermission (open route)', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
+    stubPerm(reflector, undefined);
 
     const guard = new PermissionGuard(reflector, makePrisma([]), makeRedisMock());
     const result = await guard.canActivate(makeContext({ user: undefined }));
@@ -71,7 +86,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should reject with Unauthorized when user is undefined', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.read.agency');
+    stubPerm(reflector, 'data.ticket.read.agency');
 
     const guard = new PermissionGuard(reflector, makePrisma(['data.ticket.read.agency']), makeRedisMock());
     await expect(guard.canActivate(makeContext({ user: undefined })))
@@ -82,7 +97,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should reject with Forbidden when role lacks permission', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.delete.tenant');
+    stubPerm(reflector, 'data.ticket.delete.tenant');
 
     const req = {
       user: {
@@ -105,7 +120,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should grant access when role has the required permission', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.read.agency');
+    stubPerm(reflector, 'data.ticket.read.agency');
 
     const req: any = {
       user: {
@@ -136,7 +151,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should reject user attached to platform tenant without sentinel permission', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.read.agency');
+    stubPerm(reflector, 'data.ticket.read.agency');
 
     const req = {
       user: {
@@ -157,7 +172,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should allow platform actor with sentinel permission', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('control.iam.manage.tenant');
+    stubPerm(reflector, 'control.iam.manage.tenant');
 
     const req = {
       user: {
@@ -182,7 +197,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should reject agency-scoped permission when actor has no agencyId', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.read.agency');
+    stubPerm(reflector, 'data.ticket.read.agency');
 
     const req = {
       user: {
@@ -205,7 +220,7 @@ describe('[SECURITY] Authorization & Privilege Escalation', () => {
 
   it('should use Redis cache for permission lookups', async () => {
     const reflector = new Reflector();
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('data.ticket.read.agency');
+    stubPerm(reflector, 'data.ticket.read.agency');
 
     const redis = {
       get:   jest.fn().mockResolvedValue('1'), // cache hit

@@ -96,15 +96,15 @@ export class DocumentsService {
 
   /**
    * Taux TVA effectif pour l'affichage sur les factures.
-   * Lit TenantTax(code=TVA) si présent et appliqué au prix ; sinon retombe
-   * sur le registre platform-config (`tax.defaults.tvaRate`).
+   * Lit TenantTax(code=TVA) si présent et appliqué au prix.
+   * Si aucune ligne active n'existe, la TVA n'est pas applicable → 0.
+   * L'onboarding garantit toujours la création d'une ligne TenantTax.
    */
   private async resolveEffectiveTvaRate(tenantId: string): Promise<number> {
     const tva = await this.prisma.tenantTax.findFirst({
       where: { tenantId, code: 'TVA', enabled: true, appliedToPrice: true },
     });
-    if (tva) return tva.rate;
-    return this.platformConfig.getNumber('tax.defaults.tvaRate');
+    return tva ? tva.rate : 0;
   }
 
   // ─── TVA resolution ─────────────────────────────────────────────────────────

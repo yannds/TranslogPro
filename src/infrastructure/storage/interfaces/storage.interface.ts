@@ -34,6 +34,13 @@ export const SIGNED_URL_TTL_SECONDS: Record<DocumentType, number> = {
   [DocumentType.CMS_MEDIA]:       86400,            // 24h (médias actualités portail)
 };
 
+export interface StorageObjectInfo {
+  key:      string;
+  size:     number;
+  etag:     string;
+  lastModified: Date;
+}
+
 export interface IStorageService {
   /** Génère une URL présignée pour upload (client-side upload) */
   getUploadUrl(tenantId: string, key: string, type: DocumentType): Promise<SignedUrl>;
@@ -49,6 +56,12 @@ export interface IStorageService {
 
   /** Supprime un objet */
   deleteObject(tenantId: string, key: string): Promise<void>;
+
+  /** Liste tous les objets d'un bucket tenant (avec préfixe optionnel). */
+  listObjects(tenantId: string, prefix?: string): Promise<StorageObjectInfo[]>;
+
+  /** Supprime tous les objets sous un préfixe donné (cleanup backup FAILED). */
+  removeObjectsByPrefix(tenantId: string, prefix: string): Promise<void>;
 
   /** Vérifie que l'objet appartient au bucket tenant */
   assertObjectBelongsToTenant(tenantId: string, key: string): boolean;

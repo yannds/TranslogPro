@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '../../infrastructure/eventbus/redis-publisher.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 
 export interface TenantModuleDto {
   moduleKey:      string;
@@ -12,6 +14,15 @@ export interface TenantModuleDto {
   deactivatedAt:  Date | null;
   deactivatedBy:  string | null;
 }
+
+/**
+ * Modules dont l'activation est conditionnée par un flag plateforme.
+ * La plateforme active le flag → le tenant peut activer le module.
+ * Tant que le flag est off, le toggle côté tenant est grisé (comingSoon).
+ */
+export const PLATFORM_GATED_MODULES: Record<string, string> = {
+  ROUTING_ENGINE: 'routing.enabled',
+};
 
 /**
  * TenantModuleService — CRUD métier pour `installed_modules`.
@@ -25,7 +36,8 @@ export class TenantModuleService {
   private readonly logger = new Logger(TenantModuleService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:          PrismaService,
+    private readonly platformConfig:  PlatformConfigService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
@@ -102,6 +114,65 @@ export class TenantModuleService {
 
     await this.invalidateCache(tenantId, moduleKey);
     this.logger.log(`[MODULES] tenant=${tenantId} key=${moduleKey} isActive=${isActive} actor=${by ?? 'system'}`);
+
+    return {
+      moduleKey:     row.moduleKey,
+      isActive:      row.isActive,
+      config:        (row.config ?? {}) as Record<string, unknown>,
+      activatedAt:   row.activatedAt ?? null,
+      activatedBy:   row.activatedBy ?? null,
+      deactivatedAt: row.deactivatedAt ?? null,
+      deactivatedBy: row.deactivatedBy ?? null,
+    };
+  }
+
+  /**
+   * Retourne la liste des moduleKey dont l'activation est verrouillée par la
+   * plateforme (flag PlatformConfig non activé). Le frontend les affiche en
+   * "Bientôt disponible" avec toggle désactivé.
+   */
+  async getPlatformGated(): Promise<string[]> {
+    const gated: string[] = [];
+    for (const [moduleKey, configKey] of Object.entries(PLATFORM_GATED_MODULES)) {
+      const enabled = await this.platformConfig.getBoolean(configKey);
+      if (!enabled) gated.push(moduleKey);
+    }
+    return gated;
+  }
+
+  /**
+   * Met à jour le JSON de config d'un module installé (InstalledModule.config).
+   * Le merge est shallow : les clés passées écrasent les valeurs existantes.
+   * Crée la ligne si elle n'existe pas.
+   */
+  async updateConfig(
+    tenantId:  string,
+    moduleKey: string,
+    patch:     Record<string, unknown>,
+    actorId?:  string | null,
+  ): Promise<TenantModuleDto> {
+    const existing = await this.prisma.installedModule.findUnique({
+      where:  { tenantId_moduleKey: { tenantId, moduleKey } },
+      select: { config: true },
+    });
+    const merged = { ...(existing?.config as Record<string, unknown> ?? {}), ...patch } as Prisma.InputJsonValue;
+
+    const row = await this.prisma.installedModule.upsert({
+      where:  { tenantId_moduleKey: { tenantId, moduleKey } },
+      update: { config: merged },
+      create: {
+        tenantId, moduleKey, isActive: false,
+        config: merged,
+        activatedAt: new Date(), activatedBy: actorId ?? null,
+      },
+      select: {
+        moduleKey: true, isActive: true, config: true,
+        activatedAt: true, activatedBy: true,
+        deactivatedAt: true, deactivatedBy: true,
+      },
+    });
+
+    this.logger.log(`[MODULES] config updated tenant=${tenantId} key=${moduleKey} actor=${actorId ?? 'system'}`);
 
     return {
       moduleKey:     row.moduleKey,

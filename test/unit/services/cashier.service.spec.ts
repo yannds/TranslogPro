@@ -273,6 +273,107 @@ describe('CashierService', () => {
     });
   });
 
+  // ── recordTransaction() — ESPÈCES tendered/change ─────────────────────────
+  describe('recordTransaction() — espèces (tendered/change)', () => {
+    const baseCash = {
+      type:          'TICKET' as const,
+      amount:        8_000,
+      paymentMethod: 'CASH' as const,
+      externalRef:   'ticket:cash-1',
+      referenceType: 'TICKET',
+      referenceId:   't-cash-1',
+    };
+
+    it('CASH + tendered > amount → persiste tenderedAmount + changeAmount (scénario 10000/8000/2000)', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseCash, tenderedAmount: 10_000 },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount:         8_000,
+            tenderedAmount: 10_000,
+            changeAmount:   2_000,
+          }),
+        }),
+      );
+    });
+
+    it('CASH + tendered === amount → changeAmount = 0', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseCash, tenderedAmount: 8_000 },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ tenderedAmount: 8_000, changeAmount: 0 }),
+        }),
+      );
+    });
+
+    it('CASH + tendered < amount → BadRequest (rien n\'est créé)', async () => {
+      const { service, prisma } = buildService();
+      await expect(service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseCash, tenderedAmount: 5_000 },
+        ACTOR as any,
+      )).rejects.toThrow(BadRequestException);
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it('batchTotal utilisé pour la validation et le calcul de monnaie (N tickets)', async () => {
+      const { service, prisma } = buildService();
+      // 1re tx d'un batch : amount = prix 1er ticket (3000), batchTotal = 8000, tendered = 10000
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseCash, amount: 3_000, tenderedAmount: 10_000, batchTotal: 8_000 },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount:         3_000,       // prix du ticket individuel, pas du batch
+            tenderedAmount: 10_000,
+            changeAmount:   2_000,       // = tendered - batchTotal, pas tendered - amount
+          }),
+        }),
+      );
+    });
+
+    it('MOBILE_MONEY → tenderedAmount ignoré (pas de monnaie à rendre)', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseCash, paymentMethod: 'MOBILE_MONEY', tenderedAmount: 10_000 },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paymentMethod:  'MOBILE_MONEY',
+            tenderedAmount: null,
+            changeAmount:   null,
+          }),
+        }),
+      );
+    });
+
+    it('CASH sans tendered → tenderedAmount et changeAmount restent null (rétro-compat)', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(TENANT, REGISTER.id, baseCash, ACTOR as any);
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ tenderedAmount: null, changeAmount: null }),
+        }),
+      );
+    });
+  });
+
   // ── listTransactions() ─────────────────────────────────────────────────────
   describe('listTransactions() — scope', () => {
     it("scope 'own' rejette si register pas au user", async () => {

@@ -3,14 +3,15 @@
  *
  * Lit et écrit l'état via l'API (source de vérité : `installed_modules`).
  *   GET   /api/v1/tenants/:tenantId/modules
- *   PATCH /api/v1/tenants/:tenantId/modules/:moduleKey   { isActive }
+ *   PATCH /api/v1/tenants/:tenantId/modules/:moduleKey          { isActive }
+ *   PATCH /api/v1/tenants/:tenantId/modules/:moduleKey/config   { config }
  *
  * Après un toggle, `refresh()` du AuthContext est appelé pour ré-évaluer la
  * navigation (un module désactivé disparaît du menu).
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Puzzle, Check, X, Info, AlertTriangle, Lock, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Puzzle, Check, X, Info, AlertTriangle, Lock, Loader2, Settings } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { apiFetch } from '../../lib/api';
 import { cn }     from '../../lib/utils';
@@ -145,6 +146,14 @@ const MODULE_CATALOG: ModuleDef[] = [
     description: tm('Personnalisation de la marque, couleurs, logo et domaine.', 'Brand customization, colors, logo and domain.'),
     category: CAT_PLATFORM, icon: '🎨', core: false, tags: ['branding', 'theme'],
   },
+  {
+    id: 'ROUTING_ENGINE',  name: tm('Distance routière', 'Road Distance'),
+    description: tm(
+      "Calcul automatique des distances réelles entre gares via Google Maps ou Mapbox. Remplace l'estimation à vol d'oiseau dans les formulaires de lignes.",
+      'Automatic real road-distance calculation between stations via Google Maps or Mapbox. Replaces straight-line estimation in route forms.',
+    ),
+    category: CAT_PLATFORM, icon: '🗺️', core: false, tags: ['routing', 'maps', 'distance'],
+  },
 ];
 
 // Deduplicate categories by fr key (stable identity)
@@ -161,9 +170,176 @@ interface TenantModuleDto {
   config:    Record<string, unknown>;
 }
 
+interface TenantModulesResponse {
+  modules:       TenantModuleDto[];
+  /** moduleKey[] verrouillés par la plateforme — toggle grisé, badge "Bientôt disponible" */
+  platformGated: string[];
+}
+
 function getStatus(m: ModuleDef, active: Set<string>): ModuleStatus {
   if (m.core) return 'active';
   return active.has(m.id) ? 'active' : 'inactive';
+}
+
+// ─── YieldConfigDialog ───────────────────────────────────────────────────────
+
+const YIELD_FIELDS: { key: string; labelKey: string; min: number; max: number; step: number }[] = [
+  { key: 'goldenDayMultiplier', labelKey: 'modules.yieldGoldenDayMultiplier', min: 0,   max: 2,  step: 0.01 },
+  { key: 'lowFillThreshold',    labelKey: 'modules.yieldLowFillThreshold',    min: 0,   max: 1,  step: 0.01 },
+  { key: 'lowFillDiscount',     labelKey: 'modules.yieldLowFillDiscount',     min: 0,   max: 1,  step: 0.01 },
+  { key: 'highFillThreshold',   labelKey: 'modules.yieldHighFillThreshold',   min: 0,   max: 1,  step: 0.01 },
+  { key: 'highFillPremium',     labelKey: 'modules.yieldHighFillPremium',     min: 0,   max: 1,  step: 0.01 },
+  { key: 'priceFloorRate',      labelKey: 'modules.yieldPriceFloorRate',      min: 0.1, max: 1,  step: 0.01 },
+  { key: 'priceCeilingRate',    labelKey: 'modules.yieldPriceCeilingRate',    min: 1,   max: 5,  step: 0.01 },
+];
+
+function YieldConfigDialog({
+  tenantId,
+  initialConfig,
+  onClose,
+  onSaved,
+}: {
+  tenantId:      string;
+  initialConfig: Record<string, unknown>;
+  onClose:       () => void;
+  onSaved:       (config: Record<string, unknown>) => void;
+}) {
+  const { t } = useI18n();
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      YIELD_FIELDS.map(f => [f.key, initialConfig[f.key] != null ? String(initialConfig[f.key]) : '']),
+    ),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+    const patch: Record<string, number | null> = {};
+    for (const f of YIELD_FIELDS) {
+      const raw = values[f.key].trim();
+      if (raw === '') { patch[f.key] = null; continue; }
+      const num = parseFloat(raw);
+      if (isNaN(num) || num < f.min || num > f.max) {
+        setError(`${t(f.labelKey)}: valeur invalide (${f.min}–${f.max})`);
+        setSaving(false);
+        return;
+      }
+      patch[f.key] = num;
+    }
+    const cleanPatch = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== null),
+    ) as Record<string, unknown>;
+
+    try {
+      await apiFetch(`/api/v1/tenants/${tenantId}/modules/YIELD_ENGINE/config`, {
+        method: 'PATCH',
+        body: { config: cleanPatch },
+      });
+      onSaved(cleanPatch);
+    } catch {
+      setError(t('modules.configFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleReset() {
+    setValues(Object.fromEntries(YIELD_FIELDS.map(f => [f.key, ''])));
+  }
+
+  const inputClass = 'w-full rounded-lg border t-border t-input px-3 py-1.5 text-sm t-text bg-transparent focus:outline-none focus:ring-2 focus:ring-teal-500';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('modules.yieldConfigTitle')}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={dialogRef}
+        className="t-card-bordered rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+      >
+        <div className="p-6 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-lg t-text">{t('modules.yieldConfigTitle')}</h2>
+              <p className="text-xs t-text-2 mt-0.5">{t('modules.yieldConfigDesc')}</p>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Fermer"
+              className="p-1.5 rounded-lg t-nav-hover t-text-2"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {YIELD_FIELDS.map(f => (
+              <div key={f.key}>
+                <label className="block text-xs font-medium t-text-2 mb-1">{t(f.labelKey)}</label>
+                <input
+                  type="number"
+                  min={f.min}
+                  max={f.max}
+                  step={f.step}
+                  value={values[f.key]}
+                  onChange={e => setValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={`${f.min}–${f.max}`}
+                  className={inputClass}
+                />
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs t-text-2 underline underline-offset-2 hover:t-text transition-colors"
+            >
+              {t('modules.yieldReset')}
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm t-surface t-text-2 t-nav-hover border t-border"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                {saving ? t('modules.yieldSaving') : t('modules.yieldSave')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── ModuleCard ───────────────────────────────────────────────────────────────
@@ -172,19 +348,23 @@ function ModuleCard({
   mod,
   status,
   onToggle,
+  onConfigure,
   depsMissing,
   busy,
+  platformLocked,
 }: {
-  mod:         ModuleDef;
-  status:      ModuleStatus;
-  onToggle:    (id: string) => void;
-  depsMissing: boolean;
-  busy:        boolean;
+  mod:            ModuleDef;
+  status:         ModuleStatus;
+  onToggle:       (id: string) => void;
+  onConfigure?:   (id: string) => void;
+  depsMissing:    boolean;
+  busy:           boolean;
+  platformLocked: boolean;
 }) {
   const { t } = useI18n();
   const isActive   = status === 'active';
   const isCore     = mod.core;
-  const isDisabled = isCore || busy || (depsMissing && !isActive);
+  const isDisabled = isCore || busy || platformLocked || (depsMissing && !isActive);
   const name = t(mod.name);
 
   return (
@@ -205,9 +385,14 @@ function ModuleCard({
                   <Lock size={8} /> {t('modules.coreBadge')}
                 </span>
               )}
-              {isActive && !isCore && (
+              {isActive && !isCore && !platformLocked && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
                   <Check size={8} /> {t('modules.activeBadge')}
+                </span>
+              )}
+              {platformLocked && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                  <Lock size={8} /> {t('modules.comingSoon')}
                 </span>
               )}
             </div>
@@ -253,6 +438,19 @@ function ModuleCard({
         </div>
       )}
 
+      {/* Configure button (YIELD_ENGINE only, when active) */}
+      {onConfigure && isActive && (
+        <button
+          type="button"
+          onClick={() => onConfigure(mod.id)}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg t-surface border t-border t-text-2 t-nav-hover w-full justify-center"
+          aria-label={`${t('modules.configure')} ${name}`}
+        >
+          <Settings size={12} />
+          {t('modules.configure')}
+        </button>
+      )}
+
       {/* Tags */}
       <div className="flex flex-wrap gap-1 mt-auto pt-1">
         {mod.tags.map(tag => (
@@ -270,22 +468,29 @@ export function PageModules() {
   const { t } = useI18n();
   const tenantId = user?.tenantId;
 
-  const [active,     setActive]     = useState<Set<string>>(new Set());
-  const [loading,    setLoading]    = useState(true);
-  const [busyKey,    setBusyKey]    = useState<string | null>(null);
-  const [filterCat,  setFilterCat]  = useState('');
-  const [showActive, setShowActive] = useState<'all' | 'active' | 'inactive'>('all');
-  const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null);
+  const [active,        setActive]        = useState<Set<string>>(new Set());
+  const [moduleConfigs, setModuleConfigs] = useState<Record<string, Record<string, unknown>>>({});
+  const [platformGated, setPlatformGated] = useState<Set<string>>(new Set());
+  const [loading,       setLoading]       = useState(true);
+  const [busyKey,       setBusyKey]       = useState<string | null>(null);
+  const [filterCat,     setFilterCat]     = useState('');
+  const [showActive,    setShowActive]    = useState<'all' | 'active' | 'inactive'>('all');
+  const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+  const [yieldDialog,   setYieldDialog]   = useState(false);
 
   // ── Chargement initial depuis l'API ──
   useEffect(() => {
     if (!tenantId) return;
     let cancelled = false;
     setLoading(true);
-    apiFetch<TenantModuleDto[]>(`/api/v1/tenants/${tenantId}/modules`)
-      .then(rows => {
+    apiFetch<TenantModulesResponse>(`/api/v1/tenants/${tenantId}/modules`)
+      .then(res => {
         if (cancelled) return;
-        setActive(new Set(rows.filter(r => r.isActive).map(r => r.moduleKey)));
+        setActive(new Set(res.modules.filter(r => r.isActive).map(r => r.moduleKey)));
+        setPlatformGated(new Set(res.platformGated ?? []));
+        const configs: Record<string, Record<string, unknown>> = {};
+        for (const m of res.modules) configs[m.moduleKey] = m.config ?? {};
+        setModuleConfigs(configs);
       })
       .catch(() => {
         if (cancelled) return;
@@ -341,6 +546,12 @@ export function PageModules() {
       setBusyKey(null);
     }
   }, [tenantId, busyKey, active, refresh, t]);
+
+  const handleConfigSaved = useCallback((config: Record<string, unknown>) => {
+    setModuleConfigs(prev => ({ ...prev, YIELD_ENGINE: config }));
+    setYieldDialog(false);
+    setToast({ msg: t('modules.configSaved'), ok: true });
+  }, [t]);
 
   // Filtered list
   const visible = MODULE_CATALOG.filter(m => {
@@ -445,12 +656,24 @@ export function PageModules() {
                 mod={mod}
                 status={getStatus(mod, active)}
                 onToggle={handleToggle}
+                onConfigure={mod.id === 'YIELD_ENGINE' ? () => setYieldDialog(true) : undefined}
                 depsMissing={depsMissing}
                 busy={busyKey === mod.id}
+                platformLocked={platformGated.has(mod.id)}
               />
             );
           })}
         </div>
+      )}
+
+      {/* Yield config dialog */}
+      {yieldDialog && tenantId && (
+        <YieldConfigDialog
+          tenantId={tenantId}
+          initialConfig={moduleConfigs['YIELD_ENGINE'] ?? {}}
+          onClose={() => setYieldDialog(false)}
+          onSaved={handleConfigSaved}
+        />
       )}
     </div>
   );

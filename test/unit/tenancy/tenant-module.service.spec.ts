@@ -30,11 +30,17 @@ function makeRedisMock() {
   return { del: jest.fn().mockResolvedValue(1) };
 }
 
+function makePlatformConfigMock(enabled = true) {
+  return {
+    getBoolean: jest.fn().mockResolvedValue(enabled),
+  };
+}
+
 describe('TenantModuleService.setActive', () => {
   it('active un module et horodate activatedAt + activatedBy', async () => {
     const prisma = makePrismaMock();
     const redis  = makeRedisMock();
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     const result = await svc.setActive('tenant-1', 'ticketing', true, 'user-admin');
 
@@ -54,7 +60,7 @@ describe('TenantModuleService.setActive', () => {
       deactivatedAt: new Date('2026-04-20'), deactivatedBy: 'user-admin',
     });
     const redis  = makeRedisMock();
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     const result = await svc.setActive('tenant-1', 'ticketing', false, 'user-admin');
 
@@ -72,7 +78,7 @@ describe('TenantModuleService.setActive', () => {
   it('supporte actorId null (scripts système, seed, backfill)', async () => {
     const prisma = makePrismaMock();
     const redis  = makeRedisMock();
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     await svc.setActive('tenant-1', 'parcels', true);
 
@@ -84,7 +90,7 @@ describe('TenantModuleService.setActive', () => {
   it('invalide le cache Redis après chaque write', async () => {
     const prisma = makePrismaMock();
     const redis  = makeRedisMock();
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     await svc.setActive('tenant-42', 'qhse', true, 'user-x');
 
@@ -94,7 +100,7 @@ describe('TenantModuleService.setActive', () => {
   it("n'échoue pas si Redis est indisponible (warn only)", async () => {
     const prisma = makePrismaMock();
     const redis  = { del: jest.fn().mockRejectedValue(new Error('boom')) };
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     await expect(svc.setActive('tenant-1', 'ticketing', true, 'user-1'))
       .resolves.toBeDefined();
@@ -103,7 +109,7 @@ describe('TenantModuleService.setActive', () => {
   it('branche create : active → activatedAt/By set, deactivated null', async () => {
     const prisma = makePrismaMock();
     const redis  = makeRedisMock();
-    const svc    = new TenantModuleService(prisma as any, redis as any);
+    const svc    = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, redis as any);
 
     await svc.setActive('tenant-1', 'parcels', true, 'user-x');
     const call = prisma.installedModule.upsert.mock.calls[0][0];
@@ -134,7 +140,7 @@ describe('TenantModuleService.listForTenant', () => {
         upsert: jest.fn(),
       },
     };
-    const svc = new TenantModuleService(prisma as any, makeRedisMock() as any);
+    const svc = new TenantModuleService(prisma as any, makePlatformConfigMock() as any, makeRedisMock() as any);
 
     const list = await svc.listForTenant('tenant-1');
 

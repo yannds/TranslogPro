@@ -26,6 +26,9 @@ function makeProvider(
     supportedCountries:  meta.supportedCountries  ?? ['CG'],
     supportedCurrencies: meta.supportedCurrencies ?? ['XAF'],
     defaultVaultPath:    meta.defaultVaultPath    ?? `platform/payments/${meta.key}`,
+    credentialFields:    meta.credentialFields    ?? [
+      { key: 'apiKey', label: 'API Key', type: 'password', required: true },
+    ],
   };
   return {
     meta:        fullMeta,

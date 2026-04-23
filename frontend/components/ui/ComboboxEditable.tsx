@@ -9,11 +9,15 @@
  *   - Chaque frappe filtre/recherche la liste
  *   - Le chevron ouvre/ferme le dropdown complet
  *   - allowFreeText + freeTextWarning pour la saisie libre avec alerte
+ *
+ * Le dropdown est rendu via createPortal au niveau document.body pour
+ * échapper aux parents overflow:hidden (hero sections, modales, etc.)
  */
 import {
-  useState, useRef, useEffect, useCallback, useId, useMemo,
+  useState, useRef, useEffect, useCallback, useId, useMemo, type CSSProperties,
   type KeyboardEvent, type ChangeEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { inputClass as inp } from './inputClass';
@@ -67,6 +71,7 @@ export function ComboboxEditable({
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [inputText, setInputText] = useState(value);
   const [open, setOpen] = useState(false);
@@ -74,6 +79,7 @@ export function ComboboxEditable({
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const [remoteResults, setRemoteResults] = useState<ComboboxOption[]>([]);
   const [searching, setSearching] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
 
   const abortRef = useRef<AbortController | null>(null);
   const skipSearchRef = useRef(false);
@@ -82,6 +88,24 @@ export function ComboboxEditable({
   useEffect(() => {
     if (document.activeElement !== inputRef.current) setInputText(value);
   }, [value]);
+
+  // ── Position du dropdown (fixed, échappe overflow:hidden) ──────────────────
+  const updateDropdownPos = useCallback(() => {
+    if (!containerRef.current) return;
+    const { bottom, left, width } = containerRef.current.getBoundingClientRect();
+    setDropdownStyle({ position: 'fixed', top: bottom + 4, left, width, zIndex: 9999 });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updateDropdownPos();
+    window.addEventListener('scroll', updateDropdownPos, true);
+    window.addEventListener('resize', updateDropdownPos);
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPos, true);
+      window.removeEventListener('resize', updateDropdownPos);
+    };
+  }, [open, updateDropdownPos]);
 
   // ── Filtrage local ─────────────────────────────────────────────────────────
   const filteredLocal = useMemo(() => {
@@ -156,6 +180,38 @@ export function ComboboxEditable({
     }, 150);
   }, [allowFreeText, inputText, value, onChange, allOptions]);
 
+  const dropdown = open && displayOptions.length > 0 && (
+    <ul
+      id={`${id}-listbox`}
+      role="listbox"
+      style={dropdownStyle}
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto"
+    >
+      {displayOptions.map((opt, i) => (
+        <li key={`${opt.value}-${i}`} id={`${id}-opt-${i}`} role="option" aria-selected={highlightIdx === i}>
+          <button
+            type="button"
+            onMouseDown={e => { e.preventDefault(); pick(opt); }}
+            onMouseEnter={() => setHighlightIdx(i)}
+            className={cn(
+              'w-full text-left px-3 py-2 text-sm flex flex-col transition-colors',
+              highlightIdx === i
+                ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+            )}
+          >
+            <span className={cn('truncate', opt.bold && 'font-semibold')}>{opt.label}</span>
+            {opt.hint && (
+              <span className="text-[11px] text-slate-400 truncate">
+                {opt.flag && <>{opt.flag} </>}{opt.hint}
+              </span>
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className={cn('flex flex-col gap-1', className)} ref={wrapperRef}>
       {label && (
@@ -165,7 +221,7 @@ export function ComboboxEditable({
         </label>
       )}
 
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <input
           ref={inputRef}
           id={id}
@@ -221,39 +277,10 @@ export function ComboboxEditable({
             : <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} />
           }
         </button>
-
-        {/* Dropdown — absolute, dans le flux DOM (pas de portal) */}
-        {open && displayOptions.length > 0 && (
-          <ul
-            id={`${id}-listbox`}
-            role="listbox"
-            className="absolute z-[100] mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto"
-          >
-            {displayOptions.map((opt, i) => (
-              <li key={`${opt.value}-${i}`} id={`${id}-opt-${i}`} role="option" aria-selected={highlightIdx === i}>
-                <button
-                  type="button"
-                  onMouseDown={e => { e.preventDefault(); pick(opt); }}
-                  onMouseEnter={() => setHighlightIdx(i)}
-                  className={cn(
-                    'w-full text-left px-3 py-2 text-sm flex flex-col transition-colors',
-                    highlightIdx === i
-                      ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
-                  )}
-                >
-                  <span className={cn('truncate', opt.bold && 'font-semibold')}>{opt.label}</span>
-                  {opt.hint && (
-                    <span className="text-[11px] text-slate-400 truncate">
-                      {opt.flag && <>{opt.flag} </>}{opt.hint}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
+
+      {/* Dropdown téléporté au body — échappe overflow:hidden de tous les parents */}
+      {typeof document !== 'undefined' && dropdown && createPortal(dropdown, document.body)}
 
       {/* Alerte saisie libre */}
       {isUnmatched && freeTextWarning && !open && (

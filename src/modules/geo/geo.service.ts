@@ -83,7 +83,13 @@ export class GeoService {
     // Restrict to tenant's operating country (prevents returning results from
     // neighbouring countries for same-name addresses, e.g. Kintélé CG vs GA).
     if (cc) url.searchParams.set('countrycodes', cc.toLowerCase());
-    if (bbox) url.searchParams.set('viewbox', `${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`);
+    if (bbox) {
+      url.searchParams.set('viewbox', `${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`);
+      // bounded=1 : n'accepte que les résultats à l'intérieur du viewbox.
+      // Sans ça, Nominatim peut retourner une ville homonyme hors-pays avec des
+      // coordonnées absurdes malgré countrycodes= (données OSM corrompues).
+      url.searchParams.set('bounded', '1');
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -133,6 +139,7 @@ export class GeoService {
 
   private normalize(raw: unknown, cc?: string): GeoSearchResult[] {
     if (!Array.isArray(raw)) return [];
+    const bbox = cc ? COUNTRY_BBOX[cc] : undefined;
     const out: GeoSearchResult[] = [];
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;
@@ -150,6 +157,13 @@ export class GeoService {
       // Defense-in-depth: drop results from a different country even if Nominatim
       // returns them despite the countrycodes= filter.
       if (cc && countryCode && countryCode !== cc) continue;
+      // Bbox guard (2° margin): rejecte les résultats dont les coordonnées sont
+      // clairement hors du pays même si le pays déclaré est correct (données OSM
+      // corrompues — ex. "Dongou, CG" avec lng=4 au lieu de ~22).
+      if (bbox) {
+        const [lngMin, latMax, lngMax, latMin] = bbox;
+        if (lng < lngMin - 2 || lng > lngMax + 2 || lat > latMax + 2 || lat < latMin - 2) continue;
+      }
       out.push({ displayName: displayName.slice(0, 240), lat, lng, countryCode });
       if (out.length >= MAX_RESULTS) break;
     }

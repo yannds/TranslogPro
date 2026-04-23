@@ -197,6 +197,61 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     validate: numberInRange(1, 90),
   },
 
+  // ── Subscription lifecycle ─────────────────────────────────────────────
+  // Nombre de jours après expiration du trial avant passage en SUSPENDED.
+  {
+    key:      'subscription.gracePeriodDays',
+    type:     'number',
+    default:  7,
+    label:    'platformConfig.subscriptionGracePeriodDays',
+    help:     'platformConfig.subscriptionGracePeriodDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(0, 90),
+  },
+  // Jours d'alerte avant fin de trial (banner UX).
+  {
+    key:      'subscription.graceWarningDays',
+    type:     'number',
+    default:  3,
+    label:    'platformConfig.subscriptionGraceWarningDays',
+    help:     'platformConfig.subscriptionGraceWarningDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(0, 30),
+  },
+  // Jours de rétention des données après CANCELLED avant passage en CHURNED.
+  {
+    key:      'subscription.cancelDataTtlDays',
+    type:     'number',
+    default:  30,
+    label:    'platformConfig.subscriptionCancelDataTtlDays',
+    help:     'platformConfig.subscriptionCancelDataTtlDaysHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 365),
+  },
+
+  // ── Backup / Restore ───────────────────────────────────────────────────
+  // Nombre max d'exports (backup + RGPD) par tenant par mois selon le plan.
+  // En dessous de cette limite, les exports sont autorisés.
+  {
+    key:      'backup.maxExportsPerMonth',
+    type:     'number',
+    default:  10,
+    label:    'platformConfig.backupMaxExportsPerMonth',
+    help:     'platformConfig.backupMaxExportsPerMonthHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 1000),
+  },
+  // Rétention automatique des backups planifiés (nb de backups à conserver).
+  {
+    key:      'backup.defaultRetainCount',
+    type:     'number',
+    default:  7,
+    label:    'platformConfig.backupDefaultRetainCount',
+    help:     'platformConfig.backupDefaultRetainCountHelp',
+    group:    'platformConfig.groupBilling',
+    validate: numberInRange(1, 365),
+  },
+
   // ── Subscription defaults ───────────────────────────────────────────────
   // Plan attribué par défaut aux tenants sans souscription (backfill +
   // onboarding). Doit matcher un Plan.slug existant et actif. Le backfill
@@ -512,6 +567,32 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     help:     'platformConfig.yieldLowFillTriggerHoursHelp',
     group:    'platformConfig.groupYield',
     validate: numberInRange(1, 720),
+  },
+
+  // ── Routage routier ─────────────────────────────────────────────────────
+  // Active le calcul de distance via API externe (Google Maps ou Mapbox).
+  // Désactivé par défaut — aucun appel externe en dev/staging sans clé Vault.
+  // Voir docs/ROUTING_SETUP.md pour le guide d'activation.
+  {
+    key:      'routing.enabled',
+    type:     'boolean',
+    default:  false,
+    label:    'platformConfig.routingEnabled',
+    help:     'platformConfig.routingEnabledHelp',
+    group:    'platformConfig.groupRouting',
+  },
+  {
+    key:      'routing.provider',
+    type:     'string',
+    default:  'haversine',
+    label:    'platformConfig.routingProvider',
+    help:     'platformConfig.routingProviderHelp',
+    group:    'platformConfig.groupRouting',
+    validate: (v) => {
+      if (typeof v !== 'string') return 'platformConfig.errNotString';
+      if (!['haversine', 'google', 'mapbox'].includes(v)) return 'platformConfig.routingProviderInvalid';
+      return null;
+    },
   },
 ];
 

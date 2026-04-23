@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min } from 'class-validator';
 
 export const CASHIER_TX_TYPES = ['TICKET', 'PARCEL', 'LUGGAGE_FEE', 'REFUND', 'CASH_IN', 'CASH_OUT'] as const;
 export type CashierTxType = (typeof CASHIER_TX_TYPES)[number];
@@ -34,4 +34,21 @@ export class RecordTransactionDto {
 
   @IsOptional() @IsString()
   note?: string;
+
+  /**
+   * Espèces uniquement : montant remis par le client (billet/monnaie).
+   * Doit être ≥ amount (ou ≥ batchTotal si fourni).
+   * Ignoré pour paymentMethod ≠ CASH.
+   */
+  @IsOptional() @IsNumber() @Min(0)
+  tenderedAmount?: number;
+
+  /**
+   * Espèces + achat groupé : total à couvrir par tenderedAmount pour le batch
+   * complet. Si présent, changeAmount = tenderedAmount - batchTotal.
+   * Sinon changeAmount = tenderedAmount - amount (cas single tx).
+   * Utilisé par ticketing.confirmBatch sur la 1re transaction seulement.
+   */
+  @IsOptional() @IsNumber() @Min(0)
+  batchTotal?: number;
 }

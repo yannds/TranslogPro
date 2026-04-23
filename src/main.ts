@@ -7,6 +7,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { PrismaExceptionInterceptor } from './common/interceptors/prisma-exception.interceptor';
 import { RedisIoAdapter } from './infrastructure/redis-io.adapter';
 import { SECRET_SERVICE, ISecretService } from './infrastructure/secret/interfaces/secret.interface';
+import { corsOrigin } from './common/security/cors.helper';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
@@ -62,23 +63,11 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new RequestIdInterceptor(), new LoggingInterceptor(), new PrismaExceptionInterceptor());
 
-  // CORS (configuré par tenant en production via Kong)
-  const isDev = process.env.NODE_ENV === 'development';
+  // CORS — politique unique partagée avec les WebSocket Gateways
+  // (cf. src/common/security/cors.helper.ts). En prod, whitelist regex
+  // sur PUBLIC_BASE_DOMAIN ; en dev, localhost + *.translog.test.
   app.enableCors({
-    origin: isDev
-      ? (origin, cb) => {
-          // Dev : autorise les sources connues — Vite (5173/5174), Expo Metro (8081),
-          // Expo web (19006), et tout sous-domaine .translog.test:PORT.
-          if (!origin) return cb(null, true); // requêtes same-origin / curl
-          const allowed =
-            origin === 'http://localhost:5173' ||
-            origin === 'http://localhost:5174' ||
-            origin === 'http://localhost:8081' ||
-            origin === 'http://localhost:19006' ||
-            /^https?:\/\/[^/]+\.translog\.test(?::\d+)?$/.test(origin);
-          cb(null, allowed);
-        }
-      : false,
+    origin:      corsOrigin(),
     credentials: true,
   });
 

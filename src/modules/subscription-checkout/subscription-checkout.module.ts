@@ -4,6 +4,7 @@ import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { SubscriptionReconciliationService } from './subscription-reconciliation.service';
 import { SubscriptionRenewalService } from './subscription-renewal.service';
 import { SubscriptionDunningService } from './subscription-dunning.service';
+import { SubscriptionPaymentMethodsService } from './subscription-payment-methods.service';
 
 /**
  * Cycle complet d'abonnement SaaS :
@@ -29,6 +30,7 @@ import { SubscriptionDunningService } from './subscription-dunning.service';
     SubscriptionReconciliationService,
     SubscriptionRenewalService,
     SubscriptionDunningService,
+    SubscriptionPaymentMethodsService,
   ],
 })
 export class SubscriptionCheckoutModule {}

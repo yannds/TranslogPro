@@ -17,6 +17,7 @@ import {
   type TenantLanguage,
 } from '../../../prisma/seeds/iam.seed';
 import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
+import { seedCmsPages } from '../../../prisma/seeds/cms-pages.seed';
 
 export interface OnboardTenantDto {
   name:       string;
@@ -172,6 +173,14 @@ export class OnboardingService {
       // Cf. pricing-defaults.backfill.ts pour le rattrapage des tenants
       // existants pré-migration.
       await this.seedPricingDefaults(tx as unknown as PrismaService, tenant.id);
+
+      // 7.ter. Pages CMS par défaut (about, fleet, contact, post bienvenue)
+      // + TenantPortalConfig initial. Idempotent (skipDuplicates).
+      await seedCmsPages(tx as unknown as PrismaClient, tenant.id, {
+        companyName: dto.name,
+        city:        '',        // pas encore connue à l'onboarding — éditée via portail admin
+        country:     country,
+      });
 
       // 8. Marquer tenant ACTIVE
       await tx.tenant.update({

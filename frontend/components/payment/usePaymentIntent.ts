@@ -96,15 +96,3 @@ export function usePaymentIntent(tenantId: string | null) {
 
   return { intent, status, loading, error, createIntent, stopPolling: clearPoll };
 }
-
-export interface PaymentMethodCatalogEntry {
-  providerId:  string;
-  displayName: string;
-  type:        string;
-  logoUrl:     string | null;
-  phonePrefix: string | null;
-}
-
-export async function fetchPaymentMethodsForCountry(country: string): Promise<PaymentMethodCatalogEntry[]> {
-  return apiGet<PaymentMethodCatalogEntry[]>(`/api/v1/public/payment-methods?country=${country}`).catch(() => [] as PaymentMethodCatalogEntry[]);
-}
