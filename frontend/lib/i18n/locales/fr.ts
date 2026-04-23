@@ -5071,6 +5071,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "routingKeyConfigure":     "Configurer",
     "routingKeyReplace":       "Modifier la clé",
     "routingKeyDelete":        "Supprimer la clé",
+    "unsavedBarLabel":         "Modifications non enregistrées",
+    "unsavedCount":            "{n} modification(s) non enregistrée(s)",
     "routingKeyDialogTitle":   "Clé API — {{provider}}",
     "routingKeyDialogDesc":    "La clé sera stockée dans Vault. Elle ne sera jamais relue ni affichée.",
     "routingKeyLabel":         "Clé API",

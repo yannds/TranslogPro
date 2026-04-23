@@ -1743,12 +1743,19 @@ model CashRegister {
   finalBalance   Float?
   status         String    @default("OPEN")
   // OPEN | CLOSED | DISCREPANCY — aligné blueprint cash-register-cycle
+  kind           String    @default("PHYSICAL")
+  // PHYSICAL : caisse ouverte/fermée par un caissier humain (scope own/agency).
+  // VIRTUAL  : caisse système par agence, toujours OPEN, agentId='SYSTEM'.
+  //   Utilisée pour les side-effects comptables sans session caisse :
+  //   voucher redeem self-service, refund.process, paiement en ligne.
+  //   Exclue du cycle open/close blueprint (pas de discrepancy possible).
   version        Int       @default(1)
 
   agency       Agency        @relation(fields: [agencyId], references: [id])
   transactions Transaction[]
 
   @@index([tenantId, agencyId, status])
+  @@index([tenantId, agencyId, kind])
   @@map("cash_registers")
 }
 

@@ -389,7 +389,7 @@ export function PagePlatformSettings() {
   };
 
   return (
-    <form onSubmit={handleSave} className="p-4 sm:p-6 space-y-6">
+    <form onSubmit={handleSave} className="p-4 sm:p-6 pb-24 space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -449,6 +449,28 @@ export function PagePlatformSettings() {
           )}
         </section>
       ))}
+
+      {/* Barre d'action sticky — visible UNIQUEMENT quand il y a des modifs
+          non sauvegardées. Évite le piège du bouton « Enregistrer » planqué
+          tout en haut sur une page longue multi-sections. */}
+      {dirtyKeys.length > 0 && (
+        <div
+          role="region"
+          aria-label={t('platformConfig.unsavedBarLabel')}
+          className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-300 bg-amber-50/95 backdrop-blur px-4 py-3 shadow-[0_-4px_10px_-2px_rgba(0,0,0,0.08)] dark:border-amber-900/60 dark:bg-amber-950/80"
+        >
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+              <span>{t('platformConfig.unsavedCount').replace('{n}', String(dirtyKeys.length))}</span>
+            </div>
+            <Button type="submit" disabled={saving} size="sm">
+              <Save className="w-4 h-4 mr-1.5" aria-hidden />
+              {saving ? t('common.saving') : t('platformConfig.saveAll')}
+            </Button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

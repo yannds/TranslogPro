@@ -129,6 +129,95 @@ export class InvoiceService {
     return null;
   }
 
+  /**
+   * Reçu de caisse — crée une Invoice directement en PAID pour un batch de
+   * tickets confirmé présentiel (caisse ouverte). Path "fast-track" :
+   *   1. insert status=DRAFT
+   *   2. transition DRAFT → PAID via WorkflowEngine (action `mark_paid`)
+   * Ceci garantit l'audit trail workflow tout en produisant un document
+   * unique par vente. Appelé depuis ticketing.confirmBatch après enregistrement
+   * des Transaction caisse.
+   *
+   * Idempotence : entityId=batchKey unique par tenant → si l'appel rejoue
+   * (retry, double-clic caissier), on renvoie l'Invoice existante sans créer.
+   */
+  async createPaidReceiptFromTickets(
+    tenantId: string,
+    params: {
+      batchKey:      string;       // clé idempotente (ex: `batch:<sorted-ticket-ids>`)
+      customerName:  string;
+      customerPhone?: string;
+      customerEmail?: string;
+      customerId?:    string;
+      tickets: Array<{
+        id:            string;
+        passengerName: string;
+        pricePaid:     number;
+        seatNumber?:   string | null;
+        routeName?:    string | null;
+      }>;
+      paymentMethod: string;       // CASH | MOBILE_MONEY | CARD | …
+      paymentRef?:   string;       // proofCode ou externalRef
+      currency:      string;
+    },
+    actor: CurrentUserPayload,
+  ) {
+    // Idempotence : si on rejoue, renvoyer le reçu existant.
+    const existing = await this.prisma.invoice.findFirst({
+      where:  { tenantId, entityType: 'TICKET_BATCH', entityId: params.batchKey },
+    });
+    if (existing) return existing;
+
+    const subtotal    = params.tickets.reduce((s, t) => s + (t.pricePaid ?? 0), 0);
+    const invoiceNumber = await this.generateInvoiceNumber(tenantId);
+
+    const draft = await this.prisma.invoice.create({
+      data: {
+        tenantId,
+        invoiceNumber,
+        customerName:  params.customerName,
+        customerPhone: params.customerPhone,
+        customerEmail: params.customerEmail,
+        customerId:    params.customerId,
+        subtotal,
+        taxRate:       0,       // taxes déjà incluses côté ticket.pricePaid
+        taxAmount:     0,
+        totalAmount:   subtotal,
+        currency:      params.currency,
+        entityType:    'TICKET_BATCH',
+        entityId:      params.batchKey,
+        paymentMethod: params.paymentMethod,
+        paymentRef:    params.paymentRef,
+        lineItems: params.tickets.map((t) => ({
+          description: [t.passengerName, t.routeName, t.seatNumber ? `Siège ${t.seatNumber}` : null]
+            .filter(Boolean).join(' — '),
+          quantity:  1,
+          unitPrice: t.pricePaid,
+          total:     t.pricePaid,
+          ticketId:  t.id,
+        })),
+        status: 'DRAFT',
+      },
+    });
+
+    // Transition DRAFT → PAID (fast-track) via WorkflowEngine → paidAt + audit.
+    await this.workflow.transition(
+      draft as Parameters<typeof this.workflow.transition>[0],
+      { action: 'mark_paid', actor },
+      {
+        aggregateType: 'Invoice',
+        persist: async (entity, state, p) => {
+          return p.invoice.update({
+            where: { id: entity.id },
+            data:  { status: state, paidAt: new Date(), version: { increment: 1 } },
+          }) as Promise<typeof entity>;
+        },
+      },
+    );
+
+    return this.findOne(tenantId, draft.id);
+  }
+
   async remove(tenantId: string, id: string) {
     const invoice = await this.findOne(tenantId, id);
     if (invoice.status !== 'DRAFT') {

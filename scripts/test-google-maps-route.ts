@@ -40,8 +40,9 @@ interface SegmentRow {
   to:          string;
   distDb:      number;    // km avant (DB)
   distGoogle:  number;    // km après (Google)
-  priceBefore: number;    // XAF avant
-  priceAfter:  number;    // XAF après
+  priceBefore: number;    // XAF avant (prorata distance DB)
+  priceAfter:  number;    // XAF après (prorata distance Google)
+  tollXaf:     number;    // péage de l'arrêt d'arrivée (waypoint.tollCostXaf)
   provider:    string;
   durationMin: number | null;
 }
@@ -202,6 +203,7 @@ async function main() {
       distGoogle,
       priceBefore: 0, // rempli après, quand on connaît totalDbKm (déjà) / totalGoogleKm
       priceAfter:  0,
+      tollXaf:     b.tollCost,  // péage du waypoint d'arrivée
       provider:    usedProvider,
       durationMin,
     });
@@ -217,9 +219,8 @@ async function main() {
     r.priceAfter  = Math.round((r.distGoogle / totalGoogleKm) * basePrice);
   }
 
-  // ── Affichage du tableau ──────────────────────────────────────────────────
+  // ── Affichage du tableau (avec colonne péage) ─────────────────────────────
   console.log(`\n📊 Tableau comparatif (${rows.length} segments consécutifs) :\n`);
-  const headers = ['#', 'From → To', 'DistAvant', 'DistAprès', 'PrixAvant', 'PrixAprès', 'Provider', 'Δ km'];
   console.log(
     '  ' + [
       '#'.padStart(2),
@@ -228,11 +229,12 @@ async function main() {
       'DistAprès'.padStart(10),
       'PrixAvant'.padStart(14),
       'PrixAprès'.padStart(14),
+      'Péage'.padStart(12),
       'Provider'.padEnd(10),
       'Δ km'.padStart(8),
     ].join('  '),
   );
-  console.log('  ' + '─'.repeat(120));
+  console.log('  ' + '─'.repeat(135));
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -246,6 +248,7 @@ async function main() {
         fmtKm(r.distGoogle),
         fmtMoney(r.priceBefore),
         fmtMoney(r.priceAfter),
+        r.tollXaf > 0 ? fmtMoney(r.tollXaf) : '—'.padStart(12),
         r.provider.padEnd(10),
         (Number(deltaKm) >= 0 ? '+' : '') + `${deltaKm}`.padStart(7),
       ].join('  '),
@@ -256,8 +259,9 @@ async function main() {
   const sumDistAfter    = rows.reduce((s, r) => s + r.distGoogle, 0);
   const sumPriceBefore  = rows.reduce((s, r) => s + r.priceBefore, 0);
   const sumPriceAfter   = rows.reduce((s, r) => s + r.priceAfter,  0);
+  const sumToll         = rows.reduce((s, r) => s + r.tollXaf,     0);
 
-  console.log('  ' + '─'.repeat(120));
+  console.log('  ' + '─'.repeat(135));
   console.log(
     '  ' + [
       ''.padStart(2),
@@ -266,9 +270,14 @@ async function main() {
       fmtKm(sumDistAfter),
       fmtMoney(sumPriceBefore),
       fmtMoney(sumPriceAfter),
+      fmtMoney(sumToll),
       ''.padEnd(10),
       ''.padStart(8),
     ].join('  '),
+  );
+  console.log(
+    '\n  Note : les péages sont comptés séparément dans le coût d\'exploitation (ProfitabilityService.computeTotalToll),\n' +
+    '         PAS dans le prix du billet. Le billet reste au prix prorata distance + majoration tenant (peakPeriods, fareClass).\n',
   );
 
   // Totaux route (pour comparaison directe avec ce que stocke la DB)

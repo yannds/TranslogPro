@@ -16,6 +16,7 @@ import { CashierService } from '../cashier/cashier.service';
 import type {
   CashierPaymentMethod,
 } from '../cashier/dto/record-transaction.dto';
+import { InvoiceService } from '../invoice/invoice.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1_000; // 15 minutes
@@ -61,6 +62,7 @@ export class TicketingService {
     private readonly crmResolver: CustomerResolverService,
     private readonly crmClaim:    CustomerClaimService,
     private readonly cashier:     CashierService,
+    private readonly invoice:     InvoiceService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
@@ -509,6 +511,61 @@ export class TicketingService {
               `Auto-record cashier TX failed ticket=${ticket.id} register=${registerId}: ${(err as Error).message}`,
             );
           }
+        }
+
+        // ── Reçu de caisse (Invoice PAID) — un par batch confirmé en caisse.
+        //   Idempotent via entityId=batchKey stable sur ticketIds triés.
+        //   Échec = log warn, ne bloque pas la vente déjà confirmée.
+        try {
+          const sortedIds = [...results.map((r) => r.entity.id)].sort();
+          const batchKey  = `batch:${sortedIds.join(',')}`;
+          const firstTicket = results[0]?.entity;
+          const [ticketsInfo, tenant] = await Promise.all([
+            this.prisma.ticket.findMany({
+              where:  { id: { in: sortedIds }, tenantId },
+              select: {
+                id: true, passengerName: true, pricePaid: true,
+                seatNumber: true, tripId: true,
+              },
+            }),
+            this.prisma.tenant.findUnique({
+              where:  { id: tenantId },
+              select: { currency: true },
+            }),
+          ]);
+          // Enrichit avec le nom de ligne via Trip→Route (pas de relation directe
+          // Ticket→Trip, donc requête séparée). Tolérant : route absente = null.
+          const tripIds = [...new Set(ticketsInfo.map((t) => t.tripId).filter(Boolean))];
+          const trips = tripIds.length
+            ? await this.prisma.trip.findMany({
+                where:   { id: { in: tripIds }, tenantId },
+                select:  { id: true, route: { select: { name: true } } },
+              })
+            : [];
+          const routeByTrip = new Map(trips.map((tr) => [tr.id, tr.route?.name ?? null]));
+          await this.invoice.createPaidReceiptFromTickets(
+            tenantId,
+            {
+              batchKey,
+              customerName:  firstTicket?.passengerName ?? 'Client',
+              customerPhone: firstTicket?.passengerPhone ?? undefined,
+              currency:      tenant?.currency ?? 'XAF',
+              paymentMethod: method,
+              paymentRef:    dto.proofCode ?? dto.externalRef,
+              tickets: ticketsInfo.map((t) => ({
+                id:            t.id,
+                passengerName: t.passengerName ?? '',
+                pricePaid:     t.pricePaid ?? 0,
+                seatNumber:    t.seatNumber,
+                routeName:     routeByTrip.get(t.tripId) ?? null,
+              })),
+            },
+            actor,
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Auto-receipt generation failed for batch register=${registerId}: ${(err as Error).message}`,
+          );
         }
       }
     }

@@ -6,9 +6,10 @@ import { PricingModule } from '../../core/pricing/pricing.module';
 import { SavModule } from '../sav/sav.module';
 import { CrmModule } from '../crm/crm.module';
 import { CashierModule } from '../cashier/cashier.module';
+import { InvoiceModule } from '../invoice/invoice.module';
 
 @Module({
-  imports:     [PricingModule, SavModule, CrmModule, CashierModule],
+  imports:     [PricingModule, SavModule, CrmModule, CashierModule, InvoiceModule],
   controllers: [TicketingController],
   providers:   [TicketingService, QrService],
   exports:     [TicketingService],

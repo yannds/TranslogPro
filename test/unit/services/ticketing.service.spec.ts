@@ -131,13 +131,17 @@ function buildService(overrides: Partial<{
     getMyOpenRegister: jest.fn().mockResolvedValue(null),
     recordTransaction: jest.fn().mockResolvedValue({ id: 'cashier-tx-1' }),
   } as any;
+  const invoice     = {
+    createPaidReceiptFromTickets: jest.fn().mockResolvedValue({ id: 'inv-001' }),
+  } as any;
   const service  = new TicketingService(
     prisma as any, workflow as any, pricing as any, qr as any,
     refund, crmResolver, crmClaim,
     cashier,
+    invoice,
     eventBus as any,
   );
-  return { service, prisma, workflow, pricing, qr, eventBus };
+  return { service, prisma, workflow, pricing, qr, eventBus, cashier, invoice };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
