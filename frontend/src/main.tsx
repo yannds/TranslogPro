@@ -30,6 +30,7 @@ import { StationAgentDashboard } from '../components/station-agent/StationAgentD
 import { QuaiAgentDashboard }   from '../components/quai-agent/QuaiAgentDashboard';
 import { LegacyTenantRedirect } from '../components/legacy/LegacyTenantRedirect';
 import { PageClaim }            from '../components/pages/PageClaim';
+import { PagePublicReportVehicle } from '../components/pages/PagePublicReportVehicle';
 import { PageAccount }          from '../components/pages/PageAccount';
 // Routes publiques lazy — réduit le bundle initial `index.js` (~2.3 MB → ~1.4 MB)
 // en sortant landing + signup + onboarding + welcome dans leurs propres chunks
@@ -165,6 +166,15 @@ reactRoot.render(
               <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
+              {/* Billing : historiquement /admin/billing et /admin/billing/methods.
+                  Ces URL sont encore référencées dans des emails de facture et
+                  liens externes — on les garde vivantes en redirigeant vers
+                  /account?tab=billing, où la page est désormais un onglet.
+                  ATTENTION : ces Routes DOIVENT précéder `/admin/*` pour que la
+                  redirection matche avant que le router admin prenne la main. */}
+              <Route path="/admin/billing" element={<Navigate to="/account?tab=billing" replace />} />
+              <Route path="/admin/billing/methods" element={<Navigate to="/account?tab=billing" replace />} />
+
               {/* Portail admin — protégé (STAFF / SUPER_ADMIN).
                   `portal="admin"` bloque les CUSTOMER qui tenteraient l'URL
                   et les renvoie vers leur portail. */}
@@ -228,6 +238,12 @@ reactRoot.render(
 
               {/* Claim CRM — magic link "revendication" d'historique shadow */}
               <Route path="/claim" element={<PageClaim />} />
+
+              {/* Public Reporter (Module U PRD) — portail citoyen sans auth.
+                  Le tenantId est résolu côté backend depuis le Host
+                  (TenantHostMiddleware) → l'utilisateur arrive via
+                  https://{slug}.translogpro.com/report-vehicle. */}
+              <Route path="/report-vehicle" element={<PagePublicReportVehicle />} />
 
               {/* Self-service compte : mot de passe, MFA, préférences (langue/TZ).
                   Accessible à tous les rôles authentifiés — PageAccount n'impose

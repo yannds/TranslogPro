@@ -14,12 +14,29 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  CreditCard, Clock, AlertTriangle, CheckCircle2, XCircle, Loader2,
-  RefreshCw, Ban,
+  CreditCard, Smartphone, Landmark, Clock, AlertTriangle, CheckCircle2,
+  XCircle, Loader2, RefreshCw, Ban, Plus, Star, Trash2,
 } from 'lucide-react';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { cn } from '../../lib/utils';
+import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
+import { AddPaymentMethodDialog } from '../billing/AddPaymentMethodDialog';
+
+interface SavedMethod {
+  id:          string;
+  method:      string;
+  provider:    string | null;
+  brand:       string | null;
+  last4:       string | null;
+  maskedPhone: string | null;
+  tokenRef:    string | null;
+  customerRef: string | null;
+  isDefault:   boolean;
+  lastUsedAt:  string | null;
+  createdAt:   string;
+}
 
 interface BillingSummary {
   status: string;
@@ -40,6 +57,7 @@ interface BillingDetails {
     lastSuccessAt: string | null;
     brand:         string | null;
     last4:         string | null;
+    maskedPhone:   string | null;  // '+242 ••••• 567' pour MoMo/Wave
     tokenized:     boolean;
   };
 }
@@ -50,10 +68,14 @@ export function PageAdminBilling() {
   // backend a répondu sans souscription (tenant non-onboardé / pas encore
   // provisionné), `BillingDetails` = OK. Sans cette distinction, une réponse
   // `null` valide fige la page sur un spinner infini (régression observée).
-  const [data,     setData]     = useState<BillingDetails | null | undefined>(undefined);
-  const [loadErr,  setLoadErr]  = useState(false);
-  const [busy,     setBusy]     = useState<null | 'checkout' | 'toggle' | 'cancel' | 'resume'>(null);
-  const [msg,      setMsg]      = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [data,      setData]      = useState<BillingDetails | null | undefined>(undefined);
+  const [loadErr,   setLoadErr]   = useState(false);
+  const [busy,      setBusy]      = useState<null | 'checkout' | 'toggle' | 'cancel' | 'resume' | 'pm'>(null);
+  const [msg,       setMsg]       = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [methods,   setMethods]   = useState<SavedMethod[]>([]);
+  const [addOpen,   setAddOpen]   = useState(false);
+  const [deleteTgt, setDeleteTgt] = useState<SavedMethod | null>(null);
+  const [pmBusyId,  setPmBusyId]  = useState<string | null>(null);
 
   async function reload() {
     setLoadErr(false);
@@ -61,11 +83,42 @@ export function PageAdminBilling() {
     try {
       const r = await apiFetch<BillingDetails | null>('/api/v1/subscription/billing', { skipRedirectOn401: true });
       setData(r ?? null);
+      // Liste des moyens enregistrés — on ne bloque pas le rendu si l'appel échoue
+      try {
+        const list = await apiFetch<SavedMethod[]>('/api/v1/subscription/payment-methods');
+        setMethods(list);
+      } catch { /* tolérant : la page peut rester utilisable sans cette liste */ }
     } catch {
       setLoadErr(true);
     }
   }
   useEffect(() => { void reload(); }, []);
+
+  async function setMethodDefault(m: SavedMethod) {
+    setPmBusyId(m.id);
+    try {
+      await apiFetch(`/api/v1/subscription/payment-methods/${m.id}/default`, { method: 'PUT' });
+      await reload();
+    } catch (e) {
+      setMsg({ kind: 'err', text: errMsg(e, t) });
+    } finally {
+      setPmBusyId(null);
+    }
+  }
+
+  async function doDeleteMethod() {
+    if (!deleteTgt) return;
+    setPmBusyId(deleteTgt.id);
+    try {
+      await apiFetch(`/api/v1/subscription/payment-methods/${deleteTgt.id}`, { method: 'DELETE' });
+      setDeleteTgt(null);
+      await reload();
+    } catch (e) {
+      setMsg({ kind: 'err', text: errMsg(e, t) });
+    } finally {
+      setPmBusyId(null);
+    }
+  }
 
   if (loadErr)        return <FullError onRetry={reload} />;
   if (data === undefined) return <FullLoading />;
@@ -122,17 +175,7 @@ export function PageAdminBilling() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <header className="flex items-center gap-3">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400">
-          <CreditCard className="h-5 w-5" aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{t('adminBilling.title')}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('adminBilling.subtitle')}</p>
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {msg && (
         <div
           role="alert"
@@ -203,6 +246,15 @@ export function PageAdminBilling() {
               label={t('adminBilling.method.saved')}
               value={formatSavedMethod(data.savedMethod, t)}
               hint={savedMethodHint(data.savedMethod, dateFmt, t)}
+              action={
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="text-xs font-medium text-teal-700 hover:text-teal-900 hover:underline dark:text-teal-300 dark:hover:text-teal-100"
+                >
+                  {t('adminBilling.method.add')}
+                </button>
+              }
             />
           </div>
 
@@ -273,6 +325,56 @@ export function PageAdminBilling() {
         </div>
       </section>
 
+      {/* Saved payment methods */}
+      <section className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              {t('paymentMethods.savedHeading')}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              {t('paymentMethods.subtitle')}
+            </p>
+          </div>
+          <Button
+            type="button" variant="default" size="sm"
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            {t('paymentMethods.add')}
+          </Button>
+        </header>
+        {methods.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 p-8 text-center">
+            <CreditCard className="h-8 w-8 text-slate-400" aria-hidden />
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {t('paymentMethods.emptyTitle')}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {t('paymentMethods.emptyBody')}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+            {methods.map(m => (
+              <li key={m.id}>
+                <SavedMethodRow
+                  method={m}
+                  busy={pmBusyId === m.id}
+                  onSetDefault={() => setMethodDefault(m)}
+                  onDelete={() => setDeleteTgt(m)}
+                  dateFmt={dateFmt}
+                  t={t}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* Invoices */}
       <section className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
@@ -341,6 +443,22 @@ export function PageAdminBilling() {
           </ul>
         )}
       </section>
+
+      <AddPaymentMethodDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        subscriptionStatus={s.status}
+      />
+
+      {deleteTgt && (
+        <DeleteMethodDialog
+          method={deleteTgt}
+          busy={pmBusyId === deleteTgt.id}
+          onConfirm={doDeleteMethod}
+          onClose={() => setDeleteTgt(null)}
+          t={t}
+        />
+      )}
     </div>
   );
 }
@@ -348,17 +466,21 @@ export function PageAdminBilling() {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function InfoBlock({
-  icon: Icon, label, value, hint,
-}: { icon: typeof CreditCard; label: string; value: string; hint?: string }) {
+  icon: Icon, label, value, hint, action,
+}: {
+  icon: typeof CreditCard; label: string; value: string; hint?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
         <Icon className="h-4 w-4" aria-hidden />
       </span>
-      <div>
+      <div className="flex-1">
         <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
         <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{value}</p>
         {hint && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+        {action && <div className="mt-1">{action}</div>}
       </div>
     </div>
   );
@@ -441,16 +563,7 @@ function FullLoading() {
 function NoSubscription({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="p-4 sm:p-6">
-      <header className="flex items-center gap-3 mb-6">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400">
-          <CreditCard className="h-5 w-5" aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{t('adminBilling.title')}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('adminBilling.subtitle')}</p>
-        </div>
-      </header>
+    <div>
       <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
         <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           <CreditCard className="h-6 w-6" aria-hidden />
@@ -511,7 +624,15 @@ function formatSavedMethod(
   t: (k: string) => string,
 ): string {
   if (!m) return t('adminBilling.method.none');
+  // Carte : Visa •••• 4242
   if (m.brand && m.last4) return `${m.brand} •••• ${m.last4}`;
+  // MoMo / Wave : numéro masqué
+  if (m.maskedPhone) {
+    const providerLabel = m.provider
+      ? m.provider.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      : t(('billing.method.' + m.method) as any);
+    return `${providerLabel} ${m.maskedPhone}`;
+  }
   const label = t(('billing.method.' + m.method) as any);
   return m.provider ? `${label} · ${m.provider}` : label;
 }
@@ -526,4 +647,109 @@ function savedMethodHint(
   if (m.tokenized) parts.push(t('adminBilling.method.tokenized'));
   if (m.lastSuccessAt) parts.push(`${t('adminBilling.method.lastUsed')} ${dateFmt.format(new Date(m.lastSuccessAt))}`);
   return parts.length ? parts.join(' · ') : undefined;
+}
+
+// ─── Saved methods row & delete confirm ──────────────────────────────────────
+
+function SavedMethodRow({
+  method, busy, onSetDefault, onDelete, dateFmt, t,
+}: {
+  method: SavedMethod; busy: boolean;
+  onSetDefault: () => void; onDelete: () => void;
+  dateFmt: Intl.DateTimeFormat;
+  t: (k: string) => string;
+}) {
+  const Icon = method.method === 'CARD' ? CreditCard
+            : method.method === 'MOBILE_MONEY' ? Smartphone
+            : Landmark;
+  const label = method.method === 'MOBILE_MONEY' && method.maskedPhone
+    ? `${method.brand ?? method.provider ?? 'Mobile Money'}  ${method.maskedPhone}`
+    : method.method === 'CARD' && method.last4
+      ? `${method.brand ?? 'Card'}  •••• ${method.last4}`
+      : t(('billing.method.' + method.method) as any);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+      <div className="flex items-center gap-3">
+        <span className={cn(
+          'inline-flex h-9 w-9 items-center justify-center rounded-full',
+          method.isDefault
+            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-200'
+            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+        )}>
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+        <div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white">{label}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {method.isDefault && (
+              <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                <Star className="h-2.5 w-2.5" aria-hidden />
+                {t('paymentMethods.default')}
+              </span>
+            )}
+            {method.lastUsedAt && (
+              <>{t('paymentMethods.lastUsed')} {dateFmt.format(new Date(method.lastUsedAt))}</>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        {!method.isDefault && (
+          <Button
+            type="button" size="sm" variant="ghost" disabled={busy}
+            onClick={onSetDefault}
+            className="inline-flex items-center gap-1"
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Star className="h-3.5 w-3.5" aria-hidden />}
+            {t('paymentMethods.makeDefault')}
+          </Button>
+        )}
+        <Button
+          type="button" size="sm" variant="ghost" disabled={busy}
+          onClick={onDelete}
+          className="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          {t('paymentMethods.remove')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DeleteMethodDialog({ method, busy, onConfirm, onClose, t }: {
+  method: SavedMethod; busy: boolean;
+  onConfirm: () => void; onClose: () => void;
+  t: (k: string) => string;
+}) {
+  const label = method.maskedPhone ?? (method.last4 ? `•••• ${method.last4}` : method.method);
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()} title={t('paymentMethods.deleteTitle')}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          {t('paymentMethods.deleteBody').replace('{label}', label)}
+        </p>
+        {method.isDefault && (
+          <div role="note" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{t('paymentMethods.deleteDefaultWarn')}</span>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="button" variant="destructive" onClick={onConfirm} disabled={busy}
+            className="inline-flex items-center gap-1.5"
+          >
+            {busy
+              ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> {t('paymentMethods.removing')}</>
+              : <><CheckCircle2 className="h-4 w-4" aria-hidden /> {t('paymentMethods.confirmRemove')}</>}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
 }

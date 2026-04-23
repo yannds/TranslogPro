@@ -65,6 +65,8 @@ const LazyPeakPeriods    = lazy(() => import('../pages/PageTenantPeakPeriods').t
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyQuotaSettings = lazy(() => import('../pages/PageQuotaSettings').then(m => ({ default: m.PageQuotaSettings })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyVouchers        = lazy(() => import('../pages/PageVouchers').then(m => ({ default: m.PageVouchers })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCashDiscrepancies = lazy(() => import('../pages/PageCashDiscrepancies').then(m => ({ default: m.PageCashDiscrepancies })));
@@ -75,7 +77,9 @@ const LazyTenantPayment  = lazy(() => import('../pages/PageTenantPayment').then(
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyAnnouncements  = lazy(() => import('../pages/PageAnnouncements').then(m => ({ default: m.PageAnnouncements })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
-const LazyAdminBilling   = lazy(() => import('../pages/PageAdminBilling').then(m => ({ default: m.PageAdminBilling })));
+// LazyAdminBilling + PaymentMethods supprimés : /admin/billing et /admin/billing/methods
+// sont désormais redirigés côté router principal (main.tsx) vers /account?tab=billing.
+// PageAdminBilling est importée directement par PageAccount pour rendre l'onglet.
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyIntegrations   = lazy(() => import('../pages/PageIntegrations').then(m => ({ default: m.PageIntegrations })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -106,6 +110,8 @@ const LazyDriverCalendar = lazy(() => import('../pages/PageDriverCalendar').then
 const LazyTrips          = lazy(() => import('../pages/PageTrips').then(m => ({ default: m.PageTrips })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTripPlanning   = lazy(() => import('../pages/PageTripPlanning').then(m => ({ default: m.PageTripPlanning })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyScheduler      = lazy(() => import('../pages/PageScheduler').then(m => ({ default: m.PageScheduler })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyRoutes         = lazy(() => import('../pages/PageRoutes').then(m => ({ default: m.PageRoutes })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -197,6 +203,8 @@ const LazyReports             = lazy(() => import('../pages/PageReports').then(m
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyNotifications       = lazy(() => import('../pages/PageNotifications').then(m => ({ default: m.PageNotifications })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyNotificationPreferences = lazy(() => import('../pages/PageNotificationPreferences').then(m => ({ default: m.PageNotificationPreferences })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPageAccount         = lazy(() => import('../pages/PageAccount').then(m => ({ default: m.PageAccount })));
 
 // ── Portail Plateforme (SUPER_ADMIN / SUPPORT_L1 / SUPPORT_L2) ────────────────
@@ -234,6 +242,10 @@ const LazyPlatformUsers       = lazy(() => import('../pages/PagePlatformUsers').
 const LazyPlatformRoles       = lazy(() => import('../pages/PagePlatformRoles').then(m => ({ default: m.PagePlatformRoles })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformModulesUsage = lazy(() => import('../pages/PagePlatformModulesUsage').then(m => ({ default: m.PagePlatformModulesUsage })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyBulkImport           = lazy(() => import('../pages/PageBulkImport').then(m => ({ default: m.PageBulkImport })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyAdminBackup          = lazy(() => import('../pages/PageAdminBackup').then(m => ({ default: m.PageAdminBackup })));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,6 +267,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'trips':
     case 'trips-list':          return <LazyTrips />;
     case 'trips-planning':      return <LazyTripPlanning />;
+    case 'trips-scheduler':     return <LazyScheduler />;
     case 'routes':              return <LazyRoutes />;
     case 'trips-delays':        return <LazyTripDelays />;
 
@@ -397,10 +410,14 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'tenant-taxes':        return <LazyTenantTaxes />;
     case 'tenant-fare-classes': return <LazyTenantFareClasses />;
     case 'tenant-rules':        return <LazyTenantBusinessRules />;
+    case 'tenant-quotas':       return <LazyQuotaSettings />;
     case 'vouchers':            return <LazyVouchers />;
     case 'tenant-payment':      return <LazyTenantPayment />;
-    case 'tenant-billing':      return <LazyAdminBilling />;
+    // tenant-billing + tenant-payment-methods supprimés — remplacés par l'onglet
+    // `/account?tab=billing` (redirects définis dans main.tsx).
     case 'documents-templates': return <LazyTemplateStudio />;
+    case 'bulk-import':         return <LazyBulkImport />;
+    case 'tenant-backup':       return <LazyAdminBackup />;
 
     // ── IAM ────────────────────────────────────────────────────────────────
     case 'iam-users':           return <LazyIamUsers />;
@@ -433,6 +450,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── Divers ─────────────────────────────────────────────────────────────
     case 'notifications':       return <LazyNotifications />;
+    case 'notifications-prefs': return <LazyNotificationPreferences />;
     case 'account':             return <LazyPageAccount />;
 
     default:                    return <PageDashboard />;

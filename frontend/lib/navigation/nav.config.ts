@@ -166,6 +166,10 @@ const P = {
   PLATFORM_READ:         'data.platform.read.agency',
   ANNOUNCEMENT_MANAGE:   'control.announcement.manage.tenant',
   ANNOUNCEMENT_READ:     'data.announcement.read.agency',
+  // Bulk Import
+  BULK_IMPORT:           'control.bulk.import.tenant',
+  // Backup & RGPD
+  BACKUP_READ:           'data.backup.read.tenant',
 };
 
 // ─── Portail Admin ─────────────────────────────────────────────────────────────
@@ -238,6 +242,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           children: [
             { kind: 'leaf', id: 'trips-list',     label: 'nav.today_s_trips',    href: '/admin/trips',          icon: 'List',          anyOf: [P.TRIP_UPDATE, P.TRIP_CREATE] },
             { kind: 'leaf', id: 'trips-planning', label: 'nav.weekly_planning',  href: '/admin/trips/planning', icon: 'CalendarDays',  anyOf: [P.TRIP_CREATE, P.ROUTE_MANAGE] },
+            { kind: 'leaf', id: 'trips-scheduler', label: 'nav.recurring_trips', href: '/admin/trips/scheduler', icon: 'Repeat',       anyOf: [P.TRIP_CREATE, P.TRIP_READ_TENANT] },
             { kind: 'leaf', id: 'trips-delays',   label: 'nav.delays_alerts',    href: '/admin/trips/delays',   icon: 'AlertTriangle', anyOf: [P.TRIP_DELAY, P.TRIP_UPDATE] },
           ],
         },
@@ -417,13 +422,13 @@ export const ADMIN_NAV: PortalNavConfig = {
         P.TARIFF_MANAGE, P.TARIFF_READ, P.PROMOTION_MANAGE, P.PROMOTION_READ,
         P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE, P.PEAK_PERIOD_READ, P.PEAK_PERIOD_MANAGE,
         P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE,
-        P.TAX_READ, P.TAX_MANAGE,
+        P.TAX_READ, P.TAX_MANAGE, P.SETTINGS_MANAGE,
       ],
       items: [
         {
           kind: 'group',
           id: 'pricing',
-          label: 'nav.pricing',
+          label: 'nav.pricing_and_classes',
           icon: 'Tags',
           anyOf: [
             P.PRICING_MANAGE, P.PRICING_YIELD, P.PRICING_READ,
@@ -441,7 +446,7 @@ export const ADMIN_NAV: PortalNavConfig = {
         {
           kind: 'group',
           id: 'finance-taxes',
-          label: { fr: 'Finance & Taxes', en: 'Finance & Taxes' },
+          label: 'nav.finance_fiscality',
           icon: 'Receipt',
           anyOf: [
             P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE,
@@ -450,6 +455,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           children: [
             { kind: 'leaf', id: 'invoices',       label: 'nav.invoicing',         href: '/admin/invoices',         icon: 'Receipt',    anyOf: [P.INVOICE_PRINT, P.INVOICE_READ, P.INVOICE_READ_TENANT, P.INVOICE_MANAGE] },
             { kind: 'leaf', id: 'tenant-taxes',   label: 'nav.taxes_fiscality',   href: '/admin/settings/taxes',   icon: 'Calculator', anyOf: [P.TAX_READ, P.TAX_MANAGE] },
+            { kind: 'leaf', id: 'tenant-rules',   label: 'nav.business_rules',    href: '/admin/settings/rules',   icon: 'ScrollText', anyOf: [P.SETTINGS_MANAGE] },
             { kind: 'leaf', id: 'tenant-payment', label: 'nav.payment_settings',  href: '/admin/settings/payment', icon: 'CreditCard', anyOf: [P.SETTINGS_MANAGE] },
           ],
         },
@@ -533,6 +539,7 @@ export const ADMIN_NAV: PortalNavConfig = {
         P.IAM_MANAGE, P.IAM_AUDIT,
         P.TEMPLATE_WRITE, P.TEMPLATE_READ,
         P.AGENCY_MANAGE, P.AGENCY_READ,
+        P.BULK_IMPORT,
       ],
       items: [
         {
@@ -566,10 +573,21 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Building2',
           anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ, P.MODULE_INSTALL, P.SETTINGS_MANAGE],
           children: [
-            { kind: 'leaf', id: 'agencies',      label: 'nav.agencies',         href: '/admin/settings/agencies', icon: 'Building2', anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ] },
-            { kind: 'leaf', id: 'modules',       label: 'nav.modules_extensions',href: '/admin/modules',          icon: 'Puzzle',    anyOf: [P.MODULE_INSTALL] },
-            { kind: 'leaf', id: 'tenant-company',label: 'nav.company_info',     href: '/admin/settings/company',  icon: 'Building',  anyOf: [P.SETTINGS_MANAGE] },
-            { kind: 'leaf', id: 'tenant-rules',  label: 'nav.business_rules',   href: '/admin/settings/rules',    icon: 'ScrollText',anyOf: [P.SETTINGS_MANAGE] },
+            { kind: 'leaf', id: 'agencies',      label: 'nav.agencies',          href: '/admin/settings/agencies', icon: 'Building2',  anyOf: [P.AGENCY_MANAGE, P.AGENCY_READ] },
+            { kind: 'leaf', id: 'modules',       label: 'nav.modules_extensions', href: '/admin/modules',          icon: 'Puzzle',     anyOf: [P.MODULE_INSTALL] },
+            { kind: 'leaf', id: 'tenant-company',label: 'nav.company_info',      href: '/admin/settings/company',  icon: 'Building',   anyOf: [P.SETTINGS_MANAGE] },
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'outils',
+          label: 'nav.tools',
+          icon: 'Wrench',
+          anyOf: [P.BULK_IMPORT, P.BACKUP_READ, P.SETTINGS_MANAGE],
+          children: [
+            { kind: 'leaf', id: 'bulk-import',    label: 'nav.bulk_import',   href: '/admin/settings/bulk-import', icon: 'Upload',    anyOf: [P.BULK_IMPORT] },
+            { kind: 'leaf', id: 'tenant-backup',  label: 'nav.backup',        href: '/admin/settings/backup',      icon: 'HardDrive', anyOf: [P.BACKUP_READ] },
+            { kind: 'leaf', id: 'tenant-quotas',  label: 'nav.tenant_quotas', href: '/admin/settings/quotas',      icon: 'Activity',  anyOf: [P.SETTINGS_MANAGE] },
           ],
         },
         {
@@ -593,7 +611,6 @@ export const ADMIN_NAV: PortalNavConfig = {
           anyOf: [P.INTEGRATION_SETUP, P.SETTINGS_MANAGE],
           children: [
             { kind: 'leaf', id: 'integrations',      label: 'nav.api_integrations',  href: '/admin/integrations',               icon: 'Link2',    anyOf: [P.INTEGRATION_SETUP] },
-            { kind: 'leaf', id: 'tenant-billing',    label: 'nav.billing',           href: '/admin/billing',                    icon: 'Wallet',   anyOf: [P.SETTINGS_MANAGE] },
             { kind: 'leaf', id: 'white-label',       label: 'nav.white_label_theme', href: '/admin/settings/branding',          icon: 'Palette',  anyOf: [P.SETTINGS_MANAGE], moduleKey: 'WHITE_LABEL' },
             { kind: 'leaf', id: 'portal-admin',      label: 'nav.portal_settings',   href: '/admin/settings/portal',            icon: 'Settings', anyOf: [P.SETTINGS_MANAGE] },
             { kind: 'leaf', id: 'portal-marketplace',label: 'nav.portal_marketplace',href: '/admin/settings/portal/marketplace',icon: 'Store',    anyOf: [P.SETTINGS_MANAGE] },
@@ -760,9 +777,13 @@ export const ADMIN_NAV: PortalNavConfig = {
       id: '_utility',
       anyOf: ['___never___'],
       items: [
-        { kind: 'leaf', id: 'notifications', label: 'nav.notifications', href: '/admin/notifications', icon: 'Bell' },
-        { kind: 'leaf', id: 'support',       label: 'nav.contact_support', href: '/admin/support',   icon: 'LifeBuoy' },
-        { kind: 'leaf', id: 'account',       label: 'account.title',       href: '/admin/account',  icon: 'UserCircle2' },
+        { kind: 'leaf', id: 'notifications',          label: 'nav.notifications',       href: '/admin/notifications',         icon: 'Bell' },
+        { kind: 'leaf', id: 'notifications-prefs',    label: 'nav.notification_prefs',  href: '/admin/notifications/prefs',   icon: 'Settings2' },
+        { kind: 'leaf', id: 'support',                label: 'nav.contact_support',     href: '/admin/support',               icon: 'LifeBuoy' },
+        { kind: 'leaf', id: 'account',                label: 'account.title',           href: '/admin/account',               icon: 'UserCircle2' },
+        // tenant-billing + tenant-payment-methods retirés : les URL /admin/billing
+        // et /admin/billing/methods sont désormais redirigées vers /account?tab=billing
+        // par le router principal (main.tsx). L'abonnement est un onglet de « Mon compte ».
       ],
     },
 

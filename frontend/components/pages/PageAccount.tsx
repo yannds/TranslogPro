@@ -17,22 +17,32 @@
  *   POST  /api/v1/mfa/disable         { password, code? }
  */
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   UserCircle2, ShieldCheck, SlidersHorizontal, Save, KeyRound,
-  Smartphone, Check, X, AlertTriangle, Copy, CheckCircle2,
+  Smartphone, Check, X, AlertTriangle, Copy, CheckCircle2, CreditCard,
 } from 'lucide-react';
 import { useAuth }  from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { apiPost, ApiError } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Badge }  from '../ui/Badge';
+import { PageAdminBilling } from './PageAdminBilling';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
 const inp = 'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-50';
 
-type Tab = 'profile' | 'security' | 'preferences';
+type Tab = 'profile' | 'security' | 'preferences' | 'billing';
+
+/**
+ * Permission requise pour voir/éditer l'onglet Billing. Doit rester alignée avec
+ * la garde serveur `SETTINGS_MANAGE_TENANT` sur `SubscriptionCheckoutController`
+ * (défense en profondeur — un rôle qui n'a pas cette perm renvoie 403 sur tous
+ * les endpoints /api/v1/subscription/*, même s'il accède à l'URL directement).
+ */
+const BILLING_PERMISSION = 'control.settings.manage.tenant';
 
 // Les 8 locales publiquement supportées dans l'UI TranslogPro. La source
 // canonique reste le dossier frontend/lib/i18n/locales/. Ajouter une langue
@@ -430,8 +440,33 @@ function PreferencesTab() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function PageAccount() {
-  const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>('profile');
+  const { t }          = useI18n();
+  const { user }       = useAuth();
+  const [params, setParams] = useSearchParams();
+
+  // Garde permissions (défense-en-profondeur UI — la source de vérité reste
+  // le PermissionGuard serveur). Un user sans SETTINGS_MANAGE_TENANT ne voit
+  // PAS l'onglet, ET si qqn arrive avec ?tab=billing en URL directe on bascule
+  // silencieusement vers le premier onglet autorisé.
+  const canBilling = (user?.permissions ?? []).includes(BILLING_PERMISSION);
+
+  // Tab courante dérivée du query param `?tab=…` pour que les redirects
+  // /admin/billing → /account?tab=billing fonctionnent directement. Sans perm
+  // billing, on revient à 'profile'.
+  const rawTab = (params.get('tab') ?? 'profile') as Tab;
+  const initialTab: Tab = rawTab === 'billing' && !canBilling ? 'profile' : rawTab;
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  // Synchroniser l'URL quand l'utilisateur change d'onglet — permet de partager
+  // un lien direct vers une tab et de garder l'historique navigateur cohérent.
+  useEffect(() => {
+    if (params.get('tab') !== tab) {
+      const next = new URLSearchParams(params);
+      next.set('tab', tab);
+      setParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-4xl mx-auto">
@@ -445,15 +480,19 @@ export function PageAccount() {
         </div>
       </header>
 
-      <nav className="flex border-b border-slate-200 dark:border-slate-800" role="tablist" aria-label={t('account.tablistAria')}>
+      <nav className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto" role="tablist" aria-label={t('account.tablistAria')}>
         <TabButton active={tab === 'profile'}     onClick={() => setTab('profile')}     icon={<UserCircle2 size={14} />} label={t('account.tabProfile')} />
         <TabButton active={tab === 'security'}    onClick={() => setTab('security')}    icon={<ShieldCheck size={14} />} label={t('account.tabSecurity')} />
         <TabButton active={tab === 'preferences'} onClick={() => setTab('preferences')} icon={<SlidersHorizontal size={14} />} label={t('account.tabPrefs')} />
+        {canBilling && (
+          <TabButton active={tab === 'billing'} onClick={() => setTab('billing')} icon={<CreditCard size={14} />} label={t('account.tabBilling')} />
+        )}
       </nav>
 
       {tab === 'profile'     && <ProfileTab />}
       {tab === 'security'    && <SecurityTab />}
       {tab === 'preferences' && <PreferencesTab />}
+      {tab === 'billing' && canBilling && <PageAdminBilling />}
     </div>
   );
 }
