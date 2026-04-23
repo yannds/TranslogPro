@@ -83,6 +83,178 @@ export class RouteService {
     return this.routing.suggestDistance(origin, dest);
   }
 
+  /**
+   * Recalibre une ligne depuis le provider routier actif (Google Maps typiquement).
+   *
+   * Pour chaque waypoint dont la station a des coordonnées GPS, on calcule la
+   * distance cumulée depuis l'origine segment par segment (origine → premier
+   * waypoint GPS, puis de waypoint GPS à waypoint GPS). Les waypoints sans GPS
+   * (péages, contrôles) conservent leur `distanceFromOriginKm` existant, mais
+   * sont CLAMPÉS entre les distances cumulées encadrantes pour garantir un
+   * ordre monotone croissant (fin des incohérences "RECUL").
+   *
+   * Impact :
+   *   - Route.distanceKm            = somme des segments Google
+   *   - Waypoint.distanceFromOriginKm (chaque waypoint) mis à jour
+   *   - RouteSegmentPrice           = régénéré au prorata (via generateSegmentPriceMatrix)
+   *   - Route.basePrice             INCHANGÉ (décision tenant)
+   *   - Waypoint.tollCostXaf        INCHANGÉ (les péages sont indépendants de la distance)
+   *
+   * Idempotent : rappeler la méthode sur une ligne déjà recalibrée ne change rien.
+   * Si `routing.provider` = haversine (fallback), on refuse — sinon on écraserait
+   * des distances réelles avec des lignes droites.
+   */
+  async recalibrateFromGoogle(tenantId: string, routeId: string): Promise<{
+    changed:       boolean;
+    oldDistanceKm: number;
+    newDistanceKm: number;
+    waypointsUpdated: number;
+    provider:      string;
+    segmentsCalled: number;
+    estimated:     boolean;
+  }> {
+    const route = await this.prisma.route.findFirst({
+      where:   { id: routeId, tenantId },
+      include: {
+        origin:      { select: { coordinates: true, name: true } },
+        destination: { select: { coordinates: true, name: true } },
+        waypoints:   {
+          include: { station: { select: { coordinates: true } } },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+    if (!route) throw new NotFoundException('Route introuvable');
+
+    // Provider actif : on refuse le recalibrage si le fallback haversine est
+    // utilisé (que ce soit par config ou par échec Google). Le but de cette
+    // fonctionnalité est d'écraser les saisies manuelles PAR les données du
+    // provider routier — pas par de la ligne droite.
+    const routingEnabled = await this.routing.isEnabled();
+    if (!routingEnabled) {
+      throw new BadRequestException(
+        'Le calcul de distance routière est désactivé (routing.enabled=false). Activez-le dans Platform Settings avant de recalibrer.',
+      );
+    }
+
+    const extractCoords = (s: { coordinates: unknown } | null | undefined) => {
+      if (!s?.coordinates || typeof s.coordinates !== 'object') return null;
+      const c = s.coordinates as Record<string, unknown>;
+      const lat = typeof c['lat'] === 'number' ? c['lat'] : null;
+      const lng = typeof c['lng'] === 'number' ? c['lng'] : null;
+      return lat !== null && lng !== null ? { lat, lng } : null;
+    };
+
+    const originCoords = extractCoords(route.origin);
+    const destCoords   = extractCoords(route.destination);
+    if (!originCoords || !destCoords) {
+      throw new BadRequestException(
+        'Origine et/ou destination sans coordonnées GPS — impossible de recalibrer.',
+      );
+    }
+
+    // Liste ordonnée des "ancres" (arrêts avec GPS) + index d'origine et de destination.
+    // On calcule les distances cumulées Google entre ancres consécutives.
+    type Anchor = { idx: number; coords: { lat: number; lng: number } }; // idx dans waypoints[], -1 = origin, -2 = destination
+    const anchors: Anchor[] = [];
+    anchors.push({ idx: -1, coords: originCoords });
+    route.waypoints.forEach((wp, i) => {
+      const c = extractCoords(wp.station);
+      if (c) anchors.push({ idx: i, coords: c });
+    });
+    anchors.push({ idx: -2, coords: destCoords });
+
+    if (anchors.length < 2) {
+      throw new BadRequestException(
+        'Aucun waypoint avec coordonnées GPS — recalibrage impossible.',
+      );
+    }
+
+    // Appels routing segment par segment (origin→A1, A1→A2, … An→dest)
+    const cumulatedKm: number[] = [0]; // cumulatedKm[k] = distance cumulée depuis origin à l'ancre k
+    let segmentsCalled = 0;
+    let anyEstimated   = false;
+
+    for (let k = 1; k < anchors.length; k++) {
+      const res = await this.routing.suggestDistance(anchors[k - 1].coords, anchors[k].coords);
+      cumulatedKm.push(cumulatedKm[k - 1] + res.distanceKm);
+      segmentsCalled++;
+      if (res.estimated) anyEstimated = true;
+    }
+
+    const newDistanceKm = Math.round(cumulatedKm[cumulatedKm.length - 1] * 10) / 10;
+    const oldDistanceKm = route.distanceKm;
+
+    // Mise à jour des waypoints : chaque ancre prend la distance cumulée
+    // correspondante, les non-ancres (péages) sont clampés entre leurs deux ancres
+    // encadrantes (préservent leur position relative).
+    const anchorAtWpIdx = new Map<number, number>(); // idx waypoint -> anchorIndex
+    anchors.forEach((a, k) => {
+      if (a.idx >= 0) anchorAtWpIdx.set(a.idx, k);
+    });
+
+    let updated = 0;
+    for (let i = 0; i < route.waypoints.length; i++) {
+      const wp = route.waypoints[i];
+      let targetKm: number;
+
+      const anchorIdx = anchorAtWpIdx.get(i);
+      if (anchorIdx !== undefined) {
+        // Waypoint-station avec GPS : on prend la distance cumulée Google
+        targetKm = Math.round(cumulatedKm[anchorIdx] * 10) / 10;
+      } else {
+        // Waypoint sans GPS (péage, police, contrôle) : on clamp entre les deux
+        // ancres encadrantes pour garantir l'ordre monotone. Si sa valeur actuelle
+        // tombe hors de l'intervalle, on la positionne au milieu.
+        let prevAnchorK = 0;
+        let nextAnchorK = anchors.length - 1;
+        for (let k = 1; k < anchors.length; k++) {
+          const a = anchors[k];
+          if (a.idx >= 0 && a.idx < i) prevAnchorK = k;
+          if (a.idx >= 0 && a.idx > i) { nextAnchorK = k; break; }
+          if (a.idx === -2)            { nextAnchorK = k; break; }
+        }
+        const lo = cumulatedKm[prevAnchorK];
+        const hi = cumulatedKm[nextAnchorK];
+        const cur = wp.distanceFromOriginKm ?? 0;
+        targetKm = cur >= lo && cur <= hi
+          ? cur            // valeur actuelle déjà cohérente — on la garde
+          : Math.round(((lo + hi) / 2) * 10) / 10; // sinon milieu de l'intervalle
+      }
+
+      if (Math.abs((wp.distanceFromOriginKm ?? 0) - targetKm) > 0.05) {
+        await this.prisma.waypoint.update({
+          where: { id: wp.id },
+          data:  { distanceFromOriginKm: targetKm },
+        });
+        updated++;
+      }
+    }
+
+    // Mise à jour du total sur Route (et lu avant pour comparer)
+    if (Math.abs(oldDistanceKm - newDistanceKm) > 0.05) {
+      await this.prisma.route.update({
+        where: { id: routeId },
+        data:  { distanceKm: newDistanceKm },
+      });
+    }
+
+    // Régénère la matrice des prix segment — utilise la nouvelle route.distanceKm
+    // pour recalculer les prorata. Le basePrice n'est pas touché.
+    await this.generateSegmentPriceMatrix(tenantId, routeId);
+
+    const changed = updated > 0 || Math.abs(oldDistanceKm - newDistanceKm) > 0.05;
+    return {
+      changed,
+      oldDistanceKm,
+      newDistanceKm,
+      waypointsUpdated: updated,
+      provider:         anyEstimated ? 'haversine-partial' : 'google',
+      segmentsCalled,
+      estimated:        anyEstimated,
+    };
+  }
+
   findAll(tenantId: string) {
     return this.prisma.route.findMany({
       where: { tenantId },

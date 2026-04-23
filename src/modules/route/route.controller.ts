@@ -87,6 +87,18 @@ export class RouteController {
     return this.routes.setWaypoints(tenantId, id, dto.waypoints);
   }
 
+  /**
+   * Recalibre distances des waypoints + Route.distanceKm + RouteSegmentPrice depuis
+   * le provider de routing actif (Google Maps typiquement). Ne touche PAS au basePrice
+   * ni aux tollCostXaf. Idempotent — rappelable après édition des waypoints.
+   */
+  @Post(':id/recalibrate')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission(Permission.ROUTE_MANAGE_TENANT)
+  recalibrate(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.routes.recalibrateFromGoogle(tenantId, id);
+  }
+
   // ── Matrice de prix segment ────────────────────────────────────────────
 
   @Get(':id/segment-prices')

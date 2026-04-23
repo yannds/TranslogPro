@@ -17,8 +17,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MapPin, ChevronUp, ChevronDown, Trash2, Plus, Save, Pencil, X,
   AlertTriangle, CheckCircle2, Shield, Trees, Flag, Landmark, CircleDot,
+  Zap, Loader2,
 } from 'lucide-react';
-import { apiGet, apiPatch }        from '../../lib/api';
+import { apiGet, apiPatch, apiPost } from '../../lib/api';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { Dialog }                  from '../ui/Dialog';
 import { Button }                  from '../ui/Button';
@@ -147,6 +148,10 @@ export function RouteDetailDialog({
   const [wpSuccess,      setWpSuccess]      = useState(false);
   const [showAddForm,    setShowAddForm]    = useState(false);
   const [editingIdx,     setEditingIdx]     = useState<number | null>(null);
+
+  // Recalibrage Google — bouton dédié + feedback
+  const [recalibBusy,    setRecalibBusy]    = useState(false);
+  const [recalibMsg,     setRecalibMsg]     = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   // Checkpoint autocomplete — points de contrôle déjà enregistrés sur ce tenant
   const [cpSuggestions, setCpSuggestions] = useState<{ kind: string; name: string; tollCostXaf: number; estimatedWaitTime: number | null }[]>([]);
@@ -345,6 +350,50 @@ export function RouteDetailDialog({
 
   const removeCheckpoint = (idx: number) => {
     setNewCheckpoints(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  /**
+   * Détection de "recul" — waypoint dont `distanceFromOriginKm` est inférieur
+   * au précédent dans l'ordre. Signal fort d'une saisie manuelle incohérente
+   * que le recalibrage Google peut corriger en un clic.
+   */
+  const monotonyBreaks = useMemo(() => {
+    const breaks: number[] = [];
+    for (let i = 1; i < waypoints.length; i++) {
+      if (waypoints[i].distanceFromOriginKm < waypoints[i - 1].distanceFromOriginKm) {
+        breaks.push(i);
+      }
+    }
+    return breaks;
+  }, [waypoints]);
+
+  const recalibrate = async () => {
+    if (!routeId) return;
+    setRecalibBusy(true); setRecalibMsg(null);
+    try {
+      const res = await apiPost<{
+        changed: boolean; oldDistanceKm: number; newDistanceKm: number;
+        waypointsUpdated: number; provider: string; segmentsCalled: number;
+        estimated: boolean;
+      }>(`${base}/${routeId}/recalibrate`, {});
+      if (!res.changed) {
+        setRecalibMsg({ kind: 'ok', text: t('routeDetail.recalibrateUnchanged') });
+      } else {
+        setRecalibMsg({
+          kind: 'ok',
+          text: t('routeDetail.recalibrateDone')
+            .replace('{old}', String(res.oldDistanceKm))
+            .replace('{new}', String(res.newDistanceKm))
+            .replace('{n}',   String(res.waypointsUpdated)),
+        });
+      }
+      await loadRoute();
+      onSaved();
+    } catch (e) {
+      setRecalibMsg({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setRecalibBusy(false);
+    }
   };
 
   const saveWaypoints = async () => {
@@ -689,11 +738,26 @@ export function RouteDetailDialog({
 
           {/* ── Section 1: Escales ────────────────────────────────────── */}
           <section aria-label={t('routeDetail.stopsTitle')}>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wide">
                 {t('routeDetail.stopsTitle')} ({waypoints.length})
               </h3>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {!showAddForm && !isEditing && waypoints.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={recalibrate}
+                    disabled={recalibBusy}
+                    className="inline-flex items-center gap-1.5"
+                    title={t('routeDetail.recalibrateTooltip')}
+                  >
+                    {recalibBusy
+                      ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      : <Zap className="h-4 w-4" aria-hidden />}
+                    {recalibBusy ? t('routeDetail.recalibrating') : t('routeDetail.recalibrate')}
+                  </Button>
+                )}
                 {!showAddForm && !isEditing && (
                   <Button variant="outline" onClick={() => { resetNewForm(); setShowAddForm(true); }}>
                     <Plus className="w-4 h-4 mr-1.5" aria-hidden />
@@ -702,6 +766,41 @@ export function RouteDetailDialog({
                 )}
               </div>
             </div>
+
+            {/* Badge incohérence — CTA vers le recalibrage */}
+            {monotonyBreaks.length > 0 && !recalibBusy && (
+              <button
+                type="button"
+                onClick={recalibrate}
+                className="mb-3 flex w-full items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-left text-sm text-red-900 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/60"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <div className="flex-1">
+                  <p className="font-medium">
+                    {t('routeDetail.monotonyBreakTitle').replace('{n}', String(monotonyBreaks.length))}
+                  </p>
+                  <p className="mt-0.5 text-xs opacity-80">{t('routeDetail.monotonyBreakCta')}</p>
+                </div>
+                <Zap className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              </button>
+            )}
+
+            {/* Feedback du recalibrage */}
+            {recalibMsg && (
+              <div
+                role={recalibMsg.kind === 'err' ? 'alert' : 'status'}
+                className={`mb-3 flex items-start gap-2 rounded-md border p-3 text-sm ${
+                  recalibMsg.kind === 'ok'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200'
+                }`}
+              >
+                {recalibMsg.kind === 'ok'
+                  ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
+                <span>{recalibMsg.text}</span>
+              </div>
+            )}
 
             {/* Quick-add dropdown */}
             {!showAddForm && !isEditing && availableForAdd.length > 0 && (
