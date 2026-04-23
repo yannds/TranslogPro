@@ -26,6 +26,7 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import {
   COUNTRIES, getCountry, getTimezonesForCountry, DATE_FORMAT_OPTIONS,
 } from '../../lib/config/regional.config';
+import { getPhonePlaceholder } from '../../lib/config/phone.config';
 
 // ─── i18n (string-key based — see locales/fr.ts → companySetup) ─────────────
 
@@ -295,7 +296,7 @@ export function PageCompanySetup() {
               <Field icon={FileBadge} label={t('companySetup.taxId')} htmlFor="taxId"
                      hint={t('companySetup.taxIdHint')}>
                 <input id="taxId" type="text"
-                  placeholder="Ex : CG/BZV/20-B-5678"
+                  placeholder={t('companySetup.taxIdPlaceholder')}
                   value={form.taxId ?? ''}
                   onChange={e => set({ taxId: e.target.value })}
                   className={INPUT_CLS} />
@@ -304,7 +305,7 @@ export function PageCompanySetup() {
               <Field icon={MapPin} label={t('companySetup.hqAddress')} htmlFor="address"
                      hint={t('companySetup.hqAddressHint')}>
                 <input id="address" type="text"
-                  placeholder="123 Avenue de la Paix, Brazzaville"
+                  placeholder={t('companySetup.hqAddressPlaceholder')}
                   value={form.address ?? ''}
                   onChange={e => set({ address: e.target.value })}
                   className={INPUT_CLS} />
@@ -313,7 +314,7 @@ export function PageCompanySetup() {
               <Field icon={MapPin} label={t('companySetup.hqCity')} htmlFor="city"
                      hint={t('companySetup.hqCityHint')}>
                 <input id="city" type="text"
-                  placeholder="Brazzaville"
+                  placeholder={t('companySetup.hqCityPlaceholder')}
                   value={form.city ?? ''}
                   onChange={e => set({ city: e.target.value })}
                   className={INPUT_CLS} />
@@ -327,7 +328,7 @@ export function PageCompanySetup() {
               <Field icon={Phone} label={t('companySetup.phone')} htmlFor="phone"
                      hint={t('companySetup.phoneHint')}>
                 <input id="phone" type="tel"
-                  placeholder="+242 06 123 45 67"
+                  placeholder={getPhonePlaceholder(form.country)}
                   value={form.phoneNumber ?? ''}
                   onChange={e => set({ phoneNumber: e.target.value })}
                   className={INPUT_CLS} />

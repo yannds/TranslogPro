@@ -218,7 +218,7 @@ function PlanForm({
           <input type="text" required value={f.currency} pattern="[A-Z]{3}"
             maxLength={3}
             onChange={e => set('currency', e.target.value.toUpperCase())}
-            className={`${inp} font-mono`} disabled={busy} placeholder="EUR" />
+            className={`${inp} font-mono`} disabled={busy} placeholder={t('platformPlans.formCurrencyPlaceholder')} />
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium t-text">

@@ -14,6 +14,8 @@ import { useAuth }                from '../../lib/auth/auth.context';
 import { useFetch }               from '../../lib/hooks/useFetch';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useI18n }            from '../../lib/i18n/useI18n';
+import { useTenantConfig }      from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder }  from '../../lib/config/phone.config';
 import { Badge }                  from '../ui/Badge';
 import { Button }                 from '../ui/Button';
 import { Dialog }                 from '../ui/Dialog';
@@ -381,6 +383,7 @@ function HospitalForm({
   pendingLabel?: string;
 }) {
   const { t } = useI18n();
+  const { operational } = useTenantConfig();
   const [f, setF] = useState(initial);
   const patch = (p: Partial<HospitalFormValues>) => setF(prev => ({ ...prev, ...p }));
 
@@ -422,7 +425,7 @@ function HospitalForm({
         </label>
         <input type="tel" value={f.phone}
           onChange={e => patch({ phone: e.target.value })}
-          className={inp} disabled={busy} placeholder="+237 6XX XX XX XX" />
+          className={inp} disabled={busy} placeholder={getPhonePlaceholder(operational.country)} />
       </div>
 
       <FormFooter onCancel={onCancel} busy={busy}

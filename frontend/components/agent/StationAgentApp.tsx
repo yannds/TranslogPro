@@ -27,7 +27,8 @@
 import { useState, useCallback, useRef, useEffect, type FormEvent } from 'react';
 import { cn } from '../../lib/utils';
 import { ROLE_PERMISSIONS } from '../../lib/hooks/useNavigation';
-import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
+import { useCurrencyFormatter, useTenantConfig } from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder } from '../../lib/config/phone.config';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useAuth } from '../../lib/auth/auth.context';
 import { apiGet, apiPost, ApiError } from '../../lib/api';
@@ -123,6 +124,7 @@ const UPCOMING_TRIPS: UpcomingTrip[] = [
 function TabVente() {
   const { t } = useI18n();
   const formatXAF = useCurrencyFormatter();
+  const { operational } = useTenantConfig();
   const [selectedTrip, setSelectedTrip]   = useState<UpcomingTrip | null>(null);
   const [ticketIssued, setTicketIssued]   = useState(false);
   const [ticketCode]                       = useState(() => `TLP-${Date.now().toString(36).toUpperCase()}`);
@@ -204,7 +206,7 @@ function TabVente() {
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               value={passenger.telephone}
               onChange={e => setPassenger(p => ({ ...p, telephone: e.target.value }))}
-              placeholder="+221 77 000 00 00"
+              placeholder={getPhonePlaceholder(operational.country)}
             />
           </div>
         </div>

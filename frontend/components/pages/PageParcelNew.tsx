@@ -15,6 +15,8 @@ import { useAuth }                       from '../../lib/auth/auth.context';
 import { useFetch }                      from '../../lib/hooks/useFetch';
 import { apiPost }                       from '../../lib/api';
 import { useI18n }                       from '../../lib/i18n/useI18n';
+import { useTenantConfig }                from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder }            from '../../lib/config/phone.config';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge }                         from '../ui/Badge';
 import { Button }                        from '../ui/Button';
@@ -58,6 +60,8 @@ const EMPTY_FORM: FormValues = {
 export function PageParcelNew() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { operational } = useTenantConfig();
+  const phonePh = getPhonePlaceholder(operational.country);
   const tenantId = user?.tenantId ?? '';
 
   const { data: stations } = useFetch<StationRow[]>(
@@ -174,7 +178,7 @@ export function PageParcelNew() {
                     </label>
                     <input id="rec-phone" type="tel" required value={f.recipientPhone}
                       onChange={e => patch({ recipientPhone: e.target.value })}
-                      className={inp} disabled={busy} placeholder="+242 06 000 00 00" />
+                      className={inp} disabled={busy} placeholder={phonePh} />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="rec-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -228,7 +232,7 @@ export function PageParcelNew() {
                     </label>
                     <input id="snd-phone" type="tel" value={f.senderPhone}
                       onChange={e => patch({ senderPhone: e.target.value })}
-                      className={inp} disabled={busy} placeholder="+242 06 000 00 00" />
+                      className={inp} disabled={busy} placeholder={phonePh} />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="snd-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">

@@ -248,7 +248,7 @@ export function PageDriverEvents() {
               onChange={(e) => setLieu(e.target.value)}
               className={inputClass}
               disabled={busy}
-              placeholder="Ex : PK 42, Carrefour Warda..."
+              placeholder="Ex : point kilométrique ou lieu repérable"
             />
           </div>
 

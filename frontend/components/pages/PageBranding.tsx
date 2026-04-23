@@ -18,6 +18,8 @@ import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPut } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder } from '../../lib/config/phone.config';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
@@ -150,6 +152,7 @@ function BrandPreview({ brand }: { brand: BrandConfig }) {
 export function PageBranding() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { operational } = useTenantConfig();
   const tenantId = user?.tenantId ?? '';
 
   const brandUrl = tenantId ? `/api/v1/tenants/${tenantId}/brand` : null;
@@ -299,7 +302,7 @@ export function PageBranding() {
                         type="tel"
                         value={form.supportPhone ?? ''}
                         onChange={e => handleText('supportPhone', e.target.value)}
-                        placeholder="+242 06 000 0000"
+                        placeholder={getPhonePlaceholder(operational.country)}
                         className={fieldClass}
                         disabled={saving}
                       />

@@ -234,7 +234,7 @@ export function PageDriverReport() {
                 onChange={e => patch({ locationDescription: e.target.value })}
                 className={inp}
                 disabled={busy}
-                placeholder="Ex : PK 42, sortie Douala-Yaoundé"
+                placeholder="Ex : point kilométrique ou lieu repérable"
               />
             </div>
 

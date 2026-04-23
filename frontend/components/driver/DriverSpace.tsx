@@ -423,7 +423,7 @@ function TabIncidents() {
         <div className="flex gap-2">
           <input
             className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="Ex: RN1 km 180, Louga"
+            placeholder="Ex : point kilométrique ou lieu repérable"
             value={form.localisation}
             onChange={e => setForm(f => ({ ...f, localisation: e.target.value }))}
           />

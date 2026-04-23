@@ -99,7 +99,7 @@ function CreateAgencyForm({ onSubmit, onCancel, busy, error }: {
         </label>
         <input type="text" required value={f.name}
           onChange={e => setF({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder="ex. Agence Pointe-Noire" />
+          className={inp} disabled={busy} placeholder={t('agencies.agencyNamePlaceholder')} />
       </div>
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>

@@ -16,6 +16,8 @@ import { useState, type FormEvent } from 'react';
 import { History, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
 import { useI18n }    from '../../lib/i18n/useI18n';
+import { useTenantConfig } from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder } from '../../lib/config/phone.config';
 import { apiPost }    from '../../lib/api';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button }     from '../ui/Button';
@@ -56,6 +58,7 @@ function mapError(err: unknown): string {
 export function PageRetroClaim() {
   const { t }    = useI18n();
   const { user } = useAuth();
+  const { operational } = useTenantConfig();
   const tenantId = user?.tenantId ?? '';
   const base     = `/api/tenants/${tenantId}/customer/claim`;
 
@@ -225,7 +228,7 @@ export function PageRetroClaim() {
                   value={form.phone}
                   onChange={e => patch({ phone: e.target.value })}
                   className={inp} disabled={busy}
-                  placeholder="+242 06 000 00 00"
+                  placeholder={getPhonePlaceholder(operational.country)}
                   autoComplete="tel"
                   aria-describedby="rc-phone-help"
                 />

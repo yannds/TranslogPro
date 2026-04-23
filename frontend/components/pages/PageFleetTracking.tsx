@@ -611,7 +611,7 @@ export function PageFleetTracking() {
               <input type="text"
                 value={fuelForm.stationName}
                 onChange={e => setFuelForm(f => ({ ...f, stationName: e.target.value }))}
-                className={inp} disabled={fuelBusy} placeholder="Total Dakar Centre" />
+                className={inp} disabled={fuelBusy} placeholder={t('fleetTracking.stationPlaceholder')} />
             </div>
           </div>
 

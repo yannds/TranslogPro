@@ -154,7 +154,7 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
             onFocus={() => { updateDropdownPos(); if (results.length > 0) setShowResults(true); }}
             onBlur={() => setTimeout(() => setShowResults(false), 200)}
             className={`${inp} pl-9 pr-9`}
-            placeholder="ex. Gare routière Poto-Poto, Brazzaville"
+            placeholder="Rechercher une adresse, un lieu, une gare…"
             disabled={disabled}
             maxLength={MAX_Q}
             autoComplete="off"
@@ -221,7 +221,7 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
             value={value.lat}
             onChange={e => onChange({ ...value, lat: e.target.value })}
             className={inp} disabled={disabled}
-            placeholder="ex. -4.2634"
+            placeholder="-90 à 90"
           />
         </div>
         <div className="space-y-1.5">
@@ -233,7 +233,7 @@ export function LocationPicker({ tenantId, value, onChange, disabled }: Props) {
             value={value.lng}
             onChange={e => onChange({ ...value, lng: e.target.value })}
             className={inp} disabled={disabled}
-            placeholder="ex. 15.2429"
+            placeholder="-180 à 180"
           />
         </div>
       </div>
