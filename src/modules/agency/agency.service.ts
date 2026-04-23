@@ -114,6 +114,31 @@ export class AgencyService {
         where: { tenantId, agencyId: id },
         data:  { agencyId: null },
       });
+
+      // Nettoyage de la caisse VIRTUAL rattachée à l'agence. Créée automatiquement
+      // par CashierService.getOrCreateVirtualRegister() pour tracer les mouvements
+      // comptables sans session humaine (voucher redeem self-service, refund online).
+      // Toujours OPEN, agentId='SYSTEM', jamais incluse dans le rapport fin de jour.
+      // Les transactions associées sont supprimées d'abord (FK intégrité), puis la caisse.
+      const virtualRegisters = await tx.cashRegister.findMany({
+        where:  { tenantId, agencyId: id, kind: 'VIRTUAL' },
+        select: { id: true },
+      });
+      if (virtualRegisters.length > 0) {
+        const ids = virtualRegisters.map((r) => r.id);
+        await tx.transaction.deleteMany({
+          where: { tenantId, cashRegisterId: { in: ids } },
+        });
+        await tx.cashRegister.deleteMany({
+          where: { tenantId, id: { in: ids } },
+        });
+      }
+
+      // Caisses PHYSICAL (caissier humain) : elles ne doivent PAS exister à
+      // l'instant du delete — on les a forcément clôturées avant de supprimer
+      // l'agence (UX : bouton supprimer grisé s'il reste une caisse OPEN).
+      // Si la contrainte FK saute ici, c'est un cas hors workflow → on laisse
+      // Prisma lever une erreur explicite plutôt que masquer.
       await tx.agency.delete({ where: { id } });
       return { deleted: true };
     });
