@@ -5,7 +5,10 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaymentOrchestrator } from '../../infrastructure/payment/payment-orchestrator.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
 import type { PaymentMethod, PaymentCurrency } from '../../infrastructure/payment/interfaces/payment.interface';
-import { StartSubscriptionCheckoutDto, UpdateAutoRenewDto, CancelSubscriptionDto } from './dto/subscription-checkout.dto';
+import {
+  StartSubscriptionCheckoutDto, UpdateAutoRenewDto, CancelSubscriptionDto,
+  StartSetupIntentDto,
+} from './dto/subscription-checkout.dto';
 
 /**
  * Checkout d'abonnement SaaS — crée un PaymentIntent via l'orchestrateur
@@ -112,6 +115,84 @@ export class SubscriptionCheckoutService {
       currency:    intent.currency,
       expiresAt:   intent.expiresAt,
       providerKey: intent.providerKey,
+    };
+  }
+
+  // ─── SetupIntent : tokenisation sans débit ─────────────────────────────────
+
+  /**
+   * Enregistre un moyen de paiement sans déclencher de facturation.
+   *
+   * Contexte : un abonné ACTIVE ne peut pas utiliser `startCheckout` (bloqué
+   * L50-53). Sans ce flow, il ne peut jamais ajouter/remplacer sa carte entre
+   * deux renouvellements. On contourne via un microcharge tokenisant, remboursé
+   * automatiquement par `SubscriptionReconciliationService` au SUCCEEDED.
+   *
+   * Le montant micro est la plus petite unité "significative" par devise,
+   * compatible avec le minimum accepté par la majorité des PSP africains
+   * (Flutterwave/Paystack) : 100 XAF/XOF/NGN, 1 GHS, 10 KES, 1 USD, 1 EUR.
+   */
+  async startSetupIntent(tenantId: string, dto: StartSetupIntentDto) {
+    const sub = await this.prisma.platformSubscription.findUnique({
+      where:   { tenantId },
+      include: { plan: true },
+    });
+    if (!sub) throw new NotFoundException('Aucune souscription active pour ce tenant');
+
+    const admin = await this.prisma.user.findFirst({
+      where:   { tenantId, userType: 'STAFF' },
+      orderBy: { id: 'asc' },
+      select:  { email: true, name: true },
+    });
+
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId }, select: { currency: true, name: true },
+    });
+    const supported: PaymentCurrency[] = ['XAF', 'XOF', 'NGN', 'GHS', 'KES', 'USD'];
+    const planCcy = sub.plan?.currency as PaymentCurrency | undefined;
+    const currency = planCcy && (supported as string[]).includes(planCcy)
+      ? planCcy
+      : supported.includes(tenant.currency as PaymentCurrency)
+        ? tenant.currency as PaymentCurrency
+        : 'XAF';
+    const subtotal = getSetupAmount(currency);
+
+    // Idempotence dédiée : clé indépendante du checkout normal pour éviter
+    // qu'un SetupIntent collide avec un checkout facturant sur la même période.
+    const idempotencyKey = `sub-setup-${sub.id}-${dto.method}-${Date.now()}`;
+
+    const redirectUrl = dto.redirectUrl ?? `/account?tab=billing&setup=success`;
+    const intent = await this.orchestrator.createIntent(tenantId, {
+      entityType:     'SUBSCRIPTION',
+      entityId:       sub.id,
+      subtotal,
+      method:         dto.method as PaymentMethod,
+      currency,
+      idempotencyKey,
+      description:    `Enregistrement moyen paiement — ${tenant.name}`,
+      redirectUrl,
+      customerEmail:  admin?.email ?? undefined,
+      customerName:   admin?.name  ?? undefined,
+      metadata: {
+        subscriptionId: sub.id,
+        // Flag consommé par SubscriptionReconciliationService — bascule du
+        // flow "activer/prolonger" vers "enregistrer le moyen puis refund".
+        setupOnly:      true,
+      },
+    });
+
+    this.logger.log(
+      `[setup-intent] tenant=${tenantId} sub=${sub.id} amount=${subtotal}${currency} method=${dto.method}`,
+    );
+
+    return {
+      intentId:    intent.intentId,
+      paymentUrl:  intent.paymentUrl,
+      amount:      intent.amount,
+      currency:    intent.currency,
+      expiresAt:   intent.expiresAt,
+      providerKey: intent.providerKey,
+      setupOnly:   true,
     };
   }
 
@@ -284,5 +365,23 @@ export class SubscriptionCheckoutService {
     });
     this.logger.log(`[resume] tenant=${tenantId}`);
     return { ok: true };
+  }
+}
+
+/**
+ * Montant minimal tokenisant par devise (plus petite unité courante + compatible
+ * avec les minima PSP africains). Volontairement non-pilotable via PlatformConfig :
+ * c'est une constante métier, pas un seuil tenant — la bonne valeur est
+ * "celle que les providers acceptent", pas une politique produit.
+ */
+function getSetupAmount(currency: PaymentCurrency): number {
+  switch (currency) {
+    case 'XAF': return 100;
+    case 'XOF': return 100;
+    case 'NGN': return 100;
+    case 'GHS': return 1;
+    case 'KES': return 10;
+    case 'USD': return 1;
+    default:    return 100;
   }
 }

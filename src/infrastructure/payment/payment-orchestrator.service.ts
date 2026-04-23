@@ -152,6 +152,20 @@ export class PaymentOrchestrator {
     const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
 
     // 4. TX création Intent + Attempt + Events (avant tout appel réseau)
+    // Enrichissement mobile money : on capture le MSISDN et sa version masquée
+    // dans la metadata de l'intent. Les webhooks PSP (MTN/Airtel/Wave) ne
+    // réechoent PAS le téléphone, donc sans ce capteur en amont on perdrait
+    // l'identifiant nécessaire à l'auto-renew et à l'enregistrement du moyen
+    // au succès (notamment pour SetupIntent mobile money).
+    const baseMetadata = (dto.metadata ?? {}) as Record<string, unknown>;
+    const enrichedMetadata = dto.method === 'MOBILE_MONEY' && dto.customerPhone
+      ? {
+          ...baseMetadata,
+          customerPhone:     dto.customerPhone,
+          customerPhoneMask: maskPhone(dto.customerPhone),
+        }
+      : baseMetadata;
+
     const { intent, attempt } = await this.prisma.$transaction(async (tx) => {
       const intent = await tx.paymentIntent.create({
         data: {
@@ -167,7 +181,7 @@ export class PaymentOrchestrator {
           method:         dto.method,
           status:         'CREATED',
           description:    dto.description,
-          metadata:       (dto.metadata ?? {}) as object,
+          metadata:       enrichedMetadata as object,
           expiresAt,
         },
       });
@@ -499,6 +513,7 @@ export class PaymentOrchestrator {
         methodToken: result.methodToken,
         methodLast4: result.methodLast4,
         methodBrand: result.methodBrand,
+        maskedPhone: result.maskedPhone,
       });
     }
   }
@@ -509,13 +524,14 @@ export class PaymentOrchestrator {
     tokenization?: {
       customerRef?: string; methodToken?: string;
       methodLast4?: string; methodBrand?: string;
+      maskedPhone?: string;
     },
   ) {
     const intent = await this.prisma.paymentIntent.findUnique({
       where:  { id: intentId },
       select: {
         id: true, tenantId: true, entityType: true, entityId: true,
-        amount: true, currency: true, metadata: true,
+        amount: true, currency: true, metadata: true, method: true,
       },
     });
     if (!intent) return;
@@ -523,6 +539,30 @@ export class PaymentOrchestrator {
     const type = status === 'SUCCEEDED'
       ? EventTypes.PAYMENT_INTENT_SUCCEEDED
       : EventTypes.PAYMENT_INTENT_FAILED;
+
+    // Enrichissement mobile money : les providers MTN/Airtel/Wave ne remplissent
+    // pas `customerRef` / `maskedPhone` dans leur PaymentResult (le webhook PSP
+    // n'écho pas le téléphone). On les déduit du `customerPhone` stocké dans
+    // la metadata de l'intent lors de createIntent(). Sans ça, la tokenisation
+    // mobile money est perdue — impossible de sauvegarder le moyen pour auto-renew.
+    const meta = (intent.metadata ?? {}) as Record<string, unknown>;
+    const fallbackCustomerRef =
+      intent.method === 'MOBILE_MONEY' && typeof meta.customerPhone === 'string'
+        ? stripPhone(meta.customerPhone)
+        : undefined;
+    const fallbackMaskedPhone =
+      intent.method === 'MOBILE_MONEY' && typeof meta.customerPhoneMask === 'string'
+        ? meta.customerPhoneMask
+        : undefined;
+    const enrichedTokenization = tokenization || fallbackCustomerRef || fallbackMaskedPhone
+      ? {
+          customerRef: tokenization?.customerRef ?? fallbackCustomerRef,
+          methodToken: tokenization?.methodToken,
+          methodLast4: tokenization?.methodLast4,
+          methodBrand: tokenization?.methodBrand,
+          maskedPhone: tokenization?.maskedPhone ?? fallbackMaskedPhone,
+        }
+      : undefined;
 
     // EventEmitter2 en mode fire-and-forget — les handlers sont `@OnEvent`
     // et n'interrompent JAMAIS le flux webhook. Un handler qui lève est logué
@@ -535,13 +575,34 @@ export class PaymentOrchestrator {
       amount:       intent.amount,
       currency:     intent.currency,
       metadata:     intent.metadata,
-      // Tokenisation provider — vide si le PSP ne l'a pas fourni
-      tokenization: tokenization && (
-        tokenization.customerRef || tokenization.methodToken
-      ) ? tokenization : undefined,
+      // Tokenisation provider — vide si ni PSP ni intent.metadata n'ont fourni
+      tokenization: enrichedTokenization && (
+        enrichedTokenization.customerRef || enrichedTokenization.methodToken || enrichedTokenization.maskedPhone
+      ) ? enrichedTokenization : undefined,
     });
-    this.log.debug(`[events] emitted ${type} for intent=${intent.id}${tokenization?.methodToken ? ' (tokenized)' : ''}`);
+    this.log.debug(
+      `[events] emitted ${type} for intent=${intent.id}` +
+      `${enrichedTokenization?.methodToken ? ' (tokenized card)' : ''}` +
+      `${enrichedTokenization?.maskedPhone && !enrichedTokenization?.methodToken ? ' (tokenized momo)' : ''}`,
+    );
   }
+}
+
+/**
+ * Masque un numéro pour affichage : `+242 06 123 45 67` → `+242 •• ••• 4567`.
+ * Conserve le préfixe pays et les 4 derniers chiffres, obfusque le reste.
+ */
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/[^\d+]/g, '');
+  if (digits.length < 6) return digits;
+  const last4 = digits.slice(-4);
+  const prefix = digits.startsWith('+') ? digits.slice(0, 4) : digits.slice(0, 3);
+  return `${prefix} ••••• ${last4}`;
+}
+
+/** Retire le + et les non-chiffres pour obtenir un MSISDN pur (clef customerRef). */
+function stripPhone(phone: string): string {
+  return phone.replace(/^\+/, '').replace(/\D/g, '');
 }
 
 // ─── Tables de transition (exportées pour tests) ─────────────────────────────

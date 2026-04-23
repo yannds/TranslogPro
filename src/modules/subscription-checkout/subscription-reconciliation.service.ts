@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { PaymentOrchestrator } from '../../infrastructure/payment/payment-orchestrator.service';
 import { EventTypes } from '../../common/types/domain-event.type';
 
 /**
@@ -22,7 +24,10 @@ import { EventTypes } from '../../common/types/domain-event.type';
 export class SubscriptionReconciliationService {
   private readonly logger = new Logger(SubscriptionReconciliationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly orchestrator: PaymentOrchestrator,
+  ) {}
 
   @OnEvent(EventTypes.PAYMENT_INTENT_SUCCEEDED)
   async onPaymentSucceeded(payload: {
@@ -37,6 +42,7 @@ export class SubscriptionReconciliationService {
     tokenization?: {
       customerRef?: string; methodToken?: string;
       methodLast4?: string; methodBrand?: string;
+      maskedPhone?: string;
     };
   }) {
     if (payload.entityType !== 'SUBSCRIPTION') return;
@@ -59,6 +65,16 @@ export class SubscriptionReconciliationService {
         this.logger.error(
           `Cross-tenant mismatch: intent.tenant=${payload.tenantId} sub.tenant=${sub.tenantId} — abort`,
         );
+        return;
+      }
+
+      // ─── Branche SetupIntent ─────────────────────────────────────────────
+      // Si l'intent est un SetupIntent (microcharge tokenisante), on enregistre
+      // le moyen de paiement puis on déclenche un refund automatique. On ne
+      // touche NI au statut NI à la période de la subscription.
+      const meta = (payload.metadata ?? {}) as Record<string, unknown>;
+      if (meta.setupOnly === true) {
+        await this.handleSetupIntentSuccess(sub, payload);
         return;
       }
 
@@ -93,21 +109,44 @@ export class SubscriptionReconciliationService {
       ]);
       const prevRefs = (sub.externalRefs ?? {}) as Record<string, unknown>;
       const tk = payload.tokenization;
+      const method = intent?.method ?? (prevRefs as any).lastMethod;
+      const provider = lastAttempt?.providerKey ?? (prevRefs as any).lastProvider;
+
+      // Fan-out : push ou merge dans savedMethods[] (dedup par token ou
+      // (method,last4) ou (method,maskedPhone)). Le nouveau devient default.
+      const prevList = Array.isArray((prevRefs as any).savedMethods)
+        ? ((prevRefs as any).savedMethods as SavedMethodEntry[])
+        : [];
+      const nextList = tk && (tk.methodToken || tk.methodLast4 || tk.maskedPhone)
+        ? upsertSavedMethod(prevList, {
+            id:          `pm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            method:      method ?? 'CARD',
+            provider:    provider ?? null,
+            brand:       tk.methodBrand ?? null,
+            last4:       tk.methodLast4 ?? null,
+            maskedPhone: tk.maskedPhone ?? null,
+            tokenRef:    tk.methodToken ?? null,
+            customerRef: tk.customerRef ?? null,
+            isDefault:   true,
+            lastUsedAt:  new Date().toISOString(),
+            createdAt:   new Date().toISOString(),
+          })
+        : prevList;
+
       const nextRefs = {
         ...prevRefs,
         lastIntentId:           payload.intentId,
-        lastMethod:             intent?.method ?? (prevRefs as any).lastMethod,
+        lastMethod:             method,
         lastAttemptExternalRef: lastAttempt?.externalRef ?? (prevRefs as any).lastAttemptExternalRef,
-        lastProvider:           lastAttempt?.providerKey ?? (prevRefs as any).lastProvider,
+        lastProvider:           provider,
         lastSuccessAt:          new Date().toISOString(),
         // Tokenisation — on ne conserve que les refs réutilisables (customerRef,
-        // methodToken). Le last4/brand servent uniquement l'affichage UI. Un
-        // null `methodToken` signifie : auto-renew via Intent avec paymentUrl
-        // (l'admin clique pour confirmer), pas de prélèvement silencieux.
+        // methodToken). Le last4/brand/maskedPhone servent uniquement l'affichage UI.
         customerRef:            tk?.customerRef    ?? (prevRefs as any).customerRef,
         methodToken:            tk?.methodToken    ?? (prevRefs as any).methodToken,
         methodLast4:            tk?.methodLast4    ?? (prevRefs as any).methodLast4,
         methodBrand:            tk?.methodBrand    ?? (prevRefs as any).methodBrand,
+        savedMethods:           nextList,
         // Reset dunning history après un paiement réussi — la prochaine
         // occurrence de PAST_DUE repartira de zéro sur les rappels.
         dunningSent:            {},
@@ -125,7 +164,7 @@ export class SubscriptionReconciliationService {
           cancelledAt:        null,
           cancelReason:       null,
           pastDueSince:       null,
-          externalRefs:       nextRefs,
+          externalRefs:       nextRefs as unknown as Prisma.InputJsonValue,
         },
       });
 
@@ -144,9 +183,142 @@ export class SubscriptionReconciliationService {
       // On n'escalade pas — le webhook est déjà ACK côté orchestrator.
     }
   }
+
+  /**
+   * Branche SetupIntent (enregistrement d'un moyen sans facturation).
+   *
+   * 1. Upsert du moyen dans `externalRefs.savedMethods[]` (dedup par token / last4 /
+   *    maskedPhone, même logique que le checkout classique).
+   * 2. Refund du microcharge via l'orchestrator (les 100 XAF/NGN reviennent au
+   *    tenant). Si le refund échoue, on log mais on ne rollback pas le moyen —
+   *    mieux vaut un moyen enregistré + 100 XAF à réconcilier manuellement qu'un
+   *    tenant qui perd sa tokenisation.
+   * 3. La subscription reste dans son statut courant (ACTIVE/TRIAL/PAST_DUE) —
+   *    on ne bascule PAS, on ne prolonge PAS.
+   */
+  private async handleSetupIntentSuccess(
+    sub: { id: string; tenantId: string; externalRefs: Prisma.JsonValue },
+    payload: {
+      intentId:   string;
+      tokenization?: {
+        customerRef?: string; methodToken?: string;
+        methodLast4?: string; methodBrand?: string;
+        maskedPhone?: string;
+      };
+    },
+  ) {
+    const tk = payload.tokenization;
+    if (!tk || (!tk.methodToken && !tk.methodLast4 && !tk.maskedPhone)) {
+      this.logger.warn(
+        `[setup-intent] intent=${payload.intentId} sans tokenisation — moyen non enregistré`,
+      );
+      // On refund quand même : le tenant a payé pour rien
+      await this.refundSetupIntent(sub.tenantId, payload.intentId);
+      return;
+    }
+
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where:  { id: payload.intentId },
+      select: { method: true },
+    });
+    const lastAttempt = await this.prisma.paymentAttempt.findFirst({
+      where:   { intentId: payload.intentId, status: 'SUCCESSFUL' },
+      orderBy: { createdAt: 'desc' },
+      select:  { providerKey: true },
+    });
+
+    const prevRefs = (sub.externalRefs ?? {}) as Record<string, unknown>;
+    const prevList = Array.isArray((prevRefs as any).savedMethods)
+      ? ((prevRefs as any).savedMethods as SavedMethodEntry[])
+      : [];
+    const nextList = upsertSavedMethod(prevList, {
+      id:          `pm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      method:      intent?.method ?? 'CARD',
+      provider:    lastAttempt?.providerKey ?? null,
+      brand:       tk.methodBrand ?? null,
+      last4:       tk.methodLast4 ?? null,
+      maskedPhone: tk.maskedPhone ?? null,
+      tokenRef:    tk.methodToken ?? null,
+      customerRef: tk.customerRef ?? null,
+      isDefault:   true,
+      lastUsedAt:  null,  // pas encore utilisé pour une vraie charge
+      createdAt:   new Date().toISOString(),
+    });
+
+    // On met à jour uniquement savedMethods + customerRef/methodToken (utiles
+    // pour auto-renew futur). PAS touche au statut / currentPeriodEnd.
+    await this.prisma.platformSubscription.update({
+      where: { id: sub.id },
+      data:  {
+        externalRefs: {
+          ...prevRefs,
+          customerRef: tk.customerRef ?? (prevRefs as any).customerRef,
+          methodToken: tk.methodToken ?? (prevRefs as any).methodToken,
+          methodLast4: tk.methodLast4 ?? (prevRefs as any).methodLast4,
+          methodBrand: tk.methodBrand ?? (prevRefs as any).methodBrand,
+          savedMethods: nextList,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    this.logger.log(
+      `[setup-intent] tenant=${sub.tenantId} sub=${sub.id} moyen enregistré (${tk.methodBrand ?? tk.maskedPhone ?? 'unknown'})`,
+    );
+
+    await this.refundSetupIntent(sub.tenantId, payload.intentId);
+  }
+
+  /**
+   * Refund automatique du microcharge tokenisant. N'escalade pas en cas d'échec —
+   * le moyen est déjà enregistré, un refund manuel reste possible côté support.
+   */
+  private async refundSetupIntent(tenantId: string, intentId: string) {
+    try {
+      const result = await this.orchestrator.refund(intentId, {
+        reason: 'SETUP_INTENT_AUTO_REFUND',
+      });
+      this.logger.log(
+        `[setup-intent] refund OK tenant=${tenantId} intent=${intentId} amount=${result.refundedAmount} status=${result.status}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `[setup-intent] refund FAILED tenant=${tenantId} intent=${intentId}: ${(err as Error).message} — à réconcilier manuellement`,
+      );
+    }
+  }
 }
 
 // ─── Helpers locaux ──────────────────────────────────────────────────────────
+
+export interface SavedMethodEntry {
+  id:          string;
+  method:      string;   // CARD | MOBILE_MONEY | BANK_TRANSFER
+  provider:    string | null;
+  brand:       string | null;
+  last4:       string | null;
+  maskedPhone: string | null;
+  tokenRef:    string | null;
+  customerRef: string | null;
+  isDefault:   boolean;
+  lastUsedAt:  string | null;
+  createdAt:   string;
+}
+
+/**
+ * Upsert idempotent : si une méthode équivalente existe déjà (même tokenRef, ou
+ * (method,last4), ou (method,maskedPhone)), on la met à jour et on la promeut
+ * default. Sinon on l'ajoute. Max 5 méthodes (on drop la plus ancienne).
+ */
+function upsertSavedMethod(list: SavedMethodEntry[], incoming: SavedMethodEntry): SavedMethodEntry[] {
+  const same = (m: SavedMethodEntry) =>
+    (incoming.tokenRef    && m.tokenRef    === incoming.tokenRef) ||
+    (incoming.last4       && m.method === incoming.method && m.last4       === incoming.last4) ||
+    (incoming.maskedPhone && m.method === incoming.method && m.maskedPhone === incoming.maskedPhone);
+
+  const withoutSame = list.filter(m => !same(m));
+  const merged      = [{ ...incoming }, ...withoutSame.map(m => ({ ...m, isDefault: false }))];
+  return merged.slice(0, 5);
+}
 
 function addBillingCycle(from: Date, cycle: string): Date {
   const next = new Date(from);
