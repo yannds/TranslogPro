@@ -143,6 +143,25 @@ export class CashierController {
   }
 
   /**
+   * Vérifie a posteriori une preuve de paiement saisie manuellement contre
+   * le provider correspondant (MoMo, carte, etc.). Met à jour proofVerifiedStatus.
+   * Permission scope agency — même scope que la gestion d'écart.
+   */
+  @Patch('transactions/:txId/verify-proof')
+  @RequirePermission(Permission.CASHIER_CLOSE_AGENCY)
+  verifyProof(
+    @TenantId() tenantId: string,
+    @Param('txId') txId: string,
+    @Body() body: { providerKey: string },
+    @CurrentUser() actor: CurrentUserPayload,
+    @Req() req: Request,
+  ) {
+    return this.cashierService.verifyTransactionProof(
+      tenantId, txId, body.providerKey, actor, req.ip,
+    );
+  }
+
+  /**
    * Résoudre un écart de caisse (DISCREPANCY → CLOSED) avec justification
    * obligatoire. Workflow blueprint-driven (action `resolve`, seed iam.seed.ts).
    * Scope agency : seules les caisses de l'agence du superviseur.

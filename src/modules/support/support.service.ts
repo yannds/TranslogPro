@@ -150,11 +150,22 @@ export class SupportService {
     });
 
     // Si le ticket attendait le client, il revient en IN_PROGRESS.
+    // Passage obligatoire par WorkflowEngine (ADR-15) — action `resume` du
+    // blueprint SupportTicket. Audit + idempotency + guards préservés.
     if (ticket.status === 'WAITING_CUSTOMER') {
-      await this.prisma.supportTicket.update({
-        where: { id: ticketId },
-        data:  { status: 'IN_PROGRESS' },
-      });
+      await this.workflow.transition(
+        ticket as Parameters<typeof this.workflow.transition>[0],
+        { action: 'resume', actor: { id: actor.id, tenantId: actor.tenantId, roleId: '' } as CurrentUserPayload },
+        {
+          aggregateType: 'SupportTicket',
+          persist: async (entity, state, p) => {
+            return p.supportTicket.update({
+              where: { id: entity.id },
+              data:  { status: state, version: { increment: 1 } },
+            }) as Promise<typeof entity>;
+          },
+        },
+      );
     }
     return msg;
   }
@@ -289,15 +300,12 @@ export class SupportService {
     });
 
     // Premier response externe → stamp firstResponseAt + transition via engine.
-    // La cascade OPEN→IN_PROGRESS et IN_PROGRESS→WAITING_CUSTOMER passe désormais
-    // par le blueprint SupportTicket (actions `start` / `await`) — audit homogène.
-    if (!msg.isInternal && !ticket.firstResponseAt) {
-      await this.prisma.supportTicket.update({
-        where: { id: ticketId },
-        data:  { firstResponseAt: new Date() },
-      });
-    }
-    if (!msg.isInternal && (ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS')) {
+    // firstResponseAt est désormais inclus ATOMIQUEMENT dans le persist callback
+    // de la transition pour éviter la race "firstResponseAt set mais transition
+    // échouée" (problème identifié dans l'audit workflow).
+    const stampFirstResponse = !msg.isInternal && !ticket.firstResponseAt;
+    const shouldTransition   = !msg.isInternal && (ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS');
+    if (shouldTransition) {
       const action = ticket.status === 'OPEN' ? 'start' : 'await';
       await this.workflow.transition(
         ticket as Parameters<typeof this.workflow.transition>[0],
@@ -305,13 +313,23 @@ export class SupportService {
         {
           aggregateType: 'SupportTicket',
           persist: async (entity, state, p) => {
+            const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+            if (stampFirstResponse) data.firstResponseAt = new Date();
             return p.supportTicket.update({
               where: { id: entity.id },
-              data:  { status: state, version: { increment: 1 } },
+              data,
             }) as Promise<typeof entity>;
           },
         },
       );
+    } else if (stampFirstResponse) {
+      // Pas de transition à faire mais firstResponseAt encore null → update simple.
+      // (Ce path est rare : ticket déjà en WAITING_CUSTOMER/RESOLVED avec 1re réponse
+      // tardive, sans transition de status à déclencher.)
+      await this.prisma.supportTicket.update({
+        where: { id: ticketId },
+        data:  { firstResponseAt: new Date() },
+      });
     }
     return msg;
   }

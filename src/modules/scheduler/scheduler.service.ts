@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { DriverProfileService } from '../driver-profile/driver-profile.service';
 import { SeasonalityService } from '../analytics/seasonality.service';
+import { TicketingService } from '../ticketing/ticketing.service';
 
 /**
  * PRD §IV.11 — Module M : Scheduler & Récurrence.
@@ -21,25 +22,25 @@ export class SchedulerService {
     private readonly prisma:        PrismaService,
     private readonly driverProfile: DriverProfileService,
     private readonly seasonality:   SeasonalityService,
+    private readonly ticketing:     TicketingService,
   ) {}
 
   /**
    * Expire les tickets PENDING_PAYMENT dont le timeout est dépassé.
    * PRD §III.7 — Ticket.EXPIRE (déclenché par scheduler, pas par un humain).
+   *
+   * Délègue à `TicketingService.expireStaleTickets()` qui passe chaque
+   * transition par WorkflowEngine (audit + idempotency + guards + events
+   * Outbox). ADR-15 compliant — plus de bulk `updateMany` qui bypassait
+   * le moteur.
+   *
    * Tourne toutes les minutes.
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async expireStaleTickets(): Promise<void> {
-    const expired = await this.prisma.ticket.updateMany({
-      where: {
-        status:    'PENDING_PAYMENT',
-        expiresAt: { lt: new Date() },
-      },
-      data: { status: 'EXPIRED' },
-    });
-
-    if (expired.count > 0) {
-      this.logger.log(`Tickets expirés : ${expired.count}`);
+    const count = await this.ticketing.expireStaleTickets();
+    if (count > 0) {
+      this.logger.log(`Tickets expirés via WorkflowEngine : ${count}`);
     }
   }
 

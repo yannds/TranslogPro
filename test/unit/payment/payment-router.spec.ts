@@ -77,6 +77,9 @@ describe('PaymentRouter.resolve', () => {
           allowedCurrencies:       ['XAF'],
         }),
       },
+      platformSubscription: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
     };
 
     registry = {
@@ -202,18 +205,44 @@ describe('PaymentRouter.resolve', () => {
     });
   });
 
-  it('self-heal NE déclenche PAS pour une devise ≠ tenant.currency', async () => {
-    // Sécurité : on heal uniquement la devise du tenant, pas une devise arbitraire
-    // — sinon allowedCurrencies perd son rôle défensif.
+  it('self-heal NE déclenche PAS pour une devise ≠ tenant.currency ≠ plan.currency', async () => {
+    // Sécurité : on heal uniquement les devises "légitimes de plein droit"
+    // (tenant.currency OU plan.currency) — sinon allowedCurrencies perd son
+    // rôle défensif contre un mischarge.
     prisma.tenant.findUnique.mockResolvedValueOnce({ country: 'CG', currency: 'XAF' });
     prisma.tenantPaymentConfig.findUnique.mockResolvedValueOnce({
       defaultProviderByMethod: {}, fallbackChainByMethod: {},
       minAmountByMethod: {}, maxAmountByMethod: {}, allowedCurrencies: ['XAF'],
     });
+    prisma.platformSubscription.findUnique.mockResolvedValueOnce({ plan: { currency: 'XAF' } });
     prisma.tenantPaymentConfig.update = jest.fn();
 
     await expect(router.resolve({ tenantId: 'T1', method: 'CARD', currency: 'USD' }))
       .rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.tenantPaymentConfig.update).not.toHaveBeenCalled();
+  });
+
+  it('self-heal : ajoute plan.currency à allowedCurrencies (plan USD sur tenant XAF)', async () => {
+    // Scénario : plateforme vend ses plans en USD, tenant opère en XAF.
+    // Le checkout abonnement pousse USD (plan.currency gagne) — c'est légitime.
+    prisma.tenant.findUnique.mockResolvedValueOnce({ country: 'CG', currency: 'XAF' });
+    prisma.tenantPaymentConfig.findUnique.mockResolvedValueOnce({
+      defaultProviderByMethod: {}, fallbackChainByMethod: {},
+      minAmountByMethod: {}, maxAmountByMethod: {}, allowedCurrencies: ['XAF'],
+    });
+    prisma.platformSubscription.findUnique.mockResolvedValueOnce({ plan: { currency: 'USD' } });
+    prisma.tenantPaymentConfig.update = jest.fn().mockResolvedValue({});
+    flw.supports = () => true;
+    registry.getEffectiveState.mockResolvedValue({
+      mode: 'LIVE', vaultPath: 'x', providerKey: 'flutterwave_agg',
+      displayName: '', scopedToTenant: false, meta: flw.meta,
+    });
+
+    const res = await router.resolve({ tenantId: 'T1', method: 'CARD', currency: 'USD' });
+    expect(res.currency).toBe('USD');
+    expect(prisma.tenantPaymentConfig.update).toHaveBeenCalledWith({
+      where: { tenantId: 'T1' },
+      data:  { allowedCurrencies: { push: 'USD' } },
+    });
   });
 });

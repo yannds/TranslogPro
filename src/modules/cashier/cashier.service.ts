@@ -16,6 +16,7 @@ import { OpenRegisterDto } from './dto/open-register.dto';
 import { RecordTransactionDto } from './dto/record-transaction.dto';
 import { CloseRegisterDto } from './dto/close-register.dto';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
+import { PaymentProviderRegistry } from '../../infrastructure/payment/payment-provider.registry';
 
 type RecordTxOptions = {
   tx?: Prisma.TransactionClient;
@@ -30,6 +31,7 @@ export class CashierService {
     private readonly prisma:   PrismaService,
     private readonly audit:    AuditService,
     private readonly workflow: WorkflowEngine,
+    private readonly providers: PaymentProviderRegistry,
   ) {}
 
   // ── Open ────────────────────────────────────────────────────────────────────
@@ -251,6 +253,79 @@ export class CashierService {
     });
 
     return result.entity;
+  }
+
+  // ── Vérification preuve paiement (Sprint 5) ───────────────────────────────
+
+  /**
+   * Vérifie a posteriori le code de preuve saisi par le caissier contre le
+   * provider correspondant. Met à jour Transaction.proofVerifiedStatus +
+   * proofVerifiedAt. Idempotent : si VERIFIED déjà, renvoie la transaction.
+   *
+   * Mapping statut :
+   *   provider.verify SUCCESSFUL + amount match + currency match → VERIFIED
+   *   provider.verify répondu mais non-SUCCESSFUL ou montant ≠              → FAILED
+   *   provider indisponible / exception                                     → PENDING
+   *
+   * Scope : le caller (controller) doit déjà valider que la caisse appartient
+   * au tenant/agence. Ici on vérifie juste la propriété tenantId.
+   */
+  async verifyTransactionProof(
+    tenantId: string,
+    txId: string,
+    providerKey: string,
+    actor: CurrentUserPayload,
+    ipAddress?: string,
+  ) {
+    const tx = await this.prisma.transaction.findFirst({
+      where: { id: txId, tenantId },
+    });
+    if (!tx) throw new NotFoundException(`Transaction ${txId} introuvable`);
+    if (!tx.proofCode) {
+      throw new BadRequestException('Transaction sans preuve — rien à vérifier');
+    }
+    // Idempotence : re-verifier une tx VERIFIED ne l'appelle pas au provider.
+    if (tx.proofVerifiedStatus === 'VERIFIED') return tx;
+
+    const provider = this.providers.get(providerKey);
+    if (!provider) {
+      throw new BadRequestException(`Provider "${providerKey}" inconnu`);
+    }
+
+    let status: 'VERIFIED' | 'FAILED' | 'PENDING' = 'PENDING';
+    try {
+      const result = await provider.verify(tx.proofCode);
+      if (result.status === 'SUCCESSFUL' && Math.abs(result.amount - tx.amount) < 0.01) {
+        status = 'VERIFIED';
+      } else {
+        status = 'FAILED';
+      }
+    } catch {
+      // Provider injoignable / timeout → laisser PENDING pour retry ultérieur.
+      status = 'PENDING';
+    }
+
+    const updated = await this.prisma.transaction.update({
+      where: { id: txId },
+      data:  {
+        proofVerifiedStatus: status,
+        proofVerifiedAt:     new Date(),
+      },
+    });
+
+    await this.audit.record({
+      tenantId,
+      userId:   actor.id,
+      action:   'data.cashier.proof.verify.agency',
+      resource: `CashRegisterTx:${txId}`,
+      oldValue: { proofVerifiedStatus: tx.proofVerifiedStatus },
+      newValue: { proofVerifiedStatus: status, providerKey },
+      ipAddress,
+      plane: 'data',
+      level: status === 'FAILED' ? 'warn' : 'info',
+    });
+
+    return updated;
   }
 
   // ── Lecture ─────────────────────────────────────────────────────────────────

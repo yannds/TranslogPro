@@ -191,15 +191,9 @@ export class RefundService {
   }
 
   async reject(tenantId: string, id: string, actor: CurrentUserPayload, notes?: string) {
-    const result = await this.transition(tenantId, id, RefundAction.REJECT, actor);
-    // Persist notes separately (not part of workflow state)
-    if (notes) {
-      await this.prisma.refund.update({
-        where: { id },
-        data: { rejectedBy: actor.id, rejectedAt: new Date(), notes },
-      });
-    }
-    return result;
+    // Notes transmises au persist pour écriture atomique avec rejectedBy/rejectedAt
+    // dans la même transaction que la transition — plus de window race post-engine.
+    return this.transition(tenantId, id, RefundAction.REJECT, actor, { notes });
   }
 
   private async autoApprove(tenantId: string, id: string) {
@@ -242,6 +236,7 @@ export class RefundService {
     refundId: string,
     action:   string,
     actor:    CurrentUserPayload,
+    extras?:  { notes?: string },
   ) {
     const refund = await this.findOne(tenantId, refundId);
 
@@ -265,6 +260,7 @@ export class RefundService {
         } else if (action === RefundAction.REJECT) {
           data.rejectedBy = actor.id;
           data.rejectedAt = new Date();
+          if (extras?.notes !== undefined) data.notes = extras.notes;
         }
 
         return p.refund.update({

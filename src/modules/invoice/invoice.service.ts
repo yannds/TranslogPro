@@ -79,18 +79,13 @@ export class InvoiceService {
     const invoice = await this.findOne(tenantId, id);
 
     const { status: targetStatus, ...otherFields } = dto;
+    const hasOtherFields   = Object.keys(otherFields).length > 0;
+    const hasTransition    = targetStatus && targetStatus !== invoice.status;
 
-    // 1) Patch des champs non-status (si présents) — hors workflow.
-    if (Object.keys(otherFields).length > 0) {
-      const result = await this.prisma.invoice.updateMany({
-        where: { id, tenantId },
-        data:  otherFields as Record<string, unknown>,
-      });
-      if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
-    }
-
-    // 2) Transition d'état si demandée et différente de l'état courant.
-    if (targetStatus && targetStatus !== invoice.status) {
+    // Cas 1 : transition demandée → champs non-status fusionnés ATOMIQUEMENT
+    // dans le persist callback. Si la transition échoue (permission, guard),
+    // les champs ne sont pas écrits non plus → tout ou rien.
+    if (hasTransition) {
       const action = this.resolveInvoiceAction(invoice.status, targetStatus);
       if (!action) {
         throw new BadRequestException(
@@ -103,7 +98,11 @@ export class InvoiceService {
         {
           aggregateType: 'Invoice',
           persist: async (entity, state, p) => {
-            const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+            const data: Record<string, unknown> = {
+              ...(otherFields as Record<string, unknown>),
+              status:  state,
+              version: { increment: 1 },
+            };
             if (state === 'ISSUED')    data.issuedAt = new Date();
             if (state === 'PAID')      data.paidAt   = new Date();
             if (state === 'CANCELLED') data.cancelledAt = new Date();
@@ -111,6 +110,16 @@ export class InvoiceService {
           },
         },
       );
+      return this.findOne(tenantId, id);
+    }
+
+    // Cas 2 : pas de transition → update simple des champs non-status.
+    if (hasOtherFields) {
+      const result = await this.prisma.invoice.updateMany({
+        where: { id, tenantId },
+        data:  otherFields as Record<string, unknown>,
+      });
+      if (result.count === 0) throw new NotFoundException(`Facture ${id} introuvable`);
     }
 
     return this.findOne(tenantId, id);

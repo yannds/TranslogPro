@@ -22,6 +22,7 @@ import { cn } from '../../lib/utils';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { useTenantConfig } from '../../providers/TenantConfigProvider';
+import { getPhonePlaceholder } from '../../lib/config/phone.config';
 
 type Method = 'CARD' | 'MOBILE_MONEY' | 'BANK_TRANSFER';
 
@@ -181,7 +182,7 @@ export function AddPaymentMethodDialog({
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="+242 06 123 45 67"
+              placeholder={getPhonePlaceholder(operational.country)}
               value={phone}
               onChange={e => setPhone(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"

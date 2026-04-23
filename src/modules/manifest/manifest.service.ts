@@ -175,19 +175,16 @@ export class ManifestService {
       );
     }
 
-    // Transition SUBMITTED → SIGNED
-    const result = await this.transition(manifest, 'sign', actor);
+    // Transition SUBMITTED → SIGNED — signedAt/signedById/signatureSvg inclus
+    // ATOMIQUEMENT dans le persist callback. Plus de race "SIGNED sans signedAt".
+    const result = await this.transition(manifest, 'sign', actor, {
+      signedAt:     new Date(),
+      signedById:   actor.id,
+      signatureSvg: safeSvg,
+    });
     manifest = await this.prisma.manifest.findFirstOrThrow({ where: { id: result.entity.id } });
 
-    // Post-transition : signer fields + PDF figé
-    manifest = await this.prisma.manifest.update({
-      where: { id: manifest.id },
-      data:  {
-        signedAt:     new Date(),
-        signedById:   actor.id,
-        signatureSvg: safeSvg,
-      },
-    });
+    // PDF figé — tolérant à l'échec (self-healing possible au prochain getById)
     manifest = await this.tryPrintAndAttachPdf(manifest, actor);
 
     return this.toDto(manifest);
@@ -302,6 +299,7 @@ export class ManifestService {
     manifest: { id: string; status: string; tenantId: string; version: number },
     action:   string,
     actor:    CurrentUserPayload,
+    extras?:  { signedAt?: Date; signedById?: string; signatureSvg?: string | null },
   ) {
     return this.workflow.transition(manifest as Parameters<typeof this.workflow.transition>[0], {
       action,
@@ -309,9 +307,17 @@ export class ManifestService {
     }, {
       aggregateType: 'Manifest',
       persist: async (entity, state, prisma) => {
+        // Champs de signature inclus atomiquement avec la transition :
+        // évite la fenêtre de race "status=SIGNED mais signedAt=null" qui
+        // existait quand un update séparé suivait la transition.
+        const data: Record<string, unknown> = { status: state, version: { increment: 1 } };
+        if (extras?.signedAt     !== undefined) data.signedAt     = extras.signedAt;
+        if (extras?.signedById   !== undefined) data.signedById   = extras.signedById;
+        if (extras?.signatureSvg !== undefined) data.signatureSvg = extras.signatureSvg;
+
         const updated = await prisma.manifest.update({
           where: { id: entity.id },
-          data:  { status: state, version: { increment: 1 } },
+          data,
         });
         const event: DomainEvent = {
           id:            uuidv4(),

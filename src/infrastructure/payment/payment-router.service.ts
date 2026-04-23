@@ -76,25 +76,35 @@ export class PaymentRouter {
       },
     });
 
-    // Self-heal : la devise actuelle du tenant est sa source de vérité — si elle
-    // manque de la whitelist (ex. admin l'a changée via /admin/settings/company
-    // avant que la synchro updateCompanyInfo n'existe), on l'ajoute avant
-    // d'enforcer. On ne self-heal QUE pour tenant.currency — pas pour une devise
-    // arbitraire — pour préserver le rôle défensif de allowedCurrencies.
+    // Self-heal : une devise "légitime de plein droit" est ajoutée si manquante.
+    // Deux sources légitimes :
+    //   1. Tenant.currency = source de vérité choisie par l'admin tenant
+    //   2. PlatformSubscription.plan.currency = devise tarifaire du plan
+    //      plateforme actif (business fact imposé par la plateforme, ex. plans
+    //      en USD vendus à des tenants XAF).
+    // On ne self-heal PAS pour une devise arbitraire — cela défairait le rôle
+    // défensif de allowedCurrencies contre un mischarge.
     if (
       config &&
-      currency === tenant.currency &&
       config.allowedCurrencies.length > 0 &&
       !config.allowedCurrencies.includes(currency)
     ) {
-      await this.prisma.tenantPaymentConfig.update({
-        where: { tenantId: req.tenantId },
-        data:  { allowedCurrencies: { push: currency } },
-      });
-      config = { ...config, allowedCurrencies: [...config.allowedCurrencies, currency] };
-      this.log.log(
-        `[Router] self-heal : ${currency} ajoutée à allowedCurrencies du tenant ${req.tenantId} (devise tenant = source de vérité)`,
-      );
+      const isTenantCurrency = currency === tenant.currency;
+      const isPlanCurrency   = !isTenantCurrency
+        ? await this.isActivePlanCurrency(req.tenantId, currency)
+        : false;
+
+      if (isTenantCurrency || isPlanCurrency) {
+        await this.prisma.tenantPaymentConfig.update({
+          where: { tenantId: req.tenantId },
+          data:  { allowedCurrencies: { push: currency } },
+        });
+        config = { ...config, allowedCurrencies: [...config.allowedCurrencies, currency] };
+        this.log.log(
+          `[Router] self-heal : ${currency} ajoutée à allowedCurrencies du tenant ${req.tenantId} ` +
+          `(source : ${isTenantCurrency ? 'tenant.currency' : 'plan.currency'})`,
+        );
+      }
     }
 
     this.enforceLimits(config, req.method, req.amount);
@@ -174,6 +184,19 @@ export class PaymentRouter {
     if (max !== undefined && amount > max) {
       throw new BadRequestException(`Montant ${amount} > max ${max} pour ${method}`);
     }
+  }
+
+  /**
+   * True si `currency` correspond à la devise du plan plateforme actif du
+   * tenant. Utilisé pour étendre le self-heal aux plans tarifés dans une devise
+   * différente de Tenant.currency (ex. plan en USD vendu à un tenant XAF).
+   */
+  private async isActivePlanCurrency(tenantId: string, currency: string): Promise<boolean> {
+    const sub = await this.prisma.platformSubscription.findUnique({
+      where:  { tenantId },
+      select: { plan: { select: { currency: true } } },
+    });
+    return sub?.plan?.currency === currency;
   }
 
   private enforceCurrency(

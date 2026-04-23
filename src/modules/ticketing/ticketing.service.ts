@@ -1083,6 +1083,64 @@ export class TicketingService {
   }
 
   /**
+   * Expire les billets PENDING_PAYMENT dont la fenêtre `expiresAt` est passée.
+   * Traverse tous les tenants (appelé par scheduler global). Chaque transition
+   * passe par WorkflowEngine avec action=EXPIRE → audit + idempotency + guards
+   * (vs updateMany bulk qui bypassait l'engine, ADR-15 compliant).
+   *
+   * Idempotent : si le cron tourne 2 fois sur le même ticket, l'engine
+   * renvoie la transition existante via `findIdempotentTransition` (pas de
+   * double EXPIRE).
+   * @returns nombre de billets effectivement expirés cette passe
+   */
+  async expireStaleTickets(): Promise<number> {
+    const now = new Date();
+    const candidates = await this.prisma.ticket.findMany({
+      where: {
+        status:    'PENDING_PAYMENT',
+        expiresAt: { lt: now },
+      },
+      select: { id: true, tenantId: true, status: true, version: true, expiresAt: true },
+      take: 1000,
+    });
+    if (candidates.length === 0) return 0;
+
+    let expired = 0;
+    const SYSTEM_ACTOR: CurrentUserPayload = {
+      id: 'SYSTEM', tenantId: 'SYSTEM', roleId: 'SYSTEM',
+    } as CurrentUserPayload;
+
+    for (const ticket of candidates) {
+      try {
+        // Acteur système scopé au tenant du billet pour que le RLS middleware
+        // et PermissionGuard raisonnent dans le bon périmètre.
+        const scopedActor = { ...SYSTEM_ACTOR, tenantId: ticket.tenantId } as CurrentUserPayload;
+        await this.workflow.transition(ticket as any, {
+          action: TicketAction.EXPIRE,
+          actor:  scopedActor,
+          // Idempotency key = ticket id — une seule expiration possible par billet.
+          idempotencyKey: `ticket-expire:${ticket.id}`,
+        }, {
+          aggregateType: 'Ticket',
+          persist: async (entity, state, p) => {
+            return p.ticket.update({
+              where: { id: entity.id },
+              data:  {
+                status:  state,
+                version: { increment: 1 },
+              },
+            }) as Promise<typeof entity>;
+          },
+        });
+        expired++;
+      } catch (err) {
+        this.logger.warn(`Expire failed for ticket=${ticket.id}: ${(err as Error).message}`);
+      }
+    }
+    return expired;
+  }
+
+  /**
    * Forfait automatique des billets en NO_SHOW/LATE_ARRIVED/CONFIRMED dont le TTL
    * post-départ est dépassé. Appelé par le scheduler périodiquement.
    * Retourne le nombre de billets forfaitisés.

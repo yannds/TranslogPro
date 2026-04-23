@@ -119,11 +119,38 @@ function makeWorkflow(prisma: jest.Mocked<PrismaService>) {
   } as any;
 }
 
-function buildService(prisma?: jest.Mocked<PrismaService>, audit?: jest.Mocked<AuditService>) {
+function makeProviderRegistry(opts: {
+  verifyResult?: {
+    status:   'SUCCESSFUL' | 'FAILED' | 'PENDING';
+    amount:   number;
+  };
+  verifyThrows?: boolean;
+  missingProvider?: boolean;
+} = {}) {
+  const provider = {
+    verify: jest.fn().mockImplementation(async () => {
+      if (opts.verifyThrows) throw new Error('provider unavailable');
+      return opts.verifyResult ?? { status: 'SUCCESSFUL', amount: 15_000 };
+    }),
+  };
+  return {
+    get: jest.fn().mockImplementation(() => opts.missingProvider ? undefined : provider),
+  } as any;
+}
+
+function buildService(
+  prisma?: jest.Mocked<PrismaService>,
+  audit?: jest.Mocked<AuditService>,
+  providers?: any,
+) {
   const p = prisma ?? makePrisma();
   const a = audit ?? makeAudit();
   const w = makeWorkflow(p);
-  return { service: new CashierService(p, a, w), prisma: p, audit: a, workflow: w };
+  const r = providers ?? makeProviderRegistry();
+  return {
+    service: new CashierService(p, a, w, r),
+    prisma: p, audit: a, workflow: w, providers: r,
+  };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -251,6 +278,112 @@ describe('CashierService', () => {
         TENANT, 'absent',
         { resolutionNote: 'Justification valide suffisamment longue' },
         ACTOR as any, tenantScope,
+      )).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── verifyTransactionProof() — vérification post-saisie contre provider ──
+  describe('verifyTransactionProof()', () => {
+    const TX = {
+      id:            'tx-momo-1',
+      tenantId:      TENANT,
+      cashRegisterId: REGISTER.id,
+      amount:        15_000,
+      paymentMethod: 'MOBILE_MONEY',
+      proofCode:     'MP260524.OK',
+      proofType:     'MOMO_CODE',
+      proofVerifiedStatus: null,
+    };
+
+    function makePrismaForVerify(tx: any) {
+      const base = makePrisma();
+      (base.transaction as any).findFirst = jest.fn().mockResolvedValue(tx);
+      (base.transaction as any).update    = jest.fn().mockImplementation(({ data }: any) =>
+        Promise.resolve({ ...tx, ...data }),
+      );
+      return base;
+    }
+
+    it('VERIFIED quand provider répond SUCCESSFUL + amount match', async () => {
+      const prisma = makePrismaForVerify(TX);
+      const providers = makeProviderRegistry({
+        verifyResult: { status: 'SUCCESSFUL', amount: 15_000 },
+      });
+      const { service, audit } = buildService(prisma, undefined, providers);
+      const res = await service.verifyTransactionProof(
+        TENANT, TX.id, 'mtn-momo-cg', ACTOR as any,
+      );
+      expect((res as any).proofVerifiedStatus).toBe('VERIFIED');
+      expect(prisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ proofVerifiedStatus: 'VERIFIED' }),
+        }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'data.cashier.proof.verify.agency',
+        level:  'info',
+      }));
+    });
+
+    it('FAILED quand montant provider ≠ montant transaction', async () => {
+      const prisma = makePrismaForVerify(TX);
+      const providers = makeProviderRegistry({
+        verifyResult: { status: 'SUCCESSFUL', amount: 10_000 }, // ≠ 15 000
+      });
+      const { service, audit } = buildService(prisma, undefined, providers);
+      await service.verifyTransactionProof(TENANT, TX.id, 'mtn-momo-cg', ACTOR as any);
+      expect(prisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ proofVerifiedStatus: 'FAILED' }),
+        }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+    });
+
+    it('PENDING quand provider throw (injoignable) — retry plus tard', async () => {
+      const prisma = makePrismaForVerify(TX);
+      const providers = makeProviderRegistry({ verifyThrows: true });
+      const { service } = buildService(prisma, undefined, providers);
+      await service.verifyTransactionProof(TENANT, TX.id, 'mtn-momo-cg', ACTOR as any);
+      expect(prisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ proofVerifiedStatus: 'PENDING' }),
+        }),
+      );
+    });
+
+    it('idempotence — re-verifier VERIFIED ne rappelle pas le provider', async () => {
+      const verified = { ...TX, proofVerifiedStatus: 'VERIFIED' };
+      const prisma = makePrismaForVerify(verified);
+      const providers = makeProviderRegistry();
+      const { service } = buildService(prisma, undefined, providers);
+      await service.verifyTransactionProof(TENANT, TX.id, 'mtn-momo-cg', ACTOR as any);
+      expect(providers.get).not.toHaveBeenCalled();
+      expect(prisma.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it('BadRequest si transaction sans proofCode', async () => {
+      const prisma = makePrismaForVerify({ ...TX, proofCode: null });
+      const { service } = buildService(prisma);
+      await expect(service.verifyTransactionProof(
+        TENANT, TX.id, 'mtn-momo-cg', ACTOR as any,
+      )).rejects.toThrow(BadRequestException);
+    });
+
+    it('BadRequest si providerKey inconnu', async () => {
+      const prisma = makePrismaForVerify(TX);
+      const providers = makeProviderRegistry({ missingProvider: true });
+      const { service } = buildService(prisma, undefined, providers);
+      await expect(service.verifyTransactionProof(
+        TENANT, TX.id, 'inexistant', ACTOR as any,
+      )).rejects.toThrow(BadRequestException);
+    });
+
+    it('NotFound si transaction absente (tenant isolation)', async () => {
+      const prisma = makePrismaForVerify(null);
+      const { service } = buildService(prisma);
+      await expect(service.verifyTransactionProof(
+        TENANT, 'ghost', 'mtn-momo-cg', ACTOR as any,
       )).rejects.toThrow(NotFoundException);
     });
   });

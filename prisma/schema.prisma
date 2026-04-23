@@ -1785,6 +1785,13 @@ model Transaction {
   // QR_PAYLOAD | OTHER. Indépendant d'externalRef (ID provider webhook).
   proofCode      String?
   proofType      String?
+  // Vérification a posteriori (Sprint 5) — lookup provider par proofCode.
+  // VERIFIED : montant+currency matchent, SUCCESSFUL côté provider.
+  // FAILED   : provider répond mais status≠SUCCESSFUL ou montant diffère.
+  // PENDING  : provider indisponible ou statut non final — à retenter.
+  // null     : jamais tenté (manuel, CASH, ou fonction pas activée).
+  proofVerifiedStatus String?
+  proofVerifiedAt     DateTime?
   externalRef    String? // Référence Flutterwave/Paystack (idempotent)
   metadata       Json     @default("{}")
   createdAt      DateTime @default(now())
