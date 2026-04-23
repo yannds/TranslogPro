@@ -3283,6 +3283,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "my_subscription": "Mon abonnement TransLog Pro",
     "pricing_grid": "Grille tarifaire",
     "pricing_simulator": "Simulateur de prix",
+    "toll_points": "Péages & points de contrôle",
     "yield_management": "Yield Management",
     "promotions": "Promotions",
     "invoicing": "Facturation",

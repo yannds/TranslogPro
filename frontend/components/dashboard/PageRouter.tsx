@@ -65,6 +65,8 @@ const LazyPeakPeriods    = lazy(() => import('../pages/PageTenantPeakPeriods').t
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPricingSimulator = lazy(() => import('../pages/PagePricingSimulator').then(m => ({ default: m.PagePricingSimulator })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTollPoints     = lazy(() => import('../pages/PageTollPoints').then(m => ({ default: m.PageTollPoints })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyQuotaSettings = lazy(() => import('../pages/PageQuotaSettings').then(m => ({ default: m.PageQuotaSettings })));
@@ -296,6 +298,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'pricing-yield':       return <LazyProfitability />;
     case 'pricing-promo':       return <LazyPromotions />;
     case 'pricing-simulator':   return <LazyPricingSimulator />;
+    case 'pricing-toll-points': return <LazyTollPoints />;
     case 'invoices':            return <LazyInvoices />;
 
     // ── Analytique & IA ────────────────────────────────────────────────────

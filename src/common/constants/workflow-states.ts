@@ -241,6 +241,7 @@ export type VoucherState = typeof VoucherState[keyof typeof VoucherState];
 export const VoucherAction = {
   ISSUE:    'ISSUE',     // → ISSUED (création)
   REDEEM:   'REDEEM',    // ISSUED → REDEEMED (utilisation)
+  RESTORE:  'RESTORE',   // REDEEMED → ISSUED (rollback si ticket linked annulé)
   EXPIRE:   'EXPIRE',    // ISSUED → EXPIRED (scheduler)
   CANCEL:   'CANCEL',    // ISSUED → CANCELLED (admin)
 } as const;

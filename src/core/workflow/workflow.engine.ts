@@ -15,6 +15,7 @@ import { AuditService } from './audit.service';
 import { extractScope } from '../../common/constants/permissions';
 import { IWorkflowIO, PersistFn } from './io/workflow-io.interface';
 import { LiveWorkflowIO } from './io/live-workflow.io';
+import { SideEffectRegistry } from './side-effect.registry';
 
 export interface WorkflowTransitionConfig<E extends WorkflowEntity> {
   /** Type d'entité — doit correspondre à WorkflowConfig.entityType en DB */
@@ -47,6 +48,7 @@ export class WorkflowEngine {
   constructor(
     prisma: PrismaService,
     audit:  AuditService,
+    private readonly sideEffectRegistry: SideEffectRegistry,
   ) {
     // L'engine instancie son I/O par défaut (live). Les appels en mode simulation
     // passent un `ioOverride` à transition() — aucun changement de DI requis.
@@ -120,7 +122,7 @@ export class WorkflowEngine {
       );
     }
 
-    const { toState, requiredPerm } = wfConfig;
+    const { toState, requiredPerm, sideEffectNames } = wfConfig;
 
     // ── 2. Vérification de permission — DB-driven, zéro hardcode ─────────────
     // Note : le PermissionGuard a déjà vérifié la permission de la route HTTP.
@@ -223,12 +225,25 @@ export class WorkflowEngine {
         ipAddress,
       });
 
-      // ── 4f. Side-effects SYNCHRONES CRITIQUES uniquement ─────────────────
+      // ── 4f. Side-effects SYNCHRONES CRITIQUES ────────────────────────────
       // Règle : aucun appel HTTP/NATS/gRPC ici. Seules les modifications DB
       // (ex: mise à jour du seat_map) sont admises dans cette transaction.
       // Les notifications, webhooks → OutboxEvent (asynchrone, non-bloquant).
+      //
+      // Deux sources de side-effects — toutes deux exécutées atomiquement :
+      //   (a) IMPÉRATIF : `config.sideEffects` passé par le service caller
+      //                   (back-compat — zéro régression pour le code existant)
+      //   (b) DÉCLARATIF : noms dans WorkflowConfig.sideEffects (blueprint DB)
+      //                   résolus via SideEffectRegistry. Permet à l'admin d'ajouter
+      //                   des handlers via /admin/workflow-studio sans toucher au code.
       for (const se of config.sideEffects ?? []) {
         await txIO.runSideEffect(se, updated, input, ctx);
+      }
+      if (sideEffectNames.length > 0) {
+        const declaratives = this.sideEffectRegistry.resolve(sideEffectNames);
+        for (const se of declaratives) {
+          await txIO.runSideEffect(se, updated, input, ctx);
+        }
       }
 
       this.logger.log(

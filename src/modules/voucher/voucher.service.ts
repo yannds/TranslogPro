@@ -24,6 +24,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
+import { CashierService } from '../cashier/cashier.service';
 import {
   VoucherState,
   VoucherAction,
@@ -62,6 +63,7 @@ export class VoucherService {
   constructor(
     private readonly prisma:   PrismaService,
     private readonly workflow: WorkflowEngine,
+    private readonly cashier:  CashierService,
   ) {}
 
   /**
@@ -145,7 +147,7 @@ export class VoucherService {
     // Vérif scope : si SAME_ROUTE, le ticket doit être sur la même route que source.
     const ticket = await this.prisma.ticket.findFirst({
       where:  { id: targetTicketId, tenantId },
-      select: { id: true, tripId: true, customerId: true, passengerPhone: true },
+      select: { id: true, tripId: true, customerId: true, passengerPhone: true, agencyId: true },
     });
     if (!ticket) throw new NotFoundException(`Ticket ${targetTicketId} introuvable`);
 
@@ -172,13 +174,25 @@ export class VoucherService {
       }
     }
 
+    // Pré-résolution caisse VIRTUELLE de l'agence du ticket.
+    // Si le ticket n'a pas d'agencyId (ticket de portail public), on tombe
+    // sur la première agence du tenant — la caisse virtuelle existe toujours.
+    let agencyId = ticket.agencyId ?? null;
+    if (!agencyId) {
+      const anyAgency = await this.prisma.agency.findFirst({
+        where:  { tenantId },
+        select: { id: true },
+      });
+      agencyId = anyAgency?.id ?? null;
+    }
+
     await this.workflow.transition(
       voucher as unknown as Parameters<WorkflowEngine['transition']>[0],
       { action: VoucherAction.REDEEM, actor },
       {
         aggregateType: 'Voucher',
         persist: async (entity, state, p) => {
-          return p.voucher.update({
+          const updated = await p.voucher.update({
             where: { id: entity.id },
             data: {
               status:              state,
@@ -187,7 +201,37 @@ export class VoucherService {
               redeemedById:        actor.id,
               version:             { increment: 1 },
             },
-          }) as Promise<typeof entity>;
+          });
+
+          // Side-effect caisse atomique — Transaction{type:VOUCHER, amount:-voucher.amount}
+          // sur la caisse VIRTUELLE de l'agence. ADR-15 : la trace comptable
+          // du voucher est inscrite dans la même TX que le marquage REDEEMED.
+          // Échec → rollback entier (voucher reste ISSUED).
+          if (agencyId) {
+            const vreg = await this.cashier.getOrCreateVirtualRegister(tenantId, agencyId, p as any);
+            await this.cashier.recordTransaction(
+              tenantId,
+              vreg.id,
+              {
+                type:          'VOUCHER',
+                amount:        -Math.abs((entity as any).amount),
+                paymentMethod: 'VOUCHER',
+                externalRef:   `voucher:${entity.id}:ticket:${targetTicketId}`,
+                referenceType: 'TICKET',
+                referenceId:   targetTicketId,
+                note:          `Redeem voucher ${(entity as any).code} sur ticket ${targetTicketId}`,
+              },
+              actor,
+              undefined,
+              { tx: p as any, skipScopeCheck: true, actorId: actor.id },
+            );
+          } else {
+            this.logger.warn(
+              `Voucher ${(entity as any).code} redeemed sans caisse virtuelle (tenant ${tenantId} sans agence) — trace comptable manquante`,
+            );
+          }
+
+          return updated as typeof entity;
         },
       },
     );

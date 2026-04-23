@@ -1,6 +1,11 @@
 import { IsString, IsNumber, IsOptional, IsIn, Min } from 'class-validator';
 
-export const CASHIER_TX_TYPES = ['TICKET', 'PARCEL', 'LUGGAGE_FEE', 'REFUND', 'CASH_IN', 'CASH_OUT'] as const;
+export const CASHIER_TX_TYPES = [
+  'TICKET', 'PARCEL', 'LUGGAGE_FEE',
+  'REFUND',                 // reversal d'un ticket/colis (amount ≤ 0)
+  'VOUCHER',                // application d'un voucher sur un ticket (amount ≤ 0)
+  'CASH_IN', 'CASH_OUT',
+] as const;
 export type CashierTxType = (typeof CASHIER_TX_TYPES)[number];
 
 export const CASHIER_PAYMENT_METHODS = [

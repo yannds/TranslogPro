@@ -51,6 +51,7 @@ import { IncidentModule } from './modules/incident/incident.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { AgencyModule } from './modules/agency/agency.module';
 import { RouteModule } from './modules/route/route.module';
+import { TollPointModule } from './modules/toll-point/toll-point.module';
 import { StationModule } from './modules/station/station.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { TravelerModule } from './modules/traveler/traveler.module';
@@ -175,6 +176,7 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     StaffModule,
     AgencyModule,
     RouteModule,
+    TollPointModule,
     StationModule,
     GeoModule,
     TravelerModule,

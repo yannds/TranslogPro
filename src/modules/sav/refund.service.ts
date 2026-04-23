@@ -10,6 +10,7 @@ import { P_REFUND_APPROVE_TENANT } from '../../common/constants/permissions';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CancellationPolicyService, RefundCalculation } from './cancellation-policy.service';
+import { CashierService } from '../cashier/cashier.service';
 import { v4 as uuidv4 } from 'uuid';
 
 /** Acteur synthétique pour les transitions système (auto-approve, bulk). */
@@ -28,6 +29,7 @@ export class RefundService {
     private readonly workflow:        WorkflowEngine,
     private readonly policyService:   CancellationPolicyService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
+    private readonly cashier:         CashierService,
   ) {}
 
   /* ── Queries ──────────────────────────────────────────────── */
@@ -240,6 +242,23 @@ export class RefundService {
   ) {
     const refund = await this.findOne(tenantId, refundId);
 
+    // Pré-résolution agencyId pour PROCESS → side-effect caisse (virtual).
+    // On cherche via ticket.agencyId, fallback première agence du tenant.
+    let agencyIdForCashier: string | null = null;
+    if (action === RefundAction.PROCESS) {
+      const ticket = await this.prisma.ticket.findFirst({
+        where:  { id: refund.ticketId, tenantId },
+        select: { agencyId: true },
+      });
+      agencyIdForCashier = ticket?.agencyId ?? null;
+      if (!agencyIdForCashier) {
+        const anyAgency = await this.prisma.agency.findFirst({
+          where: { tenantId }, select: { id: true },
+        });
+        agencyIdForCashier = anyAgency?.id ?? null;
+      }
+    }
+
     return this.workflow.transition(refund as any, {
       action,
       actor,
@@ -263,10 +282,36 @@ export class RefundService {
           if (extras?.notes !== undefined) data.notes = extras.notes;
         }
 
-        return p.refund.update({
+        const updated = await p.refund.update({
           where: { id: entity.id },
           data,
-        }) as Promise<typeof entity>;
+        });
+
+        // Side-effect caisse atomique sur PROCESS → Transaction{type:REFUND}
+        // avec amount négatif sur la caisse VIRTUELLE de l'agence.
+        // Garantit la traçabilité comptable dans la même TX que la transition
+        // (résolution du gap #1 de l'audit workflow).
+        if (action === RefundAction.PROCESS && agencyIdForCashier) {
+          const vreg = await this.cashier.getOrCreateVirtualRegister(tenantId, agencyIdForCashier, p as any);
+          await this.cashier.recordTransaction(
+            tenantId,
+            vreg.id,
+            {
+              type:          'REFUND',
+              amount:        -Math.abs(entity.amount),
+              paymentMethod: (entity.paymentMethod ?? 'CASH') as any,
+              externalRef:   `refund:${entity.id}`,
+              referenceType: 'TICKET',
+              referenceId:   entity.ticketId,
+              note:          `Refund ${entity.id} processed on ticket ${entity.ticketId}`,
+            },
+            actor,
+            undefined,
+            { tx: p as any, skipScopeCheck: true, actorId: actor.id },
+          );
+        }
+
+        return updated as typeof entity;
       },
     });
   }

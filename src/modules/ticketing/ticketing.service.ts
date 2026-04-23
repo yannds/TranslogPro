@@ -451,72 +451,73 @@ export class TicketingService {
   }
 
   async confirmBatch(tenantId: string, dto: ConfirmBatchDto, actor: CurrentUserPayload, idempotencyKey?: string) {
-    const results = [];
-    for (const ticketId of dto.ticketIds) {
-      const confirmed = await this.confirm(tenantId, ticketId, actor, idempotencyKey);
-      results.push(confirmed);
+    // ── Résolution registerId AVANT les transitions ─────────────────────
+    // - dto.cashRegisterId === null → portail / paiement en ligne → caisse VIRTUELLE
+    //   de l'agence (fallback première agence du tenant si ticket.agencyId null)
+    // - dto.cashRegisterId fourni  → physique (scope vérifié par cashier.recordTransaction)
+    // - sinon → caisse ouverte de l'acteur (staff au guichet)
+    const method = (dto.paymentMethod ?? 'CASH') as CashierPaymentMethod;
+    let registerId: string | undefined;
+    if (dto.cashRegisterId === null) {
+      // Paiement en ligne / portail — on écrit sur la virtuelle de l'agence
+      // du 1er ticket (sinon première agence du tenant).
+      const firstTicket = dto.ticketIds[0]
+        ? await this.prisma.ticket.findFirst({
+            where: { id: dto.ticketIds[0], tenantId },
+            select: { agencyId: true },
+          })
+        : null;
+      let agencyId = firstTicket?.agencyId ?? undefined;
+      if (!agencyId) {
+        const anyAgency = await this.prisma.agency.findFirst({
+          where:  { tenantId },
+          select: { id: true },
+        });
+        agencyId = anyAgency?.id;
+      }
+      if (agencyId) {
+        const vreg = await this.cashier.getOrCreateVirtualRegister(tenantId, agencyId);
+        registerId = vreg.id;
+      }
+    } else {
+      registerId = dto.cashRegisterId
+        ?? (await this.cashier.getMyOpenRegister(tenantId, actor.id))?.id;
     }
 
-    // ── Traçabilité caisse : une ligne par billet confirmé ─────────────────
-    // - Si dto.cashRegisterId === null → achat hors caisse (portail, paiement en ligne)
-    // - Si dto.cashRegisterId fourni  → vérifié côté service (scope own)
-    // - Sinon on retrouve la caisse ouverte de l'acteur (staff au guichet)
-    if (dto.cashRegisterId !== null) {
-      const registerId = dto.cashRegisterId
-        ?? (await this.cashier.getMyOpenRegister(tenantId, actor.id))?.id;
+    // ── Pré-calcul batch total + distribution du tendered (CASH) ──────────
+    // Calcule sur les prix courants en DB (avant confirm) pour que batchTotal
+    // soit passé au 1er ticket uniquement (changeAmount = tendered - batchTotal).
+    const tickets = await this.prisma.ticket.findMany({
+      where:  { id: { in: dto.ticketIds }, tenantId },
+      select: { id: true, pricePaid: true },
+    });
+    const batchTotal = tickets.reduce((sum, t) => sum + (t.pricePaid ?? 0), 0);
+    const tenderedBudgetInitial = method === 'CASH' ? dto.tenderedAmount : undefined;
 
-      if (registerId) {
-        const method = (dto.paymentMethod ?? 'CASH') as CashierPaymentMethod;
-        // tenderedAmount est un TOTAL batch → stocké uniquement sur la 1re
-        // Transaction avec batchTotal = Σ ticket.pricePaid. Le service calcule
-        // alors changeAmount = tendered - batchTotal (monnaie globale).
-        // Applicable uniquement en espèces.
-        const batchTotal = results.reduce((sum, r) => sum + (r.entity.pricePaid ?? 0), 0);
-        let tenderedBudget = method === 'CASH' ? dto.tenderedAmount : undefined;
-        for (const r of results) {
-          const ticket = r.entity;
-          try {
-            const ticketAmount = ticket.pricePaid ?? 0;
-            const isFirstWithTendered = tenderedBudget != null;
-            await this.cashier.recordTransaction(
-              tenantId,
-              registerId,
-              {
-                type:          'TICKET',
-                amount:        ticketAmount,
-                paymentMethod: method,
-                tenderedAmount: isFirstWithTendered ? tenderedBudget : undefined,
-                batchTotal:     isFirstWithTendered ? batchTotal : undefined,
-                // Preuve paiement hors-POS (MoMo/Card/…) propagée sur chaque
-                // tx du batch : un même code peut couvrir N tickets achetés
-                // ensemble (audit côté listing : toutes pointent le même code).
-                proofCode:     dto.proofCode,
-                proofType:     dto.proofType as any,
-                externalRef:   dto.externalRef
-                  ? `${dto.externalRef}:${ticket.id}`
-                  : `ticket:${ticket.id}`,
-                referenceType: 'TICKET',
-                referenceId:   ticket.id,
-              },
-              actor,
-              undefined,
-              { skipScopeCheck: false, actorId: actor.id },
-            );
-            if (isFirstWithTendered) {
-              tenderedBudget = undefined;
-            }
-          } catch (err) {
-            // N'invalide pas la confirmation ticket ; l'opérateur peut corriger la caisse.
-            this.logger.warn(
-              `Auto-record cashier TX failed ticket=${ticket.id} register=${registerId}: ${(err as Error).message}`,
-            );
-          }
-        }
+    // ── Confirm + side-effect caisse atomique per ticket ──────────────────
+    const results = [];
+    let tenderedBudget = tenderedBudgetInitial;
+    for (const ticketId of dto.ticketIds) {
+      const isFirstWithTendered = tenderedBudget != null;
+      const cashierCtx = registerId ? {
+        registerId,
+        paymentMethod:  method,
+        proofCode:      dto.proofCode,
+        proofType:      dto.proofType,
+        externalRef:    dto.externalRef ? `${dto.externalRef}:${ticketId}` : `ticket:${ticketId}`,
+        tenderedAmount: isFirstWithTendered ? tenderedBudget : undefined,
+        batchTotal:     isFirstWithTendered ? batchTotal : undefined,
+      } : undefined;
+      const confirmed = await this.confirm(tenantId, ticketId, actor, idempotencyKey, cashierCtx);
+      results.push(confirmed);
+      if (isFirstWithTendered) tenderedBudget = undefined;
+    }
 
-        // ── Reçu de caisse (Invoice PAID) — un par batch confirmé en caisse.
-        //   Idempotent via entityId=batchKey stable sur ticketIds triés.
-        //   Échec = log warn, ne bloque pas la vente déjà confirmée.
-        try {
+    // ── Reçu de caisse Invoice PAID (hors boucle — post-tous-confirmés) ──
+    //   Idempotent via entityId=batchKey stable sur ticketIds triés.
+    //   Échec = log warn, ne bloque pas la vente déjà confirmée.
+    if (registerId) {
+      try {
           const sortedIds = [...results.map((r) => r.entity.id)].sort();
           const batchKey  = `batch:${sortedIds.join(',')}`;
           const firstTicket = results[0]?.entity;
@@ -562,18 +563,40 @@ export class TicketingService {
             },
             actor,
           );
-        } catch (err) {
-          this.logger.warn(
-            `Auto-receipt generation failed for batch register=${registerId}: ${(err as Error).message}`,
-          );
-        }
+      } catch (err) {
+        this.logger.warn(
+          `Auto-receipt generation failed for batch register=${registerId}: ${(err as Error).message}`,
+        );
       }
     }
 
     return results;
   }
 
-  async confirm(tenantId: string, ticketId: string, actor: CurrentUserPayload, idempotencyKey?: string) {
+  /**
+   * Confirme un billet (PENDING_PAYMENT → CONFIRMED) et, si un contexte caisse
+   * est fourni, crée la `Transaction` caisse ATOMIQUEMENT dans la même DB
+   * transaction que la transition workflow.
+   *
+   * Side-effect caisse intégré au `persist` callback pour que le billet ne
+   * puisse jamais être CONFIRMED sans sa ligne Transaction correspondante
+   * (résolution du gap #5 identifié dans l'audit workflow).
+   */
+  async confirm(
+    tenantId:       string,
+    ticketId:       string,
+    actor:          CurrentUserPayload,
+    idempotencyKey?: string,
+    cashierContext?: {
+      registerId:     string;
+      paymentMethod:  CashierPaymentMethod;
+      proofCode?:     string;
+      proofType?:     string;
+      externalRef?:   string;
+      tenderedAmount?: number;
+      batchTotal?:    number;
+    },
+  ) {
     const ticket = await this.findOne(tenantId, ticketId);
     const expiresAt = ticket.expiresAt;
     if (expiresAt && new Date() > expiresAt) {
@@ -596,10 +619,37 @@ export class TicketingService {
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, prisma) => {
-        return prisma.ticket.update({
+        const updated = await prisma.ticket.update({
           where: { id: entity.id },
           data:  { status: state, qrCode: qrToken, version: { increment: 1 } },
-        }) as Promise<typeof entity>;
+        });
+
+        // Side-effect caisse atomique — créer Transaction dans la même TX.
+        // Si recordTransaction échoue (register non OPEN, doublon externalRef),
+        // la transition entière rollback → cohérence garantie.
+        if (cashierContext) {
+          await this.cashier.recordTransaction(
+            tenantId,
+            cashierContext.registerId,
+            {
+              type:           'TICKET',
+              amount:         entity.pricePaid ?? 0,
+              paymentMethod:  cashierContext.paymentMethod,
+              tenderedAmount: cashierContext.tenderedAmount,
+              batchTotal:     cashierContext.batchTotal,
+              proofCode:      cashierContext.proofCode,
+              proofType:      cashierContext.proofType as any,
+              externalRef:    cashierContext.externalRef ?? `ticket:${entity.id}`,
+              referenceType:  'TICKET',
+              referenceId:    entity.id,
+            },
+            actor,
+            undefined,
+            { tx: prisma as any, skipScopeCheck: true, actorId: actor.id },
+          );
+        }
+
+        return updated as typeof entity;
       },
     });
   }
@@ -635,6 +685,13 @@ export class TicketingService {
     const ticket = await this.findOne(tenantId, ticketId);
     const wasConfirmed = ticket.status === 'CONFIRMED' || ticket.status === 'CHECKED_IN';
 
+    // Recherche d'un voucher REDEEMED sur ce ticket — rollback atomique dans
+    // le même `persist` que la transition CANCEL (gap #8 audit workflow).
+    const linkedVoucher = await this.prisma.voucher.findFirst({
+      where:  { tenantId, redeemedOnTicketId: ticketId, status: 'REDEEMED' },
+      select: { id: true, status: true, version: true, tenantId: true, code: true },
+    });
+
     const updated = await this.workflow.transition(ticket as any, {
       action:  TicketAction.CANCEL,
       actor,
@@ -642,10 +699,39 @@ export class TicketingService {
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, prisma) => {
-        return prisma.ticket.update({
+        const result = await prisma.ticket.update({
           where: { id: entity.id },
           data:  { status: state, version: { increment: 1 } },
-        }) as Promise<typeof entity>;
+        });
+
+        // Rollback voucher REDEEMED → ISSUED dans la même TX. Si le rollback
+        // échoue (blueprint RESTORE absent, version conflict), la cancel ticket
+        // rollback → cohérence préservée.
+        if (linkedVoucher) {
+          await this.workflow.transition(linkedVoucher as any, {
+            action: 'RESTORE',
+            actor,
+          }, {
+            aggregateType: 'Voucher',
+            persist: async (vEntity, vState, vPrisma) => {
+              return vPrisma.voucher.update({
+                where: { id: vEntity.id },
+                data:  {
+                  status:             vState,
+                  redeemedOnTicketId: null,
+                  redeemedAt:         null,
+                  redeemedById:       null,
+                  version:            { increment: 1 },
+                },
+              }) as Promise<typeof vEntity>;
+            },
+          });
+          this.logger.log(
+            `Voucher ${linkedVoucher.code} restored (REDEEMED → ISSUED) after ticket ${ticketId} cancel`,
+          );
+        }
+
+        return result as typeof entity;
       },
     });
 

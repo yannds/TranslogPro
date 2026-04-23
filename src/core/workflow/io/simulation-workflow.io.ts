@@ -212,8 +212,9 @@ export class SimulationWorkflowIO implements IWorkflowIO {
     if (!edge) return null;
 
     return {
-      toState:      edge.target,
-      requiredPerm: edge.permission ?? '',
+      toState:         edge.target,
+      requiredPerm:    edge.permission ?? '',
+      sideEffectNames: Array.isArray(edge.sideEffects) ? (edge.sideEffects as string[]) : [],
     };
   }
 

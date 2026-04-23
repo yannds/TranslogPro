@@ -9,6 +9,7 @@ import { VoucherState, VoucherAction, VoucherUsageScope } from '../../../src/com
 describe('VoucherService', () => {
   let prismaMock:     any;
   let workflowMock:   any;
+  let cashierMock:    any;
   let service:        VoucherService;
 
   const tenantId = 'T1';
@@ -31,11 +32,18 @@ describe('VoucherService', () => {
       trip: {
         findFirst: jest.fn(),
       },
+      agency: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'ag-1' }),
+      },
     };
     workflowMock = {
       transition: jest.fn().mockImplementation((_entity, _input, cfg) => cfg.persist(_entity, 'REDEEMED', prismaMock)),
     };
-    service = new VoucherService(prismaMock, workflowMock);
+    cashierMock = {
+      getOrCreateVirtualRegister: jest.fn().mockResolvedValue({ id: 'vreg-1' }),
+      recordTransaction:          jest.fn().mockResolvedValue({ id: 'tx-1' }),
+    };
+    service = new VoucherService(prismaMock, workflowMock, cashierMock);
   });
 
   // ─── issue ─────────────────────────────────────────────────────────────────

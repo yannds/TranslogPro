@@ -109,7 +109,8 @@ describe('WorkflowEngine', () => {
   beforeEach(() => {
     prisma = makePrismaMock();
     audit  = makeAuditMock();
-    engine = new WorkflowEngine(prisma, audit);
+    const registry = new (require('../side-effect.registry').SideEffectRegistry)();
+    engine = new WorkflowEngine(prisma, audit, registry);
   });
 
   // ── 1. Happy path ──────────────────────────────────────────────────────────

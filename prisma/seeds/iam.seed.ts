@@ -1186,9 +1186,10 @@ export const DEFAULT_WORKFLOW_CONFIGS = [
   // Voucher — bon de réduction
   // ISSUE crée l'entité (pas de fromState cible — émission = création).
   // On modélise les transitions après émission.
-  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'REDEEM', toState: 'REDEEMED',  requiredPerm: 'data.voucher.redeem.agency' },
-  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'EXPIRE', toState: 'EXPIRED',   requiredPerm: 'data.voucher.redeem.agency' }, // scheduler (via perm technique)
-  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'CANCEL', toState: 'CANCELLED', requiredPerm: 'control.voucher.cancel.tenant' },
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'REDEEM',  toState: 'REDEEMED',  requiredPerm: 'data.voucher.redeem.agency' },
+  { entityType: 'Voucher', fromState: 'REDEEMED', action: 'RESTORE', toState: 'ISSUED',    requiredPerm: 'data.voucher.redeem.agency' }, // rollback si ticket lié annulé
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'EXPIRE',  toState: 'EXPIRED',   requiredPerm: 'data.voucher.redeem.agency' }, // scheduler (via perm technique)
+  { entityType: 'Voucher', fromState: 'ISSUED',   action: 'CANCEL',  toState: 'CANCELLED', requiredPerm: 'control.voucher.cancel.tenant' },
 
   // CompensationItem — snacks/repas
   { entityType: 'CompensationItem', fromState: 'OFFERED',   action: 'DELIVER', toState: 'DELIVERED', requiredPerm: 'data.compensation.issue.agency' },

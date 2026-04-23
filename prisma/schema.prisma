@@ -941,7 +941,14 @@ model Waypoint {
   order                Int
   distanceFromOriginKm Float        @default(0)
   // Coût supporté par le bus à ce point (péage, taxe, etc.) — utilisé dans sumSegmentCharges.
+  // Si `tollPointId` est renseigné, ce champ est un OVERRIDE ponctuel (valeur spécifique
+  // à cette route). Sinon on utilise TollPoint.tollCostXaf comme valeur par défaut.
   tollCostXaf          Float        @default(0)
+  // FK optionnelle vers le registre partagé des péages/points de contrôle du tenant.
+  // Permet de propager les modifications (nouveau tarif) vers toutes les routes concernées
+  // et de pré-placer automatiquement les péages lors de la création d'une route dans
+  // l'autre sens (même point géographique, direction BOTH ou ONE_WAY matching).
+  tollPointId          String?
   // Détail fin des coûts sur ce point (rétro-compat legacy, peut rester vide sur les nouveaux kinds).
   checkpointCosts      Json         @default("[]")
   isMandatoryStop      Boolean      @default(false) // ignoré pour les kinds non-STATION
@@ -949,11 +956,47 @@ model Waypoint {
   isAlertZone          Boolean      @default(false)
   alertDescription     String?
 
-  route   Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  station Station? @relation(fields: [stationId], references: [id])
+  route     Route      @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  station   Station?   @relation(fields: [stationId], references: [id])
+  tollPoint TollPoint? @relation(fields: [tollPointId], references: [id], onDelete: SetNull)
 
   @@unique([routeId, order])
+  @@index([tollPointId])
   @@map("waypoints")
+}
+
+// ── Registre partagé des péages / points de contrôle tenant-scope ────────────
+// Un même péage physique (ex: Lifoula) est saisi UNE FOIS et réutilisé sur
+// toutes les routes qui y passent. Éditer le tarif ici propage à toutes les
+// routes qui ne font pas d'override via Waypoint.tollCostXaf.
+//
+// Détection automatique : quand on crée une nouvelle route, on scanne les
+// TollPoints du tenant et on propose ceux qui tombent à moins de ~matchRadiusKm
+// de la polyline Google du trajet — dans le bon sens selon `direction`.
+model TollPoint {
+  id          String           @id @default(cuid())
+  tenantId    String
+  name        String
+  coordinates Json             // { lat: number, lng: number }
+  kind        WaypointKind     @default(PEAGE)
+  tollCostXaf Float            @default(0)
+  // Direction où le péage est perçu : BOTH = dans les deux sens, ONE_WAY = sens
+  // unique (utilisé pour le matching "inversion de route").
+  direction   TollDirection    @default(BOTH)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  waypoints Waypoint[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("toll_points")
+}
+
+enum TollDirection {
+  BOTH
+  ONE_WAY
 }
 
 // ── Matrice de prix par paire de stations sur une route ──────────────────────

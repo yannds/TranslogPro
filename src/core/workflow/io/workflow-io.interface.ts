@@ -27,6 +27,12 @@ export interface IdempotentTransitionSummary {
 export interface ResolvedWorkflowConfig {
   toState:      string;
   requiredPerm: string;
+  /**
+   * Noms de side-effects déclarés dans le blueprint (colonne `sideEffects: Json`).
+   * Résolus via `SideEffectRegistry.resolve()` par l'engine au runtime.
+   * Array vide si la config n'en déclare aucun.
+   */
+  sideEffectNames: string[];
 }
 
 /**

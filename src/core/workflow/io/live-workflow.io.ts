@@ -167,9 +167,25 @@ export class LiveWorkflowIO implements IWorkflowIO {
       where: { tenantId, entityType, fromState, action, isActive: true },
     });
     if (!wfConfig) return null;
+    // `sideEffects: Json` stocke soit un tableau de strings (noms de handlers),
+    // soit un tableau d'objets {name, params} (future extension). On tolère les
+    // deux formats. Format invalide → liste vide + warn (non bloquant).
+    const raw = (wfConfig as { sideEffects?: unknown }).sideEffects;
+    let sideEffectNames: string[] = [];
+    if (Array.isArray(raw)) {
+      sideEffectNames = raw
+        .map((item: unknown) =>
+          typeof item === 'string' ? item :
+          (item && typeof item === 'object' && typeof (item as { name?: unknown }).name === 'string')
+            ? (item as { name: string }).name
+            : null,
+        )
+        .filter((x): x is string => typeof x === 'string' && x.length > 0);
+    }
     return {
-      toState:      wfConfig.toState as string,
-      requiredPerm: wfConfig.requiredPerm as string,
+      toState:         wfConfig.toState as string,
+      requiredPerm:    wfConfig.requiredPerm as string,
+      sideEffectNames,
     };
   }
 

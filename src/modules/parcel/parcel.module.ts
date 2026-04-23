@@ -4,9 +4,10 @@ import { ParcelController } from './parcel.controller';
 import { ParcelTripListener } from './parcel-trip.listener';
 import { CrmModule } from '../crm/crm.module';
 import { NotificationModule } from '../notification/notification.module';
+import { WorkflowModule } from '../../core/workflow/workflow.module';
 
 @Module({
-  imports:     [CrmModule, NotificationModule],
+  imports:     [CrmModule, NotificationModule, WorkflowModule],
   controllers: [ParcelController],
   providers:   [ParcelService, ParcelTripListener],
   exports:     [ParcelService],

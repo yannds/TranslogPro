@@ -439,6 +439,7 @@ export const ADMIN_NAV: PortalNavConfig = {
           children: [
             { kind: 'leaf', id: 'pricing-grid',        label: 'nav.pricing_grid',     href: '/admin/pricing',               icon: 'Grid3x3',    anyOf: [P.TARIFF_MANAGE, P.TARIFF_READ, P.PRICING_MANAGE, P.PRICING_READ] },
             { kind: 'leaf', id: 'pricing-simulator',   label: 'nav.pricing_simulator', href: '/admin/pricing/simulator',    icon: 'Calculator', anyOf: [P.PROFITABILITY_READ_TENANT] },
+            { kind: 'leaf', id: 'pricing-toll-points', label: 'nav.toll_points',      href: '/admin/pricing/toll-points',  icon: 'Coins',      anyOf: [P.ROUTE_MANAGE] },
             { kind: 'leaf', id: 'pricing-yield',       label: 'nav.yield_management', href: '/admin/pricing/yield',         icon: 'TrendingUp', anyOf: [P.PRICING_YIELD], moduleKey: 'YIELD_ENGINE' },
             { kind: 'leaf', id: 'pricing-promo',       label: 'nav.promotions',       href: '/admin/pricing/promo',         icon: 'Percent',    anyOf: [P.PROMOTION_MANAGE, P.PROMOTION_READ] },
             { kind: 'leaf', id: 'tenant-fare-classes', label: 'nav.fare_classes',     href: '/admin/settings/fare-classes', icon: 'Tags',       anyOf: [P.FARE_CLASS_READ, P.FARE_CLASS_MANAGE] },

@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MapPin, ChevronUp, ChevronDown, Trash2, Plus, Save, Pencil, X,
   AlertTriangle, CheckCircle2, Shield, Trees, Flag, Landmark, CircleDot,
-  Zap, Loader2,
+  Zap, Loader2, Coins,
 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost } from '../../lib/api';
 import { useI18n }             from '../../lib/i18n/useI18n';
@@ -152,6 +152,21 @@ export function RouteDetailDialog({
   // Recalibrage Google — bouton dédié + feedback
   const [recalibBusy,    setRecalibBusy]    = useState(false);
   const [recalibMsg,     setRecalibMsg]     = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  // Détection péages (registre TollPoint partagé)
+  interface DetectedTollPoint {
+    tollPointId:          string;
+    name:                 string;
+    kind:                 string;
+    tollCostXaf:          number;
+    direction:            string;
+    distanceFromOriginKm: number;
+    matchDistanceKm:      number;
+    alreadyLinked:        boolean;
+  }
+  const [detectedTolls, setDetectedTolls] = useState<DetectedTollPoint[] | null>(null);
+  const [detectBusy,    setDetectBusy]    = useState(false);
+  const [tollSelection, setTollSelection] = useState<Set<string>>(new Set());
 
   // Checkpoint autocomplete — points de contrôle déjà enregistrés sur ce tenant
   const [cpSuggestions, setCpSuggestions] = useState<{ kind: string; name: string; tollCostXaf: number; estimatedWaitTime: number | null }[]>([]);
@@ -393,6 +408,50 @@ export function RouteDetailDialog({
       setRecalibMsg({ kind: 'err', text: (e as Error).message });
     } finally {
       setRecalibBusy(false);
+    }
+  };
+
+  /** Charge les péages du registre proche de l'itinéraire Google de la route. */
+  const detectTolls = async () => {
+    if (!routeId) return;
+    setDetectBusy(true); setRecalibMsg(null);
+    try {
+      const detected = await apiGet<DetectedTollPoint[]>(
+        `/api/tenants/${tenantId}/routes/${routeId}/detect-tolls`,
+      );
+      setDetectedTolls(detected);
+      // pré-sélectionne tout ce qui n'est pas déjà lié
+      setTollSelection(new Set(detected.filter(d => !d.alreadyLinked).map(d => d.tollPointId)));
+    } catch (e) {
+      setRecalibMsg({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setDetectBusy(false);
+    }
+  };
+
+  const attachSelectedTolls = async () => {
+    if (!routeId || tollSelection.size === 0) return;
+    setDetectBusy(true); setRecalibMsg(null);
+    try {
+      const ids = Array.from(tollSelection);
+      const res = await apiPost<{ attached: number; skipped: number }>(
+        `/api/tenants/${tenantId}/routes/${routeId}/attach-tolls`,
+        { tollPointIds: ids },
+      );
+      setRecalibMsg({
+        kind: 'ok',
+        text: t('routeDetail.attachTollsDone')
+          .replace('{n}', String(res.attached))
+          .replace('{s}', String(res.skipped)),
+      });
+      setDetectedTolls(null);
+      setTollSelection(new Set());
+      await loadRoute();
+      onSaved();
+    } catch (e) {
+      setRecalibMsg({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setDetectBusy(false);
     }
   };
 
@@ -759,6 +818,21 @@ export function RouteDetailDialog({
                   </Button>
                 )}
                 {!showAddForm && !isEditing && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={detectTolls}
+                    disabled={detectBusy}
+                    className="inline-flex items-center gap-1.5"
+                    title={t('routeDetail.detectTollsTooltip')}
+                  >
+                    {detectBusy
+                      ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      : <Coins className="h-4 w-4" aria-hidden />}
+                    {t('routeDetail.detectTolls')}
+                  </Button>
+                )}
+                {!showAddForm && !isEditing && (
                   <Button variant="outline" onClick={() => { resetNewForm(); setShowAddForm(true); }}>
                     <Plus className="w-4 h-4 mr-1.5" aria-hidden />
                     {t('routeDetail.addStop')}
@@ -799,6 +873,77 @@ export function RouteDetailDialog({
                   ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
                 <span>{recalibMsg.text}</span>
+              </div>
+            )}
+
+            {/* Panneau Péages détectés — après clic sur « Détecter » */}
+            {detectedTolls !== null && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    <Coins className="h-4 w-4" aria-hidden />
+                    {t('routeDetail.detectTollsFound').replace('{n}', String(detectedTolls.length))}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => { setDetectedTolls(null); setTollSelection(new Set()); }}
+                    className="text-xs text-amber-900 underline hover:no-underline dark:text-amber-100"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                </div>
+                {detectedTolls.length === 0 ? (
+                  <p className="text-xs text-amber-900 dark:text-amber-100">
+                    {t('routeDetail.detectTollsEmpty')}
+                  </p>
+                ) : (
+                  <>
+                    <ul className="space-y-1.5">
+                      {detectedTolls.map(d => (
+                        <li key={d.tollPointId}
+                          className="flex items-center gap-2 rounded-md bg-white/80 px-2 py-1.5 text-xs dark:bg-slate-900/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={tollSelection.has(d.tollPointId)}
+                            disabled={d.alreadyLinked}
+                            onChange={e => {
+                              const next = new Set(tollSelection);
+                              if (e.target.checked) next.add(d.tollPointId); else next.delete(d.tollPointId);
+                              setTollSelection(next);
+                            }}
+                          />
+                          <span className="flex-1 font-medium text-slate-900 dark:text-slate-100">{d.name}</span>
+                          <span className="text-slate-500 dark:text-slate-400">@{d.distanceFromOriginKm} km</span>
+                          <span className="text-slate-500 dark:text-slate-400">±{d.matchDistanceKm} km</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
+                            {d.tollCostXaf.toLocaleString('fr-FR')} XAF
+                          </span>
+                          {d.alreadyLinked && (
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                              {t('routeDetail.detectTollsAlreadyLinked')}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {tollSelection.size > 0 && (
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={attachSelectedTolls}
+                          disabled={detectBusy}
+                          size="sm"
+                        >
+                          {detectBusy
+                            ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" aria-hidden />
+                            : <Plus className="h-4 w-4 mr-1.5" aria-hidden />}
+                          {t('routeDetail.attachTolls').replace('{n}', String(tollSelection.size))}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
