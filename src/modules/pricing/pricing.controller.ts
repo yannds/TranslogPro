@@ -15,6 +15,7 @@ import {
 import { ProfitabilityService }   from './profitability.service';
 import { YieldService }           from './yield.service';
 import { PeakPeriodService, CreatePeakPeriodDto, UpdatePeakPeriodDto } from './peak-period.service';
+import { PricingSimulatorAdvancedService } from './simulator-advanced.service';
 import { UpsertBusCostProfileDto } from './dto/bus-cost-profile.dto';
 import { RequirePermission }      from '../../common/decorators/require-permission.decorator';
 import { Permission }             from '../../common/constants/permissions';
@@ -25,6 +26,7 @@ export class PricingController {
     private readonly profitability: ProfitabilityService,
     private readonly yield_:        YieldService,
     private readonly peakPeriods:   PeakPeriodService,
+    private readonly advanced:      PricingSimulatorAdvancedService,
   ) {}
 
   // ── Périodes peak (calendrier yield) — Sprint 5 ─────────────────────────
@@ -129,6 +131,63 @@ export class PricingController {
   ) {
     return this.profitability.simulateTrip(tenantId, dto);
   }
+
+  // ── Simulateur avancé — 7 outils d'aide à la décision ────────────────────
+  // Toutes les méthodes partagent la permission `data.profitability.read.tenant`.
+  // Elles sont déclenchées par /admin/pricing/simulator (PagePricingSimulator).
+
+  @Post('simulator/sensitivity-matrix')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simMatrix(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; busId: string; centerPrice?: number },
+  ) { return this.advanced.sensitivityMatrix(tenantId, dto); }
+
+  @Post('simulator/price-bands')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simBands(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; busId: string; fillRate?: number },
+  ) { return this.advanced.priceBands(tenantId, dto); }
+
+  @Post('simulator/historical-benchmark')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simHistorical(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; days?: number },
+  ) { return this.advanced.historicalBenchmark(tenantId, dto); }
+
+  @Post('simulator/analyze-competitor')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simCompetitor(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; busId: string; competitorPrice: number; fillRate?: number },
+  ) { return this.advanced.analyzeCompetitor(tenantId, dto); }
+
+  @Post('simulator/what-if')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simWhatIf(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: {
+      routeId: string; busId: string;
+      ticketPrice?: number; fillRate?: number;
+      fuelDeltaPct?: number; commissionRate?: number;
+    },
+  ) { return this.advanced.simulateWhatIf(tenantId, dto); }
+
+  @Post('simulator/compare-routes')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simCompare(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { fillRate?: number },
+  ) { return this.advanced.compareRoutes(tenantId, dto); }
+
+  @Post('simulator/monthly-break-even')
+  @RequirePermission(Permission.PROFITABILITY_READ_TENANT)
+  simMonthlyBE(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: { routeId: string; busId: string; ticketPrice?: number; fillRate?: number },
+  ) { return this.advanced.monthlyBreakEven(tenantId, dto); }
 
   // ── Dashboard décideur ───────────────────────────────────────────────────────
 
