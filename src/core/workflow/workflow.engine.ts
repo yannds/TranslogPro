@@ -45,14 +45,19 @@ export class WorkflowEngine {
   private readonly logger = new Logger(WorkflowEngine.name);
   private readonly defaultIO: IWorkflowIO;
 
+  private readonly sideEffectRegistry: SideEffectRegistry;
+
   constructor(
     prisma: PrismaService,
     audit:  AuditService,
-    private readonly sideEffectRegistry: SideEffectRegistry,
+    sideEffectRegistry?: SideEffectRegistry,
   ) {
     // L'engine instancie son I/O par défaut (live). Les appels en mode simulation
     // passent un `ioOverride` à transition() — aucun changement de DI requis.
     this.defaultIO = new LiveWorkflowIO(prisma, audit);
+    // Registry optionnelle pour back-compat tests — un registre vide est équivalent
+    // au comportement historique (zéro side-effect déclaratif résolu).
+    this.sideEffectRegistry = sideEffectRegistry ?? new SideEffectRegistry();
   }
 
   /**
