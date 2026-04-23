@@ -411,6 +411,43 @@ export function RouteDetailDialog({
     }
   };
 
+  /**
+   * Détecte ET attache automatiquement tous les péages du registre qui tombent
+   * sur l'itinéraire (non encore liés). Pas d'étape manuelle de sélection —
+   * utile pour les trajets bien cartographiés dont le tenant connaît déjà
+   * l'ensemble des péages (création d'un chemin retour par exemple).
+   */
+  const autoAttachTolls = async () => {
+    if (!routeId) return;
+    setDetectBusy(true); setRecalibMsg(null); setDetectedTolls(null);
+    try {
+      const detected = await apiGet<DetectedTollPoint[]>(
+        `/api/tenants/${tenantId}/routes/${routeId}/detect-tolls`,
+      );
+      const toAdd = detected.filter(d => !d.alreadyLinked).map(d => d.tollPointId);
+      if (toAdd.length === 0) {
+        setRecalibMsg({ kind: 'ok', text: t('routeDetail.detectTollsEmpty') });
+        return;
+      }
+      const res = await apiPost<{ attached: number; skipped: number }>(
+        `/api/tenants/${tenantId}/routes/${routeId}/attach-tolls`,
+        { tollPointIds: toAdd },
+      );
+      setRecalibMsg({
+        kind: 'ok',
+        text: t('routeDetail.attachTollsDone')
+          .replace('{n}', String(res.attached))
+          .replace('{s}', String(res.skipped)),
+      });
+      await loadRoute();
+      onSaved();
+    } catch (e) {
+      setRecalibMsg({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setDetectBusy(false);
+    }
+  };
+
   /** Charge les péages du registre proche de l'itinéraire Google de la route. */
   const detectTolls = async () => {
     if (!routeId) return;
@@ -818,19 +855,34 @@ export function RouteDetailDialog({
                   </Button>
                 )}
                 {!showAddForm && !isEditing && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={detectTolls}
-                    disabled={detectBusy}
-                    className="inline-flex items-center gap-1.5"
-                    title={t('routeDetail.detectTollsTooltip')}
-                  >
-                    {detectBusy
-                      ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      : <Coins className="h-4 w-4" aria-hidden />}
-                    {t('routeDetail.detectTolls')}
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={detectTolls}
+                      disabled={detectBusy}
+                      className="inline-flex items-center gap-1.5"
+                      title={t('routeDetail.detectTollsTooltip')}
+                    >
+                      {detectBusy
+                        ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        : <Coins className="h-4 w-4" aria-hidden />}
+                      {t('routeDetail.detectTolls')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={autoAttachTolls}
+                      disabled={detectBusy}
+                      className="inline-flex items-center gap-1.5"
+                      title={t('routeDetail.autoAttachTollsTooltip')}
+                    >
+                      {detectBusy
+                        ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        : <Zap className="h-4 w-4" aria-hidden />}
+                      {t('routeDetail.autoAttachTolls')}
+                    </Button>
+                  </>
                 )}
                 {!showAddForm && !isEditing && (
                   <Button variant="outline" onClick={() => { resetNewForm(); setShowAddForm(true); }}>
