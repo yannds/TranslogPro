@@ -151,7 +151,7 @@ export function PageTollPoints() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{tp.name}</h3>
-                    <Badge variant="info" size="sm">{t(`tollPoints.kind.${tp.kind}`)}</Badge>
+                    <Badge variant="info" size="sm">{t(`tollPoints.kind_${tp.kind}`)}</Badge>
                     {tp.direction === 'ONE_WAY' && (
                       <Badge variant="warning" size="sm">{t('tollPoints.oneWay')}</Badge>
                     )}
@@ -295,7 +295,7 @@ function TollPointFormDialog({
             <label className="text-xs font-medium">{t('tollPoints.fieldKind')}</label>
             <select value={kind} onChange={e => setKind(e.target.value as Kind)} className={inp}>
               {(Object.keys(KIND_LABELS) as Kind[]).map(k => (
-                <option key={k} value={k}>{t(`tollPoints.kind.${k}`)}</option>
+                <option key={k} value={k}>{t(`tollPoints.kind_${k}`)}</option>
               ))}
             </select>
           </div>
