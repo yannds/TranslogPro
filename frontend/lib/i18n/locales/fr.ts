@@ -3239,6 +3239,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "finance_fiscality": "Finance & Fiscalité",
     "my_subscription": "Mon abonnement TransLog Pro",
     "pricing_grid": "Grille tarifaire",
+    "pricing_simulator": "Simulateur de prix",
     "yield_management": "Yield Management",
     "promotions": "Promotions",
     "invoicing": "Facturation",
@@ -5965,12 +5966,99 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "securityBody":      "Nous ne stockons jamais vos détails bancaires complets. Seul un jeton opaque fourni par le prestataire de paiement (Stripe, Wave, MoMo…) est conservé, ainsi que les chiffres masqués affichés ci-dessus."
   },
 
+  // ─── Simulateur tarifaire avancé (PagePricingSimulator) ───────────────────
+  "simulator": {
+    "title":        "Simulateur de prix",
+    "subtitle":     "Outil d'aide à la décision tarifaire face à la concurrence.",
+    "exportPdf":    "Exporter en PDF",
+    "selectFirst":  "Sélectionnez une ligne et un bus pour démarrer la simulation.",
+    "routeLabel":   "Ligne",
+    "busLabel":     "Bus",
+    "fillRateLabel":"Taux de remplissage",
+
+    "matrix": {
+      "title":  "Matrice de sensibilité",
+      "desc":   "Marge nette attendue selon le prix billet (colonne) et le fillRate (ligne).",
+      "legend": "Vert = profitable · Jaune = à l'équilibre · Rouge = déficit · Montants en milliers."
+    },
+
+    "bands": {
+      "title":  "Bandes de prix recommandées",
+      "desc":   "Quatre bornes à connaître avant de fixer votre prix.",
+      "MIN_VIABLE": "Minimum viable",
+      "BREAK_EVEN": "Break-even",
+      "PROFITABLE": "Profitable",
+      "PREMIUM":    "Premium"
+    },
+
+    "historical": {
+      "title":           "Benchmark historique",
+      "desc":            "Performances réelles passées de la ligne.",
+      "days":            "j",
+      "tripCount":       "Trajets",
+      "avgFillRate":     "Remplissage moyen",
+      "avgTicketPrice":  "Prix moyen",
+      "avgNetMargin":    "Marge nette moyenne",
+      "empty":           "Aucune donnée historique pour cette ligne."
+    },
+
+    "competitor": {
+      "title":           "Analyse concurrence",
+      "desc":            "Entrez le prix d'un concurrent pour voir votre verdict.",
+      "priceLabel":      "Prix concurrent",
+      "run":             "Analyser",
+      "yourPrice":       "Votre prix actuel",
+      "atCompetitor":    "Au prix concurrent",
+      "requireFillRate": "Pour tenir break-even à ce prix, il faut au minimum {pct} de remplissage.",
+      "reco_MATCH":            "ALIGNER — vous restez rentable à ce prix.",
+      "reco_HOLD":             "CONSERVER — vous êtes à l'équilibre, pas de gain à s'aligner.",
+      "reco_UNDERCUT_PREMIUM": "PREMIUM — gardez votre prix, le concurrent perd à ce tarif.",
+      "reco_AVOID":            "ÉVITER — s'aligner vous mettrait en déficit."
+    },
+
+    "whatIf": {
+      "title":             "What-if : fuel & commission",
+      "desc":              "Stressez votre scénario avec des chocs d'environnement.",
+      "fuelDelta":         "Variation prix carburant",
+      "commission":        "Taux commission agence",
+      "commissionDefault": "Valeur tenant (défaut)",
+      "resetCommission":   "réinitialiser",
+      "totalCostDelta":    "Δ coût total",
+      "netMarginDelta":    "Δ marge nette",
+      "finalTag":          "Verdict scénario"
+    },
+
+    "compareRoutes": {
+      "title":     "Classement des lignes",
+      "desc":      "Identifiez où concentrer l'effort commercial.",
+      "rank":      "#",
+      "route":     "Ligne",
+      "distance":  "Distance",
+      "basePrice": "Prix base",
+      "netMargin": "Marge nette",
+      "marginRate":"% marge",
+      "noProfile": "Aucun bus n'a encore de profil de coûts — impossible de classer."
+    },
+
+    "monthlyBE": {
+      "title":            "Point mort mensuel",
+      "desc":             "Combien de voyages/mois pour couvrir les coûts fixes.",
+      "fixedCost":        "Coûts fixes mensuels",
+      "perTripMargin":    "Marge par trip (après variable)",
+      "tripsNeeded":      "Trips/mois requis",
+      "currentPlanned":   "Trips/mois prévus",
+      "verdict_REACHABLE":                 "ATTEIGNABLE — au plan actuel, l'objectif mensuel est couvert.",
+      "verdict_NEED_MORE_TRIPS":           "ATTENTION — il faut planifier plus de trips ou augmenter le prix.",
+      "verdict_IMPOSSIBLE_AT_THESE_PARAMS":"IMPOSSIBLE — le prix ne couvre pas les coûts variables, revoyez la tarification."
+    }
+  },
+
   // ─── Dialog d'ajout de moyen de paiement (CARD / MoMo / Bank) ─────────────
   "addPaymentMethod": {
     "title":           "Ajouter un moyen de paiement",
     "checkoutDesc":    "Choisissez un moyen — vous serez redirigé vers le prestataire pour valider un paiement.",
     "setupDesc":       "Choisissez un moyen — un enregistrement sans débit sera effectué (montant minimal remboursé automatiquement).",
-    "refundNote":      "Un micro-prélèvement de vérification (100 XAF ou équivalent selon votre devise) est effectué puis immédiatement remboursé pour enregistrer votre moyen en toute sécurité.",
+    "refundNote":      "Un micro-prélèvement de vérification ({amount}) est effectué puis immédiatement remboursé pour enregistrer votre moyen en toute sécurité.",
     "chooseMethod":    "Choisir un moyen",
     "card":            "Carte bancaire",
     "cardHint":        "Visa / Mastercard — paiement récurrent automatique au renouvellement.",

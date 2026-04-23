@@ -3386,6 +3386,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "finance_fiscality": "Finance & Tax Rules",
     "my_subscription": "My TransLog Pro Subscription",
     "pricing_grid": "Pricing Grid",
+    "pricing_simulator": "Pricing Simulator",
     "yield_management": "Yield Management",
     "promotions": "Promotions",
     "invoicing": "Invoicing",
@@ -5946,11 +5947,97 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "securityBody":      "We never store your full bank details. Only an opaque token provided by the payment processor (Stripe, Wave, MoMo...) is kept, along with the masked digits shown above."
   },
 
+  "simulator": {
+    "title":        "Pricing simulator",
+    "subtitle":     "Tariff decision-support tool against competition.",
+    "exportPdf":    "Export to PDF",
+    "selectFirst":  "Select a route and a bus to start simulating.",
+    "routeLabel":   "Route",
+    "busLabel":     "Bus",
+    "fillRateLabel":"Fill rate",
+
+    "matrix": {
+      "title":  "Sensitivity matrix",
+      "desc":   "Expected net margin by ticket price (column) and fillRate (row).",
+      "legend": "Green = profitable · Amber = break-even · Red = deficit · Amounts in thousands."
+    },
+
+    "bands": {
+      "title":  "Recommended price bands",
+      "desc":   "Four thresholds to know before setting your price.",
+      "MIN_VIABLE": "Minimum viable",
+      "BREAK_EVEN": "Break-even",
+      "PROFITABLE": "Profitable",
+      "PREMIUM":    "Premium"
+    },
+
+    "historical": {
+      "title":           "Historical benchmark",
+      "desc":            "Actual past performance of this route.",
+      "days":            "d",
+      "tripCount":       "Trips",
+      "avgFillRate":     "Avg fill rate",
+      "avgTicketPrice":  "Avg ticket price",
+      "avgNetMargin":    "Avg net margin",
+      "empty":           "No historical data for this route yet."
+    },
+
+    "competitor": {
+      "title":           "Competitor analysis",
+      "desc":            "Enter a competitor price to see your verdict.",
+      "priceLabel":      "Competitor price",
+      "run":             "Analyze",
+      "yourPrice":       "Your current price",
+      "atCompetitor":    "At competitor price",
+      "requireFillRate": "To break even at this price, you need at least {pct} fill rate.",
+      "reco_MATCH":            "MATCH — you stay profitable at this price.",
+      "reco_HOLD":             "HOLD — you're at break-even, no gain from matching.",
+      "reco_UNDERCUT_PREMIUM": "PREMIUM — keep your price, the competitor loses at theirs.",
+      "reco_AVOID":            "AVOID — matching would put you in deficit."
+    },
+
+    "whatIf": {
+      "title":             "What-if: fuel & commission",
+      "desc":              "Stress-test your scenario with environment shocks.",
+      "fuelDelta":         "Fuel price change",
+      "commission":        "Agency commission rate",
+      "commissionDefault": "Tenant default",
+      "resetCommission":   "reset",
+      "totalCostDelta":    "Δ total cost",
+      "netMarginDelta":    "Δ net margin",
+      "finalTag":          "Scenario verdict"
+    },
+
+    "compareRoutes": {
+      "title":     "Route ranking",
+      "desc":      "Spot where to focus commercial effort.",
+      "rank":      "#",
+      "route":     "Route",
+      "distance":  "Distance",
+      "basePrice": "Base price",
+      "netMargin": "Net margin",
+      "marginRate":"Margin %",
+      "noProfile": "No bus has a cost profile yet — cannot rank."
+    },
+
+    "monthlyBE": {
+      "title":            "Monthly break-even",
+      "desc":             "How many trips/month to cover fixed costs.",
+      "fixedCost":        "Monthly fixed costs",
+      "perTripMargin":    "Per-trip margin (after variable)",
+      "tripsNeeded":      "Trips/month required",
+      "currentPlanned":   "Trips/month planned",
+      "verdict_REACHABLE":                 "REACHABLE — the monthly target is covered at the current plan.",
+      "verdict_NEED_MORE_TRIPS":           "WATCH — you need more trips scheduled or a higher price.",
+      "verdict_IMPOSSIBLE_AT_THESE_PARAMS":"IMPOSSIBLE — price doesn't cover variable costs, revisit pricing."
+    }
+  },
+
   "addPaymentMethod": {
     "title":           "Add a payment method",
     "checkoutDesc":    "Choose a method — you'll be redirected to the provider to validate a payment.",
     "setupDesc":       "Choose a method — a no-charge registration will be performed (minimum amount auto-refunded).",
-    "refundNote":      "A small verification hold (100 XAF or equivalent in your currency) is placed then immediately refunded to securely save your method.",
+    "refundNote":      "A small verification hold ({amount}) is placed then immediately refunded to securely save your method.",
     "chooseMethod":    "Choose a method",
     "card":            "Bank card",
     "cardHint":        "Visa / Mastercard — automatic recurring payment at renewal.",
