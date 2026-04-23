@@ -1764,6 +1764,14 @@ model Transaction {
   // Nullable car non applicable hors CASH et rétro-compat transactions existantes.
   tenderedAmount Float?
   changeAmount   Float?
+  // Preuve paiement hors-POS saisie manuellement par le caissier quand le
+  // client paie via MoMo / Airtel / Wave / carte / virement / voucher.
+  // `proofCode` = code/numéro transaction fourni par le client (SMS confirmation,
+  // référence bancaire, numéro voucher, QR payload…). `proofType` est un
+  // tag libre typé parmi MOMO_CODE | CARD_AUTH | BANK_REF | VOUCHER_CODE |
+  // QR_PAYLOAD | OTHER. Indépendant d'externalRef (ID provider webhook).
+  proofCode      String?
+  proofType      String?
   externalRef    String? // Référence Flutterwave/Paystack (idempotent)
   metadata       Json     @default("{}")
   createdAt      DateTime @default(now())

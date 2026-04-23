@@ -374,6 +374,84 @@ describe('CashierService', () => {
     });
   });
 
+  // ── recordTransaction() — PREUVE paiement hors-POS (proofCode/proofType) ──
+  describe('recordTransaction() — preuve paiement hors-POS', () => {
+    const baseMomo = {
+      type:          'TICKET' as const,
+      amount:        12_000,
+      paymentMethod: 'MOBILE_MONEY' as const,
+      externalRef:   'ticket:momo-1',
+      referenceType: 'TICKET',
+      referenceId:   't-momo-1',
+    };
+
+    it('MOBILE_MONEY + proofCode → persiste proofCode + proofType', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseMomo, proofCode: 'MP260524.ABC123', proofType: 'MOMO_CODE' },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paymentMethod: 'MOBILE_MONEY',
+            proofCode:     'MP260524.ABC123',
+            proofType:     'MOMO_CODE',
+          }),
+        }),
+      );
+    });
+
+    it('CASH + proofCode → proofCode est IGNORÉ (cash n\'a pas besoin de preuve)', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        {
+          ...baseMomo,
+          paymentMethod: 'CASH',
+          proofCode:     'DOIT-ETRE-IGNORE',
+          proofType:     'MOMO_CODE',
+        },
+        ACTOR as any,
+      );
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paymentMethod: 'CASH',
+            proofCode:     null,
+            proofType:     null,
+          }),
+        }),
+      );
+    });
+
+    it('MOBILE_MONEY sans proofCode → proofCode null (rétro-compat portail/webhook)', async () => {
+      const { service, prisma } = buildService();
+      await service.recordTransaction(TENANT, REGISTER.id, baseMomo, ACTOR as any);
+      expect(prisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ proofCode: null, proofType: null }),
+        }),
+      );
+    });
+
+    it('audit enregistre proofCode + proofType dans newValue', async () => {
+      const { service, audit } = buildService();
+      await service.recordTransaction(
+        TENANT, REGISTER.id,
+        { ...baseMomo, proofCode: 'CARD-AUTH-42', proofType: 'CARD_AUTH' },
+        ACTOR as any,
+      );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        newValue: expect.objectContaining({
+          proofCode: 'CARD-AUTH-42',
+          proofType: 'CARD_AUTH',
+        }),
+      }));
+    });
+  });
+
   // ── listTransactions() ─────────────────────────────────────────────────────
   describe('listTransactions() — scope', () => {
     it("scope 'own' rejette si register pas au user", async () => {

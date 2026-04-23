@@ -153,4 +153,14 @@ export class ConfirmBatchDto {
    */
   @IsNumber() @Min(0) @IsOptional()
   tenderedAmount?: number;
+
+  /**
+   * Preuve paiement hors-POS saisie par le caissier (MoMo/Wave/Airtel/carte/
+   * virement/voucher/QR). Propagé sur chaque Transaction du batch.
+   */
+  @IsString() @IsOptional()
+  proofCode?: string;
+
+  @IsString() @IsOptional()
+  proofType?: string;
 }

@@ -176,7 +176,38 @@ export class TenantService {
         rccm: true, phoneNumber: true, email: true, website: true, address: true, taxId: true,
       },
     });
+
+    // Tenant.currency = source de vérité. Si l'admin la change, on ajoute
+    // automatiquement la nouvelle devise à TenantPaymentConfig.allowedCurrencies
+    // (append, pas replace — les moyens déjà tokenisés dans l'ancienne devise
+    // restent valides).
+    if (dto.currency !== undefined) {
+      await this.ensureAllowedCurrency(tenantId, updated.currency);
+    }
+
     return updated;
+  }
+
+  /**
+   * Garantit que `currency` est dans `TenantPaymentConfig.allowedCurrencies`.
+   * Idempotent — no-op si déjà présente. Upsert la config si absente.
+   */
+  private async ensureAllowedCurrency(tenantId: string, currency: string): Promise<void> {
+    const config = await this.prisma.tenantPaymentConfig.findUnique({
+      where:  { tenantId },
+      select: { allowedCurrencies: true },
+    });
+    if (!config) {
+      await this.prisma.tenantPaymentConfig.create({
+        data: { tenantId, allowedCurrencies: [currency] },
+      });
+      return;
+    }
+    if (config.allowedCurrencies.includes(currency)) return;
+    await this.prisma.tenantPaymentConfig.update({
+      where: { tenantId },
+      data:  { allowedCurrencies: { push: currency } },
+    });
   }
 
   /**

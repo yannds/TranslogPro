@@ -178,4 +178,42 @@ describe('PaymentRouter.resolve', () => {
     await expect(router.resolve({ tenantId: 'T1', method: 'CARD' }))
       .rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('self-heal : ajoute tenant.currency à allowedCurrencies si manquante', async () => {
+    // Scénario : admin a changé Tenant.currency sans que allowedCurrencies suive
+    // (migration d'anciens tenants). La devise du tenant est TOUJOURS légitime.
+    prisma.tenant.findUnique.mockResolvedValueOnce({ country: 'US', currency: 'USD' });
+    prisma.tenantPaymentConfig.findUnique.mockResolvedValueOnce({
+      defaultProviderByMethod: {}, fallbackChainByMethod: {},
+      minAmountByMethod: {}, maxAmountByMethod: {}, allowedCurrencies: ['XAF'], // ← drift
+    });
+    prisma.tenantPaymentConfig.update = jest.fn().mockResolvedValue({});
+    flw.supports = () => true;
+    registry.getEffectiveState.mockResolvedValue({
+      mode: 'LIVE', vaultPath: 'x', providerKey: 'flutterwave_agg',
+      displayName: '', scopedToTenant: false, meta: flw.meta,
+    });
+
+    const res = await router.resolve({ tenantId: 'T1', method: 'CARD' });
+    expect(res.currency).toBe('USD');
+    expect(prisma.tenantPaymentConfig.update).toHaveBeenCalledWith({
+      where: { tenantId: 'T1' },
+      data:  { allowedCurrencies: { push: 'USD' } },
+    });
+  });
+
+  it('self-heal NE déclenche PAS pour une devise ≠ tenant.currency', async () => {
+    // Sécurité : on heal uniquement la devise du tenant, pas une devise arbitraire
+    // — sinon allowedCurrencies perd son rôle défensif.
+    prisma.tenant.findUnique.mockResolvedValueOnce({ country: 'CG', currency: 'XAF' });
+    prisma.tenantPaymentConfig.findUnique.mockResolvedValueOnce({
+      defaultProviderByMethod: {}, fallbackChainByMethod: {},
+      minAmountByMethod: {}, maxAmountByMethod: {}, allowedCurrencies: ['XAF'],
+    });
+    prisma.tenantPaymentConfig.update = jest.fn();
+
+    await expect(router.resolve({ tenantId: 'T1', method: 'CARD', currency: 'USD' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.tenantPaymentConfig.update).not.toHaveBeenCalled();
+  });
 });

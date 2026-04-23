@@ -65,7 +65,7 @@ export class PaymentRouter {
     const country  = req.country  ?? tenant.country;
     const currency = (req.currency ?? tenant.currency) as PaymentCurrency;
 
-    const config = await this.prisma.tenantPaymentConfig.findUnique({
+    let config = await this.prisma.tenantPaymentConfig.findUnique({
       where: { tenantId: req.tenantId },
       select: {
         defaultProviderByMethod: true,
@@ -75,6 +75,27 @@ export class PaymentRouter {
         allowedCurrencies:       true,
       },
     });
+
+    // Self-heal : la devise actuelle du tenant est sa source de vérité — si elle
+    // manque de la whitelist (ex. admin l'a changée via /admin/settings/company
+    // avant que la synchro updateCompanyInfo n'existe), on l'ajoute avant
+    // d'enforcer. On ne self-heal QUE pour tenant.currency — pas pour une devise
+    // arbitraire — pour préserver le rôle défensif de allowedCurrencies.
+    if (
+      config &&
+      currency === tenant.currency &&
+      config.allowedCurrencies.length > 0 &&
+      !config.allowedCurrencies.includes(currency)
+    ) {
+      await this.prisma.tenantPaymentConfig.update({
+        where: { tenantId: req.tenantId },
+        data:  { allowedCurrencies: { push: currency } },
+      });
+      config = { ...config, allowedCurrencies: [...config.allowedCurrencies, currency] };
+      this.log.log(
+        `[Router] self-heal : ${currency} ajoutée à allowedCurrencies du tenant ${req.tenantId} (devise tenant = source de vérité)`,
+      );
+    }
 
     this.enforceLimits(config, req.method, req.amount);
     this.enforceCurrency(config, currency, tenant.currency);

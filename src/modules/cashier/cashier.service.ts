@@ -290,6 +290,11 @@ export class CashierService {
       changeAmount   = Math.round((dto.tenderedAmount - toCover) * 100) / 100;
     }
 
+    // Preuve paiement hors-POS : code saisi à la main par le caissier quand
+    // le client paie MoMo/Airtel/carte/virement/voucher. Ignoré si CASH.
+    const proofCode = dto.paymentMethod === 'CASH' ? null : (dto.proofCode ?? null);
+    const proofType = dto.paymentMethod === 'CASH' ? null : (dto.proofType ?? null);
+
     const created = await client.transaction.create({
       data: {
         tenantId,
@@ -299,6 +304,8 @@ export class CashierService {
         paymentMethod:  dto.paymentMethod,
         tenderedAmount,
         changeAmount,
+        proofCode,
+        proofType,
         externalRef:    dto.externalRef,
         metadata: {
           referenceType: dto.referenceType,
@@ -322,6 +329,8 @@ export class CashierService {
         paymentMethod: dto.paymentMethod,
         tenderedAmount,
         changeAmount,
+        proofCode,
+        proofType,
         referenceType: dto.referenceType,
         referenceId:   dto.referenceId,
         externalRef:   dto.externalRef,

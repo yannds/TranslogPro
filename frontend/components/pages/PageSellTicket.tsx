@@ -37,6 +37,7 @@ import { ContextualTip } from '../tour/ContextualTip';
 import { TICKETING_TOUR_ID, TICKETING_TOUR_STEPS } from '../../lib/tour/tours';
 import { YieldSuggestionCard } from '../dashboard/YieldSuggestionCard';
 import { CashPadDialog } from '../cashier/CashPadDialog';
+import { PaymentProofDialog, type ProofType } from '../cashier/PaymentProofDialog';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,8 @@ export function PageSellTicket() {
 
   // Cash pad (espèces uniquement) — ouvert avant /batch/confirm, capture tendered.
   const [cashPadOpen, setCashPadOpen] = useState(false);
+  // Preuve paiement (MoMo/Card/…) — ouvert avant /batch/confirm si méthode hors-CASH.
+  const [proofOpen, setProofOpen] = useState(false);
 
   // ── Build ordered station list from route ──
   const stations = useMemo<Station[]>(() => {
@@ -419,16 +422,23 @@ export function PageSellTicket() {
   function handleRequestConfirm() {
     if (!batchResult) return;
     const method = normalizePaymentMethod(paymentMethod);
-    // Espèces + caisse ouverte → passer par le pad pour capturer tendered/change.
-    // Sinon (MoMo/Card/portail) → confirm direct sans tendered.
-    if (method === 'CASH' && openRegister?.id) {
-      setCashPadOpen(true);
-      return;
+    // Espèces + caisse ouverte → pad pour tendered/change.
+    // Hors-CASH + caisse ouverte → dialog preuve (code MoMo / n° autorisation…).
+    // Sinon (pas de caisse = portail) → confirm direct sans capture supplémentaire.
+    if (openRegister?.id) {
+      if (method === 'CASH') {
+        setCashPadOpen(true);
+        return;
+      }
+      if (method === 'MOBILE_MONEY' || method === 'CARD' || method === 'BANK_TRANSFER' || method === 'VOUCHER' || method === 'MIXED') {
+        setProofOpen(true);
+        return;
+      }
     }
-    void doConfirm(undefined);
+    void doConfirm({});
   }
 
-  async function doConfirm(tenderedAmount: number | undefined) {
+  async function doConfirm(extra: { tenderedAmount?: number; proofCode?: string; proofType?: ProofType }) {
     if (!batchResult) return;
     setConfirming(true);
     setError(null);
@@ -442,7 +452,8 @@ export function PageSellTicket() {
         // Si une caisse est ouverte → tracer la vente dans la caisse courante.
         // Sinon, passer null désactive explicitement l'enregistrement caisse (ex: vente portail).
         cashRegisterId: openRegister?.id ?? null,
-        ...(tenderedAmount != null ? { tenderedAmount } : {}),
+        ...(extra.tenderedAmount != null ? { tenderedAmount: extra.tenderedAmount } : {}),
+        ...(extra.proofCode ? { proofCode: extra.proofCode, proofType: extra.proofType } : {}),
       };
 
       if (!online) {
@@ -471,6 +482,7 @@ export function PageSellTicket() {
       refetchRegister();
       setConfirmed(true);
       setCashPadOpen(false);
+      setProofOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('sellTicket.errorConfirm'));
     } finally {
@@ -1054,7 +1066,20 @@ export function PageSellTicket() {
           onOpenChange={(o) => !confirming && setCashPadOpen(o)}
           amountDue={batchResult.pricingSummary.grandTotal}
           submitting={confirming}
-          onConfirm={(tendered) => doConfirm(tendered)}
+          onConfirm={(tendered) => doConfirm({ tenderedAmount: tendered })}
+        />
+      )}
+
+      {/* Payment proof dialog — méthodes hors-CASH + caisse ouverte. */}
+      {batchResult && paymentMethod && paymentMethod !== 'CASH' && (
+        <PaymentProofDialog
+          open={proofOpen}
+          onOpenChange={(o) => !confirming && setProofOpen(o)}
+          paymentMethod={normalizePaymentMethod(paymentMethod) as
+            'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'VOUCHER' | 'MIXED'}
+          amountDue={batchResult.pricingSummary.grandTotal}
+          submitting={confirming}
+          onConfirm={({ proofCode, proofType }) => doConfirm({ proofCode, proofType })}
         />
       )}
     </div>

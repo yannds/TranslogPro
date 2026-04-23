@@ -3170,6 +3170,31 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "cancel": "Cancel",
     "confirm": "Validate payment"
   },
+  "paymentProof": {
+    "title": "Payment proof",
+    "description": "Enter the confirmation code/number received from the customer ({method}).",
+    "recap": "Summary",
+    "methodMomo": "Mobile Money (MTN / Airtel / Orange / Wave)",
+    "methodCard": "Credit/debit card",
+    "methodBank": "Bank transfer",
+    "methodVoucher": "Voucher",
+    "methodMixed": "Mixed payment",
+    "typeLabel": "Proof type",
+    "type": {
+      "momo": "MoMo code / SMS",
+      "card": "Card authorization #",
+      "bank": "Bank transfer reference",
+      "voucher": "Voucher #",
+      "qr": "QR code (payload)",
+      "other": "Other (specify)"
+    },
+    "codeLabel": "Code / number",
+    "codePlaceholder": "e.g. MP260524.A123.BC456",
+    "codeHint": "MoMo confirmation SMS code, card authorization number, wire reference, voucher number…",
+    "tooShort": "Code too short (min. 4 characters).",
+    "cancel": "Cancel",
+    "confirm": "Validate proof"
+  },
   "analytics": {
     "title": "Analytics",
     "subtitle": "Overview of key indicators across the selected period.",

@@ -3023,6 +3023,31 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "cancel": "Annuler",
     "confirm": "Valider l'encaissement"
   },
+  "paymentProof": {
+    "title": "Preuve de paiement",
+    "description": "Saisissez le code/numéro de confirmation reçu du client ({method}).",
+    "recap": "Récapitulatif",
+    "methodMomo": "Mobile Money (MTN / Airtel / Orange / Wave)",
+    "methodCard": "Carte bancaire",
+    "methodBank": "Virement bancaire",
+    "methodVoucher": "Bon / Voucher",
+    "methodMixed": "Paiement mixte",
+    "typeLabel": "Type de preuve",
+    "type": {
+      "momo": "Code MoMo / SMS",
+      "card": "N° d'autorisation carte",
+      "bank": "Référence virement",
+      "voucher": "N° de bon",
+      "qr": "QR code (payload)",
+      "other": "Autre (préciser)"
+    },
+    "codeLabel": "Code / numéro",
+    "codePlaceholder": "ex. MP260524.A123.BC456",
+    "codeHint": "Ex: code SMS reçu après paiement MoMo, numéro d'autorisation TPV, référence bordereau, n° voucher…",
+    "tooShort": "Code trop court (min. 4 caractères).",
+    "cancel": "Annuler",
+    "confirm": "Valider la preuve"
+  },
   "analytics": {
     "title": "Tableaux analytiques",
     "subtitle": "Vue d'ensemble des indicateurs clés sur la période sélectionnée.",

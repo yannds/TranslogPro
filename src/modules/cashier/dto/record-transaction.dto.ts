@@ -13,6 +13,25 @@ export const CASHIER_PAYMENT_METHODS = [
 ] as const;
 export type CashierPaymentMethod = (typeof CASHIER_PAYMENT_METHODS)[number];
 
+/**
+ * Types de preuve paiement hors-POS (saisie caisse manuelle).
+ * MOMO_CODE = code/SMS MoMo/Airtel/Orange reçu du client.
+ * CARD_AUTH = numéro d'autorisation si lecture TPV manuelle.
+ * BANK_REF  = référence virement bancaire.
+ * VOUCHER_CODE = bon de caisse / titre prépayé.
+ * QR_PAYLOAD   = payload d'un QR code scanné.
+ * OTHER     = fallback — toujours documenter dans `note`.
+ */
+export const CASHIER_PROOF_TYPES = [
+  'MOMO_CODE',
+  'CARD_AUTH',
+  'BANK_REF',
+  'VOUCHER_CODE',
+  'QR_PAYLOAD',
+  'OTHER',
+] as const;
+export type CashierProofType = (typeof CASHIER_PROOF_TYPES)[number];
+
 export class RecordTransactionDto {
   @IsIn(CASHIER_TX_TYPES)
   type: CashierTxType;
@@ -51,4 +70,15 @@ export class RecordTransactionDto {
    */
   @IsOptional() @IsNumber() @Min(0)
   batchTotal?: number;
+
+  /**
+   * Preuve paiement hors-POS (MoMo/Airtel/Wave/carte/virement/voucher/QR) —
+   * code/numéro/payload saisi manuellement par le caissier. Nécessaire pour
+   * tout paymentMethod ≠ CASH côté caisse présentielle.
+   */
+  @IsOptional() @IsString()
+  proofCode?: string;
+
+  @IsOptional() @IsIn(CASHIER_PROOF_TYPES)
+  proofType?: CashierProofType;
 }

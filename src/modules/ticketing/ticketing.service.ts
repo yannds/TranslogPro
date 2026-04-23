@@ -485,6 +485,11 @@ export class TicketingService {
                 paymentMethod: method,
                 tenderedAmount: isFirstWithTendered ? tenderedBudget : undefined,
                 batchTotal:     isFirstWithTendered ? batchTotal : undefined,
+                // Preuve paiement hors-POS (MoMo/Card/…) propagée sur chaque
+                // tx du batch : un même code peut couvrir N tickets achetés
+                // ensemble (audit côté listing : toutes pointent le même code).
+                proofCode:     dto.proofCode,
+                proofType:     dto.proofType as any,
                 externalRef:   dto.externalRef
                   ? `${dto.externalRef}:${ticket.id}`
                   : `ticket:${ticket.id}`,
