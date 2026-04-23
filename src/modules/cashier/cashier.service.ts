@@ -15,6 +15,7 @@ import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { OpenRegisterDto } from './dto/open-register.dto';
 import { RecordTransactionDto } from './dto/record-transaction.dto';
 import { CloseRegisterDto } from './dto/close-register.dto';
+import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
 
 type RecordTxOptions = {
   tx?: Prisma.TransactionClient;
@@ -169,6 +170,89 @@ export class CashierService {
     return closed;
   }
 
+  // ── Résolution d'écart (DISCREPANCY → CLOSED, blueprint `resolve`) ─────────
+
+  /**
+   * Résout un écart de caisse signalé à la clôture. Justification obligatoire
+   * (dto.resolutionNote) — tracée dans AuditLog (source de vérité immuable)
+   * et dénormalisée sur CashRegister.resolutionNote pour affichage rapide.
+   *
+   * Transition : DISCREPANCY → CLOSED via WorkflowEngine action 'resolve'
+   * (requiredPerm = data.cashier.close.agency, seed iam.seed.ts:1062).
+   *
+   * Scopes :
+   *   - scope=agency  → la caisse doit appartenir à l'agence du superviseur
+   *   - scope=tenant  → accès global admin
+   *
+   * Idempotent : si la caisse est déjà CLOSED avec la même note, no-op.
+   */
+  async resolveDiscrepancy(
+    tenantId: string,
+    registerId: string,
+    dto: ResolveDiscrepancyDto,
+    actor: CurrentUserPayload,
+    scope: ScopeContext,
+    ipAddress?: string,
+  ) {
+    const register = await this.prisma.cashRegister.findFirst({
+      where: { id: registerId, tenantId },
+    });
+    if (!register) throw new NotFoundException('Caisse introuvable');
+    if (register.status !== 'DISCREPANCY') {
+      throw new BadRequestException(
+        `Caisse non en écart (status=${register.status}) — rien à résoudre`,
+      );
+    }
+    if (scope.scope === 'agency' && register.agencyId !== scope.agencyId) {
+      throw new ForbiddenException('Hors périmètre agence');
+    }
+
+    // Recalcule l'écart pour l'audit (source de vérité : Transaction.amount).
+    const totals = await this.prisma.transaction.aggregate({
+      where: { tenantId, cashRegisterId: registerId },
+      _sum:  { amount: true },
+    });
+    const theoretical = register.initialBalance + (totals._sum.amount ?? 0);
+    const discrepancy = (register.finalBalance ?? 0) - theoretical;
+
+    const result = await this.workflow.transition(
+      register as Parameters<typeof this.workflow.transition>[0],
+      { action: 'resolve', actor },
+      {
+        aggregateType: 'CashRegister',
+        persist: async (entity, toState, prisma) => {
+          const updated = await prisma.cashRegister.update({
+            where: { id: entity.id },
+            data:  {
+              status:         toState,
+              resolutionNote: dto.resolutionNote,
+              resolvedAt:     new Date(),
+              resolvedById:   actor.id,
+              version:        { increment: 1 },
+            },
+          });
+          return updated as typeof entity;
+        },
+      },
+    );
+
+    await this.audit.record({
+      tenantId,
+      userId:   actor.id,
+      action:   'data.cashier.resolve.agency',
+      resource: `CashRegister:${registerId}`,
+      oldValue: { status: 'DISCREPANCY', discrepancy, theoretical },
+      newValue: { status: 'CLOSED', resolutionNote: dto.resolutionNote },
+      ipAddress,
+      plane: 'data',
+      // Résoudre un écart est toujours "notable" en audit — warn pour tous
+      // les montants (même < 1 XAF) car l'action elle-même est sensible.
+      level: 'warn',
+    });
+
+    return result.entity;
+  }
+
   // ── Lecture ─────────────────────────────────────────────────────────────────
 
   async getRegister(tenantId: string, registerId: string, scope?: ScopeContext) {
@@ -189,6 +273,49 @@ export class CashierService {
         _count: { select: { transactions: true } },
       },
     });
+  }
+
+  /**
+   * Récupère ou crée la caisse VIRTUELLE système de l'agence.
+   * Une seule caisse VIRTUAL existe par (tenant, agence), toujours OPEN,
+   * agentId='SYSTEM'. Sert aux side-effects comptables sans session caissier :
+   * voucher redeem self-service, refund.process, paiement en ligne.
+   * Idempotent — concurrence gérée via findFirst → create fallback.
+   * @param tenantId tenant scope
+   * @param agencyId agence porteuse de la caisse virtuelle
+   * @param tx       optionnel — client Prisma d'une transaction en cours
+   */
+  async getOrCreateVirtualRegister(
+    tenantId: string,
+    agencyId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+    const existing = await client.cashRegister.findFirst({
+      where: { tenantId, agencyId, kind: 'VIRTUAL' },
+    });
+    if (existing) return existing;
+
+    try {
+      return await client.cashRegister.create({
+        data: {
+          tenantId,
+          agencyId,
+          agentId:        'SYSTEM',
+          kind:           'VIRTUAL',
+          status:         'OPEN',
+          initialBalance: 0,
+        },
+      });
+    } catch (err) {
+      // Concurrence : un autre appel a créé la caisse entre notre findFirst
+      // et notre create. On re-lit et on retourne la caisse gagnante.
+      const retry = await client.cashRegister.findFirst({
+        where: { tenantId, agencyId, kind: 'VIRTUAL' },
+      });
+      if (retry) return retry;
+      throw err;
+    }
   }
 
   async listTransactions(

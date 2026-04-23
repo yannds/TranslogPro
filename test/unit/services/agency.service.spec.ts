@@ -32,31 +32,40 @@ const AGENCY = {
 type PrismaMock = jest.Mocked<PrismaService>;
 
 function makePrisma(overrides: {
-  agencyFindFirst?: jest.Mock;
-  agencyFindMany?:  jest.Mock;
-  agencyCreate?:    jest.Mock;
-  agencyUpdate?:    jest.Mock;
-  agencyDelete?:    jest.Mock;
-  agencyCount?:     jest.Mock;
-  stationFindFirst?: jest.Mock;
-  userUpdateMany?:  jest.Mock;
-  transact?:        jest.Mock;
+  agencyFindFirst?:     jest.Mock;
+  agencyFindMany?:      jest.Mock;
+  agencyCreate?:        jest.Mock;
+  agencyUpdate?:        jest.Mock;
+  agencyDelete?:        jest.Mock;
+  agencyCount?:         jest.Mock;
+  stationFindFirst?:    jest.Mock;
+  userUpdateMany?:      jest.Mock;
+  cashRegisterCreate?:  jest.Mock;
+  transact?:            jest.Mock;
 } = {}): PrismaMock {
+  const agencyCreateMock = overrides.agencyCreate ?? jest.fn().mockResolvedValue(AGENCY);
+  const cashRegisterCreateMock =
+    overrides.cashRegisterCreate ?? jest.fn().mockResolvedValue({ id: 'vreg-001', kind: 'VIRTUAL' });
   const tx = {
-    user:   { updateMany: overrides.userUpdateMany ?? jest.fn().mockResolvedValue({ count: 0 }) },
-    agency: { delete:     overrides.agencyDelete   ?? jest.fn().mockResolvedValue(AGENCY) },
+    user:         { updateMany: overrides.userUpdateMany ?? jest.fn().mockResolvedValue({ count: 0 }) },
+    agency:       {
+      create: agencyCreateMock,
+      delete: overrides.agencyDelete   ?? jest.fn().mockResolvedValue(AGENCY),
+    },
+    cashRegister: { create: cashRegisterCreateMock },
   };
   return {
     agency: {
       findFirst: overrides.agencyFindFirst ?? jest.fn().mockResolvedValue(AGENCY),
       findMany:  overrides.agencyFindMany  ?? jest.fn().mockResolvedValue([AGENCY]),
-      create:    overrides.agencyCreate    ?? jest.fn().mockResolvedValue(AGENCY),
+      create:    agencyCreateMock,
       update:    overrides.agencyUpdate    ?? jest.fn().mockResolvedValue(AGENCY),
       count:     overrides.agencyCount     ?? jest.fn().mockResolvedValue(2),
     },
     station: {
       findFirst: overrides.stationFindFirst ?? jest.fn().mockResolvedValue({ id: 'st-001' }),
     },
+    cashRegister: { create: cashRegisterCreateMock },
     transact: overrides.transact ?? jest.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)),
   } as unknown as PrismaMock;
 }
@@ -73,11 +82,21 @@ describe('AgencyService.create', () => {
     await expect(service.create(TENANT, { name: '   ' })).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('trim le nom et crée l\'agence', async () => {
+  it('trim le nom, crée l\'agence ET provisionne la caisse virtuelle (atomique)', async () => {
     const { service, prisma } = build();
     await service.create(TENANT, { name: '  Paris  ' });
     expect(prisma.agency.create).toHaveBeenCalledWith({
       data: { tenantId: TENANT, name: 'Paris', stationId: null },
+    });
+    expect(prisma.cashRegister.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId:       TENANT,
+        agencyId:       AGENCY.id,
+        agentId:        'SYSTEM',
+        kind:           'VIRTUAL',
+        status:         'OPEN',
+        initialBalance: 0,
+      }),
     });
   });
 

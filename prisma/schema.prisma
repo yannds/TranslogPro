@@ -1749,6 +1749,12 @@ model CashRegister {
   //   Utilisée pour les side-effects comptables sans session caisse :
   //   voucher redeem self-service, refund.process, paiement en ligne.
   //   Exclue du cycle open/close blueprint (pas de discrepancy possible).
+  // Résolution d'écart (blueprint `resolve` : DISCREPANCY → CLOSED). Justification
+  // obligatoire en UI ; AuditLog reste la source de vérité, ces champs servent
+  // de cache pour affichage rapide dans la liste des écarts.
+  resolutionNote String?
+  resolvedAt     DateTime?
+  resolvedById   String?
   version        Int       @default(1)
 
   agency       Agency        @relation(fields: [agencyId], references: [id])

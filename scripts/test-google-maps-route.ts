@@ -140,7 +140,8 @@ async function main() {
     return lat !== null && lng !== null ? { lat, lng } : null;
   };
 
-  const stops: Stop[] = [
+  // Construire la liste complète ordonnée (origine + waypoints dans l'ordre + destination)
+  const allStops: Stop[] = [
     {
       stationId:           route.originId,
       name:                route.origin?.name ?? 'Origine',
@@ -167,11 +168,57 @@ async function main() {
     },
   ];
 
-  console.log(`\n🛣️  Plan (${stops.length} arrêts) :`);
-  stops.forEach((s, i) => {
-    const coord = s.coords ? `${s.coords.lat.toFixed(4)},${s.coords.lng.toFixed(4)}` : '—';
-    console.log(`  ${String(i + 1).padStart(2)}. ${s.name.padEnd(30)} ${s.kind.padEnd(12)} @${String(s.distanceFromOriginKm).padStart(5)} km  ${coord}  toll=${s.tollCost}`);
+  // Détection incohérence données : distanceFromOriginKm non monotone croissant
+  const monotonyBreaks: Array<{ idx: number; name: string; prev: number; cur: number }> = [];
+  for (let i = 1; i < allStops.length; i++) {
+    if (allStops[i].distanceFromOriginKm < allStops[i - 1].distanceFromOriginKm) {
+      monotonyBreaks.push({
+        idx: i, name: allStops[i].name,
+        prev: allStops[i - 1].distanceFromOriginKm,
+        cur:  allStops[i].distanceFromOriginKm,
+      });
+    }
+  }
+
+  console.log(`\n🛣️  Plan complet (${allStops.length} entrées, incluant péages/police) :`);
+  allStops.forEach((s, i) => {
+    const coord = s.coords ? `${s.coords.lat.toFixed(4)},${s.coords.lng.toFixed(4)}` : '—'.padStart(17);
+    const warn = i > 0 && s.distanceFromOriginKm < allStops[i - 1].distanceFromOriginKm ? ' ⚠ RECUL' : '';
+    console.log(`  ${String(i + 1).padStart(2)}. ${s.name.padEnd(32)} ${s.kind.padEnd(10)} @${String(s.distanceFromOriginKm).padStart(5)} km  ${coord}  toll=${s.tollCost}${warn}`);
   });
+
+  if (monotonyBreaks.length > 0) {
+    console.log(`\n⚠️  Incohérence données : ${monotonyBreaks.length} waypoint(s) avec distanceFromOriginKm en RECUL.`);
+    console.log('    Les distances absolues depuis l\'origine ne sont pas monotones croissantes.');
+    console.log('    À corriger dans l\'éditeur de ligne → onglet Waypoints.');
+  }
+
+  // ── Sélection des arrêts "calculables" ───────────────────────────────────
+  // On ne garde pour la comparaison Google que les stations qui ont des coords GPS.
+  // Les waypoints PEAGE/POLICE/CONTROLE sans GPS sont repositionnés en "markers"
+  // dont le péage s'additionne au segment station-à-station qui les englobe.
+  const stops = allStops.filter(s => s.kind === 'STATION' && s.coords !== null);
+
+  // Agrège les péages des markers (non-station) entre deux stations pour les affecter
+  // au segment correspondant.
+  const segmentTollByIndex = new Map<number, number>();
+  for (let k = 0; k < allStops.length; k++) {
+    const s = allStops[k];
+    if (s.kind === 'STATION' || !s.tollCost) continue;
+    // Trouve l'index du segment qui contient ce marker : dernière STATION précédente avec GPS.
+    let before = -1;
+    for (let j = k - 1; j >= 0; j--) {
+      if (allStops[j].kind === 'STATION' && allStops[j].coords) { before = j; break; }
+    }
+    if (before < 0) continue;
+    // Index du segment = position de cette station dans `stops`.
+    const segIdx = stops.findIndex(st => st === allStops[before]);
+    if (segIdx < 0 || segIdx >= stops.length - 1) continue;
+    segmentTollByIndex.set(segIdx, (segmentTollByIndex.get(segIdx) ?? 0) + s.tollCost);
+  }
+
+  console.log(`\n📍 Arrêts retenus pour la comparaison (${stops.length}) : stations avec GPS uniquement.`);
+  console.log(`   Les ${allStops.length - stops.length} waypoints sans GPS (péages, police, contrôle) sont imputés en péage sur le segment englobant.`);
 
   // ── Calcul segment par segment (consécutifs) ──────────────────────────────
   const totalDbKm  = route.distanceKm || 1;
@@ -196,6 +243,10 @@ async function main() {
       usedProvider = 'MISSING_COORDS';
     }
 
+    // Péage du segment = péage de la station d'arrivée + péages des markers (péage,
+    // police, contrôle) sans GPS qui tombent entre a et b dans l'ordre d'itinéraire.
+    const aggregatedToll = (b.tollCost ?? 0) + (segmentTollByIndex.get(i) ?? 0);
+
     rows.push({
       from:        a.name,
       to:          b.name,
@@ -203,7 +254,7 @@ async function main() {
       distGoogle,
       priceBefore: 0, // rempli après, quand on connaît totalDbKm (déjà) / totalGoogleKm
       priceAfter:  0,
-      tollXaf:     b.tollCost,  // péage du waypoint d'arrivée
+      tollXaf:     aggregatedToll,
       provider:    usedProvider,
       durationMin,
     });

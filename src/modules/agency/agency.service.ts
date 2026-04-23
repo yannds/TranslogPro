@@ -34,8 +34,24 @@ export class AgencyService {
     const stationId = dto.stationId && dto.stationId.trim() !== '' ? dto.stationId : null;
     if (stationId) await this.assertStationBelongsToTenant(tenantId, stationId);
 
-    return this.prisma.agency.create({
-      data: { tenantId, name, stationId },
+    // Transaction atomique : création agence + provisioning caisse VIRTUELLE.
+    // Invariant : toute agence a exactement 1 CashRegister{kind='VIRTUAL'}
+    // portant les side-effects comptables sans session caissier.
+    return this.prisma.transact(async (tx) => {
+      const agency = await tx.agency.create({
+        data: { tenantId, name, stationId },
+      });
+      await tx.cashRegister.create({
+        data: {
+          tenantId,
+          agencyId:       agency.id,
+          agentId:        'SYSTEM',
+          kind:           'VIRTUAL',
+          status:         'OPEN',
+          initialBalance: 0,
+        },
+      });
+      return agency;
     });
   }
 

@@ -10,6 +10,7 @@ import { seedPeakPeriodsForTenant } from '../../../prisma/seeds/peak-periods.see
 import {
   seedTenantRoles,
   ensureDefaultAgency,
+  ensureVirtualRegisterForAgency,
   DEFAULT_AGENCY_NAME,
   DEFAULT_WORKFLOW_CONFIGS,
   installSystemBlueprintsForTenant,
@@ -137,6 +138,11 @@ export class OnboardingService {
         tenant.id,
         DEFAULT_AGENCY_NAME[language],
       );
+
+      // 3.bis. Caisse VIRTUELLE système de l'agence par défaut.
+      // Invariant : toute agence a sa caisse virtuelle (side-effects comptables
+      // sans caissier humain — voucher redeem, refund.process, paiement en ligne).
+      await ensureVirtualRegisterForAgency(tx as unknown as any, tenant.id, defaultAgencyId);
 
       // 4. Admin user assigné au rôle TENANT_ADMIN + rattaché à l'agence par défaut
       const admin = await tx.user.create({

@@ -188,6 +188,73 @@ describe('CashierService', () => {
     });
   });
 
+  // ── resolveDiscrepancy() — workflow DISCREPANCY → CLOSED avec justification
+  describe('resolveDiscrepancy()', () => {
+    const discrepancyReg = {
+      ...REGISTER,
+      status:       'DISCREPANCY',
+      finalBalance: 63_000,   // théorique = 50_000 + 15_000 = 65_000, écart = -2000
+    };
+    const tenantScope = { scope: 'tenant', userId: ACTOR.id, tenantId: TENANT } as any;
+
+    it('résout l\'écart avec justification + audit level warn + update resolutionNote', async () => {
+      const prisma = makePrisma({ register: discrepancyReg as any });
+      const { service, audit } = buildService(prisma);
+      await service.resolveDiscrepancy(
+        TENANT,
+        REGISTER.id,
+        { resolutionNote: 'Billet 2000 XAF retrouvé sous le tiroir à 18h15' },
+        ACTOR as any,
+        tenantScope,
+      );
+      expect(prisma.cashRegister.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status:         'CLOSED',
+            resolutionNote: 'Billet 2000 XAF retrouvé sous le tiroir à 18h15',
+            resolvedById:   ACTOR.id,
+          }),
+        }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'data.cashier.resolve.agency',
+        level:  'warn',
+        newValue: expect.objectContaining({ status: 'CLOSED' }),
+      }));
+    });
+
+    it('refuse la résolution si caisse n\'est pas DISCREPANCY (BadRequest)', async () => {
+      const prisma = makePrisma({ register: { ...REGISTER, status: 'CLOSED' } });
+      const { service } = buildService(prisma);
+      await expect(service.resolveDiscrepancy(
+        TENANT, REGISTER.id,
+        { resolutionNote: 'Justification valide suffisamment longue' },
+        ACTOR as any, tenantScope,
+      )).rejects.toThrow(BadRequestException);
+    });
+
+    it('lève Forbidden si scope=agency et agencyId ≠ register.agencyId', async () => {
+      const prisma = makePrisma({ register: { ...discrepancyReg, agencyId: 'agency-x' } as any });
+      const { service } = buildService(prisma);
+      const scope = { scope: 'agency', agencyId: 'agency-01', userId: ACTOR.id, tenantId: TENANT } as any;
+      await expect(service.resolveDiscrepancy(
+        TENANT, REGISTER.id,
+        { resolutionNote: 'Justification valide suffisamment longue' },
+        ACTOR as any, scope,
+      )).rejects.toThrow(ForbiddenException);
+    });
+
+    it('lève NotFound si caisse absente', async () => {
+      const prisma = makePrisma({ register: null });
+      const { service } = buildService(prisma);
+      await expect(service.resolveDiscrepancy(
+        TENANT, 'absent',
+        { resolutionNote: 'Justification valide suffisamment longue' },
+        ACTOR as any, tenantScope,
+      )).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ── recordTransaction() — AUDIT SÉCURITÉ ──────────────────────────────────
   describe('recordTransaction() — tenant isolation + scopes', () => {
     const dto = {

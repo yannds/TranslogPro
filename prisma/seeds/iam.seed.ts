@@ -819,6 +819,68 @@ export async function ensureDefaultAgency(
 }
 
 /**
+ * Provisionne la caisse VIRTUELLE système d'une agence.
+ * Idempotent — une seule CashRegister{kind='VIRTUAL'} par (tenantId, agencyId).
+ * Invariant : toute agence a exactement 1 caisse virtuelle, toujours OPEN,
+ * agentId='SYSTEM'. Sert aux side-effects comptables sans caissier humain
+ * (voucher redeem self-service, refund.process, paiement en ligne).
+ */
+export async function ensureVirtualRegisterForAgency(
+  client:   { cashRegister: { findFirst: Function; create: Function } },
+  tenantId: string,
+  agencyId: string,
+): Promise<string> {
+  const existing = await client.cashRegister.findFirst({
+    where: { tenantId, agencyId, kind: 'VIRTUAL' },
+  } as unknown as Record<string, unknown>);
+  if (existing) return existing.id;
+
+  const created = await client.cashRegister.create({
+    data: {
+      tenantId,
+      agencyId,
+      agentId:        'SYSTEM',
+      kind:           'VIRTUAL',
+      status:         'OPEN',
+      initialBalance: 0,
+    },
+  } as unknown as Record<string, unknown>);
+  return created.id;
+}
+
+/**
+ * Backfill pour tenants existants : pour chaque agence sans caisse VIRTUAL,
+ * en provisionne une. Idempotent — peut être rejoué sans effet.
+ */
+export async function backfillVirtualRegisters(
+  prismaClient: PrismaClient,
+): Promise<{ agenciesScanned: number; virtualsCreated: number }> {
+  const agencies = await prismaClient.agency.findMany({
+    select: { id: true, tenantId: true },
+  });
+  let virtualsCreated = 0;
+  for (const agency of agencies) {
+    const existing = await prismaClient.cashRegister.findFirst({
+      where: { tenantId: agency.tenantId, agencyId: agency.id, kind: 'VIRTUAL' },
+    });
+    if (!existing) {
+      await prismaClient.cashRegister.create({
+        data: {
+          tenantId:       agency.tenantId,
+          agencyId:       agency.id,
+          agentId:        'SYSTEM',
+          kind:           'VIRTUAL',
+          status:         'OPEN',
+          initialBalance: 0,
+        },
+      });
+      virtualsCreated++;
+    }
+  }
+  return { agenciesScanned: agencies.length, virtualsCreated };
+}
+
+/**
  * Backfill pour tenants existants créés AVANT l'introduction de l'invariant
  * "≥1 agence". Pour chaque tenant sans agence : créer l'agence par défaut et
  * y rattacher les users STAFF orphelins (agencyId IS NULL).

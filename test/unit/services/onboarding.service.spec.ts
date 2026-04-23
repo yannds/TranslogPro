@@ -15,6 +15,7 @@
 jest.mock('../../../prisma/seeds/iam.seed', () => ({
   seedTenantRoles:                 jest.fn().mockResolvedValue(new Map([['TENANT_ADMIN', 'role-admin']])),
   ensureDefaultAgency:             jest.fn().mockResolvedValue('agency-default-id'),
+  ensureVirtualRegisterForAgency:  jest.fn().mockResolvedValue('virtual-register-id'),
   DEFAULT_AGENCY_NAME:             { fr: 'Agence principale', en: 'Main Agency' },
   DEFAULT_WORKFLOW_CONFIGS:        [],
   installSystemBlueprintsForTenant: jest.fn().mockResolvedValue(0),

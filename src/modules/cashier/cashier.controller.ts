@@ -13,6 +13,7 @@ import { CashierService } from './cashier.service';
 import { OpenRegisterDto } from './dto/open-register.dto';
 import { RecordTransactionDto } from './dto/record-transaction.dto';
 import { CloseRegisterDto } from './dto/close-register.dto';
+import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ScopeCtx, ScopeContext } from '../../common/decorators/scope-context.decorator';
@@ -139,5 +140,23 @@ export class CashierController {
       agencyId: agency,
       sinceDays: safeWindow,
     });
+  }
+
+  /**
+   * Résoudre un écart de caisse (DISCREPANCY → CLOSED) avec justification
+   * obligatoire. Workflow blueprint-driven (action `resolve`, seed iam.seed.ts).
+   * Scope agency : seules les caisses de l'agence du superviseur.
+   */
+  @Patch('registers/:id/resolve')
+  @RequirePermission(Permission.CASHIER_CLOSE_AGENCY)
+  resolve(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: ResolveDiscrepancyDto,
+    @CurrentUser() actor: CurrentUserPayload,
+    @ScopeCtx() scope: ScopeContext,
+    @Req() req: Request,
+  ) {
+    return this.cashierService.resolveDiscrepancy(tenantId, id, dto, actor, scope, req.ip);
   }
 }
