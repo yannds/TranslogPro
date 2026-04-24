@@ -30,6 +30,7 @@ import { Dialog }        from '../ui/Dialog';
 import { ErrorAlert }    from '../ui/ErrorAlert';
 import { inputClass }    from '../ui/inputClass';
 import { cn }            from '../../lib/utils';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import {
   type TripRow, type BusLite, type StaffLite, type RouteLite,
   tripStatusLabel, tripStatusBadgeVariant,
@@ -139,6 +140,69 @@ export function PageTrips() {
     setEditMode((trip.seatingMode as 'FREE' | 'NUMBERED') ?? 'FREE');
     setActionError(null);
   };
+
+  // ── Colonnes DataTableMaster ──────────────────────────────────────────────
+  const tripColumns: Column<TripRow>[] = [
+    {
+      key: 'departureScheduled', header: t('trips.hour'), sortable: true, width: '100px',
+      cellRenderer: (v) => (
+        <div className="flex items-center gap-1.5 font-medium tabular-nums">
+          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
+          {formatHm(new Date(v as string))}
+        </div>
+      ),
+      csvValue: (v) => new Date(v as string).toISOString(),
+    },
+    {
+      key: 'routeId', header: t('trips.route'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
+          <span className="truncate">{routeLabelOf(row)}</span>
+        </div>
+      ),
+      csvValue: (_v, row) => routeLabelOf(row),
+    },
+    {
+      key: 'busId', header: t('trips.vehicle'), sortable: true, width: '130px',
+      cellRenderer: (_v, row) => (
+        <span className="font-mono text-slate-600 dark:text-slate-400">{row.bus?.plateNumber ?? '—'}</span>
+      ),
+      csvValue: (_v, row) => row.bus?.plateNumber ?? '',
+    },
+    {
+      key: 'status', header: t('trips.status'), sortable: true, width: '170px',
+      cellRenderer: (v, row) => (
+        <div className="flex items-center gap-1.5">
+          <Badge variant={tripStatusBadgeVariant(v as TripRow['status'])} size="sm">
+            {tripStatusLabel(v as TripRow['status'])}
+          </Badge>
+          {row.seatingMode === 'NUMBERED' && (
+            <Badge variant="info" size="sm">{t('tripForm.numberedSeating')}</Badge>
+          )}
+        </div>
+      ),
+      csvValue: (v) => tripStatusLabel(v as TripRow['status']),
+    },
+    {
+      key: 'arrivalScheduled', header: t('trips.delay'), sortable: true, width: '110px', align: 'right',
+      cellRenderer: (_v, row) => {
+        if (!isTripDelayed(row)) return <span className="text-xs text-slate-400">—</span>;
+        return <Badge variant="danger" size="sm">+{delayMinutes(row)} min</Badge>;
+      },
+      csvValue: (_v, row) => isTripDelayed(row) ? `+${delayMinutes(row)}min` : '',
+    },
+  ];
+
+  const tripRowActions: RowAction<TripRow>[] = [
+    {
+      label:  t('tripIncident.openMenu'),
+      icon:   <Siren className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden />,
+      onClick: (row) => setIncidentTrip(row),
+      hidden: (row) => !['IN_PROGRESS', 'IN_PROGRESS_DELAYED', 'SUSPENDED'].includes(row.status),
+      danger: true,
+    },
+  ];
 
   const handleUpdateSeatingMode = async () => {
     if (!editTrip) return;
@@ -255,80 +319,20 @@ export function PageTrips() {
             <div className="p-6 space-y-3" aria-busy="true">
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
-          ) : visible.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
-              <RouteIcon className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">{t('trips.noTripsDay')}</p>
-              <p className="text-sm mt-1">{t('trips.noTripsCta')}</p>
-            </div>
           ) : (
-            <div role="table" aria-label={t('trips.trips')}>
-              <div
-                role="row"
-                className="grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
-              >
-                <div role="columnheader">{t('trips.hour')}</div>
-                <div role="columnheader">{t('trips.route')}</div>
-                <div role="columnheader">{t('trips.vehicle')}</div>
-                <div role="columnheader">{t('trips.status')}</div>
-                <div role="columnheader" className="text-right">{t('trips.delay')}</div>
-              </div>
-              <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
-                {visible.map(t2 => {
-                  const d = new Date(t2.departureScheduled);
-                  const delayed = isTripDelayed(t2);
-                  const mn = delayMinutes(t2);
-                  return (
-                    <li
-                      key={t2.id}
-                      role="row"
-                      onClick={() => openEdit(t2)}
-                      className={cn(
-                        'grid grid-cols-[90px_1fr_120px_160px_140px] gap-3 px-6 py-3 items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors',
-                        delayed && 'bg-red-50/50 dark:bg-red-900/10',
-                      )}
-                    >
-                      <div role="cell" className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums">
-                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
-                        {formatHm(d)}
-                      </div>
-                      <div role="cell" className="flex items-center gap-2 min-w-0">
-                        <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
-                        <span className="text-sm text-slate-800 dark:text-slate-200 truncate">{routeLabelOf(t2)}</span>
-                      </div>
-                      <div role="cell" className="text-sm font-mono text-slate-600 dark:text-slate-400 truncate">
-                        {t2.bus?.plateNumber ?? '—'}
-                      </div>
-                      <div role="cell" className="flex items-center gap-1.5">
-                        <Badge variant={tripStatusBadgeVariant(t2.status)} size="sm">
-                          {tripStatusLabel(t2.status)}
-                        </Badge>
-                        {t2.seatingMode === 'NUMBERED' && (
-                          <Badge variant="info" size="sm">
-                            {t('tripForm.numberedSeating')}
-                          </Badge>
-                        )}
-                      </div>
-                      <div role="cell" className="text-right flex items-center justify-end gap-2">
-                        {delayed
-                          ? <Badge variant="danger" size="sm">+{mn} min</Badge>
-                          : <span className="text-xs text-slate-400">—</span>
-                        }
-                        {['IN_PROGRESS', 'IN_PROGRESS_DELAYED', 'SUSPENDED'].includes(t2.status) && (
-                          <button
-                            type="button"
-                            aria-label={t('tripIncident.openMenu')}
-                            onClick={e => { e.stopPropagation(); setIncidentTrip(t2); }}
-                            className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                          >
-                            <Siren className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+            <div className="px-4 pb-4">
+              <DataTableMaster<TripRow>
+                columns={tripColumns}
+                data={visible}
+                loading={loading}
+                rowActions={tripRowActions}
+                onRowClick={openEdit}
+                defaultSort={{ key: 'departureScheduled', dir: 'asc' }}
+                searchPlaceholder={t('trips.searchTrip')}
+                emptyMessage={t('trips.noTripsDay')}
+                exportFormats={['csv']}
+                exportFilename="trips"
+              />
             </div>
           )}
         </CardContent>
