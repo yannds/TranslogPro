@@ -7,17 +7,17 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | Métrique | Valeur |
 |---|---|
 | Routes backend total | **515** |
-| Routes **montées** (match strict verb+path) | **358** |
+| Routes **montées** (match strict verb+path) | **373** |
 | Routes **probablement montées** (trace littérale trouvée dans FE) | **8** |
-| Routes **vraiment orphelines** (zéro trace FE) | **149** |
-| Appels FE **sans route BE** correspondante | **64** |
+| Routes **vraiment orphelines** (zéro trace FE) | **134** |
+| Appels FE **sans route BE** correspondante | **50** |
 
 > **Lecture** : seuls les items de la §1 sont à traiter (vraiment orphelins, zéro référence FE). Les items §2 sont probablement consommés par `window.open`, `<a href>`, ternary, ou un service client abstrait — vérifier si un doute subsiste.
 
 ## 1 · Routes backend vraiment orphelines (zéro trace FE)
 
 - Avec motif légitime no-UI : **6**
-- **À vérifier manuellement** : **143**
+- **À vérifier manuellement** : **128**
 
 ### 1.1 · `templates` (16 routes)
 
@@ -72,20 +72,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/qhse/injuries/:id/follow-ups` | [qhse.controller.ts:159](src/modules/qhse/qhse.controller.ts#L159) |
 | `POST` | `/tenants/:tenantId/qhse/third-parties/:id/statement-url` | [qhse.controller.ts:136](src/modules/qhse/qhse.controller.ts#L136) |
 
-### 1.4 · `parcel` (8 routes)
-
-| Verb | Route | Source |
-|---|---|---|
-| `POST` | `/tenants/:tenantId/parcels/:id/hub/arrive` | [parcel.controller.ts:70](src/modules/parcel/parcel.controller.ts#L70) |
-| `POST` | `/tenants/:tenantId/parcels/:id/hub/depart` | [parcel.controller.ts:107](src/modules/parcel/parcel.controller.ts#L107) |
-| `POST` | `/tenants/:tenantId/parcels/:id/hub/load-outbound` | [parcel.controller.ts:95](src/modules/parcel/parcel.controller.ts#L95) |
-| `POST` | `/tenants/:tenantId/parcels/:id/hub/store` | [parcel.controller.ts:83](src/modules/parcel/parcel.controller.ts#L83) |
-| `POST` | `/tenants/:tenantId/parcels/:id/pickup/complete` | [parcel.controller.ts:131](src/modules/parcel/parcel.controller.ts#L131) |
-| `POST` | `/tenants/:tenantId/parcels/:id/pickup/notify` | [parcel.controller.ts:119](src/modules/parcel/parcel.controller.ts#L119) |
-| `POST` | `/tenants/:tenantId/parcels/:id/return/complete` | [parcel.controller.ts:168](src/modules/parcel/parcel.controller.ts#L168) |
-| `POST` | `/tenants/:tenantId/parcels/:id/return/initiate` | [parcel.controller.ts:156](src/modules/parcel/parcel.controller.ts#L156) |
-
-### 1.5 · `crm` (8 routes)
+### 1.4 · `crm` (8 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -98,7 +85,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/crm/contacts/:customerId/recommendations` | [crm.controller.ts:48](src/modules/crm/crm.controller.ts#L48) |
 | `POST` | `/tenants/:tenantId/crm/segments/recompute` | [crm.controller.ts:79](src/modules/crm/crm.controller.ts#L79) |
 
-### 1.6 · `driver-profile` (6 routes)
+### 1.5 · `driver-profile` (6 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -109,7 +96,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `PATCH` | `/tenants/:tenantId/driver-profile/remediation/actions/:id` | [driver-profile.controller.ts:350](src/modules/driver-profile/driver-profile.controller.ts#L350) |
 | `POST` | `/tenants/:tenantId/driver-profile/trainings/:id/upload-url` | [driver-profile.controller.ts:267](src/modules/driver-profile/driver-profile.controller.ts#L267) |
 
-### 1.7 · `traveler` (6 routes)
+### 1.6 · `traveler` (6 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -120,7 +107,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/travelers/trips/:tripId` | [traveler.controller.ts:61](src/modules/traveler/traveler.controller.ts#L61) |
 | `GET` | `/tenants/:tenantId/travelers/trips/:tripId/drop-off/:stationId` | [traveler.controller.ts:71](src/modules/traveler/traveler.controller.ts#L71) |
 
-### 1.8 · `crew-briefing` (6 routes)
+### 1.7 · `crew-briefing` (6 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -131,7 +118,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/crew-briefing/templates/:templateId/duplicate` | [crew-briefing.controller.ts:174](src/modules/crew-briefing/crew-briefing.controller.ts#L174) |
 | `POST` | `/tenants/:tenantId/crew-briefing/templates/:templateId/sections` | [crew-briefing.controller.ts:186](src/modules/crew-briefing/crew-briefing.controller.ts#L186) |
 
-### 1.9 · `fleet-docs` (5 routes)
+### 1.8 · `fleet-docs` (5 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -141,7 +128,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/fleet-docs/maintenance/:reportId/intervenants` | [fleet-docs.controller.ts:124](src/modules/fleet-docs/fleet-docs.controller.ts#L124) |
 | `POST` | `/tenants/:tenantId/fleet-docs/maintenance/:reportId/parts` | [fleet-docs.controller.ts:135](src/modules/fleet-docs/fleet-docs.controller.ts#L135) |
 
-### 1.10 · `public-portal` (5 routes)
+### 1.9 · `public-portal` (5 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -151,7 +138,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/public/:tenantSlug/portal/tickets/:ticketRef/cancel` | [public-portal.controller.ts:213](src/modules/public-portal/public-portal.controller.ts#L213) |
 | `GET` | `/public/:tenantSlug/portal/tickets/:ticketRef/refund-preview` | [public-portal.controller.ts:195](src/modules/public-portal/public-portal.controller.ts#L195) |
 
-### 1.11 · `sav` (5 routes)
+### 1.10 · `sav` (5 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -161,17 +148,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/sav/lost-found` | [sav.controller.ts:20](src/modules/sav/sav.controller.ts#L20) |
 | `GET` | `/tenants/:tenantId/sav/refunds/:id` | [sav.controller.ts:89](src/modules/sav/sav.controller.ts#L89) |
 
-### 1.12 · `ticketing` (5 routes)
-
-| Verb | Route | Source |
-|---|---|---|
-| `POST` | `/tenants/:tenantId/tickets/:id/no-show` | [ticketing.controller.ts:89](src/modules/ticketing/ticketing.controller.ts#L89) |
-| `POST` | `/tenants/:tenantId/tickets/:id/rebook/later` | [ticketing.controller.ts:111](src/modules/ticketing/ticketing.controller.ts#L111) |
-| `POST` | `/tenants/:tenantId/tickets/:id/rebook/next-available` | [ticketing.controller.ts:100](src/modules/ticketing/ticketing.controller.ts#L100) |
-| `POST` | `/tenants/:tenantId/tickets/:id/refund-request` | [ticketing.controller.ts:128](src/modules/ticketing/ticketing.controller.ts#L128) |
-| `POST` | `/tenants/:tenantId/tickets/verify-qr` | [ticketing.controller.ts:51](src/modules/ticketing/ticketing.controller.ts#L51) |
-
-### 1.13 · `analytics` (5 routes)
+### 1.11 · `analytics` (5 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -181,16 +158,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/analytics/trips` | [analytics.controller.ts:90](src/modules/analytics/analytics.controller.ts#L90) |
 | `GET` | `/tenants/:tenantId/analytics/trips/:tripId/occupancy` | [analytics.controller.ts:120](src/modules/analytics/analytics.controller.ts#L120) |
 
-### 1.14 · `notification` (4 routes)
-
-| Verb | Route | Source |
-|---|---|---|
-| `PATCH` | `/tenants/:tenantId/notifications/:id/read` | [notification.controller.ts:23](src/modules/notification/notification.controller.ts#L23) |
-| `GET` | `/tenants/:tenantId/notifications/preferences` | [notification.controller.ts:39](src/modules/notification/notification.controller.ts#L39) |
-| `PATCH` | `/tenants/:tenantId/notifications/preferences` | [notification.controller.ts:48](src/modules/notification/notification.controller.ts#L48) |
-| `GET` | `/tenants/:tenantId/notifications/unread` | [notification.controller.ts:14](src/modules/notification/notification.controller.ts#L14) |
-
-### 1.15 · `staff` (4 routes)
+### 1.12 · `staff` (4 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -199,7 +167,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/assignments/:id/agencies` | [staff-assignment.controller.ts:80](src/modules/staff/staff-assignment.controller.ts#L80) |
 | `DELETE` | `/tenants/:tenantId/assignments/:id/agencies/:agencyId` | [staff-assignment.controller.ts:90](src/modules/staff/staff-assignment.controller.ts#L90) |
 
-### 1.16 · `workflow-studio` (4 routes)
+### 1.13 · `workflow-studio` (4 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -208,7 +176,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `DELETE` | `/tenants/:tenantId/workflow-marketplace/blueprints/:blueprintId/publish` | [workflow-marketplace.controller.ts:78](src/modules/workflow-studio/workflow-marketplace.controller.ts#L78) |
 | `POST` | `/tenants/:tenantId/workflow-studio/graph/:entityType/reset` | [workflow-studio.controller.ts:83](src/modules/workflow-studio/workflow-studio.controller.ts#L83) |
 
-### 1.17 · `cashier` (3 routes)
+### 1.14 · `cashier` (3 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -216,7 +184,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/cashier/report/daily` | [cashier.controller.ts:109](src/modules/cashier/cashier.controller.ts#L109) |
 | `PATCH` | `/tenants/:tenantId/cashier/transactions/:txId/verify-proof` | [cashier.controller.ts:150](src/modules/cashier/cashier.controller.ts#L150) |
 
-### 1.18 · `feedback` (3 routes)
+### 1.15 · `feedback` (3 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -224,7 +192,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/feedback/ratings/:entityType/:entityId` | [feedback.controller.ts:28](src/modules/feedback/feedback.controller.ts#L28) |
 | `GET` | `/tenants/:tenantId/feedback/trip/:tripId` | [feedback.controller.ts:22](src/modules/feedback/feedback.controller.ts#L22) |
 
-### 1.19 · `safety` (3 routes)
+### 1.16 · `safety` (3 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -232,7 +200,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/safety/alerts` | [safety.controller.ts:36](src/modules/safety/safety.controller.ts#L36) |
 | `PATCH` | `/tenants/:tenantId/safety/alerts/:id/dismiss` | [safety.controller.ts:45](src/modules/safety/safety.controller.ts#L45) |
 
-### 1.20 · `tracking` (3 routes)
+### 1.17 · `tracking` (3 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -240,7 +208,7 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `GET` | `/tenants/:tenantId/tracking/trips/:tripId/history` | [tracking.controller.ts:35](src/modules/tracking/tracking.controller.ts#L35) |
 | `GET` | `/tenants/:tenantId/tracking/trips/:tripId/position` | [tracking.controller.ts:25](src/modules/tracking/tracking.controller.ts#L25) |
 
-### 1.21 · `garage` (3 routes)
+### 1.18 · `garage` (3 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -248,80 +216,87 @@ _Généré le 2026-04-24 par `scripts/audit-endpoints.py`. Reproduire : `python3
 | `POST` | `/tenants/:tenantId/garage/reminders/:busId/:type/performed` | [garage.controller.ts:32](src/modules/garage/garage.controller.ts#L32) |
 | `GET` | `/tenants/:tenantId/garage/reports/:id/upload-url` | [garage.controller.ts:88](src/modules/garage/garage.controller.ts#L88) |
 
-### 1.22 · `infra/payment` (2 routes)
+### 1.19 · `infra/payment` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `POST` | `/tenants/:tenantId/payments/intents/:intentId/cancel` | [payment.controller.ts:103](src/infrastructure/payment/payment.controller.ts#L103) |
 | `POST` | `/tenants/:tenantId/payments/intents/:intentId/refund` | [payment.controller.ts:121](src/infrastructure/payment/payment.controller.ts#L121) |
 
-### 1.23 · `oauth` (2 routes)
+### 1.20 · `oauth` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/auth/oauth/:providerKey/callback` | [oauth.controller.ts:93](src/modules/oauth/oauth.controller.ts#L93) |
 | `GET` | `/auth/oauth/:providerKey/start` | [oauth.controller.ts:63](src/modules/oauth/oauth.controller.ts#L63) |
 
-### 1.24 · `manifest` (2 routes)
+### 1.21 · `notification` (2 routes)
+
+| Verb | Route | Source |
+|---|---|---|
+| `PATCH` | `/tenants/:tenantId/notifications/:id/read` | [notification.controller.ts:23](src/modules/notification/notification.controller.ts#L23) |
+| `GET` | `/tenants/:tenantId/notifications/unread` | [notification.controller.ts:14](src/modules/notification/notification.controller.ts#L14) |
+
+### 1.22 · `manifest` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/tenants/:tenantId/manifests/:id` | [manifest.controller.ts:103](src/modules/manifest/manifest.controller.ts#L103) |
 | `POST` | `/tenants/:tenantId/manifests/backfill-signed-pdfs` | [manifest.controller.ts:117](src/modules/manifest/manifest.controller.ts#L117) |
 
-### 1.25 · `flight-deck` (2 routes)
+### 1.23 · `flight-deck` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `POST` | `/tenants/:tenantId/flight-deck/trips/:tripId/freight/close` | [flight-deck.controller.ts:208](src/modules/flight-deck/flight-deck.controller.ts#L208) |
 | `GET` | `/tenants/:tenantId/flight-deck/trips/:tripId/parcels` | [flight-deck.controller.ts:113](src/modules/flight-deck/flight-deck.controller.ts#L113) |
 
-### 1.26 · `incident` (2 routes)
+### 1.24 · `incident` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `PATCH` | `/tenants/:tenantId/incidents/:id/assign` | [incident.controller.ts:58](src/modules/incident/incident.controller.ts#L58) |
 | `PATCH` | `/tenants/:tenantId/incidents/:id/resolve` | [incident.controller.ts:69](src/modules/incident/incident.controller.ts#L69) |
 
-### 1.27 · `fleet` (2 routes)
+### 1.25 · `fleet` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/tenants/:tenantId/fleet/buses/:id/display` | [fleet.controller.ts:80](src/modules/fleet/fleet.controller.ts#L80) |
 | `POST` | `/tenants/:tenantId/fleet/buses/:id/photos/upload-url` | [fleet.controller.ts:88](src/modules/fleet/fleet.controller.ts#L88) |
 
-### 1.28 · `platform-plans` (2 routes)
+### 1.26 · `platform-plans` (2 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `POST` | `/platform/plans/:id/modules` | [platform-plans.controller.ts:75](src/modules/platform-plans/platform-plans.controller.ts#L75) |
 | `DELETE` | `/platform/plans/:id/modules/:moduleKey` | [platform-plans.controller.ts:84](src/modules/platform-plans/platform-plans.controller.ts#L84) |
 
-### 1.29 · `public-reporter` (1 routes)
+### 1.27 · `public-reporter` (1 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/public/:tenantId/report/list` | [public-reporter.controller.ts:52](src/modules/public-reporter/public-reporter.controller.ts#L52) |
 
-### 1.30 · `workflow` (1 routes)
+### 1.28 · `workflow` (1 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `POST` | `/tenants/:tenantId/workflow/transition` | [workflow.controller.ts:30](src/modules/workflow/workflow.controller.ts#L30) |
 
-### 1.31 · `platform-analytics` (1 routes)
+### 1.29 · `platform-analytics` (1 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/platform/analytics/tenant/:id` | [platform-analytics.controller.ts:36](src/modules/platform-analytics/platform-analytics.controller.ts#L36) |
 
-### 1.32 · `display` (1 routes)
+### 1.30 · `display` (1 routes)
 
 | Verb | Route | Source |
 |---|---|---|
 | `GET` | `/tenants/:tenantId/buses/:busId/display` | [display.controller.ts:77](src/modules/display/display.controller.ts#L77) |
 
-### 1.33 · `shipment` (1 routes)
+### 1.31 · `shipment` (1 routes)
 
 | Verb | Route | Source |
 |---|---|---|
@@ -357,70 +332,56 @@ Si réels (pas du code mort / préfixe erroné), ces appels échouent en product
 
 | Verb | URL réclamée |
 |---|---|
+| `POST` | `/api/mfa/disable` |
+| `DELETE` | `/api/tenants/:X/announcements/:X` |
+| `PATCH` | `/api/tenants/:X/announcements/:X` |
+| `PUT` | `/api/tenants/:X/brand` |
+| `POST` | `/api/tenants/:X/iam/roles` |
+| `DELETE` | `/api/tenants/:X/iam/roles/:X` |
+| `PATCH` | `/api/tenants/:X/iam/roles/:X` |
+| `PUT` | `/api/tenants/:X/iam/roles/:X/permissions` |
+| `DELETE` | `/api/tenants/:X/iam/sessions/:X` |
+| `POST` | `/api/tenants/:X/iam/users` |
+| `PATCH` | `/api/tenants/:X/iam/users/:X` |
+| `DELETE` | `/api/tenants/:X/iam/users/:X` |
+| `POST` | `/api/tenants/:X/iam/users/:X/revoke-sessions` |
+| `PATCH` | `/api/tenants/:X/iam/users/:X/toggle-active` |
+| `PATCH` | `/api/tenants/:X/invoices/:X` |
+| `DELETE` | `/api/tenants/:X/invoices/:X` |
+| `POST` | `/api/tenants/:X/peak-periods` |
+| `PATCH` | `/api/tenants/:X/peak-periods/:X` |
+| `DELETE` | `/api/tenants/:X/peak-periods/:X` |
+| `DELETE` | `/api/tenants/:X/platforms/:X` |
+| `PATCH` | `/api/tenants/:X/platforms/:X` |
+| `POST` | `/api/tenants/:X/platforms/:X/assign` |
+| `POST` | `/api/tenants/:X/platforms/:X/release` |
+| `PUT` | `/api/tenants/:X/portal/config` |
+| `PUT` | `/api/tenants/:X/portal/pages` |
+| `DELETE` | `/api/tenants/:X/portal/pages/:X` |
+| `POST` | `/api/tenants/:X/portal/posts` |
+| `DELETE` | `/api/tenants/:X/portal/posts/:X` |
+| `PUT` | `/api/tenants/:X/portal/posts/:X` |
+| `PATCH` | `/api/tenants/:X/promotions/:X` |
+| `DELETE` | `/api/tenants/:X/promotions/:X` |
 | `DELETE` | `/api/tenants/:X/qhse/:X` |
-| `POST` | `/api/v1/mfa/disable` |
-| `PATCH` | `/api/v1/tenants/:X/announcements/:X` |
-| `DELETE` | `/api/v1/tenants/:X/announcements/:X` |
-| `PUT` | `/api/v1/tenants/:X/brand` |
-| `POST` | `/api/v1/tenants/:X/iam/roles` |
-| `DELETE` | `/api/v1/tenants/:X/iam/roles/:X` |
-| `PATCH` | `/api/v1/tenants/:X/iam/roles/:X` |
-| `PUT` | `/api/v1/tenants/:X/iam/roles/:X/permissions` |
-| `DELETE` | `/api/v1/tenants/:X/iam/sessions/:X` |
-| `POST` | `/api/v1/tenants/:X/iam/users` |
-| `PATCH` | `/api/v1/tenants/:X/iam/users/:X` |
-| `DELETE` | `/api/v1/tenants/:X/iam/users/:X` |
-| `POST` | `/api/v1/tenants/:X/iam/users/:X/revoke-sessions` |
-| `PATCH` | `/api/v1/tenants/:X/iam/users/:X/toggle-active` |
-| `PATCH` | `/api/v1/tenants/:X/invoices/:X` |
-| `DELETE` | `/api/v1/tenants/:X/invoices/:X` |
-| `PATCH` | `/api/v1/tenants/:X/notifications/preferences` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/dispute` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/hub/arrive` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/hub/depart` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/hub/load-outbound` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/hub/store` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/pickup/complete` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/pickup/notify` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/return/complete` |
-| `POST` | `/api/v1/tenants/:X/parcels/:X/return/initiate` |
-| `POST` | `/api/v1/tenants/:X/peak-periods` |
-| `PATCH` | `/api/v1/tenants/:X/peak-periods/:X` |
-| `DELETE` | `/api/v1/tenants/:X/peak-periods/:X` |
-| `PATCH` | `/api/v1/tenants/:X/platforms/:X` |
-| `DELETE` | `/api/v1/tenants/:X/platforms/:X` |
-| `POST` | `/api/v1/tenants/:X/platforms/:X/assign` |
-| `POST` | `/api/v1/tenants/:X/platforms/:X/release` |
-| `PUT` | `/api/v1/tenants/:X/portal/config` |
-| `PUT` | `/api/v1/tenants/:X/portal/pages` |
-| `DELETE` | `/api/v1/tenants/:X/portal/pages/:X` |
-| `POST` | `/api/v1/tenants/:X/portal/posts` |
-| `DELETE` | `/api/v1/tenants/:X/portal/posts/:X` |
-| `PUT` | `/api/v1/tenants/:X/portal/posts/:X` |
-| `PATCH` | `/api/v1/tenants/:X/promotions/:X` |
-| `DELETE` | `/api/v1/tenants/:X/promotions/:X` |
-| `POST` | `/api/v1/tenants/:X/scheduler/templates` |
-| `DELETE` | `/api/v1/tenants/:X/scheduler/templates/:X` |
-| `POST` | `/api/v1/tenants/:X/settings/fare-classes` |
-| `PATCH` | `/api/v1/tenants/:X/settings/fare-classes/:X` |
-| `DELETE` | `/api/v1/tenants/:X/settings/fare-classes/:X` |
-| `PUT` | `/api/v1/tenants/:X/settings/integrations/:X/credentials` |
-| `PATCH` | `/api/v1/tenants/:X/settings/payment` |
-| `POST` | `/api/v1/tenants/:X/settings/taxes` |
-| `DELETE` | `/api/v1/tenants/:X/settings/taxes/:X` |
-| `PATCH` | `/api/v1/tenants/:X/settings/taxes/:X` |
-| `DELETE` | `/api/v1/tenants/:X/tariffs/:X` |
-| `PATCH` | `/api/v1/tenants/:X/tariffs/:X` |
-| `POST` | `/api/v1/tenants/:X/tickets/:X/no-show` |
-| `POST` | `/api/v1/tenants/:X/tickets/:X/rebook/later` |
-| `POST` | `/api/v1/tenants/:X/tickets/:X/rebook/next-available` |
-| `POST` | `/api/v1/tenants/:X/tickets/:X/refund-request` |
-| `POST` | `/api/v1/tenants/:X/trips/:X/incident/cancel-in-transit` |
-| `POST` | `/api/v1/tenants/:X/trips/:X/incident/declare-major-delay` |
-| `POST` | `/api/v1/tenants/:X/trips/:X/incident/resume` |
-| `POST` | `/api/v1/tenants/:X/trips/:X/incident/suspend` |
-| `POST` | `/api/v1/tenants/:X/vouchers` |
-| `PATCH` | `/api/v1/tenants/:X/vouchers/:X/cancel` |
+| `POST` | `/api/tenants/:X/scheduler/templates` |
+| `DELETE` | `/api/tenants/:X/scheduler/templates/:X` |
+| `POST` | `/api/tenants/:X/settings/fare-classes` |
+| `PATCH` | `/api/tenants/:X/settings/fare-classes/:X` |
+| `DELETE` | `/api/tenants/:X/settings/fare-classes/:X` |
+| `PUT` | `/api/tenants/:X/settings/integrations/:X/credentials` |
+| `PATCH` | `/api/tenants/:X/settings/payment` |
+| `POST` | `/api/tenants/:X/settings/taxes` |
+| `PATCH` | `/api/tenants/:X/settings/taxes/:X` |
+| `DELETE` | `/api/tenants/:X/settings/taxes/:X` |
+| `PATCH` | `/api/tenants/:X/tariffs/:X` |
+| `DELETE` | `/api/tenants/:X/tariffs/:X` |
+| `POST` | `/api/tenants/:X/trips/:X/incident/cancel-in-transit` |
+| `POST` | `/api/tenants/:X/trips/:X/incident/declare-major-delay` |
+| `POST` | `/api/tenants/:X/trips/:X/incident/resume` |
+| `POST` | `/api/tenants/:X/trips/:X/incident/suspend` |
+| `POST` | `/api/tenants/:X/vouchers` |
+| `PATCH` | `/api/tenants/:X/vouchers/:X/cancel` |
 
 ## 4 · Méthode
 
