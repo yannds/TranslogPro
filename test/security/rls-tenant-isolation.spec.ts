@@ -20,13 +20,13 @@ describe('[SECURITY] RLS & Tenant Isolation — Static Analysis', () => {
 
   it('should NOT match authenticated routes as public', () => {
     const sensitiveRoutes = [
-      '/api/v1/tenants/abc/users',
-      '/api/v1/tenants/abc/staff',
-      '/api/v1/tenants/abc/roles',
-      '/api/v1/tenants/abc/sessions',
-      '/api/v1/tenants/abc/audit-logs',
-      '/api/v1/staff',
-      '/api/v1/users/me',
+      '/api/tenants/abc/users',
+      '/api/tenants/abc/staff',
+      '/api/tenants/abc/roles',
+      '/api/tenants/abc/sessions',
+      '/api/tenants/abc/audit-logs',
+      '/api/staff',
+      '/api/users/me',
     ];
 
     for (const route of sensitiveRoutes) {
@@ -37,10 +37,10 @@ describe('[SECURITY] RLS & Tenant Isolation — Static Analysis', () => {
 
   it('should only match expected public display routes', () => {
     const validPublicRoutes = [
-      '/api/v1/tenants/uuid-here/stations/st-id/display',
-      '/api/v1/tenants/uuid-here/buses/bus-id/display',
-      '/api/v1/tenants/uuid-here/parcels/track/tracking-number',
-      '/api/v1/public/uuid-here/report',
+      '/api/tenants/uuid-here/stations/st-id/display',
+      '/api/tenants/uuid-here/buses/bus-id/display',
+      '/api/tenants/uuid-here/parcels/track/tracking-number',
+      '/api/public/uuid-here/report',
     ];
 
     for (const route of validPublicRoutes) {

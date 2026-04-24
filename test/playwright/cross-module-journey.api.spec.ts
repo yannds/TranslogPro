@@ -373,7 +373,7 @@ test.describe.serial('[E2E-API] Cross-module journey — Bus → Staff → Trip 
   // ─── [XMOD-9] Yield suggestion pour ce trip ────────────────────────────
   test('[XMOD-9] GET /pricing/trips/:tripId/yield retourne une suggestion', async ({ request }) => {
     const res = await request.get(
-      `/api/v1/tenants/${E2E.TENANT_ID}/trips/${tripId}/yield`,
+      `/api/tenants/${E2E.TENANT_ID}/trips/${tripId}/yield`,
       { headers: { Host: E2E.HOSTNAME, Cookie: cookie } },
     );
     expect(res.status()).toBe(200);

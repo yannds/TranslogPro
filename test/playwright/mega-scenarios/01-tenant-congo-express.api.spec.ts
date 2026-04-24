@@ -274,7 +274,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
   // ─── CE-VOUCHER-1 — émission voucher ────────────────────────────────
   test('[CE-VOUCHER-1] admin émet un voucher compensatoire 5 000 XAF', async ({ request }) => {
     const res = await request.post(
-      `/api/v1/tenants/${mega.congo.id}/vouchers`,
+      `/api/tenants/${mega.congo.id}/vouchers`,
       {
         headers: authHeaders(sAdmin),
         data: {
@@ -304,7 +304,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
     // Le driver doit appeler l'endpoint incident. On utilise la session admin
     // (qui a tous les droits). L'endpoint cible est flight-deck ou trip-incidents.
     const res = await request.post(
-      `/api/v1/tenants/${mega.congo.id}/trips/${tripId}/incidents/major-delay`,
+      `/api/tenants/${mega.congo.id}/trips/${tripId}/incidents/major-delay`,
       { headers: authHeaders(sAdmin), data: { minutesDelay: 120, reason: 'Accident route nationale' } },
     );
     const body = res.status() < 400 ? await res.json() : await res.text();
@@ -364,7 +364,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
   // ─── CE-YIELD-1 — suggestion yield pour le trip ─────────────────────────
   test('[CE-YIELD-1] yield suggestion PricingEngine', async ({ request }) => {
     const res = await request.get(
-      `/api/v1/tenants/${mega.congo.id}/trips/${tripId}/yield`,
+      `/api/tenants/${mega.congo.id}/trips/${tripId}/yield`,
       { headers: authHeaders(sManager) },
     );
     if (res.status() === 200) {
@@ -393,7 +393,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
   // ─── CE-SIMULATE-1 — simulate-trip DEFICIT ──────────────────────────────
   test('[CE-SIMULATE-1] simulate-trip détecte un DEFICIT à prix trop bas', async ({ request }) => {
     const res = await request.post(
-      `/api/v1/tenants/${mega.congo.id}/simulate-trip`,
+      `/api/tenants/${mega.congo.id}/simulate-trip`,
       {
         headers: authHeaders(sAdmin),
         data: { routeId: mega.congo.routes[0].id, busId: mega.congo.buses[0].id, ticketPrice: 500, fillRate: 0.1 },
@@ -433,7 +433,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
   // ─── CE-RBAC-1 — cashier NE peut PAS émettre un voucher (403) ──────
   test('[CE-RBAC-1] RBAC : cashier bloqué pour émettre un voucher', async ({ request }) => {
     const res = await request.post(
-      `/api/v1/tenants/${mega.congo.id}/vouchers`,
+      `/api/tenants/${mega.congo.id}/vouchers`,
       {
         headers: authHeaders(sCashier1),
         data: { amount: 1_000, currency: 'XAF', validityDays: 30, origin: 'MANUAL', recipientPhone: '+242060000999' },
@@ -476,7 +476,7 @@ test.describe.serial('[MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL)', () =>
     const from = new Date(Date.now() - 24 * HOUR_MS).toISOString();
     const to   = new Date(Date.now() + 24 * HOUR_MS).toISOString();
     const res = await request.get(
-      `/api/v1/tenants/${mega.congo.id}/analytics/profitability?from=${from}&to=${to}`,
+      `/api/tenants/${mega.congo.id}/analytics/profitability?from=${from}&to=${to}`,
       { headers: authHeaders(sAdmin) },
     );
     const body = res.status() < 400 ? await res.json().catch(() => ({})) : await res.text();

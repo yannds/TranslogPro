@@ -19,9 +19,9 @@ const TOKEN_A   = process.env.E2E_ADMIN_TOKEN       ?? '';
 const TOKEN_B   = process.env.E2E_ADMIN_TOKEN_B     ?? '';
 
 const credentialsUrl = (tenantId: string, provider: string) =>
-  `/api/v1/tenants/${tenantId}/settings/integrations/${provider}/credentials`;
+  `/api/tenants/${tenantId}/settings/integrations/${provider}/credentials`;
 const schemaUrl = (tenantId: string, provider: string) =>
-  `/api/v1/tenants/${tenantId}/settings/integrations/${provider}/schema`;
+  `/api/tenants/${tenantId}/settings/integrations/${provider}/schema`;
 
 test.describe('BYO-credentials — sécurité HTTP', () => {
   test('PUT /credentials sans auth → 401', async () => {

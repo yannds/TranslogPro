@@ -348,7 +348,7 @@ test.describe.serial('[MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→
 
   test('[AT-END-3] Admin : liste de ses factures pour conciliation compta', async ({ request }) => {
     const res = await request.get(
-      `/api/v1/subscription/invoices`,
+      `/api/subscription/invoices`,
       { headers: authHeaders(sAdmin) },
     );
     const body = res.status() < 400 ? await res.json().catch(() => []) : await res.text();

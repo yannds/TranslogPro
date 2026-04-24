@@ -61,7 +61,7 @@ test.describe('Payment & Integrations — smoke HTTP contract', () => {
 
   test('tenant settings endpoints require auth', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
-    const res = await ctx.get('/api/v1/tenants/any-tenant/settings/taxes');
+    const res = await ctx.get('/api/tenants/any-tenant/settings/taxes');
     // Accès refusé faute de session — 401 ou 403 selon la couche auth déclenchée.
     expect([401, 403, 404]).toContain(res.status());
     await ctx.dispose();

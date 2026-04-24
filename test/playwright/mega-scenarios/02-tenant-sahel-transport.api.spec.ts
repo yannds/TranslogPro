@@ -324,7 +324,7 @@ test.describe.serial('[MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID)', () =
     let issued = 0;
     let firstCode = '';
     for (const p of PASSENGERS_WEDNESDAY) {
-      const res = await request.post(`/api/v1/tenants/${mega.sahel.id}/vouchers`, {
+      const res = await request.post(`/api/tenants/${mega.sahel.id}/vouchers`, {
         headers: authHeaders(sAdmin),
         data: { amount: 5_000, currency: 'XOF', validityDays: 60, origin: 'MANUAL', recipientPhone: p.p },
       });
@@ -509,7 +509,7 @@ test.describe.serial('[MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID)', () =
       level: res.status() < 400 ? 'success' : 'warn',
       input: { category: 'BAGGAGE_DAMAGE', amount: 45_000, currency: 'XOF' },
       output: res.status() < 400 ? body : { error: body },
-      notes: res.status() === 404 ? 'Endpoint SAV peut être sous /api/v1/... selon version' : undefined,
+      notes: res.status() === 404 ? 'Endpoint SAV peut être sous /api/... selon version' : undefined,
     });
     expect([200, 201, 400, 404]).toContain(res.status());
   });

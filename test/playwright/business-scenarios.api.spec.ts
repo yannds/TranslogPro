@@ -216,7 +216,7 @@ test.describe.serial('[E2E-API] Business scenarios — colis, voucher, refund', 
   // ─── VOUCHER-1 — Admin issue voucher ────────────────────────────────────
   test('[VOUCHER-1] admin émet un voucher (MANUAL)', async ({ request }) => {
     const res = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/vouchers`,
+      `/api/tenants/${E2E.TENANT_ID}/vouchers`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: {
@@ -263,7 +263,7 @@ test.describe.serial('[E2E-API] Business scenarios — colis, voucher, refund', 
 
     // Redeem
     const res = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/vouchers/redeem`,
+      `/api/tenants/${E2E.TENANT_ID}/vouchers/redeem`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: { code: voucherCode, ticketId: ticket2Id },
@@ -299,9 +299,9 @@ test.describe.serial('[E2E-API] Business scenarios — colis, voucher, refund', 
 
   // ─── ANALYTICS-1 — Simulate-trip DEFICIT sur même infra ─────────────────
   test('[ANALYTICS-1] Simulate-trip retourne DEFICIT si prix trop bas', async ({ request }) => {
-    // Le PricingController est versionné : /api/v1/tenants/:id/simulate-trip
+    // Le PricingController est versionné : /api/tenants/:id/simulate-trip
     const res = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/simulate-trip`,
+      `/api/tenants/${E2E.TENANT_ID}/simulate-trip`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: { routeId, busId, ticketPrice: 100, fillRate: 0.1 },

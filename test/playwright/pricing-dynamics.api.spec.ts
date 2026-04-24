@@ -153,7 +153,7 @@ test.describe.serial('[E2E-API] Pricing dynamics — yield + profitability par l
   // ─── YIELD-1 — Yield suggestion renvoie une règle valide ────────────────
   test('[YIELD-1] GET /trips/:tripId/yield renvoie une suggestion structurée', async ({ request }) => {
     const res = await request.get(
-      `/api/v1/tenants/${E2E.TENANT_ID}/trips/${tripId}/yield`,
+      `/api/tenants/${E2E.TENANT_ID}/trips/${tripId}/yield`,
       { headers: { Host: E2E.HOSTNAME, Cookie: cookie } },
     );
     expect(res.status()).toBe(200);
@@ -172,7 +172,7 @@ test.describe.serial('[E2E-API] Pricing dynamics — yield + profitability par l
   test('[PROFIT-LINE-1] simulate-trip : DEFICIT à bas prix, PROFITABLE à haut prix', async ({ request }) => {
     // Bas prix
     const low = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/simulate-trip`,
+      `/api/tenants/${E2E.TENANT_ID}/simulate-trip`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: { routeId, busId, ticketPrice: 500, fillRate: 0.3 },
@@ -185,7 +185,7 @@ test.describe.serial('[E2E-API] Pricing dynamics — yield + profitability par l
 
     // Haut prix + fillRate élevé
     const high = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/simulate-trip`,
+      `/api/tenants/${E2E.TENANT_ID}/simulate-trip`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: { routeId, busId, ticketPrice: 50_000, fillRate: 0.9 },
@@ -208,7 +208,7 @@ test.describe.serial('[E2E-API] Pricing dynamics — yield + profitability par l
     });
 
     const res = await request.post(
-      `/api/v1/tenants/${E2E.TENANT_ID}/simulate-trip`,
+      `/api/tenants/${E2E.TENANT_ID}/simulate-trip`,
       {
         headers: { Host: E2E.HOSTNAME, Cookie: cookie, 'Content-Type': 'application/json' },
         data: { routeId, busId: naked, ticketPrice: 15_000, fillRate: 0.7 },
@@ -228,7 +228,7 @@ test.describe.serial('[E2E-API] Pricing dynamics — yield + profitability par l
     const to   = new Date().toISOString();
 
     const res = await request.get(
-      `/api/v1/tenants/${E2E.TENANT_ID}/analytics/profitability?from=${from}&to=${to}`,
+      `/api/tenants/${E2E.TENANT_ID}/analytics/profitability?from=${from}&to=${to}`,
       { headers: { Host: E2E.HOSTNAME, Cookie: cookie } },
     );
     expect(res.status()).toBe(200);
