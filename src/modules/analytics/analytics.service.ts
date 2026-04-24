@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 /**
@@ -21,6 +21,7 @@ function csvEscape(s: string | null | undefined): string {
 
 @Injectable()
 export class AnalyticsService {
+  private readonly logger = new Logger(AnalyticsService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -500,6 +501,18 @@ export class AnalyticsService {
    * Score = fillRate*60 + ratio_trips_rentables*30 + fréquence*10 (sur 100).
    */
   async getAiRoutes(tenantId: string) {
+    try {
+      return await this._getAiRoutes(tenantId);
+    } catch (err) {
+      this.logger.error(
+        `getAiRoutes failed for tenant=${tenantId}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return [];
+    }
+  }
+
+  private async _getAiRoutes(tenantId: string) {
     const since = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
 
     const [analytics, blackRows] = await Promise.all([
@@ -575,75 +588,86 @@ export class AnalyticsService {
    * (marge négative), maintenance préventive (km élevés).
    */
   async getAiFleet(tenantId: string) {
-    const since = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
+    try {
+      const since = new Date(Date.now() - 90 * AnalyticsService.DAY_MS);
 
-    const busAnalytics = await this.prisma.tripAnalytics.groupBy({
-      by:    ['busId'],
-      where: { tenantId, tripDate: { gte: since } },
-      _avg:  { avgFillRate: true, avgNetMargin: true },
-      _sum:  { tripCount: true },
-    });
+      const busAnalytics = await this.prisma.tripAnalytics.groupBy({
+        by:    ['busId'],
+        where: { tenantId, tripDate: { gte: since } },
+        _avg:  { avgFillRate: true, avgNetMargin: true },
+        _sum:  { tripCount: true },
+      });
 
-    if (busAnalytics.length === 0) return [];
+      if (busAnalytics.length === 0) return [];
 
-    const busIds = busAnalytics.map(a => a.busId);
-    const buses  = await this.prisma.bus.findMany({
-      where:  { id: { in: busIds }, tenantId },
-      select: {
-        id: true, plateNumber: true, model: true, capacity: true,
-        type: true, currentOdometerKm: true,
-      },
-    });
-    const busMap = new Map(buses.map(b => [b.id, b]));
-    const advices: {
-      id: string; category: 'rightsize' | 'assignment' | 'maintenance';
-      vehicle: string; title: string; detail: string; impact: string; score: number;
-    }[] = [];
+      const busIds = busAnalytics.map(a => a.busId);
+      const buses  = await this.prisma.bus.findMany({
+        where:  { id: { in: busIds }, tenantId },
+        select: {
+          id: true, plateNumber: true, model: true, capacity: true,
+          type: true, currentOdometerKm: true,
+        },
+      });
+      const busMap = new Map(buses.map(b => [b.id, b]));
+      const advices: {
+        id: string; category: 'rightsize' | 'assignment' | 'maintenance';
+        vehicle: string; title: string; detail: string; impact: string; score: number;
+      }[] = [];
 
-    for (const a of busAnalytics) {
-      const bus       = busMap.get(a.busId);
-      if (!bus) continue;
-      const fillRate  = a._avg.avgFillRate  ?? 0;
-      const margin    = a._avg.avgNetMargin ?? 0;
-      const trips     = a._sum.tripCount    ?? 0;
-      const fillPct   = Math.round(fillRate * 100);
+      for (const a of busAnalytics) {
+        const bus       = busMap.get(a.busId);
+        if (!bus) continue;
+        const fillRate  = a._avg.avgFillRate  ?? 0;
+        const margin    = a._avg.avgNetMargin ?? 0;
+        const trips     = a._sum.tripCount    ?? 0;
+        const fillPct   = Math.round(fillRate * 100);
 
-      if (bus.capacity > 35 && fillRate < 0.62) {
-        const fuelSave = Math.round((1 - fillRate) * 12);
-        advices.push({
-          id:       `rightsize-${bus.id}`,
-          category: 'rightsize',
-          vehicle:  bus.plateNumber,
-          title:    `Réduire la capacité — passer à un 30 places`,
-          detail:   `Taux remplissage moyen ${fillPct}% sur 90j avec un ${bus.capacity} places. Un bus 30 places couvrirait la demande.`,
-          impact:   `+${fuelSave}% économie carburant estimée`,
-          score:    Math.min(95, Math.round(85 - fillRate * 50)),
-        });
-      } else if (margin < 0 && trips >= 5) {
-        advices.push({
-          id:       `assign-${bus.id}`,
-          category: 'assignment',
-          vehicle:  bus.plateNumber,
-          title:    `Réaffecter sur une ligne rentable`,
-          detail:   `Marge nette négative sur 90j. Réaffecter ce bus sur une ligne à fort taux de remplissage optimiserait le ROI.`,
-          impact:   `Potentiel +12–18% marge nette`,
-          score:    Math.min(90, Math.round(55 + Math.min(25, trips / 3))),
-        });
-      } else if (bus.currentOdometerKm && bus.currentOdometerKm > 80_000) {
-        const kmStr = Math.round(bus.currentOdometerKm).toLocaleString('fr-FR');
-        advices.push({
-          id:       `maint-${bus.id}`,
-          category: 'maintenance',
-          vehicle:  bus.plateNumber,
-          title:    `Maintenance préventive recommandée`,
-          detail:   `${kmStr} km au compteur. Planifier une révision complète pour réduire le risque de panne en route.`,
-          impact:   `-15% risque immobilisation non planifiée`,
-          score:    Math.min(88, Math.round(55 + Math.min(33, (bus.currentOdometerKm - 80_000) / 5_000))),
-        });
+        if (bus.capacity > 35 && fillRate < 0.62) {
+          const fuelSave = Math.round((1 - fillRate) * 12);
+          advices.push({
+            id:       `rightsize-${bus.id}`,
+            category: 'rightsize',
+            vehicle:  bus.plateNumber,
+            title:    `Réduire la capacité — passer à un 30 places`,
+            detail:   `Taux remplissage moyen ${fillPct}% sur 90j avec un ${bus.capacity} places. Un bus 30 places couvrirait la demande.`,
+            impact:   `+${fuelSave}% économie carburant estimée`,
+            score:    Math.min(95, Math.round(85 - fillRate * 50)),
+          });
+        } else if (margin < 0 && trips >= 5) {
+          advices.push({
+            id:       `assign-${bus.id}`,
+            category: 'assignment',
+            vehicle:  bus.plateNumber,
+            title:    `Réaffecter sur une ligne rentable`,
+            detail:   `Marge nette négative sur 90j. Réaffecter ce bus sur une ligne à fort taux de remplissage optimiserait le ROI.`,
+            impact:   `Potentiel +12–18% marge nette`,
+            score:    Math.min(90, Math.round(55 + Math.min(25, trips / 3))),
+          });
+        } else if (bus.currentOdometerKm && bus.currentOdometerKm > 80_000) {
+          const kmStr = Math.round(bus.currentOdometerKm).toLocaleString('fr-FR');
+          advices.push({
+            id:       `maint-${bus.id}`,
+            category: 'maintenance',
+            vehicle:  bus.plateNumber,
+            title:    `Maintenance préventive recommandée`,
+            detail:   `${kmStr} km au compteur. Planifier une révision complète pour réduire le risque de panne en route.`,
+            impact:   `-15% risque immobilisation non planifiée`,
+            score:    Math.min(88, Math.round(55 + Math.min(33, (bus.currentOdometerKm - 80_000) / 5_000))),
+          });
+        }
       }
-    }
 
-    return advices.sort((a, b) => b.score - a.score).slice(0, 8);
+      return advices.sort((a, b) => b.score - a.score).slice(0, 8);
+    } catch (err) {
+      // Résilience : un échec Prisma (schema drift, timeout, groupBy edge-case)
+      // ne doit pas casser la page Optimisation flotte. On log + retourne [] —
+      // la page affiche l'état "aucune recommandation" et reste navigable.
+      this.logger.error(
+        `getAiFleet failed for tenant=${tenantId}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return [];
+    }
   }
 
   /**
@@ -653,6 +677,18 @@ export class AnalyticsService {
    * Seuil de confiance minimum 60 — suggestions en dessous exclues.
    */
   async getAiPricing(tenantId: string) {
+    try {
+      return await this._getAiPricing(tenantId);
+    } catch (err) {
+      this.logger.error(
+        `getAiPricing failed for tenant=${tenantId}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return [];
+    }
+  }
+
+  private async _getAiPricing(tenantId: string) {
     const since = new Date(Date.now() - 30 * AnalyticsService.DAY_MS);
     const DAY_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 

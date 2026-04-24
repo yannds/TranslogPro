@@ -49,10 +49,10 @@ export class NotificationService {
   // ─── Public API ──────────────────────────────────────────────────────────────
 
   async send(dto: SendNotificationDto): Promise<boolean> {
-    // 1. Vérifier les préférences utilisateur
+    // 1. Vérifier les préférences utilisateur (tenant-scoped)
     if (dto.userId) {
-      const prefs = await this.prisma.notificationPreference.findUnique({
-        where: { userId: dto.userId },
+      const prefs = await this.prisma.notificationPreference.findFirst({
+        where: { tenantId: dto.tenantId, userId: dto.userId },
       });
       if (prefs && !this.isChannelEnabled(prefs, dto.channel)) {
         this.logger.debug(
@@ -283,10 +283,13 @@ export class NotificationService {
    * créer la ligne — création paresseuse au premier upsert.
    */
   async getPreferences(tenantId: string, userId: string) {
-    const existing = await this.prisma.notificationPreference.findUnique({
-      where: { userId },
+    // Security : tenantId racine du where (règle ADR "tenantId always in WHERE").
+    // userId est déjà @unique dans le schema, mais on ajoute tenantId pour
+    // garantir zéro fuite si l'invariant user↔tenant change (multi-tenant user).
+    const existing = await this.prisma.notificationPreference.findFirst({
+      where: { tenantId, userId },
     });
-    if (existing && existing.tenantId === tenantId) return existing;
+    if (existing) return existing;
     // Defaults alignés sur le schema Prisma — pas de magic number.
     return {
       id:       null,
@@ -309,9 +312,22 @@ export class NotificationService {
     userId:   string,
     patch:    Partial<{ sms: boolean; whatsapp: boolean; push: boolean; email: boolean }>,
   ) {
-    return this.prisma.notificationPreference.upsert({
-      where:  { userId },
-      create: {
+    // Security : on vérifie le tenant propriétaire avant update pour bloquer
+    // toute tentative de modif cross-tenant via un userId d'un autre tenant.
+    const existing = await this.prisma.notificationPreference.findFirst({
+      where: { tenantId, userId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return this.prisma.notificationPreference.update({
+        where: { id: existing.id },
+        data:  patch,
+      });
+    }
+
+    return this.prisma.notificationPreference.create({
+      data: {
         userId,
         tenantId,
         sms:      patch.sms      ?? true,
@@ -319,7 +335,6 @@ export class NotificationService {
         push:     patch.push     ?? true,
         email:    patch.email    ?? false,
       },
-      update: patch,
     });
   }
 }

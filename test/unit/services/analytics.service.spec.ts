@@ -63,3 +63,51 @@ describe('AnalyticsService.getKpis', () => {
     expect(ticketCall.where.agencyId).toBe(AGENCY);
   });
 });
+
+// ── Resilience des endpoints IA (pas de 5xx sur erreur Prisma) ────────────────
+describe('AnalyticsService — AI endpoints resilience', () => {
+  function makeFailingPrisma(where: 'tripAnalytics' | 'bus') {
+    const fail = (msg: string) => jest.fn().mockRejectedValue(new Error(msg));
+    return {
+      tripAnalytics: { groupBy: where === 'tripAnalytics'
+        ? fail('boom groupBy')
+        : jest.fn().mockResolvedValue([
+            { busId: 'b1', _avg: { avgFillRate: 0.4, avgNetMargin: -10 }, _sum: { tripCount: 10 } },
+          ]) },
+      bus:   { findMany: where === 'bus' ? fail('boom findMany') : jest.fn().mockResolvedValue([]) },
+      route: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as jest.Mocked<PrismaService>;
+  }
+
+  it('getAiFleet retourne [] si tripAnalytics.groupBy throw (ne propage PAS en 5xx)', async () => {
+    const svc = new AnalyticsService(makeFailingPrisma('tripAnalytics'));
+    const result = await svc.getAiFleet('tenant-x');
+    expect(result).toEqual([]);
+  });
+
+  it('getAiFleet retourne [] si bus.findMany throw (ne propage PAS en 5xx)', async () => {
+    const svc = new AnalyticsService(makeFailingPrisma('bus'));
+    const result = await svc.getAiFleet('tenant-x');
+    expect(result).toEqual([]);
+  });
+
+  it('getAiRoutes retourne [] si tripAnalytics.groupBy throw', async () => {
+    const prisma = {
+      tripAnalytics: { groupBy: jest.fn().mockRejectedValue(new Error('db down')) },
+      route:         { findMany: jest.fn() },
+    } as unknown as jest.Mocked<PrismaService>;
+    const svc = new AnalyticsService(prisma);
+    const result = await svc.getAiRoutes('tenant-x');
+    expect(result).toEqual([]);
+  });
+
+  it('getAiPricing retourne [] si tripAnalytics.groupBy throw', async () => {
+    const prisma = {
+      tripAnalytics: { groupBy: jest.fn().mockRejectedValue(new Error('timeout')) },
+      route:         { findMany: jest.fn() },
+    } as unknown as jest.Mocked<PrismaService>;
+    const svc = new AnalyticsService(prisma);
+    const result = await svc.getAiPricing('tenant-x');
+    expect(result).toEqual([]);
+  });
+});
