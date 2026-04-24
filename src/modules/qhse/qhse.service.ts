@@ -346,7 +346,7 @@ export class QhseService {
       data:  { photoKeys: [...current, key] },
     });
 
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   // ─── Third Parties ────────────────────────────────────────────────────────
@@ -375,7 +375,7 @@ export class QhseService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.accidentThirdParty.update({ where: { id: thirdPartyId }, data: { statementFile: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   // ─── Injuries ─────────────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ export class QhseService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.medicalFollowUp.update({ where: { id: followUpId }, data: { fileKey: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   // ─── Hospitals ────────────────────────────────────────────────────────────
@@ -563,7 +563,7 @@ export class QhseService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.disputeExpense.update({ where: { id: expenseId }, data: { fileKey: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   async getDisputeSummary(tenantId: string, disputeId: string) {
@@ -757,7 +757,7 @@ export class QhseService {
 
     const key = `${tenantId}/qhse/${executionId}/${stepId}-${Date.now()}.jpg`;
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
-    return { uploadUrl: url, photoKey: key };
+    return { uploadUrl: url.url, photoKey: key };
   }
 
   // ─── Auto-trigger QHSE procedure ─────────────────────────────────────────

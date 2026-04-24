@@ -172,7 +172,7 @@ export class FleetDocsService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.vehicleDocument.update({ where: { id: documentId }, data: { fileKey: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   async getDocumentsForBus(tenantId: string, busId: string) {

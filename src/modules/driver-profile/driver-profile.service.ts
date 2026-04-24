@@ -301,7 +301,7 @@ export class DriverProfileService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.driverLicense.update({ where: { id: licenseId }, data: { fileKey: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   async getAllLicenses(tenantId: string) {
@@ -656,7 +656,7 @@ export class DriverProfileService {
     const url = await this.storage.getUploadUrl(tenantId, key, DocumentType.MAINTENANCE_DOC);
 
     await this.prisma.driverTraining.update({ where: { id: trainingId }, data: { fileKey: key } });
-    return { uploadUrl: url, fileKey: key };
+    return { uploadUrl: url.url, fileKey: key };
   }
 
   async getTrainingsForDriver(tenantId: string, staffId: string, scope?: ScopeContext) {
