@@ -82,6 +82,7 @@ function makePrisma(ticket = TICKET_BASE): jest.Mocked<PrismaService> {
       findFirst: jest.fn().mockResolvedValue({ id: 'ag-001' }),
     },
     transact: jest.fn().mockImplementation((fn: (tx: PrismaService) => Promise<unknown>) => fn({
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: 'trip-001' }]),
       ticket: {
         create:    jest.fn().mockResolvedValue(ticket),
         findFirst: jest.fn().mockResolvedValue(null),
