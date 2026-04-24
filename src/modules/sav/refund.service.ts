@@ -11,6 +11,7 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CancellationPolicyService, RefundCalculation } from './cancellation-policy.service';
 import { CashierService } from '../cashier/cashier.service';
+import { VoucherService } from '../voucher/voucher.service';
 import { v4 as uuidv4 } from 'uuid';
 
 /** Acteur synthétique pour les transitions système (auto-approve, bulk). */
@@ -30,6 +31,7 @@ export class RefundService {
     private readonly policyService:   CancellationPolicyService,
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
     private readonly cashier:         CashierService,
+    private readonly voucher:         VoucherService,
   ) {}
 
   /* ── Queries ──────────────────────────────────────────────── */
@@ -195,7 +197,85 @@ export class RefundService {
   async reject(tenantId: string, id: string, actor: CurrentUserPayload, notes?: string) {
     // Notes transmises au persist pour écriture atomique avec rejectedBy/rejectedAt
     // dans la même transaction que la transition — plus de window race post-engine.
-    return this.transition(tenantId, id, RefundAction.REJECT, actor, { notes });
+    const result = await this.transition(tenantId, id, RefundAction.REJECT, actor, { notes });
+
+    // Gap B5 — voucher fallback automatique si config tenant activée.
+    // Geste commercial : refund rejeté cash → bon d'achat courtoisie au prorata.
+    // Émission post-transition (best-effort) : échec = warn seulement, ne bloque
+    // pas le REJECT qui reste acquis. Audit cross-références Refund.notes →
+    // Voucher.metadata.sourceRefundId.
+    try {
+      await this.maybeIssueFallbackVoucher(tenantId, id, actor);
+    } catch (err) {
+      this.logger.warn(
+        `Voucher fallback on refund reject failed refund=${id}: ${(err as Error).message}`,
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Gap B5 — émet un voucher de courtoisie après refund REJECTED si le tenant
+   * l'a activé via `TenantBusinessConfig.voucherFallbackOnRejectEnabled`.
+   * Montant = refund.amount × voucherFallbackOnRejectPct. Portée SAME_COMPANY,
+   * origine GESTURE. Bénéficiaire = customer du ticket rejeté si connu, sinon
+   * shadow (recipientPhone/recipientEmail).
+   */
+  private async maybeIssueFallbackVoucher(
+    tenantId: string,
+    refundId: string,
+    actor:    CurrentUserPayload,
+  ): Promise<void> {
+    const config = await this.prisma.tenantBusinessConfig.findUnique({
+      where:  { tenantId },
+      select: {
+        voucherFallbackOnRejectEnabled:      true,
+        voucherFallbackOnRejectPct:          true,
+        voucherFallbackOnRejectValidityDays: true,
+      },
+    });
+    if (!config?.voucherFallbackOnRejectEnabled) return;
+
+    const refund = await this.prisma.refund.findFirst({
+      where:  { id: refundId, tenantId },
+      select: { id: true, amount: true, currency: true, ticketId: true, tripId: true },
+    });
+    if (!refund) return;
+
+    const pct = Math.max(0, Math.min(1, config.voucherFallbackOnRejectPct ?? 0));
+    const fallbackAmount = Math.round(refund.amount * pct * 100) / 100;
+    if (fallbackAmount <= 0) {
+      this.logger.debug(`Voucher fallback skip — amount=0 for refund=${refundId}`);
+      return;
+    }
+
+    // Lookup customer/contacts depuis le ticket rejeté (peut être null si orphelin).
+    const ticket = await this.prisma.ticket.findFirst({
+      where:  { id: refund.ticketId, tenantId },
+      select: { customerId: true, passengerPhone: true, passengerEmail: true },
+    });
+
+    await this.voucher.issue({
+      tenantId,
+      customerId:     ticket?.customerId ?? null,
+      recipientPhone: ticket?.passengerPhone ?? null,
+      recipientEmail: ticket?.passengerEmail ?? null,
+      amount:         fallbackAmount,
+      currency:       refund.currency,
+      validityDays:   config.voucherFallbackOnRejectValidityDays ?? 90,
+      usageScope:     'SAME_COMPANY',
+      origin:         'GESTURE',
+      sourceTripId:   refund.tripId ?? null,
+      sourceTicketId: refund.ticketId,
+      issuedBy:       actor.id,
+      metadata:       { sourceRefundId: refund.id, reason: 'REFUND_REJECTED_FALLBACK' },
+    });
+
+    this.logger.log(
+      `Voucher fallback emitted ${fallbackAmount}${refund.currency} after refund ${refundId} REJECTED ` +
+      `(pct=${pct}, validity=${config.voucherFallbackOnRejectValidityDays}j)`,
+    );
   }
 
   private async autoApprove(tenantId: string, id: string) {

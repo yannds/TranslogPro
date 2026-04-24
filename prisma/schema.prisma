@@ -314,6 +314,16 @@ model TenantBusinessConfig {
   // selon la logique : on prend le max entre pct*amount et flat pour éviter double-dip).
   noShowPenaltyFlatAmount Float   @default(0)
 
+  // ── Refund rejeté : fallback voucher (2026-04-24, gap B5) ───────────────
+  // Si true, quand un refund est REJECTED (montant non remboursable cash) un
+  // voucher de courtoisie est auto-émis au bénéficiaire au prorata du
+  // `voucherFallbackOnRejectPct` (fraction 0..1 du refund rejeté).
+  // Validité = `voucherFallbackOnRejectValidityDays`, portée SAME_COMPANY.
+  // Le geste commercial est tracé dans l'audit Refund + Voucher.origin='GESTURE'.
+  voucherFallbackOnRejectEnabled      Boolean @default(false)
+  voucherFallbackOnRejectPct          Float   @default(0.5)
+  voucherFallbackOnRejectValidityDays Int     @default(90)
+
   // ── Incident en route : compensation (2026-04-19) ───────────────────────
   incidentCompensationEnabled     Boolean @default(false)
   // Paliers délai → compensation. [{delayMinutes, compensationPct, snackBundle?}]

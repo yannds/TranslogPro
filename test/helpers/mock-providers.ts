@@ -260,6 +260,12 @@ export function createPrismaMock() {
     role:                  common({ id: ROLE_ID, tenantId: TENANT_ID, name: 'ADMIN' }),
     rolePermission:        common({ id: 'rp-01', roleId: ROLE_ID, permission: 'data.ticket.read.agency' }),
     tenant:                common({ id: TENANT_ID, name: 'Test Company', slug: 'test-co', status: 'ACTIVE' }),
+    // TenantDomainRepository (utilisé par TenantHostMiddleware au tout début
+    // de la chaîne). null → résolution "no match" propre, sans throw.
+    tenantDomain:          common(null),
+    // PlatformSubscription (utilisé par SubscriptionGuard — APP_GUARD global)
+    // TRIAL par défaut → passe sans erreur en E2E (pas de 403 SUBSCRIPTION_SUSPENDED).
+    platformSubscription:  common({ id: 'sub-01', tenantId: TENANT_ID, status: 'TRIAL', planId: 'plan-trial' }),
     impersonationSession:  common({ id: 'sess-test-001', actorId: USER_ID, actorTenantId: '00000000-0000-0000-0000-000000000000', targetTenantId: TENANT_ID, status: 'ACTIVE', expiresAt: new Date(Date.now() + 900_000), tokenHash: 'mock-hash', createdAt: new Date() }),
 
     // Domain

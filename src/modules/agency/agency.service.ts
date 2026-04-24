@@ -125,7 +125,7 @@ export class AgencyService {
         select: { id: true },
       });
       if (virtualRegisters.length > 0) {
-        const ids = virtualRegisters.map((r) => r.id);
+        const ids = virtualRegisters.map((r: { id: string }) => r.id);
         await tx.transaction.deleteMany({
           where: { tenantId, cashRegisterId: { in: ids } },
         });

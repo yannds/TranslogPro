@@ -6,9 +6,10 @@ import { RefundTripListener } from './refund-trip.listener';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { WorkflowModule } from '../../core/workflow/workflow.module';
 import { CashierModule } from '../cashier/cashier.module';
+import { VoucherModule } from '../voucher/voucher.module';
 
 @Module({
-  imports:     [WorkflowModule, CashierModule],
+  imports:     [WorkflowModule, CashierModule, VoucherModule],
   controllers: [SavController],
   providers:   [SavService, RefundService, RefundTripListener, CancellationPolicyService],
   exports:     [SavService, RefundService, CancellationPolicyService],

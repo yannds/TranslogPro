@@ -52,7 +52,15 @@ function makePrisma(overrides: {
       create: agencyCreateMock,
       delete: overrides.agencyDelete   ?? jest.fn().mockResolvedValue(AGENCY),
     },
-    cashRegister: { create: cashRegisterCreateMock },
+    cashRegister: {
+      create:     cashRegisterCreateMock,
+      // Nettoyage VIRTUAL register avant agency.delete (FK).
+      findMany:   jest.fn().mockResolvedValue([]),  // aucune caisse VIRTUAL → no-op dans le service
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    transaction:  {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   };
   return {
     agency: {

@@ -44,8 +44,19 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup — ordre FK-safe
+  // Cleanup — ordre FK-safe. Les caisses VIRTUAL sont créées à la volée par
+  // le service (getOrCreateVirtualRegister) et retiennent une FK sur Agency,
+  // donc on les purge avant agency.deleteMany (et leurs transactions avant elles).
   await prismaClient.user.deleteMany({ where: { tenantId: TENANT_ID } });
+  const vregs = await prismaClient.cashRegister.findMany({
+    where:  { tenantId: TENANT_ID, kind: 'VIRTUAL' },
+    select: { id: true },
+  });
+  if (vregs.length > 0) {
+    const ids = vregs.map((r: { id: string }) => r.id);
+    await prismaClient.transaction.deleteMany({ where: { tenantId: TENANT_ID, cashRegisterId: { in: ids } } });
+    await prismaClient.cashRegister.deleteMany({ where: { tenantId: TENANT_ID, id: { in: ids } } });
+  }
   await prismaClient.agency.deleteMany({ where: { tenantId: TENANT_ID } });
   await prismaClient.tenant.delete({ where: { id: TENANT_ID } }).catch(() => {/* idempotent */});
   await prismaClient.$disconnect();
