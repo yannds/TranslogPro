@@ -352,6 +352,6 @@ export class PortalAdminService {
   async getMediaUploadUrl(tenantId: string, filename: string) {
     const key = `cms/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const signed = await this.storage.getUploadUrl(tenantId, key, DocumentType.CMS_MEDIA);
-    return { uploadUrl: signed.url, key: signed.key };
+    return { uploadUrl: signed.url, fileKey: signed.key, key: signed.key, expiresAt: signed.expiresAt };
   }
 }

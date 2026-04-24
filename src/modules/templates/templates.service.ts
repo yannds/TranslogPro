@@ -274,7 +274,8 @@ export class TemplatesService {
   async getUploadUrl(tenantId: string, id: string) {
     const template = await this.findOne(tenantId, id);
     const key = `${tenantId}/templates/${template.slug}/v${template.version}.hbs`;
-    return this.storage.getUploadUrl(tenantId, key, DocumentType.TEMPLATE_SOURCE);
+    const signed = await this.storage.getUploadUrl(tenantId, key, DocumentType.TEMPLATE_SOURCE);
+    return { uploadUrl: signed.url, fileKey: key, expiresAt: signed.expiresAt };
   }
 
   // ─── Résolution runtime ──────────────────────────────────────────────────────
