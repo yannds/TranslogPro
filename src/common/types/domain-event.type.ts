@@ -72,9 +72,17 @@ export const EventTypes = {
   DRIVER_TRAINING_DUE:            'driver.training.due',
   DRIVER_LICENSE_EXPIRING:        'driver.license.expiring',
 
-  // Crew briefing
+  // Crew briefing (legacy — checklist matériel seule)
   CREW_BRIEFING_COMPLETED:        'crew.briefing.completed',
   CREW_BRIEFING_EQUIPMENT_MISSING:'crew.briefing.equipment_missing',
+
+  // Briefing QHSE v2 (refonte 2026-04-24, multi-chapitres + double signature)
+  BRIEFING_SIGNED:                'briefing.signed',
+  BRIEFING_OVERRIDE_APPLIED:      'briefing.override.applied',
+
+  // Trip safety alerts (émis par briefing, incidents, compliance)
+  TRIP_SAFETY_ALERT_RAISED:       'trip.safety_alert.raised',
+  TRIP_SAFETY_ALERT_RESOLVED:     'trip.safety_alert.resolved',
 
   // QHSE & Accidents
   ACCIDENT_REPORTED:              'accident.reported',

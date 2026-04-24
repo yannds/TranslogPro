@@ -8,8 +8,8 @@
  */
 
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { CrewBriefingService }                    from '../crew-briefing.service';
-import { PrismaService }                          from '../../../infrastructure/database/prisma.service';
+import { CrewBriefingService }                    from '@modules/crew-briefing/crew-briefing.service';
+import { PrismaService }                          from '@infra/database/prisma.service';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,9 @@ function makePrisma(opts: {
   } as unknown as PrismaService;
 }
 
-const mockEventBus = { publish: jest.fn() } as any;
+const mockEventBus  = { publish: jest.fn() } as any;
+const mockRestCalc  = { assess: jest.fn().mockResolvedValue({ compliant: true, restHours: 12, thresholdHours: 11, shortfallHours: 0, lastTripEndedAt: null, driverId: 'driver-staff' }) } as any;
+const mockAlertSvc  = { raise: jest.fn().mockResolvedValue({ id: 'alert-1' }), list: jest.fn(), resolve: jest.fn() } as any;
 
 // ─── Suite ────────────────────────────────────────────────────────────────────
 
@@ -89,7 +91,7 @@ describe('CrewBriefingService', () => {
 
     it('allEquipmentOk=true si tous les équipements obligatoires sont OK avec bonne qté', async () => {
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       const dto = {
         assignmentId: ASSIGNMENT_ID,
@@ -108,7 +110,7 @@ describe('CrewBriefingService', () => {
 
     it('allEquipmentOk=false si un équipement obligatoire est absent', async () => {
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       const dto = {
         assignmentId: ASSIGNMENT_ID,
@@ -127,7 +129,7 @@ describe('CrewBriefingService', () => {
 
     it('allEquipmentOk=false si un item est ok=false', async () => {
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       const dto = {
         assignmentId: ASSIGNMENT_ID,
@@ -146,7 +148,7 @@ describe('CrewBriefingService', () => {
 
     it('allEquipmentOk=false si qty insuffisante', async () => {
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       const dto = {
         assignmentId: ASSIGNMENT_ID,
@@ -165,7 +167,7 @@ describe('CrewBriefingService', () => {
 
     it('recense plusieurs manquants dans missingEquipmentCodes', async () => {
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       const result = await svc.createBriefing(TENANT_ID, {
         assignmentId: ASSIGNMENT_ID,
@@ -183,7 +185,7 @@ describe('CrewBriefingService', () => {
     it('publie l\'événement CREW_BRIEFING_COMPLETED si conforme', async () => {
       const publishSpy = jest.fn().mockResolvedValue(undefined);
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, { publish: publishSpy } as any);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, { publish: publishSpy } as any);
 
       await svc.createBriefing(TENANT_ID, {
         assignmentId: ASSIGNMENT_ID,
@@ -202,7 +204,7 @@ describe('CrewBriefingService', () => {
     it('publie CREW_BRIEFING_EQUIPMENT_MISSING si non conforme', async () => {
       const publishSpy = jest.fn().mockResolvedValue(undefined);
       const prisma = makePrisma();
-      svc = new CrewBriefingService(prisma, { publish: publishSpy } as any);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, { publish: publishSpy } as any);
 
       await svc.createBriefing(TENANT_ID, {
         assignmentId: ASSIGNMENT_ID,
@@ -219,7 +221,7 @@ describe('CrewBriefingService', () => {
   describe('createBriefing() — cas d\'erreur', () => {
     it('lève NotFoundException si assignment introuvable', async () => {
       const prisma = makePrisma({ assignment: null });
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       await expect(
         svc.createBriefing(TENANT_ID, { assignmentId: 'unknown', conductedById: CONDUCTED_BY, checkedItems: [] }),
@@ -228,7 +230,7 @@ describe('CrewBriefingService', () => {
 
     it('lève BadRequestException si briefing déjà existant pour cette assignment', async () => {
       const prisma = makePrisma({ existingBriefing: { id: 'existing-1' } });
-      svc = new CrewBriefingService(prisma, mockEventBus);
+      svc = new CrewBriefingService(prisma, mockRestCalc, mockAlertSvc, mockEventBus);
 
       await expect(
         svc.createBriefing(TENANT_ID, {
