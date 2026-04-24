@@ -1589,6 +1589,7 @@ const ar: Record<string, Record<string, string>> = {
     "alertKmBefore": "التنبيه (كم قبل انتهاء الصلاحية)",
     "vehicle": "المركبة",
     "noVehicle": "لا توجد مركبات",
+    "errorMissingRequired": "اختر مركبة ونوعًا قبل الإرسال.",
     "consumable": "مستهلك",
     "noConsumable": "لا يوجد مستهلك",
     "reference": "المرجع",

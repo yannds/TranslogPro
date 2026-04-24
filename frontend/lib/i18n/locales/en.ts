@@ -1993,6 +1993,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "alertKmBefore": "Alert (km before expiry)",
     "vehicle": "Vehicle",
     "noVehicle": "No vehicle",
+    "errorMissingRequired": "Select a vehicle and a type before submitting.",
     "consumable": "Consumable",
     "noConsumable": "No consumable",
     "reference": "Reference",

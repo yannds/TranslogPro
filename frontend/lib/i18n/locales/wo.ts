@@ -1656,6 +1656,7 @@ const wo: Record<string, Record<string, string>> = {
     "alertKmBefore": "Yërmànde (km balaa jeex)",
     "vehicle": "Oto",
     "noVehicle": "Amul oto",
+    "errorMissingRequired": "Tannal oto ak xeet bi balaa yónnee.",
     "consumable": "Konsomaabl",
     "noConsumable": "Amul konsomaabl",
     "reference": "Tëral",

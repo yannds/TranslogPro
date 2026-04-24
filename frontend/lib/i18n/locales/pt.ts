@@ -1723,6 +1723,7 @@ const pt: Record<string, Record<string, string>> = {
     "alertKmBefore": "Alerta (km antes do vencimento)",
     "vehicle": "Veículo",
     "noVehicle": "Nenhum veículo",
+    "errorMissingRequired": "Selecione um veículo e um tipo antes de validar.",
     "consumable": "Consumível",
     "noConsumable": "Nenhum consumível",
     "reference": "Referência",

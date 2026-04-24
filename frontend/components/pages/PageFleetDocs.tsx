@@ -8,7 +8,7 @@
  * Dark mode : classes Tailwind dark: — automatique via ThemeProvider
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
@@ -235,6 +235,12 @@ function VehicleDocumentForm({ buses, docTypes, onSubmit, onCancel, busy, error 
     busId: buses[0]?.id ?? '', typeId: docTypes[0]?.id ?? '',
     referenceNo: '', issuedAt: '', expiresAt: '', notes: '',
   });
+  useEffect(() => {
+    if (!f.busId  && buses.length    > 0) setF(p => ({ ...p, busId:  buses[0].id    }));
+  }, [buses,    f.busId]);
+  useEffect(() => {
+    if (!f.typeId && docTypes.length > 0) setF(p => ({ ...p, typeId: docTypes[0].id }));
+  }, [docTypes, f.typeId]);
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
@@ -306,6 +312,12 @@ function ReplacementForm({ buses, consTypes, onSubmit, onCancel, busy, error }: 
   const [f, setF] = useState<ReplaceValues>({
     busId: buses[0]?.id ?? '', typeId: consTypes[0]?.id ?? '', replacedAtKm: 0,
   });
+  useEffect(() => {
+    if (!f.busId  && buses.length     > 0) setF(p => ({ ...p, busId:  buses[0].id     }));
+  }, [buses,     f.busId]);
+  useEffect(() => {
+    if (!f.typeId && consTypes.length > 0) setF(p => ({ ...p, typeId: consTypes[0].id }));
+  }, [consTypes, f.typeId]);
   return (
     <form className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}>
       <ErrorAlert error={error} />
@@ -397,16 +409,20 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
     wrap(() => apiPost(`${base}/document-types`, v), () => setShowDocTypeForm(false), refetchDocTypes);
   const submitConsType = (v: ConsTypeValues) =>
     wrap(() => apiPost(`${base}/consumable-types`, v), () => setShowConsTypeForm(false), refetchConsTypes);
-  const submitDoc = (v: DocValues) =>
-    wrap(() => apiPost(`${base}/documents`, {
+  const submitDoc = (v: DocValues) => {
+    if (!v.busId || !v.typeId) { setActionError(t('fleetDocs.errorMissingRequired')); return; }
+    return wrap(() => apiPost(`${base}/documents`, {
       busId: v.busId, typeId: v.typeId,
       referenceNo: v.referenceNo || undefined,
       issuedAt:    v.issuedAt    || undefined,
       expiresAt:   v.expiresAt   || undefined,
       notes:       v.notes       || undefined,
     }), () => setShowDocForm(false), refetchAlerts);
-  const submitReplace = (v: ReplaceValues) =>
-    wrap(() => apiPost(`${base}/consumables/replacement`, v), () => setShowReplaceForm(false));
+  };
+  const submitReplace = (v: ReplaceValues) => {
+    if (!v.busId || !v.typeId) { setActionError(t('fleetDocs.errorMissingRequired')); return; }
+    return wrap(() => apiPost(`${base}/consumables/replacement`, v), () => setShowReplaceForm(false));
+  };
 
   const expiredCount  = docAlerts?.filter(d => d.status === 'EXPIRED').length  ?? 0;
   const expiringCount = docAlerts?.filter(d => d.status === 'EXPIRING').length ?? 0;

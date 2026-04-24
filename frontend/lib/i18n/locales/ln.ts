@@ -1660,6 +1660,7 @@ const ln: Record<string, Record<string, string>> = {
     "alertKmBefore": "Eleleli (km liboso ya kosila)",
     "vehicle": "Motuka",
     "noVehicle": "Motuka moko te",
+    "errorMissingRequired": "Poná motuka mpe lolenge liboso ya kotinda.",
     "consumable": "Eloko ya kosalela",
     "noConsumable": "Eloko moko te",
     "reference": "Référence",

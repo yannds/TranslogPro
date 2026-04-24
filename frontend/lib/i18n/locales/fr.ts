@@ -1848,6 +1848,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "noVehicle": "Aucun véhicule",
     "consumable": "Consommable",
     "noConsumable": "Aucun consommable",
+    "errorMissingRequired": "Sélectionnez un véhicule et un type avant de valider.",
     "reference": "Référence",
     "issuedAt": "Émis le",
     "expiresAt": "Expire le",

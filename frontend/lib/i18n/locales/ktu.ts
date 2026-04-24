@@ -1642,6 +1642,7 @@ const ktu: Record<string, Record<string, string>> = {
     "alertKmBefore": "Alerte (km liboso ya nsuka)",
     "vehicle": "Motuka",
     "noVehicle": "Motuka mosi te",
+    "errorMissingRequired": "Sola motuka mpe type yambo ya kotinda.",
     "consumable": "Consommable",
     "noConsumable": "Consommable mosi te",
     "reference": "Référence",
