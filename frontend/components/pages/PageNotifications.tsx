@@ -18,7 +18,7 @@ import {
 import { cn } from '../../lib/utils';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useAuth } from '../../lib/auth/auth.context';
-import { useNotifications } from '../../lib/hooks/useNotifications';
+import { useAnnouncementFeed } from '../../lib/hooks/useAnnouncementFeed';
 import type { Notification, NotificationType } from '../../lib/hooks/useNotifications';
 import type { Language, TranslationMap } from '../../lib/i18n/types';
 
@@ -54,9 +54,9 @@ type PriorityFilter = 'all' | 1 | 2 | 3;
 export function PageNotifications() {
   const { t, lang, dateLocale } = useI18n();
   const { user } = useAuth();
-  const tenantId = user?.tenantId ?? 'demo';
+  const tenantId = user?.effectiveTenantId ?? user?.tenantId ?? null;
 
-  const { notifications, isConnected, dismiss, clearAll } = useNotifications({ tenantId });
+  const { notifications, isConnected, dismiss, clearAll } = useAnnouncementFeed({ tenantId });
 
   const [typeFilter, setTypeFilter]         = useState<TypeFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');

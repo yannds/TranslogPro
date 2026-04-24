@@ -25,7 +25,7 @@ import {
 import { useAuth }             from '../../lib/auth/auth.context';
 import { useI18n }             from '../../lib/i18n/useI18n';
 import { useNavigation }       from '../../lib/hooks/useNavigation';
-import { useNotifications }    from '../../lib/hooks/useNotifications';
+import { useAnnouncementFeed } from '../../lib/hooks/useAnnouncementFeed';
 import { useLockedViewport }   from '../../lib/hooks/useLockedViewport';
 import { useSidebarCollapsed } from '../../lib/hooks/useSidebarCollapsed';
 import { useTheme }            from '../theme/ThemeProvider';
@@ -391,7 +391,7 @@ interface BottomBarProps {
 function BottomBar({ collapsed, authUser, onLogout, permissions, utilityHrefs }: BottomBarProps) {
   const { theme, toggle } = useTheme();
   const { t }             = useI18n();
-  const { notifications } = useNotifications({ tenantId: authUser?.tenantId ?? 'demo' });
+  const { notifications } = useAnnouncementFeed({ tenantId: authUser?.tenantId ?? null });
   const unreadCount       = notifications.length;
 
   const name     = authUser?.name ?? authUser?.email ?? '?';
