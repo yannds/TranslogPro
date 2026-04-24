@@ -3730,7 +3730,9 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "eventsTitle": "Événements à anticiper",
     "level_high": "Impact fort",
     "level_med": "Impact modéré",
-    "level_low": "Impact faible"
+    "level_low": "Impact faible",
+    "loading": "Chargement des prévisions…",
+    "empty": "Pas assez d'historique pour produire une prévision."
   },
   "seasonality": {
     "title":          "Saisonnalité & KPI",

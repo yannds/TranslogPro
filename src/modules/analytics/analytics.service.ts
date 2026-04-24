@@ -848,6 +848,213 @@ export class AnalyticsService {
       .slice(0, limit);
   }
 
+  // ── Prévisions de demande — page /admin/ai-demand ───────────────────────────
+
+  /**
+   * Prévisions de demande par ligne + horizon (7/14/30 jours).
+   *
+   * Méthode :
+   *   - forecast : moyenne mobile par day-of-week sur 90 derniers jours (seasonality
+   *     hebdomadaire capturée). Projette ensuite N jours sur les mêmes DOW.
+   *   - lineForecasts : top 5 routes (30j) avec next7 projeté, trend vs 30j précédents,
+   *     peak heure/jour détectés.
+   *   - events : jours fériés sur l'horizon + weekends prolongés.
+   *
+   * Source : Ticket.createdAt (proxy de la demande historique) + Trip.departureDate
+   *          pour détecter les peaks d'offre (créneaux à forte pression attendue).
+   */
+  async getAiDemand(tenantId: string, horizon: '7d' | '14d' | '30d') {
+    try {
+      return await this._getAiDemand(tenantId, horizon);
+    } catch (err) {
+      this.logger.error(
+        `getAiDemand failed for tenant=${tenantId} horizon=${horizon}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return { forecast: [], lineForecasts: [], events: [] };
+    }
+  }
+
+  private async _getAiDemand(tenantId: string, horizon: '7d' | '14d' | '30d') {
+    const DAY_MS_LOCAL      = AnalyticsService.DAY_MS;
+    const HISTORY_DAYS      = 90;
+    const TOP_LINES         = 5;
+    const horizonDays       = horizon === '7d' ? 7 : horizon === '14d' ? 14 : 30;
+
+    const now          = new Date();
+    const historyStart = new Date(now.getTime() - HISTORY_DAYS * DAY_MS_LOCAL);
+    const recent30     = new Date(now.getTime() - 30 * DAY_MS_LOCAL);
+    const prev30       = new Date(now.getTime() - 60 * DAY_MS_LOCAL);
+
+    const [ticketsHist, ticketsRecent, ticketsPrev, tenant] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where:  { tenantId, createdAt: { gte: historyStart } },
+        select: { createdAt: true },
+      }),
+      this.prisma.ticket.findMany({
+        where:  { tenantId, createdAt: { gte: recent30 } },
+        select: { createdAt: true,
+                  boardingStation:  { select: { name: true } },
+                  alightingStation: { select: { name: true } } },
+      }),
+      this.prisma.ticket.findMany({
+        where:  { tenantId, createdAt: { gte: prev30, lt: recent30 } },
+        select: { boardingStation:  { select: { name: true } },
+                  alightingStation: { select: { name: true } } },
+      }),
+      this.prisma.tenant.findUnique({
+        where:  { id: tenantId },
+        select: { country: true },
+      }),
+    ]);
+
+    // ── 1. Forecast : moyenne par day-of-week ────────────────────────────────
+    const counts = new Map<string, number[]>(); // key = DOW (0..6) → [count par occurrence]
+    const DOW_LABELS_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
+    // Bucketize par (jour, DOW)
+    const dayBuckets = new Map<string, { dow: number; count: number }>();
+    for (const t of ticketsHist) {
+      const d    = new Date(t.createdAt);
+      const key  = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+      const bucket = dayBuckets.get(key) ?? { dow: d.getDay(), count: 0 };
+      bucket.count += 1;
+      dayBuckets.set(key, bucket);
+    }
+    for (const { dow, count } of dayBuckets.values()) {
+      const arr = counts.get(String(dow)) ?? [];
+      arr.push(count);
+      counts.set(String(dow), arr);
+    }
+    const avgByDow = new Map<number, number>();
+    for (const [dowStr, arr] of counts.entries()) {
+      const avg = arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length);
+      avgByDow.set(Number(dowStr), avg);
+    }
+
+    const forecast = Array.from({ length: horizonDays }, (_, i) => {
+      const d      = new Date(now.getTime() + (i + 1) * DAY_MS_LOCAL);
+      const dow    = d.getDay();
+      const value  = Math.round(avgByDow.get(dow) ?? 0);
+      const label  = horizon === '7d'
+        ? DOW_LABELS_FR[dow]
+        : horizon === '14d' ? `J${i + 1}` : `${i + 1}`;
+      return { label, value };
+    });
+
+    // ── 2. Line forecasts : top 5 routes + trend 30j vs 30j précédent ────────
+    const toKey = (t: any) =>
+      `${t.boardingStation?.name ?? '—'} → ${t.alightingStation?.name ?? '—'}`;
+    const recentByLine = new Map<string, Date[]>();
+    for (const t of ticketsRecent) {
+      const k = toKey(t);
+      const arr = recentByLine.get(k) ?? [];
+      arr.push(new Date(t.createdAt));
+      recentByLine.set(k, arr);
+    }
+    const prevByLine = new Map<string, number>();
+    for (const t of ticketsPrev) {
+      const k = toKey(t);
+      prevByLine.set(k, (prevByLine.get(k) ?? 0) + 1);
+    }
+
+    const lineForecasts = [...recentByLine.entries()]
+      .map(([route, dates]) => {
+        const count30Recent = dates.length;
+        const count30Prev   = prevByLine.get(route) ?? 0;
+        const next7 = Math.round((count30Recent / 30) * 7);
+        const trend = count30Prev === 0
+          ? (count30Recent > 0 ? 100 : 0)
+          : Math.round(((count30Recent - count30Prev) / count30Prev) * 1_000) / 10;
+
+        // Peak : jour+heure le plus fréquent
+        const hourBuckets = new Map<string, number>();
+        for (const d of dates) {
+          const key = `${DOW_LABELS_FR[d.getDay()]} ${String(d.getHours()).padStart(2, '0')}h`;
+          hourBuckets.set(key, (hourBuckets.get(key) ?? 0) + 1);
+        }
+        const peak = [...hourBuckets.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+
+        const note = trend >= 10
+          ? 'Demande en hausse — anticiper un départ supplémentaire.'
+          : trend <= -10
+            ? 'Demande en baisse — revoir la fréquence.'
+            : 'Demande stable sur la période.';
+
+        return { route, next7, trend, peak, note };
+      })
+      .sort((a, b) => b.next7 - a.next7)
+      .slice(0, TOP_LINES);
+
+    // ── 3. Events : jours fériés + weekends prolongés sur l'horizon ──────────
+    const country = tenant?.country ?? 'CG';
+    const events = this.buildHolidayEvents(country, now, horizonDays);
+
+    return { forecast, lineForecasts, events };
+  }
+
+  /**
+   * Jours fériés simplifiés par pays. À terme : externaliser dans un micro-service
+   * ou un package (date-holidays) ; pour l'instant table embarquée suffit.
+   * Format : { date: 'DD MMM' (FR locale), label: string, level: 'high'|'med'|'low' }.
+   */
+  private buildHolidayEvents(
+    country:     string,
+    from:        Date,
+    horizonDays: number,
+  ): { date: string; label: string; level: 'high' | 'med' | 'low' }[] {
+    // Table minimale — à étendre progressivement. Les dates sont (month, day) JS :
+    // month = 0-indexed.
+    const PUBLIC_HOLIDAYS: Record<string, { m: number; d: number; label: string; level: 'high' | 'med' | 'low' }[]> = {
+      CG: [
+        { m: 4,  d: 1,  label: 'Fête du Travail',            level: 'med'  },
+        { m: 6,  d: 15, label: 'Fête de l\'Indépendance CG', level: 'high' },
+        { m: 7,  d: 15, label: 'Jour de l\'Armée',           level: 'low'  },
+        { m: 10, d: 1,  label: 'Toussaint',                  level: 'med'  },
+        { m: 11, d: 25, label: 'Noël',                       level: 'high' },
+      ],
+      SN: [
+        { m: 3,  d: 4,  label: 'Fête de l\'Indépendance SN', level: 'high' },
+        { m: 4,  d: 1,  label: 'Fête du Travail',            level: 'med'  },
+        { m: 10, d: 1,  label: 'Toussaint',                  level: 'med'  },
+        { m: 11, d: 25, label: 'Noël',                       level: 'high' },
+      ],
+      CI: [
+        { m: 4,  d: 1,  label: 'Fête du Travail',            level: 'med'  },
+        { m: 7,  d: 7,  label: 'Fête de l\'Indépendance CI', level: 'high' },
+        { m: 11, d: 25, label: 'Noël',                       level: 'high' },
+      ],
+      FR: [
+        { m: 4,  d: 1,  label: 'Fête du Travail',     level: 'med'  },
+        { m: 4,  d: 8,  label: 'Victoire 1945',       level: 'low'  },
+        { m: 6,  d: 14, label: 'Fête Nationale',      level: 'high' },
+        { m: 10, d: 1,  label: 'Toussaint',           level: 'med'  },
+        { m: 11, d: 25, label: 'Noël',                level: 'high' },
+      ],
+    };
+
+    const list = PUBLIC_HOLIDAYS[country] ?? PUBLIC_HOLIDAYS['CG'];
+    const to   = new Date(from.getTime() + horizonDays * AnalyticsService.DAY_MS);
+    const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+                       'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+    const events: { date: string; label: string; level: 'high' | 'med' | 'low' }[] = [];
+    // Envisager l'année courante ET l'année suivante pour les horizons qui
+    // franchissent un changement d'année.
+    for (const year of [from.getFullYear(), from.getFullYear() + 1]) {
+      for (const h of list) {
+        const hDate = new Date(year, h.m, h.d);
+        if (hDate >= from && hDate <= to) {
+          events.push({
+            date:  `${String(hDate.getDate()).padStart(2, '0')} ${MONTHS_FR[h.m]}`,
+            label: h.label,
+            level: h.level,
+          });
+        }
+      }
+    }
+    return events.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   // ── Tableaux analytiques — page /admin/analytics ─────────────────────────────
 
   /**

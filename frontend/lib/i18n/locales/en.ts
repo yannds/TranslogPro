@@ -3726,7 +3726,9 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "eventsTitle": "Upcoming events to anticipate",
     "level_high": "High impact",
     "level_med": "Medium impact",
-    "level_low": "Low impact"
+    "level_low": "Low impact",
+    "loading": "Loading forecast…",
+    "empty": "Not enough history to produce a forecast."
   },
   "seasonality": {
     "title":          "Seasonality & KPIs",

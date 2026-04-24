@@ -202,6 +202,20 @@ export class AnalyticsController {
     return this.analyticsService.getAnalyticsBoard(tenantId, p);
   }
 
+  /** Prévisions de demande — forecast par jour, top routes, jours fériés. */
+  @Get('ai-demand')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  aiDemand(
+    @TenantId() tenantId: string,
+    @Query('horizon') horizon?: string,
+  ) {
+    const allowed = ['7d', '14d', '30d'] as const;
+    const h = (allowed as readonly string[]).includes(horizon ?? '')
+      ? (horizon as '7d' | '14d' | '30d')
+      : '7d';
+    return this.analyticsService.getAiDemand(tenantId, h);
+  }
+
   /** Suggestions tarifaires dynamiques par ligne et créneau (yield, 30j). */
   @Get('ai-pricing')
   @RequirePermission(Permission.STATS_READ_TENANT)

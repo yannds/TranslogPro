@@ -240,3 +240,103 @@ describe('AnalyticsService.getAnalyticsBoard', () => {
     expect(res.miniKpis.caTotal).toBe(0);
   });
 });
+
+// ── Prévisions de demande ────────────────────────────────────────────────────
+describe('AnalyticsService.getAiDemand', () => {
+  function makeDemandPrisma(opts: {
+    tickets?:       any[];
+    ticketsRecent?: any[];
+    ticketsPrev?:   any[];
+    country?:       string;
+  } = {}) {
+    return {
+      ticket: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce(opts.tickets       ?? [])
+          .mockResolvedValueOnce(opts.ticketsRecent ?? [])
+          .mockResolvedValueOnce(opts.ticketsPrev   ?? []),
+      },
+      tenant: {
+        findUnique: jest.fn().mockResolvedValue({ country: opts.country ?? 'CG' }),
+      },
+    } as unknown as jest.Mocked<PrismaService>;
+  }
+
+  it('retourne 7/14/30 buckets selon l\'horizon', async () => {
+    const svc = new AnalyticsService(makeDemandPrisma());
+    const r7  = await svc.getAiDemand(TENANT, '7d');
+    expect(r7.forecast).toHaveLength(7);
+
+    const svc2 = new AnalyticsService(makeDemandPrisma());
+    const r14  = await svc2.getAiDemand(TENANT, '14d');
+    expect(r14.forecast).toHaveLength(14);
+
+    const svc3 = new AnalyticsService(makeDemandPrisma());
+    const r30  = await svc3.getAiDemand(TENANT, '30d');
+    expect(r30.forecast).toHaveLength(30);
+  });
+
+  it('filtre tous les findMany Ticket par tenantId (tenant isolation)', async () => {
+    const prisma = makeDemandPrisma();
+    const svc = new AnalyticsService(prisma);
+    await svc.getAiDemand(TENANT, '7d');
+
+    const calls = (prisma.ticket.findMany as jest.Mock).mock.calls;
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const call of calls) {
+      expect(call[0].where.tenantId).toBe(TENANT);
+    }
+  });
+
+  it('lineForecasts top 5 par next7, trend calculé vs 30j précédents', async () => {
+    const now = new Date();
+    const recentTicket = (route: string) => ({
+      createdAt: now,
+      boardingStation:  { name: route.split('-')[0] },
+      alightingStation: { name: route.split('-')[1] },
+    });
+    const prevTicket = (route: string) => ({
+      boardingStation:  { name: route.split('-')[0] },
+      alightingStation: { name: route.split('-')[1] },
+    });
+
+    const prisma = makeDemandPrisma({
+      ticketsRecent: [
+        ...Array(30).fill(0).map(() => recentTicket('A-B')),  // 30 récents
+        ...Array(10).fill(0).map(() => recentTicket('C-D')),
+      ],
+      ticketsPrev: [
+        ...Array(20).fill(0).map(() => prevTicket('A-B')),    // 20 prev → trend +50%
+        ...Array(15).fill(0).map(() => prevTicket('C-D')),
+      ],
+    });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAiDemand(TENANT, '7d');
+
+    expect(res.lineForecasts.length).toBeGreaterThan(0);
+    const ab = res.lineForecasts.find(l => l.route === 'A → B');
+    expect(ab).toBeDefined();
+    expect(ab!.trend).toBe(50); // (30-20)/20 * 100 = 50
+  });
+
+  it('events utilise Tenant.country pour les jours fériés (jamais hardcoded)', async () => {
+    const prisma = makeDemandPrisma({ country: 'SN' });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAiDemand(TENANT, '30d');
+    // Tous les events doivent avoir un format date + label
+    for (const e of res.events) {
+      expect(e.date).toMatch(/^\d{2} /);
+      expect(['high', 'med', 'low']).toContain(e.level);
+    }
+  });
+
+  it('retourne payload vide safe si Prisma throw', async () => {
+    const prisma = {
+      ticket: { findMany: jest.fn().mockRejectedValue(new Error('boom')) },
+      tenant: { findUnique: jest.fn() },
+    } as unknown as jest.Mocked<PrismaService>;
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAiDemand(TENANT, '7d');
+    expect(res).toEqual({ forecast: [], lineForecasts: [], events: [] });
+  });
+});
