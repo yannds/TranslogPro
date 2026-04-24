@@ -1709,6 +1709,7 @@ const pt: Record<string, Record<string, string>> = {
     "statusAlert": "Alerta",
     "alertsHeading": "Alertas de Documentos",
     "alertsDescription": "Documentos vencidos, vencendo em 30 dias ou ausentes",
+    "uploadScan": "Carregar digitalizado",
     "exportLabel": "Exportar",
     "allUpToDate": "Todos os documentos estão em dia",
     "noActiveAlert": "Nenhum alerta de documento ativo",

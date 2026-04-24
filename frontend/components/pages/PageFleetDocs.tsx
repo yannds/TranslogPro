@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, type FormEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, FileText, Wrench, Plus, Upload } from 'lucide-react';
 import { useAuth } from '../../lib/auth/auth.context';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost } from '../../lib/api';
@@ -23,6 +23,7 @@ import { ErrorAlert } from '../ui/ErrorAlert';
 import { FormFooter } from '../ui/FormFooter';
 import { inputClass } from '../ui/inputClass';
 import { cn } from '../../lib/utils';
+import { UploadScanDialog } from '../upload/UploadScanDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -374,6 +375,7 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
   const [showDocTypeForm,  setShowDocTypeForm]  = useState(false);
   const [showConsTypeForm, setShowConsTypeForm] = useState(false);
   const [showReplaceForm,  setShowReplaceForm]  = useState(false);
+  const [uploadTargetId,   setUploadTargetId]   = useState<string | null>(null);
   const [busy,             setBusy]             = useState(false);
   const [actionError,      setActionError]      = useState<string | null>(null);
 
@@ -519,13 +521,14 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                   <div role="rowgroup">
                     <div
                       role="row"
-                      className="grid grid-cols-5 px-6 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
+                      className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_0.8fr_auto] gap-3 px-6 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
                     >
                       <div role="columnheader">{t('fleetDocs.colBus')}</div>
                       <div role="columnheader">{t('fleetDocs.colDocType')}</div>
                       <div role="columnheader">{t('fleetDocs.colReference')}</div>
                       <div role="columnheader">{t('fleetDocs.colExpiration')}</div>
                       <div role="columnheader">{t('fleetDocs.colStatus')}</div>
+                      <div role="columnheader" className="sr-only">{t('common.actions')}</div>
                     </div>
                   </div>
                   <div role="rowgroup">
@@ -533,7 +536,7 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                       <div
                         key={doc.id}
                         role="row"
-                        className="grid grid-cols-5 px-6 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_0.8fr_auto] gap-3 px-6 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                       >
                         <div role="cell">
                           <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{doc.busPlate}</p>
@@ -546,6 +549,17 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                         </div>
                         <div role="cell">
                           <Badge variant={docStatusVariant(doc.status)}>{docStatusLabel(doc.status, t)}</Badge>
+                        </div>
+                        <div role="cell" className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setUploadTargetId(doc.id)}
+                            aria-label={t('fleetDocs.uploadScan')}
+                          >
+                            <Upload className="w-4 h-4 mr-1" aria-hidden />
+                            {t('fleetDocs.uploadScan')}
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -788,6 +802,14 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
           />
         )}
       </Dialog>
+
+      <UploadScanDialog
+        open={uploadTargetId !== null}
+        onClose={() => setUploadTargetId(null)}
+        uploadUrlEndpoint={uploadTargetId ? `${base}/documents/${uploadTargetId}/upload-url` : ''}
+        onUploaded={async () => { await refetchAlerts(); }}
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
+      />
     </main>
   );
 }

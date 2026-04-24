@@ -1832,6 +1832,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "statusAlert": "Alerte",
     "alertsHeading": "Documents en alerte",
     "alertsDescription": "Documents expirés, expirant sous 30 jours ou manquants",
+    "uploadScan": "Téléverser scan",
     "exportLabel": "Exporter",
     "allUpToDate": "Tous les documents sont à jour",
     "noActiveAlert": "Aucune alerte documentaire active",

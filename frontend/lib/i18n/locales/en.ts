@@ -1979,6 +1979,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "statusAlert": "Alert",
     "alertsHeading": "Document Alerts",
     "alertsDescription": "Documents expired, expiring within 30 days, or missing",
+    "uploadScan": "Upload scan",
     "exportLabel": "Export",
     "allUpToDate": "All documents are up to date",
     "noActiveAlert": "No active document alerts",

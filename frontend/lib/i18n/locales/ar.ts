@@ -1575,6 +1575,7 @@ const ar: Record<string, Record<string, string>> = {
     "statusAlert": "تنبيه",
     "alertsHeading": "وثائق في تنبيه",
     "alertsDescription": "وثائق منتهية الصلاحية، تنتهي خلال 30 يومًا أو مفقودة",
+    "uploadScan": "تحميل المسح",
     "exportLabel": "تصدير",
     "allUpToDate": "جميع الوثائق محدّثة",
     "noActiveAlert": "لا يوجد تنبيه وثائقي نشط",

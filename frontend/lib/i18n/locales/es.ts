@@ -1694,6 +1694,7 @@ const es: Record<string, Record<string, string>> = {
     "statusAlert": "Alerta",
     "alertsHeading": "Alertas de documentos",
     "alertsDescription": "Documentos caducados, que caducan en 30 días o faltantes",
+    "uploadScan": "Subir escaneo",
     "exportLabel": "Exportar",
     "allUpToDate": "Todos los documentos están al día",
     "noActiveAlert": "Sin alertas de documentos activas",
