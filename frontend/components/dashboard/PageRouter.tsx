@@ -31,6 +31,10 @@ const LazyCrewBriefing   = lazy(() => import('../pages/PageCrewBriefing').then(m
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDriverBriefing = lazy(() => import('../pages/PageDriverBriefing').then(m => ({ default: m.PageDriverBriefing })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyBriefingTemplate = lazy(() => import('../pages/PageBriefingTemplate').then(m => ({ default: m.PageBriefingTemplate })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyTripSafetyAlerts = lazy(() => import('../pages/PageTripSafetyAlerts').then(m => ({ default: m.PageTripSafetyAlerts })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyQhse           = lazy(() => import('../pages/PageQhse').then(m => ({ default: m.PageQhse })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyWorkflowStudio = lazy(() => import('../pages/PageWorkflowStudio').then(m => ({ default: m.PageWorkflowStudio })));
@@ -326,6 +330,8 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'drivers':             return <LazyDriverProfile initialTab="overview" />;
     case 'driver-scoring':      return <LazyDriverScoring />;
     case 'crew-briefing':       return <LazyCrewBriefing />;
+    case 'crew-briefing-template': return <LazyBriefingTemplate />;
+    case 'trip-safety-alerts': return <LazyTripSafetyAlerts />;
     case 'drv-briefing':        return <LazyDriverBriefing />;
 
     // ── Portail Chauffeur (items DRIVER_NAV) ───────────────────────────────

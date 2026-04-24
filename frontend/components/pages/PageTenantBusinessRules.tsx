@@ -61,6 +61,11 @@ interface BusinessRules {
   captchaEnabled:                  boolean;
   dailyMagicLinkBudget:            number;
   magicLinkPhoneCooldownHours:     number;
+  // Briefing pré-voyage QHSE (2026-04-24)
+  preTripBriefingPolicy:           'OFF' | 'RECOMMENDED' | 'RECOMMENDED_WITH_ALERT';
+  mandatoryItemFailurePolicy:      'WARN_ONLY' | 'ALERT_MANAGER' | 'BLOCK_DEPARTURE';
+  restShortfallPolicy:             'WARN' | 'ALERT' | 'BLOCK';
+  minDriverRestHours:              number;
 }
 
 const PENALTY_ACTORS   = ['CUSTOMER', 'AGENT', 'ADMIN', 'SYSTEM'];
@@ -425,6 +430,66 @@ export function PageTenantBusinessRules() {
                 <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{t('tenantRules.magicLinkPhoneCooldownHoursHint')}</span>
               </label>
             </div>
+          </div>
+        </section>
+
+        {/* ── Section 6 : Briefing pré-voyage QHSE (2026-04-24) ────────── */}
+        <section aria-labelledby="sec-briefing" className="rounded-lg border border-gray-200 dark:border-gray-700 p-5 bg-white dark:bg-gray-800">
+          <h2 id="sec-briefing" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            {t('tenantRules.briefingTitle')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t('tenantRules.briefingHint')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.preTripBriefingPolicy')}</span>
+              <select
+                value={form.preTripBriefingPolicy}
+                onChange={e => set({ preTripBriefingPolicy: e.target.value as BusinessRules['preTripBriefingPolicy'] })}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2"
+                aria-label={t('tenantRules.preTripBriefingPolicy')}
+              >
+                <option value="OFF">{t('tenantRules.preTripPolicy.OFF')}</option>
+                <option value="RECOMMENDED">{t('tenantRules.preTripPolicy.RECOMMENDED')}</option>
+                <option value="RECOMMENDED_WITH_ALERT">{t('tenantRules.preTripPolicy.RECOMMENDED_WITH_ALERT')}</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.mandatoryItemFailurePolicy')}</span>
+              <select
+                value={form.mandatoryItemFailurePolicy}
+                onChange={e => set({ mandatoryItemFailurePolicy: e.target.value as BusinessRules['mandatoryItemFailurePolicy'] })}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2"
+                aria-label={t('tenantRules.mandatoryItemFailurePolicy')}
+              >
+                <option value="WARN_ONLY">{t('tenantRules.mandatoryFailurePolicy.WARN_ONLY')}</option>
+                <option value="ALERT_MANAGER">{t('tenantRules.mandatoryFailurePolicy.ALERT_MANAGER')}</option>
+                <option value="BLOCK_DEPARTURE">{t('tenantRules.mandatoryFailurePolicy.BLOCK_DEPARTURE')}</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.restShortfallPolicy')}</span>
+              <select
+                value={form.restShortfallPolicy}
+                onChange={e => set({ restShortfallPolicy: e.target.value as BusinessRules['restShortfallPolicy'] })}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2"
+                aria-label={t('tenantRules.restShortfallPolicy')}
+              >
+                <option value="WARN">{t('tenantRules.restShortfallPolicy.WARN')}</option>
+                <option value="ALERT">{t('tenantRules.restShortfallPolicy.ALERT')}</option>
+                <option value="BLOCK">{t('tenantRules.restShortfallPolicy.BLOCK')}</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tenantRules.minDriverRestHours')}</span>
+              <Input type="number" min="0" max="72" value={form.minDriverRestHours}
+                onChange={e => set({ minDriverRestHours: Math.max(0, Math.min(72, parseInt(e.target.value, 10) || 0)) })} />
+              <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{t('tenantRules.minDriverRestHoursHint')}</span>
+            </label>
           </div>
         </section>
 
