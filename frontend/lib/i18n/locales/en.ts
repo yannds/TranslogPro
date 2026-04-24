@@ -1948,6 +1948,19 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "modeVip": "Mark VIP",
     "clickHintVip": "Click a seat to toggle it as VIP (gold) or standard."
   },
+  "uploadScan": {
+    "title": "Upload a scan",
+    "description": "Select a file or drag and drop from your computer.",
+    "dropOrBrowse": "Drop file here or click to browse",
+    "sizeHint": "PDF, JPG, PNG (max {max} MB)",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "uploaded": "Uploaded",
+    "removeFile": "Remove file",
+    "fileTooLarge": "File too large (max {max} MB).",
+    "errorInvalidResponse": "Invalid server response: missing uploadUrl or fileKey.",
+    "errorUploadFailed": "Upload failed (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Documents & Consumables",
     "pageSubtitle": "Regulatory tracking and predictive fleet maintenance",

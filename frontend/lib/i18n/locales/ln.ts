@@ -1615,6 +1615,19 @@ const ln: Record<string, Record<string, string>> = {
     "modeVip": "Kotia VIP",
     "clickHintVip": "Finá esika mpo na kobongola yango VIP (wolo) to normal."
   },
+  "uploadScan": {
+    "title": "Tómbola scan",
+    "description": "Poná liloba to benga yango uta ordinatere na yo.",
+    "dropOrBrowse": "Tiká liloba awa to finá mpo na kotala",
+    "sizeHint": "PDF, JPG, PNG (max {max} Mo)",
+    "upload": "Tómbola",
+    "uploading": "Ezali kotombola…",
+    "uploaded": "Etombolami",
+    "removeFile": "Longola liloba",
+    "fileTooLarge": "Liloba ezali monene mingi (max {max} Mo).",
+    "errorInvalidResponse": "Eyano ya serveur ezali mabe : uploadUrl to fileKey ezangi.",
+    "errorUploadFailed": "Kotómbola elongi te (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Mikanda & Biloko ya kosalela",
     "pageSubtitle": "Kolanda ya mibeko mpe bobongisi ya liboso ya otobisi nyonso",

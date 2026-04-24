@@ -1611,6 +1611,19 @@ const wo: Record<string, Record<string, string>> = {
     "modeVip": "Tànn VIP",
     "clickHintVip": "Bësal ci siis bi ngir ko def VIP (wurus) walla normal."
   },
+  "uploadScan": {
+    "title": "Yóbbu ab scan",
+    "description": "Tannal ab kayit walla defal drag ak drop di sa ordinatëer.",
+    "dropOrBrowse": "Defal kayit gi fi walla bësal ngir wut",
+    "sizeHint": "PDF, JPG, PNG (fi mu ëpp {max} Mo)",
+    "upload": "Yóbbu",
+    "uploading": "Muy yóbbu…",
+    "uploaded": "Yoppiwoon na",
+    "removeFile": "Jële kayit bi",
+    "fileTooLarge": "Kayit bi mag na lool (fi mu ëpp {max} Mo).",
+    "errorInvalidResponse": "Tontu ya serveur baaxul : uploadUrl walla fileKey amul.",
+    "errorUploadFailed": "Yóbbu bi antuwul (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Xët yi & Konsomaabl yi",
     "pageSubtitle": "Topp règlemaan ak nettali bu kanam ci parc bi",

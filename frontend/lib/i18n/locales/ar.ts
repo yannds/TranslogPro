@@ -1544,6 +1544,19 @@ const ar: Record<string, Record<string, string>> = {
     "modeVip": "تحديد VIP",
     "clickHintVip": "انقر على مقعد لتبديله إلى VIP (ذهبي) أو عادي."
   },
+  "uploadScan": {
+    "title": "تحميل مسح ضوئي",
+    "description": "اختر ملفًا أو اسحبه وأفلته من جهازك.",
+    "dropOrBrowse": "أفلت الملف هنا أو انقر للاستعراض",
+    "sizeHint": "PDF، JPG، PNG (بحد أقصى {max} م.ب)",
+    "upload": "تحميل",
+    "uploading": "جارٍ التحميل…",
+    "uploaded": "تم التحميل",
+    "removeFile": "إزالة الملف",
+    "fileTooLarge": "الملف كبير جدًا (بحد أقصى {max} م.ب).",
+    "errorInvalidResponse": "استجابة غير صالحة من الخادم: uploadUrl أو fileKey مفقود.",
+    "errorUploadFailed": "فشل التحميل (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "الوثائق والمستهلكات",
     "pageSubtitle": "متابعة تنظيمية وصيانة تنبؤية للأسطول",

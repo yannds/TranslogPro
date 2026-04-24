@@ -1663,6 +1663,19 @@ const es: Record<string, Record<string, string>> = {
     "modeVip": "Marcar VIP",
     "clickHintVip": "Haga clic en un asiento para marcarlo como VIP (dorado) o estándar."
   },
+  "uploadScan": {
+    "title": "Subir un escaneo",
+    "description": "Selecciona un archivo o arrástralo desde tu ordenador.",
+    "dropOrBrowse": "Suelta el archivo aquí o haz clic para explorar",
+    "sizeHint": "PDF, JPG, PNG (máx. {max} MB)",
+    "upload": "Subir",
+    "uploading": "Subiendo…",
+    "uploaded": "Subido",
+    "removeFile": "Quitar archivo",
+    "fileTooLarge": "Archivo demasiado grande (máx. {max} MB).",
+    "errorInvalidResponse": "Respuesta del servidor no válida: falta uploadUrl o fileKey.",
+    "errorUploadFailed": "Fallo en la subida (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Documentos y consumibles",
     "pageSubtitle": "Seguimiento reglamentario y mantenimiento predictivo de la flota",

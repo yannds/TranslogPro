@@ -1597,6 +1597,19 @@ const ktu: Record<string, Record<string, string>> = {
     "modeVip": "Tala VIP",
     "clickHintVip": "Finga siizi pona kubadila yo VIP (wolo) to normal."
   },
+  "uploadScan": {
+    "title": "Tula scan",
+    "description": "Sola fichier to kosa yango kimfumu na ordinateur.",
+    "dropOrBrowse": "Tika fichier awa to finga pona koluka",
+    "sizeHint": "PDF, JPG, PNG (max {max} Mo)",
+    "upload": "Tula",
+    "uploading": "Kotula…",
+    "uploaded": "Etuli",
+    "removeFile": "Longola fichier",
+    "fileTooLarge": "Fichier ezali monene mingi (max {max} Mo).",
+    "errorInvalidResponse": "Mpulu ya serveur ezali mabe : uploadUrl to fileKey ezangi.",
+    "errorUploadFailed": "Kotula elongi te (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Mikanda & Ba Consommables",
     "pageSubtitle": "Kolanda ba règles mpe bobongisi ya liboso ya flotte",

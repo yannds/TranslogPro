@@ -1801,6 +1801,19 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "modeVip": "Marquer VIP",
     "clickHintVip": "Cliquez sur un siège pour le basculer en VIP (doré) ou standard."
   },
+  "uploadScan": {
+    "title": "Téléverser un scan",
+    "description": "Sélectionnez un fichier ou glissez-déposez depuis votre ordinateur.",
+    "dropOrBrowse": "Glissez le fichier ici ou cliquez pour parcourir",
+    "sizeHint": "PDF, JPG, PNG (max {max} Mo)",
+    "upload": "Téléverser",
+    "uploading": "Téléversement…",
+    "uploaded": "Téléversé",
+    "removeFile": "Retirer le fichier",
+    "fileTooLarge": "Fichier trop volumineux (max {max} Mo).",
+    "errorInvalidResponse": "Réponse serveur invalide : uploadUrl ou fileKey manquant.",
+    "errorUploadFailed": "Échec du téléversement (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Documents & Consommables",
     "pageSubtitle": "Suivi réglementaire et maintenance prédictive de la flotte",

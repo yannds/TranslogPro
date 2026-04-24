@@ -1678,6 +1678,19 @@ const pt: Record<string, Record<string, string>> = {
     "modeVip": "Marcar VIP",
     "clickHintVip": "Clique num assento para marcá-lo como VIP (dourado) ou padrão."
   },
+  "uploadScan": {
+    "title": "Carregar um digitalizado",
+    "description": "Selecione um ficheiro ou arraste do seu computador.",
+    "dropOrBrowse": "Solte o ficheiro aqui ou clique para procurar",
+    "sizeHint": "PDF, JPG, PNG (máx. {max} MB)",
+    "upload": "Carregar",
+    "uploading": "A carregar…",
+    "uploaded": "Carregado",
+    "removeFile": "Remover ficheiro",
+    "fileTooLarge": "Ficheiro demasiado grande (máx. {max} MB).",
+    "errorInvalidResponse": "Resposta inválida do servidor: uploadUrl ou fileKey em falta.",
+    "errorUploadFailed": "Falha no carregamento (HTTP {status})."
+  },
   "fleetDocs": {
     "pageTitle": "Documentos e Consumíveis",
     "pageSubtitle": "Acompanhamento regulatório e manutenção preditiva da frota",
