@@ -304,6 +304,14 @@ export const TENANT_ROLES: Array<{
       // Reset complet tenant — opération destructive, uniquement TENANT_ADMIN
       // avec re-auth password + confirmation slug côté endpoint.
       'control.tenant.reset.tenant',
+      // ── Briefing pré-voyage QHSE (refonte 2026-04-24) ──
+      'data.briefing.template.read.tenant',
+      'control.briefing.template.manage.tenant',
+      'data.briefing.sign.delegate.agency',
+      'data.briefing.read.tenant',
+      'control.briefing.override.tenant',
+      'data.safety_alert.read.tenant',
+      'control.safety_alert.resolve.tenant',
     ],
   },
   {
@@ -386,6 +394,12 @@ export const TENANT_ROLES: Array<{
       // Rentabilité prévisionnelle pré-trajet (Sprint 11.A) — le manager
       // d'agence programme des trajets et doit voir la viabilité.
       'data.profitability.read.tenant',
+      // ── Briefing pré-voyage QHSE (refonte 2026-04-24) ──
+      'data.briefing.template.read.tenant',
+      'data.briefing.sign.delegate.agency',
+      'data.briefing.read.agency',
+      'data.safety_alert.read.agency',
+      'control.safety_alert.resolve.agency',
     ],
   },
   {
@@ -514,6 +528,12 @@ export const TENANT_ROLES: Array<{
       'control.trip.suspend.agency',         // chauffeur déclare panne → SUSPENDED
       'control.trip.declare_major_delay.agency', // déclenche compensation
       'data.compensation.issue.agency',      // distribuer snacks à bord
+      // ── Briefing pré-voyage QHSE (refonte 2026-04-24) ──
+      // Le chauffeur signe SON briefing. Lecture de son propre briefing et
+      // des alertes sécurité de ses trips pour traçabilité.
+      'data.briefing.sign.own',
+      'data.briefing.template.read.tenant',  // lire le template actif
+      'data.safety_alert.read.agency',
     ],
   },
   {

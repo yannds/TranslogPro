@@ -291,6 +291,27 @@ export const P_DRIVER_REST_OWN              = 'data.driver.rest.own';
 export const P_QHSE_MANAGE_TENANT           = 'control.qhse.manage.tenant';
 export const P_ACCIDENT_REPORT_OWN          = 'data.accident.report.own';
 
+// ─── Briefing pré-voyage QHSE (refonte 2026-04-24) ──────────────────────────
+// Le chauffeur signe son briefing ('briefing.sign.own') ; un manager peut
+// déléguer la conduite du briefing à un tiers ('briefing.sign.delegate') ;
+// le tenant admin gère le catalogue templates/sections/items
+// ('briefing.template.manage.tenant') et peut overrider un blocage
+// ('briefing.override.tenant'). La lecture tenant reste distribuée pour
+// les audits QHSE (history, incomplete, par assignment).
+export const P_BRIEFING_TEMPLATE_READ_TENANT   = 'data.briefing.template.read.tenant';
+export const P_BRIEFING_TEMPLATE_MANAGE_TENANT = 'control.briefing.template.manage.tenant';
+export const P_BRIEFING_SIGN_OWN               = 'data.briefing.sign.own';
+export const P_BRIEFING_SIGN_DELEGATE_AGENCY   = 'data.briefing.sign.delegate.agency';
+export const P_BRIEFING_READ_AGENCY            = 'data.briefing.read.agency';
+export const P_BRIEFING_READ_TENANT            = 'data.briefing.read.tenant';
+export const P_BRIEFING_OVERRIDE_TENANT        = 'control.briefing.override.tenant';
+
+// ─── Trip safety alerts (émises par briefing + autres sources QHSE) ─────────
+export const P_SAFETY_ALERT_READ_AGENCY      = 'data.safety_alert.read.agency';
+export const P_SAFETY_ALERT_READ_TENANT      = 'data.safety_alert.read.tenant';
+export const P_SAFETY_ALERT_RESOLVE_AGENCY   = 'control.safety_alert.resolve.agency';
+export const P_SAFETY_ALERT_RESOLVE_TENANT   = 'control.safety_alert.resolve.tenant';
+
 // ─── Workflow Studio & Marketplace ────────────────────────────────────────────
 // Conception et gestion des blueprints de workflow.
 export const P_WORKFLOW_STUDIO_READ_TENANT  = 'control.workflow.studio.read.tenant';
@@ -538,6 +559,19 @@ export const Permission = {
   // QHSE & Accidents
   QHSE_MANAGE_TENANT:           P_QHSE_MANAGE_TENANT,
   ACCIDENT_REPORT_OWN:          P_ACCIDENT_REPORT_OWN,
+  // Briefing pré-voyage QHSE (refonte 2026-04-24)
+  BRIEFING_TEMPLATE_READ_TENANT:   P_BRIEFING_TEMPLATE_READ_TENANT,
+  BRIEFING_TEMPLATE_MANAGE_TENANT: P_BRIEFING_TEMPLATE_MANAGE_TENANT,
+  BRIEFING_SIGN_OWN:               P_BRIEFING_SIGN_OWN,
+  BRIEFING_SIGN_DELEGATE_AGENCY:   P_BRIEFING_SIGN_DELEGATE_AGENCY,
+  BRIEFING_READ_AGENCY:            P_BRIEFING_READ_AGENCY,
+  BRIEFING_READ_TENANT:            P_BRIEFING_READ_TENANT,
+  BRIEFING_OVERRIDE_TENANT:        P_BRIEFING_OVERRIDE_TENANT,
+  // Safety alerts trip
+  SAFETY_ALERT_READ_AGENCY:    P_SAFETY_ALERT_READ_AGENCY,
+  SAFETY_ALERT_READ_TENANT:    P_SAFETY_ALERT_READ_TENANT,
+  SAFETY_ALERT_RESOLVE_AGENCY: P_SAFETY_ALERT_RESOLVE_AGENCY,
+  SAFETY_ALERT_RESOLVE_TENANT: P_SAFETY_ALERT_RESOLVE_TENANT,
   // Workflow Studio & Marketplace
   WORKFLOW_STUDIO_READ_TENANT:  P_WORKFLOW_STUDIO_READ_TENANT,
   WORKFLOW_STUDIO_WRITE_TENANT: P_WORKFLOW_STUDIO_WRITE_TENANT,
