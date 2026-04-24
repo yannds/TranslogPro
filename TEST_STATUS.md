@@ -1,7 +1,38 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-20 (Sprints Pricing S1→S5 + rentabilité pré-trajet + scénarios métier).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-24 (Refonte briefing QHSE — 7 sprints, 6 commits).
+
+### Refonte briefing pré-voyage QHSE (2026-04-24)
+
+Passage d'une checklist équipement-seule à un briefing multi-chapitres
+tenant-configurable avec double signature (DRAW/PIN/BIOMETRIC) et alertes
+sécurité immuables. Voir [docs/BRIEFING.md](docs/BRIEFING.md).
+
+**Tests livrés :**
+- **Unit** : 5 specs `test/unit/crew-briefing/` — 39 tests
+  (template CRUD, rest calculator, safety alert, briefing v2 flow complet).
+  Total suite unit : 1104/1104 PASS.
+- **Security** : `test/security/briefing-isolation.spec.ts` — 11 tests
+  (cross-tenant isolation, scope 'own', override BLOCK_DEPARTURE immuable,
+  alerte one-shot). Total suite security : 207/207 PASS.
+- **Playwright E2E-API** : `test/playwright/briefing-signature-recursive.api.spec.ts`
+  — 4 tests : signature DRAW SVG récursive (byte-for-byte), signature PIN,
+  policy BLOCK sans override (403), policy BLOCK avec override (200 +
+  audit tracé + alertes émises).
+
+**Sprints** :
+- S1 : Schéma Prisma + template seed (8 chapitres × 41 items, commit 1c4c95f)
+- S2 : Services (BriefingTemplate, DriverRestCalculator, TripSafetyAlert,
+  CrewBriefing v2) + 39 tests unit (commit 52053db)
+- S3 : RBAC (+13 permissions) + endpoints v2 + DTOs + 11 tests security
+  (commit a21d1aa)
+- S4 : Web admin (PageBriefingTemplate, PageTripSafetyAlerts, section
+  Briefing dans PageTenantBusinessRules, commit 0fb0832)
+- S5 : Web chauffeur (PageDriverBriefing refonte v2 + BriefingSignatureInput,
+  commit 7b9b779)
+- S6 : Mobile unifié (BriefingScreen v2 + MobileSignatureInput, commit dfa64d6)
+- S7 : Tests Playwright récursif dessin + docs/BRIEFING.md + clôture
 
 ### Sprints Pricing S1→S5 — Refonte complète (2026-04-20)
 

@@ -3,6 +3,24 @@
 
 ---
 
+## Changelog récent
+
+- **2026-04-24 : Refonte briefing pré-voyage QHSE** (7 sprints).
+  Passage d'une checklist équipement-seule à un briefing multi-chapitres
+  tenant-configurable. 4 nouveaux modèles Prisma (`BriefingTemplate`,
+  `BriefingSection`, `BriefingItem`, `TripSafetyAlert`), 3 nouveaux services
+  backend (`BriefingTemplateService`, `DriverRestCalculatorService`,
+  `TripSafetyAlertService`) + refactor `CrewBriefingService` v2. 13 nouvelles
+  permissions RBAC. Double signature (DRAW SVG / PIN sha-256 / BIOMETRIC
+  WebAuthn) côté web et mobile. Politiques tenant :
+  `preTripBriefingPolicy`, `mandatoryItemFailurePolicy`, `restShortfallPolicy`,
+  `minDriverRestHours` (défaut 11h UE). Alertes sécurité immuables
+  (`TripSafetyAlert`) faisant foi en cas d'accident. Test récursif signature
+  dessin en Playwright E2E-API garantissant la propriété byte-for-byte.
+  Voir [docs/BRIEFING.md](docs/BRIEFING.md).
+
+---
+
 ## Table des Matières
 
 1. [Vue d'Ensemble](#1-vue-densemble)
