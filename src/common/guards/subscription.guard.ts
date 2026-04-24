@@ -13,9 +13,9 @@
  * Routes toujours accessibles (tenant platform, auth, public) :
  *   - Tenant plateforme (00000000-...) : jamais bloqué
  *   - Routes sans tenantId dans le JWT (non connecté) : non bloqué ici
- *   - Routes préfixées /api/v1/auth/*
- *   - Routes préfixées /api/v1/subscription/* (paiement, auto-renew, cancel, resume)
- *   - Routes préfixées /api/v1/backup/gdpr (export RGPD)
+ *   - Routes préfixées /api/auth/*
+ *   - Routes préfixées /api/subscription/* (paiement, auto-renew, cancel, resume)
+ *   - Routes préfixées /api/backup/gdpr (export RGPD)
  *
  * Cache Redis TTL 60s : on ne tape pas la DB à chaque requête.
  */
@@ -38,11 +38,11 @@ const CACHE_TTL_SECONDS  = 60;
 
 // Préfixes de routes accessibles même en SUSPENDED/CANCELLED
 const SUSPENDED_ALLOWED_PREFIXES = [
-  '/api/v1/auth',
-  '/api/v1/subscription',
-  '/api/v1/backup/gdpr',
+  '/api/auth',
+  '/api/subscription',
+  '/api/backup/gdpr',
   '/health',
-  '/api/v1/platform',  // SA accès toujours
+  '/api/platform',  // SA accès toujours
 ];
 
 @Injectable()
