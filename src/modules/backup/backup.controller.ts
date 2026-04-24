@@ -50,18 +50,18 @@ class UpsertScheduleDto {
 /**
  * Endpoints backup/restore/RGPD pour tenant-admin.
  *
- *   GET    /api/v1/backup/scopes           — catalogue des scopes disponibles
- *   GET    /api/v1/backup/jobs             — liste des backups
- *   POST   /api/v1/backup/jobs             — déclencher un backup
- *   GET    /api/v1/backup/jobs/:id         — détail + manifest
- *   DELETE /api/v1/backup/jobs/:id         — supprimer les fichiers MinIO
- *   POST   /api/v1/backup/restores         — déclencher une restauration
- *   GET    /api/v1/backup/restores         — liste des restaurations
- *   GET    /api/v1/backup/schedule         — config planification
- *   PUT    /api/v1/backup/schedule         — upsert planification
- *   GET    /api/v1/backup/gdpr             — liste des exports RGPD
- *   POST   /api/v1/backup/gdpr             — déclencher un export RGPD
- *   GET    /api/v1/backup/gdpr/:id/url     — lien présigné de téléchargement
+ *   GET    /api/backup/scopes           — catalogue des scopes disponibles
+ *   GET    /api/backup/jobs             — liste des backups
+ *   POST   /api/backup/jobs             — déclencher un backup
+ *   GET    /api/backup/jobs/:id         — détail + manifest
+ *   DELETE /api/backup/jobs/:id         — supprimer les fichiers MinIO
+ *   POST   /api/backup/restores         — déclencher une restauration
+ *   GET    /api/backup/restores         — liste des restaurations
+ *   GET    /api/backup/schedule         — config planification
+ *   PUT    /api/backup/schedule         — upsert planification
+ *   GET    /api/backup/gdpr             — liste des exports RGPD
+ *   POST   /api/backup/gdpr             — déclencher un export RGPD
+ *   GET    /api/backup/gdpr/:id/url     — lien présigné de téléchargement
  */
 @Controller({ version: '1', path: 'backup' })
 export class BackupController {

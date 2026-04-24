@@ -2,11 +2,11 @@
  * InvoiceController — Endpoints facturation.
  *
  * Routes :
- *   GET    /api/v1/tenants/:tid/invoices
- *   GET    /api/v1/tenants/:tid/invoices/:id
- *   POST   /api/v1/tenants/:tid/invoices
- *   PATCH  /api/v1/tenants/:tid/invoices/:id
- *   DELETE /api/v1/tenants/:tid/invoices/:id
+ *   GET    /api/tenants/:tid/invoices
+ *   GET    /api/tenants/:tid/invoices/:id
+ *   POST   /api/tenants/:tid/invoices
+ *   PATCH  /api/tenants/:tid/invoices/:id
+ *   DELETE /api/tenants/:tid/invoices/:id
  */
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,

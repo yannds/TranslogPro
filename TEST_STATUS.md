@@ -125,7 +125,7 @@ pipeline tarifaire complet opérationnel.**
 Phase 11.A — **Rentabilité pré-trajet** (commit `86b5e44`) :
 - Permission granulaire `data.profitability.read.tenant` (séparée de STATS_READ)
   mappée sur TENANT_ADMIN, AGENCY_MANAGER, ACCOUNTANT dans le seed IAM
-- Endpoint `POST /api/v1/tenants/:id/simulate-trip` — retourne :
+- Endpoint `POST /api/tenants/:id/simulate-trip` — retourne :
   · Coûts détaillés (variable + fixe + total)
   · Projection (marge nette, tag PROFITABLE / BREAK_EVEN / DEFICIT)
   · Recommandations : prix break-even au fillRate, fillRate break-even au prix,

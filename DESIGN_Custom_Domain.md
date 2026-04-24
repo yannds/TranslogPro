@@ -703,7 +703,7 @@ Pour info seulement — il faudrait un script qui ajoute un server block Nginx +
 **Endpoint de vérification DNS** à créer côté backend :
 
 ```typescript
-// GET /api/v1/tenant/custom-domain/verify?domain=odn.cg
+// GET /api/tenant/custom-domain/verify?domain=odn.cg
 async verifyDns(domain: string): Promise<{ resolved: boolean; target?: string }> {
   // Utiliser le module DNS natif de Node.js
   const dns = await import('node:dns/promises');

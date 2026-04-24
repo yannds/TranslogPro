@@ -1,7 +1,7 @@
 /**
  * TenantIamController
  *
- * Routes scopées par tenant : /api/v1/tenants/:tenantId/iam/…
+ * Routes scopées par tenant : /api/tenants/:tenantId/iam/…
  *
  * Utilisateurs :
  *   GET    /users           — liste

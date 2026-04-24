@@ -66,13 +66,13 @@ function deriveActionType(method: string, path: string): string {
 
 /** Dérive le module fonctionnel impacté depuis l'URL. */
 function extractModule(path: string): string {
-  // /api/v1/tenants/:id/<module>/... → segment après l'ID tenant
+  // /api/tenants/:id/<module>/... → segment après l'ID tenant
   const parts  = path.split('/').filter(Boolean);
   const tidIdx = parts.indexOf('tenants');
   if (tidIdx !== -1 && parts.length > tidIdx + 2) {
     return parts[tidIdx + 2] ?? 'unknown';
   }
-  // /api/v1/<module>/... (routes sans tenant)
+  // /api/<module>/... (routes sans tenant)
   return parts[2] ?? 'core';
 }
 

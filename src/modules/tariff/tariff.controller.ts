@@ -2,16 +2,16 @@
  * TariffController — Endpoints grille tarifaire & promotions.
  *
  * Routes :
- *   GET    /api/v1/tenants/:tid/tariffs             — liste des grilles
- *   GET    /api/v1/tenants/:tid/tariffs/:id          — détail grille
- *   POST   /api/v1/tenants/:tid/tariffs              — créer une grille
- *   PATCH  /api/v1/tenants/:tid/tariffs/:id          — modifier une grille
- *   DELETE /api/v1/tenants/:tid/tariffs/:id          — supprimer une grille
- *   GET    /api/v1/tenants/:tid/promotions           — liste des promos
- *   GET    /api/v1/tenants/:tid/promotions/:id       — détail promo
- *   POST   /api/v1/tenants/:tid/promotions           — créer une promo
- *   PATCH  /api/v1/tenants/:tid/promotions/:id       — modifier une promo
- *   DELETE /api/v1/tenants/:tid/promotions/:id       — supprimer une promo
+ *   GET    /api/tenants/:tid/tariffs             — liste des grilles
+ *   GET    /api/tenants/:tid/tariffs/:id          — détail grille
+ *   POST   /api/tenants/:tid/tariffs              — créer une grille
+ *   PATCH  /api/tenants/:tid/tariffs/:id          — modifier une grille
+ *   DELETE /api/tenants/:tid/tariffs/:id          — supprimer une grille
+ *   GET    /api/tenants/:tid/promotions           — liste des promos
+ *   GET    /api/tenants/:tid/promotions/:id       — détail promo
+ *   POST   /api/tenants/:tid/promotions           — créer une promo
+ *   PATCH  /api/tenants/:tid/promotions/:id       — modifier une promo
+ *   DELETE /api/tenants/:tid/promotions/:id       — supprimer une promo
  */
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,

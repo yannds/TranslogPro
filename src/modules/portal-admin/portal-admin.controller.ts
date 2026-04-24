@@ -2,7 +2,7 @@
  * PortalAdminController — Gestion CMS du portail public (admin tenant).
  *
  * Toutes les routes nécessitent SETTINGS_MANAGE_TENANT.
- * Path : /api/v1/tenants/:tenantId/portal/*
+ * Path : /api/tenants/:tenantId/portal/*
  *
  * Routes :
  *   GET/PUT   config         — config portail (sections, hero, slogans, CMS toggle)

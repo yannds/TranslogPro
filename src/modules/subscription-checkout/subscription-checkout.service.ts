@@ -15,7 +15,7 @@ import {
  * pour régler 1 période d'abonnement (mensuelle ou annuelle selon le plan).
  *
  * Flux :
- *   1. Frontend appelle `POST /api/v1/subscription/checkout` depuis le banner
+ *   1. Frontend appelle `POST /api/subscription/checkout` depuis le banner
  *      trial ("Upgrade now") ou depuis /admin/billing.
  *   2. Service construit l'Intent (entityType=SUBSCRIPTION, idempotent par
  *      `sub-{subscriptionId}-{period}-{method}` pour éviter les doubles envois).

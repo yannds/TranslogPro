@@ -12,7 +12,7 @@ import { WorkflowDispatchService } from './workflow-dispatch.service';
 /**
  * PRD §VI.2 — Endpoint workflow unifié.
  *
- * POST /api/v1/tenants/{tenantId}/workflow/transition
+ * POST /api/tenants/{tenantId}/workflow/transition
  * Body: { entityType, entityId, action, context? }
  *
  * Le client ne connaît que le VERBE (action). Le moteur résout

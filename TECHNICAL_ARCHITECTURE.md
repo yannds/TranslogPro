@@ -56,7 +56,7 @@
       ┌────────▼────────┐               ┌──────────▼──────────┐
       │  REST API        │               │  Realtime Gateway    │
       │  NestJS HTTP     │               │  Socket.io + Redis   │
-      │  /api/v1/...     │               │  Adapter             │
+      │  /api/...     │               │  Adapter             │
       └────────┬────────┘               └──────────┬──────────┘
                │                                   │
 ╔══════════════▼═══════════════════════════════════▼════════════════════╗
@@ -945,9 +945,9 @@ Clés supplémentaires v3.0 :
 ### 6.1 Conventions
 
 ```
-Versioning:      /api/v1/ → /api/v2/ (breaking change = nouveau préfixe)
-Tenant scope:    /api/v1/tenants/{tenantId}/...
-Control plane:   /api/v1/control/...
+Versioning:      /api/ → /api/v2/ (breaking change = nouveau préfixe)
+Tenant scope:    /api/tenants/{tenantId}/...
+Control plane:   /api/control/...
 Auth web:        Cookie httpOnly (Better Auth)
 Auth mobile:     Bearer token (SecureStore iOS/Android Keystore)
 Idempotence:     Header Idempotency-Key: {uuid} — obligatoire sur POST mutants
@@ -964,7 +964,7 @@ Erreurs:         RFC 7807 Problem Details
   "status": 409,
   "detail": "Checklist PRE_DEPARTURE must be compliant",
   "errorCode": "GUARD_CHECKLIST_NOT_COMPLIANT",
-  "instance": "/api/v1/workflow/transition",
+  "instance": "/api/workflow/transition",
   "context": {
     "entityType": "TRIP",
     "entityId": "clx...",
@@ -979,7 +979,7 @@ Erreurs:         RFC 7807 Problem Details
 ### 6.3 Endpoint Unifié de Transition Workflow
 
 ```
-POST /api/v1/tenants/{tenantId}/workflow/transition
+POST /api/tenants/{tenantId}/workflow/transition
 Headers: Idempotency-Key: {uuid}
 Body: {
   "entityType": "TICKET" | "PARCEL" | "TRIP" | "BUS" | "TRAVELER" | "SHIPMENT",
@@ -1981,8 +1981,8 @@ const { user, loading, login, logout } = useAuth();
 
 | Page | Fichier | Endpoints |
 |------|---------|-----------|
-| Rentabilité | `PageProfitability.tsx` | GET /api/v1/tenants/:tid/analytics/profitability |
-| White-label | `PageBranding.tsx` | GET/PUT /api/v1/tenants/:tid/brand |
+| Rentabilité | `PageProfitability.tsx` | GET /api/tenants/:tid/analytics/profitability |
+| White-label | `PageBranding.tsx` | GET/PUT /api/tenants/:tid/brand |
 
 Remplacent les `PageWip` stubs pour `pricing-yield` et `white-label`.
 

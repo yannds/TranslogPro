@@ -2,12 +2,12 @@
  * PricingController — Endpoints rentabilité & yield.
  *
  * Routes :
- *   GET    /api/v1/tenants/:tid/buses/:busId/cost-profile
- *   PUT    /api/v1/tenants/:tid/buses/:busId/cost-profile
- *   GET    /api/v1/tenants/:tid/trips/:tripId/cost-snapshot
- *   POST   /api/v1/tenants/:tid/trips/:tripId/cost-snapshot   — déclenche le calcul manuellement
- *   GET    /api/v1/tenants/:tid/trips/:tripId/yield            — suggère un prix
- *   GET    /api/v1/tenants/:tid/analytics/profitability        — dashboard décideur
+ *   GET    /api/tenants/:tid/buses/:busId/cost-profile
+ *   PUT    /api/tenants/:tid/buses/:busId/cost-profile
+ *   GET    /api/tenants/:tid/trips/:tripId/cost-snapshot
+ *   POST   /api/tenants/:tid/trips/:tripId/cost-snapshot   — déclenche le calcul manuellement
+ *   GET    /api/tenants/:tid/trips/:tripId/yield            — suggère un prix
+ *   GET    /api/tenants/:tid/analytics/profitability        — dashboard décideur
  */
 import {
   Controller, Get, Put, Post, Patch, Delete, Param, Body, Query,

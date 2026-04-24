@@ -24,7 +24,7 @@ export interface TenantModulesResponse {
 /**
  * TenantModuleController
  *
- * Routes scopées par tenant : /api/v1/tenants/:tenantId/modules/…
+ * Routes scopées par tenant : /api/tenants/:tenantId/modules/…
  *
  *   GET   /                — liste des modules installés (actifs + inactifs) +
  *                            platformGated (modules non débloqués par la plateforme)

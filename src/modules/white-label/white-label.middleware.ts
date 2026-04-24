@@ -48,7 +48,7 @@ export class WhiteLabelMiddleware implements NestMiddleware {
   /**
    * Résolution du tenantId dans l'ordre de priorité :
    *  1. Session Better Auth (req.user.tenantId) — routes authentifiées
-   *  2. Path param :tenantId — routes type /api/v1/tenants/:tenantId/...
+   *  2. Path param :tenantId — routes type /api/tenants/:tenantId/...
    *  3. Sous-domaine — ex: "acme.translogpro.app" → slug "acme"
    *     (mappé en tenantId via un reverse-lookup — non implémenté ici)
    */
@@ -57,7 +57,7 @@ export class WhiteLabelMiddleware implements NestMiddleware {
     const user = (req as any).user as { tenantId?: string } | undefined;
     if (user?.tenantId) return user.tenantId;
 
-    // 2. Path param (/api/v1/tenants/:tenantId/...)
+    // 2. Path param (/api/tenants/:tenantId/...)
     const raw     = req.params?.['tenantId'] ?? req.params?.['tid'];
     const paramId = Array.isArray(raw) ? raw[0] : raw;
     if (paramId) return paramId;

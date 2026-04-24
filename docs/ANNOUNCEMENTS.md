@@ -65,7 +65,7 @@ Titre + message rendus fr/en via templates inline ([listener.ts:43-91](../src/mo
 
 ### 1.2 Manuel — UI admin
 
-[`/admin/display/announcements`](../frontend/components/pages/PageAnnouncements.tsx) → `POST /api/v1/tenants/:tid/announcements` → `AnnouncementService.create()`.
+[`/admin/display/announcements`](../frontend/components/pages/PageAnnouncements.tsx) → `POST /api/tenants/:tid/announcements` → `AnnouncementService.create()`.
 
 Permission : `control.announcement.manage.tenant` (TENANT_ADMIN par défaut).
 

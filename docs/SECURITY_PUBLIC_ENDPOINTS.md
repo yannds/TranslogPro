@@ -34,8 +34,8 @@
 | `POST /api/auth/password-reset/request` | 3/h | — | ✅ | — | cooldown 60min/email (skip si token actif émis < 60min) |
 | `POST /api/public/:tenantId/report` | 5/h | — | ✅ | — | RGPD TTL 24h |
 | `POST /api/public/report` (host-resolved) | 5/h | — | ✅ | — | idem |
-| `POST /api/v1/tenants/:id/customer/claim/initiate` (retro OTP) | 3/h | 3/24h/phone | ✅ | — | auth CUSTOMER requis |
-| `POST /api/v1/tenants/:id/customer/claim/confirm` | 10/h (throttler) | — | — | — | auth CUSTOMER + 5 tentatives OTP max |
+| `POST /api/tenants/:id/customer/claim/initiate` (retro OTP) | 3/h | 3/24h/phone | ✅ | — | auth CUSTOMER requis |
+| `POST /api/tenants/:id/customer/claim/confirm` | 10/h (throttler) | — | — | — | auth CUSTOMER + 5 tentatives OTP max |
 
 ---
 

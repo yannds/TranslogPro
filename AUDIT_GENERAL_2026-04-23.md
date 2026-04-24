@@ -201,8 +201,8 @@ L'agent backend a signalé 11 dead links. **Vérifications terrain** :
 | `/api/iam/impersonate/${tenantId}/history` | endpoint existe | ✅ Pas mort |
 | `/api/auth/oauth/providers` | 200 OK | ✅ Pas mort |
 | `/api/book` | 🔴 introuvable côté backend | ❓ À investiguer |
-| `/api/v1/public/payment-methods` | 🔴 absent | 🔴 à créer ou supprimer appel |
-| `/api/v1/subscription/*` | 🔴 absent (PRD : module checkout subscription) | 🔴 module checkout à finir |
+| `/api/public/payment-methods` | 🔴 absent | 🔴 à créer ou supprimer appel |
+| `/api/subscription/*` | 🔴 absent (PRD : module checkout subscription) | 🔴 module checkout à finir |
 | `/api/workflow/debug/*` | dev only | 🟡 normal en prod |
 
 ⚠️ **Conclusion** : l'agent a sur-estimé le nombre de liens morts (faux positifs sur impersonate). **Vrais liens morts confirmés : ~3-4**, à corriger dans le sprint final.
@@ -337,8 +337,8 @@ cors: {
 | URL | Localisation | Action |
 |---|---|---|
 | `/api/book` | grep frontend | 🔴 Introuvable backend — soit créer endpoint, soit supprimer appel |
-| `/api/v1/public/payment-methods` | sites/PageTenantPayment ? | 🔴 Endpoint absent — module checkout à finir |
-| `/api/v1/subscription/*` | onboarding wizard, billing | 🔴 Module subscription-checkout à compléter |
+| `/api/public/payment-methods` | sites/PageTenantPayment ? | 🔴 Endpoint absent — module checkout à finir |
+| `/api/subscription/*` | onboarding wizard, billing | 🔴 Module subscription-checkout à compléter |
 | `/api/workflow/debug/*` | PageDebugWorkflow.tsx | 🟡 Dev only — gater par NODE_ENV !== 'production' |
 
 ### 6.2 Endpoints "non utilisés" — ne PAS supprimer aveuglement
@@ -383,8 +383,8 @@ L'agent a flag 343 endpoints orphelins. **Faux positifs probables** : tous les C
 | B-10 | 🟠 P1 | Tests intégration | `search-trips-intermediate.integration-spec.ts` | Suite ne démarre pas (probablement liée au module `routing/` non terminé) | 2 h |
 | B-11 | 🟠 P1 | Tests sécurité | `integrations-credentials.spec.ts` | Fichier Playwright dans dossier Jest — déplacer | 5 min |
 | B-12 | 🟡 P2 | Backend missing | route `/api/book` | Endpoint absent | 1 h |
-| B-13 | 🟡 P2 | Backend missing | `/api/v1/public/payment-methods` | Endpoint absent | 2 h |
-| B-14 | 🟡 P2 | Backend missing | `/api/v1/subscription/*` | Module checkout incomplet | 1 j |
+| B-13 | 🟡 P2 | Backend missing | `/api/public/payment-methods` | Endpoint absent | 2 h |
+| B-14 | 🟡 P2 | Backend missing | `/api/subscription/*` | Module checkout incomplet | 1 j |
 | B-15 | 🟡 P2 | UI manquante | Module M (Scheduler) | Pas de PageScheduler | 2 j |
 | B-16 | 🟡 P2 | UI manquante | Module N (Quotas) | Pas de PageQuotaSettings | 1 j |
 | B-17 | 🟡 P2 | UI manquante | Module U (Public Reporter) | Page `/p/:slug/report-vehicle` minimaliste | 1 j |
@@ -522,8 +522,8 @@ J+14                    : 🚀 LANCEMENT MVP
 | B-10 Integration search-trips-intermediate | P1 | ✅ FIX | constructeur PublicPortalService aligné (13 args, ordre commenté) |
 | B-11 Spec Playwright dans dossier Jest | P1 | ✅ FIX | déplacé vers `test/playwright/integrations-credentials-security.api.spec.ts` |
 | B-12 `/api/book` introuvable | P2 | ✅ FAUX POSITIF | uniquement dans node_modules/react-router/dist/*.d.ts (JSDoc) |
-| B-13 `/api/v1/public/payment-methods` | P2 | ✅ FIX | fonction `fetchPaymentMethodsForCountry` était dead code, supprimée |
-| B-14 `/api/v1/subscription/*` | P2 | ✅ FAUX POSITIF | module `subscription-checkout` complet (10 endpoints), bien câblé |
+| B-13 `/api/public/payment-methods` | P2 | ✅ FIX | fonction `fetchPaymentMethodsForCountry` était dead code, supprimée |
+| B-14 `/api/subscription/*` | P2 | ✅ FAUX POSITIF | module `subscription-checkout` complet (10 endpoints), bien câblé |
 | B-15 PageScheduler (Module M) | P2 | ✅ FIX | `SchedulerController` créé + `PageScheduler.tsx` (CRUD TripTemplate) + nav + i18n fr/en |
 | B-16 PageQuotaSettings (Module N) | P2 | ✅ FIX | `QuotaController` créé + `PageQuotaSettings.tsx` (observation usage Redis live) + nav + i18n fr/en |
 | B-17 Public Reporter portail (Module U) | P2 | ✅ FIX | `PagePublicReportVehicle.tsx` (form CAPTCHA + GPS optionnel + WCAG AA) + route publique `/report-vehicle` dans main.tsx |
@@ -618,7 +618,7 @@ Nouvelle passe pour clôturer le backlog résiduel P1/P2/P3 de l'itération 1.
 | **SubscriptionGuard global** | APP_GUARD `src/common/guards/subscription.guard.ts` — bloque routes non-whitelistées si `SUSPENDED`/`CANCELLED`, 403 systématique si `CHURNED`. 20 tests unit. |
 | **GRACE_PERIOD + CHURNED states** | Étendus sur `PlatformSubscription.status` + champs `gracePeriodSince`/`churnedAt`. `TrialBanner` affiche `GracePeriodBanner` non-dismissable. `SuspendedScreen` gère `CANCELLED` avec CTA export RGPD. |
 | **BackupModule complet** | 4 nouveaux models Prisma (`BackupJob`, `BackupRestore`, `GdprExportJob`, `BackupSchedule`) + `BackupScopeRegistry` (tri topologique FK + 4 scopes : billetterie/colis/operations/full) + `BackupService` (2-phase atomique DB+MinIO) + `RestoreService` (watermark AES-256-GCM, verify cross-tenant) + `GdprExportService` (ZIP signé 24h). 11 tests BackupScopeRegistry. |
-| **PagePaymentMethods** | `/admin/billing/methods` — list/default/remove. Endpoints `GET/DELETE/PUT /api/v1/subscription/payment-methods`. Reconciliation auto-push vers `savedMethods[]` (dedup token/last4/maskedPhone, max 5). 11 tests service. |
+| **PagePaymentMethods** | `/admin/billing/methods` — list/default/remove. Endpoints `GET/DELETE/PUT /api/subscription/payment-methods`. Reconciliation auto-push vers `savedMethods[]` (dedup token/last4/maskedPhone, max 5). 11 tests service. |
 | **PageAdminBackup** | `/admin/settings/backup` — 4 sections (Sauvegardes / Restaurations / Planification / Export RGPD). Dialogs desktop-first. i18n fr+en natifs + 6 locales fallback. |
 
 ### Compteurs finaux

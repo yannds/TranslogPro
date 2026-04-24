@@ -748,7 +748,7 @@ Segments calculés à partir des compteurs Customer. Les compteurs sont incréme
 - **RGPD :** Les coordonnées GPS du déclarant sont automatiquement supprimées après 24h (`PublicReport.reporterGpsExpireAt`). Un avertissement permanent est affiché sur le formulaire : *"Votre position GPS sera utilisée uniquement pour valider ce signalement et supprimée sous 24h."*
 - **Rate limiting agressif par IP :** Sliding window Redis — 5 signalements/IP/heure (configurable par tenant). Dépassement → 429 avec message RGPD
 
-**Endpoint :** `POST /public/{tenantSlug}/report` (pas sous `/api/v1/tenants/`)  
+**Endpoint :** `POST /public/{tenantSlug}/report` (pas sous `/api/tenants/`)  
 **Entités :** `PublicReport (id, tenantId, plateOrParkNumber, type, description, reporterGpsLat?, reporterGpsLng?, reporterGpsExpireAt, verificationScore, status, correlatedBusId?, photoUrl?)`
 
 ### IV.17 Gestion des Délais et Annulations
@@ -1162,126 +1162,126 @@ model ImpersonationSession {
 
 **Convention globale :**
 ```
-Base URL:      /api/v1/tenants/{tenantId}/...
+Base URL:      /api/tenants/{tenantId}/...
 Auth:          Cookie httpOnly (Web) | Bearer token SecureStore (Mobile)
 Idempotence:   Header Idempotency-Key: {uuid} — obligatoire sur tous les POST mutants
-Versioning:    /api/v1/ — évolution via nouveau préfixe /api/v2/
+Versioning:    /api/ — évolution via nouveau préfixe /api/v2/
 Erreurs:       RFC 7807 (Problem Details for HTTP APIs)
 Pagination:    Cursor-based (?cursor=xxx&limit=20)
 ```
 
 **Workflow (unifié)**
 ```
-POST /api/v1/tenants/{tid}/workflow/transition   (idempotent via header)
+POST /api/tenants/{tid}/workflow/transition   (idempotent via header)
 Body: { entityType, entityId, action, context }
 ```
 
 **Ticketing**
 ```
-POST   /api/v1/tenants/{tid}/tickets                    data.ticket.create.agency
-GET    /api/v1/tenants/{tid}/tickets/{id}               data.ticket.read.agency
-POST   /api/v1/tenants/{tid}/tickets/{id}/verify-qr     data.ticket.scan.agency
-POST   /api/v1/tenants/{tid}/tickets/{id}/cancel        data.ticket.cancel.agency
-GET    /api/v1/tenants/{tid}/trips/{id}/tickets          data.ticket.read.agency
+POST   /api/tenants/{tid}/tickets                    data.ticket.create.agency
+GET    /api/tenants/{tid}/tickets/{id}               data.ticket.read.agency
+POST   /api/tenants/{tid}/tickets/{id}/verify-qr     data.ticket.scan.agency
+POST   /api/tenants/{tid}/tickets/{id}/cancel        data.ticket.cancel.agency
+GET    /api/tenants/{tid}/trips/{id}/tickets          data.ticket.read.agency
 ```
 
 **Parcels**
 ```
-POST   /api/v1/tenants/{tid}/parcels                    data.parcel.create.agency
-GET    /api/v1/tenants/{tid}/parcels/{id}               data.parcel.scan.agency
-GET    /api/v1/tenants/{tid}/parcels/track/{code}       (public tenant-scoped)
-POST   /api/v1/tenants/{tid}/shipments                  data.shipment.group.agency
-POST   /api/v1/tenants/{tid}/shipments/{id}/parcels     data.parcel.update.agency
-PATCH  /api/v1/tenants/{tid}/shipments/{id}/close       data.shipment.group.agency
+POST   /api/tenants/{tid}/parcels                    data.parcel.create.agency
+GET    /api/tenants/{tid}/parcels/{id}               data.parcel.scan.agency
+GET    /api/tenants/{tid}/parcels/track/{code}       (public tenant-scoped)
+POST   /api/tenants/{tid}/shipments                  data.shipment.group.agency
+POST   /api/tenants/{tid}/shipments/{id}/parcels     data.parcel.update.agency
+PATCH  /api/tenants/{tid}/shipments/{id}/close       data.shipment.group.agency
 ```
 
 **Trips**
 ```
-GET    /api/v1/tenants/{tid}/trips                      data.trip.read.own
-POST   /api/v1/tenants/{tid}/trips                      data.trip.create.tenant
-GET    /api/v1/tenants/{tid}/trips/{id}/roadbook        data.trip.read.own
-POST   /api/v1/tenants/{tid}/trips/{id}/checklists      data.trip.check.own
-POST   /api/v1/tenants/{tid}/trips/{id}/incidents       data.trip.report.own
-POST   /api/v1/tenants/{tid}/trips/{id}/sos             data.trip.report.own (rate: 3/h)
-GET    /api/v1/tenants/{tid}/trips/{id}/manifest        data.manifest.read.own
-GET    /api/v1/tenants/{tid}/trips/{id}/dropoff/{sid}   data.manifest.read.own
-POST   /api/v1/tenants/{tid}/trips/{id}/gps             data.trip.report.own (throttled)
+GET    /api/tenants/{tid}/trips                      data.trip.read.own
+POST   /api/tenants/{tid}/trips                      data.trip.create.tenant
+GET    /api/tenants/{tid}/trips/{id}/roadbook        data.trip.read.own
+POST   /api/tenants/{tid}/trips/{id}/checklists      data.trip.check.own
+POST   /api/tenants/{tid}/trips/{id}/incidents       data.trip.report.own
+POST   /api/tenants/{tid}/trips/{id}/sos             data.trip.report.own (rate: 3/h)
+GET    /api/tenants/{tid}/trips/{id}/manifest        data.manifest.read.own
+GET    /api/tenants/{tid}/trips/{id}/dropoff/{sid}   data.manifest.read.own
+POST   /api/tenants/{tid}/trips/{id}/gps             data.trip.report.own (throttled)
 ```
 
 **Fleet**
 ```
-GET    /api/v1/tenants/{tid}/buses                      data.fleet.manage.tenant
-POST   /api/v1/tenants/{tid}/buses                      control.fleet.manage.tenant
-PUT    /api/v1/tenants/{tid}/buses/{id}/layout          control.fleet.layout.tenant
-GET    /api/v1/tenants/{tid}/buses/available            data.fleet.status.agency
-POST   /api/v1/tenants/{tid}/staff                      data.fleet.manage.tenant
-GET    /api/v1/tenants/{tid}/staff                      data.user.read.agency
+GET    /api/tenants/{tid}/buses                      data.fleet.manage.tenant
+POST   /api/tenants/{tid}/buses                      control.fleet.manage.tenant
+PUT    /api/tenants/{tid}/buses/{id}/layout          control.fleet.layout.tenant
+GET    /api/tenants/{tid}/buses/available            data.fleet.status.agency
+POST   /api/tenants/{tid}/staff                      data.fleet.manage.tenant
+GET    /api/tenants/{tid}/staff                      data.user.read.agency
 ```
 
 **Finance**
 ```
-POST   /api/v1/tenants/{tid}/payments/initiate          data.ticket.create.agency
-POST   /api/v1/tenants/{tid}/payments/webhook           (IP allowlisted, idempotent)
-POST   /api/v1/tenants/{tid}/cash/register/open         data.cashier.open.own
-POST   /api/v1/tenants/{tid}/cash/register/close        data.cashier.close.agency
-GET    /api/v1/tenants/{tid}/cash/transactions          data.cashier.transaction.own
+POST   /api/tenants/{tid}/payments/initiate          data.ticket.create.agency
+POST   /api/tenants/{tid}/payments/webhook           (IP allowlisted, idempotent)
+POST   /api/tenants/{tid}/cash/register/open         data.cashier.open.own
+POST   /api/tenants/{tid}/cash/register/close        data.cashier.close.agency
+GET    /api/tenants/{tid}/cash/transactions          data.cashier.transaction.own
 ```
 
 **Display (Public)**
 ```
-GET    /api/v1/tenants/{tid}/stations/{id}/display      (public, tenant from path)
-GET    /api/v1/tenants/{tid}/buses/{id}/display         (public, tenant from path)
+GET    /api/tenants/{tid}/stations/{id}/display      (public, tenant from path)
+GET    /api/tenants/{tid}/buses/{id}/display         (public, tenant from path)
 ```
 
 **Safety & Feedback**
 ```
-POST   /api/v1/tenants/{tid}/feedback                       data.feedback.submit.own
-GET    /api/v1/tenants/{tid}/ratings/drivers/{staffId}      control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/ratings/buses/{busId}          control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/ratings/agencies/{agencyId}    control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/safety/alerts                  control.safety.monitor.global
+POST   /api/tenants/{tid}/feedback                       data.feedback.submit.own
+GET    /api/tenants/{tid}/ratings/drivers/{staffId}      control.stats.read.tenant
+GET    /api/tenants/{tid}/ratings/buses/{busId}          control.stats.read.tenant
+GET    /api/tenants/{tid}/ratings/agencies/{agencyId}    control.stats.read.tenant
+GET    /api/tenants/{tid}/safety/alerts                  control.safety.monitor.global
 ```
 
 **CRM**
 ```
-GET    /api/v1/tenants/{tid}/crm/voyageurs/{userId}         data.crm.read.tenant
-GET    /api/v1/tenants/{tid}/crm/voyageurs/{userId}/trips   data.crm.read.tenant
-POST   /api/v1/tenants/{tid}/campaigns                      control.campaign.manage.tenant
-GET    /api/v1/tenants/{tid}/campaigns                      control.campaign.manage.tenant
+GET    /api/tenants/{tid}/crm/voyageurs/{userId}         data.crm.read.tenant
+GET    /api/tenants/{tid}/crm/voyageurs/{userId}/trips   data.crm.read.tenant
+POST   /api/tenants/{tid}/campaigns                      control.campaign.manage.tenant
+GET    /api/tenants/{tid}/campaigns                      control.campaign.manage.tenant
 ```
 
 **Crew**
 ```
-POST   /api/v1/tenants/{tid}/trips/{id}/crew                data.crew.manage.tenant
-GET    /api/v1/tenants/{tid}/trips/{id}/crew                data.trip.read.own
-PATCH  /api/v1/tenants/{tid}/trips/{id}/crew/{assignId}/brief   data.crew.manage.tenant
+POST   /api/tenants/{tid}/trips/{id}/crew                data.crew.manage.tenant
+GET    /api/tenants/{tid}/trips/{id}/crew                data.trip.read.own
+PATCH  /api/tenants/{tid}/trips/{id}/crew/{assignId}/brief   data.crew.manage.tenant
 ```
 
 **Display**
 ```
-PATCH  /api/v1/tenants/{tid}/trips/{id}/display-note        data.display.update.agency
+PATCH  /api/tenants/{tid}/trips/{id}/display-note        data.display.update.agency
 ```
 
 **Trip Events (pauses & checkpoints)**
 ```
-POST   /api/v1/tenants/{tid}/trips/{id}/events              control.trip.log_event.own
-GET    /api/v1/tenants/{tid}/trips/{id}/events              data.trip.read.own
+POST   /api/tenants/{tid}/trips/{id}/events              control.trip.log_event.own
+GET    /api/tenants/{tid}/trips/{id}/events              data.trip.read.own
 ```
 
 **Delays & Cancellations**
 ```
-POST   /api/v1/tenants/{tid}/trips/{id}/delay               control.trip.delay.agency
-POST   /api/v1/tenants/{tid}/trips/{id}/cancel              control.trip.cancel.tenant
+POST   /api/tenants/{tid}/trips/{id}/delay               control.trip.delay.agency
+POST   /api/tenants/{tid}/trips/{id}/cancel              control.trip.cancel.tenant
 ```
 
 **IAM DB-driven**
 ```
-GET    /api/v1/tenants/{tid}/roles                          control.iam.manage.tenant
-POST   /api/v1/tenants/{tid}/roles                          control.iam.manage.tenant
-PATCH  /api/v1/tenants/{tid}/roles/{roleId}/permissions     control.iam.manage.tenant
+GET    /api/tenants/{tid}/roles                          control.iam.manage.tenant
+POST   /api/tenants/{tid}/roles                          control.iam.manage.tenant
+PATCH  /api/tenants/{tid}/roles/{roleId}/permissions     control.iam.manage.tenant
 ```
 
-**Public Reporter (pas sous /api/v1/tenants/ — pas d'auth requise)**
+**Public Reporter (pas sous /api/tenants/ — pas d'auth requise)**
 ```
 POST   /public/{tenantSlug}/report                          (public — IP rate limit 5/h)
 GET    /public/{tenantSlug}/report/{id}/status              (public — lecture statut seul)
@@ -1289,19 +1289,19 @@ GET    /public/{tenantSlug}/report/{id}/status              (public — lecture 
 
 **Analytics**
 ```
-GET    /api/v1/tenants/{tid}/stats/revenue                  control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/stats/punctuality              control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/stats/fleet-health             control.stats.read.tenant
-GET    /api/v1/tenants/{tid}/stats/driver-ranking           control.stats.read.tenant
+GET    /api/tenants/{tid}/stats/revenue                  control.stats.read.tenant
+GET    /api/tenants/{tid}/stats/punctuality              control.stats.read.tenant
+GET    /api/tenants/{tid}/stats/fleet-health             control.stats.read.tenant
+GET    /api/tenants/{tid}/stats/driver-ranking           control.stats.read.tenant
 ```
 
 **Control Plane**
 ```
-POST   /api/v1/control/tenants                          control.tenant.provision.global
-POST   /api/v1/control/tenants/{tid}/modules            control.module.install.tenant
-GET    /api/v1/control/tenants/{tid}/dlq                control.platform.dlq.global
-POST   /api/v1/control/tenants/{tid}/dlq/{id}/replay    control.platform.dlq.global
-POST   /api/v1/control/workflow/override                control.workflow.override.global
+POST   /api/control/tenants                          control.tenant.provision.global
+POST   /api/control/tenants/{tid}/modules            control.module.install.tenant
+GET    /api/control/tenants/{tid}/dlq                control.platform.dlq.global
+POST   /api/control/tenants/{tid}/dlq/{id}/replay    control.platform.dlq.global
+POST   /api/control/workflow/override                control.workflow.override.global
 ```
 
 ---
@@ -1582,7 +1582,7 @@ export default function NotFound() {
 | ADR-18 | TripEvent/Incident fusion | Table unique + discriminateur `type` | Interface partagée BaseEvent. Évite duplication colonnes. Claim FK optionnelle pour incidents SAV. |
 | ADR-19 | PostGIS optionnel | ST_Distance si disponible, sinon haversine applicatif | Développement sans PostGIS possible. Production = PostGIS activé. Interface `IGeoService` permutable. |
 | ADR-20 | PublicReport GPS TTL | reporterGpsExpireAt 24h + pg_cron delete | RGPD : données GPS collectées sans opt-in permanent — durée minimale de rétention. |
-| ADR-21 | Public Reporter isolation | /public/{slug}/... séparé de /api/v1/tenants/ | Pas d'auth, rate limit IP agressif. Isolation claire des endpoints authentifiés vs publics. |
+| ADR-21 | Public Reporter isolation | /public/{slug}/... séparé de /api/tenants/ | Pas d'auth, rate limit IP agressif. Isolation claire des endpoints authentifiés vs publics. |
 | ADR-22 | IWeatherService | Interface permutable (OpenWeatherMap default) | Smart Bus Display météo — fournisseur non critique, permutable sans modification code métier. |
 | ADR-23 | Maintenance au km | `maintenanceCostPerKm × distanceKm` (pas forfait mensuel) | Un bus faisant 2 vs 10 trajets/mois a le même forfait mensuel — coût par trajet faussé. Le coût au km reflète la consommation réelle de la mécanique. |
 | ADR-24 | TenantBusinessConfig | Modèle DB 1:1 avec Tenant pour les constantes métier | Les magic numbers (365, 30, 0.05…) dans le code empêchent la personnalisation tenant et rendent les tests fragiles. Un modèle DB permet la surcharge sans redéploiement. |

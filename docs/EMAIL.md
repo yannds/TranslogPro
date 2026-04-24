@@ -143,7 +143,7 @@ Sans cette vérification, les messages **finiront en spam** (Gmail/Outlook rejet
 | [src/infrastructure/notification/interfaces/email.interface.ts](../src/infrastructure/notification/interfaces/email.interface.ts) | Interface `IEmailService` + `SendEmailDto` + `EMAIL_SERVICE` token DI. |
 | [src/infrastructure/notification/email/email-provider.factory.ts](../src/infrastructure/notification/email/email-provider.factory.ts) | Factory qui choisit `EMAIL_SERVICE` selon `EMAIL_PROVIDER` env. |
 | [src/infrastructure/notification/email/*.service.ts](../src/infrastructure/notification/email/) | Les 4 implémentations concrètes (console, smtp, resend, o365). |
-| [src/modules/platform-email/platform-email.controller.ts](../src/modules/platform-email/platform-email.controller.ts) | Endpoints `/api/v1/platform/email/providers` (read-only + healthcheck). |
+| [src/modules/platform-email/platform-email.controller.ts](../src/modules/platform-email/platform-email.controller.ts) | Endpoints `/api/platform/email/providers` (read-only + healthcheck). |
 | [src/modules/platform-email/platform-email.service.ts](../src/modules/platform-email/platform-email.service.ts) | Service qui liste les providers + persiste les healthchecks. |
 | [src/modules/white-label/white-label.service.ts](../src/modules/white-label/white-label.service.ts) | `resolveFromForTenant()` — helper d'identité d'envoi. |
 | Table `email_provider_states` | Statut + healthcheck des 4 providers (plateforme-global, une ligne par provider). |

@@ -99,7 +99,7 @@ La transition `DISABLED → SANDBOX` ne demande rien. La transition `SANDBOX →
 
 ```
 Tenant clique SANDBOX
-  → PATCH /api/v1/tenants/:tid/settings/integrations/mtn_momo_cg { mode: 'SANDBOX' }
+  → PATCH /api/tenants/:tid/settings/integrations/mtn_momo_cg { mode: 'SANDBOX' }
   → IntegrationsService.updatePaymentMode()
   → INSERT/UPDATE payment_provider_states (tenantId, providerKey, mode='SANDBOX')
   → (aucun credential ajusté — ils vivent dans Vault)
@@ -176,7 +176,7 @@ Ce que l'utilisateur voit : `platform/payments/•••_cg` (empreinte du path)
 | Ligne affichée avec icône `ShieldAlert` orange (secretsConfigured=false) | Aucune ligne `payment_provider_states` pour le tenant + Vault n'a pas de path enregistré. | Provisionner Vault ET cliquer SANDBOX au moins une fois (crée la ligne DB). |
 | Healthcheck retourne `DOWN` | Credentials invalides ou expirés, ou provider tiers en panne. | Vérifier la valeur Vault, puis `vault kv rotate`. |
 | Bascule en LIVE échoue `MFA step-up required` | Normal — la confirmation UI doit envoyer `mfaVerified: true`. | C'est le comportement attendu ; implémenter un vrai TOTP challenge en prod. |
-| 404 sur `/api/v1/tenants/:tid/settings/integrations` | Controller sans version mappée sur `/api/v1/...`. | Vérifier que `TenantSettingsController` est bien `@Controller({ version: '1', path: '...' })`. Fixé le 19/04/2026. |
+| 404 sur `/api/tenants/:tid/settings/integrations` | Controller sans version mappée sur `/api/...`. | Vérifier que `TenantSettingsController` est bien `@Controller({ version: '1', path: '...' })`. Fixé le 19/04/2026. |
 
 ---
 
@@ -226,7 +226,7 @@ Contrairement à PAYMENT, Google/Microsoft/Facebook n'ont pas d'endpoint sandbox
 
 | Fichier | Rôle |
 |---|---|
-| [src/modules/tenant-settings/tenant-settings.controller.ts](../src/modules/tenant-settings/tenant-settings.controller.ts) | Endpoints REST `/api/v1/tenants/:tid/settings/integrations` + `/credentials` + `/schema`. |
+| [src/modules/tenant-settings/tenant-settings.controller.ts](../src/modules/tenant-settings/tenant-settings.controller.ts) | Endpoints REST `/api/tenants/:tid/settings/integrations` + `/credentials` + `/schema`. |
 | [src/modules/tenant-settings/integrations.service.ts](../src/modules/tenant-settings/integrations.service.ts) | Logique métier : agrégation PAYMENT + AUTH, changement de mode, healthcheck, BYO-credentials. |
 | [src/infrastructure/payment/payment-provider.registry.ts](../src/infrastructure/payment/payment-provider.registry.ts) | Registre plateforme des providers PAYMENT avec lecture du mode effectif par tenant + `getCredentialSchema()`. |
 | [src/infrastructure/payment/providers/types.ts](../src/infrastructure/payment/providers/types.ts) | Types `PaymentProviderMeta` (incl. `credentialFields: CredentialFieldSpec[]`) et `CredentialFieldSpec`. |
@@ -280,7 +280,7 @@ La partie email (envoi de billets, rappels, magic links) n'est **pas** dans la p
 | **Paystack** | SECRET_KEY | — |
 | **Stripe** | API_KEY, WEBHOOK_SECRET | — |
 
-Le schéma complet (avec labels et help contextuel) est disponible via `GET /api/v1/tenants/:tid/settings/integrations/:key/schema`.
+Le schéma complet (avec labels et help contextuel) est disponible via `GET /api/tenants/:tid/settings/integrations/:key/schema`.
 
 ### Endpoints BYO-credentials
 

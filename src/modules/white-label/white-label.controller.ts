@@ -2,11 +2,11 @@
  * WhiteLabelController — CRUD marque blanche par tenant.
  *
  * Routes :
- *   GET    /api/v1/tenants/:tenantId/brand         — lecture publique (portail, Next.js SSR)
- *   PUT    /api/v1/tenants/:tenantId/brand         — upsert (control.settings.manage.tenant)
- *   DELETE /api/v1/tenants/:tenantId/brand         — remise aux défauts (control.settings.manage.tenant)
- *   GET    /api/v1/tenants/:tenantId/brand/style   — retourne le bloc <style> HTML prêt à injecter
- *   GET    /api/v1/tenants/:tenantId/brand/tokens  — retourne les tokens JSON (React ThemeProvider)
+ *   GET    /api/tenants/:tenantId/brand         — lecture publique (portail, Next.js SSR)
+ *   PUT    /api/tenants/:tenantId/brand         — upsert (control.settings.manage.tenant)
+ *   DELETE /api/tenants/:tenantId/brand         — remise aux défauts (control.settings.manage.tenant)
+ *   GET    /api/tenants/:tenantId/brand/style   — retourne le bloc <style> HTML prêt à injecter
+ *   GET    /api/tenants/:tenantId/brand/tokens  — retourne les tokens JSON (React ThemeProvider)
  */
 import {
   Controller, Get, Put, Delete, Param, Body,

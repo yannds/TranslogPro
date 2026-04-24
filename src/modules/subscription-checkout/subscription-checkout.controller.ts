@@ -17,12 +17,12 @@ import {
 /**
  * Endpoints tenant-admin pour l'abonnement SaaS :
  *
- *   GET   /api/v1/subscription/summary      — statut + jours de trial restants (léger)
- *   GET   /api/v1/subscription/billing      — page /admin/billing (intents + invoices)
- *   POST  /api/v1/subscription/checkout     — initie le paiement, retourne payment URL
- *   PATCH /api/v1/subscription/auto-renew   — toggle prélèvement auto
- *   POST  /api/v1/subscription/cancel       — résilie (prend effet currentPeriodEnd)
- *   POST  /api/v1/subscription/resume       — annule une résiliation planifiée
+ *   GET   /api/subscription/summary      — statut + jours de trial restants (léger)
+ *   GET   /api/subscription/billing      — page /admin/billing (intents + invoices)
+ *   POST  /api/subscription/checkout     — initie le paiement, retourne payment URL
+ *   PATCH /api/subscription/auto-renew   — toggle prélèvement auto
+ *   POST  /api/subscription/cancel       — résilie (prend effet currentPeriodEnd)
+ *   POST  /api/subscription/resume       — annule une résiliation planifiée
  *
  * Permission : `SETTINGS_MANAGE_TENANT`. Le tenantId est lu depuis la session
  * — jamais du body. Rate-limit individuel sur les mutations.

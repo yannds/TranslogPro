@@ -27,7 +27,7 @@ RoutingService
 Cache Redis   routing:v1:{provider}:{lat1}:{lng1}:{lat2}:{lng2}   TTL 30 jours
 ```
 
-Le frontend appelle `GET /api/v1/tenants/:tenantId/routes/suggest-distance?originId=&destinationId=`
+Le frontend appelle `GET /api/tenants/:tenantId/routes/suggest-distance?originId=&destinationId=`
 qui retourne `{ distanceKm, durationMin, provider, estimated }`.
 
 ---

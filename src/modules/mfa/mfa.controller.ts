@@ -2,9 +2,9 @@
  * MfaController — endpoints "self-service" MFA
  *
  * Routes :
- *   POST   /api/v1/mfa/setup    → génère secret + QR (mfaEnabled reste false)
- *   POST   /api/v1/mfa/enable   → vérifie code TOTP + active + renvoie backup codes
- *   POST   /api/v1/mfa/disable  → désactive (code TOTP ou backup requis)
+ *   POST   /api/mfa/setup    → génère secret + QR (mfaEnabled reste false)
+ *   POST   /api/mfa/enable   → vérifie code TOTP + active + renvoie backup codes
+ *   POST   /api/mfa/disable  → désactive (code TOTP ou backup requis)
  *
  * Opère toujours sur l'utilisateur courant (`CurrentUser`). Il n'y a pas
  * d'endpoint "admin désactive le MFA d'un autre user" — c'est volontaire
