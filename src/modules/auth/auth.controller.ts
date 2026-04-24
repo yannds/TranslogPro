@@ -11,6 +11,7 @@ import {
   RedisRateLimitGuard,
 } from '../../common/guards/redis-rate-limit.guard';
 import { ImpersonationService } from '../../core/iam/services/impersonation.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 const COOKIE_NAME = 'translog_session';
@@ -71,6 +72,7 @@ export class AuthController {
   constructor(
     private readonly authService:         AuthService,
     private readonly impersonationService: ImpersonationService,
+    private readonly appConfig:            AppConfigService,
   ) {}
 
   /**
@@ -110,7 +112,7 @@ export class AuthController {
     if (!tenantId) {
       throw new BadRequestException(
         'Sous-domaine tenant requis pour s\'authentifier. ' +
-        'Utilisez https://{votre-tenant}.translogpro.com/login',
+        `Utilisez https://{votre-tenant}.${this.appConfig.publicBaseDomain}/login`,
       );
     }
 

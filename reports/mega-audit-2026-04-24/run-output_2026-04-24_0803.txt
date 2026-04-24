@@ -1,0 +1,157 @@
+
+[pw setup] 🔧 Seed comptes E2E + récupération storageState…
+[pw setup] 🧹 Redis FLUSHDB (rate-limit reset)
+[seed-e2e] Seed comptes E2E (idempotent)…
+[seed-e2e] SA déjà existant → reset mot de passe (cmo4hnwka0001688xcrzoqgay)
+[seed-e2e] TENANT_ADMIN déjà existant → reset mot de passe (cmo4i7ho10117e00lh99p8cen)
+[seed-e2e] PW E2E TENANT_ADMIN existant → password refresh (cmobzse2w012f12oci52317o7)
+[seed-e2e] Workflow configs backfill : 0 rows sur 6 tenants
+[seed-e2e] ✅ Prêt.
+[pw setup] ✅ SUPER_ADMIN → test/playwright/.auth/super-admin.json (host=admin.translog.test)
+[pw setup] ✅ TENANT_ADMIN → test/playwright/.auth/tenant-admin.json (host=trans-express.translog.test)
+[pw setup] ✅ Vite répond sur http://admin.translog.test:5173
+[pw setup] 🚀 Setup terminé.
+
+
+Running 69 tests using 1 worker
+
+[IAM Seed] Backfill workflows tenant=mega-congo-1777014228382 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-sahel-1777014228382 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-atlas-1777014228382 — 177 transition(s) créée(s)
+  ✓   1 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:100:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-AUTH-1] admin peut récupérer son /me (22ms)
+  ✓   2 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:113:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-TRIP-1] création d'un Trip BZV→PNR via Prisma (driver assigné) (7ms)
+  ✓   3 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:145:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-SELL-1] vente 3 billets classes tarifaires différentes (caissier BZV) (95ms)
+  ✓   4 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:179:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-SELL-2] achat en ligne via Mobile Money (passager final) (66ms)
+  ✓   5 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:209:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-PARCEL-1] enregistrement colis BZV→PNR (sac de riz 20 kg) (25ms)
+  ✓   6 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:237:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-ANALYTICS-1] dashboard admin (today-summary) (121ms)
+  ✓   7 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:259:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-ANALYTICS-2] RBAC analytics : manager agence NE peut PAS voir tenant-wide (28ms)
+  ✓   8 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:275:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-VOUCHER-1] admin émet un voucher compensatoire 5 000 XAF (29ms)
+  ✓   9 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:303:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-INCIDENT-1] chauffeur déclare retard majeur (>90 min) (10ms)
+  ✓  10 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:324:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-REFUND-1] annulation ticket STANDARD → workflow refund (40ms)
+  ✓  11 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:345:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-NOSHOW-1] marquage no-show sur le billet CONFORT (13ms)
+  ✓  12 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:365:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-YIELD-1] yield suggestion PricingEngine (9ms)
+  ✓  13 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:394:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-SIMULATE-1] simulate-trip détecte un DEFICIT à prix trop bas (17ms)
+  ✓  14 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:418:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-FLEET-1] fleet-summary voit les 3 bus Congo Express (26ms)
+  ✓  15 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:434:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-RBAC-1] RBAC : cashier bloqué pour émettre un voucher (18ms)
+  ✓  16 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:454:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-TRIP-2] clôture trip → statut COMPLETED (6ms)
+  ✓  17 [api] › test/playwright/mega-scenarios/01-tenant-congo-express.api.spec.ts:475:7 › [MEGA] Tenant 1 — Congo Express (CG, XAF, TRIAL) › [CE-PROFIT-1] profitability summary agrégé (12ms)
+[IAM Seed] Backfill workflows tenant=mega-congo-1777014238733 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-sahel-1777014238733 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-atlas-1777014238733 — 177 transition(s) créée(s)
+  ✓  18 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:109:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-MON-1] Lundi 06h00 : 3 trips créés pour la journée (16ms)
+  ✓  19 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:144:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-MON-2] Lundi journée : 10 billets vendus sur les 3 trips (301ms)
+  ✓  20 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:198:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-MON-3] Lundi soir : trips COMPLETED, caisse fermée (6ms)
+  ✓  21 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:213:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-TUE-1] Mardi : journée routine — 2 trips + 2 colis (52ms)
+  ✓  22 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:253:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-WED-1] Mercredi 07h : trip Dakar→SL démarre, 5 passagers embarqués (130ms)
+  ✓  23 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:296:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-WED-2] Mercredi 09h30 : PANNE MOTEUR sur bus SN-AB-101 à Mboro (7ms)
+  ✓  24 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:323:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-WED-3] Mercredi 10h : émission vouchers compensatoires aux 5 passagers (61ms)
+  ✓  25 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:355:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-WED-4] Mercredi 11h : rebook automatique des 5 passagers sur trip suivant (9ms)
+  ✓  26 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:386:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-WED-5] Mercredi 14h : un passager refuse le rebook → refund (32ms)
+  ✓  27 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:403:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-THU-1] Jeudi matin : maintenance effectuée → bus REMIS EN SERVICE (23ms)
+  ✓  28 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:440:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-FRI-1] Vendredi pic : 12 billets vendus sur 2 trips (237ms)
+  ✓  29 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:492:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-FRI-2] Vendredi : réclamation SAV — bagage abîmé (15ms)
+  ✓  30 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:518:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-SAT-1] Samedi : synthèse hebdo via analytics (23ms)
+  ✓  31 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:538:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-SAT-2] Samedi : fleet-summary — bus SN-AB-101 bien remis en service (15ms)
+  ✓  32 [api] › test/playwright/mega-scenarios/02-tenant-sahel-transport.api.spec.ts:552:7 › [MEGA] Tenant 2 — Sahel Transport (SN, XOF, PAID) › [ST-SAT-3] Samedi soir : bilan narratif de la semaine (1ms)
+[IAM Seed] Backfill workflows tenant=mega-congo-1777014244450 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-sahel-1777014244450 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-atlas-1777014244450 — 177 transition(s) créée(s)
+  ✓  33 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:98:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W1-1] Semaine 1 : admin configure une 1re route Paris→Lyon (0ms)
+  ✓  34 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:113:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W1-2] Semaine 1 : 8 billets vendus en trial (ventes réelles en EUR) (131ms)
+  ✓  35 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:159:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W2-1] Semaine 2 : fin trial — tentative de charge échoue (1ms)
+  ✓  36 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:187:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W2-2] Semaine 2 : le tenant continue à vendre malgré le grace period (47ms)
+  ✓  37 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:226:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W3-1] Semaine 3 : admin reçoit relance email (check notification pref) (12ms)
+  ✓  38 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:245:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W4-1] Semaine 4 : admin met à jour moyen paiement → statut ACTIVE (2ms)
+  ✓  39 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:272:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-W4-2] Semaine 4 : 4 billets supplémentaires après recovery (86ms)
+  ✓  40 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:308:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-END-1] Fin de mois : today-summary après reprise (16ms)
+  ✓  41 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:327:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-END-2] Demande d'export RGPD (admin demande ses données) (9ms)
+  ✓  42 [api] › test/playwright/mega-scenarios/03-tenant-atlas-bus.api.spec.ts:349:7 › [MEGA] Tenant 3 — Atlas Bus (FR, EUR, TRIAL→IMPAYÉ→RECOVERY) › [AT-END-3] Admin : liste de ses factures pour conciliation compta (9ms)
+[IAM Seed] Backfill workflows tenant=mega-congo-1777014250041 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-sahel-1777014250041 — 177 transition(s) créée(s)
+[IAM Seed] Backfill workflows tenant=mega-atlas-1777014250041 — 177 transition(s) créée(s)
+  ✓  43 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:60:7 › [MEGA] Cross-tenant + Platform + Destruction › [ISO-1] admin Congo tentant de GET bus Atlas doit être refusé (9ms)
+  ✓  44 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:78:7 › [MEGA] Cross-tenant + Platform + Destruction › [ISO-2] RLS Postgres : listing billets dans contexte Congo ne voit QUE ses billets (14ms)
+  ✓  45 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:95:7 › [MEGA] Cross-tenant + Platform + Destruction › [ISO-3] admin Sahel tente PATCH sur bus Congo → refusé (14ms)
+  ✓  46 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:118:7 › [MEGA] Cross-tenant + Platform + Destruction › [PF-1] SUPER_ADMIN peut voir les 3 tenants créés dans platform (3ms)
+  ✓  47 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:135:7 › [MEGA] Cross-tenant + Platform + Destruction › [PF-2] Cross-tenant data totals : sum tickets/parcels/trips (7ms)
+  ✓  48 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:150:7 › [MEGA] Cross-tenant + Platform + Destruction › [DEST-1] Demande export RGPD pour Congo + Sahel (archive) (13ms)
+  ✓  49 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:171:7 › [MEGA] Cross-tenant + Platform + Destruction › [DEST-2] Comptage final des entités avant wipe des 3 tenants (11ms)
+  ✓  50 [api] › test/playwright/mega-scenarios/04-cross-tenant-and-destruction.api.spec.ts:192:7 › [MEGA] Cross-tenant + Platform + Destruction › [DEST-3] Destruction cascade des 3 tenants (session_replication_role) (135ms)
+[pw cleanup]  Error: [cleanup-e2e-tenants] Refus de supprimer "mui-congo-mockev0z-radg" — préfixe non whitelisté (pw-saas-, pw-a-, pw-e2e-, e2e-)
+    at deleteTenantBySlug [90m(/Users/dsyann/TranslogPro/[39mscripts/cleanup-e2e-tenants.ts:47:13[90m)[39m
+    at fn [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:55:45[90m)[39m
+    at Object.cleanupRegister [as fn] [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/fixtures-portal.ts:38:19[90m)[39m
+[90m    at runNextTicks (node:internal/process/task_queues:65:5)[39m
+[90m    at processImmediate (node:internal/timers:472:9)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:101:9
+    at Fixture._teardownInternal [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:140:7[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:75:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:318:7[90m)[39m
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at Fixture.teardown [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:120:11[90m)[39m
+    at FixtureRunner.teardownScope [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:187:9[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:349:9
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at WorkerMain._runTest [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:334:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:203:9[90m)[39m
+    at process.<anonymous> [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:73:22[90m)[39m
+  ✓  51 [public] › test/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:45:7 › [MEGA UI] Signup 3 tenants via le landing public › 👤 Congo — Mme Bouanga crée "Congo Express UI" (TICKETING) (5.0s)
+[pw cleanup]  Error: [cleanup-e2e-tenants] Refus de supprimer "mui-sahel-mockeyss-kqud" — préfixe non whitelisté (pw-saas-, pw-a-, pw-e2e-, e2e-)
+    at deleteTenantBySlug [90m(/Users/dsyann/TranslogPro/[39mscripts/cleanup-e2e-tenants.ts:47:13[90m)[39m
+    at fn [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:69:45[90m)[39m
+    at Object.cleanupRegister [as fn] [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/fixtures-portal.ts:38:19[90m)[39m
+[90m    at runNextTicks (node:internal/process/task_queues:65:5)[39m
+[90m    at processImmediate (node:internal/timers:472:9)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:101:9
+    at Fixture._teardownInternal [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:140:7[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:75:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:318:7[90m)[39m
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at Fixture.teardown [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:120:11[90m)[39m
+    at FixtureRunner.teardownScope [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:187:9[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:349:9
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at WorkerMain._runTest [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:334:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:203:9[90m)[39m
+    at process.<anonymous> [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:73:22[90m)[39m
+  ✓  52 [public] › test/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:59:7 › [MEGA UI] Signup 3 tenants via le landing public › 👤 Sénégal — M. Diouf crée "Sahel Transport UI" (TICKETING) (5.2s)
+[pw cleanup]  Error: [cleanup-e2e-tenants] Refus de supprimer "mui-atlas-mockf2uf-278p" — préfixe non whitelisté (pw-saas-, pw-a-, pw-e2e-, e2e-)
+    at deleteTenantBySlug [90m(/Users/dsyann/TranslogPro/[39mscripts/cleanup-e2e-tenants.ts:47:13[90m)[39m
+    at fn [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:83:45[90m)[39m
+    at Object.cleanupRegister [as fn] [90m(/Users/dsyann/TranslogPro/[39mtest/playwright/fixtures-portal.ts:38:19[90m)[39m
+[90m    at runNextTicks (node:internal/process/task_queues:65:5)[39m
+[90m    at processImmediate (node:internal/timers:472:9)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:101:9
+    at Fixture._teardownInternal [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:140:7[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:75:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:318:7[90m)[39m
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at Fixture.teardown [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:120:11[90m)[39m
+    at FixtureRunner.teardownScope [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:187:9[90m)[39m
+    at [90m/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:349:9
+    at TestInfoImpl._runAsStep [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:309:7[90m)[39m
+    at WorkerMain._runTest [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:334:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:203:9[90m)[39m
+    at process.<anonymous> [90m(/Users/dsyann/TranslogPro/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:73:22[90m)[39m
+  ✓  53 [public] › test/playwright/mega-scenarios/10-saas-signup-via-ui.public.pw.spec.ts:73:7 › [MEGA UI] Signup 3 tenants via le landing public › 👤 France — M. Dubois crée "Atlas Bus UI" (PARCELS) (4.5s)
+  ✓  54 [public] › test/playwright/mega-scenarios/12-traveler-portal.public.pw.spec.ts:23:7 › [MEGA UI] Portail voyageur public › [UI-TRAV-1] Landing apex — hero visible, CTA signup présent (639ms)
+  ✓  55 [public] › test/playwright/mega-scenarios/12-traveler-portal.public.pw.spec.ts:42:7 › [MEGA UI] Portail voyageur public › [UI-TRAV-2] Portail voyageur — tracking formulaire (468ms)
+  ✓  56 [public] › test/playwright/mega-scenarios/12-traveler-portal.public.pw.spec.ts:69:7 › [MEGA UI] Portail voyageur public › [UI-TRAV-3] Page publique de signalement véhicule /report-vehicle (502ms)
+  ✓  57 [public] › test/playwright/mega-scenarios/12-traveler-portal.public.pw.spec.ts:85:7 › [MEGA UI] Portail voyageur public › [UI-TRAV-4] Signup ≠ login : pages /signup et /login accessibles (738ms)
+  ✓  58 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:55:7 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-0] login déjà posé via storageState — dashboard accessible (658ms)
+  ✓  59 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M1] Mois 1 — visite /admin (Dashboard — KPIs tenant) (622ms)
+  ✓  60 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M2] Mois 2 — visite /admin/trips (Trips — listing) (658ms)
+  ✓  61 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M3] Mois 3 — visite /admin/sell-ticket (Vente billet (caissier)) (892ms)
+  ✓  62 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M4] Mois 4 — visite /admin/tickets (Billets émis) (725ms)
+  ✓  63 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M5] Mois 5 — visite /admin/parcels (Colis) (671ms)
+  ✓  64 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M6] Mois 6 — visite /admin/cashier (Caisse) (609ms)
+  ✓  65 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M7] Mois 7 — visite /admin/fleet/vehicles (Flotte — véhicules) (623ms)
+  ✓  66 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M8] Mois 8 — visite /admin/crm/customers (CRM — clients) (613ms)
+  ✓  67 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M9] Mois 9 — visite /admin/analytics (Analytics) (553ms)
+  ✓  68 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:75:9 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-M10] Mois 10 — visite /admin/support (Support) (653ms)
+  ✓  69 [tenant-admin] › test/playwright/mega-scenarios/11-admin-portal-journey.tenant.pw.spec.ts:80:7 › [MEGA UI] 10 mois d'un admin sur le portail tenant › [UI-ADMIN-BILAN] Bilan 10 mois du patron (0ms)
+
+  69 passed (1.1m)

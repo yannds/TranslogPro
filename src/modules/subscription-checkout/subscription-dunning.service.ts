@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import { EventTypes } from '../../common/types/domain-event.type';
 
 type DunningDay = 'day1' | 'day3' | 'day7';
@@ -39,8 +40,9 @@ export class SubscriptionDunningService {
   private readonly logger = new Logger(SubscriptionDunningService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: PlatformConfigService,
+    private readonly prisma:    PrismaService,
+    private readonly config:    PlatformConfigService,
+    private readonly appConfig: AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
@@ -157,7 +159,7 @@ export class SubscriptionDunningService {
       }
       if (!day) continue;
 
-      const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
+      const baseDomain = this.appConfig.publicBaseDomain;
       const billingUrl = `https://${sub.tenant.slug}.${baseDomain}/admin/billing`;
 
       try {

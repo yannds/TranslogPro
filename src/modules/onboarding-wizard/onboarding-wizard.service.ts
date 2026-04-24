@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
+import { AppConfigService } from '../../common/config/app-config.service';
 import {
   UpdateBrandStepDto, UpdateAgencyStepDto, CreateFirstStationDto,
   CreateFirstRouteDto, InviteTeamStepDto,
@@ -28,7 +29,8 @@ export class OnboardingWizardService {
   private readonly logger = new Logger(OnboardingWizardService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:    PrismaService,
+    private readonly appConfig: AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
@@ -305,7 +307,7 @@ export class OnboardingWizardService {
   private async sendColleagueInvite(p: {
     toEmail: string; toName: string; tenantName: string; tenantSlug: string; locale: string;
   }) {
-    const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
+    const baseDomain = this.appConfig.publicBaseDomain;
     const resetUrl   = `https://${p.tenantSlug}.${baseDomain}/auth/forgot-password?email=${encodeURIComponent(p.toEmail)}`;
 
     // Sujet + corps très courts — l'invite est secondaire à l'onboarding.

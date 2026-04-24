@@ -118,14 +118,25 @@ export class TicketingService {
     const expiresAt = new Date(Date.now() + PENDING_PAYMENT_TTL_MS);
 
     const ticket = await this.prisma.transact(async (tx) => {
+      // ── DEFENSE DB R1 : verrou pessimiste sur Trip (race condition) ──
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM trips WHERE id = $1 FOR UPDATE`,
+        dto.tripId,
+      );
+
       // ── Garde capacité ──────────────────────────────────────────────────
       const activeCount = await tx.ticket.count({
         where: { tenantId, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },
       });
       const seatLayout = trip.bus.seatLayout as SeatLayout | null;
-      const totalSeats = seatLayout
+      const physicalSeats = seatLayout
         ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
         : trip.bus.capacity;
+      // Fix écart R2 v8 : respect de Trip.maxSeatsOpen (capacité ouverte)
+      const tripMaxOpen = (trip as unknown as { maxSeatsOpen: number | null }).maxSeatsOpen;
+      const totalSeats = tripMaxOpen != null
+        ? Math.min(physicalSeats, tripMaxOpen)
+        : physicalSeats;
 
       if (activeCount >= totalSeats) {
         throw new BadRequestException('Ce trajet est complet — plus aucune place disponible.');
@@ -258,9 +269,16 @@ export class TicketingService {
     });
 
     const seatLayout = trip.bus.seatLayout as SeatLayout | null;
-    const totalSeats = seatLayout
+    const physicalSeats = seatLayout
       ? seatLayout.rows * seatLayout.cols - (seatLayout.disabled?.length ?? 0)
       : trip.bus.capacity;
+    // Fix écart R2 — v8 audit (2026-04-24) : trip.maxSeatsOpen permet au
+    // gestionnaire d'ouvrir moins de places que le bus (ex: 55/60). La
+    // vente est bornée par min(sièges physiques, maxSeatsOpen).
+    const tripMaxOpen = (trip as unknown as { maxSeatsOpen: number | null }).maxSeatsOpen;
+    const totalSeats = tripMaxOpen != null
+      ? Math.min(physicalSeats, tripMaxOpen)
+      : physicalSeats;
 
     // Calculer tous les prix en amont (hors transaction pour limiter la durée du lock)
     const pricings = await Promise.all(
@@ -283,6 +301,16 @@ export class TicketingService {
 
     // Transaction atomique : soit tous les billets passent, soit aucun
     const tickets = await this.prisma.transact(async (tx) => {
+      // ── DEFENSE DB R1 : verrou pessimiste sur Trip (race condition capacity) ──
+      // Sans ce SELECT FOR UPDATE, 2 batches simultanés lisent chacun un
+      // activeCount inférieur à totalSeats et créent des tickets qui, additionnés,
+      // dépassent la capacité du bus. Le guard applicatif seul est vulnérable.
+      // Le lock est libéré à la fin de la transaction (COMMIT ou ROLLBACK).
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM trips WHERE id = $1 FOR UPDATE`,
+        dto.tripId,
+      );
+
       // ── Garde capacité globale ────────────────────────────────────────
       const activeCount = await tx.ticket.count({
         where: { tenantId, tripId: dto.tripId, status: { notIn: ['CANCELLED', 'EXPIRED'] } },

@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import { PaymentOrchestrator } from '../../infrastructure/payment/payment-orchestrator.service';
 import type { PaymentMethod, PaymentCurrency } from '../../infrastructure/payment/interfaces/payment.interface';
 
@@ -42,6 +43,7 @@ export class SubscriptionRenewalService {
     private readonly prisma:       PrismaService,
     private readonly config:       PlatformConfigService,
     private readonly orchestrator: PaymentOrchestrator,
+    private readonly appConfig:    AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
@@ -94,7 +96,7 @@ export class SubscriptionRenewalService {
       const renewalSent = (refs.renewalSent ?? {}) as Record<string, string>;
       if (renewalSent[periodKey]) continue; // déjà notifié pour cette période
 
-      const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
+      const baseDomain = this.appConfig.publicBaseDomain;
       const billingUrl = `https://${sub.tenant.slug}.${baseDomain}/admin/billing`;
 
       // Si auto-renew activé ET qu'on a la méthode du dernier paiement :

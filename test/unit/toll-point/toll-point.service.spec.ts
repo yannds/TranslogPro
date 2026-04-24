@@ -285,3 +285,116 @@ describe('TollPointService.attachDetected', () => {
     expect(prisma.waypoint.create).not.toHaveBeenCalled();
   });
 });
+
+// ─── importFromWaypoints ─────────────────────────────────────────────────────
+
+describe('importFromWaypoints — peuple le registre depuis les waypoints orphelins', () => {
+  function makePrismaWithTx(overrides: {
+    orphanWaypoints?: any[];
+    existingTollPoints?: any[];
+    createdIds?: string[];
+    findFirstExistingTp?: any;
+    updateManyCount?: number;
+  } = {}) {
+    const createdIds = overrides.createdIds ?? ['tp-new-1', 'tp-new-2', 'tp-new-3'];
+    let createIdx = 0;
+    const txCreate = jest.fn().mockImplementation(async () => ({ id: createdIds[createIdx++] }));
+    const txFindFirst = jest.fn().mockResolvedValue(overrides.findFirstExistingTp ?? null);
+    const txUpdateMany = jest.fn().mockResolvedValue({ count: overrides.updateManyCount ?? 2 });
+
+    const tx = {
+      tollPoint: { create: txCreate, findFirst: txFindFirst },
+      waypoint:  { updateMany: txUpdateMany },
+    };
+
+    return {
+      ...makePrisma({
+        waypoint: {
+          findMany:   jest.fn().mockResolvedValue(overrides.orphanWaypoints ?? []),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          create:     jest.fn(),
+        },
+        tollPoint: {
+          findMany: jest.fn().mockResolvedValue(overrides.existingTollPoints ?? []),
+          findFirst: jest.fn(),
+          create:   jest.fn(),
+          update:   jest.fn(),
+          delete:   jest.fn(),
+        },
+      }),
+      transact: jest.fn().mockImplementation((fn: any) => fn(tx)),
+      __tx: tx,
+    };
+  }
+
+  it('retourne 0/0/0 si aucun waypoint orphelin', async () => {
+    const prisma = makePrismaWithTx();
+    const svc = makeSvc(prisma);
+    const out = await svc.importFromWaypoints(TENANT);
+    expect(out).toEqual({ imported: 0, backlinked: 0, skippedExisting: 0 });
+  });
+
+  it('crée 1 TollPoint par groupe (name+kind) et backlink les waypoints', async () => {
+    const orphans = [
+      { id: 'wp-1', name: 'Lifoula',  kind: 'PEAGE',  tollCostXaf: 2000 },
+      { id: 'wp-2', name: 'Lifoula',  kind: 'PEAGE',  tollCostXaf: 2500 }, // même groupe
+      { id: 'wp-3', name: 'Kinkala',  kind: 'POLICE', tollCostXaf: 0 },    // groupe différent
+    ];
+    const prisma = makePrismaWithTx({ orphanWaypoints: orphans });
+    const svc = makeSvc(prisma);
+
+    const out = await svc.importFromWaypoints(TENANT);
+    expect(out.imported).toBe(2);     // 2 TollPoints créés (Lifoula PEAGE + Kinkala POLICE)
+    // Le tollCostXaf max = 2500 sur Lifoula
+    expect(prisma.__tx.tollPoint.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ name: 'Lifoula', kind: 'PEAGE', tollCostXaf: 2500 }),
+    }));
+  });
+
+  it('skippe les waypoints sans nom (pas de clé de regroupement)', async () => {
+    const orphans = [
+      { id: 'wp-1', name: null,  kind: 'PEAGE', tollCostXaf: 1000 },
+      { id: 'wp-2', name: '  ',  kind: 'PEAGE', tollCostXaf: 1000 },
+    ];
+    const prisma = makePrismaWithTx({ orphanWaypoints: orphans });
+    const svc = makeSvc(prisma);
+
+    const out = await svc.importFromWaypoints(TENANT);
+    expect(out.imported).toBe(0);
+    expect(out.backlinked).toBe(0);
+  });
+
+  it('réutilise un TollPoint existant de même nom au lieu de dupliquer', async () => {
+    const orphans = [
+      { id: 'wp-1', name: 'Lifoula', kind: 'PEAGE', tollCostXaf: 2000 },
+    ];
+    const prisma = makePrismaWithTx({
+      orphanWaypoints:    orphans,
+      existingTollPoints: [{ name: 'Lifoula' }],   // déjà dans le registre
+      findFirstExistingTp: { id: 'tp-existing' },
+    });
+    const svc = makeSvc(prisma);
+
+    const out = await svc.importFromWaypoints(TENANT);
+    expect(out.imported).toBe(0);
+    expect(out.skippedExisting).toBeGreaterThan(0);
+    // Le waypoint doit être backlinké vers le TollPoint existant (pas nouveau)
+    expect(prisma.__tx.waypoint.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tollPointId: 'tp-existing' }),
+    }));
+  });
+
+  it('stamp notes="IMPORTED_FROM_WAYPOINTS" sur les TollPoints créés', async () => {
+    const orphans = [{ id: 'wp-1', name: 'X', kind: 'PEAGE', tollCostXaf: 500 }];
+    const prisma = makePrismaWithTx({ orphanWaypoints: orphans });
+    const svc = makeSvc(prisma);
+
+    await svc.importFromWaypoints(TENANT);
+    expect(prisma.__tx.tollPoint.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        notes:       expect.stringContaining('IMPORTED_FROM_WAYPOINTS'),
+        coordinates: { lat: 0, lng: 0 },
+      }),
+    }));
+  });
+});

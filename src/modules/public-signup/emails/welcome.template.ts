@@ -13,13 +13,14 @@ import type { EmailAddress } from '../../../infrastructure/notification/interfac
 export type SignupLocale = 'fr' | 'en' | 'es' | 'pt' | 'wo' | 'ln' | 'ktu' | 'ar';
 
 export interface WelcomeEmailInput {
-  to:         EmailAddress;
-  adminName:  string;
-  tenantName: string;
-  tenantUrl:  string;          // ex: https://acme.translogpro.com
-  loginUrl:   string;          // ex: https://acme.translogpro.com/login
-  trialDays:  number;          // 0 si pas de trial
-  locale:     SignupLocale;
+  to:           EmailAddress;
+  adminName:    string;
+  tenantName:   string;
+  tenantUrl:    string;          // ex: https://acme.translogpro.com
+  loginUrl:     string;          // ex: https://acme.translogpro.com/login
+  trialDays:    number;          // 0 si pas de trial
+  locale:       SignupLocale;
+  supportEmail: string;          // adresse affichée dans le footer (configurable par env)
 }
 
 interface LocaleBundle {
@@ -53,7 +54,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Invitez votre équipe (caissier, manager, chauffeur)",
     closing:    "Besoin d'aide ? Répondez à cet email — on vous répond en quelques heures.",
     signature:  "L'équipe TransLog Pro",
-    support:    "Support : support@translogpro.com",
+    support:    "Support : {supportEmail}",
     legalNote:  "Cet email a été envoyé à {to} suite à votre inscription sur TransLog Pro.",
   },
   en: {
@@ -69,7 +70,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Invite your team (cashier, manager, driver)",
     closing:    "Need help? Just reply to this email — we'll respond in a few hours.",
     signature:  "The TransLog Pro team",
-    support:    "Support: support@translogpro.com",
+    support:    "Support: {supportEmail}",
     legalNote:  "This email was sent to {to} following your signup on TransLog Pro.",
   },
   es: {
@@ -85,7 +86,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Invite a su equipo (cajero, manager, conductor)",
     closing:    "¿Necesita ayuda? Responda a este email — le contestamos en pocas horas.",
     signature:  "El equipo TransLog Pro",
-    support:    "Soporte: support@translogpro.com",
+    support:    "Soporte: {supportEmail}",
     legalNote:  "Este email se envió a {to} tras su registro en TransLog Pro.",
   },
   pt: {
@@ -101,7 +102,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Convide sua equipe (caixa, gerente, motorista)",
     closing:    "Precisa de ajuda? Responda a este email — respondemos em algumas horas.",
     signature:  "A equipe TransLog Pro",
-    support:    "Suporte: support@translogpro.com",
+    support:    "Suporte: {supportEmail}",
     legalNote:  "Este email foi enviado para {to} após sua inscrição na TransLog Pro.",
   },
   ar: {
@@ -117,7 +118,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "ادعُ فريقك (محاسب، مدير، سائق)",
     closing:    "هل تحتاج مساعدة؟ ردّ على هذا البريد — نردّ في بضع ساعات.",
     signature:  "فريق TransLog Pro",
-    support:    "الدعم: support@translogpro.com",
+    support:    "الدعم: {supportEmail}",
     legalNote:  "أُرسل هذا البريد إلى {to} بعد تسجيلك في TransLog Pro.",
   },
   wo: {
@@ -133,7 +134,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Woote sa mbooloo (caissier, manager, chauffeur)",
     closing:    "Soxla nga ndimbal ? Tontuwaal ci email bi — dinañu la tontu ci ay waxtu.",
     signature:  "Mbooloo TransLog Pro",
-    support:    "Ndimbal : support@translogpro.com",
+    support:    "Ndimbal : {supportEmail}",
     legalNote:  "Email bii yónne nañu ko ci {to} ginnaaw bi nga bind ci TransLog Pro.",
   },
   ln: {
@@ -149,7 +150,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Benga équipe na yo (caissier, manager, chauffeur)",
     closing:    "Ozali na mposa ya lisalisi? Zongisa na email oyo — tokozongisa na bangonga moke.",
     signature:  "Équipe TransLog Pro",
-    support:    "Lisalisi : support@translogpro.com",
+    support:    "Lisalisi : {supportEmail}",
     legalNote:  "Email oyo etindamaki na {to} sima ya bokotisi na yo na TransLog Pro.",
   },
   ktu: {
@@ -165,7 +166,7 @@ const L: Record<SignupLocale, LocaleBundle> = {
     tip3:       "Binga équipe ya nge (caissier, manager, chauffeur)",
     closing:    "Nge ke na mposa ya lisungi ? Vutula na email yayi — beto ta vutula na bangonga fioti.",
     signature:  "Équipe TransLog Pro",
-    support:    "Lisungi : support@translogpro.com",
+    support:    "Lisungi : {supportEmail}",
     legalNote:  "Email yayi tindaki na {to} na nima ya bokotisi ya nge na TransLog Pro.",
   },
 };
@@ -181,12 +182,13 @@ function resolve(locale: SignupLocale): LocaleBundle {
 export function buildWelcomeEmail(input: WelcomeEmailInput) {
   const bundle = resolve(input.locale);
   const vars = {
-    adminName:  input.adminName,
-    tenantName: input.tenantName,
-    tenantUrl:  input.tenantUrl,
-    loginUrl:   input.loginUrl,
-    trialDays:  input.trialDays,
-    to:         input.to.email,
+    adminName:    input.adminName,
+    tenantName:   input.tenantName,
+    tenantUrl:    input.tenantUrl,
+    loginUrl:     input.loginUrl,
+    trialDays:    input.trialDays,
+    to:           input.to.email,
+    supportEmail: input.supportEmail,
   };
 
   const subject    = fill(bundle.subject,    vars);
@@ -195,6 +197,7 @@ export function buildWelcomeEmail(input: WelcomeEmailInput) {
   const trialLine  = input.trialDays > 0 ? fill(bundle.trial, vars) : '';
   const greeting   = fill(bundle.greeting,   vars);
   const legalNote  = fill(bundle.legalNote,  vars);
+  const support    = fill(bundle.support,    vars);
 
   const dir = input.locale === 'ar' ? 'rtl' : 'ltr';
 
@@ -211,7 +214,7 @@ export function buildWelcomeEmail(input: WelcomeEmailInput) {
     ctaUrl:   input.loginUrl,
     closing:  bundle.closing,
     signature: bundle.signature,
-    support:  bundle.support,
+    support,
     legalNote,
   });
 
@@ -231,7 +234,7 @@ export function buildWelcomeEmail(input: WelcomeEmailInput) {
     bundle.closing,
     '',
     bundle.signature,
-    bundle.support,
+    support,
     '',
     '—',
     legalNote,

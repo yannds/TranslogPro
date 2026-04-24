@@ -61,6 +61,17 @@ export class AppConfigService {
   get publicTrackingUrl(): string {
     return (this.env.PUBLIC_TRACKING_URL ?? `https://track.${this.publicBaseDomain}`).replace(/\/$/, '');
   }
+  /** Base URL docs d'erreurs (RFC 7807 Problem Details `type`) — override via env. */
+  get errorDocsBaseUrl(): string {
+    return (this.env.ERROR_DOCS_BASE_URL ?? `https://${this.publicBaseDomain}/errors`).replace(/\/$/, '');
+  }
+
+  // ── Contacts publics ──────────────────────────────────────────────────────
+
+  /** Email de support affiché aux utilisateurs finaux (emails, footer, erreurs). */
+  get supportEmail(): string {
+    return this.env.SUPPORT_EMAIL ?? `support@${this.publicBaseDomain}`;
+  }
 
   // ── Feature flags ─────────────────────────────────────────────────────────
 

@@ -1,0 +1,101 @@
+{"ts":"2026-04-24T10:08:16.088Z","phase":"BOOT","actor":"SYSTEM","action":"Lancement scénario multi-acteurs v5","outcome":"info","details":{"slug":"pw-saas-mul-mocqz9w8","tenantUrl":"https://pw-saas-mul-mocqz9w8.translog.test","actors":6}}
+{"ts":"2026-04-24T10:08:16.301Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : ADMIN signup + setup ═══","outcome":"info"}
+{"ts":"2026-04-24T10:08:19.260Z","phase":"P1","actor":"Admin","action":"Signup wizard (landing → plan → compte)","outcome":"success"}
+{"ts":"2026-04-24T10:08:20.192Z","phase":"login","actor":"Admin","action":"HTTP /api/auth/sign-in (admin-pw-saas-mul-mocqz9w8@mega.local)","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocqzbmk0ee251yfn8cgn0vt\",\"email\":\"admin-pw-saas-mul-mocqz9w8@mega.local\",\"name\":\"Admin Multi\",\"tenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"effectiveTenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"tenantSlug\":\"pw-saas-mul-mocqz9w8\",\"roleId\":\"4be161c9-49aa-4661-97f3-fded81c6fec7\",\"rol"}}
+{"ts":"2026-04-24T10:08:21.703Z","phase":"P1","actor":"Admin","action":"Login admin via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T10:08:23.336Z","phase":"P1","actor":"Admin","action":"Onboarding 5 steps (brand/agency/station/route/team)","outcome":"success"}
+{"ts":"2026-04-24T10:08:23.647Z","phase":"P1","actor":"Admin","action":"Atterrissage /admin","outcome":"success"}
+{"ts":"2026-04-24T10:08:24.735Z","phase":"P1","actor":"Admin","action":"Créer véhicule via /admin/fleet","outcome":"success"}
+{"ts":"2026-04-24T10:08:25.874Z","phase":"P1","actor":"Admin","action":"Créer staff DRIVER via UI (driver-pw-saas-mul-mocqz9w8@mega.local)","outcome":"success"}
+{"ts":"2026-04-24T10:08:26.986Z","phase":"P1","actor":"Admin","action":"Créer staff AGENT via UI (quai-pw-saas-mul-mocqz9w8@mega.local)","outcome":"success"}
+{"ts":"2026-04-24T10:08:27.943Z","phase":"P1","actor":"Admin","action":"Créer staff SUPERVISOR via UI (cashier-pw-saas-mul-mocqz9w8@mega.local)","outcome":"success"}
+{"ts":"2026-04-24T10:08:28.896Z","phase":"P1","actor":"Admin","action":"Créer staff CONTROLLER via UI (manager-pw-saas-mul-mocqz9w8@mega.local)","outcome":"success"}
+{"ts":"2026-04-24T10:08:28.896Z","phase":"P1.5","actor":"SYSTEM","action":"Entorse test : set password Prisma pour comptes staff (invitation mail indispo en dev)","outcome":"info"}
+{"ts":"2026-04-24T10:08:29.063Z","phase":"P1.5","actor":"SYSTEM","action":"Role IAM DRIVER assigné à driver-pw-saas-mul-mocqz9w8@mega.local","outcome":"info"}
+{"ts":"2026-04-24T10:08:29.070Z","phase":"P1.5","actor":"SYSTEM","action":"Role IAM AGENT_QUAI assigné à quai-pw-saas-mul-mocqz9w8@mega.local","outcome":"info"}
+{"ts":"2026-04-24T10:08:29.074Z","phase":"P1.5","actor":"SYSTEM","action":"Role IAM CASHIER assigné à cashier-pw-saas-mul-mocqz9w8@mega.local","outcome":"info"}
+{"ts":"2026-04-24T10:08:29.078Z","phase":"P1.5","actor":"SYSTEM","action":"Role IAM AGENCY_MANAGER assigné à manager-pw-saas-mul-mocqz9w8@mega.local","outcome":"info"}
+{"ts":"2026-04-24T10:08:29.078Z","phase":"P1.5","actor":"SYSTEM","action":"Passwords + rôles IAM posés pour 4/4 staff","outcome":"success"}
+{"ts":"2026-04-24T10:08:29.079Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : AGENT DE GARE ═══","outcome":"info"}
+{"ts":"2026-04-24T10:08:41.573Z","phase":"login","actor":"AgentGare","action":"HTTP /api/auth/sign-in (cashier-pw-saas-mul-mocqz9w8@mega.local)","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocqziyv0en851yfw8nvxk3f\",\"email\":\"cashier-pw-saas-mul-mocqz9w8@mega.local\",\"name\":\"Agent Gare Multi\",\"tenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"effectiveTenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"tenantSlug\":\"pw-saas-mul-mocqz9w8\",\"roleId\":\"2256cc4d-efa8-4ebf-b588-7fe52a8de6a"}}
+{"ts":"2026-04-24T10:08:43.087Z","phase":"P2","actor":"AgentGare","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-mul-mocqz9w8.translog.test/admin"}}
+{"ts":"2026-04-24T10:08:43.087Z","phase":"P2","actor":"AgentGare","action":"Login agent gare via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T10:08:43.813Z","phase":"P2","actor":"AgentGare","action":"Visiter Accueil agent gare (/agent)","outcome":"success","url":"/agent"}
+{"ts":"2026-04-24T10:08:44.496Z","phase":"P2","actor":"AgentGare","action":"Visiter Vente billet (/agent/sell)","outcome":"success","url":"/agent/sell"}
+{"ts":"2026-04-24T10:08:45.188Z","phase":"P2","actor":"AgentGare","action":"Visiter Check-in voyageur (/agent/checkin)","outcome":"success","url":"/agent/checkin"}
+{"ts":"2026-04-24T10:08:45.891Z","phase":"P2","actor":"AgentGare","action":"Visiter Bagages (/agent/luggage)","outcome":"success","url":"/agent/luggage"}
+{"ts":"2026-04-24T10:08:46.585Z","phase":"P2","actor":"AgentGare","action":"Visiter Colis (/agent/parcel)","outcome":"success","url":"/agent/parcel"}
+{"ts":"2026-04-24T10:08:47.271Z","phase":"P2","actor":"AgentGare","action":"Visiter Manifestes (/agent/manifests)","outcome":"success","url":"/agent/manifests"}
+{"ts":"2026-04-24T10:08:47.970Z","phase":"P2","actor":"AgentGare","action":"Visiter Caisse (/agent/cashier)","outcome":"success","url":"/agent/cashier"}
+{"ts":"2026-04-24T10:08:48.666Z","phase":"P2","actor":"AgentGare","action":"Visiter Reçus & billets (/agent/receipts)","outcome":"success","url":"/agent/receipts"}
+{"ts":"2026-04-24T10:08:49.365Z","phase":"P2","actor":"AgentGare","action":"Visiter Écrans gare (/agent/display)","outcome":"success","url":"/agent/display"}
+{"ts":"2026-04-24T10:08:50.049Z","phase":"P2","actor":"AgentGare","action":"Visiter Signaler incident (/agent/sav)","outcome":"success","url":"/agent/sav"}
+{"ts":"2026-04-24T10:08:50.049Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : AGENT DE QUAI ═══","outcome":"info"}
+{"ts":"2026-04-24T10:08:50.814Z","phase":"login","actor":"Quai","action":"HTTP /api/auth/sign-in (quai-pw-saas-mul-mocqz9w8@mega.local)","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocqzi880en251yf5as6c5qf\",\"email\":\"quai-pw-saas-mul-mocqz9w8@mega.local\",\"name\":\"Agent Quai Multi\",\"tenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"effectiveTenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"tenantSlug\":\"pw-saas-mul-mocqz9w8\",\"roleId\":\"487186a1-39cc-4cd1-8ce7-be38febfccbf\","}}
+{"ts":"2026-04-24T10:08:52.327Z","phase":"P3","actor":"Quai","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-mul-mocqz9w8.translog.test/quai"}}
+{"ts":"2026-04-24T10:08:52.328Z","phase":"P3","actor":"Quai","action":"Login agent quai via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T10:08:53.079Z","phase":"P3","actor":"Quai","action":"Visiter Accueil quai (/quai)","outcome":"success","url":"/quai"}
+{"ts":"2026-04-24T10:08:53.869Z","phase":"P3","actor":"Quai","action":"Visiter Scanner billet (/quai/scan?type=ticket)","outcome":"success","url":"/quai/scan?type=ticket"}
+{"ts":"2026-04-24T10:08:54.571Z","phase":"P3","actor":"Quai","action":"Visiter Scanner colis (/quai/scan?type=parcel)","outcome":"success","url":"/quai/scan?type=parcel"}
+{"ts":"2026-04-24T10:08:55.308Z","phase":"P3","actor":"Quai","action":"Visiter Embarquement (/quai/boarding)","outcome":"success","url":"/quai/boarding"}
+{"ts":"2026-04-24T10:08:56.071Z","phase":"P3","actor":"Quai","action":"Visiter Chargement fret (/quai/freight)","outcome":"success","url":"/quai/freight"}
+{"ts":"2026-04-24T10:08:56.820Z","phase":"P3","actor":"Quai","action":"Visiter Manifeste quai (/quai/manifest)","outcome":"success","url":"/quai/manifest"}
+{"ts":"2026-04-24T10:08:57.545Z","phase":"P3","actor":"Quai","action":"Visiter Vérifier bagages (/quai/luggage)","outcome":"success","url":"/quai/luggage"}
+{"ts":"2026-04-24T10:08:58.244Z","phase":"P3","actor":"Quai","action":"Visiter Déclarer retard (/quai/delay)","outcome":"success","url":"/quai/delay"}
+{"ts":"2026-04-24T10:08:58.948Z","phase":"P3","actor":"Quai","action":"Visiter Écran quai (/quai/display)","outcome":"success","url":"/quai/display"}
+{"ts":"2026-04-24T10:08:59.629Z","phase":"P3","actor":"Quai","action":"Visiter Signaler incident quai (/quai/sav)","outcome":"success","url":"/quai/sav"}
+{"ts":"2026-04-24T10:08:59.629Z","phase":"P4","actor":"SYSTEM","action":"═══ P4 : CHAUFFEUR ═══","outcome":"info"}
+{"ts":"2026-04-24T10:09:00.390Z","phase":"login","actor":"Driver","action":"HTTP /api/auth/sign-in (driver-pw-saas-mul-mocqz9w8@mega.local)","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocqzhdo0emw51yfgukwjglz\",\"email\":\"driver-pw-saas-mul-mocqz9w8@mega.local\",\"name\":\"Chauffeur Multi\",\"tenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"effectiveTenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"tenantSlug\":\"pw-saas-mul-mocqz9w8\",\"roleId\":\"dc2a3bcc-210d-4d4c-ac95-9841df39ec3a\""}}
+{"ts":"2026-04-24T10:09:01.903Z","phase":"P4","actor":"Driver","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-mul-mocqz9w8.translog.test/driver"}}
+{"ts":"2026-04-24T10:09:01.904Z","phase":"P4","actor":"Driver","action":"Login chauffeur via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T10:09:02.668Z","phase":"P4","actor":"Driver","action":"Visiter Accueil chauffeur (/driver)","outcome":"success","url":"/driver"}
+{"ts":"2026-04-24T10:09:03.406Z","phase":"P4","actor":"Driver","action":"Visiter Mon manifeste (/driver/manifest)","outcome":"success","url":"/driver/manifest"}
+{"ts":"2026-04-24T10:09:04.123Z","phase":"P4","actor":"Driver","action":"Visiter Check-in passagers (/driver/checkin)","outcome":"success","url":"/driver/checkin"}
+{"ts":"2026-04-24T10:09:04.365Z","phase":"runtime","actor":"Driver","action":"JS pageerror","outcome":"failed","error":"Cannot stop, scanner is not running or paused.","url":"https://pw-saas-mul-mocqz9w8.translog.test/driver/scan?type=ticket"}
+{"ts":"2026-04-24T10:09:04.369Z","phase":"runtime","actor":"Driver","action":"JS pageerror","outcome":"failed","error":"Cannot stop, scanner is not running or paused.","url":"https://pw-saas-mul-mocqz9w8.translog.test/driver/scan?type=ticket"}
+{"ts":"2026-04-24T10:09:09.867Z","phase":"P4","actor":"Driver","action":"Visiter Scanner billet (/driver/scan?type=ticket)","outcome":"failed","url":"/driver/scan?type=ticket","error":"\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading').first()\u001b[22m\n"}
+{"ts":"2026-04-24T10:09:10.158Z","phase":"runtime","actor":"Driver","action":"JS pageerror","outcome":"failed","error":"Cannot stop, scanner is not running or paused.","url":"https://pw-saas-mul-mocqz9w8.translog.test/driver/scan?type=parcel"}
+{"ts":"2026-04-24T10:09:10.159Z","phase":"runtime","actor":"Driver","action":"JS pageerror","outcome":"failed","error":"Cannot stop, scanner is not running or paused.","url":"https://pw-saas-mul-mocqz9w8.translog.test/driver/scan?type=parcel"}
+{"ts":"2026-04-24T10:09:15.681Z","phase":"P4","actor":"Driver","action":"Visiter Scanner colis (/driver/scan?type=parcel)","outcome":"failed","url":"/driver/scan?type=parcel","error":"\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading').first()\u001b[22m\n"}
+{"ts":"2026-04-24T10:09:16.519Z","phase":"P4","actor":"Driver","action":"Visiter Chargement fret (/driver/freight)","outcome":"success","url":"/driver/freight"}
+{"ts":"2026-04-24T10:09:17.250Z","phase":"P4","actor":"Driver","action":"Visiter Journal de bord (/driver/events)","outcome":"success","url":"/driver/events"}
+{"ts":"2026-04-24T10:09:17.991Z","phase":"P4","actor":"Driver","action":"Visiter Briefing pré-départ (/driver/briefing)","outcome":"success","url":"/driver/briefing"}
+{"ts":"2026-04-24T10:09:18.722Z","phase":"P4","actor":"Driver","action":"Visiter Rapport trajet (/driver/report)","outcome":"success","url":"/driver/report"}
+{"ts":"2026-04-24T10:09:19.420Z","phase":"P4","actor":"Driver","action":"Visiter Panne (/driver/maintenance)","outcome":"success","url":"/driver/maintenance"}
+{"ts":"2026-04-24T10:09:20.180Z","phase":"P4","actor":"Driver","action":"Visiter Mon planning (/driver/schedule)","outcome":"success","url":"/driver/schedule"}
+{"ts":"2026-04-24T10:09:20.909Z","phase":"P4","actor":"Driver","action":"Visiter Mes documents (/driver/documents)","outcome":"success","url":"/driver/documents"}
+{"ts":"2026-04-24T10:09:21.644Z","phase":"P4","actor":"Driver","action":"Visiter Mes temps de repos (/driver/rest)","outcome":"success","url":"/driver/rest"}
+{"ts":"2026-04-24T10:09:22.321Z","phase":"P4","actor":"Driver","action":"Visiter Feedback voyageur (/driver/feedback)","outcome":"success","url":"/driver/feedback"}
+{"ts":"2026-04-24T10:09:29.466Z","phase":"P4","actor":"Driver","action":"Clic \"Ouvrir l'embarquement\" sur /driver (si trip présent)","outcome":"missing","error":"MISSING_CTA: bouton \"Ouvrir l'embarquement\" non trouvé après 5000ms"}
+{"ts":"2026-04-24T10:09:36.476Z","phase":"P4","actor":"Driver","action":"Clic \"Démarrer le voyage\"","outcome":"missing","error":"MISSING_CTA: bouton \"Démarrer le voyage\" non trouvé après 5000ms"}
+{"ts":"2026-04-24T10:09:43.493Z","phase":"P4","actor":"Driver","action":"Clic \"Arrivé à destination\"","outcome":"missing","error":"MISSING_CTA: bouton \"Arrivé à destination\" non trouvé après 5000ms"}
+{"ts":"2026-04-24T10:09:43.494Z","phase":"P5","actor":"SYSTEM","action":"═══ P5 : CLIENT ═══","outcome":"info"}
+{"ts":"2026-04-24T10:09:44.494Z","phase":"login","actor":"Customer","action":"HTTP /api/auth/sign-in (customer-pw-saas-mul-mocqz9w8@mega.local)","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocr15f00009izg8jrpqco4w\",\"email\":\"customer-pw-saas-mul-mocqz9w8@mega.local\",\"name\":\"Client Test Multi\",\"tenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"effectiveTenantId\":\"d9ab9f11-577d-484a-94c9-e3919f6ead1c\",\"tenantSlug\":\"pw-saas-mul-mocqz9w8\",\"roleId\":null,\"roleName\":null,\"userType\":\"C"}}
+{"ts":"2026-04-24T10:09:46.015Z","phase":"P5","actor":"Customer","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-mul-mocqz9w8.translog.test/customer"}}
+{"ts":"2026-04-24T10:09:46.015Z","phase":"P5","actor":"Customer","action":"Login client via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T10:09:46.718Z","phase":"P5","actor":"Customer","action":"Visiter Accueil client (/customer)","outcome":"success","url":"/customer"}
+{"ts":"2026-04-24T10:09:47.646Z","phase":"P5","actor":"Customer","action":"Visiter Mes billets (/customer/trips)","outcome":"success","url":"/customer/trips"}
+{"ts":"2026-04-24T10:09:48.400Z","phase":"P5","actor":"Customer","action":"Visiter Mes colis (/customer/parcels)","outcome":"success","url":"/customer/parcels"}
+{"ts":"2026-04-24T10:09:49.149Z","phase":"P5","actor":"Customer","action":"Visiter Mes vouchers (/customer/vouchers)","outcome":"success","url":"/customer/vouchers"}
+{"ts":"2026-04-24T10:09:49.898Z","phase":"P5","actor":"Customer","action":"Visiter Mes incidents (/customer/incidents)","outcome":"success","url":"/customer/incidents"}
+{"ts":"2026-04-24T10:09:50.574Z","phase":"P5","actor":"Customer","action":"Visiter Faire une réclamation (/customer/claim)","outcome":"success","url":"/customer/claim"}
+{"ts":"2026-04-24T10:09:51.252Z","phase":"P5","actor":"Customer","action":"Visiter Donner un avis (/customer/feedback)","outcome":"success","url":"/customer/feedback"}
+{"ts":"2026-04-24T10:09:51.534Z","phase":"P5","actor":"Customer","action":"Clic \"Nouveau signalement\" depuis /customer/incidents","outcome":"success"}
+{"ts":"2026-04-24T10:09:51.735Z","phase":"P6","actor":"SYSTEM","action":"═══ P6 : MANAGER - KPI & BI ═══","outcome":"info"}
+{"ts":"2026-04-24T10:09:52.791Z","phase":"P6","actor":"Manager","action":"KPI/BI Dashboard admin (KPI jour) (/admin)","outcome":"success","url":"/admin"}
+{"ts":"2026-04-24T10:09:53.550Z","phase":"P6","actor":"Manager","action":"KPI/BI Analytics général (/admin/analytics)","outcome":"success","url":"/admin/analytics"}
+{"ts":"2026-04-24T10:09:54.278Z","phase":"P6","actor":"Manager","action":"KPI/BI Rapports périodiques (/admin/reports)","outcome":"success","url":"/admin/reports"}
+{"ts":"2026-04-24T10:09:55.001Z","phase":"P6","actor":"Manager","action":"KPI/BI Saisonnalité (/admin/analytics/seasonality)","outcome":"success","url":"/admin/analytics/seasonality"}
+{"ts":"2026-04-24T10:09:55.724Z","phase":"P6","actor":"Manager","action":"KPI/BI AI — rentabilité des lignes (/admin/ai/routes)","outcome":"success","url":"/admin/ai/routes"}
+{"ts":"2026-04-24T10:09:56.508Z","phase":"P6","actor":"Manager","action":"KPI/BI AI — optimisation flotte (/admin/ai/fleet)","outcome":"success","url":"/admin/ai/fleet"}
+{"ts":"2026-04-24T10:09:57.258Z","phase":"P6","actor":"Manager","action":"KPI/BI AI — prévisions demande (/admin/ai/demand)","outcome":"success","url":"/admin/ai/demand"}
+{"ts":"2026-04-24T10:09:57.957Z","phase":"P6","actor":"Manager","action":"KPI/BI AI — pricing dynamique (/admin/ai/pricing)","outcome":"success","url":"/admin/ai/pricing"}
+{"ts":"2026-04-24T10:09:58.649Z","phase":"P6","actor":"Manager","action":"KPI/BI Yield management (/admin/pricing/yield)","outcome":"success","url":"/admin/pricing/yield"}
+{"ts":"2026-04-24T10:09:59.340Z","phase":"P6","actor":"Manager","action":"KPI/BI Scoring chauffeurs (/admin/drivers/scoring)","outcome":"success","url":"/admin/drivers/scoring"}
+{"ts":"2026-04-24T10:10:00.121Z","phase":"P6","actor":"Manager","action":"KPI/BI Écarts de caisse (/admin/cash-discrepancies)","outcome":"success","url":"/admin/cash-discrepancies"}
+{"ts":"2026-04-24T10:10:00.121Z","phase":"P7","actor":"SYSTEM","action":"═══ P7 : HORS MÉTIER ═══","outcome":"info"}
+{"ts":"2026-04-24T10:10:00.340Z","phase":"P7","actor":"Admin","action":"Visiter /admin/invoices (export compta)","outcome":"success"}
+{"ts":"2026-04-24T10:10:01.059Z","phase":"P7","actor":"Admin","action":"Visiter /admin/settings/backup","outcome":"success"}
+{"ts":"2026-04-24T10:10:01.124Z","phase":"P7","actor":"Admin","action":"Clic \"Nouvelle sauvegarde\"","outcome":"success"}
+{"ts":"2026-04-24T10:10:01.133Z","phase":"P7","actor":"Admin","action":"Chercher/cliquer export RGPD","outcome":"missing","error":"MISSING_CTA: bouton export RGPD et onglet RGPD non trouvés"}
+{"ts":"2026-04-24T10:10:01.133Z","phase":"END","actor":"SYSTEM","action":"Synthèse outcomes multi-acteurs","outcome":"info","details":{"info":22,"success":68,"failed":6,"missing":4}}

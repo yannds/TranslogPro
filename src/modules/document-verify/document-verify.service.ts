@@ -5,6 +5,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { QrService } from '../../core/security/qr/qr.service';
 import { renderTicket } from '../documents/renderers/ticket.renderer';
 import { renderParcelLabel } from '../documents/renderers/parcel-label.renderer';
+import { AppConfigService } from '../../common/config/app-config.service';
 
 /**
  * DocumentVerifyService — vue publique des documents officiels.
@@ -29,8 +30,9 @@ export class DocumentVerifyService {
   private readonly log = new Logger(DocumentVerifyService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly qr:     QrService,
+    private readonly prisma:    PrismaService,
+    private readonly qr:        QrService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   // ─── Ticket ────────────────────────────────────────────────────────────────
@@ -152,7 +154,7 @@ export class DocumentVerifyService {
         })
       : null;
 
-    const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
+    const trackingBase = this.appConfig.publicTrackingUrl;
 
     const html = await renderParcelLabel({
       parcel: {

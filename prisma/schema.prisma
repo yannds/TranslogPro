@@ -1244,6 +1244,12 @@ model Trip {
   seatingMode        String    @default("FREE")
   // FREE = placement libre (pas de choix de siège, mais capacité respectée)
   // NUMBERED = places numérotées (siège attribué auto ou choisi via option payante)
+  // Fix écart R2 — v8 audit (2026-04-24) : "capacité ouverte" par trip.
+  // Permet d'ouvrir à la vente un sous-ensemble des sièges du bus (ex: 55/60)
+  // pour réserver des places (VIP, staff, no-show compensation).
+  // null = pas de limite (= bus.capacity). Valeur concrète = plafond dur.
+  // Limite effective appliquée par TicketingService = min(bus.capacity, maxSeatsOpen).
+  maxSeatsOpen       Int?
   roadbook           Json      @default("{}")
   // Stocké en DB (pas MinIO) pour permettre les requêtes sur waypoints
   departureScheduled DateTime

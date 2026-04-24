@@ -104,12 +104,15 @@ export function QrScannerWeb({
       cancelled = true;
       stoppedRef.current = true;
       const s = scannerRef.current;
-      if (s) {
-        s.stop().catch(() => { /* ignore */ }).finally(() => {
-          s.clear?.();
-          scannerRef.current = null;
-        });
-      }
+      if (!s) return;
+      scannerRef.current = null;
+      // Fix E-DRV-1 : html5-qrcode throw sync "Cannot stop, scanner is not running"
+      // si le scanner n'a jamais démarré (caméra refusée / mode manuel).
+      // On protège par try/catch externe ET on ignore les rejets internes.
+      Promise.resolve().then(async () => {
+        try { await s.stop(); } catch { /* ignore — was not running */ }
+        try { s.clear?.(); } catch { /* ignore */ }
+      }).catch(() => { /* ignore */ });
     };
     // lastDetected volontairement hors deps — géré comme cache de dernière valeur pour éviter doublons.
     // eslint-disable-next-line react-hooks/exhaustive-deps

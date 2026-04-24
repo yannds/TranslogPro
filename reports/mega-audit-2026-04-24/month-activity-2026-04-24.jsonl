@@ -1,0 +1,65 @@
+{"ts":"2026-04-24T11:27:51.495Z","phase":"BOOT","actor":"SYSTEM","action":"Scenario v6 : setup UI + 1 mois d'activité","outcome":"info","details":{"slug":"pw-saas-mth-mocttmmf","tenantUrl":"https://pw-saas-mth-mocttmmf.translog.test"}}
+{"ts":"2026-04-24T11:27:51.652Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : Setup tenant via UI ═══","outcome":"info"}
+{"ts":"2026-04-24T11:27:54.461Z","phase":"P1","actor":"Admin","action":"Signup complet via UI","outcome":"success"}
+{"ts":"2026-04-24T11:27:56.668Z","phase":"P1","actor":"Admin","action":"Login admin via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T11:28:13.077Z","phase":"P1","actor":"Admin","action":"Onboarding waitForURL timeout (tolérant)","outcome":"partial","details":{"url":"https://pw-saas-mth-mocttmmf.translog.test/onboarding"}}
+{"ts":"2026-04-24T11:28:13.078Z","phase":"P1","actor":"Admin","action":"Onboarding 5 steps via UI","outcome":"success"}
+{"ts":"2026-04-24T11:28:14.078Z","phase":"P1","actor":"Admin","action":"Créer véhicule #1 via UI","outcome":"success"}
+{"ts":"2026-04-24T11:28:15.125Z","phase":"P1","actor":"Admin","action":"Créer staff DRIVER via UI","outcome":"success"}
+{"ts":"2026-04-24T11:28:15.126Z","phase":"P1.5","actor":"SYSTEM","action":"Set password staff + PEUPLEMENT 1 MOIS D'ACTIVITÉ (Prisma fixture — documenté)","outcome":"info"}
+{"ts":"2026-04-24T11:28:15.271Z","phase":"P1.5","actor":"SYSTEM","action":"Fix E-IAM-1 vérif : driver.roleId → DRIVER","outcome":"success","details":{"expected":"DRIVER","actual":"DRIVER"}}
+{"ts":"2026-04-24T11:28:18.240Z","phase":"P1.5","actor":"SYSTEM","action":"🎯 PEUPLEMENT 1 MOIS RÉUSSI","outcome":"success","details":{"stations":4,"routes":3,"waypoints":5,"buses":5,"staff":8,"trips":180,"tickets":3758,"transactions":3237,"parcels":400,"vouchers":40,"refunds":80,"incidents":15,"revenueXAF":40770600,"durationMs":2892}}
+{"ts":"2026-04-24T11:28:18.240Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : Validation KPI via UI ═══","outcome":"info"}
+{"ts":"2026-04-24T11:28:19.170Z","phase":"P2","actor":"Admin","action":"Visiter Dashboard admin (KPI jour — tickets vendus, revenue, trips actifs) (/admin)","outcome":"success","url":"/admin"}
+{"ts":"2026-04-24T11:28:19.915Z","phase":"P2","actor":"Admin","action":"Visiter Analytics général (séries temporelles) (/admin/analytics)","outcome":"success","url":"/admin/analytics"}
+{"ts":"2026-04-24T11:28:20.641Z","phase":"P2","actor":"Admin","action":"Visiter Saisonnalité (/admin/analytics/seasonality)","outcome":"success","url":"/admin/analytics/seasonality"}
+{"ts":"2026-04-24T11:28:21.348Z","phase":"P2","actor":"Admin","action":"Visiter Rapports périodiques (/admin/reports)","outcome":"success","url":"/admin/reports"}
+{"ts":"2026-04-24T11:28:22.785Z","phase":"P2","actor":"Admin","action":"Visiter Billets émis (/admin/tickets)","outcome":"success","url":"/admin/tickets"}
+{"ts":"2026-04-24T11:28:23.722Z","phase":"P2","actor":"Admin","action":"Visiter Annulations (/admin/tickets/cancel)","outcome":"success","url":"/admin/tickets/cancel"}
+{"ts":"2026-04-24T11:28:24.457Z","phase":"P2","actor":"Admin","action":"Visiter Colis (/admin/parcels)","outcome":"success","url":"/admin/parcels"}
+{"ts":"2026-04-24T11:28:25.186Z","phase":"P2","actor":"Admin","action":"Visiter Trips du jour (/admin/trips)","outcome":"success","url":"/admin/trips"}
+{"ts":"2026-04-24T11:28:25.921Z","phase":"P2","actor":"Admin","action":"Visiter Trips retards & alertes (/admin/trips/delays)","outcome":"success","url":"/admin/trips/delays"}
+{"ts":"2026-04-24T11:28:26.626Z","phase":"P2","actor":"Admin","action":"Visiter Flotte véhicules (/admin/fleet)","outcome":"success","url":"/admin/fleet"}
+{"ts":"2026-04-24T11:28:27.307Z","phase":"P2","actor":"Admin","action":"Visiter Flotte tracking KM (/admin/fleet/tracking)","outcome":"success","url":"/admin/fleet/tracking"}
+{"ts":"2026-04-24T11:28:28.017Z","phase":"P2","actor":"Admin","action":"Visiter Staff (/admin/staff)","outcome":"success","url":"/admin/staff"}
+{"ts":"2026-04-24T11:28:28.743Z","phase":"P2","actor":"Admin","action":"Visiter Chauffeurs (/admin/drivers)","outcome":"success","url":"/admin/drivers"}
+{"ts":"2026-04-24T11:28:29.410Z","phase":"P2","actor":"Admin","action":"Visiter Scoring chauffeurs (/admin/drivers/scoring)","outcome":"success","url":"/admin/drivers/scoring"}
+{"ts":"2026-04-24T11:28:30.124Z","phase":"P2","actor":"Admin","action":"Visiter Caisse (/admin/cashier)","outcome":"success","url":"/admin/cashier"}
+{"ts":"2026-04-24T11:28:30.814Z","phase":"P2","actor":"Admin","action":"Visiter Écarts caisse (/admin/cash-discrepancies)","outcome":"success","url":"/admin/cash-discrepancies"}
+{"ts":"2026-04-24T11:28:31.512Z","phase":"P2","actor":"Admin","action":"Visiter Factures (/admin/invoices)","outcome":"success","url":"/admin/invoices"}
+{"ts":"2026-04-24T11:28:32.205Z","phase":"P2","actor":"Admin","action":"Visiter CRM clients (/admin/crm)","outcome":"success","url":"/admin/crm"}
+{"ts":"2026-04-24T11:28:32.891Z","phase":"P2","actor":"Admin","action":"Visiter CRM campagnes (/admin/crm/campaigns)","outcome":"success","url":"/admin/crm/campaigns"}
+{"ts":"2026-04-24T11:28:33.573Z","phase":"P2","actor":"Admin","action":"Visiter SAV claims (/admin/sav/claims)","outcome":"success","url":"/admin/sav/claims"}
+{"ts":"2026-04-24T11:28:34.260Z","phase":"P2","actor":"Admin","action":"Visiter SAV refunds (/admin/sav/returns)","outcome":"success","url":"/admin/sav/returns"}
+{"ts":"2026-04-24T11:28:34.945Z","phase":"P2","actor":"Admin","action":"Visiter SAV vouchers (/admin/sav/vouchers)","outcome":"success","url":"/admin/sav/vouchers"}
+{"ts":"2026-04-24T11:28:35.612Z","phase":"P2","actor":"Admin","action":"Visiter AI — rentabilité des lignes (/admin/ai/routes)","outcome":"success","url":"/admin/ai/routes"}
+{"ts":"2026-04-24T11:28:36.299Z","phase":"P2","actor":"Admin","action":"Visiter AI — optimisation flotte (/admin/ai/fleet)","outcome":"success","url":"/admin/ai/fleet"}
+{"ts":"2026-04-24T11:28:37.061Z","phase":"P2","actor":"Admin","action":"Visiter AI — prévisions demande (/admin/ai/demand)","outcome":"success","url":"/admin/ai/demand"}
+{"ts":"2026-04-24T11:28:37.741Z","phase":"P2","actor":"Admin","action":"Visiter AI — pricing dynamique (/admin/ai/pricing)","outcome":"success","url":"/admin/ai/pricing"}
+{"ts":"2026-04-24T11:28:38.410Z","phase":"P2","actor":"Admin","action":"Visiter Yield management (/admin/pricing/yield)","outcome":"success","url":"/admin/pricing/yield"}
+{"ts":"2026-04-24T11:28:39.069Z","phase":"P2","actor":"Admin","action":"Visiter Safety monitoring live (/admin/safety)","outcome":"success","url":"/admin/safety"}
+{"ts":"2026-04-24T11:28:39.796Z","phase":"P2","actor":"Admin","action":"Visiter QHSE accidents (/admin/qhse)","outcome":"success","url":"/admin/qhse"}
+{"ts":"2026-04-24T11:28:39.796Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : Chauffeur voit ses trips ═══","outcome":"info"}
+{"ts":"2026-04-24T11:28:41.938Z","phase":"P3","actor":"Driver","action":"Login chauffeur via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T11:28:42.657Z","phase":"P3","actor":"Driver","action":"Visiter Accueil chauffeur (/driver)","outcome":"success","url":"/driver"}
+{"ts":"2026-04-24T11:28:43.377Z","phase":"P3","actor":"Driver","action":"Visiter Mon manifeste (/driver/manifest)","outcome":"success","url":"/driver/manifest"}
+{"ts":"2026-04-24T11:28:44.072Z","phase":"P3","actor":"Driver","action":"Visiter Check-in passagers (/driver/checkin)","outcome":"success","url":"/driver/checkin"}
+{"ts":"2026-04-24T11:28:44.757Z","phase":"P3","actor":"Driver","action":"Visiter Journal de bord (/driver/events)","outcome":"success","url":"/driver/events"}
+{"ts":"2026-04-24T11:28:45.481Z","phase":"P3","actor":"Driver","action":"Visiter Mon planning (/driver/schedule)","outcome":"success","url":"/driver/schedule"}
+{"ts":"2026-04-24T11:28:46.164Z","phase":"P3","actor":"Driver","action":"Visiter Mes temps de repos (/driver/rest)","outcome":"success","url":"/driver/rest"}
+{"ts":"2026-04-24T11:28:46.164Z","phase":"P4","actor":"SYSTEM","action":"═══ P4 : Manager KPI ═══","outcome":"info"}
+{"ts":"2026-04-24T11:28:48.260Z","phase":"P4","actor":"Manager","action":"Login manager via UI","outcome":"success","details":true}
+{"ts":"2026-04-24T11:28:49.017Z","phase":"P4","actor":"Manager","action":"KPI Dashboard admin (/admin)","outcome":"success","url":"/admin"}
+{"ts":"2026-04-24T11:28:49.690Z","phase":"P4","actor":"Manager","action":"KPI Analytics (/admin/analytics)","outcome":"success","url":"/admin/analytics"}
+{"ts":"2026-04-24T11:28:50.350Z","phase":"P4","actor":"Manager","action":"KPI AI lignes rentables (/admin/ai/routes)","outcome":"success","url":"/admin/ai/routes"}
+{"ts":"2026-04-24T11:28:51.017Z","phase":"P4","actor":"Manager","action":"KPI AI demande (/admin/ai/demand)","outcome":"success","url":"/admin/ai/demand"}
+{"ts":"2026-04-24T11:28:51.706Z","phase":"P4","actor":"Manager","action":"KPI Yield (/admin/pricing/yield)","outcome":"success","url":"/admin/pricing/yield"}
+{"ts":"2026-04-24T11:28:52.376Z","phase":"P4","actor":"Manager","action":"KPI Rapports (/admin/reports)","outcome":"success","url":"/admin/reports"}
+{"ts":"2026-04-24T11:28:52.376Z","phase":"P5","actor":"SYSTEM","action":"═══ P5 : Validation remédiations ═══","outcome":"info"}
+{"ts":"2026-04-24T11:28:53.407Z","phase":"P5","actor":"Admin","action":"Empty state /driver absent (admin n'est pas driver — page ok quand même)","outcome":"info"}
+{"ts":"2026-04-24T11:28:53.407Z","phase":"P5","actor":"Admin","action":"Vérifier empty-state /driver (E-DRV-2)","outcome":"success"}
+{"ts":"2026-04-24T11:28:54.763Z","phase":"P5","actor":"Admin","action":"CTA RGPD TROUVÉ et visible après scroll","outcome":"success"}
+{"ts":"2026-04-24T11:28:54.763Z","phase":"P5","actor":"Admin","action":"Vérifier CTA \"Générer l'export RGPD\" (E-ADM-1)","outcome":"success"}
+{"ts":"2026-04-24T11:28:54.772Z","phase":"P5","actor":"SYSTEM","action":"Fix E-IAM-1 confirmé : driver.roleId = DRIVER","outcome":"success"}
+{"ts":"2026-04-24T11:28:54.772Z","phase":"P5","actor":"Admin","action":"Vérifier Fix E-IAM-1 en DB (driver.roleId = DRIVER)","outcome":"success"}
+{"ts":"2026-04-24T11:28:54.772Z","phase":"END","actor":"SYSTEM","action":"Synthèse v6","outcome":"info","details":{"counts":{"info":8,"success":55,"partial":1},"seedStats":{"stations":4,"routes":3,"waypoints":5,"buses":5,"staff":8,"trips":180,"tickets":3758,"transactions":3237,"parcels":400,"vouchers":40,"refunds":80,"incidents":15,"revenueXAF":40770600}}}

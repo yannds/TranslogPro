@@ -30,6 +30,7 @@ import { ExcelService }        from '../../infrastructure/renderer/excel.service
 import { PdfmeService, PdfmeInputRecord } from '../../infrastructure/renderer/pdfme.service';
 import { TemplatesService }    from '../templates/templates.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { AppConfigService }      from '../../common/config/app-config.service';
 
 import { renderTicket }                            from './renderers/ticket.renderer';
 import { renderManifest }                          from './renderers/manifest.renderer';
@@ -91,6 +92,7 @@ export class DocumentsService {
     private readonly pdfme:          PdfmeService,
     private readonly templates:      TemplatesService,
     private readonly platformConfig: PlatformConfigService,
+    private readonly appConfig:      AppConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
@@ -383,7 +385,7 @@ export class DocumentsService {
       totalWeight:    String(totalWeight),
       parcelRows:     JSON.stringify(parcelRows.length    ? parcelRows    : [['—','Aucun colis','—','—']]),
       // ── System ──
-      qrCodeValue:    `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/manifest/${trip.id}`,
+      qrCodeValue:    `${this.appConfig.publicTrackingUrl}/manifest/${trip.id}`,
       generatedAt:    new Date().toLocaleString('fr-FR'),
     };
 
@@ -427,7 +429,7 @@ export class DocumentsService {
       phone: portalSender?.phone ?? null,
     };
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: TENANT_DOC_SELECT });
-    const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
+    const trackingBase = this.appConfig.publicTrackingUrl;
 
     const html = await renderParcelLabel({
       parcel: {
@@ -613,7 +615,7 @@ export class DocumentsService {
       // ── Parcel rows ──
       parcelRows:       JSON.stringify(parcelRows.length ? parcelRows : [['—','Aucun colis','—','—']]),
       // ── System ──
-      qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
+      qrCodeValue:      `${this.appConfig.publicTrackingUrl}/shipment/${shipment.id}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
 
@@ -1096,7 +1098,7 @@ export class DocumentsService {
       scope,
     });
 
-    const trackingBase = process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io';
+    const trackingBase = this.appConfig.publicTrackingUrl;
     const pdfmeData: Record<string, string> = {
       tenantName:  tenant.name,
       shipmentId:  parcelIds[0]?.slice(0, 12).toUpperCase() ?? '—',
@@ -1188,7 +1190,7 @@ export class DocumentsService {
       destination:      station?.name ?? '',
       destinationCity:  station?.city ?? '',
       // ── System ──
-      qrCodeValue:      `${process.env.PUBLIC_TRACKING_URL ?? 'https://track.translogpro.io'}/shipment/${shipment.id}`,
+      qrCodeValue:      `${this.appConfig.publicTrackingUrl}/shipment/${shipment.id}`,
       generatedAt:      new Date().toLocaleString('fr-FR'),
     };
     return this.storeWithPdfmeFallback(

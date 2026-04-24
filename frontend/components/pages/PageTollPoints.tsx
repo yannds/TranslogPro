@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import {
   Coins, MapPin, Plus, Pencil, Trash2, AlertTriangle, CheckCircle2,
-  Loader2, Shield, Navigation,
+  Loader2, Shield, Navigation, Download,
 } from 'lucide-react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../lib/api';
 import { useAuth } from '../../lib/auth/auth.context';
@@ -70,6 +70,7 @@ export function PageTollPoints() {
   const [editing, setEditing] = useState<TollPoint | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleting, setDeleting] = useState<TollPoint | null>(null);
+  const [importing, setImporting] = useState(false);
 
   async function reload() {
     if (!tenantId) return;
@@ -96,6 +97,33 @@ export function PageTollPoints() {
     }
   }
 
+  /**
+   * Import depuis les waypoints existants — remplit le registre à partir
+   * des péages/contrôles déjà saisis sur les routes mais non rattachés.
+   * Les TollPoint créés ont des coordonnées placeholder (0,0) — l'utilisateur
+   * doit les éditer pour activer la détection automatique sur nouvelles routes.
+   */
+  async function importFromWaypoints() {
+    setImporting(true); setError(null); setMsg(null);
+    try {
+      const res = await apiPost<{ imported: number; backlinked: number; skippedExisting: number }>(
+        `${base}/import-from-waypoints`,
+        {},
+      );
+      setMsg(
+        t('tollPoints.importSuccess')
+          .replace('{imported}', String(res.imported))
+          .replace('{backlinked}', String(res.backlinked))
+          .replace('{skipped}', String(res.skippedExisting)),
+      );
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const nf = new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR');
 
   return (
@@ -110,10 +138,26 @@ export function PageTollPoints() {
             <p className="text-sm t-text-2">{t('tollPoints.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5">
-          <Plus className="h-4 w-4" aria-hidden />
-          {t('tollPoints.add')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={importFromWaypoints}
+            disabled={importing}
+            variant="outline"
+            className="inline-flex items-center gap-1.5"
+            title={t('tollPoints.importHint')}
+          >
+            {importing ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden />
+            )}
+            {t('tollPoints.importFromRoutes')}
+          </Button>
+          <Button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden />
+            {t('tollPoints.add')}
+          </Button>
+        </div>
       </header>
 
       {msg && (
@@ -135,7 +179,7 @@ export function PageTollPoints() {
           {t('common.loading')}
         </div>
       ) : items.length === 0 ? (
-        <EmptyState onAdd={() => setAddOpen(true)} />
+        <EmptyState onAdd={() => setAddOpen(true)} onImport={importFromWaypoints} importing={importing} />
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {items.map(tp => {
@@ -327,7 +371,13 @@ function TollPointFormDialog({
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({
+  onAdd, onImport, importing,
+}: {
+  onAdd:     () => void;
+  onImport:  () => void;
+  importing: boolean;
+}) {
   const { t } = useI18n();
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center dark:border-slate-700 dark:bg-slate-900/50">
@@ -335,11 +385,22 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <div>
         <h2 className="text-lg font-semibold t-text">{t('tollPoints.emptyTitle')}</h2>
         <p className="mt-1 text-sm t-text-2">{t('tollPoints.emptyBody')}</p>
+        <p className="mt-2 text-xs t-text-2 italic">{t('tollPoints.emptyImportHint')}</p>
       </div>
-      <Button onClick={onAdd}>
-        <Plus className="h-4 w-4 mr-1.5" aria-hidden />
-        {t('tollPoints.add')}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onImport} disabled={importing}>
+          {importing ? (
+            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden />
+          ) : (
+            <Download className="h-4 w-4 mr-1.5" aria-hidden />
+          )}
+          {t('tollPoints.importFromRoutes')}
+        </Button>
+        <Button onClick={onAdd}>
+          <Plus className="h-4 w-4 mr-1.5" aria-hidden />
+          {t('tollPoints.add')}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -41,8 +41,9 @@ describe('CustomerClaimService — cooldown + budget anti-abus', () => {
       },
     };
     const notifMock = { send: jest.fn().mockResolvedValue(undefined) };
+    const appConfigMock: any = { publicPortalUrl: 'https://portail.translog.test' };
     return {
-      service: new CustomerClaimService(prismaMock, notifMock as any),
+      service: new CustomerClaimService(prismaMock, notifMock as any, appConfigMock),
       prisma: prismaMock,
       notif:  notifMock,
     };

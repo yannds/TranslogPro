@@ -124,6 +124,133 @@ export class TollPointService {
     await this.prisma.tollPoint.delete({ where: { id } });
   }
 
+  /**
+   * Import depuis les waypoints existants — peuple le registre à partir des
+   * péages/contrôles déjà saisis sur les routes mais non rattachés au registre.
+   *
+   * Contexte : quand un tenant a créé des routes avec des `Waypoint{kind!=STATION}`
+   * avant d'utiliser le registre (ou sans détection auto), la page "Péages &
+   * points de contrôle" apparaît vide. Cette opération les rapatrie :
+   *   - scan `Waypoint` où `kind IN [PEAGE,POLICE,DOUANE,EAUX_FORETS,FRONTIERE,AUTRE]`
+   *     ET `tollPointId IS NULL`
+   *   - regroupe par (name trim + kind) — un même nom sur 2 kinds différents
+   *     reste distinct (ex: "Lifoula" PEAGE vs "Lifoula" POLICE)
+   *   - crée un `TollPoint` par groupe avec :
+   *       • tollCostXaf = max des waypoints du groupe (conservateur)
+   *       • coordinates = {lat:0,lng:0} placeholder → user complète ensuite
+   *       • notes = marqueur "IMPORTED_FROM_WAYPOINTS" pour tracer + rappeler
+   *   - backlink `Waypoint.tollPointId` vers le TollPoint créé (même nom+kind)
+   *
+   * Idempotent : relancer l'import n'écrase rien — les TollPoint du même
+   * (tenant, name) existants ne sont pas dupliqués (contrainte UNIQUE).
+   * Les waypoints déjà liés (tollPointId != null) sont ignorés.
+   *
+   * Retour : { imported, backlinked, skippedExisting } pour feedback UI.
+   */
+  async importFromWaypoints(tenantId: string): Promise<{
+    imported:        number;  // nouveaux TollPoint créés
+    backlinked:      number;  // waypoints dont tollPointId a été rempli
+    skippedExisting: number;  // groupes où le TollPoint existait déjà (UNIQUE name)
+  }> {
+    const orphanWaypoints = await this.prisma.waypoint.findMany({
+      where: {
+        tollPointId: null,
+        kind:        { not: WaypointKind.STATION },
+        route:       { tenantId },
+      },
+      select: {
+        id: true, name: true, kind: true, tollCostXaf: true,
+      },
+    });
+
+    if (orphanWaypoints.length === 0) {
+      return { imported: 0, backlinked: 0, skippedExisting: 0 };
+    }
+
+    // Regroupement (name normalisé + kind) — deux kinds différents ne fusionnent pas.
+    type GroupKey = string;
+    const groups = new Map<GroupKey, {
+      name:         string;
+      kind:         WaypointKind;
+      maxCost:      number;
+      waypointIds:  string[];
+    }>();
+    for (const wp of orphanWaypoints) {
+      if (!wp.name || !wp.name.trim()) continue; // sans nom on ne peut pas grouper proprement
+      const normName = wp.name.trim();
+      const key = `${normName.toLowerCase()}|${wp.kind}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.maxCost = Math.max(existing.maxCost, wp.tollCostXaf ?? 0);
+        existing.waypointIds.push(wp.id);
+      } else {
+        groups.set(key, {
+          name:        normName,
+          kind:        wp.kind,
+          maxCost:     wp.tollCostXaf ?? 0,
+          waypointIds: [wp.id],
+        });
+      }
+    }
+
+    // TollPoints existants (par name) — pour éviter les doublons de création
+    const existingNames = new Set(
+      (await this.prisma.tollPoint.findMany({
+        where:  { tenantId },
+        select: { name: true },
+      })).map(tp => tp.name.toLowerCase()),
+    );
+
+    let imported = 0;
+    let backlinked = 0;
+    let skippedExisting = 0;
+
+    await this.prisma.transact(async (tx) => {
+      for (const group of groups.values()) {
+        let tollPointId: string;
+
+        if (existingNames.has(group.name.toLowerCase())) {
+          // Un TollPoint de ce nom existe déjà — on récupère son id pour backlink
+          // (évite doublon, respecte l'@@unique([tenantId, name])).
+          const existingTp = await tx.tollPoint.findFirst({
+            where:  { tenantId, name: { equals: group.name, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (!existingTp) {
+            skippedExisting += group.waypointIds.length;
+            continue;
+          }
+          tollPointId = existingTp.id;
+          skippedExisting++;
+        } else {
+          const created = await tx.tollPoint.create({
+            data: {
+              tenantId,
+              name:        group.name,
+              kind:        group.kind,
+              tollCostXaf: group.maxCost,
+              direction:   TollDirection.BOTH,
+              coordinates: { lat: 0, lng: 0 } as unknown as Prisma.InputJsonValue,
+              notes:       'IMPORTED_FROM_WAYPOINTS — coordonnées GPS à compléter pour activer la détection automatique',
+            },
+          });
+          tollPointId = created.id;
+          imported++;
+        }
+
+        // Backlink des waypoints du groupe (préserve le tollCostXaf override
+        // existant sur chaque waypoint — il prend le pas sur TollPoint.tollCostXaf).
+        const res = await tx.waypoint.updateMany({
+          where: { id: { in: group.waypointIds }, tollPointId: null },
+          data:  { tollPointId },
+        });
+        backlinked += res.count;
+      }
+    });
+
+    return { imported, backlinked, skippedExisting };
+  }
+
   // ── Détection automatique sur une route ─────────────────────────────────
 
   /**

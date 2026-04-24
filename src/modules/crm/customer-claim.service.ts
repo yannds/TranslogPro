@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { NotificationService } from '../notification/notification.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import { createHash, randomBytes } from 'crypto';
 
 /**
@@ -60,6 +61,7 @@ export class CustomerClaimService {
   constructor(
     private readonly prisma:       PrismaService,
     private readonly notification: NotificationService,
+    private readonly appConfig:    AppConfigService,
   ) {}
 
   /** Émet un token + dispatche le magic link selon les canaux dispo.
@@ -287,7 +289,7 @@ export class CustomerClaimService {
   }
 
   private buildMagicUrl(token: string, portalBaseUrl?: string): string {
-    const base = portalBaseUrl ?? process.env.PUBLIC_PORTAL_URL ?? 'https://translogpro.io';
+    const base = portalBaseUrl ?? this.appConfig.publicPortalUrl;
     return `${base.replace(/\/$/, '')}/claim?token=${encodeURIComponent(token)}`;
   }
 

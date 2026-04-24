@@ -16,15 +16,51 @@ export class ShipmentService {
   ) {}
 
   async create(tenantId: string, dto: CreateShipmentDto, actor: CurrentUserPayload) {
-    return this.prisma.shipment.create({
-      data: {
-        tenantId,
-        tripId:          dto.tripId,
-        destinationId:   dto.destinationId,
-        totalWeight:     dto.maxWeightKg,
-        remainingWeight: dto.maxWeightKg,  // décrémenté à chaque ajout de colis
-        status:          ShipmentState.OPEN,
-      },
+    // Fix écart R4 — v8 audit : sans ce guard, plusieurs shipments sur le même
+    // trip peuvent cumulativement dépasser la capacité d'emport du bus.
+    // Défense DB R4 : SELECT FOR UPDATE sur Trip pour éviter race condition
+    // entre 2 création simultanées de shipments.
+    return this.prisma.transact(async (tx) => {
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM trips WHERE id = $1 FOR UPDATE`,
+        dto.tripId,
+      );
+
+      const trip = await tx.trip.findFirst({
+        where:   { id: dto.tripId, tenantId },
+        include: { bus: { select: { luggageCapacityKg: true } } },
+      });
+      if (!trip) throw new NotFoundException(`Trip ${dto.tripId} introuvable`);
+
+      const busCapacity = trip.bus?.luggageCapacityKg ?? 0;
+      if (busCapacity > 0) {
+        const existing = await tx.shipment.aggregate({
+          where: {
+            tenantId, tripId: dto.tripId,
+            status: { in: [ShipmentState.OPEN, 'LOADED', 'IN_TRANSIT'] },
+          },
+          _sum: { totalWeight: true },
+        });
+        const usedKg = existing._sum.totalWeight ?? 0;
+        if (usedKg + dto.maxWeightKg > busCapacity) {
+          throw new BadRequestException(
+            `Capacité d'emport bus dépassée : ${busCapacity}kg max, ` +
+            `déjà ${usedKg}kg engagés, shipment demandé ${dto.maxWeightKg}kg ` +
+            `→ total ${usedKg + dto.maxWeightKg}kg.`,
+          );
+        }
+      }
+
+      return tx.shipment.create({
+        data: {
+          tenantId,
+          tripId:          dto.tripId,
+          destinationId:   dto.destinationId,
+          totalWeight:     dto.maxWeightKg,
+          remainingWeight: dto.maxWeightKg,
+          status:          ShipmentState.OPEN,
+        },
+      });
     });
   }
 

@@ -9,6 +9,7 @@ import { PlatformPlansService } from '../platform-plans/platform-plans.service';
 import { AuthService } from '../auth/auth.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import { WaitlistSubmitDto } from './dto/waitlist.dto';
 import { PublicSignupDto } from './dto/signup.dto';
 import { buildWelcomeEmail, type SignupLocale } from './emails/welcome.template';
@@ -40,6 +41,7 @@ export class PublicSignupService {
     private readonly plans:    PlatformPlansService,
     private readonly auth:     AuthService,
     private readonly config:   PlatformConfigService,
+    private readonly appConfig: AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
   ) {}
 
@@ -214,20 +216,20 @@ export class PublicSignupService {
     to: string; adminName: string; tenantName: string; tenantSlug: string;
     trialDays: number; locale: SignupLocale;
   }) {
-    const baseDomain = process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.com';
-    const proto      = process.env.NODE_ENV === 'production' ? 'https' : 'https';
-    const tenantUrl  = `${proto}://${input.tenantSlug}.${baseDomain}`;
+    const baseDomain = this.appConfig.publicBaseDomain;
+    const tenantUrl  = `https://${input.tenantSlug}.${baseDomain}`;
     const loginUrl   = `${tenantUrl}/login`;
 
     try {
       const tmpl = buildWelcomeEmail({
-        to:         { email: input.to, name: input.adminName },
-        adminName:  input.adminName,
-        tenantName: input.tenantName,
+        to:           { email: input.to, name: input.adminName },
+        adminName:    input.adminName,
+        tenantName:   input.tenantName,
         tenantUrl,
         loginUrl,
-        trialDays:  input.trialDays,
-        locale:     input.locale,
+        trialDays:    input.trialDays,
+        locale:       input.locale,
+        supportEmail: this.appConfig.supportEmail,
       });
       await this.email.send({
         to:       { email: input.to, name: input.adminName },

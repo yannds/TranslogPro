@@ -46,7 +46,8 @@ describe('CustomerClaimService', () => {
       transact: jest.fn().mockImplementation(async (fn: any) => fn(prismaMock)),
     };
     notifMock = { send: jest.fn().mockResolvedValue(undefined) };
-    service = new CustomerClaimService(prismaMock, notifMock);
+    const appConfigMock: any = { publicPortalUrl: 'https://portail.translog.test' };
+    service = new CustomerClaimService(prismaMock, notifMock, appConfigMock);
   });
 
   describe('issueToken()', () => {

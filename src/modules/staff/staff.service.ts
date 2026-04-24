@@ -19,6 +19,21 @@ export interface CreateStaffDto {
   licenseData?: Record<string, unknown>;       // licence portée par la 1ère affectation
 }
 
+/**
+ * Mapping rôle métier (StaffAssignment) → rôle IAM (User.roleId).
+ * Sans ce mapping, un user créé via /admin/staff peut se loguer mais
+ * n'accède à aucun portail (HomeRedirect ne sait pas où le router).
+ * Fix E-IAM-1.
+ */
+const STAFF_ROLE_TO_IAM: Record<string, string> = {
+  DRIVER:     'DRIVER',
+  MECHANIC:   'MECHANIC',
+  HOSTESS:    'DRIVER',           // hôtesse = membre d'équipage → perms driver (à défaut de rôle dédié)
+  AGENT:      'AGENT_QUAI',       // agent opérationnel → portail /quai
+  CONTROLLER: 'DISPATCHER',       // contrôleur / répartiteur
+  SUPERVISOR: 'AGENCY_MANAGER',   // superviseur = manager d'agence
+};
+
 export interface UpdateStaffDto {
   name?:     string;
   agencyId?: string | null;                    // home admin uniquement (rôle/dispo gérés via StaffAssignment)
@@ -55,6 +70,23 @@ export class StaffService {
       agencyId: agencyId ?? undefined,
       userType: 'STAFF',
     });
+
+    // Fix E-IAM-1 : aligner le roleId IAM sur le rôle métier choisi à la création.
+    // Sans ça, le user créé peut se loguer mais HomeRedirect ne sait pas
+    // l'orienter vers son portail (driver/quai/agence/etc.) car roleId pointe
+    // sur un rôle générique sans perms portail.
+    const iamRoleName = STAFF_ROLE_TO_IAM[dto.role];
+    if (iamRoleName) {
+      const iamRole = await this.prisma.role.findFirst({
+        where: { tenantId, name: iamRoleName },
+      });
+      if (iamRole) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data:  { roleId: iamRole.id },
+        });
+      }
+    }
 
     // Phase 5 : Staff = enveloppe RH ; les colonnes legacy (role/license/dispo)
     // ont été supprimées. Le poste métier est porté par StaffAssignment.

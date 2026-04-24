@@ -80,4 +80,16 @@ export class TollPointController {
   ) {
     return this.svc.attachDetected(tenantId, routeId, dto.tollPointIds);
   }
+
+  /**
+   * Peuple le registre avec les péages/contrôles déjà saisis sur les routes
+   * mais non rattachés au registre (Waypoint.tollPointId = null).
+   * Idempotent : n'écrase pas les TollPoint existants, backlink uniquement
+   * les waypoints orphelins.
+   */
+  @Post('toll-points/import-from-waypoints')
+  @HttpCode(HttpStatus.OK)
+  importFromWaypoints(@TenantId() tenantId: string) {
+    return this.svc.importFromWaypoints(tenantId);
+  }
 }

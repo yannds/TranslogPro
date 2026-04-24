@@ -11,6 +11,11 @@ import { ProblemDetails } from '../types/api-response.type';
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
+const ERROR_DOCS_BASE_URL = (
+  process.env.ERROR_DOCS_BASE_URL
+  ?? `https://${process.env.PUBLIC_BASE_DOMAIN ?? process.env.PLATFORM_BASE_DOMAIN ?? 'translogpro.io'}/errors`
+).replace(/\/$/, '');
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -42,7 +47,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     const body: ProblemDetails & { stack?: string } = {
-      type:      `https://translogpro.io/errors/${status}`,
+      type:      `${ERROR_DOCS_BASE_URL}/${status}`,
       title:     HttpStatus[status] ?? 'Error',
       status,
       detail,
