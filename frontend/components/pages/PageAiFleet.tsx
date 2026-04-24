@@ -1,6 +1,6 @@
 /**
  * PageAiFleet — Recommandations IA sur l'optimisation de la flotte.
- * Source : GET /api/v1/tenants/:id/analytics/ai-fleet (TripAnalytics 90j)
+ * Source : GET /api/tenants/:id/analytics/ai-fleet (TripAnalytics 90j)
  *
  * UI : tokens sémantiques, compat light/dark, WCAG 2.1 AA, ARIA.
  */

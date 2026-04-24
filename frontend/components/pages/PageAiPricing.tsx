@@ -1,6 +1,6 @@
 /**
  * PageAiPricing — Tarifs dynamiques recommandés (yield management).
- * Source : GET /api/v1/tenants/:id/analytics/ai-pricing (TripAnalytics 30j)
+ * Source : GET /api/tenants/:id/analytics/ai-pricing (TripAnalytics 30j)
  *
  * UI : tokens sémantiques, compat light/dark, WCAG 2.1 AA, ARIA.
  * Devise lue depuis le TenantConfig (jamais hardcodée).

@@ -5,8 +5,8 @@
  * Les thèmes sont définis dans portal-themes.ts (statiques + futur API).
  *
  * Données :
- *   GET  /api/v1/tenants/:tid/portal/config          (thème actif)
- *   PUT  /api/v1/tenants/:tid/portal/config           (appliquer thème)
+ *   GET  /api/tenants/:tid/portal/config          (thème actif)
+ *   PUT  /api/tenants/:tid/portal/config           (appliquer thème)
  *
  * Accessibilité : WCAG 2.1 AA — aria-labels, rôles, focus-visible
  * Dark mode : classes Tailwind dark: via ThemeProvider
@@ -297,7 +297,7 @@ export function PagePortalMarketplace() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const { data: config, refetch } = useFetch<PortalConfig>(
-    tenantId ? `/api/v1/tenants/${tenantId}/portal/config` : null,
+    tenantId ? `/api/tenants/${tenantId}/portal/config` : null,
     [tenantId],
   );
 
@@ -323,7 +323,7 @@ export function PagePortalMarketplace() {
     setApplying(themeId);
     setSuccessMsg(null);
     try {
-      await apiPut(`/api/v1/tenants/${tenantId}/portal/config`, { themeId });
+      await apiPut(`/api/tenants/${tenantId}/portal/config`, { themeId });
       setSuccessMsg(t('portalMarket.appliedSuccess'));
       setPreviewTheme(null);
       refetch();

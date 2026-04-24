@@ -1,7 +1,7 @@
 /**
  * PageTenantTaxes — CRUD des taxes tenant (TVA, timbre, taxe gare, …).
  *
- * Endpoint : /api/v1/tenants/:tenantId/settings/taxes
+ * Endpoint : /api/tenants/:tenantId/settings/taxes
  * Permissions :
  *   - data.tax.read.tenant     : lecture (tous rôles avec accès, ex. caissier)
  *   - control.tax.manage.tenant: écriture (création/édition/suppression)
@@ -56,7 +56,7 @@ export function PageTenantTaxes() {
   const tenantId = user?.tenantId ?? '';
   const canManage = (user?.permissions ?? []).includes('control.tax.manage.tenant');
   const { data, loading, error, refetch } = useFetch<TenantTax[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/taxes` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/taxes` : null,
   );
 
   const [editing, setEditing] = useState<Partial<TenantTax> | null>(null);
@@ -74,8 +74,8 @@ export function PageTenantTaxes() {
     setSubmitting(true); setSubmitError(null);
     try {
       const body = { ...editing };
-      if (body.id) await apiPatch(`/api/v1/tenants/${tenantId}/settings/taxes/${body.id}`, body);
-      else          await apiPost(`/api/v1/tenants/${tenantId}/settings/taxes`, body);
+      if (body.id) await apiPatch(`/api/tenants/${tenantId}/settings/taxes/${body.id}`, body);
+      else          await apiPost(`/api/tenants/${tenantId}/settings/taxes`, body);
       setEditing(null); refetch();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Erreur');
@@ -84,7 +84,7 @@ export function PageTenantTaxes() {
 
   const remove = async (id: string) => {
     if (!confirm(t('tenantSettings.taxes.confirmDelete'))) return;
-    await apiDelete(`/api/v1/tenants/${tenantId}/settings/taxes/${id}`);
+    await apiDelete(`/api/tenants/${tenantId}/settings/taxes/${id}`);
     refetch();
   };
 

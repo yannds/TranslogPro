@@ -2,7 +2,7 @@
  * PageDisplayQuai — Affichage quai (QuaiScreen) avec sélecteur de quai + plein écran
  *
  * Données réelles :
- *   - Liste des quais   : GET /api/v1/tenants/:tid/platforms        (auth requise)
+ *   - Liste des quais   : GET /api/tenants/:tid/platforms        (auth requise)
  *   - Détails enrichis  : GET /api/tenants/:tid/platforms/:id/display
  *     (public — pas d'auth, fan-out écrans kiosque)
  *
@@ -72,7 +72,7 @@ export function PageDisplayQuai() {
 
   // ── 1. Liste des quais pour le sélecteur ──────────────────────────────────
   const platformsRes = useFetch<PlatformLite[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/platforms` : null,
+    tenantId ? `/api/tenants/${tenantId}/platforms` : null,
     [tenantId],
   );
   const platforms = platformsRes.data ?? [];

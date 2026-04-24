@@ -6,9 +6,9 @@
  * chaque nuit.
  *
  * Endpoints :
- *   - GET    /api/v1/tenants/:tid/scheduler/templates
- *   - POST   /api/v1/tenants/:tid/scheduler/templates
- *   - DELETE /api/v1/tenants/:tid/scheduler/templates/:id  (désactivation soft)
+ *   - GET    /api/tenants/:tid/scheduler/templates
+ *   - POST   /api/tenants/:tid/scheduler/templates
+ *   - DELETE /api/tenants/:tid/scheduler/templates/:id  (désactivation soft)
  *
  * Permissions :
  *   - Lecture  : data.trip.read.tenant
@@ -76,7 +76,7 @@ export function PageScheduler() {
   const canWrite = perms.includes('data.trip.create.tenant');
 
   const url = tenantId && canRead
-    ? `/api/v1/tenants/${tenantId}/scheduler/templates`
+    ? `/api/tenants/${tenantId}/scheduler/templates`
     : null;
 
   const { data, loading, error, refetch } = useFetch<TripTemplate[]>(url, [tenantId]);
@@ -169,7 +169,7 @@ export function PageScheduler() {
       if (editing.defaultBusId)    body.defaultBusId    = editing.defaultBusId;
       if (editing.defaultDriverId) body.defaultDriverId = editing.defaultDriverId;
       if (editing.effectiveUntil)  body.effectiveUntil  = editing.effectiveUntil;
-      await apiPost(`/api/v1/tenants/${tenantId}/scheduler/templates`, body);
+      await apiPost(`/api/tenants/${tenantId}/scheduler/templates`, body);
       setEditing(null);
       refetch();
     } catch (err) {
@@ -183,7 +183,7 @@ export function PageScheduler() {
     if (!canWrite) return;
     if (!window.confirm(T.confirmDeact)) return;
     try {
-      await apiDelete(`/api/v1/tenants/${tenantId}/scheduler/templates/${tpl.id}`);
+      await apiDelete(`/api/tenants/${tenantId}/scheduler/templates/${tpl.id}`);
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');

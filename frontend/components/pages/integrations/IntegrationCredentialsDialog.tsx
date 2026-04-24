@@ -60,7 +60,7 @@ export function IntegrationCredentialsDialog({
   const { t } = useI18n();
 
   const { data: schema, loading: schemaLoading, error: schemaError } = useFetch<SchemaResponse>(
-    open ? `/api/v1/tenants/${tenantId}/settings/integrations/${providerKey}/schema` : null,
+    open ? `/api/tenants/${tenantId}/settings/integrations/${providerKey}/schema` : null,
   );
 
   const [values,  setValues]  = useState<Record<string, string>>({});
@@ -78,7 +78,7 @@ export function IntegrationCredentialsDialog({
     e.preventDefault();
     setBusy(true); setSaveErr(null);
     try {
-      await apiPut(`/api/v1/tenants/${tenantId}/settings/integrations/${providerKey}/credentials`, {
+      await apiPut(`/api/tenants/${tenantId}/settings/integrations/${providerKey}/credentials`, {
         credentials: values,
       });
       onSaved();

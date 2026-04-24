@@ -2,7 +2,7 @@
  * PageTicketCancellations — Annulations de billets
  *
  * API :
- *   GET /api/v1/tenants/:tid/tickets?status=CANCELLED
+ *   GET /api/tenants/:tid/tickets?status=CANCELLED
  */
 
 import {

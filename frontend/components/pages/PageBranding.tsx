@@ -2,8 +2,8 @@
  * PageBranding — Paramètres marque blanche (White-label)
  *
  * Données :
- *   GET /api/v1/tenants/:tid/brand        → lire la config
- *   PUT /api/v1/tenants/:tid/brand        → sauvegarder
+ *   GET /api/tenants/:tid/brand        → lire la config
+ *   PUT /api/tenants/:tid/brand        → sauvegarder
  *
  * Prévisualisation live : les couleurs sont appliquées en CSS custom props
  * sur un aperçu interne (pas sur l'app globale tant que non sauvegardé).
@@ -155,7 +155,7 @@ export function PageBranding() {
   const { operational } = useTenantConfig();
   const tenantId = user?.tenantId ?? '';
 
-  const brandUrl = tenantId ? `/api/v1/tenants/${tenantId}/brand` : null;
+  const brandUrl = tenantId ? `/api/tenants/${tenantId}/brand` : null;
   const { data: remote, loading, error: fetchError, refetch } = useFetch<BrandConfig>(
     brandUrl,
     [tenantId],
@@ -182,7 +182,7 @@ export function PageBranding() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      await apiPut(`/api/v1/tenants/${tenantId}/brand`, form);
+      await apiPut(`/api/tenants/${tenantId}/brand`, form);
       setSaveMsg(t('branding.brandSaved'));
       refetch();
     } catch {

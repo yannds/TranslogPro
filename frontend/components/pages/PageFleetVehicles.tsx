@@ -570,7 +570,7 @@ function BusCostProfileSection({ tenantId, busId, busHints }: {
   busHints?: { fuelConsumptionPer100Km?: number; purchasePrice?: number };
 }) {
   const { t } = useI18n();
-  const base = `/api/v1/tenants/${tenantId}/buses/${busId}/cost-profile`;
+  const base = `/api/tenants/${tenantId}/buses/${busId}/cost-profile`;
   const [form, setForm] = useState<BusCostProfile>({ ...COST_DEFAULTS });
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(true);

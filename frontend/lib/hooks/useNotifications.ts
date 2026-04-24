@@ -5,7 +5,7 @@
  * Le back-office (PageNotifications, AdminDashboard, PortalShell) utilise
  * `useAnnouncementFeed` qui tape l'endpoint authentifié tenant-scopé.
  *
- * TODO : brancher sur GET /api/v1/public-portal/:slug/announcements
+ * TODO : brancher sur GET /api/public-portal/:slug/announcements
  * (endpoint public rate-limité, déjà exposé) + slug via resolveHost().
  */
 

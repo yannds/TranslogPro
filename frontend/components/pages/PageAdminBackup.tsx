@@ -78,11 +78,11 @@ export function PageAdminBackup() {
     setLoading(true); setError(null);
     try {
       const [s, j, r, sc, g] = await Promise.all([
-        apiFetch<BackupScope[]>('/api/v1/backup/scopes'),
-        apiFetch<BackupJob[]>('/api/v1/backup/jobs'),
-        apiFetch<RestoreJob[]>('/api/v1/backup/restores'),
-        apiFetch<BackupSchedule | null>('/api/v1/backup/schedule').catch(() => null),
-        apiFetch<GdprJob[]>('/api/v1/backup/gdpr'),
+        apiFetch<BackupScope[]>('/api/backup/scopes'),
+        apiFetch<BackupJob[]>('/api/backup/jobs'),
+        apiFetch<RestoreJob[]>('/api/backup/restores'),
+        apiFetch<BackupSchedule | null>('/api/backup/schedule').catch(() => null),
+        apiFetch<GdprJob[]>('/api/backup/gdpr'),
       ]);
       setScopes(s); setJobs(j); setRestores(r);
       setSchedule(sc ?? null); setGdprJobs(g);
@@ -449,7 +449,7 @@ function NewBackupDialog({ scopes, onClose, onCreated, t }: {
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
     try {
-      await apiFetch('/api/v1/backup/jobs', { method: 'POST', body: { scopeId } });
+      await apiFetch('/api/backup/jobs', { method: 'POST', body: { scopeId } });
       onCreated(); onClose();
     } catch (ex) { setErr(ex instanceof Error ? ex.message : String(ex)); }
     finally { setBusy(false); }
@@ -510,7 +510,7 @@ function RestoreDialog({ job, scopes, onClose, onCreated, t }: {
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
     try {
-      await apiFetch('/api/v1/backup/restores', {
+      await apiFetch('/api/backup/restores', {
         method: 'POST', body: { jobId: job.id, mode },
       });
       onCreated(); onClose();
@@ -583,7 +583,7 @@ function DeleteBackupDialog({ job, onClose, onDeleted, t }: {
   const [busy, setBusy] = useState(false);
   async function confirm() {
     setBusy(true);
-    await apiFetch(`/api/v1/backup/jobs/${job.id}`, { method: 'DELETE' }).catch(() => {});
+    await apiFetch(`/api/backup/jobs/${job.id}`, { method: 'DELETE' }).catch(() => {});
     onDeleted(); onClose();
   }
   return (
@@ -620,7 +620,7 @@ function ScheduleDialog({ schedule, scopes, onClose, onSaved, t }: {
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
     try {
-      await apiFetch('/api/v1/backup/schedule', { method: 'PUT', body: form });
+      await apiFetch('/api/backup/schedule', { method: 'PUT', body: form });
       onSaved(); onClose();
     } catch (ex) { setErr(ex instanceof Error ? ex.message : String(ex)); }
     finally { setBusy(false); }
@@ -691,7 +691,7 @@ function GdprTriggerButton({ onCreated, t }: { onCreated: () => void; t: (k: str
   async function trigger() {
     setBusy(true);
     try {
-      await apiFetch('/api/v1/backup/gdpr', { method: 'POST' });
+      await apiFetch('/api/backup/gdpr', { method: 'POST' });
       setDone(true); onCreated();
     } catch { /* error shown in list */ }
     finally { setBusy(false); }

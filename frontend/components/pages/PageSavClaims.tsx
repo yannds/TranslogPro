@@ -2,7 +2,7 @@
  * PageSavClaims — Réclamations SAV
  *
  * API :
- *   GET /api/v1/tenants/:tid/sav/claims
+ *   GET /api/tenants/:tid/sav/claims
  */
 
 import {

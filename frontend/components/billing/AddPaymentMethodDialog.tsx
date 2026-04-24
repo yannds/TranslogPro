@@ -2,8 +2,8 @@
  * AddPaymentMethodDialog — Modal d'ajout d'un moyen de paiement.
  *
  * Route serveur choisie selon le statut de la souscription :
- *   TRIAL / PAST_DUE → POST /api/v1/subscription/checkout     (facture + tokenise)
- *   ACTIVE           → POST /api/v1/subscription/setup-intent (tokenise sans débit)
+ *   TRIAL / PAST_DUE → POST /api/subscription/checkout     (facture + tokenise)
+ *   ACTIVE           → POST /api/subscription/setup-intent (tokenise sans débit)
  *
  * Dans les deux cas, le serveur renvoie une `paymentUrl` vers le PSP ; on
  * redirige. Au retour le reconciliation handler enregistre le nouveau moyen
@@ -63,7 +63,7 @@ export function AddPaymentMethodDialog({
   const [error,   setError]   = useState<string | null>(null);
 
   const useSetup = subscriptionStatus === 'ACTIVE';
-  const endpoint = useSetup ? '/api/v1/subscription/setup-intent' : '/api/v1/subscription/checkout';
+  const endpoint = useSetup ? '/api/subscription/setup-intent' : '/api/subscription/checkout';
 
   const setup = resolveSetupAmount(operational.currency);
   const setupAmountFormatted = new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR', {

@@ -1,7 +1,7 @@
 /**
  * PageTenantFareClasses — CRUD des classes de voyage tenant.
  *
- * Endpoint : /api/v1/tenants/:tenantId/settings/fare-classes
+ * Endpoint : /api/tenants/:tenantId/settings/fare-classes
  * Permissions :
  *   - data.fareClass.read.tenant     : lecture (caissier, agent, comptable)
  *   - control.fareClass.manage.tenant: écriture (TENANT_ADMIN seul)
@@ -48,7 +48,7 @@ export function PageTenantFareClasses() {
   const canManage = (user?.permissions ?? []).includes('control.fareClass.manage.tenant');
 
   const { data, loading, error, refetch } = useFetch<TenantFareClass[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/fare-classes` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/fare-classes` : null,
   );
 
   const [editing, setEditing] = useState<Partial<TenantFareClass> | null>(null);
@@ -67,9 +67,9 @@ export function PageTenantFareClasses() {
     try {
       const body = { ...editing };
       if (body.id) {
-        await apiPatch(`/api/v1/tenants/${tenantId}/settings/fare-classes/${body.id}`, body);
+        await apiPatch(`/api/tenants/${tenantId}/settings/fare-classes/${body.id}`, body);
       } else {
-        await apiPost(`/api/v1/tenants/${tenantId}/settings/fare-classes`, body);
+        await apiPost(`/api/tenants/${tenantId}/settings/fare-classes`, body);
       }
       setEditing(null); refetch();
     } catch (err) {
@@ -82,7 +82,7 @@ export function PageTenantFareClasses() {
   const remove = async (id: string) => {
     if (!confirm(t('tenantSettings.fareClasses.confirmDelete'))) return;
     try {
-      await apiDelete(`/api/v1/tenants/${tenantId}/settings/fare-classes/${id}`);
+      await apiDelete(`/api/tenants/${tenantId}/settings/fare-classes/${id}`);
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erreur');

@@ -6,7 +6,7 @@
  *   - AdminDashboard.ticker     (bandeau en bas)
  *   - PortalShell.ticker        (bandeau portail)
  *
- * Source : GET /api/v1/tenants/:id/announcements?activeOnly=true
+ * Source : GET /api/tenants/:id/announcements?activeOnly=true
  * Sécurité : tenantId path-scoped côté back (cf. AnnouncementService.findAll).
  *
  * Mapping DB → shape UI :
@@ -111,7 +111,7 @@ export function useAnnouncementFeed(
     setError(null);
     try {
       const data = await apiFetch<AnnouncementDto[]>(
-        `/api/v1/tenants/${tenantId}/announcements?activeOnly=true`,
+        `/api/tenants/${tenantId}/announcements?activeOnly=true`,
       );
       setRaw(data ?? []);
       setIsConnected(true);

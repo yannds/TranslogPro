@@ -2,12 +2,12 @@
  * PagePlatforms — Gestion des quais de gare
  *
  * API :
- *   GET    /api/v1/tenants/:tid/platforms
- *   POST   /api/v1/tenants/:tid/platforms
- *   PATCH  /api/v1/tenants/:tid/platforms/:id
- *   DELETE /api/v1/tenants/:tid/platforms/:id
- *   POST   /api/v1/tenants/:tid/platforms/:id/assign
- *   POST   /api/v1/tenants/:tid/platforms/:id/release
+ *   GET    /api/tenants/:tid/platforms
+ *   POST   /api/tenants/:tid/platforms
+ *   PATCH  /api/tenants/:tid/platforms/:id
+ *   DELETE /api/tenants/:tid/platforms/:id
+ *   POST   /api/tenants/:tid/platforms/:id/assign
+ *   POST   /api/tenants/:tid/platforms/:id/release
  */
 
 import { useState, type FormEvent } from 'react';
@@ -103,7 +103,7 @@ export function PagePlatforms() {
   const { user: me } = useAuth();
   const { t }        = useI18n();
   const tenantId     = me?.tenantId ?? '';
-  const base         = `/api/v1/tenants/${tenantId}/platforms`;
+  const base         = `/api/tenants/${tenantId}/platforms`;
 
   const { data: platforms, loading, refetch } = useFetch<PlatformRow[]>(tenantId ? base : null, [tenantId]);
   const { data: stations } = useFetch<StationRow[]>(tenantId ? `/api/tenants/${tenantId}/stations` : null, [tenantId]);

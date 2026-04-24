@@ -2,7 +2,7 @@
  * usePaymentIntent — hook React autour des endpoints paiement.
  *
  * Flux :
- *   1. `createIntent(dto)` → POST /api/v1/payments/intents
+ *   1. `createIntent(dto)` → POST /api/payments/intents
  *   2. Polling confirm toutes les 3s tant que status ∈ {CREATED, PROCESSING}
  *      (arrêt après TTL de l'intent ou 5 min max côté client)
  *   3. onStatus(status) callback pour UI

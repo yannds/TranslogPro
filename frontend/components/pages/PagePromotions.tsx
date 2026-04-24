@@ -9,10 +9,10 @@
  *   - Dark mode, responsive, WCAG
  *
  * API :
- *   GET    /api/v1/tenants/:tid/promotions
- *   POST   /api/v1/tenants/:tid/promotions
- *   PATCH  /api/v1/tenants/:tid/promotions/:id
- *   DELETE /api/v1/tenants/:tid/promotions/:id
+ *   GET    /api/tenants/:tid/promotions
+ *   POST   /api/tenants/:tid/promotions
+ *   PATCH  /api/tenants/:tid/promotions/:id
+ *   DELETE /api/tenants/:tid/promotions/:id
  */
 
 import { useState, useCallback, type FormEvent } from 'react';
@@ -155,7 +155,7 @@ export function PagePromotions() {
   const { user } = useAuth();
   const { t }    = useI18n();
   const tenantId = user?.tenantId ?? '';
-  const base     = `/api/v1/tenants/${tenantId}/promotions`;
+  const base     = `/api/tenants/${tenantId}/promotions`;
 
   // ── data ──
   const [rev, setRev] = useState(0);

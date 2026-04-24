@@ -9,7 +9,7 @@
  *   2. Modale — l'utilisateur doit saisir son password ET taper le slug du
  *      tenant à l'identique pour activer le bouton "Réinitialiser"
  *
- * Appelle POST /api/v1/tenants/:id/settings/reset. Le backend applique
+ * Appelle POST /api/tenants/:id/settings/reset. Le backend applique
  * lui-même les garde-fous (permission + re-auth password + slug match +
  * rate-limit 3/h) : l'UI est un confort visuel, la sécurité reste côté service.
  */
@@ -72,7 +72,7 @@ export function TenantResetSection({ tenantId, tenantSlug, onSuccess }: TenantRe
     setErr(null);
     try {
       const res = await apiPost<ResetResponse>(
-        `/api/v1/tenants/${tenantId}/settings/reset`,
+        `/api/tenants/${tenantId}/settings/reset`,
         { password, confirmSlug },
       );
       setResult(res);

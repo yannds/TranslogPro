@@ -1,7 +1,7 @@
 /**
  * PageVouchers — Liste admin des bons de réduction émis.
  *
- * Endpoint : GET /api/v1/tenants/:tid/vouchers (+ query status)
+ * Endpoint : GET /api/tenants/:tid/vouchers (+ query status)
  * Permission : data.voucher.read.tenant
  *
  * Actions :
@@ -70,7 +70,7 @@ export function PageVouchers() {
   const tenantId = user?.tenantId ?? '';
   const [filterStatus, setFilterStatus] = useState<string>('');
   const url = tenantId
-    ? `/api/v1/tenants/${tenantId}/vouchers${filterStatus ? `?status=${filterStatus}` : ''}`
+    ? `/api/tenants/${tenantId}/vouchers${filterStatus ? `?status=${filterStatus}` : ''}`
     : null;
   const { data, loading, error, refetch } = useFetch<Voucher[]>(url, [tenantId, filterStatus]);
 
@@ -88,7 +88,7 @@ export function PageVouchers() {
       if (form.amount <= 0 || form.validityDays <= 0) {
         throw new Error(t('vouchers.invalidAmountOrValidity'));
       }
-      await apiPost(`/api/v1/tenants/${tenantId}/vouchers`, form);
+      await apiPost(`/api/tenants/${tenantId}/vouchers`, form);
       setIssueOpen(false); setForm(EMPTY_NEW); refetch();
     } catch (err) {
       setSubmitErr(err instanceof Error ? err.message : 'Error');
@@ -99,7 +99,7 @@ export function PageVouchers() {
     const reason = window.prompt(t('vouchers.cancelReason'));
     if (!reason) return;
     // Le backend attend le reason en body — DELETE avec body → utilise POST via endpoint wrapper
-    await apiPatch(`/api/v1/tenants/${tenantId}/vouchers/${v.id}/cancel`, { reason });
+    await apiPatch(`/api/tenants/${tenantId}/vouchers/${v.id}/cancel`, { reason });
     refetch();
   };
   // placeholder lint : apiDelete importé mais on pourrait l'utiliser pour d'autres actions

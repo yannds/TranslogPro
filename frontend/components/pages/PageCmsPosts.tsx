@@ -8,12 +8,12 @@
  *   - Tags, publication, auteur
  *
  * API :
- *   GET    /api/v1/tenants/:tid/portal/posts
- *   GET    /api/v1/tenants/:tid/portal/posts/:id
- *   POST   /api/v1/tenants/:tid/portal/posts
- *   PUT    /api/v1/tenants/:tid/portal/posts/:id
- *   DELETE /api/v1/tenants/:tid/portal/posts/:id
- *   POST   /api/v1/tenants/:tid/portal/media/upload-url
+ *   GET    /api/tenants/:tid/portal/posts
+ *   GET    /api/tenants/:tid/portal/posts/:id
+ *   POST   /api/tenants/:tid/portal/posts
+ *   PUT    /api/tenants/:tid/portal/posts/:id
+ *   DELETE /api/tenants/:tid/portal/posts/:id
+ *   POST   /api/tenants/:tid/portal/media/upload-url
  */
 
 import { useState, useRef, useCallback } from 'react';
@@ -78,7 +78,7 @@ export function PageCmsPosts() {
   const tenantId = user?.tenantId;
 
   const postsRes = useFetch<CmsPost[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/portal/posts` : null,
+    tenantId ? `/api/tenants/${tenantId}/portal/posts` : null,
     [tenantId],
   );
 
@@ -93,7 +93,7 @@ export function PageCmsPosts() {
   const openEdit = async (post: CmsPost) => {
     if (!tenantId) return;
     try {
-      const detail = await apiGet<CmsPost>(`/api/v1/tenants/${tenantId}/portal/posts/${post.id}`);
+      const detail = await apiGet<CmsPost>(`/api/tenants/${tenantId}/portal/posts/${post.id}`);
       setEditing(detail);
     } catch {
       setEditing({ ...post });
@@ -123,9 +123,9 @@ export function PageCmsPosts() {
       };
 
       if (editing.id) {
-        await apiPut(`/api/v1/tenants/${tenantId}/portal/posts/${editing.id}`, payload);
+        await apiPut(`/api/tenants/${tenantId}/portal/posts/${editing.id}`, payload);
       } else {
-        await apiPost(`/api/v1/tenants/${tenantId}/portal/posts`, payload);
+        await apiPost(`/api/tenants/${tenantId}/portal/posts`, payload);
       }
       setEditing(null);
       postsRes.refetch();
@@ -136,13 +136,13 @@ export function PageCmsPosts() {
 
   const deletePost = async (post: CmsPost) => {
     if (!tenantId) return;
-    await apiDelete(`/api/v1/tenants/${tenantId}/portal/posts/${post.id}`);
+    await apiDelete(`/api/tenants/${tenantId}/portal/posts/${post.id}`);
     postsRes.refetch();
   };
 
   const togglePublish = async (post: CmsPost) => {
     if (!tenantId) return;
-    await apiPut(`/api/v1/tenants/${tenantId}/portal/posts/${post.id}`, {
+    await apiPut(`/api/tenants/${tenantId}/portal/posts/${post.id}`, {
       title:     post.title,
       content:   post.content,
       published: !post.published,
@@ -181,7 +181,7 @@ export function PageCmsPosts() {
 
         // Get presigned upload URL
         const { uploadUrl, key } = await apiPost<{ uploadUrl: string; key: string }>(
-          `/api/v1/tenants/${tenantId}/portal/media/upload-url`,
+          `/api/tenants/${tenantId}/portal/media/upload-url`,
           { filename: file.name },
         );
 

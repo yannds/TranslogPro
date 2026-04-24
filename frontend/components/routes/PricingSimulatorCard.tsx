@@ -110,7 +110,7 @@ export function PricingSimulatorCard({ tenantId, routeId, basePrice, currency }:
       const results = await Promise.all(
         SIM_FILL_RATES.map(fr =>
           apiPost<SimulateResponse>(
-            `/api/v1/tenants/${tenantId}/simulate-trip`,
+            `/api/tenants/${tenantId}/simulate-trip`,
             { routeId, busId, ticketPrice: price, fillRate: fr },
           ),
         ),

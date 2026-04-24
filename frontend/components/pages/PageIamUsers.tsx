@@ -4,11 +4,11 @@
  * CRUD : lister · créer · modifier (nom, rôle, agence) · supprimer
  *
  * Données :
- *   GET    /api/v1/tenants/:tid/iam/users
- *   POST   /api/v1/tenants/:tid/iam/users
- *   PATCH  /api/v1/tenants/:tid/iam/users/:id
- *   DELETE /api/v1/tenants/:tid/iam/users/:id
- *   GET    /api/v1/tenants/:tid/iam/roles   (pour le sélecteur de rôle)
+ *   GET    /api/tenants/:tid/iam/users
+ *   POST   /api/tenants/:tid/iam/users
+ *   PATCH  /api/tenants/:tid/iam/users/:id
+ *   DELETE /api/tenants/:tid/iam/users/:id
+ *   GET    /api/tenants/:tid/iam/roles   (pour le sélecteur de rôle)
  */
 
 import { useState, type FormEvent } from 'react';
@@ -421,7 +421,7 @@ export function PageIamUsers() {
   const { user: me } = useAuth();
   const { t } = useI18n();
   const tenantId = me?.tenantId ?? '';
-  const base     = `/api/v1/tenants/${tenantId}/iam`;
+  const base     = `/api/tenants/${tenantId}/iam`;
 
   const { data: users, loading, error, refetch } = useFetch<UserRow[]>(`${base}/users`, [tenantId]);
   const { data: roles }                           = useFetch<{

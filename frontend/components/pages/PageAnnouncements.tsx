@@ -2,10 +2,10 @@
  * PageAnnouncements — Annonces gare (sonores / visuelles)
  *
  * API :
- *   GET    /api/v1/tenants/:tid/announcements
- *   POST   /api/v1/tenants/:tid/announcements
- *   PATCH  /api/v1/tenants/:tid/announcements/:id
- *   DELETE /api/v1/tenants/:tid/announcements/:id
+ *   GET    /api/tenants/:tid/announcements
+ *   POST   /api/tenants/:tid/announcements
+ *   PATCH  /api/tenants/:tid/announcements/:id
+ *   DELETE /api/tenants/:tid/announcements/:id
  */
 
 import { useState, type FormEvent } from 'react';
@@ -107,7 +107,7 @@ export function PageAnnouncements() {
   const { user: me } = useAuth();
   const { t }        = useI18n();
   const tenantId     = me?.tenantId ?? '';
-  const base         = `/api/v1/tenants/${tenantId}/announcements`;
+  const base         = `/api/tenants/${tenantId}/announcements`;
 
   const { data: announcements, loading, refetch } = useFetch<AnnouncementRow[]>(tenantId ? base : null, [tenantId]);
   const { data: stations } = useFetch<StationRow[]>(tenantId ? `/api/tenants/${tenantId}/stations` : null, [tenantId]);

@@ -216,7 +216,7 @@ export function PageSellTicket() {
   // Remplace l'ancien enum figé — chaque tenant a ses propres classes.
   // Si la fetch n'a pas (encore) abouti, on retombe sur la liste par défaut.
   const { data: fareClassesData } = useFetch<TenantFareClassRow[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/fare-classes` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/fare-classes` : null,
   );
   const fareOptions = (fareClassesData ?? [])
     .filter(fc => fc.enabled)

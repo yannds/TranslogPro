@@ -8,7 +8,7 @@
  *   - Historique des factures (12 dernières)
  *   - Résiliation (prend effet à currentPeriodEnd) + reprise
  *
- * Actions déclenchent toutes les endpoints de `/api/v1/subscription/*` —
+ * Actions déclenchent toutes les endpoints de `/api/subscription/*` —
  * IEmailService côté backend confirme les changements par email. PAST_DUE
  * affiche un banner rouge avec CTA "Régler maintenant".
  */
@@ -81,11 +81,11 @@ export function PageAdminBilling() {
     setLoadErr(false);
     setData(undefined);
     try {
-      const r = await apiFetch<BillingDetails | null>('/api/v1/subscription/billing', { skipRedirectOn401: true });
+      const r = await apiFetch<BillingDetails | null>('/api/subscription/billing', { skipRedirectOn401: true });
       setData(r ?? null);
       // Liste des moyens enregistrés — on ne bloque pas le rendu si l'appel échoue
       try {
-        const list = await apiFetch<SavedMethod[]>('/api/v1/subscription/payment-methods');
+        const list = await apiFetch<SavedMethod[]>('/api/subscription/payment-methods');
         setMethods(list);
       } catch { /* tolérant : la page peut rester utilisable sans cette liste */ }
     } catch {
@@ -97,7 +97,7 @@ export function PageAdminBilling() {
   async function setMethodDefault(m: SavedMethod) {
     setPmBusyId(m.id);
     try {
-      await apiFetch(`/api/v1/subscription/payment-methods/${m.id}/default`, { method: 'PUT' });
+      await apiFetch(`/api/subscription/payment-methods/${m.id}/default`, { method: 'PUT' });
       await reload();
     } catch (e) {
       setMsg({ kind: 'err', text: errMsg(e, t) });
@@ -110,7 +110,7 @@ export function PageAdminBilling() {
     if (!deleteTgt) return;
     setPmBusyId(deleteTgt.id);
     try {
-      await apiFetch(`/api/v1/subscription/payment-methods/${deleteTgt.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/subscription/payment-methods/${deleteTgt.id}`, { method: 'DELETE' });
       setDeleteTgt(null);
       await reload();
     } catch (e) {
@@ -131,7 +131,7 @@ export function PageAdminBilling() {
   async function toggleAutoRenew(next: boolean) {
     setBusy('toggle'); setMsg(null);
     try {
-      await apiFetch('/api/v1/subscription/auto-renew', { method: 'PATCH', body: { autoRenew: next } });
+      await apiFetch('/api/subscription/auto-renew', { method: 'PATCH', body: { autoRenew: next } });
       await reload();
       setMsg({ kind: 'ok', text: t('adminBilling.autoRenew.updated') });
     } catch (e) {
@@ -142,7 +142,7 @@ export function PageAdminBilling() {
   async function launchCheckout(method: 'CARD' | 'MOBILE_MONEY' | 'BANK_TRANSFER') {
     setBusy('checkout'); setMsg(null);
     try {
-      const r = await apiFetch<{ paymentUrl?: string }>('/api/v1/subscription/checkout', {
+      const r = await apiFetch<{ paymentUrl?: string }>('/api/subscription/checkout', {
         method: 'POST',
         body:   { method },
       });
@@ -157,7 +157,7 @@ export function PageAdminBilling() {
     if (!confirm(t('adminBilling.cancel.confirm'))) return;
     setBusy('cancel'); setMsg(null);
     try {
-      await apiFetch('/api/v1/subscription/cancel', { method: 'POST', body: {} });
+      await apiFetch('/api/subscription/cancel', { method: 'POST', body: {} });
       await reload();
       setMsg({ kind: 'ok', text: t('adminBilling.cancel.done') });
     } catch (e) { setMsg({ kind: 'err', text: errMsg(e, t) }); }
@@ -167,7 +167,7 @@ export function PageAdminBilling() {
   async function resume() {
     setBusy('resume'); setMsg(null);
     try {
-      await apiFetch('/api/v1/subscription/resume', { method: 'POST', body: {} });
+      await apiFetch('/api/subscription/resume', { method: 'POST', body: {} });
       await reload();
       setMsg({ kind: 'ok', text: t('adminBilling.resume.done') });
     } catch (e) { setMsg({ kind: 'err', text: errMsg(e, t) }); }

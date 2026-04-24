@@ -74,7 +74,7 @@ export function useAnnouncements(options: UseAnnouncementsOptions): {
       const qs  = stationIdRef.current ? `?stationId=${encodeURIComponent(stationIdRef.current)}&activeOnly=true` : '?activeOnly=true';
       if (options.mode === 'authenticated') {
         if (!options.tenantId) return;
-        url = `/api/v1/tenants/${options.tenantId}/announcements${qs}`;
+        url = `/api/tenants/${options.tenantId}/announcements${qs}`;
       } else {
         if (!options.tenantSlug) return;
         url = `/api/public/${options.tenantSlug}/portal/announcements${stationIdRef.current ? `?stationId=${encodeURIComponent(stationIdRef.current)}` : ''}`;

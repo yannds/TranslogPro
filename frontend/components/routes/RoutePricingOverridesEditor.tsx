@@ -47,7 +47,7 @@ const inp = 'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-
 export function RoutePricingOverridesEditor({ tenantId, value, onChange, disabled }: Props) {
   const { t } = useI18n();
   const { data: taxesData } = useFetch<TenantTaxRow[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/taxes` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/taxes` : null,
   );
   const taxes = useMemo(() => (taxesData ?? []).filter(x => x.enabled), [taxesData]);
 

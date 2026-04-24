@@ -2,7 +2,7 @@
  * PageProfitability — Tableau de rentabilité TranslogPro
  *
  * Données :
- *   GET /api/v1/tenants/:tid/analytics/profitability?from=...&to=...
+ *   GET /api/tenants/:tid/analytics/profitability?from=...&to=...
  *
  * Accessibilité : WCAG 2.1 AA — aria-labels, rôles, focus visible
  * Dark mode : classes Tailwind dark: via ThemeProvider
@@ -80,7 +80,7 @@ export function PageProfitability() {
   const { from, to } = periodDates(periodDays);
 
   const { data, loading, error, refetch } = useFetch<ProfitabilitySummary>(
-    `/api/v1/tenants/${tenantId}/analytics/profitability?from=${from}&to=${to}`,
+    `/api/tenants/${tenantId}/analytics/profitability?from=${from}&to=${to}`,
     [tenantId, periodDays],
   );
 

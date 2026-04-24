@@ -1,7 +1,7 @@
 /**
  * YieldSuggestionCard — affiche la suggestion yield pour un trajet (Sprint 10.3).
  *
- * Consomme GET /api/v1/tenants/:tenantId/trips/:tripId/yield (existant, exposé
+ * Consomme GET /api/tenants/:tenantId/trips/:tripId/yield (existant, exposé
  * par pricing.controller.ts). Visible seulement si user a la permission
  * `control.pricing.yield.tenant` — sinon le composant rend null (opt-in).
  *
@@ -51,7 +51,7 @@ export function YieldSuggestionCard({ tenantId, tripId }: YieldSuggestionCardPro
 
   const canSee = !!user?.permissions?.includes(PERM_YIELD);
   const url = (canSee && tenantId && tripId)
-    ? `/api/v1/tenants/${tenantId}/trips/${tripId}/yield`
+    ? `/api/tenants/${tenantId}/trips/${tripId}/yield`
     : null;
   const deps = useMemo(() => [tenantId, tripId], [tenantId, tripId]);
   const { data, loading, error } = useFetch<YieldSuggestion>(url, deps);

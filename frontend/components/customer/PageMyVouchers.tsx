@@ -2,7 +2,7 @@
  * PageMyVouchers — "Mes bons de réduction" (portail voyageur).
  *
  * Liste les vouchers émis au bénéficiaire connecté (via customerId ou phone).
- * Endpoint : GET /api/v1/tenants/:tid/vouchers/my
+ * Endpoint : GET /api/tenants/:tid/vouchers/my
  * Permission : data.voucher.read.own
  */
 import { Gift, Loader2, Calendar, AlertCircle } from 'lucide-react';
@@ -38,7 +38,7 @@ const STATUS_CLS: Record<MyVoucher['status'], string> = {
 export function PageMyVouchers() {
   const { user }  = useAuth();
   const { t }     = useI18n();
-  const url = user?.tenantId ? `/api/v1/tenants/${user.tenantId}/vouchers/my` : null;
+  const url = user?.tenantId ? `/api/tenants/${user.tenantId}/vouchers/my` : null;
   const { data, loading, error } = useFetch<MyVoucher[]>(url, [user?.tenantId]);
   const vouchers = data ?? [];
 

@@ -301,7 +301,7 @@ export function PageIamRoles() {
   const { user } = useAuth();
   const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
-  const base     = `/api/v1/tenants/${tenantId}/iam`;
+  const base     = `/api/tenants/${tenantId}/iam`;
 
   const [rev, setRev]                   = useState(0);
   const reload                          = useCallback(() => setRev(r => r + 1), []);

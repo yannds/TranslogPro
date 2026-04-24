@@ -43,7 +43,7 @@ function HealthBadge({ status }: { status: EmailProviderItem['healthStatus'] }) 
 export function PagePlatformEmail() {
   const { t } = useI18n();
   const { data, loading, error, refetch } = useFetch<EmailProviderItem[]>(
-    '/api/v1/platform/email/providers',
+    '/api/platform/email/providers',
   );
 
   const [busyKey, setBusyKey]     = useState<ProviderKey | null>(null);
@@ -54,7 +54,7 @@ export function PagePlatformEmail() {
     setBusyKey(key); setActionErr(null); setLastMsg(null);
     try {
       const res = await apiPost<{ ok: boolean; status: string; detail?: string }>(
-        `/api/v1/platform/email/providers/${key}/healthcheck`,
+        `/api/platform/email/providers/${key}/healthcheck`,
         {},
       );
       setLastMsg({

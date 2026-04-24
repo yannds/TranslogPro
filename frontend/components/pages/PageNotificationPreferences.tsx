@@ -8,8 +8,8 @@
  *   - Email     (confirmations longues)
  *
  * Endpoints :
- *   - GET   /api/v1/tenants/:tid/notifications/preferences
- *   - PATCH /api/v1/tenants/:tid/notifications/preferences
+ *   - GET   /api/tenants/:tid/notifications/preferences
+ *   - PATCH /api/tenants/:tid/notifications/preferences
  *
  * Permission : data.notification.read.own
  * Identité forcée serveur (CurrentUser) — pas d'usurpation possible.
@@ -45,7 +45,7 @@ export function PageNotificationPreferences() {
   const canRead  = (user?.permissions ?? []).includes('data.notification.read.own');
 
   const url = tenantId && canRead
-    ? `/api/v1/tenants/${tenantId}/notifications/preferences`
+    ? `/api/tenants/${tenantId}/notifications/preferences`
     : null;
 
   const { data, loading, error, refetch } = useFetch<NotificationPrefs>(url, [tenantId]);
@@ -108,7 +108,7 @@ export function PageNotificationPreferences() {
     setSaving(true);
     setSaveError(null);
     try {
-      await apiPatch(`/api/v1/tenants/${tenantId}/notifications/preferences`, draft);
+      await apiPatch(`/api/tenants/${tenantId}/notifications/preferences`, draft);
       await refetch();
       setSavedTick(true);
     } catch (err) {

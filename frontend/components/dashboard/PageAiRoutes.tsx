@@ -1,6 +1,6 @@
 /**
  * PageAiRoutes — Recommandations IA sur la rentabilité des lignes.
- * Source : GET /api/v1/tenants/:id/analytics/ai-routes (TripAnalytics 90j)
+ * Source : GET /api/tenants/:id/analytics/ai-routes (TripAnalytics 90j)
  *
  * UI : tokens sémantiques (.t-*), compat light/dark, conforme WCAG 2.1 AA.
  * A11y : chaque carte est un <article> étiqueté, score encodé en progressbar.

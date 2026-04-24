@@ -6,12 +6,12 @@
  *   · Historique   — 50 dernières tentatives de connexion (succès + échec)
  *
  * Endpoints consommés :
- *   GET    /api/v1/tenants/:tid/iam/users/:uid
- *   GET    /api/v1/tenants/:tid/iam/users/:uid/sessions
- *   GET    /api/v1/tenants/:tid/iam/users/:uid/login-history
- *   POST   /api/v1/tenants/:tid/iam/users/:uid/revoke-sessions
+ *   GET    /api/tenants/:tid/iam/users/:uid
+ *   GET    /api/tenants/:tid/iam/users/:uid/sessions
+ *   GET    /api/tenants/:tid/iam/users/:uid/login-history
+ *   POST   /api/tenants/:tid/iam/users/:uid/revoke-sessions
  *
- * MFA : les endpoints existent (POST /api/v1/mfa/*) mais la vérification à la
+ * MFA : les endpoints existent (POST /api/mfa/*) mais la vérification à la
  * connexion n'est pas encore branchée — d'où le bloc "Bientôt disponible".
  */
 import { useEffect, useState } from 'react';
@@ -125,7 +125,7 @@ export function UserDetailDialog({
   const [tab,      setTab]      = useState('info');
   const { t } = useI18n();
 
-  const base = `/api/v1/tenants/${tenantId}/iam/users/${userId}`;
+  const base = `/api/tenants/${tenantId}/iam/users/${userId}`;
 
   // (Re)chargement à l'ouverture
   useEffect(() => {

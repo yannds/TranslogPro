@@ -31,7 +31,7 @@ export function PageTenantPayment() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
   const { data, loading, error, refetch } = useFetch<PaymentConfig>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/payment` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/payment` : null,
   );
   const [form, setForm] = useState<PaymentConfig | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,7 +44,7 @@ export function PageTenantPayment() {
     if (!form) return;
     setSaving(true); setSaveError(null);
     try {
-      await apiPatch(`/api/v1/tenants/${tenantId}/settings/payment`, form);
+      await apiPatch(`/api/tenants/${tenantId}/settings/payment`, form);
       refetch();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Erreur');

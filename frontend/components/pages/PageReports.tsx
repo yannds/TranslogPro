@@ -1,6 +1,6 @@
 /**
  * PageReports — Rapports périodiques (journaux de caisse + récapitulatifs mensuels).
- * Source : GET /api/v1/tenants/:id/analytics/reports (données réelles DB 30-90j)
+ * Source : GET /api/tenants/:id/analytics/reports (données réelles DB 30-90j)
  *
  * Utilise DataTableMaster (obligatoire pour toute liste/table).
  * UI : tokens sémantiques, compat light/dark, WCAG 2.1 AA.

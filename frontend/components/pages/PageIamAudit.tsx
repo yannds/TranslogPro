@@ -398,7 +398,7 @@ export function PageIamAudit() {
   const { user } = useAuth();
   const { t } = useI18n();
   const tenantId = user?.tenantId ?? '';
-  const base     = `/api/v1/tenants/${tenantId}/iam`;
+  const base     = `/api/tenants/${tenantId}/iam`;
 
   const [draft, setDraft]     = useState({ action: '', userId: '', from: '', to: '', level: '' });
   const [filters, setFilters] = useState({ action: '', userId: '', from: '', to: '', level: '' });

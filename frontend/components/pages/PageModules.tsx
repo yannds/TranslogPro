@@ -2,9 +2,9 @@
  * PageModules — Gestion des modules & extensions du tenant
  *
  * Lit et écrit l'état via l'API (source de vérité : `installed_modules`).
- *   GET   /api/v1/tenants/:tenantId/modules
- *   PATCH /api/v1/tenants/:tenantId/modules/:moduleKey          { isActive }
- *   PATCH /api/v1/tenants/:tenantId/modules/:moduleKey/config   { config }
+ *   GET   /api/tenants/:tenantId/modules
+ *   PATCH /api/tenants/:tenantId/modules/:moduleKey          { isActive }
+ *   PATCH /api/tenants/:tenantId/modules/:moduleKey/config   { config }
  *
  * Après un toggle, `refresh()` du AuthContext est appelé pour ré-évaluer la
  * navigation (un module désactivé disparaît du menu).
@@ -240,7 +240,7 @@ function YieldConfigDialog({
     ) as Record<string, unknown>;
 
     try {
-      await apiFetch(`/api/v1/tenants/${tenantId}/modules/YIELD_ENGINE/config`, {
+      await apiFetch(`/api/tenants/${tenantId}/modules/YIELD_ENGINE/config`, {
         method: 'PATCH',
         body: { config: cleanPatch },
       });
@@ -483,7 +483,7 @@ export function PageModules() {
     if (!tenantId) return;
     let cancelled = false;
     setLoading(true);
-    apiFetch<TenantModulesResponse>(`/api/v1/tenants/${tenantId}/modules`)
+    apiFetch<TenantModulesResponse>(`/api/tenants/${tenantId}/modules`)
       .then(res => {
         if (cancelled) return;
         setActive(new Set(res.modules.filter(r => r.isActive).map(r => r.moduleKey)));
@@ -526,7 +526,7 @@ export function PageModules() {
 
     setBusyKey(id);
     try {
-      await apiFetch<TenantModuleDto>(`/api/v1/tenants/${tenantId}/modules/${id}`, {
+      await apiFetch<TenantModuleDto>(`/api/tenants/${tenantId}/modules/${id}`, {
         method: 'PATCH',
         body:   { isActive: willActivate },
       });

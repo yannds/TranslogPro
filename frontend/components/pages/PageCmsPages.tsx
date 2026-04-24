@@ -8,9 +8,9 @@
  * limites de caractères. Ces pages sont pré-seedées par tenant.
  *
  * API :
- *   GET    /api/v1/tenants/:tid/portal/pages
- *   PUT    /api/v1/tenants/:tid/portal/pages      (upsert par slug+locale)
- *   DELETE /api/v1/tenants/:tid/portal/pages/:id
+ *   GET    /api/tenants/:tid/portal/pages
+ *   PUT    /api/tenants/:tid/portal/pages      (upsert par slug+locale)
+ *   DELETE /api/tenants/:tid/portal/pages/:id
  */
 
 import { useState, useMemo } from 'react';
@@ -220,7 +220,7 @@ export function PageCmsPages() {
   const tenantId = user?.tenantId;
 
   const pagesRes = useFetch<CmsPage[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/portal/pages` : null,
+    tenantId ? `/api/tenants/${tenantId}/portal/pages` : null,
     [tenantId],
   );
 
@@ -265,7 +265,7 @@ export function PageCmsPages() {
     if (!structuredValid) return;
     setSaving(true);
     try {
-      await apiPut(`/api/v1/tenants/${tenantId}/portal/pages`, {
+      await apiPut(`/api/tenants/${tenantId}/portal/pages`, {
         slug:         editing.slug,
         title:        editing.title,
         content:      editing.content || '',
@@ -284,7 +284,7 @@ export function PageCmsPages() {
   const deletePage = async (page: CmsPage) => {
     if (!tenantId) return;
     if (isSystemSlug(page.slug)) return; // pages système non supprimables
-    await apiDelete(`/api/v1/tenants/${tenantId}/portal/pages/${page.id}`);
+    await apiDelete(`/api/tenants/${tenantId}/portal/pages/${page.id}`);
     pagesRes.refetch();
   };
 

@@ -12,9 +12,9 @@
  * Endpoints consommés :
  *   POST  /api/auth/change-password   { currentPassword, newPassword }
  *   PATCH /api/auth/me/preferences    { locale?, timezone? }
- *   POST  /api/v1/mfa/setup                                  → { qrCodeDataUrl, secret }
- *   POST  /api/v1/mfa/enable          { code }               → { backupCodes[] }
- *   POST  /api/v1/mfa/disable         { password, code? }
+ *   POST  /api/mfa/setup                                  → { qrCodeDataUrl, secret }
+ *   POST  /api/mfa/enable          { code }               → { backupCodes[] }
+ *   POST  /api/mfa/disable         { password, code? }
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
@@ -40,7 +40,7 @@ type Tab = 'profile' | 'security' | 'preferences' | 'billing';
  * Permission requise pour voir/éditer l'onglet Billing. Doit rester alignée avec
  * la garde serveur `SETTINGS_MANAGE_TENANT` sur `SubscriptionCheckoutController`
  * (défense en profondeur — un rôle qui n'a pas cette perm renvoie 403 sur tous
- * les endpoints /api/v1/subscription/*, même s'il accède à l'URL directement).
+ * les endpoints /api/subscription/*, même s'il accède à l'URL directement).
  */
 const BILLING_PERMISSION = 'control.settings.manage.tenant';
 
@@ -182,7 +182,7 @@ function SecurityTab() {
   async function startMfaSetup() {
     setMfaBusy(true); setMfaErr(null);
     try {
-      const out = await apiPost<{ qrCodeDataUrl: string; secret: string }>('/api/v1/mfa/setup', {});
+      const out = await apiPost<{ qrCodeDataUrl: string; secret: string }>('/api/mfa/setup', {});
       setMfaSetup(out);
     } catch (e) {
       setMfaErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
@@ -192,7 +192,7 @@ function SecurityTab() {
   async function confirmMfaEnable() {
     setMfaBusy(true); setMfaErr(null);
     try {
-      const out = await apiPost<{ backupCodes: string[] }>('/api/v1/mfa/enable', { code: mfaCode });
+      const out = await apiPost<{ backupCodes: string[] }>('/api/mfa/enable', { code: mfaCode });
       setBackup(out.backupCodes);
       setMfaSetup(null); setMfaCode('');
     } catch (e) {
@@ -203,7 +203,7 @@ function SecurityTab() {
   async function disableMfa() {
     setMfaBusy(true); setMfaErr(null);
     try {
-      await apiPost('/api/v1/mfa/disable', { password: disPwd });
+      await apiPost('/api/mfa/disable', { password: disPwd });
       setDisPwd(''); setShowDis(false);
       window.location.reload(); // Force /me refresh — UX simple
     } catch (e) {

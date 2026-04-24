@@ -14,7 +14,7 @@
  *   G. Point mort mensuel (nb voyages/mois)
  *   H. Export PDF via window.print (CSS print-friendly @media print)
  *
- * Endpoints back : POST /api/v1/tenants/:tid/simulator/{matrix|bands|historical|
+ * Endpoints back : POST /api/tenants/:tid/simulator/{matrix|bands|historical|
  *   competitor|what-if|compare-routes|monthly-break-even}
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -280,7 +280,7 @@ function BlockSensitivityMatrix({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<MatrixResponse>(`/api/v1/tenants/${tenantId}/simulator/sensitivity-matrix`, { routeId, busId })
+    apiPost<MatrixResponse>(`/api/tenants/${tenantId}/simulator/sensitivity-matrix`, { routeId, busId })
       .then(setData)
       .catch(e => setError(String(e)))
       .finally(() => setBusy(false));
@@ -338,7 +338,7 @@ function BlockPriceBands({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<BandsResponse>(`/api/v1/tenants/${tenantId}/simulator/price-bands`, { routeId, busId, fillRate })
+    apiPost<BandsResponse>(`/api/tenants/${tenantId}/simulator/price-bands`, { routeId, busId, fillRate })
       .then(setData)
       .catch(e => setError(String(e)))
       .finally(() => setBusy(false));
@@ -380,7 +380,7 @@ function BlockHistorical({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<HistoricalResponse>(`/api/v1/tenants/${tenantId}/simulator/historical-benchmark`, { routeId, days })
+    apiPost<HistoricalResponse>(`/api/tenants/${tenantId}/simulator/historical-benchmark`, { routeId, days })
       .then(setData)
       .catch(e => setError(String(e)))
       .finally(() => setBusy(false));
@@ -453,7 +453,7 @@ function BlockCompetitor({
     setBusy(true); setError(null);
     try {
       const r = await apiPost<CompetitorResponse>(
-        `/api/v1/tenants/${tenantId}/simulator/analyze-competitor`,
+        `/api/tenants/${tenantId}/simulator/analyze-competitor`,
         { routeId, busId, competitorPrice, fillRate },
       );
       setData(r);
@@ -535,7 +535,7 @@ function BlockWhatIf({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<WhatIfResponse>(`/api/v1/tenants/${tenantId}/simulator/what-if`, {
+    apiPost<WhatIfResponse>(`/api/tenants/${tenantId}/simulator/what-if`, {
       routeId, busId, ticketPrice: basePrice, fillRate,
       fuelDeltaPct: fuelDelta,
       commissionRate: commission ?? undefined,
@@ -593,7 +593,7 @@ function BlockCompareRoutes({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<CompareResponse>(`/api/v1/tenants/${tenantId}/simulator/compare-routes`, { fillRate })
+    apiPost<CompareResponse>(`/api/tenants/${tenantId}/simulator/compare-routes`, { fillRate })
       .then(setData)
       .catch(e => setError(String(e)))
       .finally(() => setBusy(false));
@@ -654,7 +654,7 @@ function BlockMonthlyBreakEven({
 
   useEffect(() => {
     setBusy(true); setError(null);
-    apiPost<MonthlyBreakEvenResponse>(`/api/v1/tenants/${tenantId}/simulator/monthly-break-even`, {
+    apiPost<MonthlyBreakEvenResponse>(`/api/tenants/${tenantId}/simulator/monthly-break-even`, {
       routeId, busId, ticketPrice: basePrice, fillRate,
     })
       .then(setData)

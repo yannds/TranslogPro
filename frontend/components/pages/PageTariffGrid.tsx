@@ -5,10 +5,10 @@
  * plages horaires, jours de semaine, périodes de validité).
  *
  * API :
- *   GET    /api/v1/tenants/:tid/tariffs
- *   POST   /api/v1/tenants/:tid/tariffs
- *   PATCH  /api/v1/tenants/:tid/tariffs/:id
- *   DELETE /api/v1/tenants/:tid/tariffs/:id
+ *   GET    /api/tenants/:tid/tariffs
+ *   POST   /api/tenants/:tid/tariffs
+ *   PATCH  /api/tenants/:tid/tariffs/:id
+ *   DELETE /api/tenants/:tid/tariffs/:id
  */
 
 import { useState, type FormEvent } from 'react';
@@ -105,7 +105,7 @@ export function PageTariffGrid() {
   const { user: me } = useAuth();
   const { t }        = useI18n();
   const tenantId     = me?.tenantId ?? '';
-  const base         = `/api/v1/tenants/${tenantId}/tariffs`;
+  const base         = `/api/tenants/${tenantId}/tariffs`;
 
   const { data: grids, loading, refetch } = useFetch<TariffRow[]>(tenantId ? base : null, [tenantId]);
   const { data: routes } = useFetch<RouteRow[]>(tenantId ? `/api/tenants/${tenantId}/routes` : null, [tenantId]);

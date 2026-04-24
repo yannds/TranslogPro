@@ -2,7 +2,7 @@
  * PageFleet — Vue synthétique de la flotte (données mock)
  *
  * Note : distinct de PageFleetDocs (documents réglementaires).
- * Future intégration : GET /api/v1/tenants/:id/fleet/buses
+ * Future intégration : GET /api/tenants/:id/fleet/buses
  */
 import { cn }         from '../../lib/utils';
 import { NavIcon }    from './NavIcon';

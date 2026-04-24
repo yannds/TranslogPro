@@ -7,7 +7,7 @@
  *   - events_min     : 1000 events / 60s par tenant
  *   - api_req_min    : 300 req / 60s par tenant
  *
- * Endpoint : GET /api/v1/tenants/:tid/quotas/usage
+ * Endpoint : GET /api/tenants/:tid/quotas/usage
  * Permission : control.settings.manage.tenant
  *
  * Auto-refresh toutes les 10s pour suivre l'évolution.
@@ -44,7 +44,7 @@ export function PageQuotaSettings() {
   const canRead  = (user?.permissions ?? []).includes('control.settings.manage.tenant');
 
   const url = tenantId && canRead
-    ? `/api/v1/tenants/${tenantId}/quotas/usage`
+    ? `/api/tenants/${tenantId}/quotas/usage`
     : null;
 
   const { data, loading, error, refetch } = useFetch<QuotaUsage>(url, [tenantId]);

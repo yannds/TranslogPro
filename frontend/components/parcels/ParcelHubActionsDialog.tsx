@@ -76,7 +76,7 @@ export function ParcelHubActionsDialog({ open, onClose, onDone, tenantId, parcel
   const submit = async () => {
     if (!parcel || !action) return;
     setSubmitting(true); setErr(null); setOk(null);
-    const base = `/api/v1/tenants/${tenantId}/parcels/${parcel.id}`;
+    const base = `/api/tenants/${tenantId}/parcels/${parcel.id}`;
     try {
       switch (action) {
         case 'ARRIVE_AT_HUB':

@@ -198,7 +198,7 @@ export function TripDetailScreen() {
           return;
         }
         await apiPost(
-          `/api/v1/tenants/${tenantId}/trips/${tripId}/incident/suspend`,
+          `/api/tenants/${tenantId}/trips/${tripId}/incident/suspend`,
           { reason: incidentReason.trim() },
           { skipAuthRedirect: true, headers: { 'Idempotency-Key': `trip-suspend:${tripId}:${Date.now()}` } },
         );
@@ -209,7 +209,7 @@ export function TripDetailScreen() {
           return;
         }
         await apiPost(
-          `/api/v1/tenants/${tenantId}/trips/${tripId}/incident/declare-major-delay`,
+          `/api/tenants/${tenantId}/trips/${tripId}/incident/declare-major-delay`,
           { delayMinutes: min },
           { skipAuthRedirect: true, headers: { 'Idempotency-Key': `trip-delay:${tripId}:${min}:${Date.now()}` } },
         );

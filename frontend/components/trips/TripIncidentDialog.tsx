@@ -66,7 +66,7 @@ export function TripIncidentDialog({ open, onClose, onDone, tenantId, trip }: Tr
   const submit = async () => {
     if (!trip || !action) return;
     setSubmitting(true); setErr(null); setOk(null);
-    const base = `/api/v1/tenants/${tenantId}/trips/${trip.id}/incident`;
+    const base = `/api/tenants/${tenantId}/trips/${trip.id}/incident`;
     try {
       switch (action) {
         case 'SUSPEND':

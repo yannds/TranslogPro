@@ -56,7 +56,7 @@ export function PageIntegrations() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? '';
   const { data, loading, error, refetch } = useFetch<Integration[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/settings/integrations` : null,
+    tenantId ? `/api/tenants/${tenantId}/settings/integrations` : null,
   );
 
   const [actionErr,      setActionErr]      = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function PageIntegrations() {
 
   // Routage backend : PAYMENT sur /integrations/:key, OAuth sur /integrations/oauth/:key
   const endpointFor = (item: Integration): string => {
-    const prefix = `/api/v1/tenants/${tenantId}/settings/integrations`;
+    const prefix = `/api/tenants/${tenantId}/settings/integrations`;
     return item.category === 'AUTH'
       ? `${prefix}/oauth/${item.key}`
       : `${prefix}/${item.key}`;

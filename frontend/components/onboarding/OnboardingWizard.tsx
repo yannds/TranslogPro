@@ -7,7 +7,7 @@
  *   MIXED     : brand → agency → station → route       → team   (parcel dans tips)
  *   null      : brand → agency → station → route       → team
  *
- * Reprise : le wizard appelle `/api/v1/onboarding/state` à chaque montage et
+ * Reprise : le wizard appelle `/api/onboarding/state` à chaque montage et
  * détecte les étapes déjà effectuées (station existante → skip, etc.). Tout
  * bouton "Passer" est accepté sans pénalité (finalisation possible tôt).
  */
@@ -49,7 +49,7 @@ export function OnboardingWizard() {
 
   // Chargement initial de l'état backend
   useEffect(() => {
-    apiFetch<OnboardingState>('/api/v1/onboarding/state', { skipRedirectOn401: true })
+    apiFetch<OnboardingState>('/api/onboarding/state', { skipRedirectOn401: true })
       .then(setState)
       .catch(() => setLoadErr(true));
   }, []);
@@ -80,7 +80,7 @@ export function OnboardingWizard() {
   const finish = async () => {
     setFinishing(true);
     try {
-      await apiFetch('/api/v1/onboarding/complete', { method: 'POST', skipRedirectOn401: true });
+      await apiFetch('/api/onboarding/complete', { method: 'POST', skipRedirectOn401: true });
       navigate('/welcome', { replace: true });
     } catch {
       setFinishing(false);
@@ -205,7 +205,7 @@ function StepBrand({ onSaved, onSkip, onBack }: StepProps) {
     e.preventDefault();
     setSaving(true); setErr(null);
     try {
-      await apiFetch('/api/v1/onboarding/brand', {
+      await apiFetch('/api/onboarding/brand', {
         method: 'PATCH',
         body:   { brandName, logoUrl: logoUrl || undefined, primaryColor, supportEmail: supportEmail || undefined },
       });
@@ -266,7 +266,7 @@ function StepAgency({ onSaved, onSkip, onBack }: StepProps) {
     e.preventDefault();
     setSaving(true); setErr(null);
     try {
-      await apiFetch('/api/v1/onboarding/agency', { method: 'PATCH', body: { name } });
+      await apiFetch('/api/onboarding/agency', { method: 'PATCH', body: { name } });
       onSaved();
     } catch {
       setErr(t('onb.error'));
@@ -306,7 +306,7 @@ function StepStation({
     e.preventDefault();
     setSaving(true); setErr(null);
     try {
-      const res = await apiFetch<{ id: string }>('/api/v1/onboarding/station', {
+      const res = await apiFetch<{ id: string }>('/api/onboarding/station', {
         method: 'POST',
         body:   { name, city, type },
       });
@@ -368,7 +368,7 @@ function StepRoute({
     if (!originStationId) { setErr(t('onb.error')); return; }
     setSaving(true); setErr(null);
     try {
-      await apiFetch('/api/v1/onboarding/route', {
+      await apiFetch('/api/onboarding/route', {
         method: 'POST',
         body:   {
           originStationId,
@@ -459,7 +459,7 @@ function StepTeam({
     if (valid.length === 0) { onFinish(); return; }
     setSending(true); setErr(null);
     try {
-      await apiFetch('/api/v1/onboarding/invite', { method: 'POST', body: { invites: valid } });
+      await apiFetch('/api/onboarding/invite', { method: 'POST', body: { invites: valid } });
       onFinish();
     } catch { setErr(t('onb.error')); }
     finally { setSending(false); }

@@ -58,7 +58,7 @@ export function TicketIncidentDialog({
 
   // Candidates trips pour REBOOK_LATER — charge uniquement si l'action est sélectionnée.
   const candidatesUrl = action === 'REBOOK_LATER' && ticket
-    ? `/api/v1/tenants/${tenantId}/trips?routeForTicket=${ticket.id}&status=PLANNED,OPEN&future=true`
+    ? `/api/tenants/${tenantId}/trips?routeForTicket=${ticket.id}&status=PLANNED,OPEN&future=true`
     : null;
   const { data: candidates } = useFetch<TripLite[]>(candidatesUrl, [action, ticket?.id]);
   const [selectedTripId, setSelectedTripId] = useState<string>('');
@@ -84,7 +84,7 @@ export function TicketIncidentDialog({
   const submit = async () => {
     if (!ticket || !action) return;
     setSubmitting(true); setErr(null); setOk(null);
-    const base = `/api/v1/tenants/${tenantId}/tickets/${ticket.id}`;
+    const base = `/api/tenants/${tenantId}/tickets/${ticket.id}`;
     try {
       switch (action) {
         case 'MARK_NO_SHOW':

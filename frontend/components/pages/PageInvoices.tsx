@@ -4,10 +4,10 @@
  * Liste et gestion des factures émises.
  *
  * API :
- *   GET    /api/v1/tenants/:tid/invoices
- *   POST   /api/v1/tenants/:tid/invoices
- *   PATCH  /api/v1/tenants/:tid/invoices/:id
- *   DELETE /api/v1/tenants/:tid/invoices/:id
+ *   GET    /api/tenants/:tid/invoices
+ *   POST   /api/tenants/:tid/invoices
+ *   PATCH  /api/tenants/:tid/invoices/:id
+ *   DELETE /api/tenants/:tid/invoices/:id
  */
 
 import { useState, type FormEvent } from 'react';
@@ -99,7 +99,7 @@ export function PageInvoices() {
   const { user: me } = useAuth();
   const { t }        = useI18n();
   const tenantId     = me?.tenantId ?? '';
-  const base         = `/api/v1/tenants/${tenantId}/invoices`;
+  const base         = `/api/tenants/${tenantId}/invoices`;
 
   const {
     items: invoices,

@@ -8,11 +8,11 @@
  *   4. Confirmation → POST endpoint dédié.
  *
  * Endpoints :
- *   GET  /api/v1/tenants/:tid/parcels/track/:code
- *   POST /api/v1/tenants/:tid/parcels/:id/hub/{arrive,store,load-outbound,depart}
- *   POST /api/v1/tenants/:tid/parcels/:id/pickup/{notify,complete}
- *   POST /api/v1/tenants/:tid/parcels/:id/dispute
- *   POST /api/v1/tenants/:tid/parcels/:id/return/{initiate,complete}
+ *   GET  /api/tenants/:tid/parcels/track/:code
+ *   POST /api/tenants/:tid/parcels/:id/hub/{arrive,store,load-outbound,depart}
+ *   POST /api/tenants/:tid/parcels/:id/pickup/{notify,complete}
+ *   POST /api/tenants/:tid/parcels/:id/dispute
+ *   POST /api/tenants/:tid/parcels/:id/return/{initiate,complete}
  *
  * Zéro magic number : les actions dispo dépendent du statut backend + config tenant
  * (TTL retrait, hub storage, etc.).
@@ -81,7 +81,7 @@ export function QuaiParcelActionsScreen() {
     setLoading(true); setErr(null); setOk(null); setParcel(null);
     try {
       const res = await apiGet<Parcel>(
-        `/api/v1/tenants/${tenantId}/parcels/track/${encodeURIComponent(code.trim())}`,
+        `/api/tenants/${tenantId}/parcels/track/${encodeURIComponent(code.trim())}`,
         { skipAuthRedirect: true },
       );
       setParcel(res);
@@ -100,7 +100,7 @@ export function QuaiParcelActionsScreen() {
     if (!parcel || !pendingAction) return;
     setSubmitting(true); setErr(null); setOk(null);
     try {
-      const base = `/api/v1/tenants/${tenantId}/parcels/${parcel.id}`;
+      const base = `/api/tenants/${tenantId}/parcels/${parcel.id}`;
       const idemp = (suffix: string) => ({
         skipAuthRedirect: true,
         headers: { 'Idempotency-Key': `${parcel.id}:${pendingAction}:${suffix}` },

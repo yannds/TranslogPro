@@ -5,7 +5,7 @@
  * réaction fillRate). Permet d'ajuster les tarifs automatiquement en haute
  * saison / creux.
  *
- * Endpoint : /api/v1/tenants/:tid/peak-periods
+ * Endpoint : /api/tenants/:tid/peak-periods
  * Permissions : data.peakPeriod.read.tenant / control.peakPeriod.manage.tenant
  */
 import { useMemo, useState, type FormEvent } from 'react';
@@ -53,7 +53,7 @@ export function PageTenantPeakPeriods() {
   const canManage = (user?.permissions ?? []).includes('control.peakPeriod.manage.tenant');
 
   const { data, loading, error, refetch } = useFetch<PeakPeriod[]>(
-    tenantId ? `/api/v1/tenants/${tenantId}/peak-periods` : null,
+    tenantId ? `/api/tenants/${tenantId}/peak-periods` : null,
   );
 
   const [editing, setEditing] = useState<Partial<PeakPeriod> | null>(null);
@@ -79,9 +79,9 @@ export function PageTenantPeakPeriods() {
     try {
       const body = { ...editing };
       if (body.id) {
-        await apiPatch(`/api/v1/tenants/${tenantId}/peak-periods/${body.id}`, body);
+        await apiPatch(`/api/tenants/${tenantId}/peak-periods/${body.id}`, body);
       } else {
-        await apiPost(`/api/v1/tenants/${tenantId}/peak-periods`, body);
+        await apiPost(`/api/tenants/${tenantId}/peak-periods`, body);
       }
       setEditing(null); refetch();
     } catch (err) {
@@ -94,7 +94,7 @@ export function PageTenantPeakPeriods() {
   const remove = async (p: PeakPeriod) => {
     if (!confirm(t('tenantSettings.peakPeriods.confirmDelete'))) return;
     try {
-      await apiDelete(`/api/v1/tenants/${tenantId}/peak-periods/${p.id}`);
+      await apiDelete(`/api/tenants/${tenantId}/peak-periods/${p.id}`);
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erreur');

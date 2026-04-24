@@ -237,10 +237,10 @@ export function SimulationPanel({
   }, [nodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Charger les rôles du tenant pour le sélecteur
-  // (contrôleur IAM versionné → /api/v1/…)
+  // (contrôleur IAM versionné → /api/…)
   useEffect(() => {
     if (!tenantId) return;
-    apiFetch<Role[]>(`/api/v1/tenants/${tenantId}/iam/roles`)
+    apiFetch<Role[]>(`/api/tenants/${tenantId}/iam/roles`)
       .then(setRoles)
       .catch(() => setRoles([]))
       .finally(() => setRolesLoaded(true));

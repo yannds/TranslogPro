@@ -1,7 +1,7 @@
 /**
  * TrialBanner — bannière persistante quand le tenant est en phase d'essai.
  *
- * Fetch `/api/v1/subscription/summary` au mount, affiche :
+ * Fetch `/api/subscription/summary` au mount, affiche :
  *   - rien si status !== 'TRIAL' ou si plus de 14 jours restants (pas d'urgence)
  *   - banner "info" 7-14 jours restants
  *   - banner "warning" 3-6 jours restants
@@ -47,7 +47,7 @@ export function TrialBanner() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   useEffect(() => {
-    apiFetch<BillingSummary>('/api/v1/subscription/summary', { skipRedirectOn401: true })
+    apiFetch<BillingSummary>('/api/subscription/summary', { skipRedirectOn401: true })
       .then(setData)
       .catch(() => setData(null));
   }, []);
@@ -154,7 +154,7 @@ function CheckoutDialog({ onClose, plan }: { onClose: () => void; plan: NonNulla
     e.preventDefault();
     setLoading(true); setErr(null);
     try {
-      const res = await apiFetch<{ paymentUrl?: string }>('/api/v1/subscription/checkout', {
+      const res = await apiFetch<{ paymentUrl?: string }>('/api/subscription/checkout', {
         method: 'POST',
         body:   { method },
         skipRedirectOn401: true,

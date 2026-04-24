@@ -9,9 +9,9 @@
  *   5. Aperçu lien public
  *
  * Données :
- *   GET  /api/v1/tenants/:tid/portal/config
- *   PUT  /api/v1/tenants/:tid/portal/config
- *   GET  /api/v1/tenants/:tid/brand (couleurs existantes)
+ *   GET  /api/tenants/:tid/portal/config
+ *   PUT  /api/tenants/:tid/portal/config
+ *   GET  /api/tenants/:tid/brand (couleurs existantes)
  */
 
 import { useState, useEffect } from 'react';
@@ -76,7 +76,7 @@ export function PagePortalAdmin() {
 
   // Fetch current config
   const portalRes = useFetch<PortalConfig | null>(
-    tenantId ? `/api/v1/tenants/${tenantId}/portal/config` : null,
+    tenantId ? `/api/tenants/${tenantId}/portal/config` : null,
     [tenantId],
   );
   // brand not needed — themes are self-contained
@@ -124,7 +124,7 @@ export function PagePortalAdmin() {
         socialLinks:    config.socialLinks,
         ogImageUrl:     config.ogImageUrl || undefined,
       };
-      await apiPut(`/api/v1/tenants/${tenantId}/portal/config`, payload);
+      await apiPut(`/api/tenants/${tenantId}/portal/config`, payload);
       setSaved(true);
     } finally {
       setSaving(false);
