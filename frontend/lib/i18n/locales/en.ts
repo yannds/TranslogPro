@@ -2453,7 +2453,10 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "signatureCaptured":   "Signature captured",
     "autoComputed":        "Auto",
     "noTemplate":          "No active template — please contact your manager.",
-    "errSignatureRequired":"Signature is required to save the briefing."
+    "errSignatureRequired":"Signature is required to save the briefing.",
+    "clear":               "Clear",
+    "biometricNotAvailable":"Biometric unavailable on this device.",
+    "biometricPrompt":     "Authenticate to sign the briefing"
   },
   "crewPlanning": {
     "pageTitle": "Crew Planning",

@@ -2306,7 +2306,10 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "signatureCaptured":   "Signature capturée",
     "autoComputed":        "Auto",
     "noTemplate":          "Aucun template actif — contactez votre gestionnaire.",
-    "errSignatureRequired":"La signature est requise pour enregistrer le briefing."
+    "errSignatureRequired":"La signature est requise pour enregistrer le briefing.",
+    "clear":               "Effacer",
+    "biometricNotAvailable":"Biométrie indisponible sur cet appareil.",
+    "biometricPrompt":     "Authentifiez-vous pour signer le briefing"
   },
   "crewPlanning": {
     "pageTitle": "Planning Equipages",
