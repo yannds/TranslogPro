@@ -3223,7 +3223,11 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "travelersOnly": "Travelers only",
     "shippersOnly": "Shippers only",
     "travelersAndShip": "Travelers AND shippers",
-    "crossSellHint": "Customers who travel and ship — high cross-sell potential segment."
+    "crossSellHint": "Customers who travel and ship — high cross-sell potential segment.",
+    "totalRevenue": "Total revenue",
+    "travelers": "Travelers",
+    "parcels": "Parcels",
+    "fillRate": "Fill rate"
   },
   "crm": {
     "travelerCard": "Traveler Card",
@@ -6025,6 +6029,10 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "updated":          "\"{name}\" updated on all routes without override.",
     "emptyTitle":       "Your registry is empty",
     "emptyBody":        "Enter your tolls, police stops or customs points once. They'll be reusable and pre-placeable on all your routes.",
+    "emptyImportHint":  "Already have tolls listed in your routes? Import them in one click.",
+    "importFromRoutes": "Import from routes",
+    "importHint":       "Scans tolls/checkpoints entered on your routes not yet linked to the registry. Idempotent — re-running duplicates nothing.",
+    "importSuccess":    "{imported} created, {backlinked} linked to routes, {skipped} already present. Fill in GPS coordinates of new entries to enable auto-detection.",
     "fieldName":        "Name",
     "fieldLat":         "Latitude",
     "fieldLng":         "Longitude",

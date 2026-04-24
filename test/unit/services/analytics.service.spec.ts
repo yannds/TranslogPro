@@ -111,3 +111,132 @@ describe('AnalyticsService — AI endpoints resilience', () => {
     expect(result).toEqual([]);
   });
 });
+
+// ── Analytics board — séries temporelles + breakdowns ────────────────────────
+describe('AnalyticsService.getAnalyticsBoard', () => {
+  function makeBoardPrisma(opts: {
+    tenantCurrency?: string;
+    txPeriod?:       any[];
+    txPrev?:         number;
+    tickets?:        any[];
+    ticketsPrev?:    number;
+    parcels?:        any[];
+    parcelsPrev?:    number;
+    fillRate?:       number;
+  } = {}) {
+    return {
+      tenant: {
+        findUnique: jest.fn().mockResolvedValue({ currency: opts.tenantCurrency ?? 'XAF' }),
+      },
+      transaction: {
+        findMany:  jest.fn().mockResolvedValue(opts.txPeriod ?? []),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: opts.txPrev ?? 0 } }),
+      },
+      ticket: {
+        findMany: jest.fn().mockResolvedValue(opts.tickets ?? []),
+        count:    jest.fn().mockResolvedValue(opts.ticketsPrev ?? 0),
+      },
+      parcel: {
+        findMany: jest.fn().mockResolvedValue(opts.parcels ?? []),
+        count:    jest.fn().mockResolvedValue(opts.parcelsPrev ?? 0),
+      },
+      tripAnalytics: {
+        aggregate: jest.fn().mockResolvedValue({ _avg: { avgFillRate: opts.fillRate ?? 0 } }),
+      },
+    } as unknown as jest.Mocked<PrismaService>;
+  }
+
+  it('retourne la devise depuis Tenant.currency (jamais hardcodée)', async () => {
+    const prisma = makeBoardPrisma({ tenantCurrency: 'XOF' });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAnalyticsBoard(TENANT, '7d');
+    expect(res.currency).toBe('XOF');
+  });
+
+  it('retourne 7 buckets pour period=7d, 30 pour 30d, 12 pour 90d', async () => {
+    const prisma = makeBoardPrisma();
+    const svc = new AnalyticsService(prisma);
+    const r7  = await svc.getAnalyticsBoard(TENANT, '7d');
+    const r30 = await svc.getAnalyticsBoard(TENANT, '30d');
+    const r90 = await svc.getAnalyticsBoard(TENANT, '90d');
+    expect(r7.revenue).toHaveLength(7);
+    expect(r30.revenue).toHaveLength(30);
+    expect(r90.revenue).toHaveLength(12);
+  });
+
+  it('filtre chaque query par tenantId (tenant isolation)', async () => {
+    const prisma = makeBoardPrisma();
+    const svc = new AnalyticsService(prisma);
+    await svc.getAnalyticsBoard(TENANT, '7d');
+
+    const txFM  = (prisma.transaction.findMany as jest.Mock).mock.calls[0][0].where;
+    const tixFM = (prisma.ticket.findMany     as jest.Mock).mock.calls[0][0].where;
+    const parFM = (prisma.parcel.findMany     as jest.Mock).mock.calls[0][0].where;
+    const trAgg = (prisma.tripAnalytics.aggregate as jest.Mock).mock.calls[0][0].where;
+
+    expect(txFM.tenantId).toBe(TENANT);
+    expect(tixFM.tenantId).toBe(TENANT);
+    expect(parFM.tenantId).toBe(TENANT);
+    expect(trAgg.tenantId).toBe(TENANT);
+  });
+
+  it('ticketsByChannel ventile guichet (agencyId !== null) vs en ligne', async () => {
+    const prisma = makeBoardPrisma({
+      tickets: [
+        { agencyId: 'ag-1', boardingStation: { name: 'A' }, alightingStation: { name: 'B' } },
+        { agencyId: 'ag-1', boardingStation: { name: 'A' }, alightingStation: { name: 'B' } },
+        { agencyId: null,   boardingStation: { name: 'A' }, alightingStation: { name: 'B' } },
+        { agencyId: null,   boardingStation: { name: 'A' }, alightingStation: { name: 'B' } },
+      ],
+    });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAnalyticsBoard(TENANT, '7d');
+    expect(res.ticketsByChannel).toEqual([
+      { label: 'Guichet',  value: 50 },
+      { label: 'En ligne', value: 50 },
+    ]);
+  });
+
+  it('parcelsByWeight bucketize <5kg, 5–20kg, 20–50kg, >50kg', async () => {
+    const prisma = makeBoardPrisma({
+      parcels: [{ weight: 2 }, { weight: 15 }, { weight: 40 }, { weight: 60 }],
+    });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAnalyticsBoard(TENANT, '7d');
+    expect(res.parcelsByWeight).toEqual([
+      { label: '<5kg',    value: 25 },
+      { label: '5–20kg',  value: 25 },
+      { label: '20–50kg', value: 25 },
+      { label: '>50kg',   value: 25 },
+    ]);
+  });
+
+  it('miniKpis.caDelta positif si CA > période précédente', async () => {
+    const now = new Date();
+    const prisma = makeBoardPrisma({
+      txPeriod: [
+        { amount: 8_000, createdAt: now },
+        { amount: 2_000, createdAt: now },
+      ],
+      txPrev: 5_000,
+    });
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAnalyticsBoard(TENANT, '7d');
+    expect(res.miniKpis.caTotal).toBe(10_000);
+    expect(res.miniKpis.caDelta).toBe(100); // (10000-5000)/5000 = 100%
+  });
+
+  it('retourne un payload vide safe si Prisma throw', async () => {
+    const prisma = {
+      tenant:        { findUnique: jest.fn().mockRejectedValue(new Error('db down')) },
+      transaction:   { findMany: jest.fn(), aggregate: jest.fn() },
+      ticket:        { findMany: jest.fn(), count: jest.fn() },
+      parcel:        { findMany: jest.fn(), count: jest.fn() },
+      tripAnalytics: { aggregate: jest.fn() },
+    } as unknown as jest.Mocked<PrismaService>;
+    const svc = new AnalyticsService(prisma);
+    const res = await svc.getAnalyticsBoard(TENANT, '7d');
+    expect(res.revenue).toEqual([]);
+    expect(res.miniKpis.caTotal).toBe(0);
+  });
+});

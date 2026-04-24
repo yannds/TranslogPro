@@ -3076,7 +3076,11 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "travelersOnly": "Voyageurs uniquement",
     "shippersOnly": "Expéditeurs uniquement",
     "travelersAndShip": "Voyageurs ET expéditeurs",
-    "crossSellHint": "Clients qui voyagent et expédient — segment à fort potentiel cross-sell."
+    "crossSellHint": "Clients qui voyagent et expédient — segment à fort potentiel cross-sell.",
+    "totalRevenue": "Recette totale",
+    "travelers": "Voyageurs",
+    "parcels": "Colis",
+    "fillRate": "Taux de remplissage"
   },
   "crm": {
     "travelerCard": "Fiche voyageur",
@@ -6045,6 +6049,10 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "updated":          "« {name} » mis à jour sur toutes les lignes sans override.",
     "emptyTitle":       "Votre registre est vide",
     "emptyBody":        "Saisissez vos péages, barrières de police ou postes de douane une fois. Ils seront réutilisables et pré-plaçables sur toutes vos lignes.",
+    "emptyImportHint":  "Vous avez déjà des péages saisis dans vos lignes ? Importez-les en un clic.",
+    "importFromRoutes": "Importer depuis les trajets",
+    "importHint":       "Scanne les péages/contrôles saisis sur vos routes non encore rattachés au registre. Idempotent — relancer ne duplique rien.",
+    "importSuccess":    "{imported} créé(s), {backlinked} rattaché(s) aux routes, {skipped} déjà présent(s). Complétez les coordonnées GPS des nouvelles entrées pour activer la détection automatique.",
     "fieldName":        "Nom",
     "fieldLat":         "Latitude",
     "fieldLng":         "Longitude",

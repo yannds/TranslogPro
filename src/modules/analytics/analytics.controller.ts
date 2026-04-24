@@ -188,6 +188,20 @@ export class AnalyticsController {
     return this.analyticsService.getAiFleet(tenantId);
   }
 
+  /** Tableaux analytiques — séries temporelles + breakdowns + mini-KPIs. */
+  @Get('board')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  board(
+    @TenantId() tenantId: string,
+    @Query('period') period?: string,
+  ) {
+    const allowed = ['7d', '30d', '90d'] as const;
+    const p = (allowed as readonly string[]).includes(period ?? '')
+      ? (period as '7d' | '30d' | '90d')
+      : '7d';
+    return this.analyticsService.getAnalyticsBoard(tenantId, p);
+  }
+
   /** Suggestions tarifaires dynamiques par ligne et créneau (yield, 30j). */
   @Get('ai-pricing')
   @RequirePermission(Permission.STATS_READ_TENANT)

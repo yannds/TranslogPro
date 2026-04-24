@@ -847,4 +847,185 @@ export class AnalyticsService {
       .sort((a, b) => b.passengers - a.passengers)
       .slice(0, limit);
   }
+
+  // ── Tableaux analytiques — page /admin/analytics ─────────────────────────────
+
+  /**
+   * Dashboard analytique tenant — séries temporelles + breakdowns + mini-KPIs.
+   * Remplace les arrays mock côté front (REVENUE / PASSENGERS_BY_LINE /
+   * TICKETS_BY_CHANNEL / PARCELS_BY_WEIGHT / MINI_KPIS).
+   *
+   * Périodes supportées :
+   *   - 7d  → 7 buckets journaliers
+   *   - 30d → 30 buckets journaliers
+   *   - 90d → 12 buckets hebdomadaires
+   *
+   * Devise : lue depuis Tenant.currency (jamais hardcodée).
+   * Tenant isolation : tenantId en WHERE racine sur chaque requête.
+   */
+  async getAnalyticsBoard(tenantId: string, period: '7d' | '30d' | '90d') {
+    try {
+      return await this._getAnalyticsBoard(tenantId, period);
+    } catch (err) {
+      this.logger.error(
+        `getAnalyticsBoard failed for tenant=${tenantId} period=${period}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return {
+        currency:           'XAF',
+        revenue:            [],
+        passengersByLine:   [],
+        ticketsByChannel:   [],
+        parcelsByWeight:    [],
+        miniKpis:           { caTotal: 0, travelers: 0, parcels: 0, fillRate: 0,
+                              caDelta: 0, travelersDelta: 0, parcelsDelta: 0, fillRateDelta: 0 },
+      };
+    }
+  }
+
+  private async _getAnalyticsBoard(tenantId: string, period: '7d' | '30d' | '90d') {
+    const DAY_MS_LOCAL    = AnalyticsService.DAY_MS;
+    const days            = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+    const isWeeklyBucket  = period === '90d';
+    const bucketDays      = isWeeklyBucket ? 7 : 1;
+    const nBuckets        = isWeeklyBucket ? 12 : days;
+
+    const endDate       = new Date();
+    const startDate     = new Date(endDate.getTime() - days * DAY_MS_LOCAL);
+    const prevStartDate = new Date(startDate.getTime() - days * DAY_MS_LOCAL);
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where:  { id: tenantId },
+      select: { currency: true },
+    });
+    const currency = tenant?.currency ?? 'XAF';
+
+    const [
+      transactionsPeriod,
+      transactionsPrev,
+      ticketsPeriod,
+      ticketsPrev,
+      parcelsPeriod,
+      parcelsPrev,
+      tripsPeriod,
+    ] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where:  { tenantId, createdAt: { gte: startDate, lt: endDate },
+                  type: { in: ['TICKET', 'PARCEL', 'LUGGAGE_FEE'] } },
+        select: { amount: true, createdAt: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { tenantId, createdAt: { gte: prevStartDate, lt: startDate },
+                 type: { in: ['TICKET', 'PARCEL', 'LUGGAGE_FEE'] } },
+        _sum:  { amount: true },
+      }),
+      this.prisma.ticket.findMany({
+        where:  { tenantId, createdAt: { gte: startDate, lt: endDate } },
+        select: { agencyId: true,
+                  boardingStation: { select: { name: true } },
+                  alightingStation: { select: { name: true } } },
+      }),
+      this.prisma.ticket.count({
+        where: { tenantId, createdAt: { gte: prevStartDate, lt: startDate } },
+      }),
+      this.prisma.parcel.findMany({
+        where:  { tenantId, createdAt: { gte: startDate, lt: endDate } },
+        select: { weight: true },
+      }),
+      this.prisma.parcel.count({
+        where: { tenantId, createdAt: { gte: prevStartDate, lt: startDate } },
+      }),
+      this.prisma.tripAnalytics.aggregate({
+        where: { tenantId, tripDate: { gte: startDate, lt: endDate } },
+        _avg:  { avgFillRate: true },
+      }),
+    ]);
+
+    // ── 1. Revenue time-series ────────────────────────────────────────────────
+    const revenueBuckets = new Array<number>(nBuckets).fill(0);
+    for (const tx of transactionsPeriod) {
+      const age       = endDate.getTime() - new Date(tx.createdAt).getTime();
+      const ageDays   = Math.floor(age / DAY_MS_LOCAL);
+      const bucketIdx = nBuckets - 1 - Math.floor(ageDays / bucketDays);
+      if (bucketIdx >= 0 && bucketIdx < nBuckets) {
+        revenueBuckets[bucketIdx] += tx.amount;
+      }
+    }
+    const DOW_LABELS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
+    const revenue = revenueBuckets.map((v, i) => {
+      let label: string;
+      if (period === '7d') {
+        const d = new Date(endDate.getTime() - (nBuckets - 1 - i) * DAY_MS_LOCAL);
+        label = DOW_LABELS[d.getDay()];
+      } else if (period === '30d') {
+        label = `J${i + 1}`;
+      } else {
+        label = `S${i + 1}`;
+      }
+      // Valeur en millions d'unités monétaires (cohérent avec l'UX historique).
+      return { label, value: Math.round(v / 100_000) / 10 };
+    });
+
+    // ── 2. Passengers by line (top 5) ────────────────────────────────────────
+    const byLine = new Map<string, number>();
+    for (const t of ticketsPeriod) {
+      const origin = t.boardingStation?.name  ?? '—';
+      const dest   = t.alightingStation?.name ?? '—';
+      const key    = `${origin}↔${dest}`;
+      byLine.set(key, (byLine.get(key) ?? 0) + 1);
+    }
+    const passengersByLine = [...byLine.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([label, value]) => ({ label, value }));
+
+    // ── 3. Tickets by channel ────────────────────────────────────────────────
+    const ticketsTotal   = ticketsPeriod.length;
+    const ticketsGuichet = ticketsPeriod.filter(t => t.agencyId != null).length;
+    const ticketsOnline  = ticketsTotal - ticketsGuichet;
+    const ticketsByChannel = ticketsTotal === 0 ? [] : [
+      { label: 'Guichet', value: Math.round((ticketsGuichet / ticketsTotal) * 100) },
+      { label: 'En ligne', value: Math.round((ticketsOnline  / ticketsTotal) * 100) },
+    ];
+
+    // ── 4. Parcels by weight ─────────────────────────────────────────────────
+    const parcelsTotal = parcelsPeriod.length;
+    const WEIGHT_BUCKETS = [
+      { label: '<5kg',    max: 5   },
+      { label: '5–20kg',  max: 20  },
+      { label: '20–50kg', max: 50  },
+      { label: '>50kg',   max: Infinity },
+    ] as const;
+    const weightCounts = WEIGHT_BUCKETS.map(b => ({ label: b.label, count: 0 }));
+    for (const p of parcelsPeriod) {
+      const bIdx = WEIGHT_BUCKETS.findIndex(b => p.weight < b.max);
+      if (bIdx >= 0) weightCounts[bIdx].count += 1;
+    }
+    const parcelsByWeight = parcelsTotal === 0 ? [] :
+      weightCounts.map(w => ({ label: w.label, value: Math.round((w.count / parcelsTotal) * 100) }));
+
+    // ── 5. Mini-KPIs + deltas (% vs période précédente) ─────────────────────
+    const caTotal        = transactionsPeriod.reduce((s, t) => s + t.amount, 0);
+    const caPrev         = transactionsPrev._sum.amount ?? 0;
+    const travelers      = ticketsPeriod.length;
+    const travelersPrev  = ticketsPrev;
+    const parcels        = parcelsPeriod.length;
+    const parcelsPrevC   = parcelsPrev;
+    const fillRate       = Math.round((tripsPeriod._avg.avgFillRate ?? 0) * 100);
+    const pctDelta = (cur: number, prev: number) =>
+      prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 1_000) / 10;
+
+    const miniKpis = {
+      caTotal,
+      travelers,
+      parcels,
+      fillRate,
+      caDelta:         pctDelta(caTotal,       caPrev),
+      travelersDelta:  pctDelta(travelers,     travelersPrev),
+      parcelsDelta:    pctDelta(parcels,       parcelsPrevC),
+      fillRateDelta:   0, // fillRate absolu, delta moins pertinent à court terme
+    };
+
+    return { currency, revenue, passengersByLine, ticketsByChannel, parcelsByWeight, miniKpis };
+  }
 }

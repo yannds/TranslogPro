@@ -1,9 +1,8 @@
 /**
  * PageAnalytics — Tableaux analytiques multi-périodes.
  *
- * Sources (prochaine intégration):
- *   GET /api/v1/tenants/:id/analytics/weekly
- *   GET /api/v1/tenants/:id/analytics/customer-segmentation
+ * Source : GET /api/tenants/:id/analytics/board?period=7d|30d|90d
+ * Tenant-scopé, devise lue depuis Tenant.currency (jamais hardcodée).
  *
  * UI : tokens sémantiques (.t-*), conforme WCAG 2.1 (AA), ARIA.
  */
@@ -26,50 +25,37 @@ interface SegmentationData {
   both:          number;
 }
 
-// ─── Périodes disponibles ────────────────────────────────────────────────────
+interface MiniKpisDto {
+  caTotal:        number;
+  travelers:      number;
+  parcels:        number;
+  fillRate:       number;
+  caDelta:        number;
+  travelersDelta: number;
+  parcelsDelta:   number;
+  fillRateDelta:  number;
+}
+
+interface AnalyticsBoardDto {
+  currency:         string;
+  revenue:          ChartPoint[];
+  passengersByLine: ChartPoint[];
+  ticketsByChannel: ChartPoint[];
+  parcelsByWeight:  ChartPoint[];
+  miniKpis:         MiniKpisDto;
+}
 
 type PeriodKey = '7d' | '30d' | '90d';
 
-// ─── Données mock (seront remplacées par API) ────────────────────────────────
-
-const REVENUE: Record<PeriodKey, ChartPoint[]> = {
-  '7d': [
-    { label: 'Lun', value: 5.2 }, { label: 'Mar', value: 6.8 }, { label: 'Mer', value: 4.9 },
-    { label: 'Jeu', value: 7.1 }, { label: 'Ven', value: 8.4 }, { label: 'Sam', value: 9.2 },
-    { label: 'Dim', value: 6.7 },
-  ],
-  '30d': Array.from({ length: 30 }, (_, i) => ({ label: `J${i+1}`, value: 4 + Math.round(Math.sin(i/3)*3 + Math.random()*2) })),
-  '90d': Array.from({ length: 12 }, (_, i) => ({ label: `S${i+1}`, value: 28 + Math.round(Math.cos(i/2)*6 + Math.random()*4) })),
-};
-
-const PASSENGERS_BY_LINE: ChartPoint[] = [
-  { label: 'BZV↔PNR', value: 42 }, { label: 'BZV↔DOL', value: 28 },
-  { label: 'BZV↔NKY', value: 18 }, { label: 'PNR↔DOL', value: 14 },
-  { label: 'BZV↔OUE', value: 9  },
-];
-
-const TICKETS_BY_CHANNEL: ChartPoint[] = [
-  { label: 'Guichet', value: 64 }, { label: 'Web', value: 22 },
-  { label: 'Mobile', value: 11 }, { label: 'B2B', value: 3 },
-];
-
-const PARCELS_BY_WEIGHT: ChartPoint[] = [
-  { label: '<5kg', value: 48 }, { label: '5–20kg', value: 32 },
-  { label: '20–50kg', value: 14 }, { label: '>50kg', value: 6 },
-];
-
-interface MiniKpi {
-  label: string;
-  value: string;
-  delta: number; // percentage, signed
+// Formatage compact pour les mini-KPIs (ex: 48 200 000 → "48.2M").
+// Pas de magic number éparpillé : seuils nommés.
+const UNIT_MILLION = 1_000_000;
+const UNIT_THOUSAND = 1_000;
+function formatCompact(n: number): string {
+  if (Math.abs(n) >= UNIT_MILLION)  return `${(n / UNIT_MILLION).toFixed(1)}M`;
+  if (Math.abs(n) >= UNIT_THOUSAND) return `${(n / UNIT_THOUSAND).toFixed(1)}k`;
+  return Math.round(n).toString();
 }
-
-const MINI_KPIS: MiniKpi[] = [
-  { label: 'CA total', value: '48.2M', delta: 12.4 },
-  { label: 'Voyageurs', value: '9 847', delta: 6.1 },
-  { label: 'Colis', value: '1 223', delta: -2.8 },
-  { label: 'Taux remplissage', value: '78%', delta: 3.2 },
-];
 
 // ─── Segmentation clients ────────────────────────────────────────────────────
 
@@ -135,7 +121,7 @@ function CustomerSegmentationWidget() {
 
 // ─── Mini-KPI card ────────────────────────────────────────────────────────────
 
-function MiniKpiCard({ label, value, delta }: MiniKpi) {
+function MiniKpiCard({ label, value, delta }: { label: string; value: string; delta: number }) {
   const up = delta >= 0;
   return (
     <div className="t-card-bordered rounded-xl p-4">
@@ -160,7 +146,13 @@ function MiniKpiCard({ label, value, delta }: MiniKpi) {
 export function PageAnalytics() {
   const { operational } = useTenantConfig();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>('7d');
+
+  const url = user?.tenantId
+    ? `/api/tenants/${user.tenantId}/analytics/board?period=${period}`
+    : null;
+  const { data, loading, error } = useFetch<AnalyticsBoardDto>(url, [user?.tenantId, period]);
 
   const periodLabel = useMemo<Record<PeriodKey, string>>(() => ({
     '7d': t('analytics.period7d'),
@@ -173,6 +165,18 @@ export function PageAnalytics() {
     '30d': t('analytics.revenueLast30'),
     '90d': t('analytics.revenueLast90'),
   };
+
+  const currencySymbol = operational.currencySymbol;
+
+  const miniKpis = useMemo(() => {
+    if (!data) return [];
+    return [
+      { label: t('analytics.totalRevenue'), value: formatCompact(data.miniKpis.caTotal),       delta: data.miniKpis.caDelta },
+      { label: t('analytics.travelers'),    value: data.miniKpis.travelers.toLocaleString('fr-FR'), delta: data.miniKpis.travelersDelta },
+      { label: t('analytics.parcels'),      value: data.miniKpis.parcels.toLocaleString('fr-FR'),   delta: data.miniKpis.parcelsDelta },
+      { label: t('analytics.fillRate'),     value: `${data.miniKpis.fillRate}%`,                    delta: data.miniKpis.fillRateDelta },
+    ];
+  }, [data, t]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -212,68 +216,83 @@ export function PageAnalytics() {
         </div>
       </header>
 
-      {/* Mini KPIs */}
-      <section aria-labelledby="analytics-kpis-title">
-        <h2 id="analytics-kpis-title" className="sr-only">{t('analytics.kpisTitle')}</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {MINI_KPIS.map(k => <MiniKpiCard key={k.label} {...k} />)}
+      {/* Loader / error */}
+      {loading && (
+        <div role="status" className="flex items-center gap-2 t-text-2 py-4">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          <span className="text-xs">{t('analytics.loading')}</span>
         </div>
-      </section>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400 py-2">{error}</p>
+      )}
+
+      {/* Mini KPIs */}
+      {data && (
+        <section aria-labelledby="analytics-kpis-title">
+          <h2 id="analytics-kpis-title" className="sr-only">{t('analytics.kpisTitle')}</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {miniKpis.map(k => <MiniKpiCard key={k.label} {...k} />)}
+          </div>
+        </section>
+      )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section
-          aria-labelledby="analytics-rev-title"
-          className="t-card-bordered rounded-2xl p-5"
-        >
-          <h2 id="analytics-rev-title" className="sr-only">{revenueLabelByPeriod[period]}</h2>
-          <MiniBarChart
-            label={`${revenueLabelByPeriod[period]} (${operational.currencySymbol} ×1M)`}
-            data={REVENUE[period]}
-            unit={`M ${operational.currencySymbol}`}
-          />
-        </section>
+      {data && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <section
+            aria-labelledby="analytics-rev-title"
+            className="t-card-bordered rounded-2xl p-5"
+          >
+            <h2 id="analytics-rev-title" className="sr-only">{revenueLabelByPeriod[period]}</h2>
+            <MiniBarChart
+              label={`${revenueLabelByPeriod[period]} (${currencySymbol} ×1M)`}
+              data={data.revenue}
+              unit={`M ${currencySymbol}`}
+            />
+          </section>
 
-        <section
-          aria-labelledby="analytics-pax-title"
-          className="t-card-bordered rounded-2xl p-5"
-        >
-          <h2 id="analytics-pax-title" className="sr-only">{t('analytics.paxByLine')}</h2>
-          <MiniBarChart
-            label={t('analytics.paxByLine')}
-            data={PASSENGERS_BY_LINE}
-            unit={t('analytics.unitK')}
-          />
-        </section>
+          <section
+            aria-labelledby="analytics-pax-title"
+            className="t-card-bordered rounded-2xl p-5"
+          >
+            <h2 id="analytics-pax-title" className="sr-only">{t('analytics.paxByLine')}</h2>
+            <MiniBarChart
+              label={t('analytics.paxByLine')}
+              data={data.passengersByLine}
+              unit=""
+            />
+          </section>
 
-        <section
-          aria-labelledby="analytics-channels-title"
-          className="t-card-bordered rounded-2xl p-5"
-        >
-          <h2 id="analytics-channels-title" className="sr-only">{t('analytics.ticketsByChannel')}</h2>
-          <MiniBarChart
-            label={t('analytics.ticketsByChannel')}
-            data={TICKETS_BY_CHANNEL}
-            unit="%"
-          />
-        </section>
+          <section
+            aria-labelledby="analytics-channels-title"
+            className="t-card-bordered rounded-2xl p-5"
+          >
+            <h2 id="analytics-channels-title" className="sr-only">{t('analytics.ticketsByChannel')}</h2>
+            <MiniBarChart
+              label={t('analytics.ticketsByChannel')}
+              data={data.ticketsByChannel}
+              unit="%"
+            />
+          </section>
 
-        <section
-          aria-labelledby="analytics-parcels-title"
-          className="t-card-bordered rounded-2xl p-5"
-        >
-          <h2 id="analytics-parcels-title" className="sr-only">{t('analytics.parcelsByWeight')}</h2>
-          <MiniBarChart
-            label={t('analytics.parcelsByWeight')}
-            data={PARCELS_BY_WEIGHT}
-            unit="%"
-          />
-        </section>
+          <section
+            aria-labelledby="analytics-parcels-title"
+            className="t-card-bordered rounded-2xl p-5"
+          >
+            <h2 id="analytics-parcels-title" className="sr-only">{t('analytics.parcelsByWeight')}</h2>
+            <MiniBarChart
+              label={t('analytics.parcelsByWeight')}
+              data={data.parcelsByWeight}
+              unit="%"
+            />
+          </section>
 
-        <div className="lg:col-span-2">
-          <CustomerSegmentationWidget />
+          <div className="lg:col-span-2">
+            <CustomerSegmentationWidget />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
