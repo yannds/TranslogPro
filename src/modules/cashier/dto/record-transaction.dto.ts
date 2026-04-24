@@ -1,4 +1,5 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, ValidateNested, ArrayMinSize, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const CASHIER_TX_TYPES = [
   'TICKET', 'PARCEL', 'LUGGAGE_FEE',
@@ -86,4 +87,41 @@ export class RecordTransactionDto {
 
   @IsOptional() @IsIn(CASHIER_PROOF_TYPES)
   proofType?: CashierProofType;
+
+  /**
+   * Composants du paiement si `paymentMethod='MIXED'` — détail par leg.
+   * Σ(components[].amount) doit égaler `amount` total (vérifié serveur).
+   * Pour les paiements simples (non MIXED), laisser vide.
+   * Chaque leg peut porter sa propre `proofCode`/`proofType`.
+   */
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => PaymentComponentDto)
+  components?: PaymentComponentDto[];
+}
+
+/**
+ * Composant individuel d'un paiement MIXED (ex : 5000 CASH + 3000 MOBILE_MONEY).
+ * Le `paymentMethod` du composant ne peut PAS être `MIXED` — c'est un leg
+ * atomique avec sa propre méthode. Le total des composants doit matcher
+ * l'`amount` de la Transaction parente.
+ */
+export const COMPONENT_PAYMENT_METHODS = [
+  'CASH', 'MOBILE_MONEY', 'CARD', 'BANK_TRANSFER', 'VOUCHER',
+] as const;
+export type ComponentPaymentMethod = (typeof COMPONENT_PAYMENT_METHODS)[number];
+
+export class PaymentComponentDto {
+  @IsIn(COMPONENT_PAYMENT_METHODS)
+  paymentMethod: ComponentPaymentMethod;
+
+  @IsNumber() @Min(0)
+  amount: number;
+
+  @IsOptional() @IsString()
+  proofCode?: string;
+
+  @IsOptional() @IsIn(CASHIER_PROOF_TYPES)
+  proofType?: CashierProofType;
+
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

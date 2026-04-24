@@ -12,6 +12,7 @@ import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CancellationPolicyService, RefundCalculation } from './cancellation-policy.service';
 import { CashierService } from '../cashier/cashier.service';
 import { VoucherService } from '../voucher/voucher.service';
+import { PayoutService } from '../../infrastructure/payment/payout.service';
 import { v4 as uuidv4 } from 'uuid';
 
 /** Acteur synthétique pour les transitions système (auto-approve, bulk). */
@@ -32,6 +33,7 @@ export class RefundService {
     @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
     private readonly cashier:         CashierService,
     private readonly voucher:         VoucherService,
+    private readonly payout:          PayoutService,
   ) {}
 
   /* ── Queries ──────────────────────────────────────────────── */
@@ -191,7 +193,21 @@ export class RefundService {
   }
 
   async process(tenantId: string, id: string, actor: CurrentUserPayload) {
-    return this.transition(tenantId, id, RefundAction.PROCESS, actor);
+    const result = await this.transition(tenantId, id, RefundAction.PROCESS, actor);
+
+    // Gap #4 — gateway payout best-effort après la transition.
+    // Hors transaction workflow (appel HTTP externe). Un échec gateway ne
+    // remet PAS le Refund en arrière — il est marqué comme "payout failed"
+    // sur la Transaction reversal et peut être relancé manuellement.
+    try {
+      await this.payout.executeRefundPayout(tenantId, id);
+    } catch (err) {
+      this.logger.warn(
+        `Gateway payout failed refund=${id}: ${(err as Error).message}`,
+      );
+    }
+
+    return result;
   }
 
   async reject(tenantId: string, id: string, actor: CurrentUserPayload, notes?: string) {

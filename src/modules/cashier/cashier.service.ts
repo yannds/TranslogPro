@@ -418,17 +418,55 @@ export class CashierService {
         orderBy: { createdAt: 'desc' },
         take,
         skip: opts.skip ?? 0,
+        // Inclut les composants pour afficher le détail des paiements MIXED
+        // dans le listing frontend (UI peut déployer un sous-tableau par ligne).
+        include: { components: { orderBy: { sortOrder: 'asc' } } },
       }),
       this.prisma.transaction.count({
         where: { tenantId, cashRegisterId: registerId },
       }),
     ]);
 
-    const totals = await this.prisma.transaction.groupBy({
-      by: ['type', 'paymentMethod'],
-      where: { tenantId, cashRegisterId: registerId },
-      _sum: { amount: true },
-    });
+    // ── Totaux par méthode effective (gap #3 MIXED reconciliation) ──────────
+    // Ancien comportement : MIXED comptait pour 1 ligne unique — impossible de
+    // ventiler cash vs momo. Nouveau : les Transaction MIXED sont DÉPLIÉES en
+    // leurs composants (cash_only = vraies lignes CASH + composants CASH de MIXED).
+    // Les non-MIXED sont groupés normalement.
+    const [plainTotals, mixedComponents] = await Promise.all([
+      this.prisma.transaction.groupBy({
+        by: ['type', 'paymentMethod'],
+        where: { tenantId, cashRegisterId: registerId, paymentMethod: { not: 'MIXED' } },
+        _sum: { amount: true },
+      }),
+      this.prisma.transactionComponent.findMany({
+        where:  {
+          tenantId,
+          transaction: { cashRegisterId: registerId, paymentMethod: 'MIXED' },
+        },
+        select: { paymentMethod: true, amount: true, transaction: { select: { type: true } } },
+      }),
+    ]);
+
+    // Agrège plainTotals + composants MIXED en (type, paymentMethod) → somme
+    const totalsMap = new Map<string, { type: string; paymentMethod: string; _sum: { amount: number } }>();
+    for (const row of plainTotals) {
+      const key = `${row.type}|${row.paymentMethod}`;
+      totalsMap.set(key, { type: row.type, paymentMethod: row.paymentMethod, _sum: { amount: row._sum.amount ?? 0 } });
+    }
+    for (const comp of mixedComponents) {
+      const key = `${comp.transaction.type}|${comp.paymentMethod}`;
+      const existing = totalsMap.get(key);
+      if (existing) {
+        existing._sum.amount += comp.amount;
+      } else {
+        totalsMap.set(key, {
+          type:          comp.transaction.type,
+          paymentMethod: comp.paymentMethod,
+          _sum:          { amount: comp.amount },
+        });
+      }
+    }
+    const totals = Array.from(totalsMap.values());
 
     return { items, total, totals };
   }
@@ -497,6 +535,29 @@ export class CashierService {
     const proofCode = dto.paymentMethod === 'CASH' ? null : (dto.proofCode ?? null);
     const proofType = dto.paymentMethod === 'CASH' ? null : (dto.proofType ?? null);
 
+    // ── Gap #3 — validation des composants MIXED ──────────────────────────
+    // Si `paymentMethod='MIXED'` le DTO DOIT contenir `components[]` avec
+    // Σ(amount) === dto.amount (tolérance 0.005 pour arrondis float). Sinon
+    // le MIXED est rejeté comme "paiement ambigu" — pas de création d'une
+    // Transaction MIXED sans détail (rend le rapprochement caisse impossible).
+    const hasComponents = Array.isArray(dto.components) && dto.components.length > 0;
+    if (dto.paymentMethod === 'MIXED') {
+      if (!hasComponents) {
+        throw new BadRequestException(
+          'Paiement MIXED refusé : fournir `components[]` détaillant chaque leg (cash + momo, etc.)',
+        );
+      }
+      const sum = (dto.components ?? []).reduce((acc, c) => acc + c.amount, 0);
+      if (Math.abs(sum - dto.amount) > 0.005) {
+        throw new BadRequestException(
+          `Somme des composants MIXED (${sum}) ≠ total ${dto.amount}`,
+        );
+      }
+      if ((dto.components ?? []).some((c) => c.paymentMethod === 'MIXED' as any)) {
+        throw new BadRequestException('Un composant ne peut pas avoir paymentMethod=MIXED (récursivité interdite)');
+      }
+    }
+
     const created = await client.transaction.create({
       data: {
         tenantId,
@@ -517,6 +578,27 @@ export class CashierService {
         },
       },
     });
+
+    // ── Création atomique des composants MIXED (FK cascade) ───────────────
+    // Dans la même tx Prisma que la Transaction parente pour garantir
+    // l'invariant "MIXED ⇒ composants présents". Echec = rollback entier.
+    if (dto.paymentMethod === 'MIXED' && hasComponents) {
+      for (let i = 0; i < dto.components!.length; i++) {
+        const comp = dto.components![i];
+        await client.transactionComponent.create({
+          data: {
+            tenantId,
+            transactionId: created.id,
+            sortOrder:     i,
+            paymentMethod: comp.paymentMethod,
+            amount:        comp.amount,
+            proofCode:     comp.proofCode ?? null,
+            proofType:     comp.proofType ?? null,
+            metadata:      (comp.metadata ?? {}) as object,
+          },
+        });
+      }
+    }
 
     // Audit hors-transaction — non bloquant
     void this.audit.record({

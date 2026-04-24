@@ -8,6 +8,7 @@ import { PayloadEncryptor } from './payload-encryptor.service';
 import { PaymentWebhookController } from './payment-webhook.controller';
 import { PaymentController } from './payment.controller';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { PayoutService } from './payout.service';
 import { PAYMENT_PROVIDERS } from './providers/types';
 import { FlutterwaveAggregatorProvider } from './providers/flutterwave-agg.provider';
 import { PaystackAggregatorProvider } from './providers/paystack-agg.provider';
@@ -59,6 +60,7 @@ import { StripeProvider } from './providers/stripe.provider';
     PaymentRouter,
     PaymentOrchestrator,
     PaymentReconciliationService,
+    PayoutService,
   ],
   exports: [
     PaymentProviderRegistry,
@@ -66,6 +68,7 @@ import { StripeProvider } from './providers/stripe.provider';
     PaymentOrchestrator,
     PayloadEncryptor,
     PaymentReconciliationService,
+    PayoutService,
   ],
 })
 export class PaymentModule {}

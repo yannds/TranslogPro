@@ -8,6 +8,8 @@
  *   - P2003 (foreign key)       → 400 Bad Request + relation manquante
  *   - P2025 (record not found)  → 404 Not Found
  *   - P2014 (required relation) → 400 Bad Request
+ *   - P2021/P2022 (table/column missing) → 500 + BANNIÈRE dev avec remédiation
+ *                                         (drift schema Prisma vs DB)
  *   - Validation error          → 400 Bad Request + détails
  *   - Autres PrismaKnown        → 500 avec code + message réel (pas "unexpected")
  *
@@ -109,6 +111,38 @@ export class PrismaExceptionInterceptor implements NestInterceptor {
         const constraint = (meta?.constraint as string) ?? 'champ';
         return new BadRequestException(
           `Champ obligatoire manquant : ${constraint}.`,
+        );
+      }
+
+      // ── Drift schema Prisma vs DB (table ou colonne manquante) ───
+      // En dev : bannière ROUGE actionnable qui pointe vers db:check/db:sync.
+      // En prod : 500 générique (ne jamais leak la structure DB).
+      // Cas P2021 = table manquante, P2022 = colonne manquante.
+      case 'P2021':
+      case 'P2022': {
+        const table  = (meta?.table  as string) ?? 'inconnue';
+        const column = (meta?.column as string) ?? null;
+        const what = error.code === 'P2022'
+          ? `colonne "${column ?? '?'}" manquante sur table "${table}"`
+          : `table "${table}" manquante`;
+        if (!isProd) {
+          // eslint-disable-next-line no-console
+          console.error(
+            '\n\x1b[31m\x1b[1m┌─ SCHEMA DRIFT DÉTECTÉ AU RUNTIME ───────────────────────┐\x1b[0m\n' +
+            `\x1b[31m\x1b[1m│\x1b[0m Prisma ${error.code} : ${what}\n` +
+            '\x1b[31m\x1b[1m│\x1b[0m Le schema.prisma a été modifié mais la DB n\'a pas été synchronisée.\n' +
+            '\x1b[31m\x1b[1m│\x1b[0m \n' +
+            '\x1b[31m\x1b[1m│\x1b[0m Remédiation (non destructive, préserve les données de test) :\n' +
+            '\x1b[31m\x1b[1m│\x1b[0m   1. \x1b[33mnpm run db:check\x1b[0m    # voir la liste des changements\n' +
+            '\x1b[31m\x1b[1m│\x1b[0m   2. \x1b[33mnpm run db:sync\x1b[0m     # appliquer (refuse toute perte de données)\n' +
+            '\x1b[31m\x1b[1m│\x1b[0m   3. Redémarrer le backend (Prisma Client rechargé)\n' +
+            '\x1b[31m\x1b[1m└──────────────────────────────────────────────────────────┘\x1b[0m\n',
+          );
+        }
+        return new InternalServerErrorException(
+          isProd
+            ? 'Erreur base de données interne.'
+            : `Drift schema Prisma ↔ DB : ${what}. Voir les logs backend pour la commande de remédiation.`,
         );
       }
 

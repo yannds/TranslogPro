@@ -112,7 +112,7 @@ export function PagePricingSimulator() {
 
   // Sélecteurs route + bus + fillRate
   const { data: routes } = useFetch<RouteRow[]>(tenantId ? `/api/tenants/${tenantId}/routes` : null);
-  const { data: buses }  = useFetch<BusRow[]>(tenantId ? `/api/tenants/${tenantId}/buses` : null);
+  const { data: buses }  = useFetch<BusRow[]>(tenantId ? `/api/tenants/${tenantId}/fleet/buses` : null);
 
   const [routeId, setRouteId] = useState<string>('');
   const [busId,   setBusId]   = useState<string>('');

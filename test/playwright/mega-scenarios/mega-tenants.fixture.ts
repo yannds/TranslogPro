@@ -1,0 +1,483 @@
+/**
+ * [MEGA AUDIT 2026-04-24] — Fixture de provisionnement 3 tenants de test.
+ *
+ * Provisionne 3 tenants avec profils très différents :
+ *   1. CONGO EXPRESS   (CG, XAF, TRIAL, 2 agences, 4 stations, 3 routes, 3 bus, 6 users)
+ *   2. SAHEL TRANSPORT (SN, XOF, ACTIVE paid, 1 agence, 2 stations, 2 routes, 2 bus, 4 users)
+ *   3. ATLAS BUS       (FR, EUR, GRACE_PERIOD/impayé, 1 agence, 2 stations, 1 route, 1 bus, 2 users)
+ *
+ * Chaque tenant possède plusieurs users avec rôles distincts (TENANT_ADMIN,
+ * AGENCY_MANAGER, CASHIER, DRIVER, QUAI_AGENT) afin de tester RBAC et scope.
+ *
+ * Cleanup : SET LOCAL session_replication_role = 'replica' puis DELETE FROM tenants.
+ * Usage :
+ *   import { provisionMegaTenants, cleanupMegaTenants, MegaTenants } from './mega-tenants.fixture';
+ */
+
+import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+import { seedTenantRoles, ensureDefaultAgency, backfillDefaultWorkflows } from '../../../prisma/seeds/iam.seed';
+
+export const SHARED_PASSWORD = 'MegaAudit!2026';
+const BCRYPT_COST = 10;
+
+export interface UserHandle {
+  id:       string;
+  email:    string;
+  name:     string;
+  roleName: string;        // TENANT_ADMIN | AGENCY_MANAGER | CASHIER | DRIVER | QUAI_AGENT
+  agencyId: string;
+}
+
+export interface StationHandle {
+  id:        string;
+  name:      string;
+  city:      string;
+  agencyId?: string;
+}
+
+export interface RouteHandle {
+  id:           string;
+  name:         string;
+  originId:     string;
+  destinationId: string;
+  distanceKm:   number;
+  basePrice:    number;
+}
+
+export interface BusHandle {
+  id:          string;
+  plateNumber: string;
+  model:       string;
+  capacity:    number;
+  agencyId:    string;
+}
+
+export interface AgencyHandle {
+  id:   string;
+  name: string;
+}
+
+export interface TenantHandle {
+  id:        string;
+  slug:      string;
+  hostname:  string;
+  name:      string;
+  country:   string;
+  currency:  string;
+  language:  string;
+  agencies:  AgencyHandle[];
+  users:     Record<string, UserHandle>;  // clé = rôle ou "admin2", "cashier2" etc.
+  stations:  StationHandle[];
+  routes:    RouteHandle[];
+  buses:     BusHandle[];
+}
+
+export interface MegaTenants {
+  congo:  TenantHandle;
+  sahel:  TenantHandle;
+  atlas:  TenantHandle;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function createUserWithAccount(
+  prisma: PrismaClient,
+  args: {
+    tenantId: string;
+    agencyId: string;
+    email:    string;
+    name:     string;
+    roleId:   string;
+    userType?: 'STAFF' | 'CUSTOMER';
+  },
+): Promise<UserHandle & { internalRoleId: string }> {
+  const user = await prisma.user.create({
+    data: {
+      tenantId: args.tenantId,
+      agencyId: args.agencyId,
+      email:    args.email,
+      name:     args.name,
+      roleId:   args.roleId,
+      userType: args.userType ?? 'STAFF',
+      isActive: true,
+    },
+  });
+
+  const hash = await bcrypt.hash(SHARED_PASSWORD, BCRYPT_COST);
+  await prisma.account.create({
+    data: {
+      tenantId:   args.tenantId,
+      userId:     user.id,
+      providerId: 'credential',
+      accountId:  args.email,
+      password:   hash,
+    },
+  });
+
+  return {
+    id:       user.id,
+    email:    args.email,
+    name:     args.name,
+    roleName: '',
+    agencyId: args.agencyId,
+    internalRoleId: args.roleId,
+  };
+}
+
+async function provisionOneTenant(
+  prisma: PrismaClient,
+  cfg: {
+    slug: string;
+    name: string;
+    country: string;
+    currency: string;
+    language: string;
+    timezone: string;
+    agencies: string[];                    // liste noms agences (la 1re = HQ)
+    stations: Array<{ agency: number; name: string; city: string }>;
+    routes: Array<{ name: string; from: number; to: number; distanceKm: number; basePrice: number }>;
+    buses:  Array<{ agency: number; plate: string; model: string; capacity: number }>;
+    users:  Array<{ role: string; agency: number; email: string; name: string }>;
+  },
+): Promise<TenantHandle> {
+  // 1. Tenant
+  const tenant = await prisma.tenant.create({
+    data: {
+      slug:            cfg.slug,
+      name:            cfg.name,
+      country:         cfg.country,
+      currency:        cfg.currency,
+      language:        cfg.language,
+      timezone:        cfg.timezone,
+      provisionStatus: 'ACTIVE',
+    },
+  });
+
+  // 2. Domain
+  const hostname = `${cfg.slug}.translog.test`;
+  await prisma.tenantDomain.create({
+    data: {
+      tenantId:   tenant.id,
+      hostname,
+      isPrimary:  true,
+      verifiedAt: new Date(),
+    },
+  });
+
+  // 3. Roles (seedTenantRoles crée tous les rôles système)
+  const roleMap = await seedTenantRoles(prisma, tenant.id);
+
+  // 4. Agencies
+  const agencies: AgencyHandle[] = [];
+  for (const agName of cfg.agencies) {
+    const existing = await prisma.agency.findFirst({ where: { tenantId: tenant.id, name: agName } });
+    if (existing) {
+      agencies.push({ id: existing.id, name: agName });
+    } else {
+      const created = await prisma.agency.create({
+        data: { tenantId: tenant.id, name: agName },
+      });
+      agencies.push({ id: created.id, name: agName });
+    }
+  }
+
+  // 5. Users
+  const users: Record<string, UserHandle> = {};
+  for (const u of cfg.users) {
+    const roleId = roleMap.get(u.role);
+    if (!roleId) throw new Error(`[MEGA] Role ${u.role} introuvable pour ${cfg.slug}`);
+    const handle = await createUserWithAccount(prisma, {
+      tenantId: tenant.id,
+      agencyId: agencies[u.agency].id,
+      email:    u.email,
+      name:     u.name,
+      roleId,
+    });
+    handle.roleName = u.role;
+    users[u.email.split('@')[0]] = handle;
+  }
+
+  // 6. Stations (id déterministe pour faciliter le debug)
+  const stations: StationHandle[] = [];
+  for (let i = 0; i < cfg.stations.length; i++) {
+    const s = cfg.stations[i];
+    const id = `${cfg.slug}-st-${i}`;
+    await prisma.station.create({
+      data: {
+        id, tenantId: tenant.id,
+        name: s.name, city: s.city,
+        type: 'PRINCIPALE',
+        coordinates: {},
+      },
+    });
+    stations.push({ id, name: s.name, city: s.city, agencyId: agencies[s.agency].id });
+  }
+
+  // 7. Routes + PricingRules
+  const routes: RouteHandle[] = [];
+  for (let i = 0; i < cfg.routes.length; i++) {
+    const r = cfg.routes[i];
+    const id = `${cfg.slug}-route-${i}`;
+    await prisma.route.create({
+      data: {
+        id, tenantId: tenant.id, name: r.name,
+        originId:      stations[r.from].id,
+        destinationId: stations[r.to].id,
+        distanceKm:    r.distanceKm,
+        basePrice:     r.basePrice,
+      },
+    });
+    await prisma.pricingRules.create({
+      data: {
+        tenantId: tenant.id, routeId: id,
+        rules: {
+          basePriceXof:       r.basePrice,
+          taxRate:            0,
+          tollsXof:           0,
+          costPerKm:          0,
+          luggageFreeKg:      20,
+          luggagePerExtraKg:  100,
+          fareMultipliers:    { STANDARD: 1.0, CONFORT: 1.4, VIP: 2.0 },
+        },
+      },
+    });
+    routes.push({
+      id, name: r.name,
+      originId: stations[r.from].id,
+      destinationId: stations[r.to].id,
+      distanceKm: r.distanceKm,
+      basePrice: r.basePrice,
+    });
+  }
+
+  // 8. Buses
+  const buses: BusHandle[] = [];
+  for (let i = 0; i < cfg.buses.length; i++) {
+    const b = cfg.buses[i];
+    const id = `${cfg.slug}-bus-${i}`;
+    await prisma.bus.create({
+      data: {
+        id, tenantId: tenant.id, agencyId: agencies[b.agency].id,
+        plateNumber: b.plate, model: b.model,
+        capacity: b.capacity,
+        luggageCapacityKg: 500, luggageCapacityM3: 10,
+        status: 'AVAILABLE',
+        currentOdometerKm: 10_000,
+      },
+    });
+    buses.push({ id, plateNumber: b.plate, model: b.model, capacity: b.capacity, agencyId: agencies[b.agency].id });
+  }
+
+  // 9. Caisse ouverte pour chaque CASHIER + admin (nécessaire aux ventes)
+  for (const [_, u] of Object.entries(users)) {
+    if (u.roleName === 'CASHIER' || u.roleName === 'TENANT_ADMIN' || u.roleName === 'AGENCY_MANAGER') {
+      const existing = await prisma.cashRegister.findFirst({
+        where: { tenantId: tenant.id, agentId: u.id, status: 'OPEN' },
+      });
+      if (!existing) {
+        await prisma.cashRegister.create({
+          data: {
+            tenantId: tenant.id, agentId: u.id, agencyId: u.agencyId,
+            status: 'OPEN', openedAt: new Date(), initialBalance: 0, version: 1,
+          },
+        });
+      }
+    }
+  }
+
+  // 10. Staff record pour drivers (nécessaire aux trips)
+  for (const [_, u] of Object.entries(users)) {
+    if (u.roleName === 'DRIVER' || u.roleName === 'TENANT_ADMIN') {
+      await prisma.staff.upsert({
+        where:  { userId: u.id },
+        update: { agencyId: u.agencyId, status: 'ACTIVE' },
+        create: {
+          id: `${cfg.slug}-staff-${u.id.slice(-6)}`,
+          tenantId: tenant.id, userId: u.id, agencyId: u.agencyId,
+          status: 'ACTIVE', version: 1,
+        },
+      });
+    }
+  }
+
+  return {
+    id: tenant.id, slug: cfg.slug, hostname,
+    name: cfg.name, country: cfg.country, currency: cfg.currency, language: cfg.language,
+    agencies, users, stations, routes, buses,
+  };
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export async function provisionMegaTenants(prisma: PrismaClient): Promise<MegaTenants> {
+  const ts = Date.now();
+
+  const congo = await provisionOneTenant(prisma, {
+    slug: `mega-congo-${ts}`,
+    name: 'Congo Express SA',
+    country: 'CG', currency: 'XAF', language: 'fr', timezone: 'Africa/Brazzaville',
+    agencies: ['Brazzaville HQ', 'Pointe-Noire'],
+    stations: [
+      { agency: 0, name: 'Gare Routière Brazzaville', city: 'Brazzaville' },
+      { agency: 0, name: 'Gare Ouenze',              city: 'Brazzaville' },
+      { agency: 1, name: 'Gare Pointe-Noire Centre', city: 'Pointe-Noire' },
+      { agency: 1, name: 'Gare Dolisie',             city: 'Dolisie' },
+    ],
+    routes: [
+      { name: 'BZV → PNR',    from: 0, to: 2, distanceKm: 510, basePrice: 15_000 },
+      { name: 'BZV → Dolisie', from: 0, to: 3, distanceKm: 365, basePrice: 10_000 },
+      { name: 'PNR → Dolisie', from: 2, to: 3, distanceKm: 170, basePrice:  6_000 },
+    ],
+    buses: [
+      { agency: 0, plate: 'CG-001-BZV', model: 'Mercedes Travego', capacity: 50 },
+      { agency: 0, plate: 'CG-002-BZV', model: 'Yutong ZK6126',    capacity: 48 },
+      { agency: 1, plate: 'CG-003-PNR', model: 'Higer KLQ',        capacity: 45 },
+    ],
+    users: [
+      { role: 'TENANT_ADMIN',    agency: 0, email: `congo.admin.${ts}@mega.local`,    name: 'Jean-Pierre Okemba' },
+      { role: 'AGENCY_MANAGER',  agency: 1, email: `congo.manager.${ts}@mega.local`,  name: 'Marie Bouanga' },
+      { role: 'CASHIER',         agency: 0, email: `congo.cashier1.${ts}@mega.local`, name: 'Alphonse Mbemba' },
+      { role: 'CASHIER',         agency: 1, email: `congo.cashier2.${ts}@mega.local`, name: 'Grace Makaya' },
+      { role: 'DRIVER',          agency: 0, email: `congo.driver1.${ts}@mega.local`,  name: 'Patrick Kimbembé' },
+      { role: 'DRIVER',          agency: 1, email: `congo.driver2.${ts}@mega.local`,  name: 'Serge Loubaki' },
+    ],
+  });
+
+  const sahel = await provisionOneTenant(prisma, {
+    slug: `mega-sahel-${ts}`,
+    name: 'Sahel Transport SARL',
+    country: 'SN', currency: 'XOF', language: 'fr', timezone: 'Africa/Dakar',
+    agencies: ['Dakar Siège'],
+    stations: [
+      { agency: 0, name: 'Gare de Dakar Colobane', city: 'Dakar' },
+      { agency: 0, name: 'Gare de Thiès',          city: 'Thiès' },
+      { agency: 0, name: 'Gare de Saint-Louis',    city: 'Saint-Louis' },
+    ],
+    routes: [
+      { name: 'Dakar → Thiès',       from: 0, to: 1, distanceKm:  70, basePrice:  3_000 },
+      { name: 'Dakar → Saint-Louis', from: 0, to: 2, distanceKm: 270, basePrice:  8_500 },
+    ],
+    buses: [
+      { agency: 0, plate: 'SN-AB-101', model: 'Iveco Crossway', capacity: 55 },
+      { agency: 0, plate: 'SN-AB-202', model: 'King Long XMQ',  capacity: 52 },
+    ],
+    users: [
+      { role: 'TENANT_ADMIN', agency: 0, email: `sahel.admin.${ts}@mega.local`,   name: 'Aminata Diouf' },
+      { role: 'CASHIER',      agency: 0, email: `sahel.cashier.${ts}@mega.local`, name: 'Moussa Sarr' },
+      { role: 'DRIVER',       agency: 0, email: `sahel.driver.${ts}@mega.local`,  name: 'Ibrahima Fall' },
+      { role: 'QUAI_AGENT',   agency: 0, email: `sahel.quai.${ts}@mega.local`,    name: 'Fatou Ndiaye' },
+    ],
+  });
+
+  const atlas = await provisionOneTenant(prisma, {
+    slug: `mega-atlas-${ts}`,
+    name: 'Atlas Bus Lines',
+    country: 'FR', currency: 'EUR', language: 'fr', timezone: 'Europe/Paris',
+    agencies: ['Paris Bercy'],
+    stations: [
+      { agency: 0, name: 'Paris Bercy Seine',  city: 'Paris' },
+      { agency: 0, name: 'Lyon Perrache',      city: 'Lyon' },
+    ],
+    routes: [
+      { name: 'Paris → Lyon', from: 0, to: 1, distanceKm: 465, basePrice: 35 },
+    ],
+    buses: [
+      { agency: 0, plate: 'FR-AT-450', model: 'Setra ComfortClass', capacity: 50 },
+    ],
+    users: [
+      { role: 'TENANT_ADMIN', agency: 0, email: `atlas.admin.${ts}@mega.local`,   name: 'Pierre Dubois' },
+      { role: 'CASHIER',      agency: 0, email: `atlas.cashier.${ts}@mega.local`, name: 'Élise Martin' },
+    ],
+  });
+
+  // Seed workflow configs pour les 3 nouveaux tenants (sinon 400 "aucune WorkflowConfig active")
+  await backfillDefaultWorkflows(prisma);
+
+  return { congo, sahel, atlas };
+}
+
+export async function cleanupMegaTenants(prisma: PrismaClient, tenants: MegaTenants): Promise<void> {
+  const ids = [tenants.congo.id, tenants.sahel.id, tenants.atlas.id].filter(Boolean);
+  if (ids.length === 0) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL session_replication_role = 'replica'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tenants WHERE id = ANY($1::text[])`, ids);
+  });
+}
+
+// ─── Auth helper ────────────────────────────────────────────────────────────
+
+import type { APIRequestContext } from '@playwright/test';
+
+export interface Session {
+  cookie: string;
+  hostname: string;
+}
+
+export async function signInAs(
+  request: APIRequestContext,
+  hostname: string,
+  email: string,
+  password: string = SHARED_PASSWORD,
+): Promise<Session> {
+  const res = await request.post('/api/auth/sign-in', {
+    data:    { email, password },
+    headers: { Host: hostname },
+  });
+  if (res.status() !== 200) {
+    const body = await res.text();
+    throw new Error(`[signInAs] ${email} on ${hostname}: ${res.status()} ${body}`);
+  }
+  const cookie = res.headers()['set-cookie']!.split(';')[0];
+  return { cookie, hostname };
+}
+
+export function authHeaders(sess: Session, extra?: Record<string, string>): Record<string, string> {
+  return {
+    Host: sess.hostname,
+    Cookie: sess.cookie,
+    'Content-Type': 'application/json',
+    ...(extra ?? {}),
+  };
+}
+
+// ─── Scenario event logger ──────────────────────────────────────────────────
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+const LOG_DIR = path.resolve(__dirname, '../../../reports/mega-audit-2026-04-24');
+const LOG_FILE = path.join(LOG_DIR, 'scenario-events.jsonl');
+
+export interface ScenarioEvent {
+  ts:         string;
+  tenant:     string;          // "congo" | "sahel" | "atlas" | "platform"
+  scenario:   string;          // id scénario, ex "CE-TRIP-1"
+  step:       string;          // libellé humain de l'étape
+  actor?:     string;          // email / rôle
+  entity?:    { kind: string; id?: string; label?: string };
+  input?:     unknown;
+  output?:    unknown;
+  httpStatus?: number;
+  level:      'info' | 'success' | 'warn' | 'error';
+  notes?:     string;
+}
+
+export function logEvent(ev: Omit<ScenarioEvent, 'ts'>): void {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    const line = JSON.stringify({ ts: new Date().toISOString(), ...ev });
+    fs.appendFileSync(LOG_FILE, line + '\n', 'utf-8');
+  } catch (err) {
+    // Best-effort : le log ne doit jamais faire échouer un test
+    console.warn('[logEvent] %s', (err as Error).message);
+  }
+}
+
+export function resetEventLog(): void {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(LOG_FILE, '', 'utf-8');
+  } catch { /* ignore */ }
+}

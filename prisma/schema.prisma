@@ -1822,9 +1822,9 @@ model Transaction {
   id             String   @id @default(cuid())
   tenantId       String
   cashRegisterId String
-  type           String // TICKET | PARCEL | LUGGAGE_FEE | REFUND
+  type           String // TICKET | PARCEL | LUGGAGE_FEE | REFUND | VOUCHER | CASH_IN | CASH_OUT
   amount         Float
-  paymentMethod  String // CASH | MOBILE_MONEY
+  paymentMethod  String // CASH | MOBILE_MONEY | CARD | BANK_TRANSFER | VOUCHER | MIXED
   // Saisie caisse espèces (CASH uniquement) — billet remis par le client et
   // monnaie rendue. `changeAmount` est toujours = tenderedAmount - amount (≥ 0).
   // Nullable car non applicable hors CASH et rétro-compat transactions existantes.
@@ -1849,11 +1849,42 @@ model Transaction {
   metadata       Json     @default("{}")
   createdAt      DateTime @default(now())
 
-  cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
+  cashRegister CashRegister           @relation(fields: [cashRegisterId], references: [id])
+  components   TransactionComponent[]
 
   @@index([tenantId, createdAt])
   @@index([externalRef])
   @@map("transactions")
+}
+
+// TransactionComponent — ligne de détail d'un paiement composite (MIXED).
+// Quand un client règle un billet avec plusieurs méthodes (ex : 5000 CASH +
+// 3000 MOBILE_MONEY), la Transaction parente porte paymentMethod='MIXED'
+// et amount = somme totale ; les N TransactionComponent détaillent chaque
+// leg pour que le rapprochement caisse puisse ventiler correctement par
+// méthode (résout gap #3 "MIXED sans components" de l'audit workflow).
+// Invariant : Σ(components[].amount) === Transaction.amount.
+// Validation faite côté service avant insert.
+model TransactionComponent {
+  id            String  @id @default(cuid())
+  tenantId      String
+  transactionId String
+  // Ordre d'affichage sur le ticket de caisse + reçu (0 = 1er moyen saisi).
+  sortOrder     Int     @default(0)
+  paymentMethod String  // CASH | MOBILE_MONEY | CARD | BANK_TRANSFER | VOUCHER
+  amount        Float
+  // Preuve paiement par leg (code MoMo, ref CB, code voucher…).
+  proofCode     String?
+  proofType     String?
+  // Métadonnées spécifiques à ce leg (ex: last4 de carte, operateur MoMo).
+  metadata      Json    @default("{}")
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, transactionId])
+  @@index([transactionId, paymentMethod])
+  @@map("transaction_components")
 }
 
 // ─────────────────────────────────────────────────────────────
