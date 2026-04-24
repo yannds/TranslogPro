@@ -417,6 +417,25 @@ model TenantBusinessConfig {
   // provisionné — TurnstileGuard fail-open avec log.warn.
   captchaEnabled                Boolean @default(false)
 
+  // ── Briefing pré-voyage QHSE (2026-04-24, refonte multi-chapitres) ──────
+  // Politique globale :
+  //   OFF                      → module désactivé, aucun briefing proposé
+  //   RECOMMENDED (défaut)     → briefing affiché et tracé, jamais bloquant
+  //   RECOMMENDED_WITH_ALERT   → non bloquant mais émet une alerte sécurité
+  //                              si le trip démarre sans briefing signé
+  preTripBriefingPolicy        String  @default("RECOMMENDED")
+  // Politique en cas d'item `isMandatory` KO à la signature :
+  //   WARN_ONLY (défaut)       → trace dans le record, pas d'alerte
+  //   ALERT_MANAGER            → alerte sécurité + notification managers
+  //   BLOCK_DEPARTURE          → bloque le départ jusqu'à override justifié
+  mandatoryItemFailurePolicy   String  @default("WARN_ONLY")
+  // Politique repos chauffeur insuffisant (calcul auto vs `minDriverRestHours`) :
+  //   WARN | ALERT | BLOCK.
+  restShortfallPolicy          String  @default("WARN")
+  // Durée minimale (heures) de repos du chauffeur entre deux trajets.
+  // Défaut 11h (réglementation UE transport routier). Configurable par tenant.
+  minDriverRestHours           Int     @default(11)
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1292,6 +1311,7 @@ model Trip {
   travelers       Traveler[]        @relation("TripTravelers")
   costSnapshot    TripCostSnapshot?
   manifests       Manifest[]
+  safetyAlerts    TripSafetyAlert[]
 
   @@index([tenantId, status])
   @@index([tenantId, departureScheduled])
@@ -2180,6 +2200,14 @@ model CrewAssignment {
   version   Int       @default(1)
   createdAt DateTime  @default(now())
 
+  // ── Override BLOCK_DEPARTURE (refonte briefing 2026-04-24) ──────────────
+  // Si le tenant applique `mandatoryItemFailurePolicy = BLOCK_DEPARTURE` et
+  // qu'un manager autorise exceptionnellement le départ malgré un item KO,
+  // la justification est loguée ici (immuable, visible dans l'audit trip).
+  briefingOverrideById   String? // User.id du manager ayant overridé
+  briefingOverrideReason String? @db.Text
+  briefingOverrideAt     DateTime?
+
   trip           Trip                @relation(fields: [tripId], references: [id])
   briefingRecord CrewBriefingRecord?
 
@@ -2917,18 +2945,150 @@ model CrewBriefingRecord {
   assignmentId   String   @unique
   conductedById  String // Staff.id du responsable de briefing (driver ou co-pilot)
   checkedItems   Json     @default("[]")
-  // [{ equipmentTypeId: string, qty: number, ok: boolean, notes?: string }]
-  allEquipmentOk Boolean  @default(false)
+  // Refonte 2026-04-24 — format étendu :
+  // [{ itemId: string, kind: string, passed: boolean, qty?: number,
+  //    notes?: string, evidenceKeys?: string[], autoValue?: unknown }]
+  // Les legacy records (pré-refonte) gardent le format
+  // [{ equipmentTypeId, qty, ok, notes }] — le service sait lire les deux.
+  allEquipmentOk Boolean  @default(false) // DEPRECATED — conservé pour rétro-compat. Préférer `anomaliesCount == 0`
   briefingNotes  String?
   gpsLat         Float? // position GPS au moment du briefing
   gpsLng         Float?
   completedAt    DateTime @default(now())
   createdAt      DateTime @default(now())
 
-  assignment CrewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  // ── Refonte briefing QHSE (2026-04-24) ─────────────────────────────────
+  // Snapshot du template utilisé au moment du briefing — nullable pour les
+  // legacy records créés avant la refonte.
+  templateId             String?
+  // Double signature : le chauffeur co-signe pour acquitter (méthode libre).
+  acknowledgedByDriverId String?   // User.id du chauffeur signataire
+  driverSignedAt         DateTime?
+  driverSignatureMethod  String?   // "PIN" | "DRAW" | "BIOMETRIC"
+  driverSignatureBlob    String?   @db.Text  // hash PIN, dataURL dessin, ou jeton biométrique opaque
+  // Co-pilote (optionnel selon crew assignment).
+  coPilotSignedById      String?   // Staff.id du co-pilote
+  coPilotSignedAt        DateTime?
+  // Repos chauffeur calculé au moment du briefing (delta vs dernier trip terminé).
+  restHoursSnapshot      Float?
+  // Override BLOCK_DEPARTURE si tenant applique cette politique.
+  overrideReason         String?   @db.Text
+  overriddenById         String?
+  overriddenAt           DateTime?
+  // Nombre d'anomalies à la signature (items mandatory KO + shortfall repos).
+  anomaliesCount         Int       @default(0)
+
+  assignment CrewAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  template   BriefingTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([tenantId])
+  @@index([tenantId, templateId])
   @@map("crew_briefing_records")
+}
+
+// ── Templates multi-chapitres (refonte QHSE 2026-04-24) ──────────────────
+// Un tenant peut posséder plusieurs templates (urbain / longue distance /
+// fret), mais un seul est `isDefault` actif à la fois. Le template seed par
+// défaut est créé au provisioning tenant via briefing-template.seed.ts.
+model BriefingTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?  @db.Text
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections        BriefingSection[]
+  briefingRecords CrewBriefingRecord[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@index([tenantId, isDefault])
+  @@map("briefing_templates")
+}
+
+// Chapitre d'un template. Codes seed :
+//   DOCUMENTS | VEHICLE_STATE | SAFETY_EQUIPMENT | COMFORT |
+//   PASSENGER_INSTRUCTIONS | ROUTE_LOGISTICS | EMERGENCY_PROCEDURES |
+//   DRIVER_STATE. Tenant peut créer des codes custom.
+model BriefingSection {
+  id         String  @id @default(cuid())
+  tenantId   String
+  templateId String
+  code       String  // UPPER_SNAKE, stable — clé d'audit + i18n hint
+  titleFr    String
+  titleEn    String
+  order      Int     @default(0)
+  isActive   Boolean @default(true)
+
+  template BriefingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items    BriefingItem[]
+
+  @@unique([templateId, code])
+  @@index([tenantId])
+  @@map("briefing_sections")
+}
+
+// Item cochable.
+// kind :
+//   CHECK       = case à cocher (oui/non)
+//   QUANTITY    = matériel avec qty vs requiredQty (remplace BriefingEquipmentType)
+//   DOCUMENT    = présence d'un document à bord (carte grise, assurance…)
+//   ACKNOWLEDGE = annonce faite aux passagers (cochée après diffusion)
+//   INFO        = auto-calculé (repos chauffeur, météo, itinéraire, manifest…)
+// autoSource (kind=INFO uniquement) :
+//   DRIVER_REST_HOURS | WEATHER | MANIFEST_LOADED | ROUTE_CONFIRMED
+// evidenceAllowed : si true, l'UI autorise l'upload photo/doc en preuve.
+model BriefingItem {
+  id              String  @id @default(cuid())
+  tenantId        String
+  sectionId       String
+  code            String  // UPPER_SNAKE stable, ex: DOC_CARTE_GRISE, SAFETY_VESTS
+  kind            String  // CHECK | QUANTITY | DOCUMENT | ACKNOWLEDGE | INFO
+  labelFr         String
+  labelEn         String
+  helpFr          String?
+  helpEn          String?
+  requiredQty     Int     @default(1) // kind=QUANTITY uniquement
+  isMandatory     Boolean @default(true)
+  isActive        Boolean @default(true)
+  order           Int     @default(0)
+  evidenceAllowed Boolean @default(false)
+  autoSource      String? // kind=INFO : source auto-calculée
+
+  section BriefingSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([sectionId, code])
+  @@index([tenantId, kind])
+  @@index([tenantId, isActive])
+  @@map("briefing_items")
+}
+
+// Alerte sécurité trip — immuable, fait foi en cas d'accident.
+// Émise par le briefing (item KO mandatory, shortfall repos), ou par d'autres
+// sources plus tard (incidents, non-conformité QHSE…).
+// Visible : fiche trip admin, flight-deck, feed QHSE.
+model TripSafetyAlert {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tripId         String
+  severity       String    // INFO | WARNING | CRITICAL
+  source         String    // BRIEFING | INCIDENT | COMPLIANCE
+  code           String    // MANDATORY_EQUIPMENT_MISSING | DRIVER_REST_SHORTFALL | BRIEFING_MISSING …
+  payload        Json      @default("{}")
+  resolvedAt     DateTime?
+  resolvedById   String?   // User.id
+  resolutionNote String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@index([tenantId, tripId])
+  @@index([tenantId, resolvedAt])
+  @@index([tenantId, severity, resolvedAt])
+  @@map("trip_safety_alerts")
 }
 
 // ═════════════════════════════════════════════════════════════

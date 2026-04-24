@@ -569,6 +569,63 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     validate: numberInRange(1, 720),
   },
 
+  // ── Briefing pré-voyage QHSE (2026-04-24, refonte multi-chapitres) ─────
+  // Défauts injectés au provisioning tenant dans TenantBusinessConfig. Un
+  // admin tenant peut ensuite les surcharger via PageTenantBusinessRules
+  // (section Briefing). Les valeurs ci-dessous servent aussi de fallback si
+  // un ancien tenant pré-refonte n'a pas encore les colonnes seedées.
+  {
+    key:      'briefing.defaults.preTripPolicy',
+    type:     'string',
+    default:  'RECOMMENDED',
+    label:    'platformConfig.briefingPreTripPolicy',
+    help:     'platformConfig.briefingPreTripPolicyHelp',
+    group:    'platformConfig.groupBriefing',
+    validate: (v) => {
+      if (typeof v !== 'string') return 'platformConfig.errNotString';
+      return ['OFF', 'RECOMMENDED', 'RECOMMENDED_WITH_ALERT'].includes(v)
+        ? null
+        : 'platformConfig.briefingPreTripPolicyInvalid';
+    },
+  },
+  {
+    key:      'briefing.defaults.mandatoryFailurePolicy',
+    type:     'string',
+    default:  'WARN_ONLY',
+    label:    'platformConfig.briefingMandatoryFailurePolicy',
+    help:     'platformConfig.briefingMandatoryFailurePolicyHelp',
+    group:    'platformConfig.groupBriefing',
+    validate: (v) => {
+      if (typeof v !== 'string') return 'platformConfig.errNotString';
+      return ['WARN_ONLY', 'ALERT_MANAGER', 'BLOCK_DEPARTURE'].includes(v)
+        ? null
+        : 'platformConfig.briefingMandatoryFailurePolicyInvalid';
+    },
+  },
+  {
+    key:      'briefing.defaults.restShortfallPolicy',
+    type:     'string',
+    default:  'WARN',
+    label:    'platformConfig.briefingRestShortfallPolicy',
+    help:     'platformConfig.briefingRestShortfallPolicyHelp',
+    group:    'platformConfig.groupBriefing',
+    validate: (v) => {
+      if (typeof v !== 'string') return 'platformConfig.errNotString';
+      return ['WARN', 'ALERT', 'BLOCK'].includes(v)
+        ? null
+        : 'platformConfig.briefingRestShortfallPolicyInvalid';
+    },
+  },
+  {
+    key:      'briefing.defaults.minDriverRestHours',
+    type:     'number',
+    default:  11, // réglementation UE transport routier
+    label:    'platformConfig.briefingMinDriverRestHours',
+    help:     'platformConfig.briefingMinDriverRestHoursHelp',
+    group:    'platformConfig.groupBriefing',
+    validate: numberInRange(0, 72),
+  },
+
   // ── Routage routier ─────────────────────────────────────────────────────
   // Active le calcul de distance via API externe (Google Maps ou Mapbox).
   // Désactivé par défaut — aucun appel externe en dev/staging sans clé Vault.
