@@ -1643,6 +1643,7 @@ const wo: Record<string, Record<string, string>> = {
     "alertsHeading": "Xët yi ci yërmànde",
     "alertsDescription": "Xët yi jeex nañu, dañuy jeex ci 30 bés walla ñàkk nañu",
     "uploadScan": "Yóbbu scan",
+    "searchAlerts": "Seet ab xët (plaque, xeet, référence…)",
     "exportLabel": "Génne",
     "allUpToDate": "Xët yi yépp ci bés lañu",
     "noActiveAlert": "Amul yërmànde xët bu dox",

@@ -24,6 +24,7 @@ import { FormFooter } from '../ui/FormFooter';
 import { inputClass } from '../ui/inputClass';
 import { cn } from '../../lib/utils';
 import { UploadScanDialog } from '../upload/UploadScanDialog';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -431,6 +432,43 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
   const missingCount  = docAlerts?.filter(d => d.status === 'MISSING').length  ?? 0;
   const overdueCount  = consumables?.filter(c => c.status === 'OVERDUE').length ?? 0;
 
+  // ── Colonnes DataTableMaster — table docs en alerte ───────────────────────
+  const alertColumns: Column<DocAlertItem>[] = [
+    {
+      key: 'busPlate', header: t('fleetDocs.colBus'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div>
+          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{row.busPlate}</p>
+          <p className="text-xs text-slate-500">{row.busModel}</p>
+        </div>
+      ),
+    },
+    { key: 'typeName', header: t('fleetDocs.colDocType'), sortable: true },
+    {
+      key: 'referenceNo', header: t('fleetDocs.colReference'), sortable: true,
+      cellRenderer: (v) => <span className="font-mono text-slate-500">{(v as string | null) ?? '—'}</span>,
+    },
+    {
+      key: 'expiresAt', header: t('fleetDocs.colExpiration'), sortable: true, align: 'right',
+      cellRenderer: (v) => (
+        <span className="tabular-nums">{v ? new Date(v as string).toLocaleDateString('fr-FR') : '—'}</span>
+      ),
+      csvValue: (v) => (v ? new Date(v as string).toISOString().slice(0, 10) : ''),
+    },
+    {
+      key: 'status', header: t('fleetDocs.colStatus'), sortable: true,
+      cellRenderer: (v) => <Badge variant={docStatusVariant(v as DocAlertItem['status'])}>{docStatusLabel(v as DocAlertItem['status'], t)}</Badge>,
+    },
+  ];
+
+  const alertRowActions: RowAction<DocAlertItem>[] = [
+    {
+      label: t('fleetDocs.uploadScan'),
+      icon:  <Upload className="w-4 h-4" aria-hidden />,
+      onClick: (row) => setUploadTargetId(row.id),
+    },
+  ];
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'alerts',      label: t('fleetDocs.tabAlerts') },
     { id: 'consumables', label: t('fleetDocs.tabConsumables') },
@@ -510,60 +548,20 @@ export function PageFleetDocs({ initialTab = 'alerts' }: PageFleetDocsProps = {}
                 <div className="p-6 space-y-3" aria-busy="true" aria-label={t('fleetDocs.loading')}>
                   {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-              ) : !docAlerts || docAlerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400" role="status">
-                  <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" aria-hidden />
-                  <p className="font-medium">{t('fleetDocs.allUpToDate')}</p>
-                  <p className="text-sm mt-1">{t('fleetDocs.noActiveAlert')}</p>
-                </div>
               ) : (
-                <div role="table" aria-label={t('fleetDocs.alertsHeading')}>
-                  <div role="rowgroup">
-                    <div
-                      role="row"
-                      className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_0.8fr_auto] gap-3 px-6 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
-                    >
-                      <div role="columnheader">{t('fleetDocs.colBus')}</div>
-                      <div role="columnheader">{t('fleetDocs.colDocType')}</div>
-                      <div role="columnheader">{t('fleetDocs.colReference')}</div>
-                      <div role="columnheader">{t('fleetDocs.colExpiration')}</div>
-                      <div role="columnheader">{t('fleetDocs.colStatus')}</div>
-                      <div role="columnheader" className="sr-only">{t('common.actions')}</div>
-                    </div>
-                  </div>
-                  <div role="rowgroup">
-                    {docAlerts.map(doc => (
-                      <div
-                        key={doc.id}
-                        role="row"
-                        className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_0.8fr_auto] gap-3 px-6 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                      >
-                        <div role="cell">
-                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{doc.busPlate}</p>
-                          <p className="text-xs text-slate-500">{doc.busModel}</p>
-                        </div>
-                        <div role="cell" className="text-sm text-slate-700 dark:text-slate-300">{doc.typeName}</div>
-                        <div role="cell" className="text-sm font-mono text-slate-500">{doc.referenceNo ?? '—'}</div>
-                        <div role="cell" className="text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                          {doc.expiresAt ? new Date(doc.expiresAt).toLocaleDateString('fr-FR') : '—'}
-                        </div>
-                        <div role="cell">
-                          <Badge variant={docStatusVariant(doc.status)}>{docStatusLabel(doc.status, t)}</Badge>
-                        </div>
-                        <div role="cell" className="flex justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setUploadTargetId(doc.id)}
-                            aria-label={t('fleetDocs.uploadScan')}
-                          >
-                            <Upload className="w-4 h-4 mr-1" aria-hidden />
-                            {t('fleetDocs.uploadScan')}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="px-4 pb-4">
+                  <DataTableMaster<DocAlertItem>
+                    columns={alertColumns}
+                    data={docAlerts ?? []}
+                    loading={loadingAlerts}
+                    rowActions={alertRowActions}
+                    onRowClick={(row) => setUploadTargetId(row.id)}
+                    defaultSort={{ key: 'expiresAt', dir: 'asc' }}
+                    searchPlaceholder={t('fleetDocs.searchAlerts')}
+                    emptyMessage={t('fleetDocs.noActiveAlert')}
+                    exportFormats={['csv']}
+                    exportFilename="fleet-docs-alerts"
+                  />
                 </div>
               )}
             </CardContent>

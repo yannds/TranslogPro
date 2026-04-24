@@ -1647,6 +1647,7 @@ const ln: Record<string, Record<string, string>> = {
     "alertsHeading": "Mikanda ya biluleli",
     "alertsDescription": "Mikanda eleki, elingi kosila na mikolo 30 to ezali te",
     "uploadScan": "Tómbola scan",
+    "searchAlerts": "Luka mokanda (plaque, lolenge, référence…)",
     "exportLabel": "Kobimisa",
     "allUpToDate": "Mikanda nyonso ezali malamu",
     "noActiveAlert": "Eleleli moko te ya mikanda",

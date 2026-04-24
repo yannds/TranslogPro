@@ -1629,6 +1629,7 @@ const ktu: Record<string, Record<string, string>> = {
     "alertsHeading": "Mikanda na alerte",
     "alertsDescription": "Mikanda esilaki ntango, ekosilika na mikolo 30 to ezali te",
     "uploadScan": "Tula scan",
+    "searchAlerts": "Luka mukanda (plaque, type, référence…)",
     "exportLabel": "Kobimisa",
     "allUpToDate": "Mikanda nyonso ezali malamu",
     "noActiveAlert": "Alerte ya mikanda mosi te",

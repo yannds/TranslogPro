@@ -1710,6 +1710,7 @@ const pt: Record<string, Record<string, string>> = {
     "alertsHeading": "Alertas de Documentos",
     "alertsDescription": "Documentos vencidos, vencendo em 30 dias ou ausentes",
     "uploadScan": "Carregar digitalizado",
+    "searchAlerts": "Pesquisar um documento (matrícula, tipo, referência…)",
     "exportLabel": "Exportar",
     "allUpToDate": "Todos os documentos estão em dia",
     "noActiveAlert": "Nenhum alerta de documento ativo",
