@@ -577,12 +577,72 @@ print(f'sha256-{h}')
 
 ⚠️ **Le script `04-deploy.sh` peut overwriter le Caddyfile sur le VPS** (rsync depuis local). Le Caddyfile dans le repo `infra/prod/caddy/Caddyfile` doit être maintenu à jour avec les modifs prod (CSP, blocked_paths, h3 disable). Si tu modifies en prod via SSH, **resync immédiatement** le repo.
 
-### 8.6 — Hardening restant (Vague 3 suite)
+### 8.6 — Hardening Vague 3-B/C/D appliqué (2026-04-26)
 
-Voir le rapport complet `audit_2026-04-25/RAPPORT_AUDIT_PROD.md` :
-- HIGH-4 RLS Postgres + middleware NestJS `app.current_tenant_id`
-- HIGH-5 (suite) Vault uid=100 + cap_add IPC_LOCK/SETFCAP, Caddy/nginx + cap_add NET_BIND_SERVICE
-- LOW-18 MFA enrollment forcé pour TENANT_ADMIN
+| ID | Action | Vérif |
+|---|---|---|
+| V3-B | Web nginx non-root via `nginxinc/nginx-unprivileged:1.27-alpine` (uid 101, listen 8080) — Caddy `reverse_proxy web:8080` | `docker exec ... id` → uid=101 |
+| V3-C | RLS Postgres PERMISSIVE sur 120 tables `tenantId` — policies `tenant_isolation_runtime` (app_runtime) + `bypass_admin` — script `infra/prod/postgres/03-rls-runtime.sql` idempotent | `SELECT count(*) FROM pg_policies WHERE schemaname='public'` → 240 |
+| V3-D | MFA enforcement flag `mustEnrollMfa` dans `/me` et `signIn` réponse — true ssi STAFF + permission haut-privilège (control.iam.audit/manage.tenant, platform.manage, tenant.plan.change) sans MFA | Test login TENANT_ADMIN → réponse contient `mustEnrollMfa: true` |
+
+### 8.7 — Procédure DNSSEC (MED-7 — non encore activé)
+
+⚠️ Activer DNSSEC nécessite **action chez le registrar parent** (LWS pour `dsyann.info`) — sans DS record publié, la chain of trust est cassée.
+
+Procédure complète :
+
+1. **Générer KSK + ZSK ECDSAP256SHA256** dans le container BIND9 :
+   ```bash
+   ssh translog-vps
+   BIND_CID=$(docker ps --filter "label=com.docker.swarm.service.name=translog_bind9" -q | head -1)
+   docker exec $BIND_CID sh -c "
+     mkdir -p /var/lib/bind/keys
+     cd /var/lib/bind/keys
+     dnssec-keygen -a ECDSAP256SHA256 -fK translog.dsyann.info  # KSK
+     dnssec-keygen -a ECDSAP256SHA256    translog.dsyann.info   # ZSK
+     chmod 600 K*.private
+   "
+   ```
+
+2. **Activer inline-signing** dans `infra/prod/bind9/named.conf` :
+   ```
+   zone "translog.dsyann.info" {
+       type master;
+       file "/var/lib/bind/translog.db";
+       inline-signing yes;
+       auto-dnssec maintain;
+       key-directory "/var/lib/bind/keys";
+       allow-update { key translog-acme.; };  // existant TSIG
+   };
+   ```
+
+3. **Reload BIND9** : `docker service scale translog_bind9=0; sleep 3; docker service scale translog_bind9=1`
+
+4. **Récupérer le DS record** (KSK signé) :
+   ```bash
+   docker exec $BIND_CID dnssec-dsfromkey -2 /var/lib/bind/keys/Ktranslog.dsyann.info.+013+*.key
+   # Affiche : translog.dsyann.info. IN DS <key-tag> 13 2 <hash>
+   ```
+
+5. **Publier le DS chez LWS** (interface admin du registrar `dsyann.info`) :
+   - Type : DS
+   - Host : `translog`
+   - Algorithm : 13 (ECDSAP256SHA256)
+   - Digest type : 2 (SHA-256)
+   - Key tag + Digest : depuis la sortie étape 4
+
+6. **Vérifier propagation** : `dig +dnssec +short translog.dsyann.info` → doit retourner les RRSIG, et `dig DS translog.dsyann.info @8.8.8.8` doit retourner le DS publié.
+
+⚠️ Pour rotation des clés (annuel pour KSK, semestriel pour ZSK), procédure documentée dans https://datatracker.ietf.org/doc/html/rfc6781.
+
+### 8.8 — Hardening restant (Vague 4)
+
+- HIGH-5 (suite) Vault uid=100 + cap_add IPC_LOCK/SETFCAP — sealed scenario à gérer (3 unseal keys)
+- HIGH-5 (suite) Caddy non-root + cap_add NET_BIND_SERVICE — chown volumes /data /config /var/log
+- LOW-18 frontend : page `/account/mfa-enrollment`, redirect auto si `mustEnrollMfa: true` dans `/me` réponse, i18n 8 locales
+- MED-7 DNSSEC effectif — voir §8.7 (action chez registrar nécessaire)
+- Refacto deploy script `04-deploy.sh` pour ne pas écraser les Caddyfile/zone si déjà à jour
+- Bascule RLS PERMISSIVE → RESTRICTIVE strict (audit que tous les services utilisent `prisma.transact()`)
 - Investigation filtre Hostinger DDoS qui drop trafic MTN Congo (AS37463) — ticket Hostinger
 
 ---
