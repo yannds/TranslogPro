@@ -4795,7 +4795,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "colReason": "Raison",
     "colIp": "IP",
     "colCreatedAt": "Ouverte le",
-    "colEndedAt": "Terminée le"
+    "colEndedAt": "Terminée le",
+    "searchHistory": "Rechercher par acteur, raison, IP…"
   },
 
   // ─── Banner d'impersonation (sticky dashboard) ────────────────────────────

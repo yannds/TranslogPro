@@ -4786,7 +4786,8 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "colReason": "Reason",
     "colIp": "IP",
     "colCreatedAt": "Opened",
-    "colEndedAt": "Ended"
+    "colEndedAt": "Ended",
+    "searchHistory": "Search by actor, reason, IP…"
   },
 
   "impersonationBanner": {

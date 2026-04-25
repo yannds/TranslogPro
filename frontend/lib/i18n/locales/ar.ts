@@ -4037,7 +4037,8 @@ const ar: Record<string, Record<string, string>> = {
     "colReason": "السبب",
     "colIp": "IP",
     "colCreatedAt": "فُتحت",
-    "colEndedAt": "انتهت"
+    "colEndedAt": "انتهت",
+    "searchHistory": "البحث بالممثل أو السبب أو IP…"
   },
 
   "impersonationBanner": {

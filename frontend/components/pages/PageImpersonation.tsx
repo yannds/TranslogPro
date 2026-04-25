@@ -33,6 +33,7 @@ import { useI18n }                    from '../../lib/i18n/useI18n';
 import { Button }                    from '../ui/Button';
 import { Badge }                     from '../ui/Badge';
 import { Dialog }                    from '../ui/Dialog';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,75 @@ export function PageImpersonation() {
     ),
     [tenants],
   );
+
+  // ── Colonnes DataTableMaster — historique sessions impersonation ─────────
+  const historyColumns: Column<HistorySession>[] = [
+    {
+      key: 'status', header: t('impersonation.colStatus'), sortable: true, width: '110px',
+      cellRenderer: (v) => (
+        <Badge
+          variant={
+            v === 'ACTIVE'    ? 'info'    :
+            v === 'EXCHANGED' ? 'success' :
+            v === 'REVOKED'   ? 'danger'  : 'default'
+          }
+          size="sm"
+        >
+          {String(v)}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actorId', header: t('impersonation.colActor'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="min-w-0">
+          <p className="t-text truncate max-w-[220px]">{row.actor?.name ?? row.actor?.email ?? '—'}</p>
+          {row.actor?.email && row.actor.name && (
+            <p className="text-[10px] t-text-3 truncate max-w-[220px]">{row.actor.email}</p>
+          )}
+        </div>
+      ),
+      csvValue: (_v, row) => row.actor?.email ?? row.actor?.name ?? row.actorId,
+    },
+    {
+      key: 'reason', header: t('impersonation.colReason'), sortable: false,
+      cellRenderer: (v) => (
+        <span className="italic t-text-body block max-w-[260px] truncate">{(v as string | null) ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'ipAddress', header: t('impersonation.colIp'), sortable: true, width: '140px',
+      cellRenderer: (v) => <span className="font-mono text-xs">{(v as string | null) ?? '—'}</span>,
+    },
+    {
+      key: 'createdAt', header: t('impersonation.colCreatedAt'), sortable: true, width: '150px',
+      cellRenderer: (v) => (
+        <span className="whitespace-nowrap text-xs">{new Date(v as string).toLocaleString(dateLocale, {
+          day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+        })}</span>
+      ),
+      csvValue: (v) => new Date(v as string).toISOString(),
+    },
+    {
+      key: 'expiresAt', header: t('impersonation.colEndedAt'), sortable: true, width: '150px',
+      cellRenderer: (_v, row) => {
+        const endedAt = row.revokedAt ?? (row.status === 'EXPIRED' ? row.expiresAt : null);
+        return (
+          <span className="whitespace-nowrap text-xs">
+            {endedAt
+              ? new Date(endedAt).toLocaleString(dateLocale, {
+                  day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+                })
+              : '—'}
+          </span>
+        );
+      },
+      csvValue: (_v, row) => {
+        const endedAt = row.revokedAt ?? (row.status === 'EXPIRED' ? row.expiresAt : null);
+        return endedAt ? new Date(endedAt).toISOString() : '';
+      },
+    },
+  ];
 
   const handleSwitch = async (e: FormEvent) => {
     e.preventDefault();
@@ -666,69 +736,17 @@ export function PageImpersonation() {
           )}
 
           {history && history.sessions.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left t-text-3 border-b border-slate-200 dark:border-slate-800">
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colStatus')}</th>
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colActor')}</th>
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colReason')}</th>
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colIp')}</th>
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colCreatedAt')}</th>
-                    <th className="py-1.5 px-2 font-medium">{t('impersonation.colEndedAt')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.sessions.map(s => {
-                    const endedAt = s.revokedAt ?? (s.status === 'EXPIRED' ? s.expiresAt : null);
-                    return (
-                      <tr key={s.id} className="border-b border-slate-100 dark:border-slate-900">
-                        <td className="py-1.5 px-2">
-                          <Badge
-                            variant={
-                              s.status === 'ACTIVE' ? 'info' :
-                              s.status === 'EXCHANGED' ? 'success' :
-                              s.status === 'REVOKED' ? 'danger' : 'default'
-                            }
-                            size="sm"
-                          >
-                            {s.status}
-                          </Badge>
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <div className="min-w-0">
-                            <p className="t-text truncate max-w-[200px]">
-                              {s.actor?.name ?? s.actor?.email ?? '—'}
-                            </p>
-                            {s.actor?.email && s.actor.name && (
-                              <p className="text-[10px] t-text-3 truncate max-w-[200px]">{s.actor.email}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-1.5 px-2 italic t-text-body max-w-[250px] truncate">
-                          {s.reason ?? '—'}
-                        </td>
-                        <td className="py-1.5 px-2 font-mono t-text-3">{s.ipAddress ?? '—'}</td>
-                        <td className="py-1.5 px-2 t-text-3 whitespace-nowrap">
-                          {new Date(s.createdAt).toLocaleString(dateLocale, {
-                            day: '2-digit', month: '2-digit', year: '2-digit',
-                            hour: '2-digit', minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="py-1.5 px-2 t-text-3 whitespace-nowrap">
-                          {endedAt
-                            ? new Date(endedAt).toLocaleString(dateLocale, {
-                                day: '2-digit', month: '2-digit', year: '2-digit',
-                                hour: '2-digit', minute: '2-digit',
-                              })
-                            : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTableMaster<HistorySession>
+              columns={historyColumns}
+              data={history.sessions}
+              loading={lHist}
+              defaultSort={{ key: 'createdAt', dir: 'desc' }}
+              defaultPageSize={25}
+              searchPlaceholder={t('impersonation.searchHistory')}
+              emptyMessage={t('impersonation.historyEmpty')}
+              exportFormats={['csv']}
+              exportFilename="impersonation-history"
+            />
           )}
         </section>
       )}

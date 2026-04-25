@@ -4017,7 +4017,8 @@ const es: Record<string, Record<string, string>> = {
     "colReason": "Motivo",
     "colIp": "IP",
     "colCreatedAt": "Abierta",
-    "colEndedAt": "Terminada"
+    "colEndedAt": "Terminada",
+    "searchHistory": "Buscar por actor, motivo, IP…"
   },
 
   "impersonationBanner": {

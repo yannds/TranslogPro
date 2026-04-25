@@ -4032,7 +4032,8 @@ const pt: Record<string, Record<string, string>> = {
     "colReason": "Motivo",
     "colIp": "IP",
     "colCreatedAt": "Aberta",
-    "colEndedAt": "Terminada"
+    "colEndedAt": "Terminada",
+    "searchHistory": "Pesquisar por ator, motivo, IP…"
   },
 
   "impersonationBanner": {

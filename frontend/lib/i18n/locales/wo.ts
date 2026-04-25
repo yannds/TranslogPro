@@ -4104,7 +4104,8 @@ const wo: Record<string, Record<string, string>> = {
     "colReason": "Ngir",
     "colIp": "IP",
     "colCreatedAt": "Ubbéeku",
-    "colEndedAt": "Jeex"
+    "colEndedAt": "Jeex",
+    "searchHistory": "Seet ci aktoor, ngir, IP…"
   },
 
   "impersonationBanner": {

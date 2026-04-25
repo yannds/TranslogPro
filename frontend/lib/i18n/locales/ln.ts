@@ -4108,7 +4108,8 @@ const ln: Record<string, Record<string, string>> = {
     "colReason": "Ntina",
     "colIp": "IP",
     "colCreatedAt": "Efungolami",
-    "colEndedAt": "Esuka"
+    "colEndedAt": "Esuka",
+    "searchHistory": "Luka na acteur, ntina, IP…"
   },
 
   "impersonationBanner": {

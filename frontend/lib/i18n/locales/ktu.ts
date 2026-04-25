@@ -4090,7 +4090,8 @@ const ktu: Record<string, Record<string, string>> = {
     "colReason": "Kisina",
     "colIp": "IP",
     "colCreatedAt": "Kafungulama",
-    "colEndedAt": "Kamana"
+    "colEndedAt": "Kamana",
+    "searchHistory": "Luka na acteur, raison, IP…"
   },
 
   "impersonationBanner": {
