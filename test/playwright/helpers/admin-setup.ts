@@ -63,6 +63,10 @@ const ALL_TENANT_PERMISSIONS = [
   'data.refund.process.tenant',
   // Settings
   'control.settings.manage.tenant',
+  // Templates
+  'data.template.read.agency',
+  'data.template.write.agency',
+  'data.template.delete.agency',
   // IAM
   'control.iam.manage.tenant',
   'data.iam.audit.tenant',
