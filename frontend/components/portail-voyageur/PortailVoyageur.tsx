@@ -163,19 +163,35 @@ function tAmenity(t: (k: string) => string, key: string): string {
   return AMENITY_I18N[key] ? t(AMENITY_I18N[key]) : key;
 }
 
-const DEMO_PAYMENT_METHODS: PaymentMethod[] = [
-  { providerId: 'mtn_momo', displayName: 'MTN Mobile Money', type: 'MOBILE_MONEY', phonePrefix: '+242' },
-  { providerId: 'airtel_money', displayName: 'Airtel Money', type: 'MOBILE_MONEY', phonePrefix: '+242' },
-  { providerId: 'card_visa', displayName: 'Visa', type: 'CARD' },
-  { providerId: 'card_mastercard', displayName: 'Mastercard', type: 'CARD' },
-];
+interface PopularRoute {
+  from: string;
+  to: string;
+  price: number;
+  durationMinutes: number | null;
+}
 
-const POPULAR_ROUTES = [
-  { from: 'Brazzaville', to: 'Pointe-Noire', price: 10000, duration: '8h' },
-  { from: 'Brazzaville', to: 'Dolisie', price: 8000, duration: '6h' },
-  { from: 'Pointe-Noire', to: 'Dolisie', price: 5000, duration: '3h' },
-  { from: 'Brazzaville', to: 'Ouesso', price: 25000, duration: '14h' },
-];
+// Indicatifs téléphoniques ISO 3166-1 → E.164 dial. Sous-ensemble des pays
+// servis par le SaaS — aligné sur src/common/helpers/phone.helper.ts.
+const COUNTRY_DIAL: Record<string, string> = {
+  CG: '242', GA: '241', CD: '243', CM: '237', CF: '236', TD: '235', GQ: '240',
+  SN: '221', CI: '225', ML: '223', BF: '226', NE: '227', TG: '228', BJ: '229',
+  GN: '224', GW: '245', GM: '220', MR: '222', CV: '238',
+  MA: '212', DZ: '213', TN: '216',
+  KE: '254', TZ: '255', UG: '256', RW: '250', ET: '251',
+  FR: '33', BE: '32', CH: '41',
+};
+
+function phonePlaceholder(country: string | undefined, sample: '06' | '05'): string {
+  const dial = COUNTRY_DIAL[(country ?? 'CG').toUpperCase()] ?? '242';
+  return `+${dial} ${sample} 000 00 00`;
+}
+
+function fmtDurationMins(mins: number): string {
+  if (mins < 60) return `${mins}min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
+}
 
 const PAYMENT_COLORS: Record<string, string> = {
   mtn_momo: 'bg-yellow-500', airtel_money: 'bg-red-500', orange_money: 'bg-orange-500',
@@ -429,7 +445,8 @@ interface BookingResult {
 
 const emptyPassenger = (): Partial<PassengerInfo> => ({ seatType: 'STANDARD' });
 
-function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; passengerCount: number; onClose: () => void }) {
+function BookingModal({ trip, paymentMethods, apiBase, passengerCount, country, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; passengerCount: number; country?: string; onClose: () => void }) {
+  const phonePh = phonePlaceholder(country, '06');
   const { t } = useI18n();
   const fmt = useCurrencyFormatter();
   const count = Math.max(1, Math.min(passengerCount, 8));
@@ -570,11 +587,11 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, onClose }
                   {count > 1 && <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t('portail.passengerN').replace('{n}', String(idx + 1))}</p>}
                   {idx === 0 && <div><h3 className="font-semibold text-slate-900 dark:text-white text-base sm:text-lg">{t('portail.passengerInfo')}</h3><p className="text-sm text-slate-500 mt-1">{t('portail.passengerInfoDesc')}</p></div>}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Inp label={t('portail.firstName')} ph="Jean" value={pax.firstName || ''} set={v => updatePassenger(idx, { firstName: v })} />
-                    <Inp label={t('portail.lastName')} ph="Makaya" value={pax.lastName || ''} set={v => updatePassenger(idx, { lastName: v })} />
+                    <Inp label={t('portail.firstName')} ph={t('portail.firstNamePlaceholder')} value={pax.firstName || ''} set={v => updatePassenger(idx, { firstName: v })} />
+                    <Inp label={t('portail.lastName')}  ph={t('portail.lastNamePlaceholder')}  value={pax.lastName  || ''} set={v => updatePassenger(idx, { lastName: v })} />
                   </div>
-                  <Inp label={t('portail.phoneLabel')} ph="+242 06 000 00 00" value={pax.phone || ''} set={v => updatePassenger(idx, { phone: v })} />
-                  <Inp label={t('portail.emailOptional')} ph="jean@exemple.com" type="email" value={pax.email || ''} set={v => updatePassenger(idx, { email: v })} />
+                  <Inp label={t('portail.phoneLabel')} ph={phonePh} value={pax.phone || ''} set={v => updatePassenger(idx, { phone: v })} />
+                  <Inp label={t('portail.emailOptional')} ph={t('portail.emailPlaceholder')} type="email" value={pax.email || ''} set={v => updatePassenger(idx, { email: v })} />
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
                     {/* TODO S2: consommer l'endpoint public `/p/:slug/fare-classes`
@@ -938,7 +955,9 @@ const PARCEL_STATUS_LABEL: Record<string, string> = {
   RETURNED:   'portail.parcelStatusReturned',
 };
 
-function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: string | null }) {
+function ParcelSection({ t, apiBase, country }: { t: (k: string) => string; apiBase: string | null; country?: string }) {
+  const phonePhSnd = phonePlaceholder(country, '06');
+  const phonePhRcv = phonePlaceholder(country, '05');
   const [tab, setTab] = useState<'track' | 'send'>('track');
   const { cities } = useTenantConfig();
   const cityOptions = useMemo(
@@ -1119,12 +1138,12 @@ function ParcelSection({ t, apiBase }: { t: (k: string) => string; apiBase: stri
           <p className="text-sm text-slate-500 mb-4">{t('portail.sendParcelDesc')}</p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Inp label={t('portail.senderName')} ph="Jean Makaya" value={form.senderName} set={setField('senderName')} />
-              <Inp label={t('portail.senderPhone')} ph="+242 06 000 00 00" value={form.senderPhone} set={setField('senderPhone')} />
+              <Inp label={t('portail.senderName')} ph={t('portail.senderNamePlaceholder')} value={form.senderName} set={setField('senderName')} />
+              <Inp label={t('portail.senderPhone')} ph={phonePhSnd} value={form.senderPhone} set={setField('senderPhone')} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Inp label={t('portail.recipientName')} ph="Marie Mouanda" value={form.recipientName} set={setField('recipientName')} />
-              <Inp label={t('portail.recipientPhone')} ph="+242 05 000 00 00" value={form.recipientPhone} set={setField('recipientPhone')} />
+              <Inp label={t('portail.recipientName')} ph={t('portail.recipientNamePlaceholder')} value={form.recipientName} set={setField('recipientName')} />
+              <Inp label={t('portail.recipientPhone')} ph={phonePhRcv} value={form.recipientPhone} set={setField('recipientPhone')} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Sel label={t('portail.fromCity')} value={form.fromCity} set={setField('fromCity')} options={cityOptions} placeholder={t('portail.searchCityPlaceholder')} />
@@ -1489,11 +1508,15 @@ export function PortailVoyageur() {
   const cfgDeps = useMemo(() => [tenantSlug], [tenantSlug]);
   const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string>; city?: string; country?: string }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string; newsCmsEnabled?: boolean } | null }>(cfgUrl, cfgDeps, skip);
   const stRes = useFetch<StationInfo[]>(stUrl, cfgDeps, skip);
+  const popularUrl = apiBase ? `${apiBase}/popular-routes` : null;
+  const popularRes = useFetch<PopularRoute[]>(popularUrl, cfgDeps, skip);
+  const popularRoutes = popularRes.data ?? [];
+  const tenantCountry = cfg.data?.tenant?.country;
   // Tenant name takes priority — brand.brandName is only used if tenant specifically set it
   const brandName = cfg.data?.tenant?.name || cfg.data?.brand?.brandName || '';
   const brandLogo = cfg.data?.brand?.logoUrl;
   const stations = stRes.data ?? [];
-  const pms = cfg.data?.paymentMethods ?? DEMO_PAYMENT_METHODS; // payment methods fallback OK (country-specific)
+  const pms = cfg.data?.paymentMethods ?? [];
 
   // Villes uniquement — le backend matche toutes les gares d'une ville via stopMatches(city).
   const cityOptions: ComboboxOption[] = useMemo(() => {
@@ -1741,16 +1764,21 @@ export function PortailVoyageur() {
       <div className={cn('max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-14', layout === 'horizon' && section === 'booking' && !searched && 'pt-20 sm:pt-24')}>
         {section === 'booking' && (<>
           {!searched ? (
-            <div>
-              <STitle title={t('portail.popularTrips')} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{POPULAR_ROUTES.map(r => (
-                <button key={`${r.from}-${r.to}`} onClick={() => quick(r.from, r.to)} className="group relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 hover:[border-color:var(--portal-accent)] hover:shadow-xl hover:shadow-amber-500/5 transition-all text-left overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500" />
-                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">{r.from} &rarr; {r.to}</p>
-                  <div className="flex items-center gap-2 mt-2"><span className="text-xs font-semibold [color:var(--portal-accent)]">{t('portail.from')} {fmt(r.price)}</span><span className="text-xs text-slate-400">&middot; {r.duration}</span></div>
-                </button>
-              ))}</div>
-            </div>
+            popularRoutes.length > 0 ? (
+              <div>
+                <STitle title={t('portail.popularTrips')} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{popularRoutes.map(r => (
+                  <button key={`${r.from}-${r.to}`} onClick={() => quick(r.from, r.to)} className="group relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 hover:[border-color:var(--portal-accent)] hover:shadow-xl hover:shadow-amber-500/5 transition-all text-left overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-500" />
+                    <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">{r.from} &rarr; {r.to}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs font-semibold [color:var(--portal-accent)]">{t('portail.from')} {fmt(r.price)}</span>
+                      {r.durationMinutes !== null && <span className="text-xs text-slate-400">&middot; {fmtDurationMins(r.durationMinutes)}</span>}
+                    </div>
+                  </button>
+                ))}</div>
+              </div>
+            ) : null
           ) : (
             <div>
               <div className="flex flex-col gap-4 mb-6">
@@ -1799,7 +1827,7 @@ export function PortailVoyageur() {
             </div>
           )}
         </>)}
-        {section === 'parcels' && <ParcelSection t={t} apiBase={apiBase} />}
+        {section === 'parcels' && <ParcelSection t={t} apiBase={apiBase} country={tenantCountry} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
         {section === 'about' && (() => {
           const ICON_MAP: Record<string, string> = { shield: '\u2691', sparkles: '\u2726', target: '\u2316' };
@@ -1967,7 +1995,7 @@ export function PortailVoyageur() {
         </footer>
       )}
 
-      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} passengerCount={pax} onClose={() => setSelTrip(null)} />}
+      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} passengerCount={pax} country={tenantCountry} onClose={() => setSelTrip(null)} />}
     </div>
     </PortalThemeCtx.Provider>
   );

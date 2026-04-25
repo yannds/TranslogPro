@@ -38,6 +38,20 @@ export class PublicPortalController {
     return this.service.getPortalConfig(slug);
   }
 
+  /**
+   * Trajets populaires du tenant — top 4 OD par billets confirmés sur 90j.
+   * Retourne `[]` si zéro vente (tenant nouvellement créé). Aucun fallback hardcodé.
+   */
+  @Get('popular-routes')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_popular_routes',
+    message: 'Too many requests.',
+  })
+  getPopularRoutes(@Param('tenantSlug') slug: string) {
+    return this.service.getPopularRoutes(slug);
+  }
+
   /** Liste des gares/villes pour les dropdowns de recherche */
   @Get('stations')
   @UseGuards(RedisRateLimitGuard)

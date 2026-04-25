@@ -700,6 +700,127 @@ export class PublicPortalService {
     });
   }
 
+  // ─── Popular routes (top OD by confirmed tickets, 90-day window) ──────────
+
+  /**
+   * Top 4 trajets vendus du tenant sur 90 jours glissants. Source de vérité :
+   * les billets confirmés (CONFIRMED/CHECKED_IN/BOARDED/COMPLETED). Retour vide
+   * si zéro vente — pas de fallback hardcodé. Cache Redis 5 min.
+   *
+   * Durée segment : interpolée à partir d'un Trip réel via le ratio
+   * `distanceFromOriginKm / route.distanceKm`. Permet de gérer correctement
+   * les segments intermédiaires (Brazza→Dolisie sur une route Brazza→Pointe-Noire).
+   */
+  async getPopularRoutes(tenantSlug: string): Promise<Array<{
+    from: string;
+    to: string;
+    price: number;
+    durationMinutes: number | null;
+  }>> {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const cacheKey = `portal:popular:${tenant.id}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const since = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+
+    const grouped = await this.prisma.ticket.groupBy({
+      by: ['boardingStationId', 'alightingStationId'],
+      where: {
+        tenantId: tenant.id,
+        status:   { in: ['CONFIRMED', 'CHECKED_IN', 'BOARDED', 'COMPLETED'] },
+        createdAt: { gte: since },
+      },
+      _count: true,
+      _min:   { pricePaid: true },
+      orderBy: { _count: { boardingStationId: 'desc' } },
+      take: 4,
+    });
+
+    if (grouped.length === 0) {
+      await this.redis.setex(cacheKey, PORTAL_CACHE_TTL, JSON.stringify([]));
+      return [];
+    }
+
+    const stationIds = new Set<string>();
+    for (const g of grouped) {
+      stationIds.add(g.boardingStationId);
+      stationIds.add(g.alightingStationId);
+    }
+    const stations = await this.prisma.station.findMany({
+      where:  { id: { in: [...stationIds] } },
+      select: { id: true, name: true, city: true },
+    });
+    const stationMap = new Map(stations.map(s => [s.id, s]));
+
+    // Durée par OD : extrapolée depuis un Trip récent via le ratio distance.
+    // Ticket → tripId (FK string, pas de relation Prisma) → on fetche le Trip séparément.
+    const durations = new Map<string, number>();
+    for (const g of grouped) {
+      const sampleTicket = await this.prisma.ticket.findFirst({
+        where: {
+          tenantId:           tenant.id,
+          boardingStationId:  g.boardingStationId,
+          alightingStationId: g.alightingStationId,
+        },
+        select:  { tripId: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!sampleTicket) continue;
+
+      const trip = await this.prisma.trip.findUnique({
+        where:  { id: sampleTicket.tripId },
+        select: {
+          departureScheduled: true,
+          arrivalScheduled:   true,
+          route: {
+            select: {
+              originId:      true,
+              destinationId: true,
+              distanceKm:    true,
+              waypoints: {
+                select: { stationId: true, distanceFromOriginKm: true, kind: true },
+              },
+            },
+          },
+        },
+      });
+      if (!trip || trip.route.distanceKm <= 0) continue;
+
+      const km = (sid: string): number | null => {
+        if (sid === trip.route.originId)      return 0;
+        if (sid === trip.route.destinationId) return trip.route.distanceKm;
+        const wp = trip.route.waypoints.find(w => w.stationId === sid && (!w.kind || w.kind === 'STATION'));
+        return wp ? wp.distanceFromOriginKm : null;
+      };
+      const boardKm  = km(g.boardingStationId);
+      const alightKm = km(g.alightingStationId);
+      if (boardKm === null || alightKm === null || alightKm <= boardKm) continue;
+
+      const fullMs  = trip.arrivalScheduled.getTime() - trip.departureScheduled.getTime();
+      const ratio   = (alightKm - boardKm) / trip.route.distanceKm;
+      const minutes = Math.round((fullMs * ratio) / 60_000);
+      if (minutes > 0) durations.set(`${g.boardingStationId}|${g.alightingStationId}`, minutes);
+    }
+
+    const result = grouped
+      .map(g => {
+        const fromS = stationMap.get(g.boardingStationId);
+        const toS   = stationMap.get(g.alightingStationId);
+        return {
+          from:            fromS?.city || fromS?.name || '',
+          to:              toS?.city   || toS?.name   || '',
+          price:           g._min.pricePaid ?? 0,
+          durationMinutes: durations.get(`${g.boardingStationId}|${g.alightingStationId}`) ?? null,
+        };
+      })
+      .filter(r => r.from && r.to && r.from !== r.to);
+
+    await this.redis.setex(cacheKey, PORTAL_CACHE_TTL, JSON.stringify(result));
+    return result;
+  }
+
   // ─── Stations list (for search dropdowns) ─────────────────────────────────
 
   async getStations(tenantSlug: string) {
