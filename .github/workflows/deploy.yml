@@ -5,6 +5,9 @@
 # Trigger :
 #   - workflow_dispatch (manuel) → tous les déploiements importants
 #   - push tags v*.*.*           → release officielle
+#   - push main                  → auto-deploy (skip si commit "[skip deploy]")
+#                                  Skip aussi si change uniquement docs/tests
+#                                  via paths-ignore.
 #
 # Secrets GitHub à configurer (Settings → Secrets and variables → Actions) :
 #   SSH_PRIVATE_KEY      Clé privée SSH (format OpenSSH) accès root@VPS
@@ -35,6 +38,24 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'reports/**'
+      - 'test/playwright/**'
+      - 'test/unit/**'
+      - 'test/integration/**'
+      - 'test/security/**'
+      - 'test/e2e/**'
+      - '.gitignore'
+
+# Annule le run précédent si un nouveau push arrive — évite 2 deploys
+# qui se piétinent sur le même VPS.
+concurrency:
+  group: deploy-prod-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io

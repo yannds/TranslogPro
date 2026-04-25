@@ -88,8 +88,8 @@ for img in translog_api:1.0.0 translog_web:1.0.0 prod-caddy:latest; do
 done
 ok "Images OK : translog_api, translog_web, prod-caddy"
 
-# ─── 3. Cleanup compose résiduel + bridge translog_net ──────────────────────
-header "[3/12] Cleanup ancien Compose + bridge"
+# ─── 3. Cleanup compose résiduel + bridge + services orphelins ─────────────
+header "[3/12] Cleanup ancien Compose + bridge + services orphelins"
 
 docker compose --env-file .env.prod -f $COMPOSE_FILE down --remove-orphans 2>/dev/null || true
 
@@ -100,6 +100,22 @@ if docker network inspect translog_net >/dev/null 2>&1; then
         ok "Ancien bridge translog_net supprimé"
     fi
 fi
+
+# Auto-heal : tout service ${STACK_NAME}_* qui n'a pas le label
+# `com.docker.stack.namespace=${STACK_NAME}` est orphelin (créé hors stack
+# ou laissé après un stack rm partiel — observé après reboot Docker via
+# unattended-upgrades). `docker stack deploy` refuse alors de prendre la
+# main et plante avec "name conflicts with an existing object". On les
+# supprime ici, le deploy stack recrée à l'identique juste après.
+ORPHANS=$(docker service ls --format '{{.Name}}' 2>/dev/null | grep "^${STACK_NAME}_" || true)
+for svc in $ORPHANS; do
+    label=$(docker service inspect "$svc" --format '{{ index .Spec.Labels "com.docker.stack.namespace" }}' 2>/dev/null || echo "")
+    if [ "$label" != "$STACK_NAME" ]; then
+        warn "Service orphelin détecté : $svc (label=\"$label\") → drop avant deploy"
+        docker service rm "$svc" >/dev/null 2>&1 || true
+    fi
+done
+
 ok "Cleanup OK"
 
 # ─── 4. Deploy stack Swarm ───────────────────────────────────────────────────
