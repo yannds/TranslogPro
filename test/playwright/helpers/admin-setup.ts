@@ -156,6 +156,17 @@ export async function ensureModule(tenantId: string, moduleKey: string): Promise
  * les services qui lisent des paramètres business (CancellationPolicyService,
  * PricingEngine, etc.). Ne touche pas si déjà présent.
  */
+/**
+ * Marque le tenant comme ACTIVE pour exposer les endpoints publics
+ * (public portal, signup gating). Le default fixture est PENDING.
+ */
+export async function ensureTenantActive(tenantId: string): Promise<void> {
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data:  { isActive: true, provisionStatus: 'ACTIVE' },
+  });
+}
+
 export async function ensureBusinessConfig(tenantId: string): Promise<void> {
   await prisma.tenantBusinessConfig.upsert({
     where:  { tenantId },
@@ -227,6 +238,7 @@ export async function setupAdminTenant(
   const agencyId = await ensureAgency(tenant.id);
   await setUserAgency(tenant.userId, agencyId);
   await grantAllPermissions(tenant.userId);
+  await ensureTenantActive(tenant.id);
   await ensureBusinessConfig(tenant.id);
   await ensureWorkflowConfigs(tenant.id);
   if (modules.length > 0) await ensureModules(tenant.id, modules);
