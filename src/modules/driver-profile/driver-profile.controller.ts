@@ -17,6 +17,7 @@ import {
 import { DriverScoringService } from './driver-scoring.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { TenantId }          from '../../common/decorators/tenant-id.decorator';
+import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 interface MulterFile {
   fieldname:    string;
@@ -251,8 +252,9 @@ export class DriverProfileController {
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() dto: CompleteTrainingDto,
+    @CurrentUser() actor: CurrentUserPayload,
   ) {
-    return this.svc.completeTraining(tenantId, id, dto);
+    return this.svc.completeTraining(tenantId, id, dto, actor);
   }
 
   @Delete('trainings/:id')
