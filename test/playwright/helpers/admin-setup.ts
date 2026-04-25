@@ -75,6 +75,7 @@ const ALL_TENANT_PERMISSIONS = [
   'data.crm.read.agency',
   'data.crm.write.tenant',
   'data.crm.write.agency',
+  'control.campaign.manage.tenant',
   // QHSE
   'control.qhse.manage.tenant',
   'data.qhse.read.tenant',

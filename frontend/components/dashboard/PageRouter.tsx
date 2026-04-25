@@ -24,6 +24,7 @@ import { PageWip }       from './PageWip';
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyFleetDocs      = lazy(() => import('../pages/PageFleetDocs').then(m => ({ default: m.PageFleetDocs })));
+const LazyCrmCampaigns   = lazy(() => import('../pages/PageCrmCampaigns').then(m => ({ default: m.PageCrmCampaigns })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyDriverProfile  = lazy(() => import('../pages/PageDriverProfile').then(m => ({ default: m.PageDriverProfile })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -387,7 +388,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
 
     // ── CRM ────────────────────────────────────────────────────────────────
     case 'crm-clients':         return <PageCrm />;
-    case 'crm-campaigns':       return <PageWip title={t('router.campaigns')} />;
+    case 'crm-campaigns':       return <LazyCrmCampaigns />;
     case 'crm-loyalty':         return <PageWip title={t('router.loyalty')} />;
     case 'crm-feedback':        return <PageWip title={t('router.feedback')} />;
 
