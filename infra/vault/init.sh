@@ -118,9 +118,10 @@ echo "🏢 Creating default dev tenant secrets..."
 vault kv put secret/tenants/tenant-dev/hmac \
   KEY="dev-hmac-key-change-in-production-$(date +%s)"
 
-# Seed tenant (UUID du seed DB)
+# Seed tenant (UUID du seed DB) — clé HMAC générée à chaque init dev
+# (jamais de secret hardcodé — en prod, la clé est créée à l'onboarding via VaultService.createTenantHmacKey)
 vault kv put secret/tenants/11111111-1111-1111-1111-111111111111/hmac \
-  KEY="a3f8b2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1"
+  KEY="dev-tenant-seed-hmac-change-me-$(openssl rand -hex 16)"
 
 vault kv put secret/tenants/tenant-dev/pay \
   FLUTTERWAVE_SECRET="FLWSECK_TEST-dev-key" \

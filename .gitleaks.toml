@@ -1,0 +1,63 @@
+# Gitleaks config — TransLog Pro
+# https://github.com/gitleaks/gitleaks#configuration
+#
+# On garde toutes les règles par défaut (extends.useDefault) et on ajoute juste
+# les exceptions pour les fixtures de tests et les seeds dev.
+
+[extend]
+useDefault = true
+
+# ─── Allowlist : faux positifs déjà audités ──────────────────────────────────
+# Toute valeur ajoutée ici doit être :
+#   - soit dans un fichier de TEST (mocks, fixtures)
+#   - soit un seed DEV explicitement marqué comme tel
+# JAMAIS de vrai secret prod en allowlist.
+
+[allowlist]
+description = "Tests fixtures and dev seeds (audited 2026-04-25)"
+
+# Paths à exempter (mocks, fixtures, etc.)
+paths = [
+    '''test/.*\.spec\.ts$''',
+    '''test/.*\.test\.ts$''',
+    '''.*\.fixtures?\.ts$''',
+    '''dist/.*''',
+    '''node_modules/.*''',
+    '''frontend/node_modules/.*''',
+    '''\.claude/.*''',
+    # iOS CocoaPods lockfiles — contiennent des sha256 de pods (non-secret)
+    '''mobile/.*/ios/Podfile\.lock$''',
+    '''mobile/.*/ios/Pods/Manifest\.lock$''',
+    # Audit logs (cette session) — peuvent contenir des UUIDs et IPs analysés
+    '''audit_2026-.*''',
+]
+
+# Patterns de fake/test secrets explicites — toujours OK même hors paths
+regexes = [
+    # Mocks utilisés dans les tests d'idempotency
+    '''abcd1234efgh''',
+    # Token mock test password-reset
+    '''abcdef123456''',
+    # Préfixes de fake secrets
+    '''(?i)(dev|test|fake|mock|example|placeholder|change.?me|your.?key|sample)[-_a-z0-9]{0,40}''',
+    # FLW/Paystack TEST keys (préfixés par le provider — non valides)
+    '''FLWSECK_TEST-[a-z-]+''',
+    '''sk_test_[a-z-]+''',
+    # Ancienne fake HMAC key seed dev dans commits historiques (a294d12 et suivants)
+    # — fixée au HEAD via dev-tenant-seed-hmac-change-me-$(openssl rand)
+    # — l'historique reste mais cette valeur n'a jamais ete deployee en prod
+    '''a3f8b2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1''',
+]
+
+# Stop words : si la string contient un de ces mots, on ignore
+stopwords = [
+    "test",
+    "fake",
+    "mock",
+    "example",
+    "placeholder",
+    "change-in-production",
+    "change-me",
+    "dev-key",
+    "fixture",
+]
