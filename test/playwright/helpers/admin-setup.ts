@@ -25,6 +25,8 @@ const ALL_TENANT_PERMISSIONS = [
   'control.fleet.manage.tenant',
   'data.fleet.status.agency',
   'control.maintenance.update.own',
+  'data.maintenance.update.own',
+  'data.maintenance.read.agency',
   'control.maintenance.approve.tenant',
   'control.driver.manage.tenant',
   'data.driver.profile.agency',
