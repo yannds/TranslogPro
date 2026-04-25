@@ -83,6 +83,14 @@ const ALL_TENANT_PERMISSIONS = [
   'data.accident.report.own',
   // Notifications
   'data.notification.read.own',
+  // Crew Briefing
+  'control.briefing.template.manage.tenant',
+  'data.briefing.template.read.tenant',
+  'data.safety_alert.read.agency',
+  'data.safety_alert.read.tenant',
+  'control.safety_alert.resolve.agency',
+  'control.safety_alert.resolve.tenant',
+  'data.safety_alert.create.tenant',
   // Cashier
   'control.cashier.manage.tenant',
   // Manifest
