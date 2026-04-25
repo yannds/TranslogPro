@@ -26,6 +26,7 @@ import { Button }                  from '../ui/Button';
 import { Badge }                   from '../ui/Badge';
 import { ErrorAlert }              from '../ui/ErrorAlert';
 import { inputClass }              from '../ui/inputClass';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -535,6 +536,54 @@ export function RouteDetailDialog({
   };
 
   const hasEditedPrices = Object.keys(editedPrices).length > 0;
+
+  // ── Colonnes DataTableMaster — segments + prix ───────────────────────────
+  const pricesWithId = useMemo(
+    () => prices.map(p => ({ ...p, id: `${p.fromStationId}_${p.toStationId}` })),
+    [prices],
+  );
+
+  const priceColumns: Column<SegmentPriceRow & { id: string }>[] = [
+    {
+      key: 'fromStationId', header: t('routeDetail.from'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <span className="text-slate-700 dark:text-slate-300">{row.fromStation?.name ?? row.fromStationId}</span>
+      ),
+      csvValue: (_v, row) => row.fromStation?.name ?? row.fromStationId,
+    },
+    {
+      key: 'toStationId', header: t('routeDetail.to'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <span className="text-slate-700 dark:text-slate-300">{row.toStation?.name ?? row.toStationId}</span>
+      ),
+      csvValue: (_v, row) => row.toStation?.name ?? row.toStationId,
+    },
+    {
+      key: 'basePriceXaf', header: t('routeDetail.priceXaf'), sortable: true, align: 'right', width: '180px',
+      cellRenderer: (_v, row) => (
+        <input
+          type="number"
+          min={0}
+          step={50}
+          value={getPrice(row)}
+          onChange={e => handlePriceChange(row.fromStationId, row.toStationId, Number(e.target.value))}
+          className={`${inputClass} text-right w-full max-w-[160px] ml-auto`}
+          aria-label={`${row.fromStation?.name ?? row.fromStationId} → ${row.toStation?.name ?? row.toStationId}`}
+        />
+      ),
+      csvValue: (_v, row) => String(getPrice(row)),
+    },
+    {
+      key: 'routeId', header: t('routeDetail.status'), sortable: false, align: 'center', width: '110px',
+      cellRenderer: (_v, row) => {
+        const configured = getPrice(row) > 0;
+        return configured
+          ? <Badge variant="success" size="sm">{t('routeDetail.ok')}</Badge>
+          : <Badge variant="warning" size="sm">{t('routeDetail.notConfigured')}</Badge>;
+      },
+      csvValue: (_v, row) => getPrice(row) > 0 ? 'OK' : 'NOT_CONFIGURED',
+    },
+  ];
 
   const savePrices = async () => {
     if (!routeId || !hasEditedPrices) return;
@@ -1166,55 +1215,15 @@ export function RouteDetailDialog({
                 <p>{t('routeDetail.noSegments')}</p>
               </div>
             ) : (
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-900/50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        <th className="text-left px-4 py-2">{t('routeDetail.from')}</th>
-                        <th className="text-left px-4 py-2">{t('routeDetail.to')}</th>
-                        <th className="text-right px-4 py-2 w-48">{t('routeDetail.priceXaf')}</th>
-                        <th className="text-center px-4 py-2 w-20">{t('routeDetail.status')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {prices.map(row => {
-                        const currentPrice = getPrice(row);
-                        const configured   = currentPrice > 0;
-                        return (
-                          <tr key={`${row.fromStationId}_${row.toStationId}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
-                              {row.fromStation?.name ?? row.fromStationId}
-                            </td>
-                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
-                              {row.toStation?.name ?? row.toStationId}
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              <input
-                                type="number"
-                                min={0}
-                                step={50}
-                                value={currentPrice}
-                                onChange={e =>
-                                  handlePriceChange(row.fromStationId, row.toStationId, Number(e.target.value))
-                                }
-                                className={`${inputClass} text-right w-full max-w-[180px] ml-auto`}
-                              />
-                            </td>
-                            <td className="px-4 py-2 text-center">
-                              {configured ? (
-                                <Badge variant="success" size="sm">{t('routeDetail.ok')}</Badge>
-                              ) : (
-                                <Badge variant="warning" size="sm">{t('routeDetail.notConfigured')}</Badge>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <DataTableMaster<SegmentPriceRow & { id: string }>
+                columns={priceColumns}
+                data={pricesWithId}
+                defaultSort={{ key: 'fromStationId', dir: 'asc' }}
+                searchPlaceholder={t('routeDetail.searchSegments')}
+                emptyMessage={t('routeDetail.noSegments')}
+                exportFormats={['csv']}
+                exportFilename="route-segments-prices"
+              />
             )}
 
             {/* Save prices */}

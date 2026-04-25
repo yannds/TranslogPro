@@ -3222,6 +3222,7 @@ const pt: Record<string, Record<string, string>> = {
     "configuredPlural": "configurados",
     "savedPricesSuccess": "Tarifas salvas com sucesso",
     "noSegments": "Sem segmentos tarifários. Adicione escalas para gerar a matriz.",
+    "searchSegments": "Pesquisar um segmento (origem/destino)…",
     "from": "De",
     "to": "Para",
     "priceXaf": "Preço (XAF)",

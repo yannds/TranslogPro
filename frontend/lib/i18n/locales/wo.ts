@@ -3294,6 +3294,7 @@ const wo: Record<string, Record<string, string>> = {
     "configuredPlural": "tàmbali nañu",
     "savedPricesSuccess": "Njëg yi dañu ko denc",
     "noSegments": "Amul xànjar njëg. Yokk ci eskal ngir sos matris bi.",
+    "searchSegments": "Seet segment (gaar tambali/jeex)…",
     "from": "Ci",
     "to": "Ba",
     "priceXaf": "Njëg (XAF)",

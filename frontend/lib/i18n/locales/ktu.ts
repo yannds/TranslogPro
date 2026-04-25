@@ -3280,6 +3280,7 @@ const ktu: Record<string, Record<string, string>> = {
     "configuredPlural": "ebongisami",
     "savedPricesSuccess": "Ba ntalu ebombama mbote",
     "noSegments": "Biteni ya ntalu ke na yau ve. Bakisa bisika mpo kubonga tableau.",
+    "searchSegments": "Luka segment (gare ebandeli/nsuka)…",
     "from": "Banda",
     "to": "Tii",
     "priceXaf": "Ntalu (XAF)",

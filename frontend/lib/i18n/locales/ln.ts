@@ -3298,6 +3298,7 @@ const ln: Record<string, Record<string, string>> = {
     "configuredPlural": "ebongisami",
     "savedPricesSuccess": "Bantalo ebombamá malamu",
     "noSegments": "Biteni ya ntalo ezali tɛ. Bakisa bisika mpo na kosala tableau.",
+    "searchSegments": "Luka segment (gare ebandeli/nsuka)…",
     "from": "Banda",
     "to": "Tii",
     "priceXaf": "Ntalo (XAF)",

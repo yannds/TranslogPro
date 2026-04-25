@@ -3677,6 +3677,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "configuredPlural": "configurés",
     "savedPricesSuccess": "Tarifs enregistrés avec succès",
     "noSegments": "Aucun segment tarifaire. Ajoutez des escales pour générer la matrice.",
+    "searchSegments": "Rechercher un segment (gare départ/arrivée)…",
     "from": "De",
     "to": "Vers",
     "priceXaf": "Prix (XAF)",

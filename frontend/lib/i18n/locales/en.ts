@@ -3673,6 +3673,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "configuredPlural": "configured",
     "savedPricesSuccess": "Prices saved successfully",
     "noSegments": "No price segments. Add waypoints to generate the matrix.",
+    "searchSegments": "Search a segment (origin/destination station)…",
     "from": "From",
     "to": "To",
     "priceXaf": "Price (XAF)",

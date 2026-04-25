@@ -3207,6 +3207,7 @@ const es: Record<string, Record<string, string>> = {
     "configuredPlural": "configurados",
     "savedPricesSuccess": "Tarifas guardadas con éxito",
     "noSegments": "Sin segmentos tarifarios. Agregue escalas para generar la matriz.",
+    "searchSegments": "Buscar un segmento (origen/destino)…",
     "from": "De",
     "to": "A",
     "priceXaf": "Precio (XAF)",

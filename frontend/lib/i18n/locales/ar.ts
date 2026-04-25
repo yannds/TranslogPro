@@ -3227,6 +3227,7 @@ const ar: Record<string, Record<string, string>> = {
     "configuredPlural": "مُهيّأة",
     "savedPricesSuccess": "تم حفظ التعريفات بنجاح",
     "noSegments": "لا توجد أقسام تعريفية. أضف محطات لإنشاء المصفوفة.",
+    "searchSegments": "بحث عن قسم (محطة البداية/النهاية)…",
     "from": "من",
     "to": "إلى",
     "priceXaf": "السعر (XAF)",
