@@ -1,0 +1,31 @@
+$ORIGIN translog.dsyann.info.
+$TTL    3600
+
+; ─── SOA ───────────────────────────────────────────────────────────────────────
+@   IN  SOA   ns1.translog.dsyann.info. admin.translog.dsyann.info. (
+                2026042502   ; serial YYYYMMDDNN — bump à chaque edit manuel
+                3600         ; refresh  (1h)
+                900          ; retry    (15m)
+                604800       ; expire   (7j)
+                300          ; minimum TTL / negative cache
+                )
+
+; ─── Nameservers (glue dans la zone parent chez LWS) ──────────────────────────
+            IN  NS    ns1.translog.dsyann.info.
+            IN  NS    ns2.translog.dsyann.info.
+
+ns1         IN  A     72.61.108.160
+ns2         IN  A     72.61.108.160
+
+; ─── Records applicatifs TransLog ─────────────────────────────────────────────
+; Apex translog.dsyann.info — landing publique SaaS (PublicLanding)
+@               IN  A  72.61.108.160
+
+; Wildcard multi-tenant : chaque sous-domaine résout vers le VPS.
+;   admin.translog.dsyann.info  → plateforme admin SaaS (toi)
+;   api.translog.dsyann.info    → API publique cross-tenant
+;   <tenant>.translog.dsyann.info → portail voyageur / app tenant
+*               IN  A  72.61.108.160
+
+; Les records _acme-challenge.* TXT sont créés/supprimés dynamiquement
+; par Caddy via TSIG lors des renouvellements certs wildcard.

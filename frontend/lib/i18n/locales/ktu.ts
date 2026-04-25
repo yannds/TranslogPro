@@ -3,7 +3,8 @@
  * Les termes techniques sans équivalent Kituba restent en français (emprunt courant).
  */
 
-const ktu: Record<string, Record<string, string>> = {
+type LocaleValue = string | Record<string, string>;
+const ktu: Record<string, Record<string, LocaleValue>> = {
   "simulation": {
     "simTitle": "▶ Simulation Live-Path",
     "success": "✓ Elongi",
@@ -4591,7 +4592,7 @@ const ktu: Record<string, Record<string, string>> = {
     "company.name":      "Zina ya kompani",
     "company.namePlaceholder":"ACME Transport SARL",
     "company.slug":      "Sous-domaine",
-    "company.slugHint":  "Espace na nge ta kuvanda na {host}.translogpro.com — balettres, batshombo mpe batirets.",
+    "company.slugHint":  "Espace na nge ta kuvanda na {host}.{baseDomain} — balettres, batshombo mpe batirets.",
     "company.slugAvailable":"Ke kuvanda",
     "company.slugTaken": "Sous-domaine yayi bau ve bau ke kusadila yo.",
     "company.slugInvalid":"Bilembo 3-32, a-z, 0-9 mpe batirets (ve na ntete/nsuka).",
@@ -4619,7 +4620,7 @@ const ktu: Record<string, Record<string, string>> = {
     "error.rateLimit":   "Ba-tentatives mingi. Meka diaka na minuti moke.",
 
     "success.title":     "Boyeno bolamu na TransLog Pro 🎉",
-    "success.subtitle":  "Espace na nge {slug}.translogpro.com yi kele ya kusala. Beto tindila nge email ya confirmation.",
+    "success.subtitle":  "Espace na nge {slug}.{baseDomain} yi kele ya kusala. Beto tindila nge email ya confirmation.",
     "success.cta":       "Kota na espace na mono",
     "success.trialInfo": "Nge ke na bilumbu {days} ya essai ya ofele. Carte bancaire ke mfunu ve.",
 

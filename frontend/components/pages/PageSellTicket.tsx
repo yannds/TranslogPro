@@ -14,11 +14,11 @@
 import { useState, useMemo } from 'react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import {
-  Ticket, Calculator, CheckCircle2, AlertTriangle, Loader2, Printer,
+  Ticket, Calculator, CheckCircle2, Loader2, Printer,
   UserPlus, X, FileText,
 } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
-import { apiGet, apiPost, apiPatch } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 import { Button }     from '../ui/Button';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { ErrorAlert } from '../ui/ErrorAlert';
@@ -256,9 +256,7 @@ export function PageSellTicket() {
 
   // ── Pricing state ──
   const [batchResult, setBatchResult]   = useState<BatchResult | null>(null);
-  const [editablePrice, setEditablePrice] = useState('');
   const [loadingPrice, setLoadingPrice] = useState(false);
-  const [savingPrice,  setSavingPrice]  = useState(false);
   const [confirming,   setConfirming]   = useState(false);
   const [confirmed,    setConfirmed]    = useState(false);
   const [error,        setError]        = useState<string | null>(null);
@@ -397,25 +395,6 @@ export function PageSellTicket() {
       setError(err instanceof Error ? err.message : t('sellTicket.errorCalc'));
     } finally {
       setLoadingPrice(false);
-    }
-  }
-
-  async function handleSaveSegmentPrice() {
-    if (!batchResult || !route || !passengers[0]) return;
-    setSavingPrice(true);
-    setError(null);
-    try {
-      const p = passengers[0];
-      await apiPatch(`/api/tenants/${tenantId}/routes/${route.id}/segment-prices`, {
-        boardingStationId:  p.boardingStationId || undefined,
-        alightingStationId: p.alightingStationId,
-        fareClass:          p.fareClass,
-        price:              Number(editablePrice),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('sellTicket.errorSaveFare'));
-    } finally {
-      setSavingPrice(false);
     }
   }
 

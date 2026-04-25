@@ -1,0 +1,205 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# TransLog Pro — Caddyfile PROD
+# ═════════════════════════════════════════════════════════════════════════════
+# Routage :
+#   admin.translog.dsyann.info → translog_web (portail PLATFORME admin SaaS)
+#   api.translog.dsyann.info      → translog_api (API cross-tenant publique)
+#   *.translog.dsyann.info        → routing tenant (web + api) — wildcard
+#   api.dsyann.info               → gmp_backend:3002   (coexistence gmp — cert HTTP-01)
+#   app.dsyann.info               → gmp_frontend:4173  (coexistence gmp — cert HTTP-01)
+#   panel.dsyann.info             → easypanel:3000     (admin Easypanel)
+#   gmp-*.ufm9jv.easypanel.host   → services gmp observability
+#
+# TLS :
+#   - Wildcard *.translog.dsyann.info via DNS-01 (BIND9 local + TSIG rfc2136)
+#     → couvre platform/api/<tenant>.translog.dsyann.info en un seul cert
+#   - Domaines dsyann.info siblings (api/app/panel) via HTTP-01 standard
+# ═════════════════════════════════════════════════════════════════════════════
+
+{
+    email {env.ACME_EMAIL}
+    admin 0.0.0.0:2019
+
+    # Logs JSON rotation 100MB × 10 = 30 jours
+    log default {
+        output file /var/log/caddy/caddy.log {
+            roll_size 100MB
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+        # Scrub Authorization, Cookie, X-Impersonation-Token — ISO 27001
+        format filter {
+            request>headers>Authorization delete
+            request>headers>Cookie delete
+            request>headers>X-Impersonation-Token delete
+        }
+    }
+
+    # Snippet TLS réutilisable : DNS-01 via BIND9 local
+    servers {
+        protocols h1 h2 h3
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Security headers communs — appliqués à TOUS les domaines translog
+# ═════════════════════════════════════════════════════════════════════════════
+(translog_headers) {
+    header {
+        Strict-Transport-Security  "max-age=63072000; includeSubDomains; preload"
+        X-Frame-Options            "DENY"
+        X-Content-Type-Options     "nosniff"
+        Referrer-Policy            "strict-origin-when-cross-origin"
+        Permissions-Policy         "geolocation=(), camera=(), microphone=()"
+        # Supprime Server header par défaut
+        -Server
+    }
+}
+
+# Snippet TLS DNS-01 via BIND9 local (TSIG rfc2136)
+(translog_tls_dns) {
+    tls {
+        dns rfc2136 {
+            key_name   {env.TSIG_KEY_NAME}
+            key_alg    {env.TSIG_ALG}
+            key        {env.TSIG_SECRET}
+            server     bind9:53
+        }
+        # Resolvers internes pour la vérification de propagation TXT.
+        # Sans, Caddy tente l'IP publique 72.61.108.160:53 → hairpin NAT
+        # Docker ne route pas → i/o timeout. Avec bind9:53 (overlay), check OK.
+        resolvers bind9:53
+        # Skip totalement le check de propagation : on vient juste d'écrire
+        # la TXT en TSIG synchrone, on sait qu'elle est là.
+        propagation_timeout -1
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TRANSLOG PRO — Multi-tenant wildcard (DNS-01 wildcard cert)
+# ═════════════════════════════════════════════════════════════════════════════
+# Un seul site block pour tout *.translog.dsyann.info → un seul cert wildcard.
+# Le routing par hostname distingue : platform / api / <tenant>.
+# ═════════════════════════════════════════════════════════════════════════════
+
+translog.dsyann.info, *.translog.dsyann.info {
+    import translog_tls_dns
+    import translog_headers
+
+    # ── 1) /api/* → backend NestJS (priorité haute, sur TOUS les hostnames) ───
+    # Le hostname (apex, admin, api, <tenant>) est passé via X-Tenant-Host.
+    # Le backend route différemment selon ce header (cf. host-config.service).
+    @api_path path /api/*
+    handle @api_path {
+        reverse_proxy api:3000 {
+            header_up X-Real-IP     {remote_host}
+            header_up X-Tenant-Host {host}
+        }
+    }
+
+    # ── 2) /gps* /realtime* → backend WebSocket (port 3001) ───────────────────
+    @ws {
+        path /gps* /realtime*
+        header Connection *Upgrade*
+        header Upgrade    websocket
+    }
+    handle @ws {
+        reverse_proxy api:3001
+    }
+
+    # ── 3) api.translog.dsyann.info → backend pour TOUT path (API directe) ────
+    # Pour les endpoints API non préfixés /api (rare, mais possible).
+    @api_host host api.translog.dsyann.info
+    handle @api_host {
+        reverse_proxy api:3000 {
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # ── 4) Reste (admin/apex/<tenant> sans /api) → frontend SPA ───────────────
+    # Note : admin.translog.dsyann.info → host.isAdmin=true côté frontend → /login
+    # Apex translog.dsyann.info → PublicLanding
+    # <tenant>.translog.dsyann.info → PortailVoyageur
+    handle {
+        reverse_proxy web:80 {
+            header_up X-Tenant-Host {host}
+        }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GMP COEXISTENCE — HTTP-01 (certs importés de Traefik au cutover)
+# ═════════════════════════════════════════════════════════════════════════════
+
+api.dsyann.info {
+    import translog_headers
+    reverse_proxy gmp_backend:3002 {
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+    }
+}
+
+app.dsyann.info {
+    import translog_headers
+    reverse_proxy gmp_frontend:4173 {
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# ─── Easypanel admin UI (gardé pour gérer les containers gmp via UI) ─────────
+panel.dsyann.info {
+    import translog_headers
+    reverse_proxy easypanel:3000 {
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+        # WebSocket (Easypanel UI utilise des WS pour les logs en live)
+        header_up Connection        {http.request.header.Connection}
+        header_up Upgrade           {http.request.header.Upgrade}
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GMP OBSERVABILITY — sous-domaines easypanel.host
+# ═════════════════════════════════════════════════════════════════════════════
+
+gmp-grafana.ufm9jv.easypanel.host {
+    reverse_proxy gmp_grafana:3000
+}
+
+gmp-prometheus.ufm9jv.easypanel.host {
+    reverse_proxy gmp_prometheus:9090
+}
+
+gmp-jaeger.ufm9jv.easypanel.host {
+    reverse_proxy gmp_jaeger:16686
+}
+
+gmp-otel-collector.ufm9jv.easypanel.host {
+    reverse_proxy gmp_otel-collector:80
+}
+
+console-gmp-gmp-minio.ufm9jv.easypanel.host {
+    reverse_proxy gmp_gmp-minio:9001
+}
+
+gmp-gmp-minio.ufm9jv.easypanel.host {
+    reverse_proxy gmp_gmp-minio:9000
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CATCH-ALL : refuse tout autre hostname (anti-DoS, évite LE rate limit abuse)
+# ═════════════════════════════════════════════════════════════════════════════
+
+:443 {
+    respond "Unknown host" 421
+}
+
+:80 {
+    respond "Unknown host" 421
+}

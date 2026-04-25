@@ -1,0 +1,345 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# TransLog Pro — Stack PRODUCTION (Docker Swarm — coexistence gmp/Easypanel)
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Pourquoi Swarm et pas Compose ?
+#   Easypanel utilise Swarm pour gmp + traefik. Mixer un container Compose
+#   avec ports:80 ET un overlay Swarm cause un bug Docker non corrigeable
+#   (endpoint not found sur docker_gwbridge). Solution propre : tout en Swarm.
+#
+# Architecture :
+#   - Caddy : reverse proxy 80/443 sur ingress (mode: host = bind direct)
+#   - BIND9 : DNS authoritative *.translog.dsyann.info, ports 53 udp+tcp
+#   - translog_net : overlay attachable (services TransLog parlent en interne)
+#   - Caddy join aussi easypanel-gmp + easypanel pour proxy gmp_*
+#
+# Lancement :
+#   1. Build images :
+#      docker compose -f docker-compose.prod.yml --env-file .env.prod build api web caddy
+#   2. Set env file in shell:
+#      set -a; . ./.env.prod; set +a
+#   3. Deploy stack :
+#      docker stack deploy -c docker-stack.prod.yml --resolve-image=never translog
+#
+# Important :
+#   - --resolve-image=never évite que Swarm aille chercher les images sur Docker Hub
+#     (translog_api, translog_web, prod-caddy n'y sont pas — locales uniquement)
+#   - Les variables ${VAR} dans ce fichier sont substituées au moment du deploy,
+#     SHELL doit avoir .env.prod loadé via `set -a; . .env.prod; set +a`
+#
+# Rollback (cutover ratée) :
+#   docker stack rm translog
+#   docker service scale easypanel-traefik=1
+# ═════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── BIND9 — DNS authoritative pour translog.dsyann.info ───────────────────
+  bind9:
+    image: internetsystemsconsortium/bind9:9.20
+    ports:
+      - target: 53
+        published: 53
+        protocol: udp
+        mode: host
+      - target: 53
+        published: 53
+        protocol: tcp
+        mode: host
+    volumes:
+      - ./bind9/named.conf:/etc/bind/named.conf:ro
+      - ./bind9/zones:/var/lib/bind:rw
+      - bind9_cache:/var/cache/bind
+    command: ["-g", "-c", "/etc/bind/named.conf"]
+    networks:
+      - translog_net
+    healthcheck:
+      test: ["CMD", "dig", "+short", "@127.0.0.1", "translog-admin.translog.dsyann.info"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+  # ── Caddy — reverse proxy UNIQUE (80/443) avec plugin rfc2136 pour DNS-01 ──
+  caddy:
+    image: prod-caddy:latest
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: udp
+        mode: host
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    environment:
+      TSIG_KEY_NAME: ${TSIG_KEY_NAME}
+      TSIG_SECRET:   ${TSIG_SECRET}
+      TSIG_ALG:      ${TSIG_ALG:-hmac-sha256}
+      ACME_EMAIL:    ${ACME_EMAIL}
+    networks:
+      - translog_net
+      - easypanel-gmp
+      - easypanel
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+        delay: 10s
+        # max_attempts illimité — Caddy doit retry tant que 80/443 occupé par Traefik
+        # (au cutover, Traefik s'arrête et Caddy bind enfin)
+        window: 120s
+      update_config:
+        order: start-first
+        failure_action: rollback
+
+  # ── PostgreSQL + PostGIS ──────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/01-rls.sql:/docker-entrypoint-initdb.d/01-rls.sql:ro
+      - ./postgres/02-roles.sql:/docker-entrypoint-initdb.d/02-roles.sql:ro
+      - ./postgres/10-env.sh:/docker-entrypoint-initdb.d/10-env.sh:ro
+    environment:
+      POSTGRES_DB:       translog
+      POSTGRES_USER:     app_admin
+      POSTGRES_PASSWORD: ${POSTGRES_APP_ADMIN_PASSWORD}
+      APP_RUNTIME_PASSWORD: ${POSTGRES_APP_RUNTIME_PASSWORD}
+      APP_SUPERADMIN_PASSWORD: ${POSTGRES_APP_SUPERADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_admin -d translog"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+  # ── PgBouncer (SESSION mode obligatoire pour RLS SET LOCAL) ────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.1-p0
+    environment:
+      DB_HOST:          postgres
+      DB_PORT:          "5432"
+      DB_NAME:          translog
+      DB_USER:          app_runtime
+      DB_PASSWORD:      ${POSTGRES_APP_RUNTIME_PASSWORD}
+      POOL_MODE:        session
+      MAX_CLIENT_CONN:  "200"
+      DEFAULT_POOL_SIZE: "20"
+      SERVER_RESET_QUERY: DISCARD ALL
+      AUTH_TYPE:        plain
+      CLIENT_TLS_SSLMODE: disable
+      SERVER_TLS_SSLMODE: disable
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+  # ── Redis (session, rate-limit, cache) ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --save 60 1
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+  # ── MinIO — Object storage tenant ─────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER:       "off"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+  # ── Vault — secrets (mode raft backend prod) ──────────────────────────────
+  vault:
+    image: hashicorp/vault:1.16
+    cap_add:
+      - IPC_LOCK
+    user: "0:0"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        chown -R vault:vault /vault/data /vault/logs 2>/dev/null || true
+        exec /usr/local/bin/docker-entrypoint.sh server
+    volumes:
+      - ./vault/config.hcl:/vault/config/config.hcl:ro
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_API_ADDR: http://vault:8200
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--spider", "http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+  # ── API NestJS ────────────────────────────────────────────────────────────
+  api:
+    image: translog_api:1.0.0
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      WS_PORT: "3001"
+      DATABASE_URL: postgresql://app_runtime:${POSTGRES_APP_RUNTIME_PASSWORD}@pgbouncer:5432/translog
+      DATABASE_URL_POOLED: postgresql://app_runtime:${POSTGRES_APP_RUNTIME_PASSWORD}@pgbouncer:5432/translog
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_USE_SSL: "false"
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN}
+      PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN}
+      PUBLIC_BASE_DOMAIN:   ${PUBLIC_BASE_DOMAIN}
+      PUBLIC_APP_URL:       ${PUBLIC_APP_URL}
+      DOMAIN_CHECK_API_KEY: ${DOMAIN_CHECK_API_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+        delay: 10s
+        window: 120s
+
+  # ── Frontend Vite build servi par nginx statique ──────────────────────────
+  web:
+    image: translog_web:1.0.0
+    networks:
+      - translog_net
+    healthcheck:
+      # IMPORTANT : 127.0.0.1 et pas localhost — busybox wget en alpine résout
+      # localhost en ::1 (IPv6) en premier, mais nginx n'écoute que sur 0.0.0.0
+      # (IPv4) → "Connection refused" en boucle. 127.0.0.1 force IPv4.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  translog_net:
+    driver: overlay
+    attachable: true
+    name: translog_net
+  easypanel-gmp:
+    external: true
+  easypanel:
+    external: true
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:     { name: translog_postgres_data }
+  redis_data:        { name: translog_redis_data }
+  minio_data:        { name: translog_minio_data }
+  vault_data:        { name: translog_vault_data }
+  vault_logs:        { name: translog_vault_logs }
+  caddy_data:        { name: translog_caddy_data }
+  caddy_config:      { name: translog_caddy_config }
+  caddy_logs:        { name: translog_caddy_logs }
+  bind9_cache:       { name: translog_bind9_cache }

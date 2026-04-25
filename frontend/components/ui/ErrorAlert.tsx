@@ -11,14 +11,19 @@
 import { AlertTriangle } from 'lucide-react';
 
 export interface ErrorAlertProps {
-  error: string | null | undefined;
+  error?: string | null | undefined;
+  /** Alias de `error` — toléré pour rester compatible avec les pages qui
+   * passent `message="..."` (sémantique identique : si l'un OU l'autre est
+   * non-vide, on affiche le bandeau). */
+  message?: string | null | undefined;
   /** Affiche l'icône AlertTriangle + padding étendu (variante page). */
   icon?: boolean;
   className?: string;
 }
 
-export function ErrorAlert({ error, icon = false, className }: ErrorAlertProps) {
-  if (!error) return null;
+export function ErrorAlert({ error, message, icon = false, className }: ErrorAlertProps) {
+  const text = error ?? message;
+  if (!text) return null;
 
   const base =
     'rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 ' +
@@ -28,7 +33,7 @@ export function ErrorAlert({ error, icon = false, className }: ErrorAlertProps) 
   return (
     <div role="alert" className={`${base} ${size}${className ? ` ${className}` : ''}`}>
       {icon && <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden />}
-      {error}
+      {text}
     </div>
   );
 }

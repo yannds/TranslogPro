@@ -12,7 +12,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  Receipt, Plus, Eye, Trash2, Send, CreditCard, X, Ban,
+  Receipt, Plus, Trash2, Send, CreditCard, Ban,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useOfflineList } from '../../lib/hooks/useOfflineList';
@@ -76,7 +76,7 @@ function buildColumns(t: (k: string) => string): Column<InvoiceRow>[] {
     {
       key: 'totalAmount', header: t('invoices.colTotal'), sortable: true,
       cellRenderer: (_v, row) => `${row.totalAmount.toLocaleString()} ${row.currency}`,
-      csvValue: (_v, row) => row.totalAmount,
+      csvValue: (_v, row) => String(row.totalAmount),
     },
     {
       key: 'status', header: t('invoices.colStatus'),

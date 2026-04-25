@@ -10,7 +10,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  Volume2, Plus, Pencil, Trash2, ToggleLeft, X, Megaphone,
+  Plus, Trash2, ToggleLeft, Megaphone,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';

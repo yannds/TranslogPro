@@ -21,6 +21,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../../lib/api';
 import { CaptchaWidget } from '../ui/CaptchaWidget';
+import { PLATFORM_BASE_DOMAIN } from '../../lib/tenancy/host';
 import {
   ArrowRight, PlayCircle, ChevronDown,
   Shield, Cloud, Activity,
@@ -125,7 +126,7 @@ function DashboardMockup() {
       role="img"
       aria-label={t('landing.hero.mockupTitle')}
     >
-      <BrowserChrome url="acme.translogpro.com/admin" />
+      <BrowserChrome url={`acme.${PLATFORM_BASE_DOMAIN}/admin`} />
       <div className="grid grid-cols-12">
         <FakeSidebar />
         <div className="col-span-9 p-4">
@@ -846,7 +847,7 @@ function SellTicketMockup() {
       role="img"
       aria-label={t('landing.dd.row1.eyebrow')}
     >
-      <BrowserChrome url="acme.translogpro.com/admin/sell" />
+      <BrowserChrome url={`acme.${PLATFORM_BASE_DOMAIN}/admin/sell`} />
       <div className="p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -912,7 +913,7 @@ function CrmMockup() {
       role="img"
       aria-label={t('landing.dd.row2.eyebrow')}
     >
-      <BrowserChrome url="acme.translogpro.com/admin/crm" />
+      <BrowserChrome url={`acme.${PLATFORM_BASE_DOMAIN}/admin/crm`} />
       <div className="p-5">
         <div className="flex items-start gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-lg font-semibold text-white" aria-hidden>
@@ -969,7 +970,7 @@ function AnalyticsMockup() {
       role="img"
       aria-label={t('landing.dd.row3.eyebrow')}
     >
-      <BrowserChrome url="acme.translogpro.com/admin/analytics" />
+      <BrowserChrome url={`acme.${PLATFORM_BASE_DOMAIN}/admin/analytics`} />
       <div className="p-5">
         <div className="flex items-center justify-between">
           <h4 className="text-base font-semibold text-slate-900 dark:text-white">Yield — 7 derniers jours</h4>

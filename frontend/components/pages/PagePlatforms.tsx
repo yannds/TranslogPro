@@ -12,7 +12,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  MapPinned, Plus, Pencil, Wrench, Trash2, LogIn, LogOut, X, Link2,
+  MapPinned, Plus, Pencil, Wrench, Trash2, LogIn, LogOut, Link2,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';

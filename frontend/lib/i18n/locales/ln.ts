@@ -4,7 +4,8 @@
  * Technical terms (JSON, API, QHSE, IAM, GPS, etc.) kept as-is.
  */
 
-const ln: Record<string, Record<string, string>> = {
+type LocaleValue = string | Record<string, string>;
+const ln: Record<string, Record<string, LocaleValue>> = {
   "simulation": {
     "simTitle": "▶ Simulation Live-Path",
     "success": "✓ Elongi",
@@ -4609,7 +4610,7 @@ const ln: Record<string, Record<string, string>> = {
     "company.name":      "Kombo ya kompanyi",
     "company.namePlaceholder":"ACME Transport SARL",
     "company.slug":      "Sous-domaine",
-    "company.slugHint":  "Espace na yo ekozala na {host}.translogpro.com — balettres, mituya mpe batirets.",
+    "company.slugHint":  "Espace na yo ekozala na {host}.{baseDomain} — balettres, mituya mpe batirets.",
     "company.slugAvailable":"Ezali",
     "company.slugTaken": "Sous-domaine oyo bazwaki yango.",
     "company.slugInvalid":"Bilembo 3-32, a-z, 0-9 mpe batirets (te na ebandeli/nsuka).",
@@ -4637,7 +4638,7 @@ const ln: Record<string, Record<string, string>> = {
     "error.rateLimit":   "Tentatives mingi. Mekaká lisusu na miniti moke.",
 
     "success.title":     "Boyei bolamu na TransLog Pro 🎉",
-    "success.subtitle":  "Espace na yo {slug}.translogpro.com esili. Totindeli yo email ya confirmation.",
+    "success.subtitle":  "Espace na yo {slug}.{baseDomain} esili. Totindeli yo email ya confirmation.",
     "success.cta":       "Kokota na espace na ngai",
     "success.trialInfo": "Ozali na mikolo {days} ya essai ya ofele. Carte bancaire esengeli te.",
 

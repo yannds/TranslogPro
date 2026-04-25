@@ -5881,7 +5881,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "company.name":      "Nom de la compagnie",
     "company.namePlaceholder":"ACME Transport SARL",
     "company.slug":      "Sous-domaine",
-    "company.slugHint":  "Votre espace sera accessible à {host}.translogpro.com — lettres, chiffres et tirets.",
+    "company.slugHint":  "Votre espace sera accessible à {host}.{baseDomain} — lettres, chiffres et tirets.",
     "company.slugAvailable":"Disponible",
     "company.slugTaken": "Ce sous-domaine est déjà pris.",
     "company.slugInvalid":"3-32 caractères, a-z, 0-9 et tirets (pas au début/fin).",
@@ -5909,7 +5909,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "error.rateLimit":   "Trop de tentatives. Réessayez dans quelques minutes.",
 
     "success.title":     "Bienvenue dans TransLog Pro 🎉",
-    "success.subtitle":  "Votre espace {slug}.translogpro.com est prêt. Nous vous avons envoyé un email de confirmation.",
+    "success.subtitle":  "Votre espace {slug}.{baseDomain} est prêt. Nous vous avons envoyé un email de confirmation.",
     "success.cta":       "Accéder à mon espace",
     "success.trialInfo": "Vous bénéficiez de {days} jours d'essai gratuit. Aucune carte bancaire requise.",
     "success.devHostsTitle": "Dev local : un pas avant de cliquer",

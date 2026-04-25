@@ -1,0 +1,191 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# CI/CD — Build + Push GHCR + Deploy via SSH
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Trigger :
+#   - workflow_dispatch (manuel) → tous les déploiements importants
+#   - push tags v*.*.*           → release officielle
+#
+# Secrets GitHub à configurer (Settings → Secrets and variables → Actions) :
+#   SSH_PRIVATE_KEY      Clé privée SSH (format OpenSSH) accès root@VPS
+#   SSH_KNOWN_HOSTS      Output de `ssh-keyscan 72.61.108.160` (évite MITM)
+#   VPS_HOST             72.61.108.160
+#   VPS_USER             root
+#   VPS_DEPLOY_PATH      /opt/TranslogPro
+#   GHCR_TOKEN           PAT (ou GITHUB_TOKEN auto si repo public)
+#   PLATFORM_BASE_DOMAIN translog.dsyann.info
+#   PUBLIC_APP_URL       https://api.translog.dsyann.info
+#
+# Flux :
+#   1. Checkout
+#   2. Build images (api, web, caddy) avec build-args Vite
+#   3. Push à ghcr.io/<owner>/translog_{api,web,caddy}:<tag>
+#   4. SSH VPS : pull + docker stack deploy + healthcheck
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (default: short SHA)'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_API: ${{ github.repository_owner }}/translog_api
+  IMAGE_NAME_WEB: ${{ github.repository_owner }}/translog_web
+  IMAGE_NAME_CADDY: ${{ github.repository_owner }}/translog_caddy
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Backend API ─────────────────────────────────────────────────────
+      - name: Build & push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      # ── Frontend Web (Vite + nginx) ─────────────────────────────────────
+      - name: Build & push Web
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:latest
+          build-args: |
+            VITE_PLATFORM_BASE_DOMAIN=${{ secrets.PLATFORM_BASE_DOMAIN }}
+            VITE_API_URL=${{ secrets.PUBLIC_APP_URL }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # ── Caddy custom (avec rfc2136) ──────────────────────────────────────
+      - name: Build & push Caddy
+        uses: docker/build-push-action@v5
+        with:
+          context: ./infra/prod/caddy
+          file: ./infra/prod/caddy/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CADDY }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CADDY }}:latest
+          cache-from: type=gha,scope=caddy
+          cache-to: type=gha,mode=max,scope=caddy
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Configure known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Sync infra/prod (sans .env.prod)
+        run: |
+          rsync -avz --delete \
+            --exclude='.env.prod' \
+            --exclude='caddy/data/' \
+            --exclude='caddy/config/' \
+            --exclude='bind9/zones/*.jnl' \
+            --exclude='bind9/zones/tsig.key' \
+            ./infra/prod/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/infra/prod/
+          # Sync seeds + Dockerfile + frontend/.env.production
+          rsync -avz ./prisma/seeds/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/prisma/seeds/
+          rsync -avz ./Dockerfile ./prisma/schema.prisma \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/
+
+      - name: Pull images + redeploy stack
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<EOF
+            set -euo pipefail
+            cd ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod
+
+            # Login GHCR pour pull
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} \
+              -u ${{ github.actor }} --password-stdin
+
+            # Pull les nouvelles images
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ needs.build-push.outputs.tag }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:${{ needs.build-push.outputs.tag }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CADDY }}:${{ needs.build-push.outputs.tag }}
+
+            # Tag local pour matcher docker-stack.prod.yml
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ needs.build-push.outputs.tag }} translog_api:1.0.0
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:${{ needs.build-push.outputs.tag }} translog_web:1.0.0
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CADDY }}:${{ needs.build-push.outputs.tag }} prod-caddy:latest
+
+            # Re-lance le script autonome (idempotent — tous les fixes intégrés)
+            bash scripts/04-deploy.sh
+          EOF
+
+      - name: External healthcheck
+        run: |
+          for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info; do
+            code=$(curl -kI -o /dev/null -w "%{http_code}" -m 15 https://$d/ || echo 000)
+            echo "https://$d/ → HTTP $code"
+            if [ "$code" -ge 500 ] || [ "$code" = "000" ]; then
+              echo "::error::$d unhealthy (HTTP $code)"
+              exit 1
+            fi
+          done
+
+      - name: Notify success
+        if: success()
+        run: echo "::notice::Deploy ${{ needs.build-push.outputs.tag }} → production OK"

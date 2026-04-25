@@ -66,6 +66,10 @@ export interface RowAction<T> {
   hidden?:   (row: T) => boolean;
   disabled?: (row: T) => boolean;
   danger?:   boolean;
+  /** Variante visuelle de l'action. `'destructive'` et `'danger'` sont des alias
+   * de la variante "rouge" (hérite du flag `danger`). `'primary'`, `'amber'` et
+   * `'default'` permettent d'accentuer une action sans la marquer comme dangereuse. */
+  variant?:  'default' | 'destructive' | 'danger' | 'amber' | 'primary';
 }
 
 export interface BulkAction<T> {
@@ -248,7 +252,15 @@ function DataTableMaster<T extends { id: string }>({
   const [sortKey,    setSortKey]    = useState<string | null>(defaultSort?.key ?? null);
   const [sortDir,    setSortDir]    = useState<SortDir>(defaultSort?.dir ?? 'asc');
   const [page,       setPage]       = useState(1);
-  const [pageSize,   setPageSize]   = useState<number>(defaultPageSize);
+  // Sur petit écran (< 768px), on préfère 10 lignes par page pour éviter
+  // un scroll massif en mode cartes. L'utilisateur peut toujours changer
+  // via le dropdown. Évalué une seule fois au montage (lazy initializer).
+  const [pageSize,   setPageSize]   = useState<number>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches) {
+      return 10;
+    }
+    return defaultPageSize;
+  });
   const [selected,   setSelected]   = useState<Set<string>>(new Set());
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef                   = useRef<HTMLDivElement>(null);
@@ -568,6 +580,7 @@ function DataTableMaster<T extends { id: string }>({
                         <td
                           key={col.key}
                           className={`dtm-td dtm-align-${col.align ?? 'left'}`}
+                          data-label={col.header}
                         >
                           {col.cellRenderer ? col.cellRenderer(val, row) : (
                             val === null || val === undefined ? '—' :
@@ -582,18 +595,27 @@ function DataTableMaster<T extends { id: string }>({
                         <div className="dtm-actions-group" role="group" aria-label={t('dataTable.actions')}>
                           {rowActions!
                             .filter(a => !a.hidden?.(row))
-                            .map((action, i) => (
-                              <button
-                                key={i}
-                                className={`dtm-action-btn ${action.danger ? 'dtm-action-danger' : ''}`}
-                                onClick={() => action.onClick(row)}
-                                disabled={action.disabled?.(row) ?? false}
-                                aria-label={typeof action.label === 'function' ? action.label(row) : action.label}
-                                title={typeof action.label === 'function' ? action.label(row) : action.label}
-                              >
-                                {(typeof action.icon === 'function' ? action.icon(row) : action.icon) ?? (typeof action.label === 'function' ? action.label(row) : action.label)}
-                              </button>
-                            ))
+                            .map((action, i) => {
+                              const isDanger = action.danger
+                                || action.variant === 'destructive'
+                                || action.variant === 'danger';
+                              const variantClass =
+                                isDanger ? 'dtm-action-danger' :
+                                action.variant === 'amber' ? 'dtm-action-amber' :
+                                action.variant === 'primary' ? 'dtm-action-primary' : '';
+                              return (
+                                <button
+                                  key={i}
+                                  className={`dtm-action-btn ${variantClass}`}
+                                  onClick={() => action.onClick(row)}
+                                  disabled={action.disabled?.(row) ?? false}
+                                  aria-label={typeof action.label === 'function' ? action.label(row) : action.label}
+                                  title={typeof action.label === 'function' ? action.label(row) : action.label}
+                                >
+                                  {(typeof action.icon === 'function' ? action.icon(row) : action.icon) ?? (typeof action.label === 'function' ? action.label(row) : action.label)}
+                                </button>
+                              );
+                            })
                           }
                         </div>
                       </td>
@@ -732,6 +754,10 @@ function DataTableMaster<T extends { id: string }>({
         .dtm-action-btn:disabled { opacity: .4; cursor: not-allowed; }
         .dtm-action-danger { border-color: #fca5a5; color: #b91c1c; }
         .dtm-action-danger:hover:not(:disabled) { background: #fee2e2; }
+        .dtm-action-amber { border-color: #fcd34d; color: #b45309; }
+        .dtm-action-amber:hover:not(:disabled) { background: #fef3c7; }
+        .dtm-action-primary { border-color: #6366f1; color: #4338ca; }
+        .dtm-action-primary:hover:not(:disabled) { background: #eef2ff; }
         .dark .dtm-action-btn { background: #1f2937; border-color: #4b5563; color: #d1d5db; }
 
         /* Empty */
@@ -752,6 +778,133 @@ function DataTableMaster<T extends { id: string }>({
         .dtm-page-info { font-size: 13px; padding: 0 8px; color: #374151; }
         .dark .dtm-page-btn { background: #1f2937; border-color: #374151; color: #e5e7eb; }
         .dark .dtm-page-info { color: #e5e7eb; }
+
+        /* ── Mobile : mode "cartes" (< 768px) ─────────────────────────────── */
+        @media (max-width: 767px) {
+          /* Toolbar empilée, search en pleine largeur */
+          .dtm-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+          .dtm-toolbar-right { width: 100%; justify-content: flex-end; }
+          .dtm-search { width: 100%; min-width: 0; }
+          .dtm-bulk-actions { flex-wrap: wrap; width: 100%; }
+
+          /* Supprime le cadre/scroll du tableau — on passe en flux vertical */
+          .dtm-table-wrapper { overflow-x: visible; border: none; border-radius: 0; background: transparent; }
+          .dark .dtm-table-wrapper { border: none; }
+          .dtm-table { min-width: 0; border-collapse: separate; border-spacing: 0; width: 100%; }
+
+          /* En-têtes cachés visuellement mais lisibles par les SR */
+          .dtm-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+          /* Chaque ligne devient une carte */
+          .dtm-table tbody tr.dtm-row {
+            display: block;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+          }
+          .dark .dtm-table tbody tr.dtm-row { background: #1f2937; border-color: #374151; box-shadow: none; }
+          .dtm-table tbody tr.dtm-row:hover { background: #fff; }
+          .dark .dtm-table tbody tr.dtm-row:hover { background: #1f2937; }
+          .dtm-table tbody tr.dtm-row.dtm-row-even { background: #fff; }
+          .dark .dtm-table tbody tr.dtm-row.dtm-row-even { background: #1f2937; }
+          .dtm-table tbody tr.dtm-row.dtm-row-selected { background: #eef2ff !important; border-color: #6366f1 !important; }
+          .dark .dtm-table tbody tr.dtm-row.dtm-row-selected { background: #312e81 !important; border-color: #818cf8 !important; }
+
+          /* Cellules = lignes "label : valeur" */
+          .dtm-table tbody tr.dtm-row td.dtm-td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 0;
+            width: 100%;
+            border: none;
+            text-align: left;
+            min-height: 28px;
+            white-space: normal;
+          }
+          .dtm-table tbody tr.dtm-row td.dtm-td + td.dtm-td { border-top: 1px dashed #f1f5f9; padding-top: 8px; }
+          .dark .dtm-table tbody tr.dtm-row td.dtm-td + td.dtm-td { border-top-color: #334155; }
+
+          .dtm-table tbody tr.dtm-row td.dtm-td::before {
+            content: attr(data-label);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: #6b7280;
+            flex: 0 0 auto;
+            max-width: 45%;
+          }
+          .dark .dtm-table tbody tr.dtm-row td.dtm-td::before { color: #9ca3af; }
+
+          /* Checkbox (toujours en haut) : pas de label */
+          .dtm-table tbody tr.dtm-row td.dtm-td-check {
+            width: auto;
+            padding: 2px 0 4px 0;
+            min-height: 0;
+          }
+          .dtm-table tbody tr.dtm-row td.dtm-td-check::before { content: none; }
+
+          /* Premier td de données après checkbox : séparateur franc */
+          .dtm-table tbody tr.dtm-row td.dtm-td-check + td.dtm-td {
+            border-top: 1px solid #e5e7eb !important;
+            padding-top: 10px !important;
+            margin-top: 4px;
+          }
+          .dark .dtm-table tbody tr.dtm-row td.dtm-td-check + td.dtm-td { border-top-color: #374151 !important; }
+
+          /* Actions (toujours en bas de carte) : pas de label, séparateur franc au-dessus */
+          .dtm-table tbody tr.dtm-row td.dtm-td-actions {
+            width: auto;
+            justify-content: flex-end;
+            padding: 10px 0 2px 0;
+            border-top: 1px solid #e5e7eb !important;
+            margin-top: 6px;
+          }
+          .dark .dtm-table tbody tr.dtm-row td.dtm-td-actions { border-top-color: #374151 !important; }
+          .dtm-table tbody tr.dtm-row td.dtm-td-actions::before { content: none; }
+          .dtm-table tbody tr.dtm-row td.dtm-td-actions .dtm-actions-group { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+          .dtm-table tbody tr.dtm-row td.dtm-td-actions .dtm-action-btn { padding: 7px 12px; font-size: 13px; min-height: 36px; }
+
+          /* Alignement : le rendu est à droite via flex — on annule text-align sur le conteneur */
+          .dtm-table tbody tr.dtm-row td.dtm-align-right,
+          .dtm-table tbody tr.dtm-row td.dtm-align-center { text-align: left; }
+
+          /* Ligne "vide" */
+          .dtm-table tbody tr td.dtm-empty {
+            display: block;
+            background: #fff;
+            border: 1px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 32px 16px;
+            text-align: center;
+          }
+          .dark .dtm-table tbody tr td.dtm-empty { background: #1f2937; border-color: #374151; }
+
+          /* Skeleton en mode carte */
+          .dtm-row-skeleton {
+            display: block;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+          }
+          .dark .dtm-row-skeleton { background: #1f2937; border-color: #374151; }
+          .dtm-row-skeleton td { display: block; padding: 5px 0; border: none; width: 100%; }
+          .dtm-row-skeleton .dtm-skeleton { width: 100%; }
+
+          /* Footer : résumé + pagination empilés, centrés */
+          .dtm-footer { flex-direction: column; align-items: stretch; gap: 10px; }
+          .dtm-summary { text-align: center; }
+          .dtm-pagination { justify-content: center; }
+          .dtm-page-btn { padding: 8px 12px; font-size: 14px; }
+          .dtm-page-info { font-size: 14px; }
+        }
       `}</style>
     </div>
   );

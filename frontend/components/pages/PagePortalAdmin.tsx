@@ -72,7 +72,6 @@ export function PagePortalAdmin() {
   const { user } = useAuth();
   const { t } = useI18n();
   const tenantId = user?.tenantId;
-  const tenantSlug = ''; // Will be loaded from config
 
   // Fetch current config
   const portalRes = useFetch<PortalConfig | null>(

@@ -122,7 +122,6 @@ const UPCOMING_TRIPS: UpcomingTrip[] = [
 // ─── Tab: Vente ───────────────────────────────────────────────────────────────
 
 function TabVente() {
-  const { t } = useI18n();
   const formatXAF = useCurrencyFormatter();
   const { operational } = useTenantConfig();
   const [selectedTrip, setSelectedTrip]   = useState<UpcomingTrip | null>(null);
@@ -582,7 +581,6 @@ function TabScanColis() {
 // ─── Tab: Colis ───────────────────────────────────────────────────────────────
 
 function TabColis() {
-  const { t } = useI18n();
   const [form, setForm] = useState({
     expediteur: '', destinataire: '', telephone: '', destination: 'Ziguinchor', description: '', poids: '',
   });
@@ -680,7 +678,6 @@ function TabColis() {
 // ─── Tab: Caisse ──────────────────────────────────────────────────────────────
 
 function TabCaisse() {
-  const { t } = useI18n();
   const formatXAF = useCurrencyFormatter();
   const sales = [
     { heure: '07:15', passager: 'Moussa Diallo',   destination: 'Ziguinchor',  prix: 8000,  mode: 'Cash' },

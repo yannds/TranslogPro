@@ -196,7 +196,7 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
       csvValue: (v) => String(v),
     },
     {
-      key: 'availability',
+      key: 'assignments',
       header: t('personnel.available'),
       width: '90px',
       align: 'center',

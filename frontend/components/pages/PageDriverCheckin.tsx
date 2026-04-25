@@ -17,7 +17,6 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPatch, apiPost } from '../../lib/api';
 import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import DataTableMaster, { type Column } from '../DataTableMaster';
 

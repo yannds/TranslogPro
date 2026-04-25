@@ -1,6 +1,7 @@
 /** Español — Locale file */
 
-const es: Record<string, Record<string, string>> = {
+type LocaleValue = string | Record<string, string>;
+const es: Record<string, Record<string, LocaleValue>> = {
   "board": {
     "departures": "Salidas",
     "arrivals": "Llegadas",
@@ -4518,7 +4519,7 @@ const es: Record<string, Record<string, string>> = {
     "company.name":      "Nombre de la empresa",
     "company.namePlaceholder":"ACME Transport S.L.",
     "company.slug":      "Subdominio",
-    "company.slugHint":  "Su espacio estará disponible en {host}.translogpro.com — letras, números y guiones.",
+    "company.slugHint":  "Su espacio estará disponible en {host}.{baseDomain} — letras, números y guiones.",
     "company.slugAvailable":"Disponible",
     "company.slugTaken": "Este subdominio ya está en uso.",
     "company.slugInvalid":"3-32 caracteres, a-z, 0-9 y guiones (no al principio/final).",
@@ -4546,7 +4547,7 @@ const es: Record<string, Record<string, string>> = {
     "error.rateLimit":   "Demasiados intentos. Inténtelo de nuevo en unos minutos.",
 
     "success.title":     "Bienvenido a TransLog Pro 🎉",
-    "success.subtitle":  "Su espacio {slug}.translogpro.com está listo. Le hemos enviado un correo de confirmación.",
+    "success.subtitle":  "Su espacio {slug}.{baseDomain} está listo. Le hemos enviado un correo de confirmación.",
     "success.cta":       "Acceder a mi espacio",
     "success.trialInfo": "Dispone de {days} días de prueba gratuita. No se requiere tarjeta bancaria.",
 

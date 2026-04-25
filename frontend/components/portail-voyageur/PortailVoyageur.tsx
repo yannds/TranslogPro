@@ -1487,7 +1487,7 @@ export function PortailVoyageur() {
   const cfgUrl = apiBase ? `${apiBase}/config` : null;
   const stUrl = apiBase ? `${apiBase}/stations` : null;
   const cfgDeps = useMemo(() => [tenantSlug], [tenantSlug]);
-  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string> }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string; newsCmsEnabled?: boolean } | null }>(cfgUrl, cfgDeps, skip);
+  const cfg = useFetch<{ tenant: { name: string; contact: Record<string, string>; city?: string; country?: string }; brand: { brandName: string; logoUrl?: string }; paymentMethods: PaymentMethod[]; portal?: { themeId?: string; newsCmsEnabled?: boolean } | null }>(cfgUrl, cfgDeps, skip);
   const stRes = useFetch<StationInfo[]>(stUrl, cfgDeps, skip);
   // Tenant name takes priority — brand.brandName is only used if tenant specifically set it
   const brandName = cfg.data?.tenant?.name || cfg.data?.brand?.brandName || '';

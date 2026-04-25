@@ -1,140 +1,15 @@
-{"ts":"2026-04-24T09:33:32.148Z","phase":"BOOT","actor":"SYSTEM","action":"Démarrage scénario v3","outcome":"info","details":{"slug":"pw-saas-ful-mocpqlx0","adminEmail":"admin-pw-saas-ful-mocpqlx0@mega.local"}}
-{"ts":"2026-04-24T09:33:32.331Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : SIGNUP ═══","outcome":"info"}
-{"ts":"2026-04-24T09:33:32.928Z","phase":"P1","actor":"Admin","action":"Landing apex","outcome":"success"}
-{"ts":"2026-04-24T09:33:33.015Z","phase":"P1","actor":"Admin","action":"CTA signup","outcome":"success"}
-{"ts":"2026-04-24T09:33:33.131Z","phase":"P1","actor":"Admin","action":"Wizard step 1 — identité admin","outcome":"success"}
-{"ts":"2026-04-24T09:33:33.313Z","phase":"P1","actor":"Admin","action":"Wizard step 2 — société + slug","outcome":"success"}
-{"ts":"2026-04-24T09:33:36.257Z","phase":"P1","actor":"Admin","action":"Wizard step 3 — plan + \"Créer mon compte\"","outcome":"success"}
-{"ts":"2026-04-24T09:33:36.258Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : LOGIN SUBDOMAIN ═══","outcome":"info"}
-{"ts":"2026-04-24T09:33:36.690Z","phase":"P2","actor":"Admin","action":"URL après clic CTA","outcome":"info","details":{"url":"https://pw-saas-ful-mocpqlx0.translog.test/login"}}
-{"ts":"2026-04-24T09:33:36.690Z","phase":"P2","actor":"Admin","action":"Clic CTA \"Accéder à mon espace\" (signup.success.cta)","outcome":"success"}
-{"ts":"2026-04-24T09:33:37.206Z","phase":"P2","actor":"Admin","action":"Intercept /api/auth/sign-in","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmocpqns30b5051yfy7y1ybll\",\"email\":\"admin-pw-saas-ful-mocpqlx0@mega.local\",\"name\":\"Claire Patron v3\",\"tenantId\":\"428477a4-8747-490f-8aff-031d0db9775e\",\"effectiveTenantId\":\"428477a4-8747-490f-8aff-031d0db9775e\",\"tenantSlug\":\"pw-saas-ful-mocpqlx0\",\"roleId\":\"75a52438-c81f-423a-a0b7-6b9ec6223efa\""}}
-{"ts":"2026-04-24T09:33:38.713Z","phase":"P2","actor":"Admin","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-ful-mocpqlx0.translog.test/onboarding"}}
-{"ts":"2026-04-24T09:33:38.714Z","phase":"P2","actor":"Admin","action":"Login form — #login-email + #login-password + \"Se connecter\"","outcome":"success","url":"subdomain/login"}
-{"ts":"2026-04-24T09:33:38.714Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : ONBOARDING ═══","outcome":"info"}
-{"ts":"2026-04-24T09:33:38.878Z","phase":"P3","actor":"Admin","action":"Onboarding step 1 — brand","outcome":"success"}
-{"ts":"2026-04-24T09:33:39.033Z","phase":"P3","actor":"Admin","action":"Onboarding step 2 — agency","outcome":"success"}
-{"ts":"2026-04-24T09:33:40.119Z","phase":"P3","actor":"Admin","action":"Onboarding step 3 — station","outcome":"success"}
-{"ts":"2026-04-24T09:33:40.320Z","phase":"P3","actor":"Admin","action":"Onboarding step 4 — route","outcome":"success"}
-{"ts":"2026-04-24T09:33:40.358Z","phase":"P3","actor":"Admin","action":"Onboarding step 5 — clic \"Je le ferai plus tard\" (finish)","outcome":"success"}
-{"ts":"2026-04-24T09:33:41.508Z","phase":"P3","actor":"Admin","action":"Naviguer explicitement sur /admin (sortir de /welcome)","outcome":"success"}
-{"ts":"2026-04-24T09:33:41.508Z","phase":"P4","actor":"SYSTEM","action":"═══ P4 : PROVISIONING via UI ═══","outcome":"info"}
-{"ts":"2026-04-24T09:33:42.264Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/fleet","outcome":"success","url":"/admin/fleet"}
-{"ts":"2026-04-24T09:33:42.350Z","phase":"P4","actor":"Admin","action":"Clic \"Ajouter un véhicule\"","outcome":"success"}
-{"ts":"2026-04-24T09:33:42.537Z","phase":"P4","actor":"Admin","action":"Remplir + enregistrer véhicule","outcome":"success"}
-{"ts":"2026-04-24T09:33:43.454Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/staff","outcome":"success","url":"/admin/staff"}
-{"ts":"2026-04-24T09:33:43.686Z","phase":"P4","actor":"Admin","action":"Créer staff DRIVER via UI","outcome":"success"}
-{"ts":"2026-04-24T09:33:43.921Z","phase":"P4","actor":"Admin","action":"Créer staff MECHANIC via UI","outcome":"success"}
-{"ts":"2026-04-24T09:33:44.141Z","phase":"P4","actor":"Admin","action":"Créer staff AGENT via UI","outcome":"success"}
-{"ts":"2026-04-24T09:33:45.056Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/routes","outcome":"success","url":"/admin/routes"}
-{"ts":"2026-04-24T09:33:45.133Z","phase":"P4","actor":"Admin","action":"Clic \"Nouvelle ligne\"","outcome":"success"}
-{"ts":"2026-04-24T09:33:50.204Z","phase":"P4","actor":"Admin","action":"Remplir route (nom + distance + tarif) + Créer","outcome":"failed","error":"locator.click: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog').getByRole('button', { name: /^(Créer|Enregistrer)$/i }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"submit\" aria-disabled=\"true\" class=\"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline"}
-{"ts":"2026-04-24T09:33:50.938Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/trips","outcome":"success","url":"/admin/trips"}
-{"ts":"2026-04-24T09:33:51.008Z","phase":"P4","actor":"Admin","action":"Clic \"Créer un nouveau trajet\"","outcome":"success"}
-{"ts":"2026-04-24T09:34:03.640Z","phase":"P4","actor":"Admin","action":"Remplir trip + \"Créer le trajet\"","outcome":"success"}
-{"ts":"2026-04-24T09:34:04.548Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/trips/planning","outcome":"success","url":"/admin/trips/planning"}
-{"ts":"2026-04-24T09:34:04.548Z","phase":"P5","actor":"SYSTEM","action":"═══ P5 : OPÉRATIONS via UI ═══","outcome":"info"}
-{"ts":"2026-04-24T09:34:05.594Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/cashier","outcome":"success","url":"/admin/cashier"}
-{"ts":"2026-04-24T09:34:05.661Z","phase":"P5","actor":"Admin","action":"Clic \"Ouvrir ma caisse\"","outcome":"success"}
-{"ts":"2026-04-24T09:34:13.730Z","phase":"P5","actor":"Admin","action":"Remplir solde initial + valider","outcome":"failed","error":"\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).not.\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog')\nExpected: not visible\nReceived: visible\nTimeout:  8000ms\n\nCall log:\n\u001b[2m  - Expect \"not toBeVisible\" with timeout 8000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog')\u001b[22m\n\u001b[2m    12 × locator resolved to <div role=\"dialog\" tabindex=\"-1\" id=\"radix-:r3:\" data-state=\"open\" aria-labell"}
-{"ts":"2026-04-24T09:34:14.708Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/tickets/new","outcome":"success","url":"/admin/tickets/new"}
-{"ts":"2026-04-24T09:34:19.718Z","phase":"P5","actor":"Admin","action":"Remplir passager (nom + téléphone)","outcome":"failed","error":"locator.fill: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByPlaceholder(/Nom complet/i).first()\u001b[22m\n"}
-{"ts":"2026-04-24T09:34:26.746Z","phase":"DIAG","actor":"Admin","action":"Boutons/liens visibles quand \"Calculer le prix\" manque","outcome":"info","url":"https://pw-saas-ful-mocpqlx0.translog.test/admin/tickets/new","details":{"bodyButtons":[{"tag":"button","text":"Tableau de bord","disabled":false},{"tag":"button","text":"Opérations","disabled":false},{"tag":"button","text":"Commerce & SAV","disabled":false},{"tag":"button","text":"Ventes & Caisse","disabled":false},{"tag":"button","text":"Vendre billet","disabled":false},{"tag":"button","text":"Billets émis","disabled":false},{"tag":"button","text":"Annulations","disabled":false},{"tag":"button","text":"Caisse","disabled":false},{"tag":"button","text":"Écarts de caisse","disabled":false},{"tag":"button","text":"Ressources","disabled":false},{"tag":"button","text":"Stratégie & Prix","disabled":false},{"tag":"button","text":"QHSE","disabled":false},{"tag":"button","text":"Intelligence & Analytics","disabled":false},{"tag":"button","text":"Configuration","disabled":false},{"tag":"button","text":"Passer en mode sombre","disabled":false},{"tag":"button","text":"CLClaire Patron v3TENANT_ADMIN","disabled":false},{"tag":"button","text":"Précédent","disabled":true},{"tag":"button","text":"Suivant","disabled":false},{"tag":"button","text":"Ouvrir ma caisse","disabled":false}]}}
-{"ts":"2026-04-24T09:34:26.747Z","phase":"P5","actor":"Admin","action":"Clic \"Calculer le prix\"","outcome":"missing","error":"MISSING_CTA: bouton \"Calculer le prix\" non trouvé après 5000ms sur la page courante"}
-{"ts":"2026-04-24T09:34:33.768Z","phase":"DIAG","actor":"Admin","action":"Boutons/liens visibles quand \"Confirmer et imprimer\" manque","outcome":"info","url":"https://pw-saas-ful-mocpqlx0.translog.test/admin/tickets/new","details":{"bodyButtons":[{"tag":"button","text":"Tableau de bord","disabled":false},{"tag":"button","text":"Opérations","disabled":false},{"tag":"button","text":"Commerce & SAV","disabled":false},{"tag":"button","text":"Ventes & Caisse","disabled":false},{"tag":"button","text":"Vendre billet","disabled":false},{"tag":"button","text":"Billets émis","disabled":false},{"tag":"button","text":"Annulations","disabled":false},{"tag":"button","text":"Caisse","disabled":false},{"tag":"button","text":"Écarts de caisse","disabled":false},{"tag":"button","text":"Ressources","disabled":false},{"tag":"button","text":"Stratégie & Prix","disabled":false},{"tag":"button","text":"QHSE","disabled":false},{"tag":"button","text":"Intelligence & Analytics","disabled":false},{"tag":"button","text":"Configuration","disabled":false},{"tag":"button","text":"Passer en mode sombre","disabled":false},{"tag":"button","text":"CLClaire Patron v3TENANT_ADMIN","disabled":false},{"tag":"button","text":"Précédent","disabled":true},{"tag":"button","text":"Suivant","disabled":false},{"tag":"button","text":"Ouvrir ma caisse","disabled":false}]}}
-{"ts":"2026-04-24T09:34:33.768Z","phase":"P5","actor":"Admin","action":"Clic \"Confirmer et imprimer\"","outcome":"missing","error":"MISSING_CTA: bouton \"Confirmer et imprimer\" non trouvé après 5000ms sur la page courante"}
-{"ts":"2026-04-24T09:34:34.737Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/parcels/new","outcome":"success","url":"/admin/parcels/new"}
-{"ts":"2026-04-24T09:34:34.870Z","phase":"P5","actor":"Admin","action":"Remplir colis + \"Enregistrer le colis\"","outcome":"success"}
-{"ts":"2026-04-24T09:34:35.739Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/sav/vouchers","outcome":"success","url":"/admin/sav/vouchers"}
-{"ts":"2026-04-24T09:34:35.812Z","phase":"P5","actor":"Admin","action":"Clic \"Émettre un bon\"","outcome":"success"}
-{"ts":"2026-04-24T09:34:40.866Z","phase":"P5","actor":"Admin","action":"Remplir voucher + valider","outcome":"failed","error":"locator.click: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog').getByRole('button', { name: /^(Émettre|Créer|Enregistrer)$/i }).first()\u001b[22m\n"}
-{"ts":"2026-04-24T09:34:41.774Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/sav/claims","outcome":"success","url":"/admin/sav/claims"}
-{"ts":"2026-04-24T09:34:48.796Z","phase":"DIAG","actor":"Admin","action":"Boutons/liens visibles quand \"Nouvelle réclamation\" manque","outcome":"info","url":"https://pw-saas-ful-mocpqlx0.translog.test/admin/sav/claims","details":{"bodyButtons":[{"tag":"button","text":"Tableau de bord","disabled":false},{"tag":"button","text":"Opérations","disabled":false},{"tag":"button","text":"Commerce & SAV","disabled":false},{"tag":"button","text":"Ressources","disabled":false},{"tag":"button","text":"Stratégie & Prix","disabled":false},{"tag":"button","text":"QHSE","disabled":false},{"tag":"button","text":"Intelligence & Analytics","disabled":false},{"tag":"button","text":"Configuration","disabled":false},{"tag":"button","text":"Passer en mode sombre","disabled":false},{"tag":"button","text":"CLClaire Patron v3TENANT_ADMIN","disabled":false},{"tag":"button","text":"↓ Exporter ▾","disabled":true},{"tag":"button","text":"«","disabled":true},{"tag":"button","text":"‹","disabled":true},{"tag":"button","text":"›","disabled":true},{"tag":"button","text":"»","disabled":true}]}}
-{"ts":"2026-04-24T09:34:48.796Z","phase":"P5","actor":"Admin","action":"Clic \"Nouvelle réclamation\"","outcome":"missing","error":"MISSING_CTA: bouton \"Nouvelle réclamation\" non trouvé après 5000ms sur la page courante"}
-{"ts":"2026-04-24T09:34:49.706Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/sav/returns","outcome":"success","url":"/admin/sav/returns"}
-{"ts":"2026-04-24T09:34:49.706Z","phase":"P6","actor":"SYSTEM","action":"═══ P6 : ANALYTICS ═══","outcome":"info"}
-{"ts":"2026-04-24T09:34:50.630Z","phase":"P6","actor":"Admin","action":"Consulter Dashboard admin (/admin)","outcome":"success","url":"/admin"}
-{"ts":"2026-04-24T09:34:51.397Z","phase":"P6","actor":"Admin","action":"Consulter Analytics (/admin/analytics)","outcome":"success","url":"/admin/analytics"}
-{"ts":"2026-04-24T09:34:52.102Z","phase":"P6","actor":"Admin","action":"Consulter Rentabilité (yield) (/admin/ai/routes)","outcome":"success","url":"/admin/ai/routes"}
-{"ts":"2026-04-24T09:34:52.970Z","phase":"P6","actor":"Admin","action":"Consulter Saisonnalité (/admin/seasonality)","outcome":"success","url":"/admin/seasonality"}
-{"ts":"2026-04-24T09:34:53.704Z","phase":"P6","actor":"Admin","action":"Consulter CRM clients (/admin/crm/customers)","outcome":"success","url":"/admin/crm/customers"}
-{"ts":"2026-04-24T09:34:54.421Z","phase":"P6","actor":"Admin","action":"Consulter Factures (/admin/invoices)","outcome":"success","url":"/admin/invoices"}
-{"ts":"2026-04-24T09:34:55.150Z","phase":"P6","actor":"Admin","action":"Consulter Support (/admin/support)","outcome":"success","url":"/admin/support"}
-{"ts":"2026-04-24T09:34:55.887Z","phase":"P6","actor":"Admin","action":"Consulter Billets émis (/admin/tickets)","outcome":"success","url":"/admin/tickets"}
-{"ts":"2026-04-24T09:34:56.602Z","phase":"P6","actor":"Admin","action":"Consulter Colis (/admin/parcels)","outcome":"success","url":"/admin/parcels"}
-{"ts":"2026-04-24T09:34:56.602Z","phase":"P6b","actor":"SYSTEM","action":"═══ P6b : TOUR EXHAUSTIF 60+ ÉCRANS ADMIN ═══","outcome":"info"}
-{"ts":"2026-04-24T09:34:57.335Z","phase":"P6b","actor":"Admin","action":"Visiter Trips annulations (/admin/tickets/cancel)","outcome":"success","url":"/admin/tickets/cancel"}
-{"ts":"2026-04-24T09:34:58.124Z","phase":"P6b","actor":"Admin","action":"Visiter Trips récurrents (scheduler) (/admin/trips/scheduler)","outcome":"success","url":"/admin/trips/scheduler"}
-{"ts":"2026-04-24T09:34:58.870Z","phase":"P6b","actor":"Admin","action":"Visiter Trips retards & alertes (/admin/trips/delays)","outcome":"success","url":"/admin/trips/delays"}
-{"ts":"2026-04-24T09:34:59.659Z","phase":"P6b","actor":"Admin","action":"Visiter Shipments (groupages) (/admin/shipments)","outcome":"success","url":"/admin/shipments"}
-{"ts":"2026-04-24T09:35:00.543Z","phase":"P6b","actor":"Admin","action":"Visiter Manifestes (/admin/manifests)","outcome":"success","url":"/admin/manifests"}
-{"ts":"2026-04-24T09:35:01.314Z","phase":"P6b","actor":"Admin","action":"Visiter Stations (/admin/stations)","outcome":"success","url":"/admin/stations"}
-{"ts":"2026-04-24T09:35:02.091Z","phase":"P6b","actor":"Admin","action":"Visiter Plates-formes / quais (/admin/platforms)","outcome":"success","url":"/admin/platforms"}
-{"ts":"2026-04-24T09:35:02.892Z","phase":"P6b","actor":"Admin","action":"Visiter Display — écrans (/admin/display)","outcome":"success","url":"/admin/display"}
-{"ts":"2026-04-24T09:35:03.632Z","phase":"P6b","actor":"Admin","action":"Visiter Display — quais (/admin/display/quais)","outcome":"success","url":"/admin/display/quais"}
-{"ts":"2026-04-24T09:35:04.378Z","phase":"P6b","actor":"Admin","action":"Visiter Display — bus (/admin/display/bus)","outcome":"success","url":"/admin/display/bus"}
-{"ts":"2026-04-24T09:35:05.118Z","phase":"P6b","actor":"Admin","action":"Visiter Display — annonces (/admin/display/announcements)","outcome":"success","url":"/admin/display/announcements"}
-{"ts":"2026-04-24T09:35:05.842Z","phase":"P6b","actor":"Admin","action":"Visiter Caisse — écarts (/admin/cash-discrepancies)","outcome":"success","url":"/admin/cash-discrepancies"}
-{"ts":"2026-04-24T09:35:06.564Z","phase":"P6b","actor":"Admin","action":"Visiter SAV — signalements (/admin/sav/reports)","outcome":"success","url":"/admin/sav/reports"}
-{"ts":"2026-04-24T09:35:07.255Z","phase":"P6b","actor":"Admin","action":"Visiter CRM — campagnes (/admin/crm/campaigns)","outcome":"success","url":"/admin/crm/campaigns"}
-{"ts":"2026-04-24T09:35:07.951Z","phase":"P6b","actor":"Admin","action":"Visiter CRM — fidélité (/admin/crm/loyalty)","outcome":"success","url":"/admin/crm/loyalty"}
-{"ts":"2026-04-24T09:35:08.646Z","phase":"P6b","actor":"Admin","action":"Visiter CRM — feedback (/admin/crm/feedback)","outcome":"success","url":"/admin/crm/feedback"}
-{"ts":"2026-04-24T09:35:09.381Z","phase":"P6b","actor":"Admin","action":"Visiter Flotte — tracking KM/carburant (/admin/fleet/tracking)","outcome":"success","url":"/admin/fleet/tracking"}
-{"ts":"2026-04-24T09:35:10.133Z","phase":"P6b","actor":"Admin","action":"Visiter Flotte — plans de sièges (/admin/fleet/seats)","outcome":"success","url":"/admin/fleet/seats"}
-{"ts":"2026-04-24T09:35:10.876Z","phase":"P6b","actor":"Admin","action":"Visiter Flotte — docs & consommables (/admin/fleet-docs)","outcome":"success","url":"/admin/fleet-docs"}
-{"ts":"2026-04-24T09:35:11.657Z","phase":"P6b","actor":"Admin","action":"Visiter Chauffeurs (/admin/drivers)","outcome":"success","url":"/admin/drivers"}
-{"ts":"2026-04-24T09:35:12.356Z","phase":"P6b","actor":"Admin","action":"Visiter Chauffeurs — scoring (/admin/drivers/scoring)","outcome":"success","url":"/admin/drivers/scoring"}
-{"ts":"2026-04-24T09:35:13.086Z","phase":"P6b","actor":"Admin","action":"Visiter Équipages — planning (/admin/crew/planning)","outcome":"success","url":"/admin/crew/planning"}
-{"ts":"2026-04-24T09:35:13.827Z","phase":"P6b","actor":"Admin","action":"Visiter Chauffeurs — calendrier (/admin/crew/driver-calendar)","outcome":"success","url":"/admin/crew/driver-calendar"}
-{"ts":"2026-04-24T09:35:14.566Z","phase":"P6b","actor":"Admin","action":"Visiter Briefing pré-départ (/admin/crew/briefing)","outcome":"success","url":"/admin/crew/briefing"}
-{"ts":"2026-04-24T09:35:15.285Z","phase":"P6b","actor":"Admin","action":"Visiter Maintenance — fiches (/admin/maintenance)","outcome":"success","url":"/admin/maintenance"}
-{"ts":"2026-04-24T09:35:15.988Z","phase":"P6b","actor":"Admin","action":"Visiter Maintenance — planning (/admin/maintenance/planning)","outcome":"success","url":"/admin/maintenance/planning"}
-{"ts":"2026-04-24T09:35:16.704Z","phase":"P6b","actor":"Admin","action":"Visiter Maintenance — alertes techniques (/admin/maintenance/alerts)","outcome":"success","url":"/admin/maintenance/alerts"}
-{"ts":"2026-04-24T09:35:17.434Z","phase":"P6b","actor":"Admin","action":"Visiter Pricing — grille (/admin/pricing)","outcome":"success","url":"/admin/pricing"}
-{"ts":"2026-04-24T09:35:18.373Z","phase":"P6b","actor":"Admin","action":"Visiter Pricing — simulateur (/admin/pricing/simulator)","outcome":"success","url":"/admin/pricing/simulator"}
-{"ts":"2026-04-24T09:35:19.125Z","phase":"P6b","actor":"Admin","action":"Visiter Pricing — points de péage (/admin/pricing/toll-points)","outcome":"success","url":"/admin/pricing/toll-points"}
-{"ts":"2026-04-24T09:35:20.040Z","phase":"P6b","actor":"Admin","action":"Visiter Pricing — yield management (/admin/pricing/yield)","outcome":"success","url":"/admin/pricing/yield"}
-{"ts":"2026-04-24T09:35:20.777Z","phase":"P6b","actor":"Admin","action":"Visiter Pricing — promotions (/admin/pricing/promo)","outcome":"success","url":"/admin/pricing/promo"}
-{"ts":"2026-04-24T09:35:21.502Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — classes tarifaires (/admin/settings/fare-classes)","outcome":"success","url":"/admin/settings/fare-classes"}
-{"ts":"2026-04-24T09:35:22.210Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — périodes de pointe (/admin/settings/peak-periods)","outcome":"success","url":"/admin/settings/peak-periods"}
-{"ts":"2026-04-24T09:35:22.935Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — taxes & fiscalité (/admin/settings/taxes)","outcome":"success","url":"/admin/settings/taxes"}
-{"ts":"2026-04-24T09:35:23.686Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — règles métier (/admin/settings/rules)","outcome":"success","url":"/admin/settings/rules"}
-{"ts":"2026-04-24T09:35:24.401Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — paiement (/admin/settings/payment)","outcome":"success","url":"/admin/settings/payment"}
-{"ts":"2026-04-24T09:35:25.141Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — agences (/admin/settings/agencies)","outcome":"success","url":"/admin/settings/agencies"}
-{"ts":"2026-04-24T09:35:25.867Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — société (/admin/settings/company)","outcome":"success","url":"/admin/settings/company"}
-{"ts":"2026-04-24T09:35:26.565Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — bulk import (/admin/settings/bulk-import)","outcome":"success","url":"/admin/settings/bulk-import"}
-{"ts":"2026-04-24T09:35:27.265Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — quotas (/admin/settings/quotas)","outcome":"success","url":"/admin/settings/quotas"}
-{"ts":"2026-04-24T09:35:27.963Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — branding white-label (/admin/settings/branding)","outcome":"success","url":"/admin/settings/branding"}
-{"ts":"2026-04-24T09:35:28.697Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — portail (/admin/settings/portal)","outcome":"success","url":"/admin/settings/portal"}
-{"ts":"2026-04-24T09:35:29.424Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — portail marketplace (/admin/settings/portal/marketplace)","outcome":"success","url":"/admin/settings/portal/marketplace"}
-{"ts":"2026-04-24T09:35:30.175Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — CMS pages (/admin/settings/portal/pages)","outcome":"success","url":"/admin/settings/portal/pages"}
-{"ts":"2026-04-24T09:35:30.895Z","phase":"P6b","actor":"Admin","action":"Visiter Settings — CMS posts (/admin/settings/portal/posts)","outcome":"success","url":"/admin/settings/portal/posts"}
-{"ts":"2026-04-24T09:35:31.699Z","phase":"P6b","actor":"Admin","action":"Visiter QHSE — accidents (/admin/qhse)","outcome":"success","url":"/admin/qhse"}
-{"ts":"2026-04-24T09:35:32.410Z","phase":"P6b","actor":"Admin","action":"Visiter Safety — incidents (/admin/safety/incidents)","outcome":"success","url":"/admin/safety/incidents"}
-{"ts":"2026-04-24T09:35:33.116Z","phase":"P6b","actor":"Admin","action":"Visiter Safety — monitoring live (/admin/safety)","outcome":"success","url":"/admin/safety"}
-{"ts":"2026-04-24T09:35:33.800Z","phase":"P6b","actor":"Admin","action":"Visiter Safety — SOS alertes (/admin/safety/sos)","outcome":"success","url":"/admin/safety/sos"}
-{"ts":"2026-04-24T09:35:34.535Z","phase":"P6b","actor":"Admin","action":"Visiter Analytics — saisonnalité (vrai path) (/admin/analytics/seasonality)","outcome":"success","url":"/admin/analytics/seasonality"}
-{"ts":"2026-04-24T09:35:35.235Z","phase":"P6b","actor":"Admin","action":"Visiter Rapports périodiques (/admin/reports)","outcome":"success","url":"/admin/reports"}
-{"ts":"2026-04-24T09:35:35.950Z","phase":"P6b","actor":"Admin","action":"Visiter AI — rentabilité lignes (/admin/ai/routes)","outcome":"success","url":"/admin/ai/routes"}
-{"ts":"2026-04-24T09:35:36.666Z","phase":"P6b","actor":"Admin","action":"Visiter AI — optimisation flotte (/admin/ai/fleet)","outcome":"success","url":"/admin/ai/fleet"}
-{"ts":"2026-04-24T09:35:37.356Z","phase":"P6b","actor":"Admin","action":"Visiter AI — prévision demande (/admin/ai/demand)","outcome":"success","url":"/admin/ai/demand"}
-{"ts":"2026-04-24T09:35:38.082Z","phase":"P6b","actor":"Admin","action":"Visiter AI — pricing dynamique (/admin/ai/pricing)","outcome":"success","url":"/admin/ai/pricing"}
-{"ts":"2026-04-24T09:35:39.049Z","phase":"P6b","actor":"Admin","action":"Visiter Workflow — designer (/admin/workflow-studio)","outcome":"success","url":"/admin/workflow-studio"}
-{"ts":"2026-04-24T09:35:39.852Z","phase":"P6b","actor":"Admin","action":"Visiter Workflow — blueprints (/admin/workflow-studio/blueprints)","outcome":"success","url":"/admin/workflow-studio/blueprints"}
-{"ts":"2026-04-24T09:35:40.611Z","phase":"P6b","actor":"Admin","action":"Visiter Workflow — marketplace (/admin/workflow-studio/market)","outcome":"success","url":"/admin/workflow-studio/market"}
-{"ts":"2026-04-24T09:35:41.361Z","phase":"P6b","actor":"Admin","action":"Visiter Workflow — simulateur (/admin/workflow-studio/simulate)","outcome":"success","url":"/admin/workflow-studio/simulate"}
-{"ts":"2026-04-24T09:35:45.442Z","phase":"P6b","actor":"Admin","action":"Visiter Documents — templates (/admin/templates)","outcome":"success","url":"/admin/templates"}
-{"ts":"2026-04-24T09:35:46.362Z","phase":"P6b","actor":"Admin","action":"Visiter Modules & extensions (/admin/modules)","outcome":"success","url":"/admin/modules"}
-{"ts":"2026-04-24T09:35:47.175Z","phase":"P6b","actor":"Admin","action":"Visiter IAM — utilisateurs (/admin/iam/users)","outcome":"success","url":"/admin/iam/users"}
-{"ts":"2026-04-24T09:35:47.933Z","phase":"P6b","actor":"Admin","action":"Visiter IAM — rôles (/admin/iam/roles)","outcome":"success","url":"/admin/iam/roles"}
-{"ts":"2026-04-24T09:35:48.678Z","phase":"P6b","actor":"Admin","action":"Visiter IAM — journal d'accès (/admin/iam/audit)","outcome":"success","url":"/admin/iam/audit"}
-{"ts":"2026-04-24T09:35:49.387Z","phase":"P6b","actor":"Admin","action":"Visiter IAM — sessions (/admin/iam/sessions)","outcome":"success","url":"/admin/iam/sessions"}
-{"ts":"2026-04-24T09:35:50.132Z","phase":"P6b","actor":"Admin","action":"Visiter Intégrations API (/admin/integrations)","outcome":"success","url":"/admin/integrations"}
-{"ts":"2026-04-24T09:35:50.866Z","phase":"P6b","actor":"Admin","action":"Visiter Notifications (/admin/notifications)","outcome":"success","url":"/admin/notifications"}
-{"ts":"2026-04-24T09:35:51.560Z","phase":"P6b","actor":"Admin","action":"Visiter Notifications — préférences (/admin/notifications/prefs)","outcome":"success","url":"/admin/notifications/prefs"}
-{"ts":"2026-04-24T09:35:52.285Z","phase":"P6b","actor":"Admin","action":"Visiter Mon compte (/admin/account)","outcome":"success","url":"/admin/account"}
-{"ts":"2026-04-24T09:35:52.285Z","phase":"P7","actor":"SYSTEM","action":"═══ P7 : HORS MÉTIER ═══","outcome":"info"}
-{"ts":"2026-04-24T09:35:52.997Z","phase":"P7","actor":"Admin","action":"Ouvrir /admin/settings/backup","outcome":"success","url":"/admin/settings/backup"}
-{"ts":"2026-04-24T09:35:53.569Z","phase":"P7","actor":"Admin","action":"Clic \"Nouvelle sauvegarde\" (backup.new)","outcome":"success"}
-{"ts":"2026-04-24T09:35:53.574Z","phase":"P7","actor":"Admin","action":"Chercher CTA export RGPD","outcome":"missing","error":"MISSING_CTA: bouton export RGPD non trouvé"}
-{"ts":"2026-04-24T09:35:53.575Z","phase":"END","actor":"SYSTEM","action":"Synthèse outcomes","outcome":"info","details":{"info":15,"success":116,"failed":4,"missing":4}}
+{"ts":"2026-04-25T07:22:17.714Z","phase":"BOOT","actor":"SYSTEM","action":"Démarrage scénario v3","outcome":"info","details":{"slug":"pw-saas-ful-moe0homq","adminEmail":"admin-pw-saas-ful-moe0homq@mega.local"}}
+{"ts":"2026-04-25T07:22:17.906Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : SIGNUP ═══","outcome":"info"}
+{"ts":"2026-04-25T07:22:18.525Z","phase":"P1","actor":"Admin","action":"Landing apex","outcome":"success"}
+{"ts":"2026-04-25T07:22:18.621Z","phase":"P1","actor":"Admin","action":"CTA signup","outcome":"success"}
+{"ts":"2026-04-25T07:22:18.741Z","phase":"P1","actor":"Admin","action":"Wizard step 1 — identité admin","outcome":"success"}
+{"ts":"2026-04-25T07:22:18.912Z","phase":"P1","actor":"Admin","action":"Wizard step 2 — société + slug","outcome":"success"}
+{"ts":"2026-04-25T07:22:21.855Z","phase":"P1","actor":"Admin","action":"Wizard step 3 — plan + \"Créer mon compte\"","outcome":"success"}
+{"ts":"2026-04-25T07:22:21.856Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : LOGIN SUBDOMAIN ═══","outcome":"info"}
+{"ts":"2026-04-25T07:22:22.315Z","phase":"P2","actor":"Admin","action":"URL après clic CTA","outcome":"info","details":{"url":"https://pw-saas-ful-moe0homq.translog.test/login"}}
+{"ts":"2026-04-25T07:22:22.315Z","phase":"P2","actor":"Admin","action":"Clic CTA \"Accéder à mon espace\" (signup.success.cta)","outcome":"success"}
+{"ts":"2026-04-25T07:22:22.820Z","phase":"P2","actor":"Admin","action":"Intercept /api/auth/sign-in","outcome":"info","details":{"status":200,"body":"{\"id\":\"cmoe0hqmc053h6psmrvaagtsb\",\"email\":\"admin-pw-saas-ful-moe0homq@mega.local\",\"name\":\"Claire Patron v3\",\"tenantId\":\"d3d31e23-4f31-443d-b3f4-8c0c18676494\",\"effectiveTenantId\":\"d3d31e23-4f31-443d-b3f4-8c0c18676494\",\"tenantSlug\":\"pw-saas-ful-moe0homq\",\"roleId\":\"6bb08aaa-83fc-4cd4-945c-e684114a0916\""}}
+{"ts":"2026-04-25T07:22:24.329Z","phase":"P2","actor":"Admin","action":"URL post-login","outcome":"info","details":{"url":"https://pw-saas-ful-moe0homq.translog.test/onboarding"}}
+{"ts":"2026-04-25T07:22:24.329Z","phase":"P2","actor":"Admin","action":"Login form — #login-email + #login-password + \"Se connecter\"","outcome":"success","url":"subdomain/login"}
+{"ts":"2026-04-25T07:22:24.329Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : ONBOARDING ═══","outcome":"info"}
+{"ts":"2026-04-25T07:22:34.336Z","phase":"P3","actor":"Admin","action":"Onboarding step 1 — brand","outcome":"failed","error":"\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('#brand-name')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('#brand-name')\u001b[22m\n"}

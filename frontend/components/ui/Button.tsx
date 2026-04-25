@@ -24,6 +24,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:     'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-200',
+        primary:     'bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
         destructive: 'bg-red-600 text-white hover:bg-red-500 dark:bg-red-900 dark:hover:bg-red-800',
         outline:     'border border-slate-200 bg-white hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800 dark:hover:text-slate-50',
         secondary:   'bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700',

@@ -13,9 +13,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, MapPin, Bus, Clock, Users, ArrowRight, ArrowDown,
+  CalendarDays, MapPin, Bus, Clock, Users,
   ClipboardCheck, Eye, ChevronRight, CheckCircle2, Circle,
-  AlertTriangle, Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth }    from '../../lib/auth/auth.context';
 import { useI18n }    from '../../lib/i18n/useI18n';
@@ -86,7 +86,7 @@ interface ScheduleTrip {
 interface TripDetail extends ScheduleTrip {
   checklists:  ChecklistItem[];
   briefing:    { briefedAt: string | null; crewRole: string } | null;
-  _count:      { travelers: number };
+  _count:      { travelers: number; checklists: number };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

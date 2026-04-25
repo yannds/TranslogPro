@@ -1,39 +1,38 @@
-{"ts":"2026-04-24T12:10:00.953Z","phase":"BOOT","actor":"SYSTEM","action":"Scenario v7 : règles métier","outcome":"info","details":{"slug":"pw-saas-brl-mocvbud5"}}
-{"ts":"2026-04-24T12:10:01.121Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : Setup tenant via UI ═══","outcome":"info"}
-{"ts":"2026-04-24T12:10:03.787Z","phase":"P1","actor":"Admin","action":"Signup + wizard complet","outcome":"success"}
-{"ts":"2026-04-24T12:10:06.039Z","phase":"P1","actor":"Admin","action":"Login admin","outcome":"success","details":true}
-{"ts":"2026-04-24T12:10:22.310Z","phase":"P1","actor":"Admin","action":"Onboarding complet (tolérant)","outcome":"success"}
-{"ts":"2026-04-24T12:10:23.294Z","phase":"P1","actor":"Admin","action":"Créer DRIVER via /admin/staff","outcome":"success"}
-{"ts":"2026-04-24T12:10:23.462Z","phase":"P1","actor":"SYSTEM","action":"Seed scénario métier OK","outcome":"success","details":{"routeId":"cmocvcbpy0009psllkl0ozne7","busId":"cmocvcbq3000dpsll0v33h2kf","tripId":"cmocvcbq8000fpsll19gqp1qc","trip2Id":"cmocvcbqa000hpsll6t6le9kj","stationAId":"cmocvbyhz02eq11v9hx1x0adj","stationBId":"cmocvcbpv0007psllccqjws5g","busSmallCapacity":5}}
-{"ts":"2026-04-24T12:10:23.473Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : MANIFESTES ═══","outcome":"info"}
-{"ts":"2026-04-24T12:10:24.332Z","phase":"P2","actor":"Admin","action":"Ouvrir /admin/manifests","outcome":"success"}
-{"ts":"2026-04-24T12:10:25.376Z","phase":"P2","actor":"Admin","action":"Sélectionner trip dans dropdown manifeste","outcome":"success"}
-{"ts":"2026-04-24T12:10:26.922Z","phase":"P2","actor":"Admin","action":"HTTP génération manifeste","outcome":"success","details":{"status":201,"body":"{\"id\":\"cmocvcd9b02ey11v9ii26ejlv\",\"tenantId\":\"c529339d-17d8-4147-8618-921229626213\",\"tripId\":\"cmocvcbqa000hpsll6t6le9kj\",\"kind\":\"PASSENGERS\",\"status\":\"SUBMITTED\",\"storageKey\":\"c529339d-17d8-4147-8618-"}}
-{"ts":"2026-04-24T12:10:28.499Z","phase":"P2","actor":"Admin","action":"Générer manifeste PASSENGERS + signer","outcome":"success"}
-{"ts":"2026-04-24T12:10:31.377Z","phase":"P2","actor":"Driver","action":"Login driver + voir /driver/manifest","outcome":"success"}
-{"ts":"2026-04-24T12:10:31.378Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : HISTORIQUES ═══","outcome":"info"}
-{"ts":"2026-04-24T12:10:33.512Z","phase":"P3","actor":"Customer","action":"Login customer","outcome":"success","details":true}
-{"ts":"2026-04-24T12:10:35.746Z","phase":"P3","actor":"Customer","action":"HTTP /tickets/my","outcome":"info","details":{"status":200,"count":2}}
-{"ts":"2026-04-24T12:10:35.750Z","phase":"P3","actor":"Customer","action":"Billets visibles dans /customer/trips : 9 items <li>","outcome":"success","details":{"countLi":9,"seededAttendu":2}}
-{"ts":"2026-04-24T12:10:35.751Z","phase":"P3","actor":"Customer","action":"Voir /customer/trips — historique billets","outcome":"success"}
-{"ts":"2026-04-24T12:10:37.951Z","phase":"P3","actor":"Customer","action":"Colis visibles dans /customer/parcels : 1 éléments","outcome":"info","details":{"count":1}}
-{"ts":"2026-04-24T12:10:37.951Z","phase":"P3","actor":"Customer","action":"Voir /customer/parcels — historique colis","outcome":"success"}
-{"ts":"2026-04-24T12:10:41.475Z","phase":"P3","actor":"Driver","action":"Login driver → voir /driver/schedule historique trajets","outcome":"success"}
-{"ts":"2026-04-24T12:10:43.345Z","phase":"P3","actor":"Admin","action":"Manifestes présents sur /admin/manifests : 3 éléments","outcome":"info","details":{"count":3}}
-{"ts":"2026-04-24T12:10:43.345Z","phase":"P3","actor":"Admin","action":"Admin accède aux manifestes d'un trip passé","outcome":"success"}
-{"ts":"2026-04-24T12:10:43.345Z","phase":"P4","actor":"SYSTEM","action":"═══ P4 : SEATMAP & CAPACITÉ ═══","outcome":"info"}
-{"ts":"2026-04-24T12:10:44.247Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/tickets/new (vente) avec trip petit bus","outcome":"success"}
-{"ts":"2026-04-24T12:10:44.263Z","phase":"P4","actor":"SYSTEM","action":"Pré-remplir 5 billets pour saturer le bus (capacité=5)","outcome":"success"}
-{"ts":"2026-04-24T12:10:44.999Z","phase":"P4","actor":"Admin","action":"Pas de champ Nom — trip non sélectionné","outcome":"info","details":{"url":"https://pw-saas-brl-mocvbud5.translog.test/admin/tickets/new"}}
-{"ts":"2026-04-24T12:10:44.999Z","phase":"P4","actor":"Admin","action":"Tenter vente 6ème billet → attendre 400 \"Pas assez de places\"","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.007Z","phase":"P4","actor":"SYSTEM","action":"Fix unique seat ACTIF validé : doublon rejeté par DB","outcome":"success","details":{"rejection":"\nInvalid `prisma.ticket.create()` invocation in\n/Users/dsyann/TranslogPro/test/playwright/mega-scenarios/FULL-UI-BUSINESS-RULES.public.pw.spec.ts:585:27\n\n  582 // 4.3 Vérifier la contrainte unique DB "}}
-{"ts":"2026-04-24T12:10:45.007Z","phase":"P4","actor":"SYSTEM","action":"Vérif fix DB : doublon seat ACTIF 1-1 rejeté","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.012Z","phase":"P4","actor":"SYSTEM","action":"Réassignation seat après CANCELLED : OK (index partiel fonctionne)","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.013Z","phase":"P4","actor":"SYSTEM","action":"Vérif : seat d'un ticket CANCELLED peut être revendu","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.013Z","phase":"P5","actor":"SYSTEM","action":"═══ P5 : COLIS & CAPACITÉ ═══","outcome":"info"}
-{"ts":"2026-04-24T12:10:45.018Z","phase":"P5","actor":"SYSTEM","action":"Shipment seedé, guards testables via UI /agent/parcel","outcome":"info","details":{"shipmentId":"cmocvcsd10015psll54ut85x7","remainingWeight":30}}
-{"ts":"2026-04-24T12:10:45.018Z","phase":"P5","actor":"SYSTEM","action":"Créer shipment 30kg puis tenter dépassement poids","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.740Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/parcels/new pour tester enregistrement colis","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.870Z","phase":"P5","actor":"Admin","action":"HTTP parcels register (poids 50kg)","outcome":"info","details":{"status":201,"note":"Le /register ne fait pas le guard capacité — c'est au /shipments/:id/add que le guard s'applique"}}
-{"ts":"2026-04-24T12:10:45.871Z","phase":"P5","actor":"Admin","action":"Remplir colis surdimensionné (poids 50kg) et observer","outcome":"success"}
-{"ts":"2026-04-24T12:10:45.871Z","phase":"END","actor":"SYSTEM","action":"Synthèse v7","outcome":"info","details":{"info":12,"success":26}}
+{"ts":"2026-04-25T07:21:40.631Z","phase":"BOOT","actor":"SYSTEM","action":"Scenario v7 : règles métier","outcome":"info","details":{"slug":"pw-saas-brl-moe0gw0m"}}
+{"ts":"2026-04-25T07:21:40.796Z","phase":"P1","actor":"SYSTEM","action":"═══ P1 : Setup tenant via UI ═══","outcome":"info"}
+{"ts":"2026-04-25T07:21:43.588Z","phase":"P1","actor":"Admin","action":"Signup + wizard complet","outcome":"success"}
+{"ts":"2026-04-25T07:21:45.983Z","phase":"P1","actor":"Admin","action":"Login admin","outcome":"success","details":true}
+{"ts":"2026-04-25T07:21:45.988Z","phase":"P1","actor":"Admin","action":"Onboarding complet (tolérant)","outcome":"success"}
+{"ts":"2026-04-25T07:21:46.966Z","phase":"P1","actor":"Admin","action":"Créer DRIVER via /admin/staff","outcome":"success"}
+{"ts":"2026-04-25T07:21:47.166Z","phase":"P1","actor":"SYSTEM","action":"Seed scénario métier OK","outcome":"success","details":{"routeId":"cmoe0h11o000blowv2j4o3qb6","busId":"cmoe0h11u000flowvbfmwih2l","tripId":"cmoe0h11y000hlowv2bgiihs0","trip2Id":"cmoe0h121000jlowvah5cxejj","stationAId":"cmoe0h11k0007lowvkghw98zt","stationBId":"cmoe0h11m0009lowvqdkhp1g2","busSmallCapacity":5}}
+{"ts":"2026-04-25T07:21:47.204Z","phase":"P2","actor":"SYSTEM","action":"═══ P2 : MANIFESTES ═══","outcome":"info"}
+{"ts":"2026-04-25T07:21:47.933Z","phase":"P2","actor":"Admin","action":"Ouvrir /admin/manifests","outcome":"success"}
+{"ts":"2026-04-25T07:21:48.957Z","phase":"P2","actor":"Admin","action":"Sélectionner trip dans dropdown manifeste","outcome":"success"}
+{"ts":"2026-04-25T07:21:50.505Z","phase":"P2","actor":"Admin","action":"HTTP génération manifeste","outcome":"success","details":{"status":201,"body":"{\"id\":\"cmoe0h2hq03q86psmk9chlf1y\",\"tenantId\":\"e277b0d5-66b9-41a4-a6c3-5c37b140b7aa\",\"tripId\":\"cmoe0h121000jlowvah5cxejj\",\"kind\":\"PASSENGERS\",\"status\":\"SUBMITTED\",\"storageKey\":\"e277b0d5-66b9-41a4-a6c3-"}}
+{"ts":"2026-04-25T07:21:52.107Z","phase":"P2","actor":"Admin","action":"Générer manifeste PASSENGERS + signer","outcome":"success"}
+{"ts":"2026-04-25T07:21:55.101Z","phase":"P2","actor":"Driver","action":"Login driver + voir /driver/manifest","outcome":"success"}
+{"ts":"2026-04-25T07:21:55.101Z","phase":"P3","actor":"SYSTEM","action":"═══ P3 : HISTORIQUES ═══","outcome":"info"}
+{"ts":"2026-04-25T07:21:57.303Z","phase":"P3","actor":"Customer","action":"Login customer","outcome":"success","details":true}
+{"ts":"2026-04-25T07:21:59.584Z","phase":"P3","actor":"Customer","action":"HTTP /tickets/my","outcome":"info","details":{"status":200,"count":2}}
+{"ts":"2026-04-25T07:21:59.591Z","phase":"P3","actor":"Customer","action":"Billets visibles dans /customer/trips : 9 items <li>","outcome":"success","details":{"countLi":9,"seededAttendu":2}}
+{"ts":"2026-04-25T07:21:59.592Z","phase":"P3","actor":"Customer","action":"Voir /customer/trips — historique billets","outcome":"success"}
+{"ts":"2026-04-25T07:22:01.810Z","phase":"P3","actor":"Customer","action":"Colis visibles dans /customer/parcels : 1 éléments","outcome":"info","details":{"count":1}}
+{"ts":"2026-04-25T07:22:01.811Z","phase":"P3","actor":"Customer","action":"Voir /customer/parcels — historique colis","outcome":"success"}
+{"ts":"2026-04-25T07:22:05.484Z","phase":"P3","actor":"Driver","action":"Login driver → voir /driver/schedule historique trajets","outcome":"success"}
+{"ts":"2026-04-25T07:22:07.397Z","phase":"P3","actor":"Admin","action":"Manifestes présents sur /admin/manifests : 3 éléments","outcome":"info","details":{"count":3}}
+{"ts":"2026-04-25T07:22:07.398Z","phase":"P3","actor":"Admin","action":"Admin accède aux manifestes d'un trip passé","outcome":"success"}
+{"ts":"2026-04-25T07:22:07.398Z","phase":"P4","actor":"SYSTEM","action":"═══ P4 : SEATMAP & CAPACITÉ ═══","outcome":"info"}
+{"ts":"2026-04-25T07:22:08.223Z","phase":"P4","actor":"Admin","action":"Ouvrir /admin/tickets/new (vente) avec trip petit bus","outcome":"success"}
+{"ts":"2026-04-25T07:22:08.246Z","phase":"P4","actor":"SYSTEM","action":"Pré-remplir 5 billets pour saturer le bus (capacité=5)","outcome":"failed","error":"\nInvalid `prisma.ticket.create()` invocation in\n/Users/dsyann/TranslogPro/test/playwright/mega-scenarios/FULL-UI-BUSINESS-RULES.public.pw.spec.ts:535:27\n\n  532 //     On va créer 5 tickets via Prisma (seed existant) puis tenter UI+6e\n  533 await attempt('P4', 'SYSTEM', 'Pré-remplir 5 billets pour saturer le bus (capacité=5)', async () => {\n  534   for (let i = 1; i <= 5; i++) {\n→ 535     await pri"}
+{"ts":"2026-04-25T07:22:08.999Z","phase":"P4","actor":"Admin","action":"Pas de champ Nom — trip non sélectionné","outcome":"info","details":{"url":"https://pw-saas-brl-moe0gw0m.translog.test/admin/tickets/new"}}
+{"ts":"2026-04-25T07:22:08.999Z","phase":"P4","actor":"Admin","action":"Tenter vente 6ème billet → attendre 400 \"Pas assez de places\"","outcome":"success"}
+{"ts":"2026-04-25T07:22:09.004Z","phase":"P4","actor":"SYSTEM","action":"Fix unique seat ACTIF validé : doublon rejeté par DB","outcome":"success","details":{"rejection":"\nInvalid `prisma.ticket.create()` invocation in\n/Users/dsyann/TranslogPro/test/playwright/mega-scenarios/FULL-UI-BUSINESS-RULES.public.pw.spec.ts:585:27\n\n  582 // 4.3 Vérifier la contrainte unique DB "}}
+{"ts":"2026-04-25T07:22:09.004Z","phase":"P4","actor":"SYSTEM","action":"Vérif fix DB : doublon seat ACTIF 1-1 rejeté","outcome":"success"}
+{"ts":"2026-04-25T07:22:09.009Z","phase":"P4","actor":"SYSTEM","action":"Vérif : seat d'un ticket CANCELLED peut être revendu","outcome":"failed","error":"\nInvalid `prisma.ticket.create()` invocation in\n/Users/dsyann/TranslogPro/test/playwright/mega-scenarios/FULL-UI-BUSINESS-RULES.public.pw.spec.ts:626:25\n\n  623   },\n  624 });\n  625 // Tenter d'en vendre un nouveau sur le même seat → DOIT RÉUSSIR car premier est CANCELLED\n→ 626 await prisma.ticket.create(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None"}
+{"ts":"2026-04-25T07:22:09.009Z","phase":"P5","actor":"SYSTEM","action":"═══ P5 : COLIS & CAPACITÉ ═══","outcome":"info"}
+{"ts":"2026-04-25T07:22:09.016Z","phase":"P5","actor":"SYSTEM","action":"Shipment seedé, guards testables via UI /agent/parcel","outcome":"info","details":{"shipmentId":"cmoe0hhwy0017lowv10ujjda9","remainingWeight":30}}
+{"ts":"2026-04-25T07:22:09.016Z","phase":"P5","actor":"SYSTEM","action":"Créer shipment 30kg puis tenter dépassement poids","outcome":"success"}
+{"ts":"2026-04-25T07:22:09.752Z","phase":"P5","actor":"Admin","action":"Ouvrir /admin/parcels/new pour tester enregistrement colis","outcome":"success"}
+{"ts":"2026-04-25T07:22:09.889Z","phase":"P5","actor":"Admin","action":"HTTP parcels register (poids 50kg)","outcome":"info","details":{"status":201,"note":"Le /register ne fait pas le guard capacité — c'est au /shipments/:id/add que le guard s'applique"}}
+{"ts":"2026-04-25T07:22:09.889Z","phase":"P5","actor":"Admin","action":"Remplir colis surdimensionné (poids 50kg) et observer","outcome":"success"}
+{"ts":"2026-04-25T07:22:09.889Z","phase":"END","actor":"SYSTEM","action":"Synthèse v7","outcome":"info","details":{"info":12,"success":23,"failed":2}}

@@ -9,7 +9,7 @@
  *
  * WCAG : role="checkbox", aria-checked, focus-visible ring
  */
-import { useId, type ReactNode } from 'react';
+import { useId, type ChangeEvent, type ReactNode } from 'react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import { cn } from '../../lib/utils';
 
@@ -21,25 +21,59 @@ export interface CheckboxProps {
   checked?:      boolean;
   defaultChecked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
+  /** Alias React-natif. Si fourni, on synthétise un ChangeEvent avec
+   * `target.checked` correctement positionné, en plus d'appeler
+   * `onCheckedChange` si présent. */
+  onChange?:     (e: ChangeEvent<HTMLInputElement>) => void;
   disabled?:     boolean;
   name?:         string;
   required?:     boolean;
   wrapperClass?: string;
+  'aria-describedby'?: string;
 }
 
 export function Checkbox({
-  id: idProp, label, hint, error, wrapperClass, ...props
+  id: idProp, label, hint, error, wrapperClass,
+  onCheckedChange, onChange,
+  ...props
 }: CheckboxProps) {
   const generatedId = useId();
   const id          = idProp ?? generatedId;
+
+  const handleCheckedChange = (next: boolean) => {
+    if (onCheckedChange) onCheckedChange(next);
+    if (onChange) {
+      // Synthétise un ChangeEvent minimal avec target.checked.
+      // Suffisant pour tous les usages observés (lecture de e.target.checked).
+      const synthetic = {
+        target: { checked: next, name: props.name, type: 'checkbox' },
+        currentTarget: { checked: next, name: props.name, type: 'checkbox' },
+      } as unknown as ChangeEvent<HTMLInputElement>;
+      onChange(synthetic);
+    }
+  };
+
+  // Le `aria-describedby` interne (lié à hint/error) doit primer sur celui
+  // passé par le caller, mais on le concatène pour ne pas perdre l'info
+  // additionnelle que le caller voulait référencer.
+  const internalDescribedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  const externalDescribedBy = props['aria-describedby'];
+  const mergedDescribedBy = [internalDescribedBy, externalDescribedBy]
+    .filter(Boolean)
+    .join(' ') || undefined;
+
+  // Retire `aria-describedby` du spread pour éviter qu'il écrase le merge.
+  const { 'aria-describedby': _ignored, ...restProps } = props;
+  void _ignored;
 
   return (
     <div className={cn('flex flex-col gap-1', wrapperClass)}>
       <div className="flex items-start gap-2">
         <CheckboxPrimitive.Root
           id={id}
-          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+          aria-describedby={mergedDescribedBy}
           aria-invalid={error ? 'true' : undefined}
+          onCheckedChange={(v) => handleCheckedChange(v === true)}
           className={cn(
             `peer h-4 w-4 shrink-0 rounded border
              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2
@@ -51,7 +85,7 @@ export function Checkbox({
              dark:focus-visible:ring-slate-300`,
             error ? 'border-red-400 dark:border-red-600' : 'border-slate-300',
           )}
-          {...props}
+          {...restProps}
         >
           <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
             <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden>

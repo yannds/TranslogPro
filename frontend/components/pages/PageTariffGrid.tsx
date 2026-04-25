@@ -13,7 +13,7 @@
 
 import { useState, type FormEvent } from 'react';
 import {
-  Grid3x3, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X,
+  Grid3x3, Plus, Trash2, ToggleLeft,
 } from 'lucide-react';
 import { useAuth }       from '../../lib/auth/auth.context';
 import { useFetch }      from '../../lib/hooks/useFetch';
@@ -111,7 +111,7 @@ export function PageTariffGrid() {
   const { data: routes } = useFetch<RouteRow[]>(tenantId ? `/api/tenants/${tenantId}/routes` : null, [tenantId]);
 
   const [showCreate, setShowCreate]       = useState(false);
-  const [editTarget, setEditTarget]       = useState<TariffRow | null>(null);
+  const [_editTarget, _setEditTarget]     = useState<TariffRow | null>(null);
   const [deleteTarget, setDeleteTarget]   = useState<TariffRow | null>(null);
   const [busy, setBusy]     = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);

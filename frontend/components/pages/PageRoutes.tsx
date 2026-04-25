@@ -25,11 +25,11 @@ import { Card, CardHeader, CardContent }    from '../ui/Card';
 import { Badge }                            from '../ui/Badge';
 import { RoutePricingOverridesEditor }       from '../routes/RoutePricingOverridesEditor';
 import { PricingSimulatorCard }              from '../routes/PricingSimulatorCard';
-import { Skeleton }                         from '../ui/Skeleton';
 import { Button }                           from '../ui/Button';
 import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
 import { RouteDetailDialog }                from './RouteDetailDialog';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -64,6 +64,9 @@ interface RouteRow {
   destination?: { id: string; name: string; city: string } | null;
   _count?:      { trips: number };
 }
+
+/** Ligne aplatie pour DataTableMaster : ajoute `tripsCount` pour tri/recherche. */
+type RouteTableRow = RouteRow & { tripsCount: number };
 
 interface RouteFormValues {
   name:          string;
@@ -312,10 +315,69 @@ export function PageRoutes() {
     finally { setBusy(false); }
   };
 
-  const sortedRoutes = useMemo(() =>
-    [...(routes ?? [])].sort((a, b) => (b._count?.trips ?? 0) - (a._count?.trips ?? 0)),
+  const tableRows: RouteTableRow[] = useMemo(
+    () => (routes ?? []).map(r => ({ ...r, tripsCount: r._count?.trips ?? 0 })),
     [routes],
   );
+
+  const columns: Column<RouteTableRow>[] = useMemo(() => [
+    {
+      key: 'name',
+      header: t('routes.routeHeader'),
+      sortable: true,
+      cellRenderer: (_v, r) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{r.name}</p>
+            <p className="text-[11px] text-slate-500 truncate">
+              {formatStation(r.origin)} → {formatStation(r.destination)}
+            </p>
+          </div>
+        </div>
+      ),
+      csvValue: (_v, r) => `${r.name} — ${formatStation(r.origin)} → ${formatStation(r.destination)}`,
+    },
+    {
+      key: 'distanceKm',
+      header: t('routes.distanceHeader'),
+      sortable: true,
+      align: 'right',
+      width: '120px',
+      cellRenderer: (v) => `${(v as number).toLocaleString('fr-FR')} km`,
+    },
+    {
+      key: 'basePrice',
+      header: t('routes.baseFareHeader'),
+      sortable: true,
+      align: 'right',
+      width: '140px',
+      cellRenderer: (v) => formatXof(v as number, operational.currency),
+    },
+    {
+      key: 'tripsCount',
+      header: t('routes.tripsHeader'),
+      sortable: true,
+      align: 'right',
+      width: '100px',
+      cellRenderer: (v) => <Badge variant="info" size="sm">{(v as number).toString()}</Badge>,
+      csvValue: (v) => String(v ?? 0),
+    },
+  ], [t, operational.currency]);
+
+  const rowActions: RowAction<RouteTableRow>[] = useMemo(() => [
+    {
+      label: (r) => `${t('common.edit')} ${r.name}`,
+      icon: <Pencil className="w-4 h-4" aria-hidden />,
+      onClick: (r) => { setActionErr(null); setEditTarget(r); },
+    },
+    {
+      label: (r) => `${t('common.delete')} ${r.name}`,
+      icon: <Trash2 className="w-4 h-4" aria-hidden />,
+      onClick: (r) => { setActionErr(null); setDeleteTarget(r); },
+      danger: true,
+    },
+  ], [t]);
 
   const noStations = (stations?.length ?? 0) === 0;
 
@@ -368,83 +430,22 @@ export function PageRoutes() {
       {/* Liste */}
       <Card>
         <CardHeader
-          heading={`${sortedRoutes.length} ${sortedRoutes.length > 1 ? t('routes.pageTitle') : t('routes.routeHeader')}`}
+          heading={`${tableRows.length} ${tableRows.length > 1 ? t('routes.pageTitle') : t('routes.routeHeader')}`}
           description={t('routes.sortedByTrips')}
         />
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-3" aria-busy="true">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
-            </div>
-          ) : sortedRoutes.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-slate-500 dark:text-slate-400" role="status">
-              <RouteIcon className="w-10 h-10 mb-3 text-slate-300 dark:text-slate-600" aria-hidden />
-              <p className="font-medium">{t('routes.noRoutes')}</p>
-              <p className="text-sm mt-1">{t('routes.noRoutesCta')}</p>
-            </div>
-          ) : (
-            <div role="table" aria-label={t('routes.pageTitle')}>
-              <div
-                role="row"
-                className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50"
-              >
-                <div role="columnheader">{t('routes.routeHeader')}</div>
-                <div role="columnheader" className="text-right">{t('routes.distanceHeader')}</div>
-                <div role="columnheader" className="text-right">{t('routes.baseFareHeader')}</div>
-                <div role="columnheader" className="text-right">{t('routes.tripsHeader')}</div>
-                <div role="columnheader" className="text-right">{t('routes.actionsHeader')}</div>
-              </div>
-              <ul role="rowgroup" className="divide-y divide-slate-100 dark:divide-slate-800">
-                {sortedRoutes.map(r => (
-                  <li
-                    key={r.id}
-                    role="row"
-                    onClick={() => setDetailRouteId(r.id)}
-                    className="grid grid-cols-[1fr_120px_120px_100px_130px] gap-3 px-6 py-3 items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                  >
-                    <div role="cell" className="flex items-center gap-2 min-w-0">
-                      <MapPin className="w-4 h-4 text-teal-500 shrink-0" aria-hidden />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{r.name}</p>
-                        <p className="text-[11px] text-slate-500 truncate">
-                          {formatStation(r.origin)} → {formatStation(r.destination)}
-                        </p>
-                      </div>
-                    </div>
-                    <div role="cell" className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
-                      {r.distanceKm.toLocaleString('fr-FR')} km
-                    </div>
-                    <div role="cell" className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
-                      {formatXof(r.basePrice, operational.currency)}
-                    </div>
-                    <div role="cell" className="text-right">
-                      <Badge variant="info" size="sm">{r._count?.trips ?? 0}</Badge>
-                    </div>
-                    <div role="cell" className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); setActionErr(null); setEditTarget(r); }}
-                        className="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                        aria-label={`${t('common.edit')} ${r.name}`}
-                        title={t('common.edit')}
-                      >
-                        <Pencil className="w-4 h-4" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); setActionErr(null); setDeleteTarget(r); }}
-                        className="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                        aria-label={`${t('common.delete')} ${r.name}`}
-                        title={t('common.delete')}
-                      >
-                        <Trash2 className="w-4 h-4" aria-hidden />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        <CardContent>
+          <DataTableMaster<RouteTableRow>
+            columns={columns}
+            data={tableRows}
+            loading={loading}
+            rowActions={rowActions}
+            onRowClick={(r) => setDetailRouteId(r.id)}
+            defaultSort={{ key: 'tripsCount', dir: 'desc' }}
+            emptyMessage={t('routes.noRoutes')}
+            exportFormats={['csv', 'xls', 'pdf']}
+            exportFilename="routes"
+            stickyHeader
+          />
         </CardContent>
       </Card>
 

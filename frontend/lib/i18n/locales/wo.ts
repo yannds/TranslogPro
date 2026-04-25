@@ -1,6 +1,7 @@
 /** Wolof — Locale file (fully translated from French) */
 
-const wo: Record<string, Record<string, string>> = {
+type LocaleValue = string | Record<string, string>;
+const wo: Record<string, Record<string, LocaleValue>> = {
   "simulation": {
     "simTitle": "▶ Simulation Live-Path",
     "success": "✓ Jàmm",
@@ -4605,7 +4606,7 @@ const wo: Record<string, Record<string, string>> = {
     "company.name":      "Turu kompaañ",
     "company.namePlaceholder":"ACME Transport SARL",
     "company.slug":      "Sous-domaine",
-    "company.slugHint":  "Sa espace dina am ci {host}.translogpro.com — lettres, chiffres ak tirets.",
+    "company.slugHint":  "Sa espace dina am ci {host}.{baseDomain} — lettres, chiffres ak tirets.",
     "company.slugAvailable":"Am na",
     "company.slugTaken": "Sous-domaine bii jot nañu ko.",
     "company.slugInvalid":"3-32 karakter, a-z, 0-9 ak tirets (du ci njëkk/mujj).",
@@ -4633,7 +4634,7 @@ const wo: Record<string, Record<string, string>> = {
     "error.rateLimit":   "Tentative yu bari. Jéemaat ci ay simili.",
 
     "success.title":     "Dalal jàmm ci TransLog Pro 🎉",
-    "success.subtitle":  "Sa espace {slug}.translogpro.com am na. Dañu la yónni email bu confirmation.",
+    "success.subtitle":  "Sa espace {slug}.{baseDomain} am na. Dañu la yónni email bu confirmation.",
     "success.cta":       "Dugg ci sama espace",
     "success.trialInfo": "Am nga {days} fan bu essai bu dul fay. Carte bancaire soxlawul.",
 

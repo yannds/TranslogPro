@@ -123,7 +123,6 @@ export function PagePricingSimulator() {
   useEffect(() => { if (!busId   && buses  && buses.length  > 0) setBusId(buses[0].id);    }, [buses,  busId]);
 
   const selectedRoute = routes?.find(r => r.id === routeId);
-  const selectedBus   = buses?.find(b => b.id === busId);
   const currency = 'XAF';  // TenantConfig provider eût été plus propre — fallback OK pour affichage
   const fmt = useMemo(() => new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'fr-FR'), [lang]);
   const fmtPct = (n: number | null | undefined) =>
@@ -521,7 +520,7 @@ function BlockCompetitor({
 // ─── E. What-if sliders fuel / commission ───────────────────────────────────
 
 function BlockWhatIf({
-  tenantId, routeId, busId, fillRate, basePrice, fmtMoney, fmtPct,
+  tenantId, routeId, busId, fillRate, basePrice, fmtMoney, fmtPct: _fmtPct,
 }: {
   tenantId: string; routeId: string; busId: string; fillRate: number; basePrice: number;
   fmtMoney: (n: number | null | undefined) => string;

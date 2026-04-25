@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
@@ -32,8 +32,6 @@ async function bootstrap() {
   );
   app.useWebSocketAdapter(redisIoAdapter);
 
-  // API Versioning
-  app.enableVersioning({ type: VersioningType.URI });
   app.setGlobalPrefix('api');
 
   // HTTP Security headers (CSP, X-Frame-Options, HSTS, etc.)

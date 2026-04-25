@@ -24,7 +24,8 @@ const SCOPE_COLORS: Record<string, string> = {
 };
 
 function extractScope(permission: string): string {
-  return permission.split('.').at(-1) ?? 'tenant';
+  const parts = permission.split('.');
+  return parts[parts.length - 1] ?? 'tenant';
 }
 
 interface TransitionEdgeProps extends EdgeProps {

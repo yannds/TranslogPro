@@ -25,6 +25,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { CaptchaWidget } from '../ui/CaptchaWidget';
 import { newIdempotencyKey } from '../../lib/captcha/useTurnstile';
 import { cn } from '../../lib/utils';
+import { PLATFORM_BASE_DOMAIN } from '../../lib/tenancy/host';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -478,7 +479,7 @@ function StepCompany(p: StepCompanyProps) {
         <Field
           id="company-slug"
           label={t('signup.company.slug')}
-          hint={t('signup.company.slugHint').replace('{host}', p.slug || 'votre-nom')}
+          hint={t('signup.company.slugHint').replace('{host}', p.slug || 'votre-nom').replace('{baseDomain}', PLATFORM_BASE_DOMAIN)}
           error={p.errors.slug}
         >
           <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800">
@@ -493,7 +494,7 @@ function StepCompany(p: StepCompanyProps) {
               className="flex-1 border-0 bg-transparent px-3 py-2 text-sm text-slate-900 outline-none dark:text-white"
             />
             <span className="pointer-events-none border-l border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-              .translogpro.com
+              .{PLATFORM_BASE_DOMAIN}
             </span>
           </div>
         </Field>
@@ -664,7 +665,7 @@ function SuccessScreen({ slug, trialDays }: { slug: string; trialDays: number })
   // pas encore à jour → le CTA mènerait à un host non résolu. On affiche la
   // commande à lancer. Condition : domaine de base == translog.test (conv. dev).
   const isDevDomain =
-    ((import.meta as any)?.env?.VITE_PLATFORM_BASE_DOMAIN ?? 'translog.test') === 'translog.test';
+    (import.meta.env.VITE_PLATFORM_BASE_DOMAIN ?? 'translog.test') === 'translog.test';
   return (
     <section className="relative overflow-hidden py-20 lg:py-28">
       <div className="absolute inset-0 -z-10" aria-hidden>
@@ -680,7 +681,7 @@ function SuccessScreen({ slug, trialDays }: { slug: string; trialDays: number })
           {t('signup.success.title')}
         </h1>
         <p className="mt-5 text-lg text-slate-600 dark:text-slate-300">
-          {t('signup.success.subtitle').replace('{slug}', slug)}
+          {t('signup.success.subtitle').replace('{slug}', slug).replace('{baseDomain}', PLATFORM_BASE_DOMAIN)}
         </p>
         {trialDays > 0 && (
           <p className="mt-3 text-sm font-medium text-teal-700 dark:text-teal-400">
@@ -732,7 +733,7 @@ function slugify(s: string): string {
 function buildTenantLoginUrl(slug: string): string {
   // Même logique que frontend/lib/tenancy/host.ts buildTenantUrl, sans importer
   // pour éviter une dépendance circulaire host.ts → PublicLayout.
-  const base = (import.meta as any)?.env?.VITE_PLATFORM_BASE_DOMAIN ?? 'translog.test';
+  const base = import.meta.env.VITE_PLATFORM_BASE_DOMAIN ?? 'translog.test';
   const proto = typeof window !== 'undefined' && window.location?.protocol ? window.location.protocol : 'https:';
   const port  = typeof window !== 'undefined' && window.location?.port ? `:${window.location.port}` : '';
   return `${proto}//${slug}.${base}${port}/login`;

@@ -300,7 +300,7 @@ export function PagePlatformModulesUsage() {
         : `/api/platform/kpi/modules/usage/${effectiveTenantId}?days=${days}`
     : null;
 
-  const { data, loading, error, refetch } = useFetch<ModulesUsageReport>(
+  const { data, loading, error } = useFetch<ModulesUsageReport>(
     url,
     [effectiveTenantId, days, rev],
   );

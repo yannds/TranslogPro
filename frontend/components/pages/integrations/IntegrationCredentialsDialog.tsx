@@ -20,7 +20,6 @@ import { useFetch } from '../../../lib/hooks/useFetch';
 import { apiPut } from '../../../lib/api';
 import { useI18n } from '../../../lib/i18n/useI18n';
 import { Dialog } from '../../ui/Dialog';
-import { Button } from '../../ui/Button';
 import { FormFooter } from '../../ui/FormFooter';
 import { ErrorAlert } from '../../ui/ErrorAlert';
 import { inputClass } from '../../ui/inputClass';

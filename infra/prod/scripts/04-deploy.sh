@@ -1,0 +1,401 @@
+#!/usr/bin/env bash
+# ═════════════════════════════════════════════════════════════════════════════
+# 04-deploy.sh — Déploiement TransLog Pro production AUTONOME
+#
+# Du serveur vierge (avec Easypanel/gmp coexistants) à la prod fonctionnelle.
+# Idempotent : rejouable à volonté.
+#
+# Pauses MANUELLES inévitables (par design sécurité) :
+#   1. vault operator init   (génère 5 unseal keys + root token)
+#   2. vault operator unseal (3× après chaque restart Vault)
+#   → Le script s'arrête avec instructions, tu reprends après.
+#
+# Usage :
+#   bash scripts/04-deploy.sh
+#
+# Variables optionnelles dans .env.prod :
+#   PLATFORM_SUPERADMIN_EMAIL, PLATFORM_SUPERADMIN_NAME, PLATFORM_SUPERADMIN_PASSWORD
+#     → Si présentes, seed automatique d'un super-admin plateforme.
+# ═════════════════════════════════════════════════════════════════════════════
+
+set -euo pipefail
+cd "$(dirname "$0")/.."   # → infra/prod/
+
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; NC='\033[0m'
+ok()     { echo -e "${GREEN}✔${NC} $1"; }
+fail()   { echo -e "${RED}✘ $1${NC}"; exit 1; }
+warn()   { echo -e "${YELLOW}⚠${NC} $1"; }
+header() { echo ""; echo "═══════════════════════════════════════════════════════════"; echo "  $1"; echo "═══════════════════════════════════════════════════════════"; }
+
+STACK_NAME="translog"
+COMPOSE_FILE="docker-compose.prod.yml"   # build only
+STACK_FILE="docker-stack.prod.yml"        # deploy
+
+# ─── 0. Sanity ──────────────────────────────────────────────────────────────
+header "[0/12] Sanity checks"
+
+[ "$EUID" -eq 0 ] || fail "root required"
+[ -f .env.prod ]   || fail ".env.prod absent — run 02-gen-secrets.sh first"
+[ -f $STACK_FILE ] || fail "$STACK_FILE absent"
+
+# Charge .env.prod dans le shell pour substitution Swarm + var locales
+set -a; . ./.env.prod; set +a
+
+# Init Swarm si pas actif (Easypanel l'a fait, mais sécurité)
+if ! docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q active; then
+    docker swarm init --advertise-addr 127.0.0.1 || fail "Swarm init failed"
+    ok "Docker Swarm initialisé"
+fi
+ok "Sanity OK"
+
+# ─── 1. Permissions BIND9 + drop journal stale ──────────────────────────────
+header "[1/12] BIND9 zones permissions + drop journal stale"
+
+# Sans 777 → bind user (UID 100) ne peut pas écrire le journal .jnl → updates TSIG fail
+chmod -R 777 ./bind9/zones 2>/dev/null || true
+
+# Drop journal stale (sinon BIND9 préfère le journal au file → records apex/wildcard ignorés)
+if [ -f ./bind9/zones/translog.db.jnl ]; then
+    rm -f ./bind9/zones/translog.db.jnl
+    ok "BIND9 journal stale supprimé"
+else
+    ok "BIND9 zones permissions OK (pas de journal résiduel)"
+fi
+
+# ─── 2. Build images (api + web + caddy) ─────────────────────────────────────
+header "[2/12] Build images"
+
+# Web : --build-arg explicit (Vite ne lit pas .env.prod via compose, faut forcer)
+docker build \
+    --build-arg VITE_PLATFORM_BASE_DOMAIN="${PLATFORM_BASE_DOMAIN}" \
+    --build-arg VITE_API_URL="${PUBLIC_APP_URL}" \
+    -f ../../frontend/Dockerfile.prod \
+    -t translog_web:1.0.0 \
+    ../../frontend/ 2>&1 | tail -3 || fail "Web build failed"
+
+# API + Caddy via compose (build context différent)
+docker compose --env-file .env.prod -f $COMPOSE_FILE build --pull api caddy 2>&1 | tail -3 \
+    || fail "API/Caddy build failed"
+
+# Vérification
+for img in translog_api:1.0.0 translog_web:1.0.0 prod-caddy:latest; do
+    docker image inspect "$img" >/dev/null 2>&1 || fail "Image manquante : $img"
+done
+ok "Images buildées : translog_api, translog_web, prod-caddy"
+
+# ─── 3. Cleanup compose résiduel + bridge translog_net ──────────────────────
+header "[3/12] Cleanup ancien Compose + bridge"
+
+docker compose --env-file .env.prod -f $COMPOSE_FILE down --remove-orphans 2>/dev/null || true
+
+# Si translog_net existe en mode bridge, le supprimer (sera recréé en overlay par stack)
+if docker network inspect translog_net >/dev/null 2>&1; then
+    if [ "$(docker network inspect translog_net --format '{{.Driver}}')" != "overlay" ]; then
+        docker network rm translog_net 2>/dev/null || true
+        ok "Ancien bridge translog_net supprimé"
+    fi
+fi
+ok "Cleanup OK"
+
+# ─── 4. Deploy stack Swarm ───────────────────────────────────────────────────
+header "[4/12] Deploy Swarm stack"
+
+docker stack deploy \
+    -c $STACK_FILE \
+    --resolve-image=never \
+    --with-registry-auth \
+    $STACK_NAME || fail "Stack deploy failed"
+ok "Stack $STACK_NAME déployé"
+
+# Attente services infra healthy
+echo "Wait infra services (postgres/redis/minio/bind9) healthy — max 180s..."
+START_TS=$(date +%s)
+healthy_count=0
+while true; do
+    healthy_count=0
+    for svc in postgres redis minio bind9; do
+        cid=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_${svc}" -q 2>/dev/null | head -1)
+        if [ -n "${cid:-}" ]; then
+            status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo none)
+            [ "$status" = healthy ] && healthy_count=$((healthy_count + 1))
+        fi
+    done
+    [ "$healthy_count" -ge 4 ] && break
+    elapsed=$(($(date +%s) - START_TS))
+    if [ "$elapsed" -gt 180 ]; then
+        warn "Timeout 3min — $healthy_count/4 healthy. Continue (peut converger)."
+        break
+    fi
+    sleep 5
+done
+ok "Infra healthy ($healthy_count/4)"
+
+# ─── 5. Postgres : role app_runtime + grants ────────────────────────────────
+header "[5/12] Postgres role app_runtime"
+
+docker run --rm -i --network translog_net \
+    -e PGPASSWORD="${POSTGRES_APP_ADMIN_PASSWORD}" \
+    postgres:16-alpine \
+    psql -h postgres -p 5432 -U app_admin -d translog \
+    -v runtime_pass="${POSTGRES_APP_RUNTIME_PASSWORD}" <<'EOF' || fail "app_runtime role failed"
+-- Idempotent : DROP IF EXISTS gère legacy app_user ou re-run
+DROP ROLE IF EXISTS app_runtime;
+CREATE ROLE app_runtime LOGIN PASSWORD :'runtime_pass'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT;
+
+GRANT CONNECT ON DATABASE translog TO app_runtime;
+GRANT USAGE ON SCHEMA public TO app_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app_runtime;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE app_admin IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE app_admin IN SCHEMA public
+    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE app_admin IN SCHEMA public
+    GRANT EXECUTE ON FUNCTIONS TO app_runtime;
+EOF
+ok "Role app_runtime créé/mis à jour"
+
+# ─── 6. Migrations Prisma + seeds IAM/plans ──────────────────────────────────
+header "[6/12] Migrations Prisma + seeds initiaux"
+
+DBURL_ADMIN="postgresql://app_admin:${POSTGRES_APP_ADMIN_PASSWORD}@postgres:5432/translog"
+
+docker run --rm \
+    --network translog_net \
+    -e DATABASE_URL="$DBURL_ADMIN" \
+    translog_api:1.0.0 \
+    npx prisma db push --skip-generate --accept-data-loss=false || fail "Prisma db push failed"
+ok "Schema Prisma appliqué"
+
+docker run --rm \
+    --network translog_net \
+    -e DATABASE_URL="$DBURL_ADMIN" \
+    translog_api:1.0.0 \
+    npx tsx prisma/seeds/iam.seed.ts || fail "Seed IAM failed"
+ok "IAM seedé (permissions/roles/workflows)"
+
+docker run --rm \
+    --network translog_net \
+    -e DATABASE_URL="$DBURL_ADMIN" \
+    translog_api:1.0.0 \
+    npx tsx prisma/seeds/plans.seed.ts || fail "Seed plans failed"
+ok "Plans seedés (Starter/Growth/Enterprise)"
+
+# ─── 7. Vault : init detection + AppRole + secrets seedés ────────────────────
+header "[7/12] Vault — AppRole + secrets boot"
+
+VAULT_CID=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_vault" -q | head -1)
+[ -n "$VAULT_CID" ] || fail "Container Vault introuvable"
+
+# Détection : Vault initialisé ?
+if [ -z "${VAULT_TOKEN:-}" ] || [ "$VAULT_TOKEN" = "REPLACE_AFTER_VAULT_INIT" ]; then
+    warn "Vault PAS INITIALISÉ. Lance manuellement :"
+    echo ""
+    echo "  docker exec -it $VAULT_CID vault operator init"
+    echo "  → Conserve les 5 unseal keys + root token (coffre-fort impératif)"
+    echo "  → Édite .env.prod : VAULT_TOKEN=<root_token>"
+    echo "  → Unseal : docker exec -it $VAULT_CID vault operator unseal <key1>"
+    echo "             docker exec -it $VAULT_CID vault operator unseal <key2>"
+    echo "             docker exec -it $VAULT_CID vault operator unseal <key3>"
+    echo "  → Re-lance ce script : bash scripts/04-deploy.sh"
+    exit 0
+fi
+
+# Détection : Vault scellé ?
+sealed=$(docker exec $VAULT_CID vault status -format=json 2>/dev/null | jq -r '.sealed' || echo true)
+if [ "$sealed" = true ]; then
+    warn "Vault SCELLÉ. Unseal manuel :"
+    echo "  docker exec -it $VAULT_CID vault operator unseal <key1>  (3×)"
+    echo "  Puis re-lance ce script."
+    exit 0
+fi
+ok "Vault initialisé + unsealed"
+
+# Setup AppRole + KV-v2 + Transit (idempotent)
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault auth enable approle 2>&1 | grep -v already 1>/dev/null || true
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault secrets enable -path=secret kv-v2 2>&1 | grep -v already 1>/dev/null || true
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault secrets enable transit 2>&1 | grep -v already 1>/dev/null || true
+
+# Policy translog-api (étendue secret/* + transit/* + pki/issue/*)
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID sh -c 'cat > /tmp/translog-api.hcl <<POLICY
+path "secret/*"          { capabilities = ["create","read","update","delete","list","patch"] }
+path "transit/encrypt/*" { capabilities = ["update"] }
+path "transit/decrypt/*" { capabilities = ["update"] }
+path "transit/keys/*"    { capabilities = ["create","read","update","list"] }
+path "pki/issue/*"       { capabilities = ["update"] }
+POLICY
+vault policy write translog-api /tmp/translog-api.hcl' >/dev/null 2>&1
+
+# Role
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault write auth/approle/role/translog-api \
+    token_policies="translog-api" token_ttl=1h token_max_ttl=4h >/dev/null 2>&1
+
+# AppRole credentials → .env.prod (rotate à chaque deploy si pas présents)
+NEW_ROLE_ID=$(docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault read -format=json auth/approle/role/translog-api/role-id 2>/dev/null | jq -r '.data.role_id')
+if [ "${VAULT_ROLE_ID:-}" != "$NEW_ROLE_ID" ] || [ -z "${VAULT_SECRET_ID:-}" ]; then
+    NEW_SECRET_ID=$(docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault write -f -format=json auth/approle/role/translog-api/secret-id | jq -r '.data.secret_id')
+    sed -i '/^VAULT_ROLE_ID=/d; /^VAULT_SECRET_ID=/d' .env.prod
+    echo "VAULT_ROLE_ID=$NEW_ROLE_ID" >> .env.prod
+    echo "VAULT_SECRET_ID=$NEW_SECRET_ID" >> .env.prod
+    set -a; . ./.env.prod; set +a
+    ok "AppRole credentials écrits dans .env.prod"
+fi
+
+# APP_SECRET stable : génère si absent
+if [ -z "${APP_SECRET:-}" ]; then
+    APP_SECRET=$(openssl rand -hex 32)
+    sed -i '/^APP_SECRET=/d' .env.prod
+    echo "APP_SECRET=$APP_SECRET" >> .env.prod
+    set -a; . ./.env.prod; set +a
+fi
+
+# Seed Vault secrets requis au boot API (sans, l'API crash en startup)
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault kv put secret/platform/redis \
+    HOST=redis PORT=6379 PASSWORD="$REDIS_PASSWORD" >/dev/null
+
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault kv put secret/platform/db \
+    DATABASE_URL="postgresql://app_runtime:${POSTGRES_APP_RUNTIME_PASSWORD}@pgbouncer:5432/translog" >/dev/null
+
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault kv put secret/platform/app \
+    APP_SECRET="$APP_SECRET" >/dev/null
+
+docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault kv put secret/platform/minio \
+    ENDPOINT=minio PORT=9000 \
+    ACCESS_KEY="$MINIO_ROOT_USER" SECRET_KEY="$MINIO_ROOT_PASSWORD" USE_SSL=false >/dev/null
+
+ok "Vault AppRole + policy + 4 secrets boot seedés"
+
+# ─── 8. Force restart API pour pickup nouveaux env (VAULT_ROLE_ID, etc.) ────
+header "[8/12] Restart API"
+
+docker service update --force ${STACK_NAME}_api >/dev/null
+sleep 30
+ok "API restart OK (pick up new Vault credentials)"
+
+# ─── 9. Seed super-admin plateforme (optionnel, dépend de .env.prod) ────────
+header "[9/12] Seed super-admin plateforme"
+
+if [ -z "${PLATFORM_SUPERADMIN_PASSWORD:-}" ]; then
+    warn "PLATFORM_SUPERADMIN_PASSWORD pas dans .env.prod — skip seed super-admin"
+    warn "Pour seed plus tard, ajoute dans .env.prod :"
+    echo "  PLATFORM_SUPERADMIN_EMAIL=\"toi@example.com\""
+    echo "  PLATFORM_SUPERADMIN_NAME=\"Ton Nom\""
+    echo "  PLATFORM_SUPERADMIN_PASSWORD=\"PassFort2026!\""
+    echo "  Puis re-lance ce script (idempotent)."
+else
+    docker run --rm \
+        --network translog_net \
+        -e DATABASE_URL="$DBURL_ADMIN" \
+        -e PLATFORM_SUPERADMIN_EMAIL="${PLATFORM_SUPERADMIN_EMAIL:-admin@example.com}" \
+        -e PLATFORM_SUPERADMIN_NAME="${PLATFORM_SUPERADMIN_NAME:-Super Admin}" \
+        -e PLATFORM_SUPERADMIN_PASSWORD="${PLATFORM_SUPERADMIN_PASSWORD}" \
+        translog_api:1.0.0 \
+        npx tsx prisma/seeds/platform-init.seed.ts || fail "Super-admin seed failed"
+    ok "Super-admin plateforme créé/mis à jour"
+fi
+
+# ─── 10. CUTOVER : stop Easypanel-traefik, scale up Caddy ───────────────────
+header "[10/12] CUTOVER (downtime ~30s sur gmp)"
+
+# Stop Easypanel Traefik
+if docker service ls --filter "name=easypanel-traefik" -q 2>/dev/null | grep -q .; then
+    docker service scale easypanel-traefik=0 >/dev/null
+    sleep 5
+    ok "Easypanel Traefik scaled à 0 (libère 80/443)"
+fi
+
+# Caddy : scale=0/1 force remount du Caddyfile (bind mount peut être stale après rsync)
+docker service scale ${STACK_NAME}_caddy=0 >/dev/null 2>&1 || true
+sleep 3
+docker service scale ${STACK_NAME}_caddy=1 >/dev/null
+
+# Wait Caddy healthy avec retry sur scheduler bug
+echo "Wait Caddy healthy (max 120s)..."
+CADDY_START=$(date +%s)
+SCHEDULER_RETRIES=0
+while true; do
+    cid=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_caddy" -q | head -1)
+    if [ -n "${cid:-}" ]; then
+        status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo none)
+        [ "$status" = healthy ] && break
+    else
+        # Scheduler bug : "no suitable node" → re-scale
+        if [ "$SCHEDULER_RETRIES" -lt 3 ]; then
+            sleep 10
+            docker service scale ${STACK_NAME}_caddy=0 >/dev/null
+            sleep 3
+            docker service scale ${STACK_NAME}_caddy=1 >/dev/null
+            SCHEDULER_RETRIES=$((SCHEDULER_RETRIES + 1))
+            warn "Scheduler retry $SCHEDULER_RETRIES/3"
+        fi
+    fi
+    elapsed=$(($(date +%s) - CADDY_START))
+    if [ "$elapsed" -gt 120 ]; then
+        warn "Caddy timeout — ROLLBACK : restart Easypanel Traefik"
+        docker service scale ${STACK_NAME}_caddy=0 >/dev/null
+        docker service scale easypanel-traefik=1 >/dev/null 2>&1 || true
+        fail "Caddy never healthy — gmp restauré via Traefik"
+    fi
+    sleep 3
+done
+ok "Caddy up (TLS wildcard *.translog.dsyann.info acquis automatiquement)"
+
+# ─── 11. Healthchecks externes ──────────────────────────────────────────────
+header "[11/12] Healthchecks externes"
+
+sleep 5
+
+for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info app.dsyann.info api.dsyann.info panel.dsyann.info; do
+    code=$(curl -kI -o /dev/null -w "%{http_code}" -m 15 https://${d}/ 2>/dev/null || echo 000)
+    if [ "$code" = "200" ] || [ "$code" = "404" ] || [ "$code" = "302" ]; then
+        ok "https://${d}/ → HTTP $code"
+    else
+        warn "https://${d}/ → HTTP $code (à vérifier)"
+    fi
+done
+
+# ─── 12. Post-deploy : UFW + cron backup ────────────────────────────────────
+header "[12/12] Post-deploy hardening"
+
+if command -v ufw >/dev/null; then
+    ufw --force enable >/dev/null 2>&1 || true
+    for port in 22 80 443 53; do
+        ufw allow $port/tcp >/dev/null 2>&1 || true
+    done
+    ufw allow 443/udp >/dev/null 2>&1 || true   # HTTP/3
+    ufw allow 53/udp  >/dev/null 2>&1 || true
+    ok "UFW : 22/80/443/53 ouverts"
+fi
+
+CRON_LINE="0 2 * * * cd $(pwd) && ./scripts/backup.sh >> /var/log/translog-backup.log 2>&1"
+crontab -l 2>/dev/null | grep -v 'translog-backup' | (cat; echo "$CRON_LINE") | crontab - 2>/dev/null && \
+    ok "Cron backup quotidien 02:00 UTC"
+
+echo ""
+echo "════════════════════════════════════════════════════════════"
+echo -e "${GREEN}🚀 DÉPLOIEMENT OK — ${STACK_NAME} stack en prod${NC}"
+echo "════════════════════════════════════════════════════════════"
+echo ""
+echo "Endpoints :"
+echo "  https://translog.dsyann.info         — Landing publique SaaS"
+echo "  https://admin.translog.dsyann.info   — Plateforme admin (login)"
+echo "  https://api.translog.dsyann.info     — API publique cross-tenant"
+echo "  https://<tenant>.translog.dsyann.info — Tenants (PortailVoyageur)"
+echo "  https://app.dsyann.info              — gmp frontend (proxy Caddy)"
+echo "  https://api.dsyann.info              — gmp backend (proxy Caddy)"
+echo "  https://panel.dsyann.info            — Easypanel UI (proxy Caddy)"
+echo ""
+echo "Observabilité :"
+echo "  docker stack ps $STACK_NAME       — Status tasks"
+echo "  docker service ls                 — Tous les services"
+echo "  docker service logs ${STACK_NAME}_api -f"
+echo "  docker service logs ${STACK_NAME}_caddy -f"
+echo ""
+echo "Modifications :"
+echo "  rsync infra/prod/ + .github/workflows/deploy.yml (CI/CD)"
+echo "  ou re-lance ./scripts/04-deploy.sh manuellement (idempotent)"
+echo ""
+echo "Rollback : bash scripts/rollback.sh"

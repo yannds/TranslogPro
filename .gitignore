@@ -8,11 +8,19 @@ dist/
 build/
 *.tsbuildinfo
 
-# Environment — NE JAMAIS COMMITER
+# Environment — NE JAMAIS COMMITER (.env.production EST commité, valeurs publiques Vite)
 .env
 .env.local
 .env.*.local
 *.env
+.env.prod
+infra/prod/.env.prod
+infra/prod/bind9/zones/*.jnl
+infra/prod/bind9/zones/tsig.key
+infra/prod/caddy/data/
+infra/prod/caddy/config/
+infra/prod/vault-keys.txt
+infra/prod/.unseal-keys
 
 # Secrets — NE JAMAIS COMMITER
 *.key

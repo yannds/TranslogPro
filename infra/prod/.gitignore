@@ -1,0 +1,14 @@
+# Secrets prod — JAMAIS commiter
+.env.prod
+.env.prod.backup.*
+
+# BIND9 TSIG key (générée)
+bind9/zones/tsig.key
+
+# Backups locaux
+*.enc
+*.pgdump
+*.snap
+
+# Logs
+*.log

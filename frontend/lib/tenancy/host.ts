@@ -34,7 +34,10 @@ const RESERVED_SUBDOMAINS = new Set([
  * — préférer toujours build-time.
  */
 function resolvePlatformBaseDomain(): string {
-  const viteEnv = (import.meta as any)?.env?.VITE_PLATFORM_BASE_DOMAIN;
+  // IMPORTANT : accès DIRECT à import.meta.env.VITE_* — tout cast (as any)
+  // ou optional chaining empêche Vite de faire le static replacement au build.
+  // Le typage vient de frontend/vite-env.d.ts.
+  const viteEnv = import.meta.env.VITE_PLATFORM_BASE_DOMAIN;
   if (typeof viteEnv === 'string' && viteEnv.length > 0) {
     return viteEnv.toLowerCase();
   }

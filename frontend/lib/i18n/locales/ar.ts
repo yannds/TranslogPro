@@ -3,7 +3,8 @@
  * لغة من اليمين إلى اليسار — اتجاه التخطيط يُدار عبر CSS.
  */
 
-const ar: Record<string, Record<string, string>> = {
+type LocaleValue = string | Record<string, string>;
+const ar: Record<string, Record<string, LocaleValue>> = {
   "simulation": {
     "simTitle": "▶ محاكاة المسار المباشر",
     "success": "✓ نجاح",
@@ -4538,7 +4539,7 @@ const ar: Record<string, Record<string, string>> = {
     "company.name":      "اسم الشركة",
     "company.namePlaceholder":"ACME Transport ش.م.م",
     "company.slug":      "النطاق الفرعي",
-    "company.slugHint":  "ستكون مساحتك متاحة على {host}.translogpro.com — حروف وأرقام وشُرَط.",
+    "company.slugHint":  "ستكون مساحتك متاحة على {host}.{baseDomain} — حروف وأرقام وشُرَط.",
     "company.slugAvailable":"متاح",
     "company.slugTaken": "هذا النطاق الفرعي مُستخدم بالفعل.",
     "company.slugInvalid":"3-32 حرفًا، a-z و0-9 وشُرَط (ليس في البداية/النهاية).",
@@ -4566,7 +4567,7 @@ const ar: Record<string, Record<string, string>> = {
     "error.rateLimit":   "محاولات كثيرة جدًا. أعد المحاولة بعد بضع دقائق.",
 
     "success.title":     "مرحبًا بك في TransLog Pro 🎉",
-    "success.subtitle":  "مساحتك {slug}.translogpro.com جاهزة. لقد أرسلنا إليك بريدًا إلكترونيًا للتأكيد.",
+    "success.subtitle":  "مساحتك {slug}.{baseDomain} جاهزة. لقد أرسلنا إليك بريدًا إلكترونيًا للتأكيد.",
     "success.cta":       "الدخول إلى مساحتي",
     "success.trialInfo": "تستفيد من {days} يومًا تجريبيًا مجانيًا. لا حاجة إلى بطاقة مصرفية.",
 

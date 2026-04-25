@@ -408,7 +408,7 @@ export function PageTenantBusinessRules() {
             <label className="flex items-start gap-3">
               <Checkbox
                 checked={form.captchaEnabled}
-                onChange={e => set({ captchaEnabled: e.target.checked })}
+                onCheckedChange={(checked) => set({ captchaEnabled: !!checked })}
                 aria-describedby="captcha-help"
               />
               <span>

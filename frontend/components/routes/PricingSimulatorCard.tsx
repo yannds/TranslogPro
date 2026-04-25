@@ -12,7 +12,7 @@
  * ACCOUNTANT). Le composant ne vérifie pas la permission lui-même — l'API renvoie
  * 403 si non autorisé ; le parent (PageRoutes) peut masquer le composant si besoin.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Calculator, TrendingUp, TrendingDown, Scale, Loader2, AlertTriangle } from 'lucide-react';
 import { apiPost } from '../../lib/api';
 import { useFetch } from '../../lib/hooks/useFetch';

@@ -441,7 +441,7 @@ function StepParcelInfo({ onSaved, onSkip, onBack }: StepProps) {
 interface Invite { email: string; name: string; roleSlug: string }
 
 function StepTeam({
-  isLast, onFinish, finishing, onSkip, onBack,
+  isLast: _isLast, onFinish, finishing, onSkip, onBack,
 }: { isLast: boolean; onFinish: () => void; finishing: boolean } & Omit<StepProps, 'onSaved'>) {
   const { t } = useI18n();
   const [invites, setInvites] = useState<Invite[]>([{ email: '', name: '', roleSlug: 'CASHIER' }]);
