@@ -5229,6 +5229,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "peakPeriods.confirmDelete":      "Delete this period?",
     "peakPeriods.systemBadge":        "System",
     "peakPeriods.systemBadgeHelp":    "Seeded automatically — can be disabled but not deleted.",
+    "peakPeriods.searchPlaceholder":  "Search (code, label, country)…",
     "payment.title":      "Payment Configuration",
     "payment.subtitle":   "Limits, timeouts and payment options.",
     "payment.intentTtl":  "Intent lifetime (min)",

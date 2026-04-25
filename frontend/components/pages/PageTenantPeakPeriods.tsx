@@ -18,6 +18,7 @@ import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Checkbox } from '../ui/Checkbox';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 import { Badge } from '../ui/Badge';
 import { FormFooter } from '../ui/FormFooter';
 import { ErrorAlert } from '../ui/ErrorAlert';
@@ -112,6 +113,70 @@ export function PageTenantPeakPeriods() {
     return <Badge variant="outline">×{f.toFixed(2)}</Badge>;
   };
 
+  // ── Colonnes DataTableMaster ──────────────────────────────────────────────
+  const peakColumns: Column<PeakPeriod>[] = [
+    {
+      key: 'code', header: t('tenantSettings.peakPeriods.code'), sortable: true, width: '110px',
+      cellRenderer: (v) => <span className="font-mono text-xs">{String(v)}</span>,
+    },
+    {
+      key: 'label', header: t('tenantSettings.peakPeriods.label'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <span>
+          {row.label}
+          {row.isHoliday && <Badge variant="outline" className="ml-2">{t('tenantSettings.peakPeriods.holiday')}</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'startDate', header: t('tenantSettings.peakPeriods.dates'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <span className="text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtDate(row.startDate)} → {fmtDate(row.endDate)}</span>
+      ),
+      csvValue: (_v, row) => `${row.startDate}/${row.endDate}`,
+    },
+    {
+      key: 'expectedDemandFactor', header: t('tenantSettings.peakPeriods.factor'), sortable: true, align: 'right', width: '100px',
+      cellRenderer: (v) => factorBadge(v as number),
+      csvValue: (v) => String(v),
+    },
+    {
+      key: 'countryCode', header: t('tenantSettings.peakPeriods.country'), sortable: true, width: '80px',
+      cellRenderer: (v) => <span className="text-xs text-gray-500 dark:text-gray-400">{(v as string | null) ?? '—'}</span>,
+    },
+    {
+      key: 'enabled', header: t('tenantSettings.peakPeriods.status'), sortable: true, width: '140px',
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-1">
+          <Badge variant={row.enabled ? 'success' : 'outline'}>
+            {row.enabled ? t('common.enabled') : t('common.disabled')}
+          </Badge>
+          {row.isSystemDefault && (
+            <Badge variant="outline" title={t('tenantSettings.peakPeriods.systemBadgeHelp')}>
+              {t('tenantSettings.peakPeriods.systemBadge')}
+            </Badge>
+          )}
+        </div>
+      ),
+      csvValue: (_v, row) => (row.enabled ? 'enabled' : 'disabled') + (row.isSystemDefault ? '+system' : ''),
+    },
+  ];
+
+  const peakRowActions: RowAction<PeakPeriod>[] = [
+    {
+      label:  t('common.edit'),
+      icon:   <Pencil className="w-4 h-4" aria-hidden />,
+      onClick: openEdit,
+    },
+    {
+      label:  t('common.delete'),
+      icon:   <Trash2 className="w-4 h-4" aria-hidden />,
+      onClick: remove,
+      hidden: (row) => row.isSystemDefault,
+      danger: true,
+    },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <header className="flex items-center justify-between">
@@ -133,69 +198,18 @@ export function PageTenantPeakPeriods() {
 
       {error && <ErrorAlert error={error} />}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.code')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.label')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.dates')}</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.factor')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.country')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.peakPeriods.status')}</th>
-              <th className="px-3 py-2 text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('common.loading')}</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('tenantSettings.peakPeriods.empty')}</td></tr>
-            )}
-            {rows.map(p => (
-              <tr key={p.id} className="border-t border-gray-200 dark:border-gray-700">
-                <td className="px-3 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{p.code}</td>
-                <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
-                  {p.label}
-                  {p.isHoliday && <Badge variant="outline" className="ml-2">{t('tenantSettings.peakPeriods.holiday')}</Badge>}
-                </td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  {fmtDate(p.startDate)} → {fmtDate(p.endDate)}
-                </td>
-                <td className="px-3 py-2 text-right">{factorBadge(p.expectedDemandFactor)}</td>
-                <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{p.countryCode ?? '—'}</td>
-                <td className="px-3 py-2 space-x-1">
-                  <Badge variant={p.enabled ? 'success' : 'outline'}>
-                    {p.enabled ? t('common.enabled') : t('common.disabled')}
-                  </Badge>
-                  {p.isSystemDefault && (
-                    <Badge variant="outline" title={t('tenantSettings.peakPeriods.systemBadgeHelp')}>
-                      {t('tenantSettings.peakPeriods.systemBadge')}
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right space-x-1">
-                  {canManage ? (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label={t('common.edit')}>
-                        <Pencil className="w-4 h-4" aria-hidden />
-                      </Button>
-                      {!p.isSystemDefault && (
-                        <Button variant="ghost" size="sm" onClick={() => remove(p)} aria-label={t('common.delete')}>
-                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden />
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400">{t('common.readOnly')}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTableMaster<PeakPeriod>
+        columns={peakColumns}
+        data={rows}
+        loading={loading}
+        rowActions={canManage ? peakRowActions : undefined}
+        onRowClick={canManage ? openEdit : undefined}
+        defaultSort={{ key: 'startDate', dir: 'asc' }}
+        searchPlaceholder={t('tenantSettings.peakPeriods.searchPlaceholder')}
+        emptyMessage={t('tenantSettings.peakPeriods.empty')}
+        exportFormats={['csv']}
+        exportFilename="peak-periods"
+      />
 
       {editing && (
         <Dialog

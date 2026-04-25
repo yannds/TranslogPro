@@ -5241,6 +5241,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "peakPeriods.confirmDelete":      "Supprimer cette période ?",
     "peakPeriods.systemBadge":        "Système",
     "peakPeriods.systemBadgeHelp":    "Période seedée automatiquement — désactivable mais non supprimable.",
+    "peakPeriods.searchPlaceholder":  "Rechercher (code, libellé, pays)…",
     "payment.title":      "Configuration Paiement",
     "payment.subtitle":   "Limites, délais et options des paiements.",
     "payment.intentTtl":  "Durée de vie d'une intention (min)",
