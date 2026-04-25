@@ -6284,7 +6284,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
       "basePrice": "Prix base",
       "netMargin": "Marge nette",
       "marginRate":"% marge",
-      "noProfile": "Aucun bus n'a encore de profil de coûts — impossible de classer."
+      "noProfile": "Aucun bus n'a encore de profil de coûts — impossible de classer.",
+      "searchPlaceholder": "Rechercher une ligne…"
     },
 
     "monthlyBE": {

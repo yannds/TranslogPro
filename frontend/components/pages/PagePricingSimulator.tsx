@@ -28,6 +28,7 @@ import { useAuth } from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { cn } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
+import DataTableMaster from '../DataTableMaster';
 import { Button } from '../ui/Button';
 
 // ─── Types d'échange (miroirs back) ──────────────────────────────────────────
@@ -604,36 +605,46 @@ function BlockCompareRoutes({
       {busy ? <Spinner /> : error ? <ErrorBox msg={error} /> : !data ? null : data.notice === 'NO_COST_PROFILE_ANYWHERE' ? (
         <p className="text-sm text-amber-600 dark:text-amber-400">{t('simulator.compareRoutes.noProfile')}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-slate-500">
-                <th className="px-2 py-1.5 text-left">{t('simulator.compareRoutes.rank')}</th>
-                <th className="px-2 py-1.5 text-left">{t('simulator.compareRoutes.route')}</th>
-                <th className="px-2 py-1.5 text-right">{t('simulator.compareRoutes.distance')}</th>
-                <th className="px-2 py-1.5 text-right">{t('simulator.compareRoutes.basePrice')}</th>
-                <th className="px-2 py-1.5 text-right">{t('simulator.compareRoutes.netMargin')}</th>
-                <th className="px-2 py-1.5 text-right">{t('simulator.compareRoutes.marginRate')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.routes.map((r, i) => (
-                <tr key={r.routeId} className="border-t border-slate-100 dark:border-slate-800">
-                  <td className="px-2 py-1.5 font-mono">{i + 1}</td>
-                  <td className="px-2 py-1.5 font-medium">{r.routeName}</td>
-                  <td className="px-2 py-1.5 text-right">{r.distanceKm} km</td>
-                  <td className="px-2 py-1.5 text-right">{fmtMoney(r.basePrice)}</td>
-                  <td className={cn('px-2 py-1.5 text-right font-semibold', tagTextColor(r.profitabilityTag))}>
-                    {fmtMoney(r.netMargin)}
-                  </td>
-                  <td className={cn('px-2 py-1.5 text-right', tagTextColor(r.profitabilityTag))}>
-                    {fmtPct(r.netMarginRate)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTableMaster<CompareRow & { id: string }>
+          columns={[
+            {
+              key: 'routeName', header: t('simulator.compareRoutes.route'), sortable: true,
+              cellRenderer: (v) => <span className="font-medium">{String(v)}</span>,
+            },
+            {
+              key: 'distanceKm', header: t('simulator.compareRoutes.distance'), sortable: true, align: 'right', width: '110px',
+              cellRenderer: (v) => <span>{v} km</span>,
+              csvValue: (v) => String(v),
+            },
+            {
+              key: 'basePrice', header: t('simulator.compareRoutes.basePrice'), sortable: true, align: 'right', width: '130px',
+              cellRenderer: (v) => <span>{fmtMoney(v as number | null)}</span>,
+              csvValue: (v) => String(v ?? ''),
+            },
+            {
+              key: 'netMargin', header: t('simulator.compareRoutes.netMargin'), sortable: true, align: 'right', width: '140px',
+              cellRenderer: (v, row) => (
+                <span className={cn('font-semibold', tagTextColor(row.profitabilityTag))}>
+                  {fmtMoney(v as number | null)}
+                </span>
+              ),
+              csvValue: (v) => String(v ?? ''),
+            },
+            {
+              key: 'netMarginRate', header: t('simulator.compareRoutes.marginRate'), sortable: true, align: 'right', width: '130px',
+              cellRenderer: (v, row) => (
+                <span className={tagTextColor(row.profitabilityTag)}>{fmtPct(v as number | null)}</span>
+              ),
+              csvValue: (v) => v == null ? '' : `${(v as number).toFixed(2)}`,
+            },
+          ]}
+          data={data.routes.map(r => ({ ...r, id: r.routeId }))}
+          defaultSort={{ key: 'netMargin', dir: 'desc' }}
+          searchPlaceholder={t('simulator.compareRoutes.searchPlaceholder')}
+          emptyMessage={t('simulator.compareRoutes.noProfile')}
+          exportFormats={['csv']}
+          exportFilename="pricing-compare-routes"
+        />
       )}
     </BlockCard>
   );

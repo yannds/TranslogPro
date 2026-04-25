@@ -6263,7 +6263,8 @@ const en: Record<string, Record<string, LocaleValue>> = {
       "basePrice": "Base price",
       "netMargin": "Net margin",
       "marginRate":"Margin %",
-      "noProfile": "No bus has a cost profile yet — cannot rank."
+      "noProfile": "No bus has a cost profile yet — cannot rank.",
+      "searchPlaceholder": "Search a route…"
     },
 
     "monthlyBE": {
