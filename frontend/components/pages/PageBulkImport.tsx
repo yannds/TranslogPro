@@ -14,6 +14,7 @@ import { useI18n } from '../../lib/i18n/useI18n';
 import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { cn } from '../../lib/utils';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,22 @@ export function PageBulkImport() {
   const [apiError,   setApiError]   = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Colonnes DataTableMaster — erreurs d'import ───────────────────────────
+  const errorColumns: Column<ImportError & { id: string }>[] = [
+    {
+      key: 'row', header: t('bulkImport.colRow'), sortable: true, width: '90px', align: 'right',
+      cellRenderer: (v) => <span className="text-gray-700 dark:text-gray-300 font-mono">{String(v)}</span>,
+    },
+    {
+      key: 'field', header: t('bulkImport.colField'), sortable: true, width: '180px',
+      cellRenderer: (v) => <span className="text-gray-500 dark:text-gray-400">{(v as string | undefined) ?? '—'}</span>,
+    },
+    {
+      key: 'message', header: t('common.description'), sortable: false,
+      cellRenderer: (v) => <span className="text-red-700 dark:text-red-400">{String(v)}</span>,
+    },
+  ];
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -298,26 +315,15 @@ export function PageBulkImport() {
 
             {/* Error table */}
             {result.errors.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border border-red-200 dark:border-red-800">
-                <table className="min-w-full divide-y divide-red-100 dark:divide-red-900 text-sm">
-                  <thead className="bg-red-50 dark:bg-red-900/30">
-                    <tr>
-                      <th scope="col" className="px-4 py-2 text-left font-medium text-red-700 dark:text-red-300">{t('bulkImport.errorRow').replace('{{row}}', '#')}</th>
-                      <th scope="col" className="px-4 py-2 text-left font-medium text-red-700 dark:text-red-300">{t('bulkImport.errorField').replace('{{field}}', '—')}</th>
-                      <th scope="col" className="px-4 py-2 text-left font-medium text-red-700 dark:text-red-300">{t('common.description')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-red-50 dark:divide-red-900/30">
-                    {result.errors.map((err, i) => (
-                      <tr key={i}>
-                        <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{err.row}</td>
-                        <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{err.field ?? '—'}</td>
-                        <td className="px-4 py-2 text-red-700 dark:text-red-400">{err.message}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTableMaster<ImportError & { id: string }>
+                columns={errorColumns}
+                data={result.errors.map((e, i) => ({ ...e, id: `err-${i}` }))}
+                defaultSort={{ key: 'row', dir: 'asc' }}
+                searchPlaceholder={t('bulkImport.searchErrors')}
+                emptyMessage={t('bulkImport.successTitle')}
+                exportFormats={['csv']}
+                exportFilename="bulk-import-errors"
+              />
             )}
 
             {/* Reset */}
