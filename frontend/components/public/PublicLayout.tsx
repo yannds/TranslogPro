@@ -56,7 +56,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen overflow-x-clip bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-teal-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
@@ -252,7 +252,7 @@ function LanguageSwitcher() {
           <ul
             role="listbox"
             aria-label={t('landing.nav.switchLanguage')}
-            className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900"
+            className="absolute left-0 z-50 mt-1 w-44 max-w-[calc(100vw-1rem)] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg md:left-auto md:right-0 dark:border-slate-800 dark:bg-slate-900"
           >
             {(Object.keys(languages) as Language[]).map(code => (
               <li key={code}>
