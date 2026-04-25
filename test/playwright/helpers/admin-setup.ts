@@ -63,6 +63,9 @@ const ALL_TENANT_PERMISSIONS = [
   'data.parcel.create.agency',
   'data.parcel.deliver.agency',
   'data.parcel.update.agency',
+  'data.manifest.generate.agency',
+  'data.manifest.sign.agency',
+  'data.incident.report.own',
   // SAV
   'control.sav.manage.tenant',
   'data.sav.read.agency',
