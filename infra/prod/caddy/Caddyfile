@@ -38,7 +38,7 @@
 
     # Snippet TLS réutilisable : DNS-01 via BIND9 local
     servers {
-        protocols h1 h2 h3
+        protocols h1 h2
     }
 }
 
@@ -53,6 +53,7 @@
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "geolocation=(), camera=(), microphone=()"
         # Supprime Server header par défaut
+                Content-Security-Policy   "default-src 'self'; script-src 'self' 'sha256-SpcYfPAFmN3AcqAisA2RsheLRqw5HOlqBLk/WvFAdUE=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         -Server
     }
 }
@@ -115,6 +116,14 @@ translog.dsyann.info, *.translog.dsyann.info {
         reverse_proxy api:3000 {
             header_up X-Real-IP {remote_host}
         }
+    }
+
+    # ── Block sensitive file patterns (anti-leak / scanner deception) ────────
+    @blocked_paths {
+        path /.env /.git* /.DS_Store /package.json /package-lock.json /yarn.lock /Dockerfile /.dockerignore /.gitignore /.gitleaks.toml /webpack.config.js /tsconfig.json /docker-compose* /node_modules*
+    }
+    handle @blocked_paths {
+        respond "Not Found" 404
     }
 
     # ── 4) Reste (admin/apex/<tenant> sans /api) → frontend SPA ───────────────

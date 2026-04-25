@@ -555,13 +555,34 @@ Le user `bind` dans le container BIND9 a uid=**53**, pas 1001. Quand on fait MED
 
 Avec `mode: host` sur ports 80/443/53, Swarm ne peut pas tenter un rolling update (2 containers ne peuvent pas binder le même port host). Solution : `docker service scale X=0; sleep 3; docker service scale X=1`.
 
-### 8.5 — Hardening restant (Vague 3)
+### 8.5 — Hardening Vague 3 — partiel (audit 2026-04-25)
+
+| ID | Action | Vérif |
+|---|---|---|
+| V3-A | CSP `'unsafe-inline'` remplacé par hash SHA-256 du script theme inline (`'sha256-SpcYfPAFmN3AcqAisA2RsheLRqw5HOlqBLk/WvFAdUE='`) | `curl -I` → header CSP avec hash ; theme bootstrap fonctionne sans warning |
+
+⚠️ **Si tu modifies `frontend/index.html`** (en particulier le script theme inline), le hash CSP devient invalide → le script sera bloqué → page blanche.
+
+Pour recalculer le hash après modif :
+```bash
+python3 -c "
+import hashlib, base64, re
+html = open('frontend/index.html').read()
+m = re.search(r'<script>([\s\S]*?)</script>', html)
+h = base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode()
+print(f'sha256-{h}')
+"
+# Puis update Caddyfile avec le nouveau hash, reload Caddy
+```
+
+⚠️ **Le script `04-deploy.sh` peut overwriter le Caddyfile sur le VPS** (rsync depuis local). Le Caddyfile dans le repo `infra/prod/caddy/Caddyfile` doit être maintenu à jour avec les modifs prod (CSP, blocked_paths, h3 disable). Si tu modifies en prod via SSH, **resync immédiatement** le repo.
+
+### 8.6 — Hardening restant (Vague 3 suite)
 
 Voir le rapport complet `audit_2026-04-25/RAPPORT_AUDIT_PROD.md` :
 - HIGH-4 RLS Postgres + middleware NestJS `app.current_tenant_id`
 - HIGH-5 (suite) Vault uid=100 + cap_add IPC_LOCK/SETFCAP, Caddy/nginx + cap_add NET_BIND_SERVICE
 - LOW-18 MFA enrollment forcé pour TENANT_ADMIN
-- Refacto theme bootstrap script en external (retirer `'unsafe-inline'` CSP)
 - Investigation filtre Hostinger DDoS qui drop trafic MTN Congo (AS37463) — ticket Hostinger
 
 ---
