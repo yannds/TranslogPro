@@ -54,7 +54,13 @@ const ALL_TENANT_PERMISSIONS = [
   // SAV
   'control.sav.manage.tenant',
   'data.sav.read.agency',
+  'data.sav.report.own',
+  'data.sav.report.agency',
+  'data.sav.deliver.agency',
+  'data.sav.claim.tenant',
   'control.refund.approve.tenant',
+  'data.refund.approve.tenant',
+  'data.refund.process.tenant',
   // Settings
   'control.settings.manage.tenant',
   // IAM
