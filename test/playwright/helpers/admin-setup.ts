@@ -74,6 +74,18 @@ const ALL_TENANT_PERMISSIONS = [
   'data.refund.process.tenant',
   // Settings
   'control.settings.manage.tenant',
+  // Documents (PDF generation)
+  'data.ticket.print.agency',
+  'data.parcel.print.agency',
+  'data.manifest.print.agency',
+  'data.invoice.print.agency',
+  'data.shipment.print.agency',
+  // Analytics
+  'control.stats.read.tenant',
+  // Staff
+  'control.staff.manage.tenant',
+  'data.staff.read.agency',
+  'data.staff.read.tenant',
   // Templates
   'data.template.read.agency',
   'data.template.write.agency',
