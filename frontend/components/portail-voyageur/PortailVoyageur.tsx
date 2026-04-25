@@ -18,7 +18,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth/auth.context';
 import { resolveHost } from '../../lib/tenancy/host';
 import { cn } from '../../lib/utils';
-import { useCurrencyFormatter, useTenantConfig } from '../../providers/TenantConfigProvider';
+import { useCurrencyFormatter } from '../../providers/TenantConfigProvider';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { apiFetch } from '../../lib/api';
@@ -143,7 +143,7 @@ interface PassengerInfo {
   lastName: string;
   phone: string;
   email: string;
-  seatType: 'STANDARD' | 'VIP';
+  seatType: string;
   wantsSeatSelection?: boolean;
   seatNumber?: string | null;
 }
@@ -168,6 +168,15 @@ interface PopularRoute {
   to: string;
   price: number;
   durationMinutes: number | null;
+}
+
+interface FareClassInfo {
+  code:       string;
+  label:      string;
+  labelKey:   string | null;
+  multiplier: number;
+  color:      string | null;
+  sortOrder:  number;
 }
 
 // Indicatifs téléphoniques ISO 3166-1 → E.164 dial. Sous-ensemble des pays
@@ -443,15 +452,18 @@ interface BookingResult {
   paymentMethod: string;
 }
 
-const emptyPassenger = (): Partial<PassengerInfo> => ({ seatType: 'STANDARD' });
+const emptyPassenger = (defaultSeatType: string): Partial<PassengerInfo> => ({ seatType: defaultSeatType });
 
-function BookingModal({ trip, paymentMethods, apiBase, passengerCount, country, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; passengerCount: number; country?: string; onClose: () => void }) {
+function BookingModal({ trip, paymentMethods, apiBase, passengerCount, country, fareClasses, onClose }: { trip: TripResult; paymentMethods: PaymentMethod[]; apiBase: string | null; passengerCount: number; country?: string; fareClasses: FareClassInfo[]; onClose: () => void }) {
   const phonePh = phonePlaceholder(country, '06');
   const { t } = useI18n();
   const fmt = useCurrencyFormatter();
   const count = Math.max(1, Math.min(passengerCount, 8));
+  // Seat-type par défaut = première classe tarifaire active du tenant
+  // (résolue par /portal/fare-classes). Si vide → '' (le bloc UI est masqué).
+  const defaultSeatType = fareClasses[0]?.code ?? '';
   const [step, setStep] = useState<BookingStep>('passengers');
-  const [passengers, setPassengers] = useState<Partial<PassengerInfo>[]>(() => Array.from({ length: count }, emptyPassenger));
+  const [passengers, setPassengers] = useState<Partial<PassengerInfo>[]>(() => Array.from({ length: count }, () => emptyPassenger(defaultSeatType)));
   const [selectedPayment, setSelectedPayment] = useState('');
   const [booking, setBooking] = useState<BookingResult | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -592,20 +604,34 @@ function BookingModal({ trip, paymentMethods, apiBase, passengerCount, country, 
                   </div>
                   <Inp label={t('portail.phoneLabel')} ph={phonePh} value={pax.phone || ''} set={v => updatePassenger(idx, { phone: v })} />
                   <Inp label={t('portail.emailOptional')} ph={t('portail.emailPlaceholder')} type="email" value={pax.email || ''} set={v => updatePassenger(idx, { email: v })} />
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
-                    {/* TODO S2: consommer l'endpoint public `/p/:slug/fare-classes`
-                        (à créer) pour que le portail voyageur reflète les
-                        TenantFareClass configurées par le tenant. Pour S1, on
-                        reste sur STANDARD/VIP qui sont seedés par défaut pour
-                        tous les tenants et couvrent 99% des cas. */}
-                    <div className="grid grid-cols-2 gap-3">{(['STANDARD', 'VIP'] as const).map(type => (
-                      <button key={type} onClick={() => updatePassenger(idx, { seatType: type })} className={cn('relative p-3 sm:p-4 rounded-2xl border-2 text-sm font-medium transition-all text-left',
-                        pax.seatType === type ? (type === 'VIP' ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-900 dark:border-white bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white') : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300')}>
-                        <span className="text-lg block mb-1">{type === 'VIP' ? '\u2605' : '\u25CB'}</span><span className="font-bold">{type}</span><span className="block text-xs mt-0.5 opacity-70">{type === 'VIP' ? t('portail.vipDesc') : t('portail.standardDesc')}</span>
-                      </button>
-                    ))}</div>
-                  </div>
+                  {fareClasses.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">{t('portail.seatType')}</label>
+                      <div className={cn('grid gap-3', fareClasses.length === 1 ? 'grid-cols-1' : fareClasses.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3')}>
+                        {fareClasses.map(fc => {
+                          const selected    = pax.seatType === fc.code;
+                          const accentStyle = fc.color ? { borderColor: selected ? fc.color : undefined, color: selected ? fc.color : undefined } : undefined;
+                          return (
+                            <button
+                              key={fc.code}
+                              onClick={() => updatePassenger(idx, { seatType: fc.code })}
+                              style={accentStyle}
+                              className={cn('relative p-3 sm:p-4 rounded-2xl border-2 text-sm font-medium transition-all text-left',
+                                selected
+                                  ? (fc.color ? '' : 'border-slate-900 dark:border-white bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white')
+                                  : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300',
+                              )}
+                            >
+                              <span className="font-bold block">{fc.label}</span>
+                              {fc.multiplier !== 1 && (
+                                <span className="block text-xs mt-0.5 opacity-70">×{fc.multiplier.toFixed(2)}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -955,15 +981,10 @@ const PARCEL_STATUS_LABEL: Record<string, string> = {
   RETURNED:   'portail.parcelStatusReturned',
 };
 
-function ParcelSection({ t, apiBase, country }: { t: (k: string) => string; apiBase: string | null; country?: string }) {
+function ParcelSection({ t, apiBase, country, cityOptions }: { t: (k: string) => string; apiBase: string | null; country?: string; cityOptions: ComboboxOption[] }) {
   const phonePhSnd = phonePlaceholder(country, '06');
   const phonePhRcv = phonePlaceholder(country, '05');
   const [tab, setTab] = useState<'track' | 'send'>('track');
-  const { cities } = useTenantConfig();
-  const cityOptions = useMemo(
-    () => cities.map(c => ({ value: c.name, label: c.name })),
-    [cities],
-  );
 
   // ── Track state ────────────────────────────────────────────────────────
   const [code, setCode] = useState('');
@@ -1511,6 +1532,9 @@ export function PortailVoyageur() {
   const popularUrl = apiBase ? `${apiBase}/popular-routes` : null;
   const popularRes = useFetch<PopularRoute[]>(popularUrl, cfgDeps, skip);
   const popularRoutes = popularRes.data ?? [];
+  const fareClassesUrl = apiBase ? `${apiBase}/fare-classes` : null;
+  const fareClassesRes = useFetch<FareClassInfo[]>(fareClassesUrl, cfgDeps, skip);
+  const fareClasses = fareClassesRes.data ?? [];
   const tenantCountry = cfg.data?.tenant?.country;
   // Tenant name takes priority — brand.brandName is only used if tenant specifically set it
   const brandName = cfg.data?.tenant?.name || cfg.data?.brand?.brandName || '';
@@ -1827,7 +1851,7 @@ export function PortailVoyageur() {
             </div>
           )}
         </>)}
-        {section === 'parcels' && <ParcelSection t={t} apiBase={apiBase} country={tenantCountry} />}
+        {section === 'parcels' && <ParcelSection t={t} apiBase={apiBase} country={tenantCountry} cityOptions={cityOptions} />}
         {section === 'nearby' && <NearbyStations stations={stations} t={t} />}
         {section === 'about' && (() => {
           const ICON_MAP: Record<string, string> = { shield: '\u2691', sparkles: '\u2726', target: '\u2316' };
@@ -1995,7 +2019,7 @@ export function PortailVoyageur() {
         </footer>
       )}
 
-      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} passengerCount={pax} country={tenantCountry} onClose={() => setSelTrip(null)} />}
+      {selTrip && <BookingModal trip={selTrip} paymentMethods={pms} apiBase={apiBase} passengerCount={pax} country={tenantCountry} fareClasses={fareClasses} onClose={() => setSelTrip(null)} />}
     </div>
     </PortalThemeCtx.Provider>
   );

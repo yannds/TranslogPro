@@ -700,6 +700,40 @@ export class PublicPortalService {
     });
   }
 
+  // ─── Fare classes (public — actives, triées) ──────────────────────────────
+
+  /**
+   * Classes tarifaires actives du tenant. Lit `TenantFareClass` (source de
+   * vérité), filtre `enabled=true`, trié par `sortOrder`. Aucun fallback
+   * hardcodé : si rien n'est configuré, le portail n'affichera rien (cas
+   * pathologique, le seed onboarding garantit STANDARD + VIP par défaut).
+   */
+  async getFareClasses(tenantSlug: string): Promise<Array<{
+    code:       string;
+    label:      string;
+    labelKey:   string | null;
+    multiplier: number;
+    color:      string | null;
+    sortOrder:  number;
+  }>> {
+    const tenant = await this.resolveTenant(tenantSlug);
+
+    const rows = await this.prisma.tenantFareClass.findMany({
+      where:   { tenantId: tenant.id, enabled: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      select: {
+        code:       true,
+        label:      true,
+        labelKey:   true,
+        multiplier: true,
+        color:      true,
+        sortOrder:  true,
+      },
+    });
+
+    return rows;
+  }
+
   // ─── Popular routes (top OD by confirmed tickets, 90-day window) ──────────
 
   /**

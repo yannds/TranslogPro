@@ -39,6 +39,22 @@ export class PublicPortalController {
   }
 
   /**
+   * Classes tarifaires actives du tenant (TenantFareClass).
+   * Le portail voyageur utilise cette liste à la place des classes
+   * STANDARD/VIP hardcodées historiquement. Retour vide si rien n'est
+   * configuré — le seed onboarding garantit STANDARD + VIP par défaut.
+   */
+  @Get('fare-classes')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'ip', suffix: 'portal_fare_classes',
+    message: 'Too many requests.',
+  })
+  getFareClasses(@Param('tenantSlug') slug: string) {
+    return this.service.getFareClasses(slug);
+  }
+
+  /**
    * Trajets populaires du tenant — top 4 OD par billets confirmés sur 90j.
    * Retourne `[]` si zéro vente (tenant nouvellement créé). Aucun fallback hardcodé.
    */

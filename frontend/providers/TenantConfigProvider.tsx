@@ -19,7 +19,6 @@ import type { Language }      from '../lib/i18n/types';
 import type { StatusRegistry } from '../lib/config/status.config';
 import type { City }           from '../lib/config/city.config';
 import { DEFAULT_TRIP_STATUS_REGISTRY } from '../lib/config/status.config';
-import { getCitiesForTenant }           from '../lib/config/city.config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +77,9 @@ export const DEFAULT_TENANT_CONFIG: TenantConfig = {
     displayLangRotateMs: 8_000,  // 8s par langue sur écrans TV
   },
   statuses:  DEFAULT_TRIP_STATUS_REGISTRY,
-  cities:    getCitiesForTenant('CG', true),
+  // Liste vide par défaut — les villes proviennent désormais de l'API
+  // /portal/stations (tenant-scoped). Aucun fallback hardcodé pays.
+  cities:    [],
 };
 
 // ─── Contexte ─────────────────────────────────────────────────────────────────
