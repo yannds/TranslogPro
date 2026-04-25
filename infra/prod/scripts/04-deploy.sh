@@ -289,12 +289,16 @@ docker exec -e VAULT_TOKEN=$VAULT_TOKEN $VAULT_CID vault kv put secret/platform/
 
 ok "Vault AppRole + policy + 4 secrets boot seedés"
 
-# ─── 8. Force restart API pour pickup nouveaux env (VAULT_ROLE_ID, etc.) ────
-header "[8/12] Restart API"
+# ─── 8. Force restart API + Web pour pickup nouveau code ────────────────────
+# Avec --resolve-image=never et un tag local fixe (translog_web:1.0.0 / translog_api:1.0.0),
+# Swarm ne détecte aucun changement de spec lors d'un re-tag → la task continue à
+# tourner sur l'ancien digest. Force update explicite pour remplacer la task.
+header "[8/12] Restart API + Web"
 
 docker service update --force ${STACK_NAME}_api >/dev/null
+docker service update --force ${STACK_NAME}_web >/dev/null
 sleep 30
-ok "API restart OK (pick up new Vault credentials)"
+ok "API + Web restart OK (pick up new image digest + Vault credentials)"
 
 # ─── 9. Seed super-admin plateforme (optionnel, dépend de .env.prod) ────────
 header "[9/12] Seed super-admin plateforme"
