@@ -3786,6 +3786,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "tagTrough":      "Creux",
     "recPeak":        "Période forte : {{period}} ({{pct}} vs an dernier) — anticiper l'ajout de trajets ou de capacité.",
     "recTrough":      "Période creuse : {{period}} ({{pct}} vs an dernier) — bon moment pour planifier les formations ou la maintenance.",
+    "searchPlaceholder": "Rechercher une période…",
     "colPeriod":      "Période",
     "colTrips":       "Trajets",
     "colTickets":     "Billets",

@@ -21,6 +21,7 @@ import { useTenantConfig } from '../../providers/TenantConfigProvider';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { MiniBarChart } from '../dashboard/MiniBarChart';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 type HistoryWindow = 'INSUFFICIENT' | 'SHORT' | 'MEDIUM' | 'YOY' | 'MULTI_YEAR';
 type PeriodType = 'YEAR' | 'MONTH' | 'WEEKEND' | 'WEEKDAY';
@@ -122,6 +123,37 @@ export function PageSeasonality() {
 
   const chartData = rows.map(r => ({ label: labelFor(r), value: Math.round(r.revenueTotal) }));
 
+  // ── Colonnes DataTableMaster ──────────────────────────────────────────────
+  const seasonalityColumns: Column<SeasonalRow>[] = [
+    {
+      key: 'periodStartAt', header: t('seasonality.colPeriod'), sortable: true,
+      cellRenderer: (_v, row) => <span className="font-medium text-slate-900 dark:text-slate-100">{labelFor(row)}</span>,
+      csvValue: (_v, row) => labelFor(row),
+    },
+    { key: 'tripCount', header: t('seasonality.colTrips'), sortable: true, align: 'right', width: '100px' },
+    { key: 'ticketsSold', header: t('seasonality.colTickets'), sortable: true, align: 'right', width: '100px' },
+    {
+      key: 'revenueTotal', header: t('seasonality.colRevenue'), sortable: true, align: 'right',
+      cellRenderer: (v) => <span>{formatMoney(v as number, currency)}</span>,
+      csvValue: (v) => String(v),
+    },
+    {
+      key: 'fillRateAvg', header: t('seasonality.colFillRate'), sortable: true, align: 'right', width: '110px',
+      cellRenderer: (v) => <span>{((v as number) * 100).toFixed(0)}%</span>,
+      csvValue: (v) => `${((v as number) * 100).toFixed(0)}%`,
+    },
+    {
+      key: 'vsPreviousPct', header: t('seasonality.colVsPrev'), sortable: true, align: 'right', width: '110px',
+      cellRenderer: (v) => <PctTrend value={v as number | null} />,
+      csvValue: (v) => v == null ? '' : `${(v as number).toFixed(1)}%`,
+    },
+    ...(yoyAvailable ? [{
+      key: 'vsLastYearPct', header: t('seasonality.colVsYoY'), sortable: true, align: 'right' as const, width: '110px',
+      cellRenderer: (v: SeasonalRow['vsLastYearPct']) => <PctTrend value={v} />,
+      csvValue: (v: SeasonalRow['vsLastYearPct']) => v == null ? '' : `${v.toFixed(1)}%`,
+    } as Column<SeasonalRow>] : []),
+  ];
+
   // Recommandation dérivée (ex: "Décembre 2026 +32% vs 2025 → ajouter trips")
   const recommendation = useMemo(() => {
     if (!yoyAvailable || rows.length === 0) return null;
@@ -216,38 +248,15 @@ export function PageSeasonality() {
           </div>
 
           {/* Table détaillée */}
-          <div className="overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colPeriod')}</th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colTrips')}</th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colTickets')}</th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colRevenue')}</th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colFillRate')}</th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colVsPrev')}</th>
-                  {yoyAvailable && (
-                    <th className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">{t('seasonality.colVsYoY')}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.id} className="border-t border-slate-200 dark:border-slate-700">
-                    <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{labelFor(r)}</td>
-                    <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{r.tripCount}</td>
-                    <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{r.ticketsSold}</td>
-                    <td className="px-3 py-2 text-right text-slate-900 dark:text-slate-100">{formatMoney(r.revenueTotal, currency)}</td>
-                    <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{(r.fillRateAvg * 100).toFixed(0)}%</td>
-                    <td className="px-3 py-2 text-right"><PctTrend value={r.vsPreviousPct} /></td>
-                    {yoyAvailable && (
-                      <td className="px-3 py-2 text-right"><PctTrend value={r.vsLastYearPct} /></td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTableMaster<SeasonalRow>
+            columns={seasonalityColumns}
+            data={rows}
+            defaultSort={{ key: 'periodStartAt', dir: 'desc' }}
+            searchPlaceholder={t('seasonality.searchPlaceholder')}
+            emptyMessage={t('common.noData')}
+            exportFormats={['csv']}
+            exportFilename="seasonality"
+          />
 
           {/* Recommandations dérivées YoY */}
           {recommendation && (

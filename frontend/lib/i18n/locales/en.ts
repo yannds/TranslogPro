@@ -3782,6 +3782,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "tagTrough":      "Trough",
     "recPeak":        "Peak period: {{period}} ({{pct}} YoY) — anticipate adding trips or capacity.",
     "recTrough":      "Low period: {{period}} ({{pct}} YoY) — good time to plan training or maintenance.",
+    "searchPlaceholder": "Search a period…",
     "colPeriod":      "Period",
     "colTrips":       "Trips",
     "colTickets":     "Tickets",
