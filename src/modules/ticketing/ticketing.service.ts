@@ -1087,7 +1087,7 @@ export class TicketingService {
       },
       occurredAt: new Date(),
     };
-    await this.eventBus.publish(event, null);
+    await this.prisma.transact(tx => this.eventBus.publish(event, tx));
 
     return { oldTicketId: oldTicket.id, newTicket };
   }

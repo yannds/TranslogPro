@@ -62,6 +62,7 @@ const ALL_TENANT_PERMISSIONS = [
   'data.parcel.hub_move.agency',
   'data.parcel.create.agency',
   'data.parcel.deliver.agency',
+  'data.parcel.update.agency',
   // SAV
   'control.sav.manage.tenant',
   'data.sav.read.agency',
@@ -113,6 +114,14 @@ const ALL_TENANT_PERMISSIONS = [
   'control.safety_alert.resolve.agency',
   'control.safety_alert.resolve.tenant',
   'data.safety_alert.create.tenant',
+  'control.safety.monitor.global',
+  // Workflow studio + feedback + shipment
+  'control.workflow.studio.read.tenant',
+  'control.workflow.studio.write.tenant',
+  'data.feedback.submit.own',
+  'data.shipment.group.agency',
+  'data.shipment.read.own',
+  'data.shipment.read.agency',
   // Cashier
   'control.cashier.manage.tenant',
   'data.cashier.open.own',

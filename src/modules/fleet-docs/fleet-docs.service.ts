@@ -413,7 +413,7 @@ export class FleetDocsService {
       occurredAt:    new Date(),
     };
     // publish sans transaction (événement de monitoring, pas métier critique)
-    await this.eventBus.publish(event, null);
+    await this.prisma.transact(tx => this.eventBus.publish(event, tx));
   }
 
   private async _publishConsumableAlert(
@@ -432,6 +432,6 @@ export class FleetDocsService {
       payload:       { busId, consumableCode, status, nextDueKm },
       occurredAt:    new Date(),
     };
-    await this.eventBus.publish(event, null);
+    await this.prisma.transact(tx => this.eventBus.publish(event, tx));
   }
 }
