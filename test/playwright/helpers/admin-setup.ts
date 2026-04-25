@@ -54,6 +54,7 @@ const ALL_TENANT_PERMISSIONS = [
   'data.ticket.rebook.agency',
   'data.ticket.noshow_mark.agency',
   'data.ticket.refund_request.agency',
+  'data.traveler.verify.agency',
   // Parcels
   'control.parcel.manage.tenant',
   'data.parcel.read.agency',
