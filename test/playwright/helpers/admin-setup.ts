@@ -251,6 +251,99 @@ export async function signIn(
   return { cookie, authHeaders: { Host: tenant.hostname, Cookie: cookie } };
 }
 
+export const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Toutes les permissions plateforme — pour tests qui hittent /platform/*.
+ * Distinct des permissions tenant : ces clés ne marchent que si le user
+ * est rattaché au tenant plateforme (sentinel id 00000000-...).
+ */
+const ALL_PLATFORM_PERMISSIONS = [
+  'control.impersonation.switch.global',  // SENTINEL : sans ça, le user ne peut pas être rattaché à la plateforme
+  'control.impersonation.revoke.global',
+  'control.platform.staff.global',
+  'control.platform.plans.manage.global',
+  'control.platform.billing.manage.global',
+  'data.platform.metrics.read.global',
+  'data.platform.kpi.business.read.global',
+  'data.platform.kpi.adoption.read.global',
+  'data.platform.audit.read.global',
+  'control.platform.manage.tenant',
+  'data.platform.read.agency',
+  'data.tenant.plan.read.tenant',
+];
+
+/**
+ * Setup d'un super-admin plateforme à partir d'un tenant fixture existant —
+ * BASCULE le user vers le tenant 00000000-... (PLATFORM_TENANT_ID), grant les
+ * permissions plateforme, et signIn avec le hostname admin.translog.test.
+ *
+ * À utiliser quand on veut tester /platform/analytics, /platform/plans, etc.
+ *
+ * IMPORTANT : modifie le user fixture (rattachement) — utilise un fixture
+ * dédié si tu veux tester en parallèle un acteur tenant régulier.
+ */
+export async function setupPlatformAdmin(
+  request: APIRequestContext,
+  tenant:  { id: string; userId: string; userEmail: string; userPassword: string },
+): Promise<{ cookie: string; authHeaders: { Host: string; Cookie: string } }> {
+  // 1. S'assurer que le tenant plateforme existe (créé par le seed initial)
+  let platform = await prisma.tenant.findUnique({ where: { id: PLATFORM_TENANT_ID } });
+  if (!platform) {
+    platform = await prisma.tenant.create({
+      data: {
+        id: PLATFORM_TENANT_ID,
+        name: 'Platform',
+        slug: 'admin',
+        country: 'CG',
+        language: 'fr',
+        isActive: true,
+        provisionStatus: 'ACTIVE',
+      },
+    });
+    await prisma.tenantDomain.create({
+      data: { tenantId: platform.id, hostname: 'admin.translog.test', isPrimary: true, verifiedAt: new Date() },
+    });
+  }
+
+  // 2. Créer un rôle platform-admin sur le tenant plateforme + grant perms
+  const role = await prisma.role.upsert({
+    where:  { tenantId_name: { tenantId: PLATFORM_TENANT_ID, name: 'pw-platform-admin' } },
+    update: {},
+    create: { tenantId: PLATFORM_TENANT_ID, name: 'pw-platform-admin', isSystem: false },
+  });
+  for (const permission of ALL_PLATFORM_PERMISSIONS) {
+    await prisma.rolePermission.upsert({
+      where:  { roleId_permission: { roleId: role.id, permission } },
+      update: {},
+      create: { roleId: role.id, permission },
+    });
+  }
+
+  // 3. Bascule le user fixture vers tenant plateforme + nouveau rôle
+  await prisma.user.update({
+    where: { id: tenant.userId },
+    data:  { tenantId: PLATFORM_TENANT_ID, roleId: role.id },
+  });
+  // 3b. Synchronise Account.tenantId (unicité (tenantId, providerId, accountId))
+  await prisma.account.updateMany({
+    where: { userId: tenant.userId },
+    data:  { tenantId: PLATFORM_TENANT_ID },
+  });
+
+  // 4. SignIn sur le hostname admin
+  const adminHost = 'admin.translog.test';
+  const res = await request.post('/api/auth/sign-in', {
+    data:    { email: tenant.userEmail, password: tenant.userPassword },
+    headers: { Host: adminHost },
+  });
+  if (res.status() !== 200) {
+    throw new Error(`Platform sign-in failed [${res.status()}] : ${await res.text()}`);
+  }
+  const cookie = res.headers()['set-cookie']!.split(';')[0];
+  return { cookie, authHeaders: { Host: adminHost, Cookie: cookie } };
+}
+
 /**
  * Setup complet "admin" : agency + perms + modules + signIn.
  * Renvoie agencyId + cookie d'auth.
