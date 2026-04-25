@@ -30,37 +30,59 @@ encrypt() {
     openssl enc -aes-256-cbc -salt -pbkdf2 -pass "file:$KEY_FILE"
 }
 
+# Helper : récupère le container ID Swarm dynamique pour un service
+swarm_cid() {
+    docker ps --filter "label=com.docker.swarm.service.name=translog_$1" -q | head -1
+}
+
 # ─── 1. Postgres dump ───────────────────────────────────────────────────────
 echo "→ Dump Postgres..."
-docker exec translog_postgres pg_dump -U app_admin -F c -Z 9 translog | encrypt > "$BACKUP_DIR/db-${STAMP}.pgdump.enc"
+PG_CID=$(swarm_cid postgres)
+[ -n "$PG_CID" ] || { echo "✗ Postgres container introuvable — skip"; exit 1; }
+docker exec "$PG_CID" pg_dump -U app_admin -F c -Z 9 translog | encrypt > "$BACKUP_DIR/db-${STAMP}.pgdump.enc"
 echo "  ✔ $(du -h $BACKUP_DIR/db-${STAMP}.pgdump.enc | cut -f1)"
 
 # ─── 2. MinIO mirror (tar compressé + chiffré) ──────────────────────────────
 echo "→ Dump MinIO..."
-docker run --rm \
-    --volumes-from translog_minio \
-    -v "$BACKUP_DIR:/backup" \
-    busybox tar -czf - -C /data . | encrypt > "$BACKUP_DIR/minio-${STAMP}.tar.gz.enc"
-echo "  ✔ $(du -h $BACKUP_DIR/minio-${STAMP}.tar.gz.enc | cut -f1)"
+MINIO_CID=$(swarm_cid minio)
+if [ -n "$MINIO_CID" ]; then
+    docker run --rm \
+        --volumes-from "$MINIO_CID" \
+        -v "$BACKUP_DIR:/backup" \
+        busybox tar -czf - -C /data . | encrypt > "$BACKUP_DIR/minio-${STAMP}.tar.gz.enc"
+    echo "  ✔ $(du -h $BACKUP_DIR/minio-${STAMP}.tar.gz.enc | cut -f1)"
+else
+    echo "  ⚠ MinIO container introuvable — skip"
+fi
 
 # ─── 3. Vault raft snapshot ─────────────────────────────────────────────────
 if [ -n "${VAULT_TOKEN:-}" ] && [ "${VAULT_TOKEN}" != "REPLACE_AFTER_VAULT_INIT" ]; then
     echo "→ Snapshot Vault..."
-    docker exec -e VAULT_TOKEN="${VAULT_TOKEN}" translog_vault \
-        vault operator raft snapshot save /tmp/vault-snapshot.bin
-    docker cp translog_vault:/tmp/vault-snapshot.bin /tmp/vault-snapshot.bin
-    encrypt < /tmp/vault-snapshot.bin > "$BACKUP_DIR/vault-${STAMP}.snap.enc"
-    rm -f /tmp/vault-snapshot.bin
-    echo "  ✔ $(du -h $BACKUP_DIR/vault-${STAMP}.snap.enc | cut -f1)"
+    VAULT_CID=$(swarm_cid vault)
+    if [ -n "$VAULT_CID" ]; then
+        docker exec -e VAULT_TOKEN="${VAULT_TOKEN}" "$VAULT_CID" \
+            vault operator raft snapshot save /tmp/vault-snapshot.bin
+        docker cp "$VAULT_CID":/tmp/vault-snapshot.bin /tmp/vault-snapshot.bin
+        encrypt < /tmp/vault-snapshot.bin > "$BACKUP_DIR/vault-${STAMP}.snap.enc"
+        rm -f /tmp/vault-snapshot.bin
+        echo "  ✔ $(du -h $BACKUP_DIR/vault-${STAMP}.snap.enc | cut -f1)"
+    else
+        echo "  ⚠ Vault container introuvable — skip"
+    fi
 fi
 
 # ─── 4. Caddy data (certs Let's Encrypt — critique) ─────────────────────────
 echo "→ Backup Caddy certs..."
-docker run --rm \
-    --volumes-from translog_caddy \
-    -v "$BACKUP_DIR:/backup" \
-    busybox tar -czf - -C /data . | encrypt > "$BACKUP_DIR/caddy-${STAMP}.tar.gz.enc"
-echo "  ✔ $(du -h $BACKUP_DIR/caddy-${STAMP}.tar.gz.enc | cut -f1)"
+CADDY_CID=$(swarm_cid caddy)
+if [ -n "$CADDY_CID" ]; then
+    docker run --rm \
+        --volumes-from "$CADDY_CID" \
+        -v "$BACKUP_DIR:/backup" \
+        busybox tar -czf - -C /data . | encrypt > "$BACKUP_DIR/caddy-${STAMP}.tar.gz.enc"
+    echo "  ✔ $(du -h $BACKUP_DIR/caddy-${STAMP}.tar.gz.enc | cut -f1)"
+else
+    echo "  ⚠ Caddy container introuvable — skip"
+fi
 
 # ─── 5. Rétention locale 7j ─────────────────────────────────────────────────
 find "$BACKUP_DIR" -type f -name '*.enc' -mtime +7 -delete
