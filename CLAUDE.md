@@ -98,6 +98,19 @@ Phases Workflow-driven livrées (2026-04-19) :
 - Phase 4 : +28 tests unit sur nouveaux services (total 561/561 PASS)
 - Phase 5 : [docs/WORKFLOWS.md](docs/WORKFLOWS.md)
 
+Suite Notifications cycle de vie voyageur (2026-04-26) :
+- `test/unit/notification/lifecycle-templates.spec.ts` (10 tests)
+- `test/unit/notification/lifecycle-notification.listener.spec.ts` (9 tests)
+- `test/unit/scheduler/trip-reminder.scheduler.spec.ts` (9 tests)
+
+Phase Notifications cycle de vie livrée (2026-04-26) :
+- 5 events DomainEvent (TRIP_PUBLISHED, TICKET_ISSUED enrichi, TRIP_BOARDING_OPENED, TRIP_REMINDER_DUE, TRIP_COMPLETED)
+- LifecycleNotificationListener fan-out multi-canal IN_APP + WhatsApp/SMS fallback + Email selon NotificationPreference
+- TripReminderScheduler @Cron 30 min, seuils PlatformConfig `[24, 6, 1]` (J-1/H-6/H-1) éditables, idempotent via Notification.metadata
+- Templates fr+en intégrés dans `lifecycle-templates.ts` (XSS-escape) — fallback fr pour les 7 autres locales
+- 4 clés PlatformConfig admin éditables (killswitch, seuils JSON, fenêtre scan, fan-out cap)
+- 28 tests unit verts ; régression couverte (announcement-trip + trip.service)
+
 UI restantes (backlog, documentées mais non implémentées) :
 - Actions ticket no-show/rebook dans la fiche ticket admin (endpoints exposés côté back-end)
 - TripDetailDialog incident panel (suspend/cancel/declare-delay) admin

@@ -19,11 +19,14 @@ export interface TypedDomainEvent<T = Record<string, unknown>> {
 
 export const EventTypes = {
   // Trip
-  TRIP_STARTED:           'trip.started',
+  TRIP_PUBLISHED:         'trip.published',         // créé / mis en vente
+  TRIP_BOARDING_OPENED:   'trip.boarding.opened',   // entrée en BOARDING (notif passagers)
+  TRIP_STARTED:           'trip.started',           // départ effectif (IN_PROGRESS)
   TRIP_PAUSED:            'trip.paused',
   TRIP_RESUMED:           'trip.resumed',
   TRIP_DELAYED:           'trip.delayed',
-  TRIP_COMPLETED:         'trip.completed',
+  TRIP_REMINDER_DUE:      'trip.reminder.due',      // émis par TripReminderScheduler (T-Xh)
+  TRIP_COMPLETED:         'trip.completed',         // arrivée destination → bon séjour
   TRIP_CANCELLED:         'trip.cancelled',
 
   // Ticket

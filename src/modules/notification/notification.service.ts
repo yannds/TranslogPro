@@ -166,22 +166,11 @@ export class NotificationService {
   }
 
   // ─── Domain event handlers ────────────────────────────────────────────────────
-
-  @OnEvent(EventTypes.TICKET_ISSUED)
-  async onTicketIssued(payload: { tenantId: string; ticketId: string; phone?: string; userId?: string }) {
-    this.logger.debug(`Notification trigger: ticket issued ${payload.ticketId}`);
-    if (payload.phone) {
-      await this.send({
-        tenantId:   payload.tenantId,
-        userId:     payload.userId,
-        phone:      payload.phone,
-        channel:    'SMS',
-        templateId: 'ticket.confirmed',
-        body:       `Votre billet a été confirmé. Réf: ${payload.ticketId}`,
-        metadata:   { ticketId: payload.ticketId },
-      });
-    }
-  }
+  //
+  // TICKET_ISSUED + TRIP_BOARDING_OPENED + TRIP_COMPLETED + TRIP_REMINDER_DUE +
+  // TRIP_PUBLISHED sont gérés par LifecycleNotificationListener (multi-canal,
+  // i18n, fan-out passagers). Ce service expose uniquement les hooks ad-hoc
+  // (SOS, retard) et l'API send().
 
   @OnEvent(EventTypes.INCIDENT_SOS)
   async onSos(payload: { tenantId: string; incidentId: string; tripId?: string; dispatchPhone?: string }) {

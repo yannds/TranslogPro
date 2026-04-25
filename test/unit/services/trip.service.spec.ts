@@ -58,7 +58,10 @@ function makePrisma(trip = TRIP_BASE): jest.Mocked<PrismaService> {
     if (hasOverlap) return Promise.resolve(null);
     return Promise.resolve(trip);
   });
-  return {
+  // create() est désormais wrappée dans un $transaction qui émet TRIP_PUBLISHED.
+  // Le mock $transaction passe le client Prisma lui-même comme `tx`, donc
+  // tx.trip.create délègue au mock principal.
+  const prismaObj: any = {
     trip: {
       create:    jest.fn().mockResolvedValue(trip),
       findMany:  jest.fn().mockResolvedValue([trip]),
@@ -77,7 +80,9 @@ function makePrisma(trip = TRIP_BASE): jest.Mocked<PrismaService> {
         user: { id: 'user-drv-01', name: 'Chauffeur Test', email: 'drv@example.com' },
       }]),
     },
-  } as unknown as jest.Mocked<PrismaService>;
+  };
+  prismaObj.$transaction = jest.fn().mockImplementation(async (fn: any) => fn(prismaObj));
+  return prismaObj as unknown as jest.Mocked<PrismaService>;
 }
 
 function makeWorkflow(): jest.Mocked<WorkflowEngine> {

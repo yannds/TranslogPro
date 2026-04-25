@@ -626,6 +626,59 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
     validate: numberInRange(0, 72),
   },
 
+  // ── Notifications cycle de vie voyageur (TripReminderScheduler) ────────
+  // Active l'envoi multi-canal (SMS/WA/Email/IN_APP) sur les 5 évènements :
+  // achat billet, ouverture trajet, ouverture embarquement, rappel pré-voyage,
+  // arrivée. Désactivable globalement (ex: incident provider Twilio).
+  {
+    key:      'notifications.lifecycle.enabled',
+    type:     'boolean',
+    default:  true,
+    label:    'platformConfig.notifLifecycleEnabled',
+    help:     'platformConfig.notifLifecycleEnabledHelp',
+    group:    'platformConfig.groupNotifications',
+  },
+  // Seuils (heures avant départ) auxquels TripReminderScheduler émet un
+  // TRIP_REMINDER_DUE par trip + ticket. Ordre quelconque, dédupliqué.
+  // Défaut [24, 6, 1] = J-1, H-6, H-1.
+  {
+    key:      'notifications.reminders.hoursBeforeDeparture',
+    type:     'json',
+    default:  [24, 6, 1],
+    label:    'platformConfig.notifReminderThresholds',
+    help:     'platformConfig.notifReminderThresholdsHelp',
+    group:    'platformConfig.groupNotifications',
+    validate: (v) => {
+      if (!Array.isArray(v)) return 'platformConfig.errInvalidArray';
+      if (v.length === 0)    return 'platformConfig.errInvalidArray';
+      const allValid = v.every(n => typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= 720);
+      return allValid ? null : 'platformConfig.errInvalidArray';
+    },
+  },
+  // Fenêtre (en minutes) du scan cron : un seuil de 24h sera "tiré" pour
+  // tout trip dont le départ est dans [24h - window/2, 24h + window/2].
+  // Défaut 15 min — doit être ≥ fréquence du @Cron (15 min).
+  {
+    key:      'notifications.reminders.scanWindowMinutes',
+    type:     'number',
+    default:  15,
+    label:    'platformConfig.notifReminderScanWindow',
+    help:     'platformConfig.notifReminderScanWindowHelp',
+    group:    'platformConfig.groupNotifications',
+    validate: numberInRange(5, 120),
+  },
+  // Limite de fan-out par tir (sécurité anti-spam si erreur de filtre).
+  // Si un cron-tick veut envoyer + de N notifs sur un seul trip → log + skip.
+  {
+    key:      'notifications.reminders.maxRecipientsPerTrip',
+    type:     'number',
+    default:  500,
+    label:    'platformConfig.notifReminderMaxRecipients',
+    help:     'platformConfig.notifReminderMaxRecipientsHelp',
+    group:    'platformConfig.groupNotifications',
+    validate: numberInRange(1, 10_000),
+  },
+
   // ── Routage routier ─────────────────────────────────────────────────────
   // Active le calcul de distance via API externe (Google Maps ou Mapbox).
   // Désactivé par défaut — aucun appel externe en dev/staging sans clé Vault.

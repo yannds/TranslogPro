@@ -57,15 +57,18 @@ describe('AnnouncementTripListener', () => {
     };
   }
 
-  it('TRIP_STARTED → annonce BOARDING priority 5, scope gare origine', async () => {
+  it('TRIP_BOARDING_OPENED → annonce BOARDING priority 5, scope gare origine', async () => {
     const { announcements, eventBus } = makeDeps();
-    await eventBus.emit(EventTypes.TRIP_STARTED, evt(EventTypes.TRIP_STARTED, { tripId: 'trip-1' }));
+    await eventBus.emit(
+      EventTypes.TRIP_BOARDING_OPENED,
+      evt(EventTypes.TRIP_BOARDING_OPENED, { tripId: 'trip-1' }),
+    );
     expect(announcements.createAuto).toHaveBeenCalledWith(tenantId, expect.objectContaining({
       type: 'BOARDING',
       priority: 5,
       tripId: 'trip-1',
       stationId: 'st-brz',
-      sourceEventId: 'evt-trip.started',
+      sourceEventId: 'evt-trip.boarding.opened',
     }));
     const call = (announcements.createAuto as jest.Mock).mock.calls[0][1];
     expect(call.title).toMatch(/Embarquement/);

@@ -13,6 +13,9 @@ Les derniers ajouts frontend ont introduit **3 namespaces i18n** actuellement pr
 | `vouchers.*`    | ~30 | Page admin Vouchers (émission, filtrage, annulation)  | [PageVouchers.tsx](../frontend/components/pages/PageVouchers.tsx) — ajouté 2026-04-19 |
 | `nav.business_rules`, `nav.vouchers` | 2 | Entrées nav admin | [nav.config.ts](../frontend/lib/navigation/nav.config.ts) — ajouté 2026-04-19 |
 | `platformKpi.*` | ~80 | Dashboard KPI SaaS plateforme (7 sections : North Star, MRR, retention, transactional, adoption détaillée, activation, strategic) | [fr.ts](../frontend/lib/i18n/locales/fr.ts), [en.ts](../frontend/lib/i18n/locales/en.ts) — ajouté 2026-04-20 |
+| `platformConfig.notif*`, `groupNotifications` | 9 | Section "Notifications voyageur" PlatformConfig (toggles, seuils rappel, fenêtre scan, fan-out cap) | [fr.ts](../frontend/lib/i18n/locales/fr.ts), [en.ts](../frontend/lib/i18n/locales/en.ts) — ajouté 2026-04-26 |
+
+> **Note backend (2026-04-26)** : les templates de notifications cycle-de-vie voyageur (`notif.ticket.purchased`, `notif.trip.published`, `notif.trip.boarding`, `notif.trip.reminder`, `notif.trip.arrived`) sont rendus **côté backend** dans [lifecycle-templates.ts](../src/modules/notification/lifecycle-templates.ts) en fr+en. Les 7 autres locales tombent automatiquement en français via `LifecycleNotificationListener.resolveLanguage()`. Pour les ajouter : étendre la const `TEMPLATES` dans `lifecycle-templates.ts` (et le type `Lang`) avec les nouvelles entrées.
 
 Total : **~220 clés** × 6 locales = ~1320 lignes à ajouter.
 

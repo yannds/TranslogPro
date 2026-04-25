@@ -68,18 +68,37 @@ export class TripService {
       }
     }
 
-    return this.prisma.trip.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.create({
+        data: {
+          tenantId,
+          routeId:             dto.routeId,
+          busId:               dto.busId,
+          driverId:            dto.driverId,
+          departureScheduled:  departure,
+          arrivalScheduled:    arrival,
+          seatingMode,
+          status:              TripState.PLANNED,
+          version:             0,
+        },
+      });
+
+      const event: DomainEvent = {
+        id:            uuidv4(),
+        type:          EventTypes.TRIP_PUBLISHED,
         tenantId,
-        routeId:             dto.routeId,
-        busId:               dto.busId,
-        driverId:            dto.driverId,
-        departureScheduled:  departure,
-        arrivalScheduled:    arrival,
-        seatingMode,
-        status:              TripState.PLANNED,
-        version:             0,
-      },
+        aggregateId:   trip.id,
+        aggregateType: 'Trip',
+        payload: {
+          tripId:             trip.id,
+          routeId:            trip.routeId,
+          departureScheduled: trip.departureScheduled.toISOString(),
+        },
+        occurredAt: new Date(),
+      };
+      await this.eventBus.publish(event, tx as unknown as Parameters<typeof this.eventBus.publish>[1]);
+
+      return trip;
     });
   }
 
@@ -376,7 +395,7 @@ export class TripService {
     const trip = await this.findOne(tenantId, tripId);
 
     const eventTypeMap: Record<string, string> = {
-      [TripState.BOARDING]:           EventTypes.TRIP_STARTED,
+      [TripState.BOARDING]:           EventTypes.TRIP_BOARDING_OPENED,
       [TripState.IN_PROGRESS]:        EventTypes.TRIP_STARTED,
       [TripState.IN_PROGRESS_PAUSED]: EventTypes.TRIP_PAUSED,
       [TripState.IN_PROGRESS_DELAYED]:EventTypes.TRIP_DELAYED,

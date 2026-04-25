@@ -117,7 +117,10 @@ export class AnnouncementTripListener implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.eventBus.subscribe(EventTypes.TRIP_STARTED,   (e) => this.onTripEvent(e, 'BOARDING'));
+    // BOARDING gare diffusée à l'ouverture d'embarquement (TRIP_BOARDING_OPENED).
+    // TRIP_STARTED reste pour le départ effectif → pas d'announcement gare distincte
+    // (le quai est libéré, plus utile).
+    this.eventBus.subscribe(EventTypes.TRIP_BOARDING_OPENED, (e) => this.onTripEvent(e, 'BOARDING'));
     this.eventBus.subscribe(EventTypes.TRIP_DELAYED,   (e) => this.onTripEvent(e, 'DELAY'));
     this.eventBus.subscribe(EventTypes.TRIP_CANCELLED, (e) => this.onTripEvent(e, 'CANCELLATION'));
     this.eventBus.subscribe(EventTypes.TRIP_COMPLETED, (e) => this.onTripEvent(e, 'ARRIVAL'));

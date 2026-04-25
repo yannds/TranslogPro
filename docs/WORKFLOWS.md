@@ -114,6 +114,34 @@ Permission requise : `control.trip.override_policy.tenant`. Nullables — fallba
 
 ---
 
+## Notifications cycle de vie voyageur (2026-04-26)
+
+Le bus d'événements (Outbox) émet 5 événements clés du cycle de vie qui sont fan-outés multi-canal aux passagers :
+
+| Event | Émis par | Handler | Audience |
+|---|---|---|---|
+| `trip.published` | `TripService.create()` | [LifecycleNotificationListener](../src/modules/notification/lifecycle-notification.listener.ts) | Customers FREQUENT/VIP du tenant (phoneVerified) |
+| `ticket.issued` | `TicketingService` (caisse, portail, rebook) | LifecycleListener | Le passager du billet |
+| `trip.boarding.opened` | `TripService.transition` (PLANNED → BOARDING) | LifecycleListener + AnnouncementTripListener (gare) | Tous tickets actifs du trip |
+| `trip.reminder.due` | [TripReminderScheduler](../src/modules/scheduler/trip-reminder.scheduler.ts) (cron 30 min) | LifecycleListener | Tous tickets actifs du trip |
+| `trip.completed` | `TripService.transition` (... → COMPLETED) | LifecycleListener + AnnouncementTripListener (gare) | Tous tickets actifs du trip |
+
+**Canaux** : pour chaque destinataire on dispatche `IN_APP` (toujours, si userId connu) + `WhatsApp` avec fallback `SMS` (si phone) + `Email` (si email présent). Les préférences `NotificationPreference` sont consultées avant chaque envoi externe.
+
+**Idempotency rappels** : `TripReminderScheduler.alreadyEmitted()` consulte `Notification.metadata.tripId + hoursThreshold` avant d'émettre — un rappel n'est jamais dupliqué pour le même couple (trip, seuil).
+
+**Config tenant/plateforme** (PlatformConfig — éditable depuis l'admin) :
+- `notifications.lifecycle.enabled` (bool, défaut `true`) : killswitch global
+- `notifications.reminders.hoursBeforeDeparture` (number[], défaut `[24, 6, 1]`) : seuils J-1, H-6, H-1
+- `notifications.reminders.scanWindowMinutes` (number, défaut `15`) : tolérance autour de chaque seuil
+- `notifications.reminders.maxRecipientsPerTrip` (number, défaut `500`) : cap fan-out anti-emballement
+
+**Templates** : 5 templates × 2 langues (fr, en) dans [lifecycle-templates.ts](../src/modules/notification/lifecycle-templates.ts). Les 7 autres locales tombent en français via `resolveLanguage()`.
+
+**Observabilité** : chaque `Notification` créée a `templateId`, `metadata.tripId`, `metadata.ticketId`, `metadata.hoursThreshold` — utilisé pour debug, l'idempotency et l'analytics post-hoc.
+
+---
+
 ## Invariants à respecter
 
 - Tout nouveau blueprint → ajouter à `DEFAULT_WORKFLOW_CONFIGS` + entry dans `AGGREGATE_TABLE_MAP` + run `npx prisma migrate dev` si nouvelle table + run backfill `backfillDefaultWorkflows` pour les tenants existants.
