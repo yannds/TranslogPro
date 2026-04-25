@@ -65,23 +65,28 @@ fi
 # ─── 2. Build images (api + web + caddy) ─────────────────────────────────────
 header "[2/12] Build images"
 
-# Web : --build-arg explicit (Vite ne lit pas .env.prod via compose, faut forcer)
-docker build \
-    --build-arg VITE_PLATFORM_BASE_DOMAIN="${PLATFORM_BASE_DOMAIN}" \
-    --build-arg VITE_API_URL="${PUBLIC_APP_URL}" \
-    -f ../../frontend/Dockerfile.prod \
-    -t translog_web:1.0.0 \
-    ../../frontend/ 2>&1 | tail -3 || fail "Web build failed"
+# CI/CD : SKIP_BUILD=1 → images viennent déjà de GHCR (pull + tag localement avant deploy)
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+    warn "SKIP_BUILD=1 — images supposées présentes (CI/CD GHCR)"
+else
+    # Web : --build-arg explicit (Vite ne lit pas .env.prod via compose, faut forcer)
+    docker build \
+        --build-arg VITE_PLATFORM_BASE_DOMAIN="${PLATFORM_BASE_DOMAIN}" \
+        --build-arg VITE_API_URL="${PUBLIC_APP_URL}" \
+        -f ../../frontend/Dockerfile.prod \
+        -t translog_web:1.0.0 \
+        ../../frontend/ 2>&1 | tail -3 || fail "Web build failed"
 
-# API + Caddy via compose (build context différent)
-docker compose --env-file .env.prod -f $COMPOSE_FILE build --pull api caddy 2>&1 | tail -3 \
-    || fail "API/Caddy build failed"
+    # API + Caddy via compose (build context différent)
+    docker compose --env-file .env.prod -f $COMPOSE_FILE build --pull api caddy 2>&1 | tail -3 \
+        || fail "API/Caddy build failed"
+fi
 
-# Vérification
+# Vérification présence images (que SKIP_BUILD ou pas)
 for img in translog_api:1.0.0 translog_web:1.0.0 prod-caddy:latest; do
-    docker image inspect "$img" >/dev/null 2>&1 || fail "Image manquante : $img"
+    docker image inspect "$img" >/dev/null 2>&1 || fail "Image manquante : $img — pull GHCR + retag (cf. CI/CD) ou unset SKIP_BUILD"
 done
-ok "Images buildées : translog_api, translog_web, prod-caddy"
+ok "Images OK : translog_api, translog_web, prod-caddy"
 
 # ─── 3. Cleanup compose résiduel + bridge translog_net ──────────────────────
 header "[3/12] Cleanup ancien Compose + bridge"

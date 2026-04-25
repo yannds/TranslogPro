@@ -135,6 +135,11 @@ jobs:
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Ensure target directories exist on VPS
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "mkdir -p ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod ${{ secrets.VPS_DEPLOY_PATH }}/prisma/seeds ${{ secrets.VPS_DEPLOY_PATH }}/frontend"
+
       - name: Sync infra/prod (sans .env.prod)
         run: |
           rsync -avz --delete \
@@ -145,11 +150,20 @@ jobs:
             --exclude='bind9/zones/tsig.key' \
             ./infra/prod/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/infra/prod/
-          # Sync seeds + Dockerfile + frontend/.env.production
+
+      - name: Sync prisma seeds + schema
+        run: |
           rsync -avz ./prisma/seeds/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/prisma/seeds/
-          rsync -avz ./Dockerfile ./prisma/schema.prisma \
+          rsync -avz ./prisma/schema.prisma \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/prisma/
+
+      - name: Sync Dockerfile + frontend env
+        run: |
+          rsync -avz ./Dockerfile \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/
+          rsync -avz ./frontend/.env.production ./frontend/.dockerignore ./frontend/Dockerfile.prod \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/frontend/ 2>/dev/null || true
 
       - name: Pull images + redeploy stack
         run: |
@@ -171,8 +185,8 @@ jobs:
             docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:${{ needs.build-push.outputs.tag }} translog_web:1.0.0
             docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CADDY }}:${{ needs.build-push.outputs.tag }} prod-caddy:latest
 
-            # Re-lance le script autonome (idempotent — tous les fixes intégrés)
-            bash scripts/04-deploy.sh
+            # Re-lance le script autonome avec SKIP_BUILD=1 (images viennent de GHCR)
+            SKIP_BUILD=1 bash scripts/04-deploy.sh
           EOF
 
       - name: External healthcheck
