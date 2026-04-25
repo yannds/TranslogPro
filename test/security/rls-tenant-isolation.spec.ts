@@ -12,10 +12,10 @@ describe('[SECURITY] RLS & Tenant Isolation — Static Analysis', () => {
   // ── Public tenant paths whitelist ──────────────────────────────────────────
 
   const PUBLIC_TENANT_PATHS = [
-    /^\/api\/v1\/tenants\/([^/]+)\/stations\/([^/]+)\/display/,
-    /^\/api\/v1\/tenants\/([^/]+)\/buses\/([^/]+)\/display/,
-    /^\/api\/v1\/tenants\/([^/]+)\/parcels\/track\//,
-    /^\/api\/v1\/public\/([^/]+)\/report$/,
+    /^\/api\/tenants\/([^/]+)\/stations\/([^/]+)\/display/,
+    /^\/api\/tenants\/([^/]+)\/buses\/([^/]+)\/display/,
+    /^\/api\/tenants\/([^/]+)\/parcels\/track\//,
+    /^\/api\/public\/([^/]+)\/report$/,
   ];
 
   it('should NOT match authenticated routes as public', () => {

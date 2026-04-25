@@ -7,10 +7,10 @@ const PUBLIC_TENANT_PATHS = [
   /^\/api\/tenants\/([^/]+)\/config$/,
   /^\/api\/tenants\/([^/]+)\/company$/,
   /^\/api\/tenants\/([^/]+)\/brand$/,
-  /^\/api\/v1\/tenants\/([^/]+)\/stations\/([^/]+)\/display/,
-  /^\/api\/v1\/tenants\/([^/]+)\/buses\/([^/]+)\/display/,
-  /^\/api\/v1\/tenants\/([^/]+)\/parcels\/track\//,
-  /^\/api\/v1\/public\/([^/]+)\/report$/,
+  /^\/api\/tenants\/([^/]+)\/stations\/([^/]+)\/display/,
+  /^\/api\/tenants\/([^/]+)\/buses\/([^/]+)\/display/,
+  /^\/api\/tenants\/([^/]+)\/parcels\/track\//,
+  /^\/api\/public\/([^/]+)\/report$/,
 ];
 
 @Injectable()

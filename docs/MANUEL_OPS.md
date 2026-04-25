@@ -517,17 +517,52 @@ iptables -A INPUT ... && netfilter-persistent save`).
 À l'avenir : préférer la console KVM pour modifier iptables, garder une session SSH
 "filet" ouverte, ou utiliser `ufw allow/deny` au lieu d'iptables direct.
 
-### 8.3 — Hardening restant (Vagues 2-3)
+### 8.3 — Hardening Vague 2 appliqué (audit 2026-04-25)
+
+| ID | Action | Vérif |
+|---|---|---|
+| MED-9 | Vault AppRole `secret_id_ttl=720h`, `secret_id_bound_cidrs=10.0.2.0/24`, `token_bound_cidrs=10.0.2.0/24` | `vault read auth/approle/role/translog-api` |
+| MED-12 | CSP appliqué sur frontend (apex/admin/tenants) via snippet Caddy `(translog_headers)` | `curl -I` → header `content-security-policy` non vide |
+| MED-7 | CAA records BIND9 (`@ IN CAA 0 issue "letsencrypt.org"` + iodef) — dans `bind9/zones/translog.db` | `dig CAA translog.dsyann.info` |
+| MED-8 | BIND9 zones perms `750/640/600` ownership uid 53:53 (uid `bind` du container) | `ls -la bind9/zones/` |
+| MED-10 | Caddy block `path /.env /.git* /.DS_Store /package.json ... /node_modules*` retourne 404 | `curl https://translog.dsyann.info/.env` → 404 |
+| MED-13 | `pg_hba.conf` : `host all all 10.0.2.0/24 scram-sha-256` + `host all all 10.0.0.0/8 scram-sha-256` (au lieu de `host all all all`) | `docker exec ... cat /var/lib/postgresql/data/pg_hba.conf` |
+| HIGH-5 | Containers non-root : Postgres uid=999, Redis uid=999, MinIO uid=1000 (Vault/Caddy/nginx → Vague 3 cap_add) | `docker exec $cid id` |
+| HIGH-6 | Fix 2 tests security KO (`briefing-isolation`, `rls-tenant-isolation`) — mock `prisma.transact` + regex `PUBLIC_TENANT_PATHS` sans `/v1/` | `npm run test:security` 207/207 |
+
+### 8.4 — Pièges connus Vague 2
+
+⚠️ **Bind mount Caddyfile : `sed -i` casse le mount**
+
+`sed -i` crée un nouveau fichier (rename atomic) → l'inode change → le bind mount Docker pointe sur l'ancien inode → le container voit l'ancienne version. Workaround :
+```bash
+sed 's/old/new/' file > /tmp/x && cat /tmp/x > file  # cat > preserve inode
+```
+
+⚠️ **Caddy reload via API : 403 origin**
+
+`docker exec $CID caddy reload` peut échouer avec "client is not allowed to access from origin 'http://localhost:2019'". Force restart via `docker service scale translog_caddy=0; sleep 3; docker service scale translog_caddy=1`.
+
+⚠️ **Vault non-root : `unable to set CAP_SETFCAP effective capability: Operation not permitted`**
+
+Image Vault essaie de set capability au boot. Nécessite `cap_add: [IPC_LOCK, SETFCAP]` dans le docker-stack file (modif du source, pas via `docker service update`). Si tentative `docker service update --user 100`, le service crash et Swarm rollback automatiquement → **Vault devient sealed après chaque restart**, requiert unseal manuel avec les 3 keys.
+
+⚠️ **Permission denied sur `/var/lib/bind/tsig.key`**
+
+Le user `bind` dans le container BIND9 a uid=**53**, pas 1001. Quand on fait MED-8 (`chmod 600 + chown`), il faut `chown 53:53` (pas 1001). Sinon BIND9 crash en boot. Workaround : `chown 53:53 zones/*`.
+
+⚠️ **`docker service update --force` en host port mode bloque sur "host-mode port already in use"**
+
+Avec `mode: host` sur ports 80/443/53, Swarm ne peut pas tenter un rolling update (2 containers ne peuvent pas binder le même port host). Solution : `docker service scale X=0; sleep 3; docker service scale X=1`.
+
+### 8.5 — Hardening restant (Vague 3)
 
 Voir le rapport complet `audit_2026-04-25/RAPPORT_AUDIT_PROD.md` :
 - HIGH-4 RLS Postgres + middleware NestJS `app.current_tenant_id`
-- HIGH-5 6 containers Docker en non-root (web/caddy/postgres/redis/minio/vault/bind9)
-- HIGH-6 Fix 2 tests security KO (briefing-isolation, rls-tenant-isolation)
-- MED-7 DNSSEC + CAA records BIND9
-- MED-9 Vault AppRole TTL + CIDR bound
-- MED-10 nginx fallback 404 sur `.env`/`.git`/etc.
-- MED-12 CSP frontend dans Caddyfile
-- MED-13 Restreindre `pg_hba.conf` aux réseaux overlay Docker
+- HIGH-5 (suite) Vault uid=100 + cap_add IPC_LOCK/SETFCAP, Caddy/nginx + cap_add NET_BIND_SERVICE
+- LOW-18 MFA enrollment forcé pour TENANT_ADMIN
+- Refacto theme bootstrap script en external (retirer `'unsafe-inline'` CSP)
+- Investigation filtre Hostinger DDoS qui drop trafic MTN Congo (AS37463) — ticket Hostinger
 
 ---
 

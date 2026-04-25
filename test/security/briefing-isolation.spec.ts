@@ -71,6 +71,7 @@ function makeBriefingPrisma(opts: {
     trip:     { findFirst: jest.fn().mockResolvedValue({ id: 'trip-a', driverId: 'staff-a' }) },
     staff:    { findFirst: jest.fn().mockResolvedValue({ id: 'staff-a' }) },
     briefingEquipmentType: { findMany: jest.fn().mockResolvedValue([]) },
+    transact: jest.fn().mockImplementation((cb: (tx: unknown) => unknown) => cb({})),
   };
 }
 
