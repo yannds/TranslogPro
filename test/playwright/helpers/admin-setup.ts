@@ -95,6 +95,10 @@ const ALL_TENANT_PERMISSIONS = [
   'data.safety_alert.create.tenant',
   // Cashier
   'control.cashier.manage.tenant',
+  'data.cashier.open.own',
+  'data.cashier.transaction.own',
+  'data.cashier.close.agency',
+  'data.cashier.read.global',
   // Manifest
   'data.manifest.read.agency',
   'control.manifest.close.agency',
