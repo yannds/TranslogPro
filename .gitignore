@@ -78,3 +78,6 @@ test/playwright/.auth/
 test/playwright/.report/
 test-results/
 playwright-report/
+
+# Audit logs (locaux uniquement, contiennent UUIDs / IPs)
+audit_2026-*/

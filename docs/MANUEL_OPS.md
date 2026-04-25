@@ -492,10 +492,199 @@ bash scripts/rollback.sh
 - [ ] `npm audit fix --force` backend + frontend
 - [ ] Backup vault snapshot offline (USB / coffre)
 - [ ] Test restore sur VPS staging
+- [ ] `apt-mark showhold` revue trimestrielle (notamment docker-ce, kernel) puis upgrade en fenêtre maintenance
+
+### 8.1 — Hardening appliqué (audit 2026-04-25)
+
+| ID | Action | Vérif |
+|---|---|---|
+| CRIT-1 | Port 3000 (Easypanel HTTP brut) bloqué via `iptables DOCKER-USER` (panel.dsyann.info HTTPS continue de marcher via Caddy) | `curl --connect-timeout 4 http://72.61.108.160:3000/` doit timeout ; `curl https://panel.dsyann.info/` doit 200 |
+| CRIT-2 | `fail2ban` installé (jail SSH 3 essais / 600s / ban 1h) + `PermitRootLogin prohibit-password` + `X11Forwarding no` | `fail2ban-client status sshd` ; `grep -E "^(PermitRootLogin\|X11)" /etc/ssh/sshd_config` |
+| HIGH-3 | Vault audit device file activé : `/vault/logs/audit.log` (HMAC-SHA256 sur tokens et secrets) | `vault audit list` non-vide |
+| MED-8 | Permissions BIND9 zones : `750/640/600` au lieu de `777` | `ls -la /opt/TranslogPro/infra/prod/bind9/zones/` |
+| MED-11 | Paquets non-Docker / non-kernel mis à jour (63 → 9 pendants, holds explicites) | `apt list --upgradable` < 15 |
+
+### 8.2 — Pièges connus
+
+⚠️ **`apt install iptables-persistent` désinstalle UFW automatiquement** (conflit Debian).
+Sur Ubuntu 24.04, UFW pose un default INPUT=DROP via ses chains custom. Quand UFW est
+désinstallé, ses chains disparaissent mais le default DROP reste, **et tout le trafic
+entrant est bloqué** → SSH timeout → VPS isolé.
+
+Recovery via console KVM Hostinger (`iptables -P INPUT ACCEPT && iptables -F INPUT &&
+iptables -A INPUT ... && netfilter-persistent save`).
+
+À l'avenir : préférer la console KVM pour modifier iptables, garder une session SSH
+"filet" ouverte, ou utiliser `ufw allow/deny` au lieu d'iptables direct.
+
+### 8.3 — Hardening restant (Vagues 2-3)
+
+Voir le rapport complet `audit_2026-04-25/RAPPORT_AUDIT_PROD.md` :
+- HIGH-4 RLS Postgres + middleware NestJS `app.current_tenant_id`
+- HIGH-5 6 containers Docker en non-root (web/caddy/postgres/redis/minio/vault/bind9)
+- HIGH-6 Fix 2 tests security KO (briefing-isolation, rls-tenant-isolation)
+- MED-7 DNSSEC + CAA records BIND9
+- MED-9 Vault AppRole TTL + CIDR bound
+- MED-10 nginx fallback 404 sur `.env`/`.git`/etc.
+- MED-12 CSP frontend dans Caddyfile
+- MED-13 Restreindre `pg_hba.conf` aux réseaux overlay Docker
 
 ---
 
-## 9. Quand ça plante
+## 9. Workflow de release (CI/CD GitHub Actions)
+
+### 9.1 — Logique : 2 triggers séparés (volontaire)
+
+```yaml
+on:
+  workflow_dispatch:        # Manuel (Run workflow UI)
+  push:
+    tags:
+      - 'v*.*.*'            # Tag → deploy auto
+```
+
+| Action | Effet | Trigger |
+|---|---|---|
+| `git push origin main` | Tests CI seulement (jest unit + frontend build + gitleaks + npm audit) | `test.yml` |
+| `git tag v1.0.1 && git push --tags` | **Build + push GHCR + deploy auto sur VPS** | `deploy.yml` |
+| Actions UI → Run workflow | Idem (déploie depuis main) | `deploy.yml` (workflow_dispatch) |
+
+### 9.2 — Pourquoi PAS auto-deploy sur push main ?
+
+- Évite déploiement par erreur (commit "wip", "test", merge cassé)
+- Sépare clairement "code commité" et "version livrée"
+- Tag = marqueur d'historique pour rollback (`v1.0.1` → `v1.0.0`)
+- Permet de pousser plusieurs commits et déployer une fois tout cohérent
+
+### 9.3 — Flow standard d'une release
+
+```bash
+# 1. Code + tests locaux
+npm test
+npm run build          # backend
+cd frontend && npm run build && cd ..
+
+# 2. Commit + push (déclenche les TESTS CI seulement)
+git add -A
+git commit -m "feat(billing): nouvelle facturation pro-rata"
+git push origin main
+
+# 3. Vérifier que le run "Tests" est vert sur GitHub Actions
+#    https://github.com/yannds/TranslogPro/actions/workflows/test.yml
+
+# 4. Tag + push tags → déclenche le DÉPLOIEMENT
+git tag v1.0.1
+git push --tags
+
+# 5. Suivre le run "Deploy production" sur Actions
+#    https://github.com/yannds/TranslogPro/actions/workflows/deploy.yml
+```
+
+### 9.4 — Conventions de versioning (semver)
+
+```
+MAJOR.MINOR.PATCH
+  │     │     └── Bug fix sans changement d'API (ex: 1.2.3 → 1.2.4)
+  │     └──────── Nouvelle feature compatible (ex: 1.2.3 → 1.3.0)
+  └────────────── Breaking change (ex: 1.2.3 → 2.0.0)
+```
+
+### 9.5 — Hotfix urgent (skipper la séquence normale)
+
+```bash
+# Sur main, fix + commit
+git commit -am "fix(critical): patch incident production"
+git push origin main
+
+# Tag patch immédiat
+git tag v1.0.2
+git push --tags
+# → CI/CD déploie en ~5 min
+```
+
+### 9.6 — Rollback en cas de release foireuse
+
+**Option A — Rollback service au précédent tag** (rapide) :
+```bash
+ssh root@72.61.108.160 'docker service update --image translog_api:1.0.0 translog_api'
+# Idem pour translog_web et translog_caddy
+```
+
+**Option B — Re-déployer un ancien tag** :
+- Actions UI → Run workflow → entre `tag` = `v1.0.0` → Run
+
+**Option C — Urgence totale** (gmp prend le relais) :
+```bash
+ssh root@72.61.108.160 'bash /opt/TranslogPro/infra/prod/scripts/rollback.sh'
+```
+
+---
+
+## 10. Architecture CI/CD : push-based vs pull-based
+
+### Mode actuel (push-based, GitHub Actions → VPS)
+
+```
+[Mac local] ──git push──▶ [GitHub] ──CI/CD──▶ [VPS]
+                              │              ▲
+                              │   1. build   │
+                              │   2. push    │
+                              ▼              │
+                        [GHCR registry] ─────┘  3. SSH pull + deploy
+```
+
+- **Push-based** : GitHub Actions SSH vers le VPS et exécute `04-deploy.sh`
+- Trigger : tag push ou clic UI
+- Sécurité : SSH key dédiée déploiement, scope minimum
+- Pré-requis : VPS accessible depuis internet sur 22 (mais filtré par IP GitHub Actions optionnel)
+
+### Mode alternatif (pull-based, GitOps)
+
+```
+[Mac local] ──git push──▶ [GitHub] ◄──poll──[VPS agent]
+                                              │
+                                              ▼
+                                       docker stack deploy
+```
+
+Le VPS héberge un agent (ex: **Watchtower**, **Flux**, **ArgoCD**) qui :
+- **Poll** GitHub toutes les X minutes
+- Détecte un nouveau tag/commit
+- Pull les images depuis GHCR
+- Re-deploy le stack
+
+**Pros pull-based** :
+- ✅ **Sécurité** : pas de SSH inbound depuis internet (port 22 fermé totalement)
+- ✅ **Source of truth** : l'état Git est l'état prod (réconciliation auto)
+- ✅ **Auto-recovery** : si VPS reboot, l'agent re-synchronise tout seul
+- ✅ **Audit** : historique complet dans Git (qui a déployé quoi quand)
+
+**Cons pull-based** :
+- ❌ Agent supplémentaire à maintenir (mémoire CPU + monitoring)
+- ❌ Latence de polling (1-15 min selon config)
+- ❌ Plus complexe : webhooks possibles mais ouvre un port HTTP (genre 9000)
+- ❌ Migration depuis push-based actuel = effort initial
+
+**Outils possibles** :
+| Outil | Niveau | Complexité | Use case |
+|---|---|---|---|
+| **Watchtower** | Container update auto | ⭐ Trivial | Petit projet, 1 service |
+| **GitHub Actions self-hosted runner** | Runner sur le VPS qui exécute le workflow | ⭐⭐ Moyen | Hybride simple |
+| **Flux CD** | GitOps complet | ⭐⭐⭐⭐ Élevé | Cluster k8s/Swarm avancé |
+| **ArgoCD** | GitOps + UI graphique | ⭐⭐⭐⭐⭐ Très élevé | Production sérieuse multi-env |
+
+### Quand passer au pull-based ?
+
+- Si tu fermes le port 22 au monde et veux quand même déployer
+- Si plusieurs serveurs / multi-env (staging + prod)
+- Si l'équipe grandit (plusieurs devs qui tag)
+- Si tu veux 0 SSH outbound depuis CI
+
+**Pour TransLog Pro aujourd'hui** : push-based actuel est **adapté** (1 VPS, 1 dev, releases manuelles via tag). Pas besoin de basculer tant que tu n'as pas un de ces besoins.
+
+---
+
+## 11. Quand ça plante
 
 1. **Lis les logs** : `docker service logs translog_<service> --since 10m | tail -50`
 2. **Status** : `docker stack ps translog --no-trunc`
