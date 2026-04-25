@@ -133,6 +133,14 @@ export interface AuthUserDto {
    */
   mfaEnabled:       boolean;
   /**
+   * Indique que l'utilisateur a un rôle haut-privilège (ex: TENANT_ADMIN
+   * via permission `control.iam.audit.tenant` ou `control.platform.manage.tenant`)
+   * mais n'a pas encore enrôlé son MFA. Le frontend doit alors rediriger
+   * vers /account/mfa-enrollment et bloquer les actions sensibles tant que
+   * MFA n'est pas activé. Conforme NIST SP 800-63B AAL2.
+   */
+  mustEnrollMfa: boolean;
+  /**
    * Indique qu'un admin a forcé la rotation du mot de passe au prochain
    * login (Account.forcePasswordChange). Le frontend affiche alors
    * automatiquement l'écran /account/security.
@@ -827,6 +835,18 @@ export class AuthService {
 
     const prefs = ((fullUser?.preferences ?? user.preferences) as Record<string, unknown> | null) ?? {};
     const mfaEnabled = fullUser?.mfaEnabled ?? user.mfaEnabled ?? false;
+    const permissions = user.role?.permissions?.map(p => p.permission) ?? [];
+
+    // LOW-18 — MFA enrollment forcé pour les rôles haut-privilège
+    // On code contre les permissions (pas les noms de rôle) car les rôles
+    // sont configurables par tenant. Toute permission qui donne accès à
+    // l'audit IAM ou à la gestion plateforme déclenche la contrainte.
+    const isHighPrivilege =
+      permissions.includes('control.iam.audit.tenant') ||
+      permissions.includes('control.iam.manage.tenant') ||
+      permissions.includes('control.platform.manage.tenant') ||
+      permissions.includes('control.tenant.plan.change.tenant');
+    const mustEnrollMfa = !mfaEnabled && user.userType === 'STAFF' && isHighPrivilege;
 
     return {
       id:               user.id,
@@ -841,13 +861,14 @@ export class AuthService {
       staffId:          staff?.id ?? null,
       agencyId:         staff?.agencyId ?? null,
       enabledModules,
-      permissions:      user.role?.permissions?.map(p => p.permission) ?? [],
+      permissions,
       onboardingCompletedAt: tenant?.onboardingCompletedAt ? tenant.onboardingCompletedAt.toISOString() : null,
       businessActivity:      tenant?.businessActivity ?? null,
       subscriptionStatus:    subscription?.status ?? null,
       locale:           (prefs['locale']   as string | undefined) ?? null,
       timezone:         (prefs['timezone'] as string | undefined) ?? null,
       mfaEnabled,
+      mustEnrollMfa,
       mustChangePassword: credAccount?.forcePasswordChange ?? false,
     };
   }
