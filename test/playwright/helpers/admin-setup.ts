@@ -34,7 +34,9 @@ const ALL_TENANT_PERMISSIONS = [
   'data.driver.rest.own',
   // Trips & Tickets
   'control.trip.manage.tenant',
+  'data.trip.read.tenant',
   'data.trip.read.agency',
+  'data.trip.read.own',
   'data.trip.update.agency',
   'data.trip.report.own',
   'control.ticket.issue.agency',
