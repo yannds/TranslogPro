@@ -1,7 +1,60 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-24 (Refonte briefing QHSE — 7 sprints, 6 commits).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-25 (Chantier audit endpoints — 11 sprints, ~50 commits).
+
+### Chantier audit endpoints + couverture E2E (2026-04-24 → 2026-04-25)
+
+Décliné en 11 sprints — passage de 358 routes "montées" à **380 + 53 endpoints E2E
+testés**, 9 bugs prod corrigés, fixture Playwright admin réutilisable créée.
+
+**Sprints livrés** :
+- **S1** : Hot-fix `/api/v1/` fantôme (510 occurrences supprimées dans FE+mobile+tests+docs)
+  + bug SubscriptionGuard (préfixes whitelist plateforme)
+- **S2** : Composant `<UploadScanDialog>` DRY i18n 8 locales + harmonisation 11 endpoints
+  upload-url backend (8 endpoints fixés : SignedUrl mal déplié)
+- **S3** : 9 tables ad-hoc → DataTableMaster (fleet-docs, trips, impersonation,
+  routeDetail, driverRest, bulkImport, peakPeriods, seasonality, pricingSimulator)
+- **S4** : Fixture Playwright admin (perms+modules+workflow+businessConfig+signIn) +
+  tickets / parcels / sav / notifications (9 tests)
+- **S5** : Templates studio (7 tests) + page CRM Campaigns from-scratch (5 tests) +
+  driver-profile trainings (5 tests) — bug controller actor manquant fixé
+- **S6** : 8 modules backend (qhse, crew-briefing, garage, cashier, tracking,
+  flight-deck, public-portal, traveler-scan) — 13 tests
+- **S7** : Documents PDF (9 endpoints) + analytics + staff assignments (3 tests)
+- **S8** : Safety+Feedback+Workflow-studio+Shipment (4 tests) +
+  **6 bugs OutboxService.publish(null) corrigés en cascade**
+- **S9** : Incident + Manifest + fleet/crm/driver remediation misc (5 tests)
+- **S10** : Fixture super-admin plateforme + platform-analytics + platform-plans (2 tests)
+- **S11** : 4 dernières pages B-layout → DataTableMaster (Vouchers, TenantTaxes,
+  TenantFareClasses, DriverScoring)
+
+**Métrique finale** :
+- Unit : **1104 / 1104 PASS** (+ aucune régression sur 18 mois d'historique)
+- Playwright E2E-API : **53 / 53 PASS** (Sprints 4-10, ~30s exécution complète)
+- TS frontend : **57 erreurs préexistantes** inchangées (warnings unused vars)
+- Audit endpoints : `routes=515  mounted=380  likely=8  orphan=127  missing_be=50`
+
+**Bugs prod découverts uniquement par Playwright** :
+1. SubscriptionGuard `/api/v1/...` fantôme (tenant suspendu ne pouvait pas se reconnecter ni payer)
+2. SignedUrl unwrap (8 endpoints upload-url retournaient un objet au lieu d'une string)
+3. completeTraining controller n'injectait pas `@CurrentUser` → SYSTEM_ACTOR (formation jamais clôturable)
+4. OutboxService.publish(null) dans 7 services (qhse, fleet-docs ×2, sav refund, crew-briefing ×2, ticketing, shipment) → 500 sur tout publish d'event métier
+5. WorkflowConfig manquait pour action `REQUEST_REFUND` Ticket CONFIRMED→REFUND_PENDING (mais via flow no-show ça marche)
+
+**Helper Playwright `setupAdminTenant`** (réutilisable Sprints 4+) :
+agency + Staff + ~50 perms + WorkflowConfig + TenantBusinessConfig + modules + signIn → 1 ligne.
+
+**Composant `<UploadScanDialog>`** DRY (i18n 8 locales) — pattern presigned URL utilisé
+par 7 modules (fleet-docs, driver-profile, qhse, garage, templates, fleet, portal-admin).
+
+**Backlog non bloquant** :
+- Page Tracking GPS map live (besoin lib carto, scope ~3-4h)
+- i18n complète des nouvelles clés CRM Campaigns / Vouchers / TenantTaxes / etc.
+  dans 6 locales (ar, ktu, ln, pt, wo, es) — fr+en livrés
+- 50 endpoints `missing_be` du §3 audit : code FE référence des routes inexistantes
+  (héritage avant fix v1, à nettoyer)
+
 
 ### Refonte briefing pré-voyage QHSE (2026-04-24)
 
