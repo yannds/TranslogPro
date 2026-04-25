@@ -2121,6 +2121,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "history": "History",
     "noHistory": "No rest periods in the last",
     "lastDays": "days.",
+    "searchPeriods": "Search a period (source, status)…",
     "start": "Start",
     "end": "End",
     "duration": "Duration",

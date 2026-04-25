@@ -1974,6 +1974,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "history": "Historique",
     "noHistory": "Aucune période de repos sur les",
     "lastDays": "derniers jours.",
+    "searchPeriods": "Rechercher une période (source, statut)…",
     "start": "Début",
     "end": "Fin",
     "duration": "Durée",

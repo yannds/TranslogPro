@@ -1783,6 +1783,7 @@ const ln: Record<string, Record<string, string>> = {
     "history": "Makambo ya kala",
     "noHistory": "Eleko ya kopema moko te na",
     "lastDays": "mikolo ya nsuka.",
+    "searchPeriods": "Luka eleko (source, status)…",
     "start": "Ebandeli",
     "end": "Nsuka",
     "duration": "Ntango",

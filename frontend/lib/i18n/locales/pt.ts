@@ -1846,6 +1846,7 @@ const pt: Record<string, Record<string, string>> = {
     "history": "Histórico",
     "noHistory": "Nenhum período de descanso nos últimos",
     "lastDays": "dias.",
+    "searchPeriods": "Pesquisar um período (origem, estado)…",
     "start": "Início",
     "end": "Fim",
     "duration": "Duração",

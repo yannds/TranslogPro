@@ -1765,6 +1765,7 @@ const ktu: Record<string, Record<string, string>> = {
     "history": "Makambu ya kala",
     "noHistory": "Ntango ya kopema mosi te na",
     "lastDays": "mikolo ya nsima.",
+    "searchPeriods": "Luka ntango (source, status)…",
     "start": "Kubanda",
     "end": "Nsuka",
     "duration": "Ntango",

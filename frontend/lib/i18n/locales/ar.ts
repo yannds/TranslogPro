@@ -1712,6 +1712,7 @@ const ar: Record<string, Record<string, string>> = {
     "history": "السجل",
     "noHistory": "لا توجد فترات راحة في آخر",
     "lastDays": "أيام.",
+    "searchPeriods": "بحث عن فترة (المصدر، الحالة)…",
     "start": "البداية",
     "end": "النهاية",
     "duration": "المدة",

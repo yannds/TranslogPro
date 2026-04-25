@@ -1779,6 +1779,7 @@ const wo: Record<string, Record<string, string>> = {
     "history": "Taariik",
     "noHistory": "Amul diir ngëneel ci",
     "lastDays": "bés yi mujj.",
+    "searchPeriods": "Seet diir (source, status)…",
     "start": "Tambali",
     "end": "Noppi",
     "duration": "Diir",

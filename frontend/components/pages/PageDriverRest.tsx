@@ -26,6 +26,7 @@ import { apiGet, apiPost, apiPatch } from '../../lib/api';
 import { Badge }    from '../ui/Badge';
 import { Button }   from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 // ─── Types API ────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,53 @@ export function PageDriverRest() {
       : 0;
     return { total: closed.length, totalMin, violations };
   }, [filtered, config]);
+
+  // ── Colonnes DataTableMaster ──────────────────────────────────────────────
+  const restColumns: Column<RestPeriod>[] = [
+    {
+      key: 'startedAt', header: t('driverRest.start'), sortable: true,
+      cellRenderer: (v) => <span className="t-text">{fmtDateTime(v as string)}</span>,
+      csvValue: (v) => new Date(v as string).toISOString(),
+    },
+    {
+      key: 'endedAt', header: t('driverRest.end'), sortable: true,
+      cellRenderer: (v) => v
+        ? <span className="t-text">{fmtDateTime(v as string)}</span>
+        : <span className="italic t-text-2">{t('driverRest.inProgress')}</span>,
+      csvValue: (v) => v ? new Date(v as string).toISOString() : '',
+    },
+    {
+      key: 'id', header: t('driverRest.duration'), sortable: false, width: '120px',
+      cellRenderer: (_v, row) => (
+        <span className="t-text font-mono">{fmtDuration(periodDurationMin(row))}</span>
+      ),
+      csvValue: (_v, row) => fmtDuration(periodDurationMin(row)),
+    },
+    {
+      key: 'source', header: t('driverRest.source'), sortable: true, width: '130px',
+      cellRenderer: (v) => (
+        <span className="t-text-2">{SOURCE_LABEL[v as string] ? t(SOURCE_LABEL[v as string]) : (v as string)}</span>
+      ),
+      csvValue: (v) => SOURCE_LABEL[v as string] ? t(SOURCE_LABEL[v as string]) : (v as string),
+    },
+    {
+      key: 'tenantId', header: t('driverRest.statusLabel'), sortable: false, width: '160px',
+      cellRenderer: (_v, row) => {
+        const dur   = periodDurationMin(row);
+        const isOk  = !config || dur >= config.minRestMinutes;
+        const isEnd = !!row.endedAt;
+        if (!isEnd)  return <Badge variant="warning">{t('driverRest.inProgress')}</Badge>;
+        return isOk
+          ? <Badge variant="success">{t('driverRest.compliant')}</Badge>
+          : <Badge variant="danger">{t('driverRest.insufficient')}</Badge>;
+      },
+      csvValue: (_v, row) => {
+        const dur = periodDurationMin(row);
+        const isOk = !config || dur >= config.minRestMinutes;
+        return !row.endedAt ? 'IN_PROGRESS' : (isOk ? 'COMPLIANT' : 'INSUFFICIENT');
+      },
+    },
+  ];
 
   const activeElapsedMin = compliance?.activeRestPeriod
     // tick forces re-eval ; la variable est utilisée implicitement via Date.now()
@@ -334,49 +382,17 @@ export function PageDriverRest() {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="p-8 text-center t-text-2 text-sm">
-            {t('driverRest.noHistory')} {range} {t('driverRest.lastDays')}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/40 text-xs uppercase tracking-wide t-text-2">
-                <tr>
-                  <th className="text-left px-4 py-2 font-semibold">{t('driverRest.start')}</th>
-                  <th className="text-left px-4 py-2 font-semibold">{t('driverRest.end')}</th>
-                  <th className="text-left px-4 py-2 font-semibold">{t('driverRest.duration')}</th>
-                  <th className="text-left px-4 py-2 font-semibold">{t('driverRest.source')}</th>
-                  <th className="text-left px-4 py-2 font-semibold">{t('driverRest.statusLabel')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(p => {
-                  const dur   = periodDurationMin(p);
-                  const isOk  = !config || dur >= config.minRestMinutes;
-                  const isEnd = !!p.endedAt;
-                  return (
-                    <tr key={p.id} className="border-t t-border">
-                      <td className="px-4 py-2 t-text">{fmtDateTime(p.startedAt)}</td>
-                      <td className="px-4 py-2 t-text">
-                        {p.endedAt ? fmtDateTime(p.endedAt) : <span className="italic t-text-2">{t('driverRest.inProgress')}</span>}
-                      </td>
-                      <td className="px-4 py-2 t-text font-mono">{fmtDuration(dur)}</td>
-                      <td className="px-4 py-2 t-text-2">{SOURCE_LABEL[p.source] ? t(SOURCE_LABEL[p.source]) : p.source}</td>
-                      <td className="px-4 py-2">
-                        {!isEnd
-                          ? <Badge variant="warning">{t('driverRest.inProgress')}</Badge>
-                          : isOk
-                            ? <Badge variant="success">{t('driverRest.compliant')}</Badge>
-                            : <Badge variant="danger">{t('driverRest.insufficient')}</Badge>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <DataTableMaster<RestPeriod>
+            columns={restColumns}
+            data={filtered}
+            defaultSort={{ key: 'startedAt', dir: 'desc' }}
+            searchPlaceholder={t('driverRest.searchPeriods')}
+            emptyMessage={`${t('driverRest.noHistory')} ${range} ${t('driverRest.lastDays')}`}
+            exportFormats={['csv']}
+            exportFilename="driver-rest-periods"
+          />
+        </div>
       </section>
     </div>
   );
