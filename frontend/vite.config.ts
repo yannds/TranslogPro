@@ -10,6 +10,14 @@ export default defineConfig({
       registerType:    'autoUpdate',
       injectRegister:  'auto',
       workbox: {
+        // À chaque déploiement, le nouveau SW saute la phase "waiting"
+        // (skipWaiting) et prend le contrôle de tous les onglets ouverts
+        // (clientsClaim). Sans ces deux flags, l'ancien SW continue à
+        // servir l'ancien `index.html` précaché jusqu'à ce que TOUS les
+        // onglets du site soient fermés — comportement WTF pour les users
+        // qui voient "j'ai déployé mais le site n'a pas changé".
+        skipWaiting:  true,
+        clientsClaim: true,
         // Fichiers statiques mis en pre-cache. On évite les gros assets bin.
         globPatterns: ['**/*.{js,css,html,svg,woff2,png,jpg,webp}'],
         // PageTemplateStudio est lazy-loadé et pèse actuellement 12.7 MB à
