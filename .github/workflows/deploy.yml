@@ -161,6 +161,21 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "mkdir -p ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod ${{ secrets.VPS_DEPLOY_PATH }}/prisma/seeds ${{ secrets.VPS_DEPLOY_PATH }}/frontend"
 
+      - name: Drift check Caddyfile + BIND9 zone
+        # Garde-fou : si quelqu'un a modifié Caddyfile ou zone BIND9 sur le VPS
+        # sans sync dans le repo, le rsync va écraser ses modifs. On compare
+        # les md5 AVANT le rsync et on log un warning si drift détecté.
+        # Ne fait pas fail le deploy (le repo reste source de vérité), mais
+        # alerte explicitement pour éviter les pertes silencieuses.
+        run: |
+          for f in caddy/Caddyfile bind9/zones/translog.db; do
+            host_md5=$(ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "md5sum ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod/$f 2>/dev/null | cut -d' ' -f1" || echo "")
+            repo_md5=$(md5sum ./infra/prod/$f 2>/dev/null | cut -d' ' -f1 || echo "")
+            if [ -n "$host_md5" ] && [ -n "$repo_md5" ] && [ "$host_md5" != "$repo_md5" ]; then
+              echo "::warning::Drift détecté sur $f — VPS:$host_md5 vs repo:$repo_md5 (le rsync va écraser la version VPS)"
+            fi
+          done
+
       - name: Sync infra/prod (sans .env.prod)
         run: |
           rsync -avz --delete \
