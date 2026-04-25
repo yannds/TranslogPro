@@ -24,6 +24,7 @@ import { Checkbox } from '../ui/Checkbox';
 import { Badge } from '../ui/Badge';
 import { FormFooter } from '../ui/FormFooter';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 interface TenantFareClass {
   id:              string;
@@ -89,6 +90,37 @@ export function PageTenantFareClasses() {
     }
   };
 
+  const fareColumns: Column<TenantFareClass>[] = [
+    { key: 'code', header: t('tenantSettings.fareClasses.code'), sortable: true,
+      cellRenderer: (v) => <span className="font-mono text-xs">{String(v)}</span> },
+    { key: 'label', header: t('tenantSettings.fareClasses.label'), sortable: true },
+    { key: 'multiplier', header: t('tenantSettings.fareClasses.multiplier'), sortable: true, align: 'right',
+      cellRenderer: (v) => <span>×{(v as number).toFixed(2)}</span> },
+    { key: 'color', header: t('tenantSettings.fareClasses.color'), sortable: false,
+      cellRenderer: (v) => v ? (
+        <span className="inline-flex items-center gap-2 text-xs">
+          <span aria-hidden className="inline-block w-4 h-4 rounded-full border border-gray-300 dark:border-gray-600" style={{ backgroundColor: v as string }} />
+          <span className="font-mono">{v as string}</span>
+        </span>
+      ) : <span className="text-xs text-gray-400">—</span> },
+    { key: 'sortOrder', header: t('tenantSettings.fareClasses.sortOrder'), sortable: true, align: 'right' },
+    { key: 'enabled', header: t('tenantSettings.fareClasses.status'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-1 flex-wrap">
+          <Badge variant={row.enabled ? 'success' : 'outline'}>
+            {row.enabled ? t('common.enabled') : t('common.disabled')}
+          </Badge>
+          {row.isSystemDefault && <Badge variant="outline" title={t('tenantSettings.fareClasses.systemBadgeHelp')}>{t('tenantSettings.fareClasses.systemBadge')}</Badge>}
+        </div>
+      ) },
+  ];
+
+  const fareRowActions: RowAction<TenantFareClass>[] = [
+    { label: t('common.edit'), icon: <Pencil className="w-4 h-4" aria-hidden />, onClick: openEdit },
+    { label: t('common.delete'), icon: <Trash2 className="w-4 h-4" aria-hidden />, onClick: (row) => remove(row.id),
+      hidden: (row) => row.isSystemDefault, danger: true },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <header className="flex items-center justify-between">
@@ -109,79 +141,18 @@ export function PageTenantFareClasses() {
 
       {error && <ErrorAlert error={error} />}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.code')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.label')}</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.multiplier')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.color')}</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.sortOrder')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.fareClasses.status')}</th>
-              <th className="px-3 py-2 text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('common.loading')}</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('tenantSettings.fareClasses.empty')}</td></tr>
-            )}
-            {rows.map(row => (
-              <tr key={row.id} className="border-t border-gray-200 dark:border-gray-700">
-                <td className="px-3 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{row.code}</td>
-                <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{row.label}</td>
-                <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">
-                  ×{row.multiplier.toFixed(2)}
-                </td>
-                <td className="px-3 py-2">
-                  {row.color ? (
-                    <span className="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-                      <span
-                        aria-hidden="true"
-                        className="inline-block w-4 h-4 rounded-full border border-gray-300 dark:border-gray-600"
-                        style={{ backgroundColor: row.color }}
-                      />
-                      <span className="font-mono">{row.color}</span>
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{row.sortOrder}</td>
-                <td className="px-3 py-2 space-x-1">
-                  <Badge variant={row.enabled ? 'success' : 'outline'}>
-                    {row.enabled ? t('common.enabled') : t('common.disabled')}
-                  </Badge>
-                  {row.isSystemDefault && (
-                    <Badge variant="outline" title={t('tenantSettings.fareClasses.systemBadgeHelp')}>
-                      {t('tenantSettings.fareClasses.systemBadge')}
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right space-x-1">
-                  {canManage ? (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label={t('common.edit')}>
-                        <Pencil className="w-4 h-4" aria-hidden="true" />
-                      </Button>
-                      {!row.isSystemDefault && (
-                        <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
-                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{t('common.readOnly')}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTableMaster<TenantFareClass>
+        columns={fareColumns}
+        data={rows}
+        loading={loading}
+        rowActions={canManage ? fareRowActions : undefined}
+        onRowClick={canManage ? openEdit : undefined}
+        defaultSort={{ key: 'sortOrder', dir: 'asc' }}
+        searchPlaceholder={t('tenantSettings.fareClasses.searchPlaceholder')}
+        emptyMessage={t('tenantSettings.fareClasses.empty')}
+        exportFormats={['csv']}
+        exportFilename="fare-classes"
+      />
 
       {editing && (
         <Dialog

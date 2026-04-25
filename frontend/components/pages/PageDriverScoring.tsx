@@ -27,6 +27,7 @@ import { Card, CardHeader, CardContent } from '../ui/Card';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
+import DataTableMaster, { type Column } from '../DataTableMaster';
 
 interface DriverScoreRow {
   id:                string;
@@ -75,6 +76,35 @@ export function PageDriverScoring() {
 
   const podium = (rows ?? []).slice(0, 3);
   const rest   = (rows ?? []).slice(3);
+
+  const leaderboardColumns: Column<DriverScoreRow>[] = [
+    {
+      key: 'staffId', header: t('driverScoring.driver'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div>
+          <p className="font-semibold t-text">{row.staff.user.name ?? row.staff.user.email}</p>
+          <p className="text-xs t-text-3">{row.staff.user.email}</p>
+        </div>
+      ),
+      csvValue: (_v, row) => row.staff.user.name ?? row.staff.user.email,
+    },
+    {
+      key: 'overallScore', header: t('driverScoring.overall'), sortable: true, align: 'right', width: '120px',
+      cellRenderer: (v) => <span className="tabular-nums font-bold t-text">{(v as number).toFixed(1)}</span>,
+    },
+    {
+      key: 'punctualityScore', header: t('driverScoring.punctuality'), sortable: true, align: 'right', width: '110px',
+      cellRenderer: (v) => <span className="tabular-nums t-text-2">{Math.round((v as number) * 100)}%</span>,
+    },
+    {
+      key: 'incidents', header: t('driverScoring.incidents'), sortable: true, align: 'right', width: '100px',
+      cellRenderer: (v) => <span className="tabular-nums t-text-2">{String(v)}</span>,
+    },
+    {
+      key: 'tripsCompleted', header: t('driverScoring.trips'), sortable: true, align: 'right', width: '100px',
+      cellRenderer: (v) => <span className="tabular-nums t-text-2">{String(v)}</span>,
+    },
+  ];
 
   return (
     <main className="p-4 sm:p-6 space-y-6" role="main" aria-label={t('driverScoring.title')}>
@@ -127,41 +157,19 @@ export function PageDriverScoring() {
       )}
 
       {!loading && rest.length > 0 && (
-        <section aria-labelledby="leaderboard-title" className="t-card-bordered rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800">
-            <h2 id="leaderboard-title" className="text-xs font-semibold t-text-2 uppercase tracking-wider">
-              {t('driverScoring.ranking')}
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" role="table">
-              <thead className="bg-slate-50 dark:bg-slate-900/50">
-                <tr>
-                  <th className="text-left px-4 py-2 t-text-2 font-medium">#</th>
-                  <th className="text-left px-4 py-2 t-text-2 font-medium">{t('driverScoring.driver')}</th>
-                  <th className="text-right px-4 py-2 t-text-2 font-medium">{t('driverScoring.overall')}</th>
-                  <th className="text-right px-4 py-2 t-text-2 font-medium hidden md:table-cell">{t('driverScoring.punctuality')}</th>
-                  <th className="text-right px-4 py-2 t-text-2 font-medium hidden md:table-cell">{t('driverScoring.incidents')}</th>
-                  <th className="text-right px-4 py-2 t-text-2 font-medium hidden lg:table-cell">{t('driverScoring.trips')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rest.map((row, idx) => (
-                  <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-900/30">
-                    <td className="px-4 py-2 font-bold tabular-nums t-text-2">{idx + 4}</td>
-                    <td className="px-4 py-2">
-                      <p className="font-semibold t-text">{row.staff.user.name ?? row.staff.user.email}</p>
-                      <p className="text-xs t-text-3">{row.staff.user.email}</p>
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums font-bold t-text">{row.overallScore.toFixed(1)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums t-text-2 hidden md:table-cell">{Math.round(row.punctualityScore * 100)}%</td>
-                    <td className="px-4 py-2 text-right tabular-nums t-text-2 hidden md:table-cell">{row.incidents}</td>
-                    <td className="px-4 py-2 text-right tabular-nums t-text-2 hidden lg:table-cell">{row.tripsCompleted}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <section aria-labelledby="leaderboard-title">
+          <h2 id="leaderboard-title" className="text-xs font-semibold t-text-2 uppercase tracking-wider mb-3">
+            {t('driverScoring.ranking')}
+          </h2>
+          <DataTableMaster<DriverScoreRow>
+            columns={leaderboardColumns}
+            data={rest}
+            defaultSort={{ key: 'overallScore', dir: 'desc' }}
+            searchPlaceholder={t('driverScoring.searchPlaceholder')}
+            emptyMessage={t('driverScoring.empty')}
+            exportFormats={['csv']}
+            exportFilename="driver-scoring-leaderboard"
+          />
         </section>
       )}
     </main>

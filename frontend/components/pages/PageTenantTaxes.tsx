@@ -23,6 +23,7 @@ import { Checkbox } from '../ui/Checkbox';
 import { Badge } from '../ui/Badge';
 import { FormFooter } from '../ui/FormFooter';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 interface TenantTax {
   id:        string;
@@ -88,6 +89,35 @@ export function PageTenantTaxes() {
     refetch();
   };
 
+  const taxColumns: Column<TenantTax>[] = [
+    { key: 'code', header: t('tenantSettings.taxes.code'), sortable: true,
+      cellRenderer: (v) => <span className="font-mono text-xs">{String(v)}</span> },
+    { key: 'label', header: t('tenantSettings.taxes.label'), sortable: true },
+    { key: 'rate', header: t('tenantSettings.taxes.rate'), sortable: true, align: 'right',
+      cellRenderer: (v, row) => <span>{row.kind === 'PERCENT' ? `${((v as number) * 100).toFixed(2)}%` : (v as number).toFixed(2)}</span> },
+    { key: 'base', header: t('tenantSettings.taxes.base'), sortable: true,
+      cellRenderer: (v) => <span className="text-gray-600 dark:text-gray-300">{String(v)}</span> },
+    { key: 'appliesTo', header: t('tenantSettings.taxes.appliesTo'), sortable: false,
+      cellRenderer: (v) => <span className="text-gray-600 dark:text-gray-300">{(v as string[]).join(', ')}</span>,
+      csvValue: (v) => (v as string[]).join('|') },
+    { key: 'enabled', header: t('tenantSettings.taxes.status'), sortable: true,
+      cellRenderer: (_v, row) => (
+        <div className="flex items-center gap-1 flex-wrap">
+          <Badge variant={row.enabled ? 'success' : 'outline'}>
+            {row.enabled ? t('common.enabled') : t('common.disabled')}
+          </Badge>
+          {row.isSystemDefault && <Badge variant="outline" title={t('tenantSettings.taxes.systemBadgeHelp')}>{t('tenantSettings.taxes.systemBadge')}</Badge>}
+          {!row.appliedToPrice && <Badge variant="outline" title={t('tenantSettings.taxes.notAppliedHelp')}>{t('tenantSettings.taxes.notApplied')}</Badge>}
+        </div>
+      ) },
+  ];
+
+  const taxRowActions: RowAction<TenantTax>[] = [
+    { label: t('common.edit'), icon: <Pencil className="w-4 h-4" aria-hidden />, onClick: openEdit },
+    { label: t('common.delete'), icon: <Trash2 className="w-4 h-4" aria-hidden />, onClick: (row) => remove(row.id),
+      hidden: (row) => row.isSystemDefault, danger: true },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <header className="flex items-center justify-between">
@@ -106,71 +136,18 @@ export function PageTenantTaxes() {
 
       {error && <ErrorAlert error={error} />}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.code')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.label')}</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.rate')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.base')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.appliesTo')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('tenantSettings.taxes.status')}</th>
-              <th className="px-3 py-2 text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('common.loading')}</td></tr>
-            )}
-            {!loading && taxes.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">{t('tenantSettings.taxes.empty')}</td></tr>
-            )}
-            {taxes.map(row => (
-              <tr key={row.id} className="border-t border-gray-200 dark:border-gray-700">
-                <td className="px-3 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{row.code}</td>
-                <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{row.label}</td>
-                <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">
-                  {row.kind === 'PERCENT' ? `${(row.rate * 100).toFixed(2)}%` : row.rate.toFixed(2)}
-                </td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.base}</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.appliesTo.join(', ')}</td>
-                <td className="px-3 py-2 space-x-1">
-                  <Badge variant={row.enabled ? 'success' : 'outline'}>
-                    {row.enabled ? t('common.enabled') : t('common.disabled')}
-                  </Badge>
-                  {row.isSystemDefault && (
-                    <Badge variant="outline" title={t('tenantSettings.taxes.systemBadgeHelp')}>
-                      {t('tenantSettings.taxes.systemBadge')}
-                    </Badge>
-                  )}
-                  {!row.appliedToPrice && (
-                    <Badge variant="outline" title={t('tenantSettings.taxes.notAppliedHelp')}>
-                      {t('tenantSettings.taxes.notApplied')}
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right space-x-1">
-                  {canManage ? (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label={t('common.edit')}>
-                        <Pencil className="w-4 h-4" aria-hidden="true" />
-                      </Button>
-                      {!row.isSystemDefault && (
-                        <Button variant="ghost" size="sm" onClick={() => remove(row.id)} aria-label={t('common.delete')}>
-                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{t('common.readOnly')}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTableMaster<TenantTax>
+        columns={taxColumns}
+        data={taxes}
+        loading={loading}
+        rowActions={canManage ? taxRowActions : undefined}
+        onRowClick={canManage ? openEdit : undefined}
+        defaultSort={{ key: 'sortOrder', dir: 'asc' }}
+        searchPlaceholder={t('tenantSettings.taxes.searchPlaceholder')}
+        emptyMessage={t('tenantSettings.taxes.empty')}
+        exportFormats={['csv']}
+        exportFilename="tenant-taxes"
+      />
 
       {editing && (
         <Dialog

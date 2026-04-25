@@ -25,6 +25,7 @@ import { Select } from '../ui/Select';
 import { Badge } from '../ui/Badge';
 import { FormFooter } from '../ui/FormFooter';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
 
 interface Voucher {
   id:             string;
@@ -98,12 +99,56 @@ export function PageVouchers() {
   const cancel = async (v: Voucher) => {
     const reason = window.prompt(t('vouchers.cancelReason'));
     if (!reason) return;
-    // Le backend attend le reason en body — DELETE avec body → utilise POST via endpoint wrapper
     await apiPatch(`/api/tenants/${tenantId}/vouchers/${v.id}/cancel`, { reason });
     refetch();
   };
-  // placeholder lint : apiDelete importé mais on pourrait l'utiliser pour d'autres actions
   void apiDelete;
+
+  // ── Colonnes DataTableMaster ──────────────────────────────────────────────
+  const voucherColumns: Column<Voucher>[] = [
+    {
+      key: 'code', header: t('vouchers.code'), sortable: true,
+      cellRenderer: (v) => <span className="font-mono text-xs">{String(v)}</span>,
+    },
+    {
+      key: 'amount', header: t('vouchers.amount'), sortable: true, align: 'right',
+      cellRenderer: (v, row) => <span>{(v as number).toLocaleString()} {row.currency}</span>,
+    },
+    {
+      key: 'origin', header: t('vouchers.origin'), sortable: true,
+      cellRenderer: (v) => <span>{t(`vouchers.origin.${v}` as const) || (v as string)}</span>,
+    },
+    {
+      key: 'recipientPhone', header: t('vouchers.recipient'), sortable: false,
+      cellRenderer: (_v, row) => <span>{row.recipientPhone ?? row.recipientEmail ?? row.customerId ?? '—'}</span>,
+    },
+    {
+      key: 'usageScope', header: t('vouchers.scope'), sortable: true,
+      cellRenderer: (v) => <span>{t(`vouchers.scope.${v}` as const) || (v as string)}</span>,
+    },
+    {
+      key: 'validityEnd', header: t('vouchers.validityEnd'), sortable: true,
+      cellRenderer: (v) => <span>{new Date(v as string).toLocaleDateString()}</span>,
+    },
+    {
+      key: 'status', header: t('vouchers.statusLabel'), sortable: true,
+      cellRenderer: (v) => (
+        <Badge variant={STATUS_VARIANTS[v as Voucher['status']]}>
+          {t(`vouchers.status.${v}` as const)}
+        </Badge>
+      ),
+    },
+  ];
+
+  const voucherRowActions: RowAction<Voucher>[] = [
+    {
+      label:  t('vouchers.cancelAction'),
+      icon:   <Trash2 className="w-4 h-4" aria-hidden />,
+      onClick: cancel,
+      hidden: (row) => row.status !== 'ISSUED',
+      danger: true,
+    },
+  ];
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -130,46 +175,17 @@ export function PageVouchers() {
 
       {error && <ErrorAlert error={error} />}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.code')}</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">{t('vouchers.amount')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.origin')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.recipient')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.scope')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.validityEnd')}</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{t('vouchers.statusLabel')}</th>
-              <th className="px-3 py-2 text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={8} className="p-6 text-center text-gray-500">{t('common.loading')}</td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-gray-500">{t('vouchers.empty')}</td></tr>}
-            {rows.map(v => (
-              <tr key={v.id} className="border-t border-gray-200 dark:border-gray-700">
-                <td className="px-3 py-2 font-mono text-xs text-gray-900 dark:text-gray-100">{v.code}</td>
-                <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">{v.amount.toLocaleString()} {v.currency}</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{t(`vouchers.origin.${v.origin}` as const) || v.origin}</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{v.recipientPhone ?? v.recipientEmail ?? v.customerId ?? '—'}</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{t(`vouchers.scope.${v.usageScope}` as const) || v.usageScope}</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{new Date(v.validityEnd).toLocaleDateString()}</td>
-                <td className="px-3 py-2">
-                  <Badge variant={STATUS_VARIANTS[v.status]}>{t(`vouchers.status.${v.status}`)}</Badge>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {v.status === 'ISSUED' && (
-                    <Button variant="ghost" size="sm" aria-label={t('vouchers.cancelAction')} onClick={() => cancel(v)}>
-                      <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTableMaster<Voucher>
+        columns={voucherColumns}
+        data={rows}
+        loading={loading}
+        rowActions={voucherRowActions}
+        defaultSort={{ key: 'createdAt', dir: 'desc' }}
+        searchPlaceholder={t('vouchers.searchPlaceholder')}
+        emptyMessage={t('vouchers.empty')}
+        exportFormats={['csv']}
+        exportFilename="vouchers"
+      />
 
       {issueOpen && (
         <Dialog open={issueOpen} onOpenChange={setIssueOpen} title={t('vouchers.issueTitle')} size="xl">
