@@ -69,6 +69,9 @@ function makePrisma(opts: {
       create:   jest.fn(),
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    transact: jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ outboxEvent: { create: jest.fn().mockResolvedValue({}) } }),
+    ),
   } as unknown as PrismaService;
 }
 

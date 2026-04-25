@@ -120,6 +120,9 @@ function makePrisma(opts: {
     briefingEquipmentType: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    transact: jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ outboxEvent: { create: jest.fn().mockResolvedValue({}) } }),
+    ),
   } as unknown as PrismaService;
 }
 
