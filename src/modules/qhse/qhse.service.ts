@@ -801,6 +801,9 @@ export class QhseService {
       payload:       { reportId, ...payload },
       occurredAt:    new Date(),
     };
-    await this.eventBus.publish(event, null);
+    // Outbox pattern : la publication doit être atomique avec l'opération métier.
+    // On enveloppe dans une mini-transaction dédiée à l'écriture de l'événement —
+    // les writes business ont déjà été commitées avant l'appel.
+    await this.prisma.transact(tx => this.eventBus.publish(event, tx));
   }
 }

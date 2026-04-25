@@ -80,6 +80,7 @@ const ALL_TENANT_PERMISSIONS = [
   // QHSE
   'control.qhse.manage.tenant',
   'data.qhse.read.tenant',
+  'data.accident.report.own',
   // Notifications
   'data.notification.read.own',
   // Cashier
