@@ -131,7 +131,7 @@ translog.dsyann.info, *.translog.dsyann.info {
     # Apex translog.dsyann.info → PublicLanding
     # <tenant>.translog.dsyann.info → PortailVoyageur
     handle {
-        reverse_proxy web:80 {
+        reverse_proxy web:8080 {
             header_up X-Tenant-Host {host}
         }
     }

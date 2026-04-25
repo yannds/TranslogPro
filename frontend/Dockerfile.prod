@@ -27,14 +27,15 @@ RUN echo "BUILD ARGS: VITE_PLATFORM_BASE_DOMAIN=[$VITE_PLATFORM_BASE_DOMAIN] VIT
 
 RUN npm run build
 
-# ─── Stage 2 : nginx static ────────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runtime
+# ─── Stage 2 : nginx-unprivileged static (uid 101, port 8080, no cap needed) ──
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
 # SPA config : tout chemin fallback sur index.html (React Router client-side)
+USER root
 RUN rm /etc/nginx/conf.d/default.conf
 COPY <<'EOF' /etc/nginx/conf.d/default.conf
 server {
-    listen 80;
+    listen 8080;
     server_name _;
 
     root /usr/share/nginx/html;
@@ -81,5 +82,8 @@ EOF
 
 COPY --from=builder /dist/frontend /usr/share/nginx/html
 
-EXPOSE 80
+# Retour user nginx (uid 101) — non-root final
+USER nginx
+
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
