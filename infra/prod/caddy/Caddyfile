@@ -153,7 +153,6 @@ translog.dsyann.info, *.translog.dsyann.info {
 
 grafana.translog.dsyann.info {
     import translog_tls_dns
-    import translog_headers
 
     # IMPORTANT : nom complet `translog-obs_grafana` (PAS l'alias court `grafana`).
     # Raison : la stack gmp d'Easypanel expose AUSSI un service avec alias DNS
@@ -169,6 +168,18 @@ grafana.translog.dsyann.info {
         # Grafana Live (WebSocket) sur /api/live/ws
         header_up Connection        {http.request.header.Connection}
         header_up Upgrade           {http.request.header.Upgrade}
+    }
+
+    # Headers de securite minimaux (PAS d'import translog_headers — son CSP est
+    # taille pour le SPA TransLog avec des hashs script specifiques, et bloque
+    # les inline scripts + eval() dont Grafana a besoin pour bootstrapper sa
+    # config et charger ses plugins panels — incident 2026-04-26 : tous les
+    # panels affichaient "Panel plugin not found: stat/timeseries/...". Grafana
+    # envoie deja ses propres CSP/X-Frame-Options/etc. adaptes a lui-meme.
+    header {
+        Strict-Transport-Security  "max-age=63072000; includeSubDomains; preload"
+        Referrer-Policy            "strict-origin-when-cross-origin"
+        -Server
     }
 }
 
