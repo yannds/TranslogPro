@@ -1,7 +1,104 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-26 (Chantier responsive web + finalisation apps mobiles — 5 lots).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-26 (Chantier refonte UX apps mobiles par acteur — 9 lots).
+
+### Chantier refonte UX apps mobiles par acteur (2026-04-26 — soir)
+
+9 lots livrés (~16 commits), refonte profonde des apps mobiles avec dashboards
+et actions dédiés à chaque rôle.
+
+**Lots livrés** :
+
+- **L0** Setup design system : `lucide-react-native@^1.11.0` + composants UX
+  partagés (`ScreenHeader`, `EmptyState`, `Loading`, `SegmentedControl`,
+  `ActionSheet`, `AgencyFilter`) + tabBarIcon mapping global pour les 7 profils
+  (élimine les "flèches grises" par défaut RN).
+
+- **L1** Backend P0 (3 endpoints purement additifs, déployés en prod) :
+  - `GET /platform/analytics/summary` — KPIs SaaS lite mobile (~1 KB) : MRR,
+    DAU/MAU, churn 30j, payments PAST_DUE, support/incidents/DLQ ouverts.
+  - `GET /tenants/:tid/analytics/finance-realtime?period=&agencyId=&stationId=`
+    — CA jour/semaine/mois avec breakdown par méthode de paiement.
+  - `GET /tenants/:tid/trips/live` — trips actifs enrichis avec state
+    ('on-time'|'delayed'|'early'|'arrived'|'suspended') + delayMinutes
+    (signe + magnitude).
+
+- **L2** Super-Admin app distincte (4 tabs : Plateforme · Tenants · Sécurité ·
+  Plus) + fix `portalForUser` (le bug "super-admin voit dashboard tenant" est
+  résolu : détection via userType=PLATFORM_ADMIN, slug=__platform__, ou
+  PLATFORM_HINTS perms). `ChangePasswordScreen` partagé créé et câblé dans
+  tous les stacks.
+
+- **L3a** Admin Teams enrichi avec ActionSheet 4 actions IAM :
+  Suspendre/Réactiver, Reset password (link mode TTL 30min), Reset MFA,
+  Révoquer toutes sessions. Tap card → ouvre ActionSheet.
+
+- **L3b** Admin Trajets J ± 7 (date picker linéaire navigation jour) +
+  AdminLiveScreen (polling 10s sur `/trips/live` avec retards/états +
+  4 chips résumé : En cours / Retard / Embarq. / Suspendu).
+
+- **L3c** AdminFleetScreen — KPIs flotte (Actifs/Maintenance/Hors service)
+  + top 5 véhicules sous-utilisés 7j (utilisation % calculée).
+
+- **L3d** Filtre agence (AgencyFilter) sur AdminLive + AdminTrips, défaut
+  "Toutes les agences", server scope appliqué (manager voit le tenant
+  complet avec filtre par agence).
+
+- **L4** Admin Planning hub (3 sous-vues via SegmentedControl) :
+  - **Calendrier** hebdo grille bus × 7 jours, navigation S ± 8.
+  - **Ressources** : chauffeurs assignés cross-trips de la semaine.
+  - **Repos** : chauffeurs actuellement en pause AETR (durée écoulée).
+  + nouveau endpoint `GET /driver-profile/rest-active` avec scope agency.
+
+- **L5** Admin Finances hub (4 sous-vues) :
+  - **Temps réel** : CA jour/sem/mois avec filtres agence + period radio.
+  - **Audit caisses** : discrepancies + drill par caisse.
+  - **Remboursements** : approbation one-tap.
+  - **Tickets** : breakdown payment + total période.
+
+- **L6** Caissier MyStats (CA généré, vitesse moyenne TX/h, breakdown
+  payment) + Customer ChangePassword entry point. Cashier portal wrappé
+  dans CashierStack (avant : tabs only, pas de stack screens).
+
+- **L7** Customer Vouchers (`Mes bons`) — liste vouchers ACTIVE/REDEEMED
+  via `/vouchers/my` (existant). Code monospace selectable, expiration
+  rouge si dépassée.
+
+**Métriques finales** :
+- Backend : 4 endpoints créés (3 P0 L1 + 1 driver-rest-active L4), purement
+  additifs, zéro impact sur API existante. Tous déployés prod (`docker service
+  update` rolling) et testés via curl 401/200.
+- Mobile : ~30 nouveaux fichiers (5 platform + 5 admin hubs + cashier mystats
+  + customer vouchers + 6 composants UX partagés + ChangePassword + AgencyFilter
+  + ActionSheet + screens enrichis).
+- TypeScript mobile : 0 erreur sur les nouveaux écrans (erreurs préexistantes
+  sur MobileSignatureInput/BriefingScreen restent, hors scope).
+- Vite build frontend : ✅ propre.
+- Unit backend : 1330/1331 PASS — 1 fail sur `ticket-notification.spec.ts`
+  qui référence un fichier `ticket-notification.listener.ts` non-tracké
+  (`?? ` dans git status), donc absent du repo distant et du CI.
+
+**Architecture (philosophie "sobre, pas fouilli")** :
+
+| Profil | Tabs | Hubs / écrans clés |
+|---|---|---|
+| Super-Admin | 4 | Dashboard SaaS · Tenants suspend/reactivate · IAM cross-tenant + Sessions + Audit · Plus |
+| Admin Tenant + Manager | 4 | Bord (8 KPIs) · Trajets (J±7 + filtre agence) · Incidents · Équipes (4 actions IAM) — + 5 hubs nav (Live, Fleet, Planning, Finances, Charts/SAV) |
+| Caissier | 4 | Caisse · Vente · Billets (annulation) · Incident — + MyStats + ChangePassword en stack |
+| Voyageur | 4 | Accueil · Mes docs · SAV · Profil — + Vouchers + ChangePassword en stack |
+| Driver / Station / Quai | 3 chacun | Inchangés (déjà 85-90% OK pré-session) |
+
+**Hors scope assumé** (à venir) :
+- Driver Cabine hub (Check-in/Boarding/Colis/Manifest/EndReport en segmented)
+- Driver Mes heures + Mon scoring + GPS intent
+- Customer bagages tracking + favoris + programme fidélité
+- Gare lost-found UI + display miroir
+- Quai badges visuels + dommage report photo
+- AdminMyActivity field-staff (endpoint `/staff/me/activity` à créer)
+- ChangePassword entry points dans Driver/Station/Quai (écrans Profil
+  pas dédiés mobile, à créer)
+- Maestro happy path tests par profil
 
 ### Chantier responsive web + finalisation apps mobiles (2026-04-26)
 

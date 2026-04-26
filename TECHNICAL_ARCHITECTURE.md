@@ -5,6 +5,32 @@
 
 ## Changelog récent
 
+- **2026-04-26 (soir) : Refonte UX apps mobiles par acteur** (9 lots, ~16 commits).
+  Création d'apps mobiles dédiées par rôle, fini le "Admin générique" pour
+  tout le monde. Setup design system Lucide React Native + composants UX
+  partagés (`ScreenHeader`, `EmptyState`, `Loading`, `SegmentedControl`,
+  `ActionSheet`, `AgencyFilter`). 4 endpoints backend purement additifs
+  (`/platform/analytics/summary`, `/analytics/finance-realtime`, `/trips/live`,
+  `/driver-profile/rest-active`). Fix `portalForUser` : détection super-admin
+  via userType=PLATFORM_ADMIN, slug=__platform__, ou PLATFORM_HINTS perms
+  (le bug "super-admin voit dashboard tenant" est résolu).
+  - **Super-Admin** : app distincte 4 tabs (Plateforme/Tenants/Sécurité/Plus)
+    avec MRR/DAU/MAU/churn, lookup user cross-tenant + reset password/MFA,
+    sessions, audit feed, suspend/reactivate tenant, ChangePassword.
+  - **Admin Tenant + Manager** (même app, scope serveur) : Bord 4 tabs
+    enrichis + 5 hubs nav (AdminLive polling 10s, AdminTrips date picker
+    J±7 + filtre agence, AdminFleet KPIs+sous-utilisés, AdminPlanning
+    Calendrier hebdo+Ressources+Repos, AdminFinances Temps réel+Audit+
+    Refunds+Tickets), AdminTeams ActionSheet 4 actions IAM (Suspend,
+    ResetPassword, ResetMFA, RevokeSessions).
+  - **Caissier** : CashierMyStatsScreen (CA généré + breakdown payment +
+    vitesse TX/h) wrappé dans CashierStack pour ChangePassword.
+  - **Voyageur** : CustomerVouchersScreen (Mes bons), ChangePassword link
+    dans Profil.
+  - **ChangePasswordScreen** partagé câblé dans tous les stacks (point
+    d'entrée UI restant à finaliser pour Driver/Station/Quai).
+  Détails dans TEST_STATUS.md section "Chantier refonte UX apps mobiles".
+
 - **2026-04-26 : Finalisation apps mobiles + responsive web** (5 lots).
   Côté web : 18 grids non-responsives fixées sur 11 pages back-office +
   landing publique, 2 tables HTML brutes wrappées en `overflow-x-auto`,
