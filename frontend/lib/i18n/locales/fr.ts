@@ -646,7 +646,17 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "regeocodeRunning": "Calcul…",
     "regeocodeApply": "Appliquer",
     "regeocodeNoResult": "Aucune adresse trouvée pour ce nom + ville. Vérifiez l'orthographe.",
-    "regeocodeDistance": "Distance par rapport à la position actuelle : ~{km} km"
+    "regeocodeDistance": "Distance par rapport à la position actuelle : ~{km} km",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "mapSectionTitle": "Position géographique",
+    "mapSearchLabel": "Rechercher une adresse",
+    "mapSearchPlaceholder": "Rechercher une adresse, un lieu, une gare…",
+    "mapInteractHint": "Cliquez sur la carte ou déplacez le marqueur pour ajuster les coordonnées.",
+    "mapLoading": "Chargement de la carte Google…",
+    "mapKeyMissing": "La clé navigateur Google Maps n'est pas encore configurée. Saisissez les coordonnées à la main ou demandez à l'admin plateforme de l'ajouter dans Paramètres → Intégrations.",
+    "mapKeyError": "Impossible de récupérer la configuration carte — saisie manuelle des coordonnées disponible.",
+    "mapLoadFailed": "Impossible de charger Google Maps — vérifiez la clé navigateur (restriction par référent HTTP) ou la connexion réseau."
   },
   "shipments": {
     "groupShipments": "Expéditions groupées",

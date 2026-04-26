@@ -10,23 +10,20 @@
  *   DELETE /api/tenants/:tid/stations/:id    409 si référencée
  */
 
-import { useMemo, useState, useCallback, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  MapPin, Plus, Pencil, Trash2, Building2, Link as LinkIcon, Crosshair, Check, X,
+  MapPin, Plus, Pencil, Trash2, Building2, Link as LinkIcon,
 } from 'lucide-react';
 import { useAuth }                          from '../../lib/auth/auth.context';
 import { useI18n }                      from '../../lib/i18n/useI18n';
 import { useFetch }                         from '../../lib/hooks/useFetch';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../../lib/api';
+import { apiPost, apiPatch, apiDelete }     from '../../lib/api';
 import { Badge }                            from '../ui/Badge';
 import { Button }                           from '../ui/Button';
-import { ComboboxEditable, type ComboboxOption } from '../ui/ComboboxEditable';
 import { Dialog }                           from '../ui/Dialog';
 import { ErrorAlert }                       from '../ui/ErrorAlert';
-import { FormFooter }                       from '../ui/FormFooter';
-import { inputClass as inp }                from '../ui/inputClass';
-import { LocationPicker }                   from '../ui/LocationPicker';
 import DataTableMaster, { type Column, type RowAction } from '../DataTableMaster';
+import { StationFormDialog, EMPTY_STATION, type StationDialogValues } from './stations/StationFormDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,231 +47,10 @@ interface StationRow {
   };
 }
 
-interface StationFormValues {
-  name: string;
-  city: string;
-  type: StationType;
-  lat:  string;
-  lng:  string;
-}
-
-const EMPTY_FORM: StationFormValues = {
-  name: '', city: '', type: 'PRINCIPALE', lat: '', lng: '',
-};
-
 function refsCount(c: StationRow['_count']): number {
   if (!c) return 0;
   return c.routesOrigin + c.routesDestination + c.agencies + c.waypoints
        + c.parcelsTo + c.shipmentsTo + c.travelersDropoff;
-}
-
-// ─── Formulaire ───────────────────────────────────────────────────────────────
-
-interface GeoResult { displayName: string; lat: number; lng: number; countryCode: string }
-interface GeoResponse { results: GeoResult[] }
-
-/** Convertit un code pays ISO alpha-2 en emoji drapeau (ex. "CG" → 🇨🇬) */
-function countryFlag(code: string): string {
-  if (code.length !== 2) return '';
-  return String.fromCodePoint(
-    ...code.toUpperCase().split('').map(c => 0x1F1E6 + c.charCodeAt(0) - 65),
-  );
-}
-
-interface RegeocodeSuggestion {
-  current:               { lat: number; lng: number } | null;
-  suggested:             { displayName: string; lat: number; lng: number; countryCode: string } | null;
-  distanceKmFromCurrent: number | null;
-}
-
-function StationForm({
-  tenantId, stationId, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel,
-}: {
-  tenantId:     string;
-  stationId?:   string;
-  initial:      StationFormValues;
-  onSubmit:     (v: StationFormValues) => void;
-  onCancel:     () => void;
-  busy:         boolean;
-  error:        string | null;
-  submitLabel:  string;
-  pendingLabel: string;
-}) {
-  const { t } = useI18n();
-  const [f, setF] = useState<StationFormValues>(initial);
-  const patch = (p: Partial<StationFormValues>) => setF(prev => ({ ...prev, ...p }));
-
-  // Re-geocode existant : adresse → suggestion via chaine multi-provider
-  const [regeocodeBusy, setRegeocodeBusy]       = useState(false);
-  const [regeocodeError, setRegeocodeError]     = useState<string | null>(null);
-  const [regeoSuggestion, setRegeoSuggestion]   = useState<RegeocodeSuggestion | null>(null);
-
-  const handleRegeocode = useCallback(async () => {
-    if (!stationId) return;
-    setRegeocodeBusy(true); setRegeocodeError(null); setRegeoSuggestion(null);
-    try {
-      const res = await apiPost<RegeocodeSuggestion>(
-        `/api/tenants/${tenantId}/stations/${stationId}/regeocode`,
-        {},
-      );
-      setRegeoSuggestion(res);
-      if (!res.suggested) setRegeocodeError(t('stations.regeocodeNoResult'));
-    } catch (e) {
-      setRegeocodeError((e as Error).message ?? String(e));
-    } finally {
-      setRegeocodeBusy(false);
-    }
-  }, [stationId, tenantId, t]);
-
-  const applySuggestion = () => {
-    if (!regeoSuggestion?.suggested) return;
-    patch({
-      lat: String(regeoSuggestion.suggested.lat),
-      lng: String(regeoSuggestion.suggested.lng),
-    });
-    setRegeoSuggestion(null);
-  };
-
-  // Recherche Nominatim pour le champ Ville — chaque résultat avec drapeau pays
-  const searchCity = useCallback(async (q: string): Promise<ComboboxOption[]> => {
-    const data = await apiGet<GeoResponse>(
-      `/api/tenants/${tenantId}/geo/search?q=${encodeURIComponent(q)}`,
-    );
-    return (data.results ?? []).map(r => ({
-      value: r.displayName.split(',')[0].trim(),
-      label: r.displayName.split(',')[0].trim(),
-      hint:  r.displayName.split(',').slice(1).join(',').trim(),
-      flag:  countryFlag(r.countryCode),
-    }));
-  }, [tenantId]);
-
-  return (
-    <form
-      onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }}
-      className="space-y-4"
-    >
-      <ErrorAlert error={error} />
-
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t('stations.stationName')} <span aria-hidden className="text-red-500">*</span>
-        </label>
-        <input type="text" required value={f.name}
-          onChange={e => patch({ name: e.target.value })}
-          className={inp} disabled={busy} placeholder={t('stations.placeholderName')} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <ComboboxEditable
-          label={t('stations.city')}
-          value={f.city}
-          onChange={v => patch({ city: v })}
-          onSearch={searchCity}
-          allowFreeText
-          freeTextWarning={t('stations.cityFreeTextWarning')}
-          placeholder={t('stations.placeholderCity')}
-          disabled={busy}
-          required
-        />
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('common.type')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <select required value={f.type}
-            onChange={e => patch({ type: e.target.value as StationType })}
-            className={inp} disabled={busy}>
-            <option value="PRINCIPALE">{t('stations.typePrincipale')}</option>
-            <option value="RELAIS">{t('stations.typeRelais')}</option>
-          </select>
-        </div>
-      </div>
-
-      <LocationPicker
-        tenantId={tenantId}
-        value={{ lat: f.lat, lng: f.lng }}
-        onChange={v => patch({ lat: v.lat, lng: v.lng })}
-        disabled={busy}
-      />
-
-      {/* Bouton Re-geocoder : visible uniquement en mode edition */}
-      {stationId && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800/40 p-3 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="text-xs text-slate-700 dark:text-slate-300 flex-1">
-              <div className="font-medium flex items-center gap-1.5">
-                <Crosshair className="w-3.5 h-3.5" aria-hidden />
-                {t('stations.regeocodeTitle')}
-              </div>
-              <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                {t('stations.regeocodeHelp')}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleRegeocode}
-              disabled={busy || regeocodeBusy}
-              aria-label={t('stations.regeocodeButton')}
-            >
-              {regeocodeBusy ? t('stations.regeocodeRunning') : t('stations.regeocodeButton')}
-            </Button>
-          </div>
-
-          {regeocodeError && (
-            <p role="alert" className="text-[11px] text-red-700 dark:text-red-400">
-              {regeocodeError}
-            </p>
-          )}
-
-          {regeoSuggestion?.suggested && (
-            <div className="rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 p-2 text-[12px] space-y-2">
-              <div className="space-y-0.5">
-                <div className="font-medium text-slate-800 dark:text-slate-200">
-                  {regeoSuggestion.suggested.displayName}
-                </div>
-                <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                  {regeoSuggestion.suggested.lat.toFixed(6)}, {regeoSuggestion.suggested.lng.toFixed(6)}
-                </div>
-                {regeoSuggestion.distanceKmFromCurrent !== null && (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-500">
-                    {t('stations.regeocodeDistance')
-                      .replace('{km}', regeoSuggestion.distanceKmFromCurrent.toFixed(1))}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={applySuggestion}
-                  disabled={busy}
-                  aria-label={t('stations.regeocodeApply')}
-                >
-                  <Check className="w-3.5 h-3.5" aria-hidden /> {t('stations.regeocodeApply')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setRegeoSuggestion(null)}
-                  disabled={busy}
-                  aria-label={t('common.cancel')}
-                >
-                  <X className="w-3.5 h-3.5" aria-hidden /> {t('common.cancel')}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <FormFooter
-        onCancel={onCancel}
-        busy={busy}
-        submitLabel={submitLabel}
-        pendingLabel={pendingLabel}
-      />
-    </form>
-  );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -305,14 +81,14 @@ export function PageStations() {
     };
   }, [stations]);
 
-  const toPayload = (f: StationFormValues) => ({
+  const toPayload = (f: StationDialogValues) => ({
     name: f.name.trim(),
     city: f.city.trim(),
     type: f.type,
     coordinates: { lat: Number(f.lat), lng: Number(f.lng) },
   });
 
-  const handleCreate = async (f: StationFormValues) => {
+  const handleCreate = async (f: StationDialogValues) => {
     setBusy(true); setActionErr(null);
     try {
       await apiPost(base, toPayload(f));
@@ -321,7 +97,7 @@ export function PageStations() {
     finally { setBusy(false); }
   };
 
-  const handleEdit = async (f: StationFormValues) => {
+  const handleEdit = async (f: StationDialogValues) => {
     if (!editTarget) return;
     setBusy(true); setActionErr(null);
     try {
@@ -435,53 +211,36 @@ export function PageStations() {
       />
 
       {/* Modal créer */}
-      <Dialog
+      <StationFormDialog
         open={showCreate}
-        onOpenChange={o => { if (!o) setShowCreate(false); }}
-        title={t('stations.newStation')}
-        description={t('stations.dialogNewDesc')}
-        size="lg"
-      >
-        <StationForm
-          tenantId={tenantId}
-          initial={EMPTY_FORM}
-          onSubmit={handleCreate}
-          onCancel={() => setShowCreate(false)}
-          busy={busy}
-          error={actionErr}
-          submitLabel={t('common.create')}
-          pendingLabel={t('common.creating')}
-        />
-      </Dialog>
+        mode="create"
+        tenantId={tenantId}
+        initial={EMPTY_STATION}
+        onSubmit={handleCreate}
+        onClose={() => setShowCreate(false)}
+        busy={busy}
+        error={actionErr}
+      />
 
       {/* Modal éditer */}
-      <Dialog
+      <StationFormDialog
         open={!!editTarget}
-        onOpenChange={o => { if (!o) setEditTarget(null); }}
-        title={t('stations.editStation')}
-        description={editTarget?.name}
-        size="lg"
-      >
-        {editTarget && (
-          <StationForm
-            tenantId={tenantId}
-            stationId={editTarget.id}
-            initial={{
-              name: editTarget.name,
-              city: editTarget.city,
-              type: editTarget.type,
-              lat:  String(editTarget.coordinates.lat ?? ''),
-              lng:  String(editTarget.coordinates.lng ?? ''),
-            }}
-            onSubmit={handleEdit}
-            onCancel={() => setEditTarget(null)}
-            busy={busy}
-            error={actionErr}
-            submitLabel={t('common.save')}
-            pendingLabel={t('common.saving')}
-          />
-        )}
-      </Dialog>
+        mode="edit"
+        tenantId={tenantId}
+        stationId={editTarget?.id}
+        stationName={editTarget?.name}
+        initial={editTarget ? {
+          name: editTarget.name,
+          city: editTarget.city,
+          type: editTarget.type,
+          lat:  String(editTarget.coordinates.lat ?? ''),
+          lng:  String(editTarget.coordinates.lng ?? ''),
+        } : EMPTY_STATION}
+        onSubmit={handleEdit}
+        onClose={() => setEditTarget(null)}
+        busy={busy}
+        error={actionErr}
+      />
 
       {/* Modal supprimer */}
       <Dialog

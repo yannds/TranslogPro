@@ -793,7 +793,17 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "regeocodeRunning": "Computing…",
     "regeocodeApply": "Apply",
     "regeocodeNoResult": "No address found for this name + city. Check spelling.",
-    "regeocodeDistance": "Distance from current position: ~{km} km"
+    "regeocodeDistance": "Distance from current position: ~{km} km",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "mapSectionTitle": "Geographic position",
+    "mapSearchLabel": "Search for an address",
+    "mapSearchPlaceholder": "Search for an address, a place, a station…",
+    "mapInteractHint": "Click on the map or drag the marker to adjust the coordinates.",
+    "mapLoading": "Loading Google Map…",
+    "mapKeyMissing": "The browser Google Maps key is not configured yet. Enter coordinates manually or ask the platform admin to add it under Settings → Integrations.",
+    "mapKeyError": "Unable to fetch map config — manual coordinate entry is still available.",
+    "mapLoadFailed": "Failed to load Google Maps — check the browser key (HTTP referrer restriction) or the network."
   },
   "shipments": {
     "groupShipments": "Group Shipments",
