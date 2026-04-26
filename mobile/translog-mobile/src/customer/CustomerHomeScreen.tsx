@@ -205,6 +205,12 @@ export function CustomerHomeScreen() {
             badge={parcelsInTransit > 0 ? String(parcelsInTransit) : undefined}
           />
           <Tile
+            label={L('Mes bons', 'My vouchers')}
+            icon="🎁"
+            onPress={() => navigation.navigate('CustomerVouchers')}
+            color={colors.surface} fg={colors.text} colors={colors}
+          />
+          <Tile
             label={L('SAV & avis', 'SAV & feedback')}
             icon="💬"
             onPress={() => navigation.navigate('CustomerSav')}

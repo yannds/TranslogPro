@@ -46,6 +46,7 @@ import { CustomerBookingScreen } from '../customer/CustomerBookingScreen';
 import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
 import { CustomerSavScreen } from '../customer/CustomerSavScreen';
 import { CustomerProfileScreen } from '../customer/CustomerProfileScreen';
+import { CustomerVouchersScreen } from '../customer/CustomerVouchersScreen';
 import { PlatformDashboardScreen } from '../platform/PlatformDashboardScreen';
 import { PlatformTenantsScreen } from '../platform/PlatformTenantsScreen';
 import { PlatformSecurityScreen } from '../platform/PlatformSecurityScreen';
@@ -223,6 +224,7 @@ function CustomerNav() {
       <CustomerStack.Screen name="CustomerMyItems"  component={CustomerMyItemsScreen} />
       <CustomerStack.Screen name="CustomerSav"      component={CustomerSavScreen} />
       <CustomerStack.Screen name="CustomerProfile"  component={CustomerProfileScreen} />
+      <CustomerStack.Screen name="CustomerVouchers" component={CustomerVouchersScreen} />
       <CustomerStack.Screen name="ChangePassword"   component={ChangePasswordScreen} />
     </CustomerStack.Navigator>
   );
