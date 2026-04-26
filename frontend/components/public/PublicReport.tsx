@@ -248,7 +248,7 @@ export function PublicReport() {
               className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-base focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <p id={descHintId} className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {t('publicReport.descriptionHint')} — {description.length}/1000
+              {t('publicReport.descriptionHint')} · {description.length}/1000
             </p>
           </div>
 

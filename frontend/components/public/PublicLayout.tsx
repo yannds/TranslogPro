@@ -106,7 +106,7 @@ function PublicHeader({ active, mobileOpen, onMobileToggle }: PublicHeaderProps)
         <Link
           to="/"
           className="flex shrink-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
-          aria-label="TransLog Pro — Accueil"
+          aria-label="TransLog Pro, accueil"
         >
           <LogoMark />
           <span className="text-base font-semibold tracking-tight">
@@ -337,7 +337,7 @@ function PublicFooter() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-5">
           <div className="col-span-2">
-            <Link to="/" className="inline-flex items-center gap-2" aria-label="TransLog Pro — Accueil">
+            <Link to="/" className="inline-flex items-center gap-2" aria-label="TransLog Pro, accueil">
               <LogoMark />
               <span className="text-base font-semibold tracking-tight">
                 TransLog<span className="text-teal-600 dark:text-teal-400">Pro</span>

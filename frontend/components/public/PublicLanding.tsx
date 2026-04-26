@@ -954,7 +954,7 @@ function CrmMockup() {
             Suggestion agent
           </p>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Proposer le siège 12A sur le trajet de demain — probabilité d'achat 84 %.
+            Proposer le siège 12A sur le trajet de demain. Probabilité d'achat 84 %.
           </p>
         </div>
       </div>
@@ -973,7 +973,7 @@ function AnalyticsMockup() {
       <BrowserChrome url={`acme.${PLATFORM_BASE_DOMAIN}/admin/analytics`} />
       <div className="p-5">
         <div className="flex items-center justify-between">
-          <h4 className="text-base font-semibold text-slate-900 dark:text-white">Yield — 7 derniers jours</h4>
+          <h4 className="text-base font-semibold text-slate-900 dark:text-white">Yield, 7 derniers jours</h4>
           <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
             <Sparkles className="h-3 w-3" aria-hidden />
             AI
