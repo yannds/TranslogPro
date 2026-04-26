@@ -45,6 +45,15 @@ NO_UI_PREFIXES = [
 
 
 def extract_backend():
+    """
+    Extrait les routes @Controller/@Get/@Post/etc. en tenant compte de :
+      - le global prefix `/api/` posé par `app.setGlobalPrefix('api')` dans main.ts
+      - les 2 syntaxes @Controller : `@Controller('path')` et `@Controller({ path: 'xxx' })`
+      - PLUSIEURS @Controller dans un même fichier (ex: support.controller.ts qui a
+        un @Controller('tenants/...') ET un @Controller('platform/support/...'))
+      - la directive `version: '1'` est IGNORÉE car `enableVersioning()` n'est PAS appelé
+        dans main.ts → routes accessibles SANS /v1/
+    """
     routes = []
     for ts in glob.glob('src/**/*.ts', recursive=True):
         if '/test/' in ts or '.spec.' in ts or '.d.ts' in ts:
@@ -56,14 +65,23 @@ def extract_backend():
             continue
         prefix = None
         for i, line in enumerate(lines):
-            mc = re.search(r"@Controller\(\s*['\"]([^'\"]*)['\"]", line)
-            if mc:
-                prefix = mc.group(1)
-            mh = re.search(r"@(Get|Post|Patch|Delete|Put)\(\s*(?:['\"]([^'\"]*)['\"])?\s*\)", line)
+            # @Controller objet : @Controller({ ... path: 'xxx' ... })
+            mc_obj = re.search(r"@Controller\(\s*\{[^}]*\bpath\s*:\s*['\"]([^'\"]*)['\"]", line)
+            if mc_obj:
+                prefix = mc_obj.group(1)
+                continue
+            # @Controller string : @Controller('xxx')
+            mc_str = re.search(r"@Controller\(\s*['\"]([^'\"]*)['\"]\s*\)", line)
+            if mc_str:
+                prefix = mc_str.group(1)
+                continue
+            # Méthode : @Get('path') ou @Get() ou @Get('path', { ... })
+            mh = re.search(r"@(Get|Post|Patch|Delete|Put)\(\s*(?:['\"]([^'\"]*)['\"])?\s*[,\)]", line)
             if mh and prefix is not None:
                 verb = mh.group(1).upper()
                 path = mh.group(2) or ''
-                full = ('/' + prefix + ('/' + path if path else '')).replace('//', '/').rstrip('/')
+                # Ajout du global prefix /api/ (cf. app.setGlobalPrefix('api') dans main.ts)
+                full = ('/api/' + prefix + ('/' + path if path else '')).replace('//', '/').rstrip('/')
                 norm = re.sub(r':[^/]+', ':X', full)
                 routes.append((verb, norm, full, ts, i + 1))
     return routes
