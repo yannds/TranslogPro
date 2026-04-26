@@ -585,9 +585,11 @@ print(f'sha256-{h}')
 | V3-C | RLS Postgres PERMISSIVE sur 120 tables `tenantId` — policies `tenant_isolation_runtime` (app_runtime) + `bypass_admin` — script `infra/prod/postgres/03-rls-runtime.sql` idempotent | `SELECT count(*) FROM pg_policies WHERE schemaname='public'` → 240 |
 | V3-D | MFA enforcement flag `mustEnrollMfa` dans `/me` et `signIn` réponse — true ssi STAFF + permission haut-privilège (control.iam.audit/manage.tenant, platform.manage, tenant.plan.change) sans MFA | Test login TENANT_ADMIN → réponse contient `mustEnrollMfa: true` |
 
-### 8.7 — Procédure DNSSEC (MED-7 — non encore activé)
+### 8.7 — Procédure DNSSEC (MED-7 — non encore activé en prod)
 
 ⚠️ Activer DNSSEC nécessite **action chez le registrar parent** (LWS pour `dsyann.info`) — sans DS record publié, la chain of trust est cassée.
+
+⚠️ **BIND9 9.20+** a **supprimé `auto-dnssec`** : utiliser **`dnssec-policy`** (built-in `default`) à la place.
 
 Procédure complète :
 
@@ -598,42 +600,57 @@ Procédure complète :
    docker exec $BIND_CID sh -c "
      mkdir -p /var/lib/bind/keys
      cd /var/lib/bind/keys
-     dnssec-keygen -a ECDSAP256SHA256 -fK translog.dsyann.info  # KSK
-     dnssec-keygen -a ECDSAP256SHA256    translog.dsyann.info   # ZSK
+     dnssec-keygen -K /var/lib/bind/keys -a ECDSAP256SHA256 -fK translog.dsyann.info  # KSK
+     dnssec-keygen -K /var/lib/bind/keys -a ECDSAP256SHA256    translog.dsyann.info   # ZSK
      chmod 600 K*.private
    "
+   chown -R 53:53 /opt/TranslogPro/infra/prod/bind9/zones/keys
+   chmod 750 /opt/TranslogPro/infra/prod/bind9/zones/keys
    ```
 
-2. **Activer inline-signing** dans `infra/prod/bind9/named.conf` :
+2. **Modifier `infra/prod/bind9/named.conf` dans le repo** (sinon rsync deploy écrase) :
    ```
    zone "translog.dsyann.info" {
        type master;
        file "/var/lib/bind/translog.db";
+
        inline-signing yes;
-       auto-dnssec maintain;
-       key-directory "/var/lib/bind/keys";
-       allow-update { key translog-acme.; };  // existant TSIG
+       dnssec-policy  "default";       // BIND9 9.20+ syntax (au lieu de auto-dnssec)
+       key-directory  "/var/lib/bind/keys";
+
+       update-policy {
+           grant translog-acme. subdomain _acme-challenge.translog.dsyann.info. TXT;
+       };
+       notify no;
    };
    ```
 
-3. **Reload BIND9** : `docker service scale translog_bind9=0; sleep 3; docker service scale translog_bind9=1`
+3. **Push + auto-deploy** ou `rsync` direct + restart BIND9 :
+   ```bash
+   docker service update --force translog_bind9
+   ```
 
-4. **Récupérer le DS record** (KSK signé) :
+4. **Vérifier signing** : `dig +dnssec translog.dsyann.info @72.61.108.160` doit contenir des `RRSIG`.
+
+5. **Récupérer le DS record** (KSK signé) :
    ```bash
    docker exec $BIND_CID dnssec-dsfromkey -2 /var/lib/bind/keys/Ktranslog.dsyann.info.+013+*.key
    # Affiche : translog.dsyann.info. IN DS <key-tag> 13 2 <hash>
+   # Note : prendre la KSK seulement (le -fK key)
    ```
 
-5. **Publier le DS chez LWS** (interface admin du registrar `dsyann.info`) :
+6. **Publier le DS chez LWS** (interface admin du registrar `dsyann.info`) :
    - Type : DS
    - Host : `translog`
    - Algorithm : 13 (ECDSAP256SHA256)
    - Digest type : 2 (SHA-256)
-   - Key tag + Digest : depuis la sortie étape 4
+   - Key tag + Digest : depuis la sortie étape 5
 
-6. **Vérifier propagation** : `dig +dnssec +short translog.dsyann.info` → doit retourner les RRSIG, et `dig DS translog.dsyann.info @8.8.8.8` doit retourner le DS publié.
+7. **Vérifier chain of trust** : `dig DS translog.dsyann.info @8.8.8.8` doit retourner le DS publié, propagation 4-24h.
 
 ⚠️ Pour rotation des clés (annuel pour KSK, semestriel pour ZSK), procédure documentée dans https://datatracker.ietf.org/doc/html/rfc6781.
+
+⚠️ Tentative de génération keys + activation faite le 2026-04-26 (V4.4) — BIND9 a crash avec `option 'auto-dnssec' no longer exists`. Reverté. À refaire avec syntaxe `dnssec-policy "default"` ci-dessus + édition dans le REPO (pas direct VPS, sinon rsync deploy écrase).
 
 ### 8.8 — Hardening restant (Vague 4)
 
