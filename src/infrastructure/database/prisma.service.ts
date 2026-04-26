@@ -15,9 +15,24 @@ function setTenantLocal(tx: Prisma.TransactionClient, tenantId: string) {
   return tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
 }
 
+/**
+ * Construit dynamiquement la liste des modèles Prisma porteurs d'un champ
+ * `tenantId`. Sert de filtre pour le middleware d'isolation tenant.
+ */
+function buildTenantScopedModels(): Set<string> {
+  const set = new Set<string>();
+  for (const model of Prisma.dmmf.datamodel.models) {
+    if (model.fields.some((f) => f.name === 'tenantId')) {
+      set.add(model.name);
+    }
+  }
+  return set;
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly tenantScopedModels = buildTenantScopedModels();
 
   constructor(
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
@@ -38,26 +53,106 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     await this.$connect();
     this.logger.log('✅ Database connected');
 
-    // Extension Prisma pour injecter app.tenant_id automatiquement
-    this.$extends({
-      query: {
-        $allModels: {
-          async $allOperations({ args, query }) {
-            const ctx = TenantContextService.getStore();
-            if (!ctx?.tenantId) return query(args);
-
-            return (this as any).$transaction(async (tx: Prisma.TransactionClient) => {
-              await setTenantLocal(tx, ctx.tenantId);
-              return query(args);
-            });
-          },
-        },
-      },
-    });
+    this.installTenantIsolationMiddleware();
+    this.logger.log(
+      `🔒 Tenant isolation middleware actif (${this.tenantScopedModels.size} modèles tenant-scoped)`,
+    );
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
+  }
+
+  /**
+   * Middleware d'isolation tenant — couche défense applicative.
+   *
+   * Pour chaque opération sur un modèle porteur d'un champ `tenantId` :
+   *  - lit le contexte tenant courant (AsyncLocalStorage via RlsMiddleware HTTP)
+   *  - injecte `where.tenantId` (find/update/delete) ou `data.tenantId` (create)
+   *    si le developpeur ne l'a pas déjà précisé
+   *
+   * Comportement explicit-override-friendly :
+   *  - Si pas de contexte tenant → pass-through (queries platform/health/signup)
+   *  - Si `where.tenantId` déjà fourni → respect du choix dev (cross-tenant admin)
+   *
+   * Cette couche complète (sans remplacer) la RLS Postgres et empêche les fuites
+   * accidentelles cross-tenant lorsqu'un développeur oublie le filtre tenant.
+   */
+  private installTenantIsolationMiddleware() {
+    this.$use(async (params, next) => {
+      const model = params.model;
+      if (!model || !this.tenantScopedModels.has(model)) {
+        return next(params);
+      }
+
+      const ctx = TenantContextService.getStore();
+      if (!ctx?.tenantId) {
+        return next(params);
+      }
+      const tenantId = ctx.tenantId;
+
+      switch (params.action) {
+        case 'findUnique':
+        case 'findUniqueOrThrow':
+        case 'findFirst':
+        case 'findFirstOrThrow':
+        case 'findMany':
+        case 'count':
+        case 'aggregate':
+        case 'groupBy':
+        case 'update':
+        case 'updateMany':
+        case 'delete':
+        case 'deleteMany': {
+          params.args = params.args || {};
+          const where = params.args.where || {};
+          if (where.tenantId === undefined) {
+            params.args.where = { ...where, tenantId };
+          }
+          break;
+        }
+
+        case 'create': {
+          params.args = params.args || {};
+          const data = params.args.data || {};
+          if (data.tenantId === undefined) {
+            params.args.data = { ...data, tenantId };
+          }
+          break;
+        }
+
+        case 'createMany': {
+          params.args = params.args || {};
+          const data = params.args.data;
+          if (Array.isArray(data)) {
+            params.args.data = data.map((item: any) =>
+              item && item.tenantId === undefined ? { ...item, tenantId } : item,
+            );
+          } else if (data && data.tenantId === undefined) {
+            params.args.data = { ...data, tenantId };
+          }
+          break;
+        }
+
+        case 'upsert': {
+          params.args = params.args || {};
+          const where = params.args.where || {};
+          const create = params.args.create || {};
+          if (where.tenantId === undefined) {
+            params.args.where = { ...where, tenantId };
+          }
+          if (create.tenantId === undefined) {
+            params.args.create = { ...create, tenantId };
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      return next(params);
+    });
   }
 
   /** Exécute une transaction avec SET LOCAL tenant_id */
