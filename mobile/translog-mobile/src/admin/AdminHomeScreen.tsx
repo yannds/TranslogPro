@@ -227,6 +227,15 @@ export function AdminHomeScreen() {
 
         <NavCard
           colors={colors}
+          icon="🚌"
+          tone={colors.success}
+          title={L('Flotte', 'Fleet')}
+          subtitle={L('Actifs · maintenance · sous-utilisés 7j', 'Active · maintenance · underutilized 7d')}
+          onPress={() => navigation.navigate('AdminFleet')}
+        />
+
+        <NavCard
+          colors={colors}
           icon="🚨"
           tone={incidentAlert ? colors.danger : colors.warning}
           title={L('Incidents', 'Incidents')}
