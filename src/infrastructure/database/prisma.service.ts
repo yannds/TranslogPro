@@ -53,6 +53,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     await this.$connect();
     this.logger.log('✅ Database connected');
 
+    if (process.env.TENANT_ISOLATION_MIDDLEWARE === 'off') {
+      this.logger.warn(
+        '⚠️  Tenant isolation middleware DESACTIVE via TENANT_ISOLATION_MIDDLEWARE=off (kill-switch)',
+      );
+      return;
+    }
+
     this.installTenantIsolationMiddleware();
     this.logger.log(
       `🔒 Tenant isolation middleware actif (${this.tenantScopedModels.size} modèles tenant-scoped)`,

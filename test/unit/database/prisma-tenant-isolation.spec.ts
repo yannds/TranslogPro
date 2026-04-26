@@ -17,7 +17,7 @@ describe('PrismaService — middleware isolation tenant ($use)', () => {
   beforeAll(() => {
     svc = Object.create(PrismaService.prototype) as PrismaService;
     (svc as any).logger = { log: () => {} };
-    (svc as any).tenantScopedModels = new Set(['Ticket', 'Parcel', 'Customer']);
+    (svc as any).tenantScopedModels = new Set(['Ticket', 'Parcel', 'Customer', 'User', 'AuditLog']);
     (svc as any).$use = (cb: any) => {
       captured = cb;
     };
@@ -120,5 +120,80 @@ describe('PrismaService — middleware isolation tenant ($use)', () => {
     const params = { model: 'Ticket', action: 'findUnique', args: {} };
     const out = await runMw(params, { tenantId: 'tnt-7' });
     expect(out.args.where).toEqual({ tenantId: 'tnt-7' });
+  });
+
+  // ─── Regression guards ────────────────────────────────────────────────────
+
+  it('REG R1 — clé composite tenantId_email : injection top-level coherente', async () => {
+    // Reproduit auth-identity.service.ts:101 : findUnique avec composite key.
+    // Le middleware doit injecter tenantId au top-level SANS abimer la composite.
+    // Prisma 5+ accepte le mix (composite + filtre supplementaire) si valeurs alignees.
+    const params = {
+      model: 'User',
+      action: 'findUnique',
+      args: { where: { tenantId_email: { tenantId: 'tnt-X', email: 'a@b.c' } } },
+    };
+    const out = await runMw(params, { tenantId: 'tnt-X' });
+    expect(out.args.where.tenantId_email).toEqual({ tenantId: 'tnt-X', email: 'a@b.c' });
+    expect(out.args.where.tenantId).toBe('tnt-X');
+  });
+
+  it('REG R2 — groupBy avec tenantId already in where (operator not) : pas de surcharge', async () => {
+    // Reproduit platform-kpi.service.ts:898 : groupBy by tenantId, where avec operator.
+    const params = {
+      model: 'AuditLog',
+      action: 'groupBy',
+      args: {
+        by:    ['tenantId'],
+        where: { tenantId: { not: 'platform' } },
+      },
+    };
+    const out = await runMw(params, { tenantId: 'tnt-1' });
+    expect(out.args.where.tenantId).toEqual({ not: 'platform' });
+    expect(out.args.by).toEqual(['tenantId']);
+  });
+
+  it('REG R3 — modele non-tenant-scoped (PlatformConfig) : aucune injection', async () => {
+    const params = { model: 'PlatformConfig', action: 'findMany', args: { where: { key: 'x' } } };
+    const out = await runMw(params, { tenantId: 'tnt-1' });
+    expect(out.args.where).toEqual({ key: 'x' });
+  });
+
+  it('REG — auth-flow sans contexte HTTP (login pre-auth) : aucune injection', async () => {
+    // Login appelle findUserByEmail AVANT que RlsMiddleware ait peuple le contexte.
+    const params = {
+      model: 'User',
+      action: 'findUnique',
+      args: { where: { tenantId_email: { tenantId: 'tnt-X', email: 'a@b.c' } } },
+    };
+    const out = await runMw(params); // pas de contexte
+    expect(out.args.where.tenantId).toBeUndefined();
+    expect(out.args.where.tenantId_email).toEqual({ tenantId: 'tnt-X', email: 'a@b.c' });
+  });
+
+  it('REG — kill-switch desactive le middleware quand TENANT_ISOLATION_MIDDLEWARE=off', async () => {
+    // Verifie le code path explicit — onModuleInit ne reinstalle pas si flag off.
+    const original = process.env.TENANT_ISOLATION_MIDDLEWARE;
+    process.env.TENANT_ISOLATION_MIDDLEWARE = 'off';
+    try {
+      const fakeSvc: any = Object.create(PrismaService.prototype);
+      fakeSvc.logger = { log: jest.fn(), warn: jest.fn() };
+      fakeSvc.tenantScopedModels = new Set(['Ticket']);
+      fakeSvc.$use = jest.fn();
+      fakeSvc.$connect = jest.fn().mockResolvedValue(undefined);
+      fakeSvc.secretService = {
+        getSecret: jest.fn().mockResolvedValue('postgresql://stub'),
+      };
+      fakeSvc._engineConfig = {};
+
+      await fakeSvc.onModuleInit();
+      expect(fakeSvc.$use).not.toHaveBeenCalled();
+      expect(fakeSvc.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('DESACTIVE'),
+      );
+    } finally {
+      if (original === undefined) delete process.env.TENANT_ISOLATION_MIDDLEWARE;
+      else process.env.TENANT_ISOLATION_MIDDLEWARE = original;
+    }
   });
 });
