@@ -241,7 +241,21 @@ export function CustomerProfileScreen() {
           />
         </View>
 
-        {/* ── Sécurité (déconnexion) ─────────────────────────────────── */}
+        {/* ── Sécurité ───────────────────────────────────────────────── */}
+        <Pressable
+          onPress={() => nav.navigate('ChangePassword')}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.changePwdBtn,
+            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={{ color: colors.text, fontWeight: '600' }}>
+            🔐 {L('Changer mon mot de passe', 'Change my password')}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 18 }}>›</Text>
+        </Pressable>
+
         <Pressable
           onPress={() => {
             Alert.alert(
@@ -329,6 +343,15 @@ const styles = StyleSheet.create({
     gap:            12,
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  changePwdBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius:    10,
+    borderWidth:     1,
   },
   logoutBtn:   {
     paddingVertical: 14,

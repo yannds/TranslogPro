@@ -11,6 +11,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { CashierHomeScreen } from '../cashier/CashierHomeScreen';
 import { SellTicketScreen } from '../cashier/SellTicketScreen';
 import { CashierTicketsScreen } from '../cashier/CashierTicketsScreen';
+import { CashierMyStatsScreen } from '../cashier/CashierMyStatsScreen';
 import { IncidentReportScreen } from '../incidents/IncidentReportScreen';
 import { DriverHomeScreen } from '../driver/DriverHomeScreen';
 import { TripDetailScreen } from '../driver/TripDetailScreen';
@@ -70,6 +71,7 @@ const QuaiStack    = createNativeStackNavigator();
 const AdminStack     = createNativeStackNavigator();
 const CustomerStack  = createNativeStackNavigator();
 const PlatformStack  = createNativeStackNavigator();
+const CashierStack   = createNativeStackNavigator();
 const Tab            = createBottomTabNavigator();
 
 /* ── Helpers tab bar ───────────────────────────────────────────────────── */
@@ -180,6 +182,16 @@ function CashierTabs() {
         options={{ tabBarIcon: makeTabIcon(IconWarn) }}
       />
     </Tab.Navigator>
+  );
+}
+
+function CashierNav() {
+  return (
+    <CashierStack.Navigator screenOptions={{ headerShown: false }}>
+      <CashierStack.Screen name="CashierHome"   component={CashierTabs} />
+      <CashierStack.Screen name="CashierMyStats" component={CashierMyStatsScreen} />
+      <CashierStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+    </CashierStack.Navigator>
   );
 }
 
@@ -397,7 +409,7 @@ export function AppNavigator() {
             const portal = portalForUser(user);
             switch (portal) {
               case 'platform': return <RootStack.Screen name="Platform" component={PlatformNav} />;
-              case 'cashier':  return <RootStack.Screen name="Cashier"  component={CashierTabs} />;
+              case 'cashier':  return <RootStack.Screen name="Cashier"  component={CashierNav} />;
               case 'driver':   return <RootStack.Screen name="Driver"   component={DriverNav} />;
               case 'station':  return <RootStack.Screen name="Station"  component={StationNav} />;
               case 'quai':     return <RootStack.Screen name="Quai"     component={QuaiNav} />;
