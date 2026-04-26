@@ -21,17 +21,19 @@ import type {
   RenderedEmail,
 } from './types';
 import { LIFECYCLE_DESCRIPTORS } from './lifecycle.descriptors';
+import { INVOICE_DESCRIPTORS }   from './invoice.descriptors';
 
 /**
  * Catalogue exhaustif des templates email.
  *
  * Ordre = ordre d'apparition dans la combobox du testeur plateforme.
- * À chaque nouveau tier (Invoice, Voucher, Refund…) on ajoute son tableau
+ * À chaque nouveau tier (Voucher, Refund…) on ajoute son tableau
  * importé de son fichier `*.descriptors.ts`.
  */
 const ALL_DESCRIPTORS: ReadonlyArray<EmailTemplateDescriptor> = [
   ...LIFECYCLE_DESCRIPTORS,
-  // À venir : ...INVOICE_DESCRIPTORS, ...VOUCHER_DESCRIPTORS, ...REFUND_DESCRIPTORS,
+  ...INVOICE_DESCRIPTORS,
+  // À venir : ...VOUCHER_DESCRIPTORS, ...REFUND_DESCRIPTORS,
   //          ...USER_DESCRIPTORS,    ...TRIP_DESCRIPTORS,    ...PARCEL_DESCRIPTORS,
   //          ...TICKET_DESCRIPTORS,  ...AUTH_DESCRIPTORS,    ...SUBSCRIPTION_DESCRIPTORS
 ];

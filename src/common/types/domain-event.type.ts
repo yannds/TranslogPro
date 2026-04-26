@@ -37,6 +37,13 @@ export const EventTypes = {
   TICKET_REFUNDED:        'ticket.refunded',
   TICKET_EXPIRED:         'ticket.expired',
 
+  // Invoice (facturation tenant — émis par InvoiceService transitions + InvoiceOverdueScheduler)
+  // payload : { invoiceId, invoiceNumber, totalAmount, currency, dueDate?, paidAt?, paymentMethod?, daysOverdue? }
+  INVOICE_ISSUED:         'invoice.issued',         // DRAFT → ISSUED : nouvelle facture envoyée au client
+  INVOICE_PAID:           'invoice.paid',           // ISSUED|DRAFT → PAID : paiement reçu
+  INVOICE_OVERDUE:        'invoice.overdue',        // cron : ISSUED + dueDate < now (idempotent par invoice)
+  INVOICE_CANCELLED:      'invoice.cancelled',      // ISSUED → CANCELLED : annulation après émission
+
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',

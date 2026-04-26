@@ -6,11 +6,14 @@
  * WorkflowEngine (ADR-15/16, migration 2026-04-19). Un update() qui ne touche
  * pas le status reste un update direct (champs libres : notes, dueDate, etc.).
  */
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CreateInvoiceDto, UpdateInvoiceDto } from './dto/create-invoice.dto';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { EventTypes } from '../../common/types/domain-event.type';
+import { v4 as uuidv4 } from 'uuid';
 
 /** Acteur système synthétique (transitions déclenchées par webhook paiement, cron, etc.) */
 const SYSTEM_ACTOR: CurrentUserPayload = {
@@ -24,7 +27,24 @@ export class InvoiceService {
   constructor(
     private readonly prisma:   PrismaService,
     private readonly workflow: WorkflowEngine,
+    @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
+
+  /**
+   * Construit le DomainEvent à émettre selon l'état cible d'une transition.
+   * - DRAFT  → ISSUED    : invoice.issued      (le client peut maintenant payer)
+   * - ISSUED → PAID      : invoice.paid        (paiement reçu)
+   * - DRAFT  → PAID      : invoice.paid uniquement (fast-track caisse — on ne
+   *                        notifie pas "issued" pour éviter 2 mails au client)
+   * - ISSUED → CANCELLED : invoice.cancelled   (annulation après émission)
+   * - DRAFT  → CANCELLED : null (le client n'a jamais vu cette facture)
+   */
+  private invoiceEventTypeFor(fromState: string, toState: string): string | null {
+    if (toState === 'ISSUED'    && fromState === 'DRAFT')                              return EventTypes.INVOICE_ISSUED;
+    if (toState === 'PAID')                                                            return EventTypes.INVOICE_PAID;
+    if (toState === 'CANCELLED' && fromState === 'ISSUED')                             return EventTypes.INVOICE_CANCELLED;
+    return null;
+  }
 
   async findAll(tenantId: string, status?: string) {
     return this.prisma.invoice.findMany({
@@ -106,7 +126,31 @@ export class InvoiceService {
             if (state === 'ISSUED')    data.issuedAt = new Date();
             if (state === 'PAID')      data.paidAt   = new Date();
             if (state === 'CANCELLED') data.cancelledAt = new Date();
-            return p.invoice.update({ where: { id: entity.id }, data }) as Promise<typeof entity>;
+            const updated = (await p.invoice.update({ where: { id: entity.id }, data })) as typeof entity;
+
+            // Émission Outbox dans la même tx que la transition d'état (atomicité).
+            const eventType = this.invoiceEventTypeFor(invoice.status, state);
+            if (eventType) {
+              const event: DomainEvent = {
+                id:            uuidv4(),
+                type:          eventType,
+                tenantId,
+                aggregateId:   updated.id,
+                aggregateType: 'Invoice',
+                payload: {
+                  invoiceId:     updated.id,
+                  invoiceNumber: invoice.invoiceNumber,
+                  totalAmount:   invoice.totalAmount,
+                  currency:      invoice.currency,
+                  dueDate:       invoice.dueDate?.toISOString() ?? null,
+                  paidAt:        state === 'PAID' ? new Date().toISOString() : null,
+                  paymentMethod: invoice.paymentMethod ?? null,
+                },
+                occurredAt: new Date(),
+              };
+              await this.eventBus.publish(event, p);
+            }
+            return updated;
           },
         },
       );
@@ -216,10 +260,32 @@ export class InvoiceService {
       {
         aggregateType: 'Invoice',
         persist: async (entity, state, p) => {
-          return p.invoice.update({
+          const updated = (await p.invoice.update({
             where: { id: entity.id },
             data:  { status: state, paidAt: new Date(), version: { increment: 1 } },
-          }) as Promise<typeof entity>;
+          })) as typeof entity;
+
+          // Fast-track caisse → uniquement invoice.paid (pas issued — le client
+          // a réglé immédiatement, un seul mail de reçu suffit).
+          const event: DomainEvent = {
+            id:            uuidv4(),
+            type:          EventTypes.INVOICE_PAID,
+            tenantId,
+            aggregateId:   updated.id,
+            aggregateType: 'Invoice',
+            payload: {
+              invoiceId:     updated.id,
+              invoiceNumber: draft.invoiceNumber,
+              totalAmount:   draft.totalAmount,
+              currency:      draft.currency,
+              dueDate:       null,
+              paidAt:        new Date().toISOString(),
+              paymentMethod: params.paymentMethod,
+            },
+            occurredAt: new Date(),
+          };
+          await this.eventBus.publish(event, p);
+          return updated;
         },
       },
     );

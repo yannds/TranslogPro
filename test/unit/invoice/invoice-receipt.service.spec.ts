@@ -46,13 +46,27 @@ function makeWorkflow() {
   } as any;
 }
 
-function buildService(prisma?: any, workflow?: any) {
-  const p = prisma ?? makePrisma();
-  const w = workflow ?? makeWorkflow();
-  const svc = new InvoiceService(p as PrismaService, w);
+/**
+ * Mock IEventBus minimal — `publish` est appelé depuis la persist callback
+ * de WorkflowEngine pour émettre INVOICE_PAID en Outbox. Les tests existants
+ * vérifient le flow caisse (création reçu) et n'ont pas besoin d'asserter
+ * sur l'event ; on capture juste les appels pour les tests qui le demandent.
+ */
+function makeEventBus() {
+  return {
+    publish:   jest.fn().mockResolvedValue(undefined),
+    subscribe: jest.fn(),
+  } as any;
+}
+
+function buildService(prisma?: any, workflow?: any, eventBus?: any) {
+  const p  = prisma   ?? makePrisma();
+  const w  = workflow ?? makeWorkflow();
+  const eb = eventBus ?? makeEventBus();
+  const svc = new InvoiceService(p as PrismaService, w, eb);
   // findOne() relit après la transition — on stub
   jest.spyOn(svc as any, 'findOne').mockImplementation((_t, id) => Promise.resolve({ id, status: 'PAID' }));
-  return { service: svc, prisma: p, workflow: w };
+  return { service: svc, prisma: p, workflow: w, eventBus: eb };
 }
 
 const PARAMS = {
