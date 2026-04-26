@@ -209,10 +209,19 @@ export function AdminHomeScreen() {
 
         <NavCard
           colors={colors}
+          icon="🚦"
+          tone={(today?.openIncidents ?? 0) > 0 ? colors.warning : colors.success}
+          title={L('Trajets en cours (live)', 'Live trips')}
+          subtitle={L('Polling 10s · états retards / à l’heure / suspendus', 'Polling 10s · delayed / on-time / held states')}
+          onPress={() => navigation.navigate('AdminLive')}
+        />
+
+        <NavCard
+          colors={colors}
           icon="🛣"
           tone={colors.primary}
-          title={L('Trajets du jour', 'Today’s trips')}
-          subtitle={L('Suspendre · annuler · déclarer retard majeur', 'Suspend · cancel · declare major delay')}
+          title={L('Trajets J ± 7', 'Trips J ± 7')}
+          subtitle={L('Date picker · suspendre · annuler · retard majeur', 'Date picker · suspend · cancel · major delay')}
           onPress={() => navigation.navigate('Trajets')}
         />
 

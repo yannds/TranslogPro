@@ -71,19 +71,32 @@ export function AdminTripsScreen() {
   const lang = (user as any)?.locale === 'en' ? 'en' : 'fr';
   const L = (fr: string, en: string) => (lang === 'en' ? en : fr);
 
-  const [filter, setFilter]   = useState<StatusFilter>('ALL');
-  const [trips, setTrips]     = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [filter, setFilter]     = useState<StatusFilter>('ALL');
+  const [trips, setTrips]       = useState<Trip[]>([]);
+  const [loading, setLoading]   = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [busyId, setBusyId]   = useState<string | null>(null);
+  const [busyId, setBusyId]     = useState<string | null>(null);
+  // Offset en jours par rapport à aujourd'hui : 0 = aujourd'hui, +1 = demain,
+  // -1 = hier, etc. Permet la navigation J ± 7 sans date picker complexe.
+  const [dayOffset, setDayOffset] = useState(0);
 
-  // Range jour J : 00:00 → +48h (laisse voir les départs très matin J+1)
+  // Range = jour sélectionné (00:00 à 23:59:59).
   const range = useMemo(() => {
-    const from = new Date();
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(from.getTime() + 48 * 60 * 60 * 1_000);
-    return { from: from.toISOString(), to: to.toISOString() };
-  }, []);
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() + dayOffset);
+    const to = new Date(day.getTime() + 24 * 60 * 60 * 1_000 - 1);
+    return { from: day.toISOString(), to: to.toISOString(), date: day };
+  }, [dayOffset]);
+
+  function dayLabel(): string {
+    if (dayOffset === 0)  return L('Aujourd’hui',  'Today');
+    if (dayOffset === 1)  return L('Demain',       'Tomorrow');
+    if (dayOffset === -1) return L('Hier',         'Yesterday');
+    return range.date.toLocaleDateString(lang, {
+      weekday: 'short', day: '2-digit', month: 'short',
+    });
+  }
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -231,7 +244,7 @@ export function AdminTripsScreen() {
           <Text style={{ color: colors.primary, fontSize: 18 }}>‹</Text>
         </Pressable>
         <Text style={[styles.h1, { color: colors.text }]}>
-          {L('Trajets du jour', 'Today’s trips')}
+          {L('Trajets', 'Trips')}
         </Text>
       </View>
 
@@ -240,6 +253,42 @@ export function AdminTripsScreen() {
           <Text style={{ color: colors.warning }}>{t('offline.bannerOffline')}</Text>
         </View>
       )}
+
+      {/* ── Date picker linéaire J ± 7 ──────────────────────────────────── */}
+      <View style={[styles.dateRow, { borderBottomColor: colors.border }]}>
+        <Pressable
+          onPress={() => setDayOffset(d => Math.max(d - 1, -7))}
+          disabled={dayOffset <= -7}
+          accessibilityRole="button"
+          accessibilityLabel={L('Jour précédent', 'Previous day')}
+          hitSlop={8}
+          style={styles.dateBtn}
+        >
+          <Text style={{ color: dayOffset <= -7 ? colors.textMuted : colors.primary, fontSize: 22, fontWeight: '700' }}>‹</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setDayOffset(0)}
+          accessibilityRole="button"
+          style={{ flex: 1, alignItems: 'center' }}
+        >
+          <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{dayLabel()}</Text>
+          {dayOffset !== 0 && (
+            <Text style={{ color: colors.primary, fontSize: 11, marginTop: 2 }}>
+              {L('Tap pour revenir à aujourd’hui', 'Tap to return to today')}
+            </Text>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => setDayOffset(d => Math.min(d + 1, 7))}
+          disabled={dayOffset >= 7}
+          accessibilityRole="button"
+          accessibilityLabel={L('Jour suivant', 'Next day')}
+          hitSlop={8}
+          style={styles.dateBtn}
+        >
+          <Text style={{ color: dayOffset >= 7 ? colors.textMuted : colors.primary, fontSize: 22, fontWeight: '700' }}>›</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.filters}>
         <FlatList
@@ -361,6 +410,14 @@ const styles = StyleSheet.create({
   h1:      { fontSize: 18, fontWeight: '800' },
   banner:  { marginHorizontal: 16, padding: 10, borderRadius: 8 },
   filters: { paddingVertical: 8 },
+  dateRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dateBtn: { width: 40, height: 36, alignItems: 'center', justifyContent: 'center' },
   chip:    {
     paddingVertical:   8,
     paddingHorizontal: 14,
