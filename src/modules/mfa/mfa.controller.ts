@@ -14,10 +14,22 @@
 import {
   Controller, Post, Body, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { IsString, Length, Matches } from 'class-validator';
 import { MfaService } from './mfa.service';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/**
+ * NB : décorateurs class-validator obligatoires — le ValidationPipe global
+ * tourne avec `whitelist: true` + `forbidNonWhitelisted: true`. Sans
+ * décorateurs, le champ est strippé du body et le service reçoit `undefined`,
+ * ce qui se traduit par un 400 silencieux côté client (le bon code TOTP est
+ * rejeté à tort). Couvre /enable et /disable.
+ */
 class VerifyCodeDto {
+  @IsString()
+  // 6 chiffres TOTP standard, ou backup code 8 hex (utilisé par /disable).
+  @Length(6, 16)
+  @Matches(/^[A-Za-z0-9]+$/)
   code!: string;
 }
 
