@@ -780,14 +780,10 @@ export const ADMIN_NAV: PortalNavConfig = {
           icon: 'Settings',
           anyOf: [P.PLATFORM_CONFIG_MANAGE],
         },
-        {
-          kind: 'leaf',
-          id: 'platform-email',
-          label: 'nav.platform_email',
-          href: '/admin/platform/email',
-          icon: 'Mail',
-          anyOf: [P.PLATFORM_CONFIG_MANAGE],
-        },
+        // Note : `platform-email` n'est PAS exposé dans ADMIN_NAV (admins
+        // tenants). Réservé à PLATFORM_NAV (super-admin plateforme). Sera
+        // ré-exposé ici si on active la personnalisation email par tenant
+        // (custom domain SPF/DKIM, sender propre).
         {
           kind: 'group',
           id: 'debug',
