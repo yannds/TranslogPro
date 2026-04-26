@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ConflictException,
   BadRequestException,
@@ -9,6 +10,32 @@ import { PlatformConfigService } from '../platform-config/platform-config.servic
 import { FareClassDefault } from '../tenant-settings/tenant-fare-class.service';
 import { RoutingService } from '../routing/routing.service';
 import type { SuggestDistanceResponse } from '../routing/routing.types';
+
+/**
+ * Distance Haversine (orthodromique, ligne droite à la surface) en km.
+ * Donne un fallback raisonnable quand le provider routier (Google Directions)
+ * n'est pas accessible — typiquement à la création d'une ligne dont l'origine
+ * et la destination ont leurs coordonnées GPS.
+ *
+ * NOTE : c'est une approximation par-dessus de l'élipsoïde terrestre. Pour la
+ * distance routière réelle, utilisez `routing.suggestDistance()`. Ici on s'en
+ * sert juste pour ne pas afficher "0 km" quand on a au moins les coords.
+ */
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** Multiplicateur pour passer de la distance Haversine (ligne droite) à une
+ *  approximation de distance routière. ~30% en moyenne sur l'Afrique centrale,
+ *  où les routes ne sont pas en ligne droite à cause du relief / forêts. */
+const ROAD_FACTOR = 1.3;
 
 export interface CreateRouteDto {
   name:          string;
@@ -46,11 +73,52 @@ export interface UpdateRouteDto {
 
 @Injectable()
 export class RouteService {
+  private readonly log = new Logger(RouteService.name);
+
   constructor(
     private readonly prisma:         PrismaService,
     private readonly platformConfig: PlatformConfigService,
     private readonly routing:        RoutingService,
   ) {}
+
+  /**
+   * Si la ligne a `distanceKm = 0` ET que origine + destination ont des
+   * coordonnées GPS, calcule un fallback haversine x road-factor. Sinon
+   * renvoie 0 sans rien faire. Idempotent : si distanceKm > 0, ne touche
+   * pas — l'utilisateur peut toujours ajuster manuellement ou recalibrer
+   * via Google.
+   */
+  private async ensureDistanceFallback(tenantId: string, routeId: string): Promise<void> {
+    const route = await this.prisma.route.findFirst({
+      where:  { id: routeId, tenantId },
+      select: {
+        distanceKm: true,
+        origin:      { select: { coordinates: true } },
+        destination: { select: { coordinates: true } },
+      },
+    });
+    if (!route || route.distanceKm > 0) return;
+
+    const extract = (s: { coordinates: unknown } | null) => {
+      if (!s?.coordinates || typeof s.coordinates !== 'object') return null;
+      const c = s.coordinates as Record<string, unknown>;
+      const lat = typeof c['lat'] === 'number' ? c['lat'] : null;
+      const lng = typeof c['lng'] === 'number' ? c['lng'] : null;
+      return lat !== null && lng !== null ? { lat, lng } : null;
+    };
+    const o = extract(route.origin);
+    const d = extract(route.destination);
+    if (!o || !d) return;
+
+    const km = Math.round(haversineKm(o, d) * ROAD_FACTOR * 10) / 10;
+    if (km <= 0) return;
+
+    await this.prisma.route.update({
+      where: { id: routeId },
+      data:  { distanceKm: km },
+    });
+    this.log.log(`[Route ${routeId}] distance auto-calculée (haversine x ${ROAD_FACTOR}) = ${km} km`);
+  }
 
   /**
    * Suggère une distance entre deux gares en utilisant le provider actif.
@@ -347,6 +415,14 @@ export class RouteService {
       });
 
       return route;
+    }).then(async (route) => {
+      // Hors transaction (lecture cross-table) : si l'utilisateur a saisi 0 km
+      // mais que les 2 stations ont leurs GPS, propose un fallback haversine
+      // pour ne pas bloquer la matrice de prix segment.
+      if (payload.distanceKm === 0) {
+        await this.ensureDistanceFallback(tenantId, route.id);
+      }
+      return route;
     });
   }
 
@@ -414,6 +490,11 @@ export class RouteService {
   // ── Waypoints (escales) ──────────────────────────────────────────────────
 
   async findOneWithWaypoints(tenantId: string, id: string) {
+    // Rattrape les lignes existantes sans distanceKm : si origine + destination
+    // ont leur GPS, on calcule le fallback haversine + on régénère la matrice de
+    // prix avant de retourner la ligne. Idempotent (no-op si distanceKm > 0).
+    await this.ensureDistanceFallback(tenantId, id);
+
     const route = await this.prisma.route.findFirst({
       where: { id, tenantId },
       include: {
@@ -424,6 +505,24 @@ export class RouteService {
       },
     });
     if (!route) throw new NotFoundException(`Ligne ${id} introuvable`);
+
+    // Si la matrice est vide (anciens routes créés avant le fallback) et qu'on
+    // a maintenant un distanceKm > 0, génère la matrice à la volée.
+    if (route.distanceKm > 0 && route.segmentPrices.length === 0) {
+      await this.generateSegmentPriceMatrix(tenantId, id);
+      // Re-fetch pour retourner les nouveaux segments à l'UI
+      const refreshed = await this.prisma.route.findFirst({
+        where: { id, tenantId },
+        include: {
+          origin:      { select: { id: true, name: true, city: true, coordinates: true } },
+          destination: { select: { id: true, name: true, city: true, coordinates: true } },
+          waypoints:   { include: { station: { select: { id: true, name: true, city: true, coordinates: true } } }, orderBy: { order: 'asc' } },
+          segmentPrices: true,
+        },
+      });
+      return refreshed!;
+    }
+
     return route;
   }
 
@@ -433,44 +532,60 @@ export class RouteService {
     tollCostXaf?: number; checkpointCosts?: unknown[];
     isMandatoryStop?: boolean; estimatedWaitTime?: number;
   }[]) {
-    await this.findOne(tenantId, routeId);
+    try {
+      await this.findOne(tenantId, routeId);
 
-    // Invariant : STATION exige stationId, les autres kinds exigent name
-    for (const wp of waypoints) {
-      const kind = wp.kind ?? 'STATION';
-      if (kind === 'STATION') {
-        if (!wp.stationId) throw new BadRequestException(`Waypoint order ${wp.order} : stationId requis pour kind STATION`);
-        await this.assertStationBelongsToTenant(tenantId, wp.stationId);
-      } else {
-        if (!wp.name) throw new BadRequestException(`Waypoint order ${wp.order} : name requis pour kind ${kind}`);
+      // Invariant : STATION exige stationId, les autres kinds exigent name
+      for (const wp of waypoints) {
+        const kind = wp.kind ?? 'STATION';
+        if (kind === 'STATION') {
+          if (!wp.stationId) throw new BadRequestException(`Waypoint order ${wp.order} : stationId requis pour kind STATION`);
+          await this.assertStationBelongsToTenant(tenantId, wp.stationId);
+        } else {
+          if (!wp.name) throw new BadRequestException(`Waypoint order ${wp.order} : name requis pour kind ${kind}`);
+        }
       }
+
+      // Remplacer tous les waypoints (atomique) — defense-in-depth via FK tenantId
+      await this.prisma.transact(async (tx) => {
+        await tx.waypoint.deleteMany({ where: { routeId, route: { tenantId } } });
+        if (waypoints.length > 0) {
+          await tx.waypoint.createMany({
+            data: waypoints.map(wp => ({
+              routeId,
+              kind:                 (wp.kind ?? 'STATION') as any,
+              stationId:            wp.stationId ?? null,
+              name:                 wp.name ?? null,
+              order:                wp.order,
+              distanceFromOriginKm: wp.distanceFromOriginKm,
+              tollCostXaf:          wp.tollCostXaf ?? 0,
+              checkpointCosts:      (wp.checkpointCosts ?? []) as any,
+              isMandatoryStop:      wp.isMandatoryStop ?? false,
+              estimatedWaitTime:    wp.estimatedWaitTime,
+            })),
+          });
+        }
+      });
+
+      // Si la ligne n'a pas encore de distanceKm (création récente, GPS stations
+      // posés mais pas encore de calcul), pose un fallback haversine. Sans ça,
+      // generateSegmentPriceMatrix produirait des prix proratisés sur 1 km soit
+      // toujours = basePrice complet pour le seul segment origine→destination.
+      await this.ensureDistanceFallback(tenantId, routeId);
+
+      // Auto-générer la matrice de prix (toutes paires, prix = 0 si pas encore configuré)
+      await this.generateSegmentPriceMatrix(tenantId, routeId);
+
+      return this.findOneWithWaypoints(tenantId, routeId);
+    } catch (e) {
+      // Log structuré pour diagnostic prod : on capture le payload exact + l'erreur
+      // au lieu de laisser remonter une 500 opaque côté frontend.
+      this.log.error(
+        `[setWaypoints] route=${routeId} tenant=${tenantId} waypoints=${waypoints.length} — ${(e as Error).message}`,
+        (e as Error).stack,
+      );
+      throw e;
     }
-
-    // Remplacer tous les waypoints (atomique) — defense-in-depth via FK tenantId
-    await this.prisma.transact(async (tx) => {
-      await tx.waypoint.deleteMany({ where: { routeId, route: { tenantId } } });
-      if (waypoints.length > 0) {
-        await tx.waypoint.createMany({
-          data: waypoints.map(wp => ({
-            routeId,
-            kind:                 (wp.kind ?? 'STATION') as any,
-            stationId:            wp.stationId ?? null,
-            name:                 wp.name ?? null,
-            order:                wp.order,
-            distanceFromOriginKm: wp.distanceFromOriginKm,
-            tollCostXaf:          wp.tollCostXaf ?? 0,
-            checkpointCosts:      wp.checkpointCosts ?? [],
-            isMandatoryStop:      wp.isMandatoryStop ?? false,
-            estimatedWaitTime:    wp.estimatedWaitTime,
-          })),
-        });
-      }
-    });
-
-    // Auto-générer la matrice de prix (toutes paires, prix = 0 si pas encore configuré)
-    await this.generateSegmentPriceMatrix(tenantId, routeId);
-
-    return this.findOneWithWaypoints(tenantId, routeId);
   }
 
   // ── Matrice de prix segment ────────────────────────────────────────────────
