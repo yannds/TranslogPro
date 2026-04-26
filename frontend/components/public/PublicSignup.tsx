@@ -213,17 +213,21 @@ function SignupWizard() {
           className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900"
           noValidate
         >
-          {/* Honeypot anti-bot */}
-          <input
-            type="text"
-            name="company_website"
-            value={honeypot}
-            onChange={e => setHoneypot(e.target.value)}
-            autoComplete="off"
-            tabIndex={-1}
-            aria-hidden
-            className="absolute left-[-9999px] h-0 w-0 opacity-0"
-          />
+          {/* Honeypot anti-bot — name volontairement opaque pour neutraliser
+              les heuristiques d'autofill (Chrome / 1Password / LastPass). La
+              clé JSON envoyée au backend reste `company_website`. */}
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', top: 'auto', width: '1px', height: '1px', overflow: 'hidden' }}>
+            <label htmlFor="trp-hp-field">Ne pas remplir</label>
+            <input
+              id="trp-hp-field"
+              type="text"
+              name="trp_hp_field"
+              value={honeypot}
+              onChange={e => setHoneypot(e.target.value)}
+              autoComplete="off"
+              tabIndex={-1}
+            />
+          </div>
 
           {step === 1 && (
             <StepAdmin
