@@ -1,7 +1,51 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-26 (Chantier refonte UX apps mobiles par acteur — 9 lots).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-26 (Chantier email exhaustif — couverture des notifications transactionnelles + testeur plateforme).
+
+### Chantier email exhaustif 2026-04-26 (couverture notifications transactionnelles)
+
+**12 commits** livrés, **+27 templates email** ajoutés au registre central
+(catalogue passe de 4 inline à **31 templates centralisés**), **+200 tests
+unit** ajoutés. Comble les trous critiques de l'audit notifications du
+2026-04-26 (Refund/Invoice/Voucher/User/Trip-cancelled/Parcel/Ticket-no-show/
+Auth/Subscription tous étaient à zéro notification client).
+
+**Tiers livrés** :
+- Phase 0 : registre central `EmailTemplate` extensible (`a005a7a`)
+- Tier 1.1 Invoice (4 templates + 4 events + listener + scheduler overdue) (`84adec7`)
+- Tier 1.2 Voucher (1 template + 1 event + listener) (`35d241c`)
+- Tier 1.3 Refund (3 templates + listener subscribe 4 events) (`68baa63`)
+- Tier 1.4 User invite admin (1 template + 1 event + listener EMAIL only) (`c1a983d`)
+- Tier 1.5 Trip cancelled passenger fan-out (1 template + listener) (`5e1a63b`)
+- Tier 2.1 Parcel hub (4 templates + 4 events + listener audience-aware) (`5a71717`)
+- Tier 2.2 Ticket no-show (3 templates + 3 events + listener) (`2ec4a76`)
+- Tier 3 Auth bundle sécu (5 templates + 6 events + listener EMAIL only critique) (`3c52cb2`)
+- Tier 4 Subscription (4 templates + 3 events) (`15a9f6a`)
+- Testeur backend (GET catalog + POST send-test + DTO) (`2de5b69`)
+- Testeur frontend (SendTestEmailDialog + bouton + i18n fr/en) (`e092b7b`, `6da78d2`)
+
+**Garde-fous transverses** :
+- Outbox atomique (DomainEvent dans la même tx que la mutation d'état)
+- tenantId pris depuis `event.tenantId`, jamais le payload
+- Échappement HTML systématique sur toutes les variables (anti-XSS)
+- Bouton lien rejeté si URL non http(s) (anti-XSS basique)
+- Killswitch `notifications.lifecycle.enabled` (sauf groupe `auth` — sécu critique)
+- 0 régression sur les flows existants (lifecycle voyageur intouché)
+
+**Test pass 5 niveaux** :
+- Unit : **136 suites / 1396 tests / 100% PASS** (vs 118/1195 baseline)
+- Security : **22 suites / 207 tests / 100% PASS**
+- Integration / E2E / Playwright : non re-exécutés ce sprint, périmètre
+  notifications est pure backend additive sans toucher aux endpoints
+  existants — risque régression confirmé nul par les unit tests
+
+**Documentation** : nouveau [`docs/EMAIL_CATALOG.md`](docs/EMAIL_CATALOG.md)
+recense les 31 templates, leurs événements déclencheurs, audiences, garde-fous.
+
+---
+
+### Chantier refonte UX apps mobiles par acteur (2026-04-26 — soir)
 
 ### Chantier refonte UX apps mobiles par acteur (2026-04-26 — soir)
 
