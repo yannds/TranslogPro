@@ -12,12 +12,13 @@
  * Endpoints consommés :
  *   POST  /api/auth/change-password   { currentPassword, newPassword }
  *   PATCH /api/auth/me/preferences    { locale?, timezone? }
- *   POST  /api/mfa/setup                                  → { qrDataUrl, secret }
+ *   POST  /api/mfa/setup                                  → { otpauthUrl, secret, qrDataUrl }
  *   POST  /api/mfa/enable          { code }               → { backupCodes[] }
  *   POST  /api/mfa/disable         { password, code? }
  */
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import QRCode from 'qrcode';
 import { useSearchParams } from 'react-router-dom';
 import {
   UserCircle2, ShieldCheck, SlidersHorizontal, Save, KeyRound,
@@ -170,7 +171,12 @@ function SecurityTab() {
   }
 
   // ── Carte MFA ──
-  const [mfaSetup, setMfaSetup] = useState<{ qrDataUrl: string; secret: string } | null>(null);
+  // On consomme `otpauthUrl` (toujours présent dans la réponse) pour rendre
+  // le QR localement via `qrcode.toCanvas` — pas de data: URI dans le DOM,
+  // donc indépendant de la CSP `img-src` du frontend (Vite, nginx, SW PWA).
+  // Le champ legacy `qrDataUrl` reste lu si présent mais n'est plus requis.
+  const [mfaSetup, setMfaSetup] = useState<{ otpauthUrl: string; secret: string } | null>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mfaCode,  setMfaCode]  = useState('');
   const [mfaBusy,  setMfaBusy]  = useState(false);
   const [mfaErr,   setMfaErr]   = useState<string | null>(null);
@@ -179,10 +185,23 @@ function SecurityTab() {
   const [showDis,  setShowDis]  = useState(false);
   const mfaEnabled = user?.mfaEnabled ?? false;
 
+  // Rendu du QR sur canvas dès que mfaSetup.otpauthUrl est disponible.
+  // Aucun data: URI n'est exposé au DOM — toute CSP img-src ne peut bloquer.
+  useEffect(() => {
+    if (!mfaSetup?.otpauthUrl || !qrCanvasRef.current) return;
+    QRCode.toCanvas(qrCanvasRef.current, mfaSetup.otpauthUrl, { width: 192, margin: 1 })
+      .catch((err: unknown) => {
+        // En dernier recours, on log et l'utilisateur peut toujours saisir
+        // le secret manuellement (champ "Secret" affiché juste en dessous).
+        // eslint-disable-next-line no-console
+        console.error('[MFA] QR render failed', err);
+      });
+  }, [mfaSetup?.otpauthUrl]);
+
   async function startMfaSetup() {
     setMfaBusy(true); setMfaErr(null);
     try {
-      const out = await apiPost<{ qrDataUrl: string; secret: string }>('/api/mfa/setup', {});
+      const out = await apiPost<{ otpauthUrl: string; secret: string }>('/api/mfa/setup', {});
       setMfaSetup(out);
     } catch (e) {
       setMfaErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
@@ -294,7 +313,12 @@ function SecurityTab() {
           <div className="space-y-3">
             <p className="text-sm t-text-body">{t('account.mfaScanHint')}</p>
             <div className="flex flex-col sm:flex-row gap-4 items-start">
-              <img src={mfaSetup.qrDataUrl} alt="QR TOTP" className="w-48 h-48 rounded border border-slate-200 dark:border-slate-700" />
+              <canvas
+                ref={qrCanvasRef}
+                aria-label="QR TOTP"
+                role="img"
+                className="w-48 h-48 rounded border border-slate-200 dark:border-slate-700 bg-white"
+              />
               <div className="space-y-2 flex-1">
                 <p className="text-xs t-text-3">{t('account.mfaSecretLabel')}</p>
                 <code className="block text-[11px] font-mono break-all t-text bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">{mfaSetup.secret}</code>
