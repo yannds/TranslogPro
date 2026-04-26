@@ -213,7 +213,7 @@ export function AdminHomeScreen() {
           tone={colors.primary}
           title={L('Trajets du jour', 'Today’s trips')}
           subtitle={L('Suspendre · annuler · déclarer retard majeur', 'Suspend · cancel · declare major delay')}
-          onPress={() => navigation.navigate('AdminTrips')}
+          onPress={() => navigation.navigate('Trajets')}
         />
 
         <NavCard
@@ -223,7 +223,7 @@ export function AdminHomeScreen() {
           title={L('Incidents', 'Incidents')}
           subtitle={L('Triage SOS et signalements en cours', 'Triage SOS and live reports')}
           badge={today?.openIncidents}
-          onPress={() => navigation.navigate('AdminIncidents')}
+          onPress={() => navigation.navigate('Incidents')}
         />
 
         <NavCard
@@ -241,7 +241,7 @@ export function AdminHomeScreen() {
           tone={colors.success}
           title={L('Équipes', 'Teams')}
           subtitle={L('Staff par agence & rôle — suspendre/réactiver', 'Staff by agency & role — suspend/reactivate')}
-          onPress={() => navigation.navigate('AdminTeams')}
+          onPress={() => navigation.navigate('Équipes')}
         />
 
         <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 24, fontSize: 11 }}>

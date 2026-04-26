@@ -1,7 +1,12 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  createBottomTabNavigator,
+  type BottomTabNavigationOptions,
+} from '@react-navigation/bottom-tabs';
+import { type ComponentType } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useTheme } from '../theme/ThemeProvider';
 import { LoginScreen } from '../screens/LoginScreen';
 import { CashierHomeScreen } from '../cashier/CashierHomeScreen';
 import { SellTicketScreen } from '../cashier/SellTicketScreen';
@@ -37,6 +42,16 @@ import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
 import { CustomerSavScreen } from '../customer/CustomerSavScreen';
 import { CustomerProfileScreen } from '../customer/CustomerProfileScreen';
 import { portalForUser } from './portalForUser';
+import {
+  type IconProps,
+  TabIconBoard, TabIconOperations, TabIconTeams, TabIconMore,
+  TabIconCash, TabIconSell, TabIconTickets,
+  TabIconStation, TabIconManifest,
+  TabIconDock, TabIconScanner,
+  TabIconTrips, TabIconBriefing, TabIconCabin,
+  TabIconHome, TabIconMyDocs, TabIconSav, TabIconProfile,
+  IconWarn,
+} from '../ui/icons';
 
 const RootStack    = createNativeStackNavigator();
 const DriverStack  = createNativeStackNavigator();
@@ -46,16 +61,65 @@ const AdminStack     = createNativeStackNavigator();
 const CustomerStack  = createNativeStackNavigator();
 const Tab            = createBottomTabNavigator();
 
+/* ── Helpers tab bar ───────────────────────────────────────────────────── */
+
+function makeTabIcon(Icon: ComponentType<IconProps>) {
+  return ({ color, size }: { color: string; size: number }) => (
+    <Icon size={size} color={color} strokeWidth={2} />
+  );
+}
+
+/** Options globales bottom-tab — couleurs theme-aware, hauteur cohérente. */
+function useTabScreenOptions(): BottomTabNavigationOptions {
+  const { colors } = useTheme();
+  return {
+    headerShown:           false,
+    tabBarActiveTintColor: colors.primary,
+    tabBarInactiveTintColor: colors.textMuted,
+    tabBarStyle: {
+      backgroundColor: colors.surface,
+      borderTopColor:  colors.border,
+      borderTopWidth:  StyleSheet_hairline(),
+      height:          60,
+      paddingBottom:   8,
+      paddingTop:      6,
+    },
+    tabBarLabelStyle: {
+      fontSize:   11,
+      fontWeight: '600',
+      marginTop:  2,
+    },
+  };
+}
+
+// Helper local pour éviter d'importer StyleSheet juste pour hairlineWidth.
+function StyleSheet_hairline(): number {
+  // Approx 1 / pixelRatio — 0.5 sur la plupart des devices, suffisant pour
+  // un séparateur subtil cohérent avec iOS/Android natif.
+  return 0.5;
+}
+
+/* ── DRIVER ─────────────────────────────────────────────────────────────── */
+
 function DriverBottomTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Trajets"  component={DriverHomeScreen} />
-      {/* Manifest : on réutilise QuaiManifestScreen (sélection trip + génération
-          + signature géo-stampée). Permission backend : MANIFEST_GENERATE/SIGN
-          déjà accordées au DRIVER ; le composant est trip-driven, pas
-          rôle-spécifique. Évite duplication d'UI. */}
-      <Tab.Screen name="Manifest" component={QuaiManifestScreen} />
-      <Tab.Screen name="Incident" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Trajets"
+        component={DriverHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconTrips) }}
+      />
+      <Tab.Screen
+        name="Manifest"
+        component={QuaiManifestScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconManifest) }}
+      />
+      <Tab.Screen
+        name="Incident"
+        component={IncidentReportScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
     </Tab.Navigator>
   );
 }
@@ -68,9 +132,6 @@ function DriverNav() {
       <DriverStack.Screen name="DriverBriefing"      component={BriefingScreen} />
       <DriverStack.Screen name="DriverCheckin"       component={CheckinScreen} />
       <DriverStack.Screen name="DriverBoardingScan"  component={BoardingScanScreen} />
-      {/* Scan rafale chauffeur — même écran que l'agent quai (QuaiBulkScan)
-          mais avec defaultIntent='board'. Le toggle check-in/board reste
-          accessible selon capabilities. */}
       <DriverStack.Screen name="DriverBulkScan"      component={QuaiBulkScanScreen} initialParams={{ defaultIntent: 'board' }} />
       <DriverStack.Screen name="DriverParcelScan"    component={ParcelScanScreen} />
       <DriverStack.Screen name="DriverEndReport"     component={EndReportScreen} />
@@ -80,22 +141,52 @@ function DriverNav() {
   );
 }
 
+/* ── CASHIER ────────────────────────────────────────────────────────────── */
+
 function CashierTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Caisse"   component={CashierHomeScreen} />
-      <Tab.Screen name="Vente"    component={SellTicketScreen} />
-      <Tab.Screen name="Billets"  component={CashierTicketsScreen} />
-      <Tab.Screen name="Incident" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Caisse"
+        component={CashierHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconCash) }}
+      />
+      <Tab.Screen
+        name="Vente"
+        component={SellTicketScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconSell) }}
+      />
+      <Tab.Screen
+        name="Billets"
+        component={CashierTicketsScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconTickets) }}
+      />
+      <Tab.Screen
+        name="Incident"
+        component={IncidentReportScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
     </Tab.Navigator>
   );
 }
 
+/* ── CUSTOMER ───────────────────────────────────────────────────────────── */
+
 function CustomerBottomTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Accueil"     component={CustomerHomeScreen} />
-      <Tab.Screen name="Signalement" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Accueil"
+        component={CustomerHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconHome) }}
+      />
+      <Tab.Screen
+        name="Signalement"
+        component={IncidentReportScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
     </Tab.Navigator>
   );
 }
@@ -112,15 +203,27 @@ function CustomerNav() {
   );
 }
 
+/* ── STATION ────────────────────────────────────────────────────────────── */
+
 function StationBottomTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Gare"     component={StationHomeScreen} />
-      {/* Manifest : agent gare doit aussi générer + signer (manifest_generate
-          + manifest_sign accordées par défaut au STATION_AGENT). Même composant
-          que Quai/Driver — trip-driven, perm-gated server-side. */}
-      <Tab.Screen name="Manifest" component={QuaiManifestScreen} />
-      <Tab.Screen name="Incident" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Gare"
+        component={StationHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconStation) }}
+      />
+      <Tab.Screen
+        name="Manifest"
+        component={QuaiManifestScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconManifest) }}
+      />
+      <Tab.Screen
+        name="Incident"
+        component={IncidentReportScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
     </Tab.Navigator>
   );
 }
@@ -137,15 +240,27 @@ function StationNav() {
   );
 }
 
+/* ── QUAI ───────────────────────────────────────────────────────────────── */
+
 function QuaiBottomTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Quai"     component={QuaiHomeScreen} />
-      {/* Manifest : on utilise QuaiManifestScreen (sélection trip + vue live
-          passagers/colis + signature), pas le legacy ManifestSignScreen qui
-          n'affiche rien d'autre qu'un champ texte + pad. */}
-      <Tab.Screen name="Manifest" component={QuaiManifestScreen} />
-      <Tab.Screen name="Incident" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Quai"
+        component={QuaiHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconDock) }}
+      />
+      <Tab.Screen
+        name="Manifest"
+        component={QuaiManifestScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconManifest) }}
+      />
+      <Tab.Screen
+        name="Incident"
+        component={IncidentReportScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
     </Tab.Navigator>
   );
 }
@@ -155,33 +270,57 @@ function QuaiNav() {
     <QuaiStack.Navigator screenOptions={{ headerShown: false }}>
       <QuaiStack.Screen name="QuaiHome"          component={QuaiBottomTabs} />
       <QuaiStack.Screen name="QuaiBulkScan"      component={QuaiBulkScanScreen} />
-      <QuaiStack.Screen name="QuaiManifest"     component={QuaiManifestScreen} />
+      <QuaiStack.Screen name="QuaiManifest"      component={QuaiManifestScreen} />
       <QuaiStack.Screen name="QuaiParcelActions" component={QuaiParcelActionsScreen} />
     </QuaiStack.Navigator>
   );
 }
 
+/* ── ADMIN TENANT ───────────────────────────────────────────────────────── */
+
 function AdminBottomTabs() {
+  const opts = useTabScreenOptions();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Admin"    component={AdminHomeScreen} />
-      <Tab.Screen name="Incident" component={IncidentReportScreen} />
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Bord"
+        component={AdminHomeScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconBoard) }}
+      />
+      <Tab.Screen
+        name="Trajets"
+        component={AdminTripsScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconOperations) }}
+      />
+      <Tab.Screen
+        name="Incidents"
+        component={AdminIncidentsScreen}
+        options={{ tabBarIcon: makeTabIcon(IconWarn) }}
+      />
+      <Tab.Screen
+        name="Équipes"
+        component={AdminTeamsScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconTeams) }}
+      />
     </Tab.Navigator>
   );
 }
 
 function AdminNav() {
+  // Note : Trajets, Incidents, Équipes sont des tabs dans AdminBottomTabs.
+  // On ne les répète PAS comme stack screens pour éviter les ambiguïtés
+  // de navigation (navigate('Trajets') depuis Bord change de tab proprement).
+  // Charts et SAV restent en stack — accessibles via le drawer header (L5).
   return (
     <AdminStack.Navigator screenOptions={{ headerShown: false }}>
-      <AdminStack.Screen name="AdminHome"      component={AdminBottomTabs} />
-      <AdminStack.Screen name="AdminCharts"    component={AdminChartsScreen} />
-      <AdminStack.Screen name="AdminSav"       component={AdminSavScreen} />
-      <AdminStack.Screen name="AdminTeams"     component={AdminTeamsScreen} />
-      <AdminStack.Screen name="AdminTrips"     component={AdminTripsScreen} />
-      <AdminStack.Screen name="AdminIncidents" component={AdminIncidentsScreen} />
+      <AdminStack.Screen name="AdminHome"   component={AdminBottomTabs} />
+      <AdminStack.Screen name="AdminCharts" component={AdminChartsScreen} />
+      <AdminStack.Screen name="AdminSav"    component={AdminSavScreen} />
     </AdminStack.Navigator>
   );
 }
+
+/* ── ROOT NAVIGATOR ─────────────────────────────────────────────────────── */
 
 export function AppNavigator() {
   const { user, loading } = useAuth();
