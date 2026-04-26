@@ -27,6 +27,8 @@ import { AdminHomeScreen } from '../admin/AdminHomeScreen';
 import { AdminChartsScreen } from '../admin/AdminChartsScreen';
 import { AdminSavScreen } from '../admin/AdminSavScreen';
 import { AdminTeamsScreen } from '../admin/AdminTeamsScreen';
+import { AdminTripsScreen } from '../admin/AdminTripsScreen';
+import { AdminIncidentsScreen } from '../admin/AdminIncidentsScreen';
 import { CustomerHomeScreen } from '../customer/CustomerHomeScreen';
 import { CustomerBookingScreen } from '../customer/CustomerBookingScreen';
 import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
@@ -165,10 +167,12 @@ function AdminBottomTabs() {
 function AdminNav() {
   return (
     <AdminStack.Navigator screenOptions={{ headerShown: false }}>
-      <AdminStack.Screen name="AdminHome"   component={AdminBottomTabs} />
-      <AdminStack.Screen name="AdminCharts" component={AdminChartsScreen} />
-      <AdminStack.Screen name="AdminSav"    component={AdminSavScreen} />
-      <AdminStack.Screen name="AdminTeams"  component={AdminTeamsScreen} />
+      <AdminStack.Screen name="AdminHome"      component={AdminBottomTabs} />
+      <AdminStack.Screen name="AdminCharts"    component={AdminChartsScreen} />
+      <AdminStack.Screen name="AdminSav"       component={AdminSavScreen} />
+      <AdminStack.Screen name="AdminTeams"     component={AdminTeamsScreen} />
+      <AdminStack.Screen name="AdminTrips"     component={AdminTripsScreen} />
+      <AdminStack.Screen name="AdminIncidents" component={AdminIncidentsScreen} />
     </AdminStack.Navigator>
   );
 }

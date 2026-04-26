@@ -9,18 +9,32 @@ import { useI18n } from '../i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { useOnline } from '../offline/useOnline';
 
-interface Kpis {
-  ticketsToday?:     number;
-  parcelsToday?:     number;
-  openIncidents?:    number;
-  openRegisters?:    number;
-  discrepancyCount?: number;
+interface TodaySummary {
+  today: {
+    revenue:            number;
+    ticketsSold:        number;
+    parcelsRegistered:  number;
+    openIncidents:      number;
+    openRegisters:      number;
+    discrepancyCount:   number;
+    activeTrips:        number;
+    fillRate:           number;
+    fillRateTripsCount: number;
+  };
+  thresholds?: {
+    incident:    number;
+    discrepancy: number;
+    fillRate:    number;
+  };
 }
 
 /**
- * Dashboard admin tenant — vue rapide mobile.
- *   - KPIs du jour (endpoint `/analytics/kpis` si dispo, sinon zéros).
- *   - Liste des clôtures DISCREPANCY récentes (visibilité audit caisse).
+ * Dashboard admin tenant — vue rapide mobile (le pouls du jour).
+ *   - 8 KPIs structurés : CA, trajets actifs, billets, colis, taux rempl.,
+ *     incidents, caisses ouvertes, anomalies caisse.
+ *   - Cartes de navigation : Charts, SAV, Trajets, Incidents, Équipes.
+ *   - Pas de configuration tenant lourde (Workflow Studio, IAM, intégrations) —
+ *     tout cela reste sur le web.
  */
 export function AdminHomeScreen() {
   const { user, logout } = useAuth();
@@ -30,22 +44,52 @@ export function AdminHomeScreen() {
   const navigation = useNavigation<NavigationProp<any>>();
   const tenantId = user?.effectiveTenantId ?? user?.tenantId ?? '';
 
-  const [kpis,    setKpis]    = useState<Kpis>({});
+  const lang = (user as any)?.locale === 'en' ? 'en' : 'fr';
+  const L = (fr: string, en: string) => (lang === 'en' ? en : fr);
+
+  const [data,    setData]    = useState<TodaySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!tenantId) return;
-    // Best-effort : le backend peut ne pas avoir l'endpoint analytics/kpis ;
-    // on reste silencieux en cas d'échec pour ne pas bloquer l'écran.
     try {
-      const k = await apiGet<Kpis>(
-        `/api/tenants/${tenantId}/analytics/kpis`,
+      const res = await apiGet<TodaySummary>(
+        `/api/tenants/${tenantId}/analytics/today-summary`,
         { skipAuthRedirect: true },
       );
-      setKpis(k ?? {});
+      setData(res ?? null);
     } catch {
-      setKpis({});
+      // fallback : essayer l'endpoint léger /kpis si today-summary échoue (perm,
+      // ancien backend). On reconstruit un payload minimal pour la home.
+      try {
+        const k = await apiGet<{
+          ticketsToday:     number;
+          parcelsToday:     number;
+          openIncidents:    number;
+          openRegisters:    number;
+          discrepancyCount: number;
+        }>(`/api/tenants/${tenantId}/analytics/kpis`, { skipAuthRedirect: true });
+        if (k) {
+          setData({
+            today: {
+              revenue:            0,
+              ticketsSold:        k.ticketsToday,
+              parcelsRegistered:  k.parcelsToday,
+              openIncidents:      k.openIncidents,
+              openRegisters:      k.openRegisters,
+              discrepancyCount:   k.discrepancyCount,
+              activeTrips:        0,
+              fillRate:           0,
+              fillRateTripsCount: 0,
+            },
+          });
+        } else {
+          setData(null);
+        }
+      } catch {
+        setData(null);
+      }
     }
   }, [tenantId]);
 
@@ -60,12 +104,22 @@ export function AdminHomeScreen() {
     setRefreshing(false);
   }
 
+  const today = data?.today;
+  const thresholds = data?.thresholds;
+
+  // Calcul des badges d'alerte (vs seuils tenant)
+  const incidentAlert    = today && thresholds && today.openIncidents    >= thresholds.incident;
+  const discrepancyAlert = today && thresholds && today.discrepancyCount >= thresholds.discrepancy;
+  const fillRateAlert    = today && thresholds && today.fillRateTripsCount > 0 && today.fillRate < thresholds.fillRate;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.h1, { color: colors.text }]}>TransLog — Admin</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>{user?.name ?? user?.email}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+            {user?.name ?? user?.email}
+          </Text>
         </View>
         <Pressable onPress={logout} accessibilityRole="button" style={styles.logoutBtn}>
           <Text style={{ color: colors.danger, fontWeight: '600' }}>⎋</Text>
@@ -82,98 +136,232 @@ export function AdminHomeScreen() {
         contentContainerStyle={{ padding: 16, gap: 10 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} />}
       >
-        {loading && <ActivityIndicator color={colors.primary} />}
+        {loading && !data && <ActivityIndicator color={colors.primary} />}
 
+        {/* CA jour : KPI vedette pleine largeur */}
+        <View style={[styles.heroKpi, { borderColor: colors.primary, backgroundColor: colors.surface }]}>
+          <Text style={[styles.heroLabel, { color: colors.textMuted }]}>
+            {L('Chiffre d’affaires aujourd’hui', 'Revenue today')}
+          </Text>
+          <Text style={[styles.heroValue, { color: colors.primary }]}>
+            {today ? formatMoney(today.revenue, lang) : '—'}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+            {today
+              ? L(`${today.activeTrips} trajets actifs · ${today.ticketsSold} billets · ${today.parcelsRegistered} colis`,
+                  `${today.activeTrips} active trips · ${today.ticketsSold} tickets · ${today.parcelsRegistered} parcels`)
+              : ''}
+          </Text>
+        </View>
+
+        {/* Grille 6 KPIs (3×2) */}
         <View style={styles.grid}>
-          <KpiCard label="Billets (j)"    value={kpis.ticketsToday ?? '—'}    color={colors.primary}   fg={colors.primaryFg} surface={colors.surface} border={colors.border} text={colors.text} muted={colors.textMuted} />
-          <KpiCard label="Colis (j)"      value={kpis.parcelsToday ?? '—'}    color={colors.primary}   fg={colors.primaryFg} surface={colors.surface} border={colors.border} text={colors.text} muted={colors.textMuted} />
-          <KpiCard label="Incidents ouv." value={kpis.openIncidents ?? '—'}   color={colors.warning}   fg={'white'}          surface={colors.surface} border={colors.border} text={colors.text} muted={colors.textMuted} />
-          <KpiCard label="Caisses ouv."   value={kpis.openRegisters ?? '—'}   color={colors.success}   fg={'white'}          surface={colors.surface} border={colors.border} text={colors.text} muted={colors.textMuted} />
+          <KpiCard
+            label={L('Trajets', 'Trips')}
+            value={today?.activeTrips ?? '—'}
+            color={colors.primary}
+            colors={colors}
+          />
+          <KpiCard
+            label={L('Taux rempl.', 'Fill rate')}
+            value={today && today.fillRateTripsCount > 0 ? `${Math.round(today.fillRate * 100)}%` : '—'}
+            color={fillRateAlert ? colors.warning : colors.success}
+            colors={colors}
+            alert={fillRateAlert}
+          />
+          <KpiCard
+            label={L('Incidents', 'Incidents')}
+            value={today?.openIncidents ?? '—'}
+            color={incidentAlert ? colors.danger : colors.warning}
+            colors={colors}
+            alert={incidentAlert}
+          />
+          <KpiCard
+            label={L('Caisses ouv.', 'Open tills')}
+            value={today?.openRegisters ?? '—'}
+            color={colors.success}
+            colors={colors}
+          />
+          <KpiCard
+            label={L('Billets', 'Tickets')}
+            value={today?.ticketsSold ?? '—'}
+            color={colors.primary}
+            colors={colors}
+          />
+          <KpiCard
+            label={L('Anomalies caisse', 'Cash issues')}
+            value={today?.discrepancyCount ?? '—'}
+            color={discrepancyAlert ? colors.danger : colors.textMuted}
+            colors={colors}
+            alert={discrepancyAlert}
+          />
         </View>
 
-        <Pressable
+        {/* Cartes de navigation */}
+        <NavCard
+          colors={colors}
+          icon="📊"
+          tone={colors.primary}
+          title={L('Graphes & analytics', 'Charts & analytics')}
+          subtitle={L('7j billets · revenus 30j · top routes · incidents', '7d tickets · 30d revenue · top routes · incidents')}
           onPress={() => navigation.navigate('AdminCharts')}
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.card,
-            { borderColor: colors.primary, backgroundColor: colors.surface, marginTop: 8, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={[styles.h2, { color: colors.primary }]}>📊 Graphes détaillés ›</Text>
-          <Text style={{ color: colors.textMuted, marginTop: 2, fontSize: 12 }}>
-            Tickets 7j · Revenus 30j · Top routes · Incidents par sévérité
-          </Text>
-        </Pressable>
+        />
 
-        <Pressable
+        <NavCard
+          colors={colors}
+          icon="🛣"
+          tone={colors.primary}
+          title={L('Trajets du jour', 'Today’s trips')}
+          subtitle={L('Suspendre · annuler · déclarer retard majeur', 'Suspend · cancel · declare major delay')}
+          onPress={() => navigation.navigate('AdminTrips')}
+        />
+
+        <NavCard
+          colors={colors}
+          icon="🚨"
+          tone={incidentAlert ? colors.danger : colors.warning}
+          title={L('Incidents', 'Incidents')}
+          subtitle={L('Triage SOS et signalements en cours', 'Triage SOS and live reports')}
+          badge={today?.openIncidents}
+          onPress={() => navigation.navigate('AdminIncidents')}
+        />
+
+        <NavCard
+          colors={colors}
+          icon="🛠"
+          tone={colors.warning}
+          title={L('SAV & remboursements', 'SAV & refunds')}
+          subtitle={L('Valider/rejeter remboursements et réclamations clients', 'Approve/reject refunds and customer claims')}
           onPress={() => navigation.navigate('AdminSav')}
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.card,
-            { borderColor: colors.warning, backgroundColor: colors.surface, marginTop: 8, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={[styles.h2, { color: colors.warning }]}>🛠  SAV & remboursements ›</Text>
-          <Text style={{ color: colors.textMuted, marginTop: 2, fontSize: 12 }}>
-            Valider/rejeter remboursements et réclamations clients.
-          </Text>
-        </Pressable>
+        />
 
-        <Pressable
+        <NavCard
+          colors={colors}
+          icon="👥"
+          tone={colors.success}
+          title={L('Équipes', 'Teams')}
+          subtitle={L('Staff par agence & rôle — suspendre/réactiver', 'Staff by agency & role — suspend/reactivate')}
           onPress={() => navigation.navigate('AdminTeams')}
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.card,
-            { borderColor: colors.success, backgroundColor: colors.surface, marginTop: 8, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={[styles.h2, { color: colors.success }]}>👥  Équipes ›</Text>
-          <Text style={{ color: colors.textMuted, marginTop: 2, fontSize: 12 }}>
-            Staff par agence & rôle — suspendre/réactiver.
-          </Text>
-        </Pressable>
+        />
 
-        <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface, marginTop: 8 }]}>
-          <Text style={[styles.h2, { color: colors.text }]}>Audit caisses</Text>
-          <Text style={{ color: colors.textMuted, marginTop: 2 }}>
-            {typeof kpis.discrepancyCount === 'number'
-              ? `${kpis.discrepancyCount} clôture(s) avec écart sur les 30 derniers jours.`
-              : 'Utilisez le dashboard web pour le détail (/admin/reports).'}
-          </Text>
-        </View>
-
-        <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 24, fontSize: 12 }}>
-          Le rapport complet (graphes, CSV, filtres) reste sur le web — cette vue donne le pouls du jour.
+        <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 24, fontSize: 11 }}>
+          {L('Configuration avancée (workflows, IAM, intégrations) sur le tableau de bord web.',
+             'Advanced configuration (workflows, IAM, integrations) on the web dashboard.')}
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function formatMoney(amount: number, lang: string): string {
+  try {
+    return amount.toLocaleString(lang, { maximumFractionDigits: 0 });
+  } catch {
+    return String(amount);
+  }
+}
+
 function KpiCard({
-  label, value, color, fg, surface, border, text, muted,
-}: { label: string; value: number | string; color: string; fg: string; surface: string; border: string; text: string; muted: string }) {
+  label, value, color, alert, colors,
+}: {
+  label: string;
+  value: number | string;
+  color: string;
+  alert?: boolean;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
-    <View style={[styles.kpi, { borderColor: border, backgroundColor: surface }]}>
-      <View style={[styles.dot, { backgroundColor: color }]}>
-        <Text style={{ color: fg, fontWeight: '700', fontSize: 10 }}>●</Text>
-      </View>
-      <Text style={[styles.kpiValue, { color: text }]}>{String(value)}</Text>
-      <Text style={[styles.kpiLabel, { color: muted }]}>{label}</Text>
+    <View style={[
+      styles.kpi,
+      {
+        borderColor: alert ? color : colors.border,
+        backgroundColor: colors.surface,
+        borderLeftWidth: 4,
+        borderLeftColor: color,
+      },
+    ]}>
+      <Text style={[styles.kpiValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
+        {String(value)}
+      </Text>
+      <Text style={[styles.kpiLabel, { color: colors.textMuted }]} numberOfLines={1}>{label}</Text>
     </View>
+  );
+}
+
+function NavCard({
+  colors, icon, tone, title, subtitle, onPress, badge,
+}: {
+  colors: ReturnType<typeof useTheme>['colors'];
+  icon: string;
+  tone: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  badge?: number;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      style={({ pressed }) => [
+        styles.navCard,
+        {
+          borderColor: tone,
+          backgroundColor: colors.surface,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <Text style={{ fontSize: 22 }}>{icon}</Text>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={[styles.navTitle, { color: tone }]} numberOfLines={1}>{title}</Text>
+          {typeof badge === 'number' && badge > 0 && (
+            <View style={[styles.navBadge, { backgroundColor: tone }]}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{badge}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+      <Text style={{ color: tone, fontSize: 18, fontWeight: '700' }}>›</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   h1:        { fontSize: 20, fontWeight: '800' },
-  h2:        { fontSize: 15, fontWeight: '700' },
   logoutBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   banner:    { marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 8 },
-  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  kpi:       { flexBasis: '48%', padding: 14, borderRadius: 12, borderWidth: 1 },
-  dot:       { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  kpiValue:  { fontSize: 22, fontWeight: '800' },
-  kpiLabel:  { fontSize: 12 },
-  card:      { padding: 14, borderRadius: 12, borderWidth: 1 },
+
+  heroKpi:   { padding: 16, borderRadius: 14, borderWidth: 1, borderLeftWidth: 4 },
+  heroLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '600' },
+  heroValue: { fontSize: 28, fontWeight: '900', marginTop: 4 },
+
+  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kpi:       {
+    flexBasis:    '31%',
+    flexGrow:     1,
+    padding:      10,
+    borderRadius: 10,
+    borderWidth:  1,
+    minHeight:    66,
+  },
+  kpiValue:  { fontSize: 18, fontWeight: '800' },
+  kpiLabel:  { fontSize: 11, marginTop: 2 },
+
+  navCard:   {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           12,
+    padding:       14,
+    borderRadius:  12,
+    borderWidth:   1,
+  },
+  navTitle:  { fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  navBadge:  { paddingHorizontal: 6, minWidth: 20, height: 18, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
 });
