@@ -6612,6 +6612,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "pwdOk":              "Mot de passe changé — vous allez être redirigé vers la page de connexion.",
     "pwdFailed":          "Échec du changement de mot de passe.",
     "mustChangePassword": "Votre administrateur a demandé que vous changiez votre mot de passe avant de continuer.",
+    "mustEnrollMfa":      "L'authentification à deux facteurs (MFA) est obligatoire pour votre rôle. Activez-la dans la section Sécurité ci-dessous pour continuer à utiliser l'application.",
 
     "mfaTitle":           "Double authentification (TOTP)",
     "mfaDesc":            "Protégez votre compte avec une application d'authentification comme Google Authenticator ou 1Password.",

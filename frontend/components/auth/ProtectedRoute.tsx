@@ -75,6 +75,13 @@ export function ProtectedRoute({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // MFA enrollment forcé pour rôles haut-privilège (TENANT_ADMIN etc.)
+  // Bloquant : tant que MFA n'est pas activé, l'utilisateur ne peut accéder
+  // qu'à /account (onglet security) — le reste de l'app est inaccessible.
+  if (user.mustEnrollMfa && !location.pathname.startsWith('/account')) {
+    return <Navigate to="/account?tab=security" replace />;
+  }
+
   // Portal guard — **strict par défaut** :
   //   - un chauffeur qui tape /admin est renvoyé vers /driver
   //   - un admin qui tape /driver est renvoyé vers /admin

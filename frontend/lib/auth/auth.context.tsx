@@ -69,6 +69,13 @@ export interface AuthUser {
   mustChangePassword?: boolean;
   /** True quand MFA activé et confirmé sur ce compte. */
   mfaEnabled?:         boolean;
+  /**
+   * True ssi l'utilisateur a un rôle haut-privilège (TENANT_ADMIN, etc.) mais
+   * n'a pas encore enrôlé son MFA. Le frontend redirige alors vers
+   * /account?tab=security et bloque les autres pages tant que MFA pas activé.
+   * Conforme NIST SP 800-63B AAL2.
+   */
+  mustEnrollMfa?:      boolean;
 }
 
 /** Résultat possible de login : soit session OK, soit MFA requis. */

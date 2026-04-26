@@ -220,6 +220,13 @@ function SecurityTab() {
         </div>
       )}
 
+      {user?.mustEnrollMfa && (
+        <div role="alert" className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-4 py-3 text-sm text-rose-800 dark:text-rose-300 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          <span>{t('account.mustEnrollMfa')}</span>
+        </div>
+      )}
+
       <Card title={t('account.pwdTitle')} description={t('account.pwdDesc')}>
         <form onSubmit={handlePwdSubmit} className="space-y-3">
           {err && (
