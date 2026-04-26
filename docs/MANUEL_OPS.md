@@ -652,15 +652,95 @@ Procédure complète :
 
 ⚠️ Tentative de génération keys + activation faite le 2026-04-26 (V4.4) — BIND9 a crash avec `option 'auto-dnssec' no longer exists`. Reverté. À refaire avec syntaxe `dnssec-policy "default"` ci-dessus + édition dans le REPO (pas direct VPS, sinon rsync deploy écrase).
 
-### 8.8 — Hardening restant (Vague 4)
+### 8.8 — Hardening Vague 5 appliqué (2026-04-26)
 
-- HIGH-5 (suite) Vault uid=100 + cap_add IPC_LOCK/SETFCAP — sealed scenario à gérer (3 unseal keys)
-- HIGH-5 (suite) Caddy non-root + cap_add NET_BIND_SERVICE — chown volumes /data /config /var/log
-- LOW-18 frontend : page `/account/mfa-enrollment`, redirect auto si `mustEnrollMfa: true` dans `/me` réponse, i18n 8 locales
-- MED-7 DNSSEC effectif — voir §8.7 (action chez registrar nécessaire)
-- Refacto deploy script `04-deploy.sh` pour ne pas écraser les Caddyfile/zone si déjà à jour
-- Bascule RLS PERMISSIVE → RESTRICTIVE strict (audit que tous les services utilisent `prisma.transact()`)
-- Investigation filtre Hostinger DDoS qui drop trafic MTN Congo (AS37463) — ticket Hostinger
+| ID | Action | Vérif |
+|---|---|---|
+| V5-A | DNSSEC effectif via `dnssec-policy "default"` (BIND9 9.20+) — CSK ECDSAP256SHA256 tag=29651 dans `/var/cache/bind` | `dig +dnssec translog.dsyann.info @72.61.108.160` retourne RRSIG |
+| V5-B | Script `infra/prod/scripts/rotate-secrets.sh` automatise rotation 90j (Postgres runtime + MinIO + Vault SECRET_ID) | `--dry-run` puis `--force` en cron `0 3 1 */3 0` |
+| V5-C | `04-deploy.sh` smart reload via md5 cache → skip Caddy/BIND9 si config inchangée — préserve RRSIG DNSSEC en mémoire | `cat /var/run/translog/{caddyfile,bind9}.md5` après deploy |
+| V4-A | LOW-18 MFA frontend : ProtectedRoute redirect /account?tab=security si `mustEnrollMfa`, alert rose visible, fr+en | login TENANT_ADMIN sans MFA → redirect auto |
+
+⚠️ **DS record DNSSEC à publier chez LWS** (registrar `dsyann.info`) :
+- Host : `translog`
+- Type : DS
+- Key tag : **29651**
+- Algorithm : **13** (ECDSAP256SHA256)
+- Digest type : **2** (SHA-256)
+- Digest : `8124BDB692683D056BAD81C758566E4B79D554946131872E081BD6846FCA1558`
+
+Tant que le DS n'est pas publié, DNSSEC est techniquement actif (zone signée avec RRSIG) mais "insecure" pour les resolvers DNSSEC-aware (pas de chain of trust depuis la racine `.info`).
+
+### 8.9 — Procédure HIGH-5 Caddy non-root (V5-D, non encore appliqué)
+
+⚠️ Risque casse certs LE renewal si volumes mal pré-chown. À faire en fenêtre maintenance avec Easypanel-traefik prêt en rollback.
+
+1. Modifier `infra/prod/caddy/Dockerfile` :
+   ```dockerfile
+   FROM caddy:2-alpine
+   COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+   RUN addgroup -g 1000 caddy && adduser -u 1000 -G caddy -S -D caddy
+   USER 1000:1000
+   ```
+2. Pré-chown volumes côté VPS (Caddy DOWN pendant) :
+   ```bash
+   docker service scale translog_caddy=0
+   chown -R 1000:1000 /var/lib/docker/volumes/translog_caddy_{data,config,logs}/_data
+   ```
+3. Modifier `docker-stack.prod.yml` (caddy) :
+   ```yaml
+   cap_add:
+     - NET_BIND_SERVICE
+   user: "1000:1000"
+   ```
+4. Deploy + monitor logs. Si certs LE renewal fail → `docker service update --rollback translog_caddy`.
+
+### 8.10 — Procédure HIGH-5 Vault non-root (V5-F, non encore appliqué)
+
+⚠️ Sealed scenario après crash → 3 unseal keys requises avant.
+
+1. Backup snapshot Vault : `bash scripts/backup.sh`
+2. Pré-chown : `chown -R 100:1000 /var/lib/docker/volumes/translog_vault_{data,logs}/_data`
+3. Modifier `docker-stack.prod.yml` :
+   ```yaml
+   cap_add:
+     - IPC_LOCK
+     - SETFCAP
+   user: "100:1000"
+   ```
+4. Avoir les 3 unseal keys prêtes
+5. Push + monitor. Si crash → unseal manuel `vault operator unseal <key>` × 3
+
+### 8.11 — Procédure RLS PERMISSIVE → RESTRICTIVE (V5-E, non encore appliqué)
+
+⚠️ Risque énorme : si une query backend ne passe PAS par `prisma.transact()` ou `prisma.withTenant()`, RLS RESTRICTIVE retournera 0 row → UI affiche données vides sans erreur visible.
+
+**Pré-requis audit** :
+1. Grep tous `prisma.X.{findMany,findUnique,findFirst,update,...}` dans `src/`
+2. Vérifier que chaque query passe par `transact()` ou `withTenant()` ou est dans un endpoint public légitime
+3. Lister les exceptions et créer policy `bypass_public` PERMISSIVE pour `app_runtime` sur tables exception
+
+**Migration script** (à créer) `04-rls-restrictive.sql` :
+```sql
+DROP POLICY tenant_isolation_runtime ON <table>;
+CREATE POLICY tenant_isolation_strict ON <table>
+  AS RESTRICTIVE FOR ALL TO app_runtime
+  USING (current_tenant_id() IS NOT NULL AND "tenantId"::text = current_tenant_id())
+  WITH CHECK (current_tenant_id() IS NOT NULL AND "tenantId"::text = current_tenant_id());
+```
+
+Apply en fenêtre maintenance avec backup pg_dump + Playwright tests + monitor logs Postgres.
+
+### 8.12 — Hardening restant (Vague 6+)
+
+- V5-D Caddy non-root (cf §8.9)
+- V5-F Vault non-root (cf §8.10)
+- V5-E RLS RESTRICTIVE strict (cf §8.11)
+- 6 i18n locales restantes pour `mustEnrollMfa` (wo/ln/ktu/ar/pt/es) — quand i18n complète sera réactivé
+- APP_SECRET rotation (déconnecte sessions actives — planifier annonce)
+- TSIG_SECRET rotation (à coordonner avec cert LE renewal manuel)
+- Vault unseal keys rekey (`vault operator rekey` interactif)
+- Investigation filtre Hostinger DDoS MTN Congo (AS37463) — ticket Hostinger si problème revient
 
 ---
 
