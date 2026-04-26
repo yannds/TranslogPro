@@ -177,7 +177,7 @@ export class AuthController {
     @Req()  req: Request,
   ): Promise<
     | (AuthUserDto & { token: string; tenantHost: string })
-    | { mfaRequired: true; expiresAt: string }
+    | { mfaRequired: true; challengeToken: string; expiresAt: string; tenantHost: string }
     | { multiple: true; tenants: Array<{ slug: string; name: string }> }
   > {
     const result = await this.authService.signInCrossTenant(
@@ -194,16 +194,23 @@ export class AuthController {
     }
 
     if (result.kind === 'mfaChallenge') {
-      // Pas de cookie en cross-tenant — on retourne le challenge en JSON,
-      // le client devra appeler /mfa/verify sur le tenantHost résolu (pas
-      // possible ici car on n'a pas encore le slug). Solution simple : on
-      // expose le slug via une 2e étape — pour la v1, on ne supporte pas
-      // MFA en cross-tenant et on demande au client de basculer sur le
-      // sub-domaine après le 1er essai. Si MFA enabled et qu'on arrive ici,
-      // on renvoie une erreur explicite.
-      throw new BadRequestException(
-        'MFA activé sur ce compte — connectez-vous depuis le sous-domaine de votre société.',
-      );
+      // Pas de cookie en cross-tenant — on retourne le challenge token en
+      // JSON. Le client appelle ensuite /api/auth/mfa/verify-cross-tenant
+      // (cf. plus bas) avec le code TOTP + ce challengeToken. Le tenantHost
+      // est déduit du challenge côté serveur ; on le retourne ici pour que
+      // l'app sache vers quelle URL persister la session après MFA réussie.
+      const challenge = await this.authService.lookupMfaChallenge(result.challengeToken);
+      const slug = challenge?.tenantSlug ?? null;
+      if (!slug) {
+        throw new BadRequestException('Tenant slug introuvable pour le challenge MFA.');
+      }
+      const tenantHost = `${slug}.${this.appConfig.publicBaseDomain}`;
+      return {
+        mfaRequired:    true,
+        challengeToken: result.challengeToken,
+        expiresAt:      result.expiresAt.toISOString(),
+        tenantHost,
+      };
     }
 
     // result.kind === 'session' — on construit le tenantHost depuis le slug.
@@ -217,6 +224,51 @@ export class AuthController {
       token:      result.token,
       tenantHost,
     };
+  }
+
+  /**
+   * POST /api/auth/mfa/verify-cross-tenant
+   *
+   * Étape 2 du sign-in MFA pour mobile multi-tenant. Reçoit le `challengeToken`
+   * en body (pas en cookie — le client mobile ne maintient pas la session par
+   * cookie en cross-tenant) + le code TOTP. Retourne `{ token, tenantHost,
+   * ...user }` exactement comme le succès du sign-in cross-tenant.
+   *
+   * Sécurité : même garanties que /mfa/verify (rate-limit, IP binding,
+   * single-use challenge, max attempts). Pas de tenant attendu côté
+   * controller (impossible à vérifier sans Host) — la garantie tenant
+   * vient du challenge lui-même qui est lié à un User.tenantId.
+   */
+  @Post('mfa/verify-cross-tenant')
+  @HttpCode(200)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 15 * 60_000, keyBy: 'ip', suffix: 'auth_mfa_verify_xt' })
+  async verifyMfaCrossTenant(
+    @Body() body: { code: string; challengeToken: string },
+    @Req()  req:  Request,
+  ): Promise<AuthUserDto & { token: string; tenantHost: string }> {
+    if (!body?.code || typeof body.code !== 'string') {
+      throw new UnauthorizedException('Code requis');
+    }
+    if (!body?.challengeToken || typeof body.challengeToken !== 'string') {
+      throw new UnauthorizedException('challengeToken requis');
+    }
+
+    const { token, user } = await this.authService.verifyMfa(
+      body.challengeToken,
+      body.code,
+      extractIp(req),
+      req.headers['user-agent'] ?? '',
+      // Pas d'expectedTenantId — on accepte le tenant que porte le challenge.
+      // L'IP binding + le TTL 5 min + max 5 attempts protègent déjà.
+      undefined,
+    );
+
+    if (!user.tenantSlug) {
+      throw new BadRequestException('Tenant slug manquant — connectez-vous depuis le portail web.');
+    }
+    const tenantHost = `${user.tenantSlug}.${this.appConfig.publicBaseDomain}`;
+    return { ...user, token, tenantHost };
   }
 
   /**

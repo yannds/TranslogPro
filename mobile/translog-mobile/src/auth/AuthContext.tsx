@@ -48,18 +48,31 @@ export interface MultiTenantChoice {
   tenants:  Array<{ slug: string; name: string }>;
 }
 
+/** Réponse "MFA requis" : le compte a TOTP activé, le caller doit demander
+ *  le code à 6 chiffres et appeler `verifyMfa(code, challengeToken)`. */
+export interface MfaPending {
+  mfaRequired:    true;
+  challengeToken: string;
+  expiresAt:      string;
+  tenantHost:     string;
+}
+
 interface AuthContextValue {
   user:    AuthUser | null;
   loading: boolean;
   error:   string | null;
   /**
-   * Connexion. Renvoie `null` si la session est créée, ou la liste des tenants
-   * candidats si l'email a un compte sur plusieurs (le caller doit alors
-   * rappeler `login` avec `preferredTenantSlug`).
+   * Connexion. Renvoie :
+   *   - `null` si la session est créée (cas standard, sans MFA).
+   *   - `{ multiple, tenants }` si l'email a un compte sur plusieurs sociétés.
+   *   - `{ mfaRequired, challengeToken, ... }` si le compte a TOTP activé →
+   *      le caller doit afficher le step MFA et appeler `verifyMfa()`.
    */
-  login:   (email: string, password: string, preferredTenantSlug?: string) => Promise<MultiTenantChoice | null>;
-  logout:  () => Promise<void>;
-  refresh: () => Promise<void>;
+  login:    (email: string, password: string, preferredTenantSlug?: string) => Promise<MultiTenantChoice | MfaPending | null>;
+  /** Étape 2 du flow MFA : valide le code TOTP + le challengeToken. */
+  verifyMfa: (code: string, challengeToken: string) => Promise<void>;
+  logout:   () => Promise<void>;
+  refresh:  () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -72,17 +85,22 @@ function crossTenantSignInUrl(rootDomain: string = DEFAULT_API_ROOT_DOMAIN): str
   return `https://api.${rootDomain}/api/auth/sign-in-cross-tenant`;
 }
 
+function crossTenantMfaVerifyUrl(rootDomain: string = DEFAULT_API_ROOT_DOMAIN): string {
+  return `https://api.${rootDomain}/api/auth/mfa/verify-cross-tenant`;
+}
+
 interface CrossTenantResponse {
-  // Cas succès : on reçoit AuthUser + token + tenantHost + (optional mfaRequired)
+  // Cas succès : on reçoit AuthUser + token + tenantHost
   token?:      string;
   tenantHost?: string;
   // ou cas multi-tenant
   multiple?:   true;
   tenants?:    Array<{ slug: string; name: string }>;
-  // ou MFA
-  mfaRequired?: true;
-  expiresAt?:   string;
-  // ...AuthUser fields
+  // ou MFA pending
+  mfaRequired?:    true;
+  challengeToken?: string;
+  expiresAt?:      string;
+  // ...AuthUser fields (réponse succès uniquement)
   id?:         string;
   email?:      string;
   tenantSlug?: string;
@@ -120,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     preferredTenantSlug?: string,
-  ): Promise<MultiTenantChoice | null> {
+  ): Promise<MultiTenantChoice | MfaPending | null> {
     const url = crossTenantSignInUrl();
     const res = await fetch(url, {
       method:  'POST',
@@ -149,9 +167,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { multiple: true, tenants: data.tenants ?? [] };
     }
 
-    // Cas 2 : MFA exigé — non supporté en cross-tenant pour l'instant.
+    // Cas 2 : MFA exigé — on remonte le challenge au caller pour qu'il
+    // affiche l'écran code à 6 chiffres. Pas de session créée à ce stade.
     if (data.mfaRequired) {
-      throw new Error('MFA activé — connectez-vous depuis le portail web de votre société.');
+      if (!data.challengeToken || !data.tenantHost || !data.expiresAt) {
+        throw new Error('Réponse MFA serveur invalide.');
+      }
+      return {
+        mfaRequired:    true,
+        challengeToken: data.challengeToken,
+        expiresAt:      data.expiresAt,
+        tenantHost:     data.tenantHost,
+      };
     }
 
     // Cas 3 : succès — on persiste host + token, puis on hydrate l'user via /me.
@@ -159,19 +186,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Réponse serveur invalide (token ou tenantHost manquant).');
     }
 
-    const host: ApiHost | null = urlToHost(`https://${data.tenantHost}`);
+    await persistSession(data.tenantHost, data.token);
+    return null;
+  }
+
+  async function verifyMfa(code: string, challengeToken: string): Promise<void> {
+    const url = crossTenantMfaVerifyUrl();
+    const res = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ code: code.trim(), challengeToken }),
+    });
+
+    if (!res.ok) {
+      let body: unknown = null;
+      try { body = await res.json(); } catch { /* ignore */ }
+      const detail =
+        body && typeof body === 'object' && 'detail' in body && typeof (body as Record<string, unknown>).detail === 'string'
+          ? (body as Record<string, string>).detail
+          : `Erreur ${res.status}`;
+      throw new Error(detail);
+    }
+
+    const data = await res.json() as CrossTenantResponse;
+    if (!data.token || !data.tenantHost) {
+      throw new Error('Réponse serveur invalide après MFA.');
+    }
+    await persistSession(data.tenantHost, data.token);
+  }
+
+  async function persistSession(tenantHost: string, token: string): Promise<void> {
+    const host: ApiHost | null = urlToHost(`https://${tenantHost}`);
     if (!host) throw new Error('tenantHost invalide.');
-
     await setApiHost(host);
-    await setAuthToken(data.token);
-
-    // Re-fetch /me sur le tenant host pour normaliser le DTO complet
+    await setAuthToken(token);
+    // Re-fetch /me sur le tenantHost pour normaliser le DTO complet
     // (permissions, enabledModules, agencyId — qui ne sont pas tous dans
     // la réponse cross-tenant légère).
     const me = await apiGet<AuthUser>('/api/auth/me', { skipAuthRedirect: true });
     setUser(me);
-
-    return null;
   }
 
   async function logout() {
@@ -184,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, error, login, verifyMfa, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

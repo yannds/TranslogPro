@@ -766,6 +766,25 @@ export class AuthService {
    * (et qu'elle n'est pas locale/privée), on rejette → protection contre vol
    * du cookie pré-session.
    */
+  /**
+   * Lookup léger d'un challenge MFA — utilisé par le controller cross-tenant
+   * pour récupérer le slug du tenant et construire le tenantHost de réponse.
+   * Aucune mutation, aucun side-effect ; ne valide pas l'expiration (laisse
+   * verifyMfa gérer ça lors du verify final).
+   */
+  async lookupMfaChallenge(challengeToken: string): Promise<{ tenantId: string; tenantSlug: string | null } | null> {
+    const challenge = await this.prisma.mfaChallenge.findUnique({
+      where:  { token: challengeToken },
+      select: { tenantId: true },
+    });
+    if (!challenge) return null;
+    const tenant = await this.prisma.tenant.findUnique({
+      where:  { id: challenge.tenantId },
+      select: { slug: true },
+    });
+    return { tenantId: challenge.tenantId, tenantSlug: tenant?.slug ?? null };
+  }
+
   async verifyMfa(
     challengeToken: string,
     code:           string,
