@@ -62,6 +62,10 @@ export function AgencyFilter({ selected, onChange }: Props) {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      // flexGrow: 0 + height fixe : empêche le ScrollView horizontal de
+      // s'étirer verticalement dans un parent flex column (sinon la chip
+      // hérite de la hauteur du conteneur et devient une longue capsule).
+      style={styles.scroller}
       contentContainerStyle={styles.row}
     >
       {items.map((a) => {
@@ -96,14 +100,25 @@ export function AgencyFilter({ selected, onChange }: Props) {
 }
 
 const styles = StyleSheet.create({
-  row:  { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: 'row' },
+  scroller: {
+    flexGrow:  0,        // pas d'étirement vertical
+    flexShrink:0,
+    maxHeight: 48,       // hauteur cohérente avec le SegmentedControl
+  },
+  row:  {
+    paddingHorizontal: 16,
+    paddingVertical:   8,
+    gap:               8,
+    flexDirection:     'row',
+    alignItems:        'center',
+  },
   chip: {
     paddingVertical:   6,
     paddingHorizontal: 12,
     borderRadius:      999,
     borderWidth:       1,
-    minHeight:         32,
+    height:            32,
     justifyContent:    'center',
-    maxWidth:          200,
+    maxWidth:          220,
   },
 });
