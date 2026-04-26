@@ -27,7 +27,11 @@ import * as qrcode from 'qrcode';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
-authenticator.options = { window: 1 };
+// window: 2 = tolère ±60 s de drift entre serveur et téléphone client.
+// Standard de l'industrie (Google Authenticator côté serveur tolère 1-2 steps).
+// Avec window: 1 (±30 s), un VPS mal-NTP ou un téléphone légèrement décalé
+// rejette des codes pourtant corrects, sans message clair pour l'utilisateur.
+authenticator.options = { window: 2 };
 
 const BACKUP_CODE_COUNT  = 10;
 const BACKUP_CODE_LENGTH = 8;
@@ -56,23 +60,35 @@ export class MfaService {
   /**
    * Étape 1 : génère un secret + QR code, persiste le secret en attente
    * (mfaSecret rempli, mfaEnabled reste false tant qu'on n'a pas vérifié).
+   *
+   * Idempotence : si l'utilisateur a déjà initié un setup non-finalisé
+   * (mfaSecret rempli, mfaEnabled false), on **réutilise** le secret stocké
+   * au lieu d'en regénérer. Ça évite le scénario classique :
+   *   1. user clique "Activer" → secret S1 stocké, QR S1 scanné par téléphone
+   *   2. user re-clique "Activer" (ex: rafraîchit l'écran) → ancien code écrasé
+   *   3. user saisit le code S1 généré par son téléphone → 401 "Code invalide"
+   * Pour forcer une rotation explicite (sécurité après leak), il faut d'abord
+   * `disable()` — chemin documenté dans l'UI.
    */
   async setup(userId: string): Promise<MfaSetupResult> {
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
-      select: { id: true, email: true, mfaEnabled: true },
+      select: { id: true, email: true, mfaEnabled: true, mfaSecret: true },
     });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     if (user.mfaEnabled) throw new ConflictException('MFA déjà activé');
 
-    const secret     = authenticator.generateSecret();
+    // Réutilise le secret en attente s'il existe déjà — sinon en génère un.
+    const secret = user.mfaSecret ?? authenticator.generateSecret();
     const otpauthUrl = authenticator.keyuri(user.email, ISSUER_NAME, secret);
     const qrDataUrl  = await qrcode.toDataURL(otpauthUrl);
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data:  { mfaSecret: secret },
-    });
+    if (!user.mfaSecret) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data:  { mfaSecret: secret },
+      });
+    }
 
     return { secret, otpauthUrl, qrDataUrl, qrCodeDataUrl: qrDataUrl };
   }
