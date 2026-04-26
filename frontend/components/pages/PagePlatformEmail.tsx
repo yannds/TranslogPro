@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import {
   Mail, CheckCircle2, XCircle, Wifi, WifiOff, Loader2, RefreshCw,
-  ShieldCheck, ShieldAlert, Settings,
+  ShieldCheck, ShieldAlert, Settings, Send,
 } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost } from '../../lib/api';
@@ -22,6 +22,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { EmailProviderConfigDialog, type ProviderField } from './platform-email/EmailProviderConfigDialog';
+import { SendTestEmailDialog } from './platform-email/SendTestEmailDialog';
 
 type ProviderKey = 'console' | 'smtp' | 'resend' | 'o365';
 
@@ -54,6 +55,7 @@ export function PagePlatformEmail() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [lastMsg, setLastMsg]     = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [configKey, setConfigKey] = useState<ProviderKey | null>(null);
+  const [testKey, setTestKey]     = useState<ProviderKey | null>(null);
 
   async function runHealth(key: ProviderKey) {
     setBusyKey(key); setActionErr(null); setLastMsg(null);
@@ -182,6 +184,14 @@ export function PagePlatformEmail() {
                   : <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden />}
                 {t('platformEmail.test')}
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTestKey(p.key)}
+              >
+                <Send className="w-4 h-4 mr-1.5" aria-hidden />
+                {t('platformEmail.testWithTemplate')}
+              </Button>
             </div>
           </li>
         ))}
@@ -199,6 +209,19 @@ export function PagePlatformEmail() {
             open={true}
             onClose={() => setConfigKey(null)}
             onSaved={refetch}
+          />
+        );
+      })()}
+
+      {testKey && (() => {
+        const p = (data ?? []).find(x => x.key === testKey);
+        if (!p) return null;
+        return (
+          <SendTestEmailDialog
+            providerKey={p.key}
+            providerName={p.displayName}
+            open={true}
+            onClose={() => setTestKey(null)}
           />
         );
       })()}
