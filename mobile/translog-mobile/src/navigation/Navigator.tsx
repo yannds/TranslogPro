@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { CashierHomeScreen } from '../cashier/CashierHomeScreen';
 import { SellTicketScreen } from '../cashier/SellTicketScreen';
+import { CashierTicketsScreen } from '../cashier/CashierTicketsScreen';
 import { IncidentReportScreen } from '../incidents/IncidentReportScreen';
 import { DriverHomeScreen } from '../driver/DriverHomeScreen';
 import { TripDetailScreen } from '../driver/TripDetailScreen';
@@ -19,6 +20,7 @@ import { StationHomeScreen } from '../station/StationHomeScreen';
 import { StationSellTicketScreen } from '../station/StationSellTicketScreen';
 import { StationLuggageScreen } from '../station/StationLuggageScreen';
 import { StationBoardScreen } from '../station/StationBoardScreen';
+import { StationCustomerLookupScreen } from '../station/StationCustomerLookupScreen';
 import { QuaiHomeScreen } from '../quai/QuaiHomeScreen';
 import { QuaiBulkScanScreen } from '../quai/QuaiBulkScanScreen';
 import { QuaiManifestScreen } from '../quai/QuaiManifestScreen';
@@ -83,6 +85,7 @@ function CashierTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Caisse"   component={CashierHomeScreen} />
       <Tab.Screen name="Vente"    component={SellTicketScreen} />
+      <Tab.Screen name="Billets"  component={CashierTicketsScreen} />
       <Tab.Screen name="Incident" component={IncidentReportScreen} />
     </Tab.Navigator>
   );
@@ -125,10 +128,11 @@ function StationBottomTabs() {
 function StationNav() {
   return (
     <StationStack.Navigator screenOptions={{ headerShown: false }}>
-      <StationStack.Screen name="StationHome"       component={StationBottomTabs} />
-      <StationStack.Screen name="StationSellTicket" component={StationSellTicketScreen} />
-      <StationStack.Screen name="StationLuggage"    component={StationLuggageScreen} />
-      <StationStack.Screen name="StationBoard"      component={StationBoardScreen} />
+      <StationStack.Screen name="StationHome"           component={StationBottomTabs} />
+      <StationStack.Screen name="StationSellTicket"     component={StationSellTicketScreen} />
+      <StationStack.Screen name="StationLuggage"        component={StationLuggageScreen} />
+      <StationStack.Screen name="StationBoard"          component={StationBoardScreen} />
+      <StationStack.Screen name="StationCustomerLookup" component={StationCustomerLookupScreen} />
     </StationStack.Navigator>
   );
 }

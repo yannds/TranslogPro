@@ -186,6 +186,15 @@ export function StationHomeScreen() {
           onPress={() => navigation.navigate('StationBoard')}
         />
       </View>
+      <View style={[styles.actionRow, { marginTop: 8 }]}>
+        <ActionButton
+          label="Recherche client"
+          color={colors.surface}
+          fg={colors.text}
+          onPress={() => navigation.navigate('StationCustomerLookup')}
+        />
+        <View style={{ flex: 1 }} />
+      </View>
 
       <Text style={[styles.h2, { color: colors.text, paddingHorizontal: 16, marginTop: 16 }]}>
         Prochains départs
