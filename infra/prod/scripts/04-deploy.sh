@@ -62,6 +62,17 @@ else
     ok "BIND9 zones permissions OK (pas de journal résiduel)"
 fi
 
+# Smart reload BIND9 — flag lu en step 4 pour éviter restart inutile (DNSSEC
+# perdrait les RRSIG en mémoire, devrait re-signer toute la zone).
+mkdir -p /var/run/translog
+NEW_BIND_MD5=$(md5sum ./bind9/named.conf ./bind9/zones/translog.db 2>/dev/null | md5sum | awk '{print $1}')
+PREV_BIND_MD5=$(cat /var/run/translog/bind9.md5 2>/dev/null || echo "")
+BIND_NEEDS_RELOAD=0
+if [ "$NEW_BIND_MD5" != "$PREV_BIND_MD5" ]; then
+    BIND_NEEDS_RELOAD=1
+fi
+echo "$NEW_BIND_MD5" > /var/run/translog/bind9.md5
+
 # ─── 2. Build images (api + web + caddy) ─────────────────────────────────────
 header "[2/12] Build images"
 
@@ -127,6 +138,15 @@ docker stack deploy \
     --with-registry-auth \
     $STACK_NAME || fail "Stack deploy failed"
 ok "Stack $STACK_NAME déployé"
+
+# Smart reload BIND9 si named.conf ou zone changé (sinon DNSSEC perdrait les
+# RRSIG en mémoire et devrait re-signer toute la zone).
+if [ "$BIND_NEEDS_RELOAD" -eq 1 ]; then
+    warn "BIND9 config/zone changé → force update"
+    docker service update --force ${STACK_NAME}_bind9 >/dev/null 2>&1 || true
+else
+    ok "BIND9 config/zone identique — skip reload (RRSIG préservés)"
+fi
 
 # Attente services infra healthy
 echo "Wait infra services (postgres/redis/minio/bind9) healthy — max 180s..."
@@ -323,7 +343,7 @@ else
 fi
 
 # ─── 10. CUTOVER : stop Easypanel-traefik, scale up Caddy ───────────────────
-header "[10/12] CUTOVER (downtime ~30s sur gmp)"
+header "[10/12] CUTOVER (downtime ~30s sur gmp si Caddyfile change)"
 
 # Stop Easypanel Traefik
 if docker service ls --filter "name=easypanel-traefik" -q 2>/dev/null | grep -q .; then
@@ -332,10 +352,25 @@ if docker service ls --filter "name=easypanel-traefik" -q 2>/dev/null | grep -q 
     ok "Easypanel Traefik scaled à 0 (libère 80/443)"
 fi
 
-# Caddy : scale=0/1 force remount du Caddyfile (bind mount peut être stale après rsync)
-docker service scale ${STACK_NAME}_caddy=0 >/dev/null 2>&1 || true
-sleep 3
-docker service scale ${STACK_NAME}_caddy=1 >/dev/null
+# Smart reload Caddy : on ne scale 0/1 (= ~10s downtime apex) QUE si le
+# Caddyfile a réellement changé depuis le dernier deploy. Sinon Caddy continue
+# à servir avec sa config en mémoire (déjà rechargée à chaque reload Caddy
+# qui détecte un fichier modifié — mais en pratique, le reload du bind mount
+# nécessite le scale 0/1 pour pickup les modifs récentes). Le tag md5 est
+# stocké dans /var/run/translog/caddyfile.md5 (volatile, recréé après reboot).
+mkdir -p /var/run/translog
+NEW_CADDY_MD5=$(md5sum ./caddy/Caddyfile 2>/dev/null | awk '{print $1}')
+PREV_CADDY_MD5=$(cat /var/run/translog/caddyfile.md5 2>/dev/null || echo "")
+if [ "$NEW_CADDY_MD5" != "$PREV_CADDY_MD5" ] || ! docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_caddy" -q | grep -q .; then
+    # Caddy : scale=0/1 force remount du Caddyfile (bind mount peut être stale après rsync)
+    warn "Caddyfile changé ou Caddy down → scale 0/1"
+    docker service scale ${STACK_NAME}_caddy=0 >/dev/null 2>&1 || true
+    sleep 3
+    docker service scale ${STACK_NAME}_caddy=1 >/dev/null
+    echo "$NEW_CADDY_MD5" > /var/run/translog/caddyfile.md5
+else
+    ok "Caddyfile identique (md5=${NEW_CADDY_MD5:0:8}…) — skip scale, Caddy continue à tourner"
+fi
 
 # Wait Caddy healthy avec retry sur scheduler bug
 echo "Wait Caddy healthy (max 120s)..."
