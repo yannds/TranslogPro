@@ -144,6 +144,7 @@ function DriverNav() {
       <DriverStack.Screen name="DriverEndReport"     component={EndReportScreen} />
       <DriverStack.Screen name="DriverDocuments"     component={DriverDocumentsScreen} />
       <DriverStack.Screen name="DriverRest"          component={DriverRestScreen} />
+      <DriverStack.Screen name="ChangePassword"      component={ChangePasswordScreen} />
     </DriverStack.Navigator>
   );
 }
@@ -206,6 +207,7 @@ function CustomerNav() {
       <CustomerStack.Screen name="CustomerMyItems"  component={CustomerMyItemsScreen} />
       <CustomerStack.Screen name="CustomerSav"      component={CustomerSavScreen} />
       <CustomerStack.Screen name="CustomerProfile"  component={CustomerProfileScreen} />
+      <CustomerStack.Screen name="ChangePassword"   component={ChangePasswordScreen} />
     </CustomerStack.Navigator>
   );
 }
@@ -243,6 +245,7 @@ function StationNav() {
       <StationStack.Screen name="StationLuggage"        component={StationLuggageScreen} />
       <StationStack.Screen name="StationBoard"          component={StationBoardScreen} />
       <StationStack.Screen name="StationCustomerLookup" component={StationCustomerLookupScreen} />
+      <StationStack.Screen name="ChangePassword"        component={ChangePasswordScreen} />
     </StationStack.Navigator>
   );
 }
@@ -279,6 +282,7 @@ function QuaiNav() {
       <QuaiStack.Screen name="QuaiBulkScan"      component={QuaiBulkScanScreen} />
       <QuaiStack.Screen name="QuaiManifest"      component={QuaiManifestScreen} />
       <QuaiStack.Screen name="QuaiParcelActions" component={QuaiParcelActionsScreen} />
+      <QuaiStack.Screen name="ChangePassword"    component={ChangePasswordScreen} />
     </QuaiStack.Navigator>
   );
 }
@@ -320,9 +324,10 @@ function AdminNav() {
   // Charts et SAV restent en stack — accessibles via le drawer header (L5).
   return (
     <AdminStack.Navigator screenOptions={{ headerShown: false }}>
-      <AdminStack.Screen name="AdminHome"   component={AdminBottomTabs} />
-      <AdminStack.Screen name="AdminCharts" component={AdminChartsScreen} />
-      <AdminStack.Screen name="AdminSav"    component={AdminSavScreen} />
+      <AdminStack.Screen name="AdminHome"     component={AdminBottomTabs} />
+      <AdminStack.Screen name="AdminCharts"   component={AdminChartsScreen} />
+      <AdminStack.Screen name="AdminSav"      component={AdminSavScreen} />
+      <AdminStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </AdminStack.Navigator>
   );
 }

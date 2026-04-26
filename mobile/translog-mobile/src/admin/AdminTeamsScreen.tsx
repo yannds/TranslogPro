@@ -20,11 +20,15 @@ import {
   View, Text, SafeAreaView, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
-import { apiGet, apiPatch } from '../api/client';
+import { apiGet, apiPatch, apiPost } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useI18n } from '../i18n/useI18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { useOnline } from '../offline/useOnline';
+import { ActionSheet, type ActionItem } from '../ui/ActionSheet';
+import {
+  IconKey, IconLock, IconPower, IconLogout, IconChevronR,
+} from '../ui/icons';
 
 const ROLE_FILTERS = [
   { id: 'ALL',           fr: 'Tous',    en: 'All'     },
@@ -73,6 +77,7 @@ export function AdminTeamsScreen() {
   const [loading, setLoading]   = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId]     = useState<string | null>(null);
+  const [sheetTarget, setSheetTarget] = useState<Staff | null>(null);
 
   const loadAgencies = useCallback(async () => {
     if (!tenantId) return;
@@ -111,12 +116,17 @@ export function AdminTeamsScreen() {
     setRefreshing(false);
   }
 
-  async function toggleSuspend(s: Staff) {
+  function ensureOnline(): boolean {
     if (!online) {
       Alert.alert(L('Action nécessite réseau', 'Requires network'),
         L('Les changements RH ne partent pas en file.', 'HR changes are not queued.'));
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function toggleSuspend(s: Staff) {
+    if (!ensureOnline()) return;
     const action = s.status === 'ACTIVE' ? 'suspend' : 'reactivate';
     const label  = s.status === 'ACTIVE' ? L('Suspendre', 'Suspend') : L('Réactiver', 'Reactivate');
     Alert.alert(
@@ -151,6 +161,134 @@ export function AdminTeamsScreen() {
         },
       ],
     );
+  }
+
+  async function resetPassword(s: Staff) {
+    if (!ensureOnline()) return;
+    Alert.alert(
+      L('Réinitialiser le mot de passe ?', 'Reset password?'),
+      `${s.user.email ?? s.user.name ?? s.userId}\n${L('Un lien de reset (TTL 30 min) sera généré.', 'A reset link (30min TTL) will be generated.')}`,
+      [
+        { text: L('Annuler', 'Cancel'), style: 'cancel' },
+        {
+          text: L('Générer le lien', 'Generate link'),
+          onPress: async () => {
+            setBusyId(s.userId);
+            try {
+              const res = await apiPost<{ resetUrl?: string }>(
+                `/api/tenants/${tenantId}/iam/users/${s.userId}/reset-password`,
+                { mode: 'link' },
+                {
+                  skipAuthRedirect: true,
+                  headers: { 'Idempotency-Key': `iam-reset-pwd:${s.userId}` },
+                },
+              );
+              if (res?.resetUrl) {
+                Alert.alert(
+                  L('Lien généré', 'Link generated'),
+                  L('Copiez et envoyez à l’utilisateur :', 'Copy and send to user:') + '\n\n' + res.resetUrl,
+                );
+              } else {
+                Alert.alert(L('Mot de passe réinitialisé', 'Password reset'));
+              }
+            } catch (e) {
+              Alert.alert(L('Erreur', 'Error'), e instanceof Error ? e.message : String(e));
+            } finally { setBusyId(null); }
+          },
+        },
+      ],
+    );
+  }
+
+  async function resetMfa(s: Staff) {
+    if (!ensureOnline()) return;
+    Alert.alert(
+      L('Réinitialiser le MFA ?', 'Reset MFA?'),
+      `${s.user.email ?? s.user.name ?? s.userId}\n${L('Le user devra reconfigurer son authenticator au prochain login.', 'User will need to reconfigure authenticator at next login.')}`,
+      [
+        { text: L('Annuler', 'Cancel'), style: 'cancel' },
+        {
+          text: L('Réinitialiser', 'Reset'),
+          style: 'destructive',
+          onPress: async () => {
+            setBusyId(s.userId);
+            try {
+              await apiPost(
+                `/api/tenants/${tenantId}/iam/users/${s.userId}/reset-mfa`,
+                {},
+                { skipAuthRedirect: true, headers: { 'Idempotency-Key': `iam-reset-mfa:${s.userId}` } },
+              );
+              Alert.alert(L('MFA réinitialisé ✓', 'MFA reset ✓'));
+            } catch (e) {
+              Alert.alert(L('Erreur', 'Error'), e instanceof Error ? e.message : String(e));
+            } finally { setBusyId(null); }
+          },
+        },
+      ],
+    );
+  }
+
+  async function revokeAllSessions(s: Staff) {
+    if (!ensureOnline()) return;
+    Alert.alert(
+      L('Révoquer toutes ses sessions ?', 'Revoke all sessions?'),
+      `${s.user.email ?? s.user.name ?? s.userId}\n${L('Le user sera déconnecté immédiatement de tous ses appareils.', 'User will be signed out from all devices immediately.')}`,
+      [
+        { text: L('Annuler', 'Cancel'), style: 'cancel' },
+        {
+          text: L('Tout révoquer', 'Revoke all'),
+          style: 'destructive',
+          onPress: async () => {
+            setBusyId(s.userId);
+            try {
+              await apiPost(
+                `/api/tenants/${tenantId}/iam/users/${s.userId}/revoke-sessions`,
+                {},
+                { skipAuthRedirect: true, headers: { 'Idempotency-Key': `iam-revoke-sessions:${s.userId}` } },
+              );
+              Alert.alert(L('Sessions révoquées ✓', 'Sessions revoked ✓'));
+            } catch (e) {
+              Alert.alert(L('Erreur', 'Error'), e instanceof Error ? e.message : String(e));
+            } finally { setBusyId(null); }
+          },
+        },
+      ],
+    );
+  }
+
+  function buildActions(s: Staff): ActionItem[] {
+    const isActive = s.status === 'ACTIVE';
+    return [
+      {
+        label:       isActive ? L('Suspendre', 'Suspend') : L('Réactiver', 'Reactivate'),
+        icon:        IconPower,
+        destructive: isActive,
+        description: isActive
+          ? L('Bloque l’accès aux apps et trips', 'Block access to apps and trips')
+          : L('Restaure les accès', 'Restore access'),
+        onPress:     () => toggleSuspend(s),
+      },
+      {
+        label:       L('Réinitialiser le mot de passe', 'Reset password'),
+        icon:        IconKey,
+        description: L('Génère un lien sécurisé (TTL 30 min)', 'Generates a secure link (30min TTL)'),
+        onPress:     () => resetPassword(s),
+      },
+      {
+        label:       L('Réinitialiser le MFA', 'Reset MFA'),
+        icon:        IconLock,
+        destructive: true,
+        description: L('Le user devra re-enregistrer son authenticator', 'User must re-register authenticator'),
+        onPress:     () => resetMfa(s),
+      },
+      {
+        label:       L('Révoquer toutes les sessions', 'Revoke all sessions'),
+        icon:        IconLogout,
+        destructive: true,
+        description: L('Déconnecte de tous les appareils', 'Sign out from all devices'),
+        onPress:     () => revokeAllSessions(s),
+      },
+    ];
   }
 
   const grouped = useMemo(() => {
@@ -298,20 +436,21 @@ export function AdminTeamsScreen() {
                       )}
                     </View>
                     <Pressable
-                      onPress={() => toggleSuspend(s)}
+                      onPress={() => setSheetTarget(s)}
                       disabled={busyId === s.userId}
                       accessibilityRole="button"
+                      accessibilityLabel={L('Actions', 'Actions')}
                       style={({ pressed }) => [
                         styles.actionBtn,
                         {
-                          backgroundColor: suspended ? colors.success : colors.surface,
-                          borderColor: suspended ? colors.success : colors.danger,
+                          backgroundColor: colors.surface,
+                          borderColor: colors.primary,
                           opacity: pressed || busyId === s.userId ? 0.5 : 1,
                         },
                       ]}
                     >
-                      <Text style={{ color: suspended ? '#fff' : colors.danger, fontWeight: '700', fontSize: 12 }}>
-                        {suspended ? L('Réactiver', 'Reactivate') : L('Suspendre', 'Suspend')}
+                      <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
+                        {L('Actions ›', 'Actions ›')}
                       </Text>
                     </Pressable>
                   </View>
@@ -320,6 +459,16 @@ export function AdminTeamsScreen() {
             </View>
           </View>
         )}
+      />
+
+      {/* ActionSheet — actions IAM (suspend/reactivate, reset password,
+          reset MFA, revoke sessions). S'ouvre au tap sur "Actions ›". */}
+      <ActionSheet
+        visible={!!sheetTarget}
+        onClose={() => setSheetTarget(null)}
+        title={sheetTarget?.user.name ?? sheetTarget?.user.email ?? undefined}
+        cancelLabel={L('Annuler', 'Cancel')}
+        actions={sheetTarget ? buildActions(sheetTarget) : []}
       />
     </SafeAreaView>
   );
