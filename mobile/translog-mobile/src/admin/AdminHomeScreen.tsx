@@ -245,6 +245,15 @@ export function AdminHomeScreen() {
 
         <NavCard
           colors={colors}
+          icon="💰"
+          tone={colors.success}
+          title={L('Finances', 'Finances')}
+          subtitle={L('CA temps réel · audit caisses · remboursements · billets', 'Real-time revenue · cash audit · refunds · tickets')}
+          onPress={() => navigation.navigate('AdminFinances')}
+        />
+
+        <NavCard
+          colors={colors}
           icon="🚨"
           tone={incidentAlert ? colors.danger : colors.warning}
           title={L('Incidents', 'Incidents')}

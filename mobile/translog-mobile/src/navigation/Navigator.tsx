@@ -39,6 +39,7 @@ import { AdminIncidentsScreen } from '../admin/AdminIncidentsScreen';
 import { AdminLiveScreen } from '../admin/AdminLiveScreen';
 import { AdminFleetScreen } from '../admin/AdminFleetScreen';
 import { AdminPlanningScreen } from '../admin/AdminPlanningScreen';
+import { AdminFinancesScreen } from '../admin/AdminFinancesScreen';
 import { CustomerHomeScreen } from '../customer/CustomerHomeScreen';
 import { CustomerBookingScreen } from '../customer/CustomerBookingScreen';
 import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
@@ -333,6 +334,7 @@ function AdminNav() {
       <AdminStack.Screen name="AdminLive"     component={AdminLiveScreen} />
       <AdminStack.Screen name="AdminFleet"    component={AdminFleetScreen} />
       <AdminStack.Screen name="AdminPlanning" component={AdminPlanningScreen} />
+      <AdminStack.Screen name="AdminFinances" component={AdminFinancesScreen} />
       <AdminStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </AdminStack.Navigator>
   );
