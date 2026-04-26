@@ -36,14 +36,18 @@ interface Props {
   tenantId: string;
   value:    GoogleMapPickerValue;
   onChange: (v: GoogleMapPickerValue) => void;
-  /** Pays par défaut pour biais geocoding (ISO alpha-2 ex. "GA"). */
-  countryCode?: string;
   disabled?: boolean;
   /** Hauteur de la carte en pixels — défaut 320. */
   mapHeightPx?: number;
 }
 
-interface MapsConfig { jsApiKey: string | null }
+type CountryBounds = { north: number; south: number; east: number; west: number };
+
+interface MapsConfig {
+  jsApiKey:      string | null;
+  countryCode?:  string | null;
+  countryBounds?: { north: number; south: number; east: number; west: number } | null;
+}
 
 const LIBRARIES: ('places')[] = ['places'];
 const DEFAULT_CENTER = { lat: 4.0, lng: 12.0 }; // Afrique centrale
@@ -72,21 +76,24 @@ function fmt(n: number): string {
  */
 export function GoogleMapPicker(props: Props) {
   const { t } = useI18n();
-  const [jsApiKey, setJsApiKey] = useState<string | null | undefined>(undefined);
+  const [config,   setConfig]   = useState<MapsConfig | null | undefined>(undefined);
   const [keyError, setKeyError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancel = false;
     apiGet<MapsConfig>(`/api/tenants/${props.tenantId}/geo/maps-config`)
-      .then(cfg => { if (!cancel) setJsApiKey(cfg.jsApiKey); })
+      .then(cfg => { if (!cancel) setConfig(cfg); })
       .catch(e => {
         if (!cancel) {
-          setJsApiKey(null);
+          setConfig(null);
           setKeyError(e instanceof Error ? e.message : String(e));
         }
       });
     return () => { cancel = true; };
   }, [props.tenantId]);
+
+  const jsApiKey = config?.jsApiKey ?? null;
+  const bounds   = config?.countryBounds ?? null;
 
   // Tant que la clé est en cours de récupération OU absente : fallback champs lat/lng.
   if (typeof jsApiKey !== 'string' || jsApiKey.length === 0) {
@@ -95,15 +102,15 @@ export function GoogleMapPicker(props: Props) {
         value={props.value}
         onChange={props.onChange}
         disabled={props.disabled}
-        loading={jsApiKey === undefined}
-        keyMissing={jsApiKey === null}
+        loading={config === undefined}
+        keyMissing={config !== undefined && jsApiKey === null}
         keyError={keyError}
         t={t}
       />
     );
   }
 
-  return <GoogleMapPickerInner {...props} jsApiKey={jsApiKey} />;
+  return <GoogleMapPickerInner {...props} jsApiKey={jsApiKey} countryBounds={bounds} />;
 }
 
 /**
@@ -111,8 +118,8 @@ export function GoogleMapPicker(props: Props) {
  * `useJsApiLoader`, exactement une fois pour la durée de vie du composant.
  */
 function GoogleMapPickerInner({
-  value, onChange, countryCode, disabled, mapHeightPx = 320, jsApiKey,
-}: Props & { jsApiKey: string }) {
+  value, onChange, disabled, mapHeightPx = 320, jsApiKey, countryBounds,
+}: Props & { jsApiKey: string; countryBounds: CountryBounds | null }) {
   const { t } = useI18n();
 
   const { isLoaded: gmapsLoaded, loadError: gmapsLoadError } = useJsApiLoader({
@@ -159,13 +166,22 @@ function GoogleMapPickerInner({
 
     const timer = setTimeout(() => {
       setSearching(true);
-      const componentRestrictions = countryCode ? { country: countryCode.toLowerCase() } : undefined;
+      // Bias SOFT par bounding box du pays : les resultats dans la box remontent
+      // mais ceux a l'exterieur restent visibles (`location` + `radius` ou
+      // `bounds` sans `strictBounds:true` = preference, pas filtre).
+      const bias: google.maps.places.AutocompletionRequest = {
+        input:        q,
+        sessionToken: sessionTokenRef.current!,
+      };
+      if (countryBounds) {
+        bias.bounds = new google.maps.LatLngBounds(
+          { lat: countryBounds.south, lng: countryBounds.west },
+          { lat: countryBounds.north, lng: countryBounds.east },
+        );
+        // strictBounds NON spécifié → bias soft, n'exclut pas les resultats hors box.
+      }
       acServiceRef.current!.getPlacePredictions(
-        {
-          input:                  q,
-          sessionToken:           sessionTokenRef.current!,
-          ...(componentRestrictions ? { componentRestrictions } : {}),
-        },
+        bias,
         (results, status) => {
           setSearching(false);
           if (status === google.maps.places.PlacesServiceStatus.OK && results) {
@@ -180,7 +196,7 @@ function GoogleMapPickerInner({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [query, gmapsLoaded, countryCode]);
+  }, [query, gmapsLoaded, countryBounds]);
 
   const pickPrediction = useCallback((p: google.maps.places.AutocompletePrediction) => {
     if (!placesServiceRef.current || !sessionTokenRef.current) return;

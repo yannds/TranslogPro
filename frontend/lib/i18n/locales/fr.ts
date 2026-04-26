@@ -637,7 +637,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "deleteDesc": "Cette action est irréversible.",
     "refsWarning": "objet(s) référencent cette station.",
     "placeholderName": "ex. Gare centrale",
-    "placeholderCity": "ex. Brazzaville",
+    "placeholderCity": "Tapez les premières lettres de la ville…",
     "cityFreeTextWarning": "Cette ville ne figure pas dans le référentiel. Vérifiez qu'elle n'existe pas sous un autre nom — la recherche voyageurs dépend de ce nom.",
     "pageDesc": "Points d'origine et de destination pour lignes, colis et voyageurs.",
     "regeocodeTitle": "Re-calibrer la position",

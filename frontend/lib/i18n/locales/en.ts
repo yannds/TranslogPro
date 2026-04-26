@@ -784,7 +784,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "deleteDesc": "This action is irreversible.",
     "refsWarning": "object(s) reference this station.",
     "placeholderName": "e.g. Central Station",
-    "placeholderCity": "e.g. Brazzaville",
+    "placeholderCity": "Start typing the city name…",
     "cityFreeTextWarning": "This city is not in the official directory. Please check it doesn't already exist under another name — traveler search depends on this name.",
     "pageDesc": "Origin and destination points for routes, parcels and travelers.",
     "regeocodeTitle": "Re-calibrate position",

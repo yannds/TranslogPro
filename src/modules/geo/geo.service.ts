@@ -86,6 +86,26 @@ export class GeoService {
     return value;
   }
 
+  /**
+   * Bounding box du pays sous forme `LatLngBoundsLiteral` consommable par Google
+   * Maps JS (`{ north, south, east, west }`). Sert de **biais soft** sur Places
+   * Autocomplete : les resultats dans la box remontent en tete sans bloquer
+   * ceux situes a l'exterieur — l'utilisateur peut donc taper une adresse a
+   * Paris pour un tenant base au Congo, elle sera toujours trouvee.
+   *
+   * Source : COUNTRY_BBOX du nominatim provider (deja maintenu pour le geocodage
+   * server-side). Format source : [west, north, east, south].
+   */
+  getCountryBounds(countryCode: string | null | undefined):
+    { north: number; south: number; east: number; west: number } | null {
+    if (!countryCode) return null;
+    const cc = countryCode.toUpperCase();
+    const bbox = COUNTRY_BBOX[cc];
+    if (!bbox) return null;
+    const [west, north, east, south] = bbox;
+    return { north, south, east, west };
+  }
+
   async search(rawQuery: string, countryCode?: string): Promise<GeoSearchResult[]> {
     const q  = this.sanitize(rawQuery);
     const cc = countryCode?.trim().toUpperCase() || undefined;

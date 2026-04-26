@@ -39,8 +39,14 @@ export class GeoController {
 
   /**
    * Renvoie la configuration Maps destinee au navigateur :
-   *   - jsApiKey : cle Google Maps JavaScript API (Maps JS + Places),
-   *                lue depuis Vault platform/google-maps:JS_API_KEY.
+   *   - jsApiKey       : cle Google Maps JavaScript API (Maps JS + Places),
+   *                      lue depuis Vault platform/google-maps:JS_API_KEY.
+   *   - countryCode    : code ISO alpha-2 du tenant (ex. "GA" pour le Gabon),
+   *                      utilise pour le biais soft de Google Places Autocomplete.
+   *   - countryBounds  : LatLngBoundsLiteral du pays {north,south,east,west} —
+   *                      les resultats dans cette box remontent en tete sans
+   *                      filtrer ceux a l'exterieur. null si pays non couvert
+   *                      par le referentiel COUNTRY_BBOX.
    *
    * La cle est restreinte par referent HTTP cote Google Cloud Console — sa fuite
    * n'est exploitable que depuis les domaines autorises (cf. docs/INTEGRATIONS.md).
@@ -50,9 +56,17 @@ export class GeoController {
    */
   @Get('maps-config')
   @RequirePermission(Permission.STATION_MANAGE_TENANT)
-  async mapsConfig() {
-    const jsApiKey = await this.geo.getJsMapsApiKey();
-    return { jsApiKey };
+  async mapsConfig(@Param('tenantId') tenantId: string) {
+    const [jsApiKey, tenant] = await Promise.all([
+      this.geo.getJsMapsApiKey(),
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { country: true },
+      }),
+    ]);
+    const countryCode   = tenant?.country ?? null;
+    const countryBounds = this.geo.getCountryBounds(countryCode);
+    return { jsApiKey, countryCode, countryBounds };
   }
 
   /**
