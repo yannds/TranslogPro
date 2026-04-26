@@ -46,7 +46,7 @@ interface ConfigEntry {
   isDefault: boolean;
 }
 
-interface KeyStatus { google: boolean; mapbox: boolean }
+interface KeyStatus { google: boolean; googleJs: boolean; mapbox: boolean }
 
 type RoutingProvider = 'google' | 'mapbox';
 const ROUTING_GROUP = 'platformConfig.groupRouting';
@@ -72,28 +72,46 @@ function parseInput(value: string, type: ConfigEntry['type']): unknown {
 // ─── Sous-composant : dialog injection clé API Vault ─────────────────────────
 
 function RoutingKeyDialog({
-  open, provider, onClose, onSaved,
+  open, provider, status, onClose, onSaved,
 }: {
   open:     boolean;
   provider: RoutingProvider | null;
+  status:   KeyStatus | undefined | null;
   onClose:  () => void;
   onSaved:  () => void;
 }) {
   const { t } = useI18n();
-  const [apiKey, setApiKey] = useState('');
-  const [busy,   setBusy]   = useState(false);
-  const [err,    setErr]    = useState<string | null>(null);
+  const [apiKey,   setApiKey]   = useState('');
+  const [jsApiKey, setJsApiKey] = useState('');
+  const [busy,     setBusy]     = useState(false);
+  const [err,      setErr]      = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) { setApiKey(''); setErr(null); }
+    if (open) { setApiKey(''); setJsApiKey(''); setErr(null); }
   }, [open, provider]);
+
+  const supportsJsKey = provider === 'google';
+  const serverConfigured = provider === 'google'
+    ? !!status?.google
+    : provider === 'mapbox' ? !!status?.mapbox : false;
+  const browserConfigured = !!status?.googleJs;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!provider || !apiKey.trim()) return;
+    if (!provider) return;
+    const trimmedApi = apiKey.trim();
+    const trimmedJs  = jsApiKey.trim();
+    if (!trimmedApi && !trimmedJs) {
+      setErr(t('platformConfig.routingKeyAtLeastOne'));
+      return;
+    }
+    const payload: { apiKey?: string; jsApiKey?: string } = {};
+    if (trimmedApi) payload.apiKey   = trimmedApi;
+    if (trimmedJs)  payload.jsApiKey = trimmedJs;
+
     setBusy(true); setErr(null);
     try {
-      await apiPut(`/api/platform/config/routing/key/${provider}`, { apiKey: apiKey.trim() });
+      await apiPut(`/api/platform/config/routing/key/${provider}`, payload);
       onSaved();
       onClose();
     } catch (ex) {
@@ -131,24 +149,72 @@ function RoutingKeyDialog({
 
       {err && <ErrorAlert error={err} />}
 
-      <form id="routing-key-form" onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1">
-          <label htmlFor="routing-api-key" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('platformConfig.routingKeyLabel')}
-            <span className="ml-1 text-red-500" aria-hidden>*</span>
-          </label>
+      <form id="routing-key-form" onSubmit={handleSubmit} className="space-y-5">
+        {/* Clé serveur (toujours affichée) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="routing-api-key" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              {supportsJsKey
+                ? t('platformConfig.routingKeyServerLabel')
+                : t('platformConfig.routingKeyLabel')}
+            </label>
+            <Badge variant={serverConfigured ? 'success' : 'warning'} size="sm">
+              {serverConfigured
+                ? t('platformConfig.routingKeyConfigured')
+                : t('platformConfig.routingKeyMissing')}
+            </Badge>
+          </div>
           <input
             id="routing-api-key"
             type="password"
             className={inputClass}
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
-            placeholder={t('platformConfig.routingKeyPlaceholder')}
-            required
+            placeholder={serverConfigured
+              ? t('platformConfig.routingKeyPlaceholderReplace')
+              : t('platformConfig.routingKeyPlaceholder')}
             autoComplete="new-password"
-            aria-required
           />
+          {supportsJsKey && (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {t('platformConfig.routingKeyServerHelp')}
+            </p>
+          )}
         </div>
+
+        {/* Clé browser (Google uniquement) */}
+        {supportsJsKey && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="routing-js-api-key" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t('platformConfig.routingKeyBrowserLabel')}
+              </label>
+              <Badge variant={browserConfigured ? 'success' : 'warning'} size="sm">
+                {browserConfigured
+                  ? t('platformConfig.routingKeyConfigured')
+                  : t('platformConfig.routingKeyMissing')}
+              </Badge>
+            </div>
+            <input
+              id="routing-js-api-key"
+              type="password"
+              className={inputClass}
+              value={jsApiKey}
+              onChange={e => setJsApiKey(e.target.value)}
+              placeholder={browserConfigured
+                ? t('platformConfig.routingKeyPlaceholderReplace')
+                : t('platformConfig.routingKeyPlaceholder')}
+              autoComplete="new-password"
+            />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {t('platformConfig.routingKeyBrowserHelp')}
+            </p>
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+          {t('platformConfig.routingKeyAtLeastOneHint')}
+        </p>
       </form>
     </Dialog>
   );
@@ -201,12 +267,15 @@ function RoutingKeysSection({ onRefreshStatus }: { onRefreshStatus: () => void }
 
       <ul className="space-y-2">
         {(['google', 'mapbox'] as RoutingProvider[]).map(provider => {
-          const configured = keyStatus?.[provider] ?? false;
+          const serverConfigured = keyStatus?.[provider] ?? false;
+          const browserConfigured = provider === 'google' ? !!keyStatus?.googleJs : false;
+          // "configured" pour l'icône globale = au moins la clé serveur OK
+          const configured = serverConfigured;
           return (
             <li key={provider}
-              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 {configured
                   ? <ShieldCheck className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" aria-hidden />
                   : <ShieldAlert className="w-4 h-4 text-orange-500 shrink-0" aria-hidden />
@@ -214,9 +283,18 @@ function RoutingKeysSection({ onRefreshStatus }: { onRefreshStatus: () => void }
                 <span className="text-sm text-slate-800 dark:text-slate-200 font-medium">
                   {t(PROVIDER_LABELS[provider])}
                 </span>
-                <Badge variant={configured ? 'success' : 'warning'} size="sm">
-                  {configured ? t('platformConfig.routingKeyConfigured') : t('platformConfig.routingKeyMissing')}
-                </Badge>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge variant={serverConfigured ? 'success' : 'warning'} size="sm">
+                    {provider === 'google'
+                      ? `${t('platformConfig.routingKeyServerShort')} · ${serverConfigured ? t('platformConfig.routingKeyConfigured') : t('platformConfig.routingKeyMissing')}`
+                      : (serverConfigured ? t('platformConfig.routingKeyConfigured') : t('platformConfig.routingKeyMissing'))}
+                  </Badge>
+                  {provider === 'google' && (
+                    <Badge variant={browserConfigured ? 'success' : 'warning'} size="sm">
+                      {`${t('platformConfig.routingKeyBrowserShort')} · ${browserConfigured ? t('platformConfig.routingKeyConfigured') : t('platformConfig.routingKeyMissing')}`}
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Button
@@ -248,6 +326,7 @@ function RoutingKeysSection({ onRefreshStatus }: { onRefreshStatus: () => void }
       <RoutingKeyDialog
         open={!!dialogProvider}
         provider={dialogProvider}
+        status={keyStatus}
         onClose={() => setDialogProvider(null)}
         onSaved={handleSaved}
       />

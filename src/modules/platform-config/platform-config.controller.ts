@@ -5,9 +5,13 @@
  *   PATCH  /platform/config                          → batch update [{ key, value }, …]
  *   DELETE /platform/config/:key                     → reset à la valeur par défaut
  *
- *   GET    /platform/config/routing/key-status       → { google: bool, mapbox: bool }
- *   PUT    /platform/config/routing/key/:provider    → { apiKey } → Vault
+ *   GET    /platform/config/routing/key-status       → { google, googleJs, mapbox } (booléens)
+ *   PUT    /platform/config/routing/key/:provider    → { apiKey?, jsApiKey? } → Vault (merge non-destructif)
  *   DELETE /platform/config/routing/key/:provider    → supprime la clé du Vault
+ *
+ * Provider `google` accepte deux champs distincts :
+ *   - apiKey   → API_KEY    (server-side : Geocoding, Directions)
+ *   - jsApiKey → JS_API_KEY (browser-side : Maps JavaScript API + Places)
  *
  * Permission : control.platform.config.manage.global (SUPER_ADMIN).
  */
@@ -64,39 +68,79 @@ export class PlatformConfigController {
   /**
    * GET /platform/config/routing/key-status
    * Retourne si chaque provider a une clé API provisionnée dans Vault.
+   * Pour google : deux champs distincts (server API_KEY + browser JS_API_KEY).
    * Ne retourne jamais la clé elle-même.
    */
   @Get('routing/key-status')
   async routingKeyStatus() {
-    const check = async (provider: RoutingProvider): Promise<boolean> => {
+    const checkField = async (provider: RoutingProvider, field: string): Promise<boolean> => {
       try {
-        await this.secrets.getSecret(VAULT_PATHS[provider], 'API_KEY');
-        return true;
+        const v = await this.secrets.getSecret(VAULT_PATHS[provider], field);
+        return typeof v === 'string' && v.trim().length > 0;
       } catch {
         return false;
       }
     };
-    const [google, mapbox] = await Promise.all([check('google'), check('mapbox')]);
-    return { google, mapbox };
+    const [google, googleJs, mapbox] = await Promise.all([
+      checkField('google', 'API_KEY'),
+      checkField('google', 'JS_API_KEY'),
+      checkField('mapbox', 'API_KEY'),
+    ]);
+    return { google, googleJs, mapbox };
   }
 
   /**
    * PUT /platform/config/routing/key/:provider
-   * Injecte la clé API dans Vault (chemin platform/{google-maps|mapbox}).
+   * Injecte la/les clé(s) API dans Vault (chemin platform/{google-maps|mapbox}).
+   *
+   * Body :
+   *   - { apiKey }                    → écrase API_KEY
+   *   - { jsApiKey }                  → ajoute/met à jour JS_API_KEY (google uniquement, préserve API_KEY)
+   *   - { apiKey, jsApiKey }          → écrit les deux d'un coup
+   *
+   * Au moins un des deux champs est requis. Pour mapbox, seul `apiKey` est accepté.
    */
   @Put('routing/key/:provider')
   async setRoutingKey(
     @Param('provider') provider: string,
-    @Body() body: { apiKey: string },
+    @Body() body: { apiKey?: string; jsApiKey?: string },
   ) {
     if (!ROUTING_PROVIDERS.includes(provider as RoutingProvider)) {
       throw new BadRequestException(`Provider invalide. Valeurs acceptées : ${ROUTING_PROVIDERS.join(', ')}`);
     }
-    if (!body?.apiKey || typeof body.apiKey !== 'string' || body.apiKey.trim().length < 10) {
-      throw new BadRequestException('apiKey manquante ou trop courte');
+
+    const apiKey   = typeof body?.apiKey   === 'string' ? body.apiKey.trim()   : '';
+    const jsApiKey = typeof body?.jsApiKey === 'string' ? body.jsApiKey.trim() : '';
+
+    if (!apiKey && !jsApiKey) {
+      throw new BadRequestException('Au moins une clé requise (apiKey ou jsApiKey).');
     }
-    await this.secrets.putSecret(VAULT_PATHS[provider as RoutingProvider], { API_KEY: body.apiKey.trim() });
-    return { ok: true, provider };
+    if (apiKey && apiKey.length < 10) {
+      throw new BadRequestException('apiKey trop courte');
+    }
+    if (jsApiKey && jsApiKey.length < 10) {
+      throw new BadRequestException('jsApiKey trop courte');
+    }
+    if (jsApiKey && provider !== 'google') {
+      throw new BadRequestException('jsApiKey n\'est accepté que pour le provider google');
+    }
+
+    const path = VAULT_PATHS[provider as RoutingProvider];
+
+    // Merge non-destructif : on récupère l'objet existant pour préserver les champs non touchés.
+    let existing: Record<string, string> = {};
+    try {
+      existing = await this.secrets.getSecretObject<Record<string, string>>(path);
+    } catch {
+      // Premier write : pas de secret existant.
+    }
+
+    const merged: Record<string, string> = { ...existing };
+    if (apiKey)   merged.API_KEY    = apiKey;
+    if (jsApiKey) merged.JS_API_KEY = jsApiKey;
+
+    await this.secrets.putSecret(path, merged);
+    return { ok: true, provider, fieldsUpdated: { apiKey: !!apiKey, jsApiKey: !!jsApiKey } };
   }
 
   /**

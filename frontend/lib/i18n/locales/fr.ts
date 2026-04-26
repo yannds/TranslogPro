@@ -5225,7 +5225,16 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "routingKeySave":          "Enregistrer dans Vault",
     "routingKeySaving":        "Enregistrement…",
     "routingKeyDeleteConfirm": "Supprimer la clé Vault pour {{provider}} ? Le provider tombera en fallback haversine.",
-    "routingKeyDeleted":       "Clé supprimée"
+    "routingKeyDeleted":       "Clé supprimée",
+    "routingKeyServerLabel":   "Clé serveur (Geocoding / Directions)",
+    "routingKeyServerHelp":    "Utilisée côté backend pour la recherche d'adresse et le calcul d'itinéraires. Restreinte par adresse IP côté Google Cloud.",
+    "routingKeyServerShort":   "Serveur",
+    "routingKeyBrowserLabel":  "Clé navigateur (Maps JS + Places)",
+    "routingKeyBrowserHelp":   "Utilisée côté frontend pour afficher la carte Google et l'autocomplétion d'adresse. Restreinte par référent HTTP côté Google Cloud.",
+    "routingKeyBrowserShort":  "Navigateur",
+    "routingKeyPlaceholderReplace": "Coller pour remplacer (laisser vide pour conserver)",
+    "routingKeyAtLeastOne":    "Au moins une clé doit être renseignée.",
+    "routingKeyAtLeastOneHint": "Vous pouvez mettre à jour une seule clé à la fois — l'autre sera préservée."
   },
   "payment": {
     "title":            "Paiement",

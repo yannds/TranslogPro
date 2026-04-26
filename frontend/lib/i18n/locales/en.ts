@@ -5213,7 +5213,16 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "routingKeySave":          "Save to Vault",
     "routingKeySaving":        "Saving…",
     "routingKeyDeleteConfirm": "Delete Vault key for {{provider}}? The provider will fall back to haversine.",
-    "routingKeyDeleted":       "Key deleted"
+    "routingKeyDeleted":       "Key deleted",
+    "routingKeyServerLabel":   "Server key (Geocoding / Directions)",
+    "routingKeyServerHelp":    "Used backend-side for address lookup and route computation. IP-restricted on Google Cloud.",
+    "routingKeyServerShort":   "Server",
+    "routingKeyBrowserLabel":  "Browser key (Maps JS + Places)",
+    "routingKeyBrowserHelp":   "Used frontend-side to render the Google map and address autocomplete. HTTP-referrer-restricted on Google Cloud.",
+    "routingKeyBrowserShort":  "Browser",
+    "routingKeyPlaceholderReplace": "Paste to replace (leave empty to keep)",
+    "routingKeyAtLeastOne":    "At least one key must be provided.",
+    "routingKeyAtLeastOneHint": "You can update a single key at a time — the other one is preserved."
   },
   "payment": {
     "title":            "Payment",

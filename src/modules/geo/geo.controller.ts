@@ -38,9 +38,27 @@ export class GeoController {
   }
 
   /**
+   * Renvoie la configuration Maps destinee au navigateur :
+   *   - jsApiKey : cle Google Maps JavaScript API (Maps JS + Places),
+   *                lue depuis Vault platform/google-maps:JS_API_KEY.
+   *
+   * La cle est restreinte par referent HTTP cote Google Cloud Console — sa fuite
+   * n'est exploitable que depuis les domaines autorises (cf. docs/INTEGRATIONS.md).
+   *
+   * Permission : STATION_MANAGE_TENANT (seuls les admins ouvrant la modale station
+   * en ont besoin).
+   */
+  @Get('maps-config')
+  @RequirePermission(Permission.STATION_MANAGE_TENANT)
+  async mapsConfig() {
+    const jsApiKey = await this.geo.getJsMapsApiKey();
+    return { jsApiKey };
+  }
+
+  /**
    * Reverse geocoding : coordonnees → adresse la plus proche.
    * Permet de confirmer "tu pointes bien sur la bonne rue" apres drag manuel
-   * du marker sur la carte Leaflet.
+   * du marker sur la carte.
    */
   @Get('reverse')
   @RequirePermission(Permission.STATION_MANAGE_TENANT)
