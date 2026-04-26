@@ -269,6 +269,7 @@ const ALL_PLATFORM_PERMISSIONS = [
   'data.platform.kpi.adoption.read.global',
   'data.platform.audit.read.global',
   'control.platform.manage.tenant',
+  'control.platform.config.manage.global',
   'data.platform.read.agency',
   'data.tenant.plan.read.tenant',
 ];

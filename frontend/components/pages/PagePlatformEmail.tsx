@@ -11,7 +11,8 @@
 
 import { useState } from 'react';
 import {
-  Mail, CheckCircle2, XCircle, Wifi, WifiOff, Loader2, RefreshCw, ShieldCheck, ShieldAlert,
+  Mail, CheckCircle2, XCircle, Wifi, WifiOff, Loader2, RefreshCw,
+  ShieldCheck, ShieldAlert, Settings,
 } from 'lucide-react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import { apiPost } from '../../lib/api';
@@ -20,6 +21,7 @@ import { cn } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
+import { EmailProviderConfigDialog, type ProviderField } from './platform-email/EmailProviderConfigDialog';
 
 type ProviderKey = 'console' | 'smtp' | 'resend' | 'o365';
 
@@ -31,6 +33,8 @@ interface EmailProviderItem {
   healthStatus:         'UP' | 'DOWN' | 'DEGRADED' | 'UNKNOWN';
   lastHealthCheckAt:    string | null;
   lastHealthCheckError: string | null;
+  fields:               ReadonlyArray<ProviderField>;
+  configured:           boolean;
 }
 
 function HealthBadge({ status }: { status: EmailProviderItem['healthStatus'] }) {
@@ -49,6 +53,7 @@ export function PagePlatformEmail() {
   const [busyKey, setBusyKey]     = useState<ProviderKey | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [lastMsg, setLastMsg]     = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [configKey, setConfigKey] = useState<ProviderKey | null>(null);
 
   async function runHealth(key: ProviderKey) {
     setBusyKey(key); setActionErr(null); setLastMsg(null);
@@ -130,8 +135,15 @@ export function PagePlatformEmail() {
               </div>
               {p.vaultPath ? (
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-                  <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" aria-hidden />
+                  {p.configured
+                    ? <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" aria-hidden />
+                    : <ShieldAlert className="w-3 h-3 text-amber-500" aria-hidden />}
                   <span className="font-mono">{p.vaultPath}</span>
+                  {!p.configured && (
+                    <span className="italic text-amber-600 dark:text-amber-400">
+                      {t('platformEmail.notConfigured')}
+                    </span>
+                  )}
                   {p.lastHealthCheckAt && (
                     <span>· {t('platformEmail.lastCheck')}: {new Date(p.lastHealthCheckAt).toLocaleString()}</span>
                   )}
@@ -149,6 +161,16 @@ export function PagePlatformEmail() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {p.vaultPath && p.fields.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfigKey(p.key)}
+                >
+                  <Settings className="w-4 h-4 mr-1.5" aria-hidden />
+                  {t('platformEmail.configure')}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -164,6 +186,22 @@ export function PagePlatformEmail() {
           </li>
         ))}
       </ul>
+
+      {configKey && (() => {
+        const p = (data ?? []).find(x => x.key === configKey);
+        if (!p || !p.vaultPath) return null;
+        return (
+          <EmailProviderConfigDialog
+            providerKey={p.key}
+            providerName={p.displayName}
+            vaultPath={p.vaultPath}
+            fields={p.fields}
+            open={true}
+            onClose={() => setConfigKey(null)}
+            onSaved={refetch}
+          />
+        );
+      })()}
     </div>
   );
 }

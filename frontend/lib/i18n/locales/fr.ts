@@ -5604,7 +5604,15 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "lastCheck":          "Dernier test",
     "test":               "Tester",
     "healthcheckOk":      "Connexion vérifiée — provider fonctionnel",
-    "healthcheckFailed":  "Échec du test de connexion"
+    "healthcheckFailed":  "Échec du test de connexion",
+    "configure":  "Configurer",
+    "configureTitle":  "Configurer le provider",
+    "vaultPath":  "Chemin Vault",
+    "saveAndTest":  "Enregistrer & tester",
+    "savedAndHealthy":  "Configuration enregistrée — test de connexion OK",
+    "savedHealthFailed":  "Configuration enregistrée mais test de connexion KO",
+    "secretHint":  "Les champs sensibles (clés, secrets, mots de passe) sont chiffrés dans Vault. Laissez la valeur masquée •••••••• pour conserver l"ancienne.",
+    "notConfigured":  "Non configuré"
   },
 
   // ─── Portail plateforme — IAM cross-tenant (audit / sessions / users / rôles)

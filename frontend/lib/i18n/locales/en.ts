@@ -5592,7 +5592,15 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "lastCheck":          "Last check",
     "test":               "Test",
     "healthcheckOk":      "Connection verified — provider working",
-    "healthcheckFailed":  "Connection test failed"
+    "healthcheckFailed":  "Connection test failed",
+    "configure":  "Configure",
+    "configureTitle":  "Configure provider",
+    "vaultPath":  "Vault path",
+    "saveAndTest":  "Save & test",
+    "savedAndHealthy":  "Settings saved — connection test OK",
+    "savedHealthFailed":  "Settings saved but connection test failed",
+    "secretHint":  "Secret fields (keys, secrets, passwords) are encrypted in Vault. Leave the masked value •••••••• to keep the previous one.",
+    "notConfigured":  "Not configured"
   },
 
   "platformAudit": {
