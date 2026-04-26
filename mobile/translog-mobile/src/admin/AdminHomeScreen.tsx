@@ -236,6 +236,15 @@ export function AdminHomeScreen() {
 
         <NavCard
           colors={colors}
+          icon="📅"
+          tone={colors.primary}
+          title={L('Planning', 'Planning')}
+          subtitle={L('Calendrier hebdo · ressources · chauffeurs au repos', 'Weekly calendar · resources · resting drivers')}
+          onPress={() => navigation.navigate('AdminPlanning')}
+        />
+
+        <NavCard
+          colors={colors}
           icon="🚨"
           tone={incidentAlert ? colors.danger : colors.warning}
           title={L('Incidents', 'Incidents')}

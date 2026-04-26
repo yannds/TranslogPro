@@ -551,6 +551,67 @@ export class DriverProfileService {
     });
   }
 
+  /**
+   * Chauffeurs actuellement en repos (endedAt = null).
+   * Utilisé par la vue admin/manager mobile Planning > Repos pour voir
+   * en un coup d'œil qui est indisponible maintenant.
+   *
+   * Scope agency : si scope.agency, on filtre via Staff.agencyId.
+   */
+  async getActiveRestPeriods(tenantId: string, scope?: ScopeContext) {
+    const agencyFilter = scope?.scope === 'agency' && scope.agencyId
+      ? { staff: { agencyId: scope.agencyId } }
+      : {};
+
+    const periods = await this.prisma.driverRestPeriod.findMany({
+      where: {
+        tenantId,
+        endedAt: null,
+        ...agencyFilter,
+      },
+      orderBy: { startedAt: 'desc' },
+      take:    100,
+    });
+
+    if (periods.length === 0) return [];
+
+    const staffIds = Array.from(new Set(periods.map(p => p.staffId)));
+    const staffs = await this.prisma.staff.findMany({
+      where:   { id: { in: staffIds }, tenantId },
+      select: {
+        id:       true,
+        userId:   true,
+        agencyId: true,
+      },
+    });
+    const userIds = Array.from(new Set(staffs.map(s => s.userId).filter(Boolean) as string[]));
+    const users = userIds.length > 0
+      ? await this.prisma.user.findMany({
+          where:   { id: { in: userIds }, tenantId },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
+    const staffMap = new Map(staffs.map(s => [s.id, s]));
+
+    const now = Date.now();
+    return periods.map(p => {
+      const s = staffMap.get(p.staffId) ?? null;
+      const u = s?.userId ? userMap.get(s.userId) ?? null : null;
+      const durationMin = Math.round((now - p.startedAt.getTime()) / 60_000);
+      return {
+        id:          p.id,
+        staffId:     p.staffId,
+        startedAt:   p.startedAt,
+        source:      p.source,
+        notes:       p.notes,
+        durationMin,
+        agencyId:    s?.agencyId ?? null,
+        driver:      u,
+      };
+    });
+  }
+
   // ─── Training Types ───────────────────────────────────────────────────────
 
   async createTrainingType(tenantId: string, dto: CreateTrainingTypeDto) {

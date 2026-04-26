@@ -174,6 +174,20 @@ export class DriverProfileController {
 
   // ── Rest Periods ───────────────────────────────────────────────────────────
 
+  /**
+   * Liste les chauffeurs actuellement en repos (RestPeriod sans endedAt).
+   * Pour la vue admin/manager mobile (Planning hub > Repos).
+   * Permission : DRIVER_PROFILE_AGENCY (lecture admin scope).
+   */
+  @Get('rest-active')
+  @RequirePermission(Permission.DRIVER_PROFILE_AGENCY)
+  getActiveRestPeriods(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.svc.getActiveRestPeriods(tenantId, scope);
+  }
+
   @Get('drivers/:staffId/rest-compliance')
   // .agency en 1er (plus large — pour managers), .own en 2e (chauffeur lisant
   // ses propres données). Le service rejette le cross-user quand scope=own.
