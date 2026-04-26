@@ -60,18 +60,24 @@ function fmt(n: number): string {
   return n.toFixed(6);
 }
 
-export function GoogleMapPicker({
-  tenantId, value, onChange, countryCode, disabled, mapHeightPx = 320,
-}: Props) {
+/**
+ * Wrapper public : récupère la clé navigateur depuis Vault et délègue au composant
+ * interne UNIQUEMENT quand la clé est résolue. Sinon affiche le fallback (recherche
+ * + lat/lng manuels).
+ *
+ * Critique : on ne doit JAMAIS appeler `useJsApiLoader` avec une clé vide puis avec
+ * la vraie — le loader cache ses options au premier appel et refuse tout changement
+ * (erreur "Loader must not be called again with different options"). D'où le split
+ * en deux composants.
+ */
+export function GoogleMapPicker(props: Props) {
   const { t } = useI18n();
-
-  // 1. Récupération de la clé navigateur (Vault → /geo/maps-config).
-  const [jsApiKey,    setJsApiKey]    = useState<string | null | undefined>(undefined);
-  const [keyError,    setKeyError]    = useState<string | null>(null);
+  const [jsApiKey, setJsApiKey] = useState<string | null | undefined>(undefined);
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancel = false;
-    apiGet<MapsConfig>(`/api/tenants/${tenantId}/geo/maps-config`)
+    apiGet<MapsConfig>(`/api/tenants/${props.tenantId}/geo/maps-config`)
       .then(cfg => { if (!cancel) setJsApiKey(cfg.jsApiKey); })
       .catch(e => {
         if (!cancel) {
@@ -80,11 +86,37 @@ export function GoogleMapPicker({
         }
       });
     return () => { cancel = true; };
-  }, [tenantId]);
+  }, [props.tenantId]);
 
-  // 2. Chargement de la lib Google JS quand la clé est dispo.
+  // Tant que la clé est en cours de récupération OU absente : fallback champs lat/lng.
+  if (typeof jsApiKey !== 'string' || jsApiKey.length === 0) {
+    return (
+      <FallbackPicker
+        value={props.value}
+        onChange={props.onChange}
+        disabled={props.disabled}
+        loading={jsApiKey === undefined}
+        keyMissing={jsApiKey === null}
+        keyError={keyError}
+        t={t}
+      />
+    );
+  }
+
+  return <GoogleMapPickerInner {...props} jsApiKey={jsApiKey} />;
+}
+
+/**
+ * Composant interne — la clé est garantie non-vide. C'est ici qu'on appelle
+ * `useJsApiLoader`, exactement une fois pour la durée de vie du composant.
+ */
+function GoogleMapPickerInner({
+  value, onChange, countryCode, disabled, mapHeightPx = 320, jsApiKey,
+}: Props & { jsApiKey: string }) {
+  const { t } = useI18n();
+
   const { isLoaded: gmapsLoaded, loadError: gmapsLoadError } = useJsApiLoader({
-    googleMapsApiKey: jsApiKey ?? '',
+    googleMapsApiKey: jsApiKey,
     libraries:        LIBRARIES,
     id:               'translogpro-gmaps-loader',
     preventGoogleFontsLoading: true,
@@ -100,7 +132,7 @@ export function GoogleMapPicker({
 
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // 3. État pour la recherche Google Places (autocomplete client).
+  // État pour la recherche Google Places (autocomplete client).
   const [query,        setQuery]        = useState('');
   const [predictions,  setPredictions]  = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [searching,    setSearching]    = useState(false);
@@ -186,12 +218,8 @@ export function GoogleMapPicker({
     onChange({ lat: fmt(e.latLng.lat()), lng: fmt(e.latLng.lng()) });
   };
 
-  // ─── Détermination de l'état d'affichage ──────────────────────────────────
-  const keyMissing  = jsApiKey === null;
-  const keyLoading  = jsApiKey === undefined;
-  const keyOk       = typeof jsApiKey === 'string' && jsApiKey.length > 0;
-  const mapReady    = keyOk && gmapsLoaded;
-  const mapFailed   = keyOk && (!!gmapsLoadError);
+  const mapReady  = gmapsLoaded && !gmapsLoadError;
+  const mapFailed = !!gmapsLoadError;
 
   return (
     <div className="space-y-3">
@@ -211,7 +239,7 @@ export function GoogleMapPicker({
             onBlur={() => setTimeout(() => setShowResults(false), 150)}
             className={`${inp} pl-9 pr-9`}
             placeholder={t('stations.mapSearchPlaceholder')}
-            disabled={disabled || (!mapReady && !keyMissing)}
+            disabled={disabled || !mapReady}
             autoComplete="off"
             aria-autocomplete="list"
             aria-expanded={showResults && predictions.length > 0}
@@ -240,11 +268,6 @@ export function GoogleMapPicker({
             </ul>
           )}
         </div>
-        {keyMissing && (
-          <p className="text-[11px] text-amber-700 dark:text-amber-300">
-            {t('stations.mapKeyMissing')}
-          </p>
-        )}
         {mapFailed && (
           <p className="text-[11px] text-amber-700 dark:text-amber-300">
             {t('stations.mapLoadFailed')}
@@ -252,90 +275,137 @@ export function GoogleMapPicker({
         )}
       </div>
 
-      {/* ── Carte (uniquement si la clé est OK et la lib chargée) ───────────── */}
-      {keyOk && (
-        <div
-          className="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40"
-          style={{ height: mapHeightPx }}
-        >
-          {keyLoading || (!gmapsLoaded && !gmapsLoadError) ? (
-            <div className="h-full w-full flex items-center justify-center text-xs text-slate-500">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" aria-hidden />
-              {t('stations.mapLoading')}
-            </div>
-          ) : mapReady ? (
-            <GoogleMap
-              mapContainerStyle={{ width: '100%', height: '100%' }}
-              center={center}
-              zoom={hasMarker ? MARKED_ZOOM : DEFAULT_ZOOM}
-              onClick={onMapClick}
-              onLoad={m => { mapRef.current = m; }}
-              options={{
-                streetViewControl:  false,
-                mapTypeControl:     false,
-                fullscreenControl:  false,
-                gestureHandling:    'cooperative',
-                clickableIcons:     false,
-              }}
-            >
-              {hasMarker && (
-                <MarkerF
-                  position={{ lat: lat!, lng: lng! }}
-                  draggable={!disabled}
-                  onDragEnd={onMarkerDragEnd}
-                />
-              )}
-            </GoogleMap>
-          ) : (
-            <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 px-4 text-center">
-              {t('stations.mapLoadFailed')}
-            </div>
-          )}
-        </div>
-      )}
-      {keyOk && mapReady && (
+      {/* ── Carte ──────────────────────────────────────────────────────────── */}
+      <div
+        className="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40"
+        style={{ height: mapHeightPx }}
+      >
+        {!gmapsLoaded && !gmapsLoadError ? (
+          <div className="h-full w-full flex items-center justify-center text-xs text-slate-500">
+            <Loader2 className="w-4 h-4 animate-spin mr-2" aria-hidden />
+            {t('stations.mapLoading')}
+          </div>
+        ) : mapReady ? (
+          <GoogleMap
+            mapContainerStyle={{ width: '100%', height: '100%' }}
+            center={center}
+            zoom={hasMarker ? MARKED_ZOOM : DEFAULT_ZOOM}
+            onClick={onMapClick}
+            onLoad={m => { mapRef.current = m; }}
+            options={{
+              streetViewControl:  false,
+              mapTypeControl:     false,
+              fullscreenControl:  false,
+              gestureHandling:    'cooperative',
+              clickableIcons:     false,
+            }}
+          >
+            {hasMarker && (
+              <MarkerF
+                position={{ lat: lat!, lng: lng! }}
+                draggable={!disabled}
+                onDragEnd={onMarkerDragEnd}
+              />
+            )}
+          </GoogleMap>
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 px-4 text-center">
+            {t('stations.mapLoadFailed')}
+          </div>
+        )}
+      </div>
+      {mapReady && (
         <p className="text-[11px] text-slate-500 dark:text-slate-400">
           {t('stations.mapInteractHint')}
         </p>
       )}
-      {keyError && (
+
+      {/* ── Champs lat/lng — toujours disponibles ──────────────────────────── */}
+      <CoordinateInputs value={value} onChange={onChange} disabled={disabled} t={t} />
+    </div>
+  );
+}
+
+/**
+ * Pickers de fallback : pas de carte Google. Affiche juste les champs lat/lng
+ * (et un message si la clé est manquante / en cours de chargement).
+ */
+function FallbackPicker({
+  value, onChange, disabled, loading, keyMissing, keyError, t,
+}: {
+  value:      GoogleMapPickerValue;
+  onChange:   (v: GoogleMapPickerValue) => void;
+  disabled?:  boolean;
+  loading:    boolean;
+  keyMissing: boolean;
+  keyError:   string | null;
+  t:          (k: string) => string;
+}) {
+  return (
+    <div className="space-y-3">
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+          {t('stations.mapLoading')}
+        </div>
+      )}
+      {keyMissing && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+          {t('stations.mapKeyMissing')}
+        </div>
+      )}
+      {keyError && !keyMissing && (
         <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
           {t('stations.mapKeyError')}
         </p>
       )}
+      <CoordinateInputs value={value} onChange={onChange} disabled={disabled} t={t} />
+    </div>
+  );
+}
 
-      {/* ── Champs lat/lng — toujours disponibles ──────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label htmlFor="gmap-lat" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('stations.latitude')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input
-            id="gmap-lat"
-            type="number" required step="any" min={-90} max={90}
-            value={value.lat}
-            onChange={e => onChange({ ...value, lat: e.target.value })}
-            className={inp}
-            disabled={disabled}
-            placeholder="-90 → 90"
-            inputMode="decimal"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="gmap-lng" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t('stations.longitude')} <span aria-hidden className="text-red-500">*</span>
-          </label>
-          <input
-            id="gmap-lng"
-            type="number" required step="any" min={-180} max={180}
-            value={value.lng}
-            onChange={e => onChange({ ...value, lng: e.target.value })}
-            className={inp}
-            disabled={disabled}
-            placeholder="-180 → 180"
-            inputMode="decimal"
-          />
-        </div>
+/**
+ * Champs lat/lng manuels — partagés par GoogleMapPickerInner et FallbackPicker.
+ */
+function CoordinateInputs({
+  value, onChange, disabled, t,
+}: {
+  value:    GoogleMapPickerValue;
+  onChange: (v: GoogleMapPickerValue) => void;
+  disabled?: boolean;
+  t:        (k: string) => string;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-1.5">
+        <label htmlFor="gmap-lat" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          {t('stations.latitude')} <span aria-hidden className="text-red-500">*</span>
+        </label>
+        <input
+          id="gmap-lat"
+          type="number" required step="any" min={-90} max={90}
+          value={value.lat}
+          onChange={e => onChange({ ...value, lat: e.target.value })}
+          className={inp}
+          disabled={disabled}
+          placeholder="-90 → 90"
+          inputMode="decimal"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor="gmap-lng" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          {t('stations.longitude')} <span aria-hidden className="text-red-500">*</span>
+        </label>
+        <input
+          id="gmap-lng"
+          type="number" required step="any" min={-180} max={180}
+          value={value.lng}
+          onChange={e => onChange({ ...value, lng: e.target.value })}
+          className={inp}
+          disabled={disabled}
+          placeholder="-180 → 180"
+          inputMode="decimal"
+        />
       </div>
     </div>
   );

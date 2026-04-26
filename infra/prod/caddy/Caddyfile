@@ -53,7 +53,7 @@
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "geolocation=(), camera=(), microphone=()"
         # Supprime Server header par défaut
-                Content-Security-Policy   "default-src 'self'; script-src 'self' 'sha256-SpcYfPAFmN3AcqAisA2RsheLRqw5HOlqBLk/WvFAdUE=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+                Content-Security-Policy   "default-src 'self'; script-src 'self' 'sha256-SpcYfPAFmN3AcqAisA2RsheLRqw5HOlqBLk/WvFAdUE=' 'wasm-unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' wss: https: https://maps.googleapis.com https://places.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:"
         -Server
     }
 }
