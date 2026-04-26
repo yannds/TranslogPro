@@ -253,13 +253,15 @@ export class ParcelService {
     }, {
       aggregateType: 'Parcel',
       persist: async (entity, state, p) => {
-        return p.parcel.update({
+        const updated = (await p.parcel.update({
           where: { id: entity.id },
           data:  {
             status:  state,
             version: { increment: 1 },
           },
-        }) as Promise<typeof entity>;
+        })) as typeof entity;
+        await this.maybeEmitParcelEvent(tenantId, updated as unknown as Parameters<typeof this.maybeEmitParcelEvent>[1], state, p);
+        return updated;
       },
     });
   }
@@ -314,13 +316,56 @@ export class ParcelService {
       {
         aggregateType: 'Parcel',
         persist: async (entity, state, p) => {
-          return p.parcel.update({
+          const updated = (await p.parcel.update({
             where: { id: entity.id },
             data:  { status: state, version: { increment: 1 }, ...stamps },
-          }) as Promise<typeof entity>;
+          })) as typeof entity;
+          await this.maybeEmitParcelEvent(tenantId, updated as unknown as Parameters<typeof this.maybeEmitParcelEvent>[1], state, p);
+          return updated;
         },
       },
     );
+  }
+
+  /**
+   * Émet le DomainEvent de notification correspondant à l'état cible — uniquement
+   * pour les états qui méritent une notif client (in transit, ready for pickup,
+   * delivered). Outbox atomique dans la persist callback. Mapping :
+   *   IN_TRANSIT             → PARCEL_DISPATCHED   (parcel.in_transit)
+   *   AVAILABLE_FOR_PICKUP   → PARCEL_ARRIVED      (parcel.ready_for_pickup)
+   *   DELIVERED              → PARCEL_DELIVERED    (parcel.delivered)
+   * Les autres états (AT_HUB_*, STORED_*, DAMAGED, RETURNED, DISPUTED) restent
+   * silencieux côté notification — flux interne ou hors scope Tier 2.1.
+   */
+  private async maybeEmitParcelEvent(
+    tenantId: string,
+    parcel: { id: string; trackingCode: string; senderCustomerId: string | null; recipientCustomerId: string | null },
+    toState: string,
+    tx: unknown,
+  ): Promise<void> {
+    const eventType =
+      toState === 'IN_TRANSIT'           ? EventTypes.PARCEL_DISPATCHED :
+      toState === 'AVAILABLE_FOR_PICKUP' ? EventTypes.PARCEL_ARRIVED :
+      toState === 'DELIVERED'            ? EventTypes.PARCEL_DELIVERED :
+      null;
+    if (!eventType) return;
+
+    const event: DomainEvent = {
+      id:            uuidv4(),
+      type:          eventType,
+      tenantId,
+      aggregateId:   parcel.id,
+      aggregateType: 'Parcel',
+      payload: {
+        parcelId:            parcel.id,
+        trackingCode:        parcel.trackingCode,
+        senderCustomerId:    parcel.senderCustomerId,
+        recipientCustomerId: parcel.recipientCustomerId,
+        toState,
+      },
+      occurredAt: new Date(),
+    };
+    await this.eventBus.publish(event, tx as Parameters<typeof this.eventBus.publish>[1]);
   }
 
   /**

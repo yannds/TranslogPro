@@ -36,7 +36,7 @@ describe('EmailTemplate registry — fondation', () => {
 
   it('chaque descripteur expose les champs obligatoires non vides', () => {
     for (const d of listEmailTemplates()) {
-      expect(d.id).toMatch(/^[a-z0-9.-]+$/);
+      expect(d.id).toMatch(/^[a-z0-9._-]+$/);
       expect(d.group).toBeTruthy();
       expect(d.labelFr.length).toBeGreaterThan(0);
       expect(d.labelEn.length).toBeGreaterThan(0);
