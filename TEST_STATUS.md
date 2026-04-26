@@ -1,7 +1,48 @@
 # TransLog Pro — Statut des Tests
 
 > Référence partagée entre les deux développeurs.
-> Mise à jour après chaque session. Dernière mise à jour : 2026-04-25 (Chantier audit endpoints — 11 sprints, ~50 commits).
+> Mise à jour après chaque session. Dernière mise à jour : 2026-04-26 (Chantier responsive web + finalisation apps mobiles — 5 lots).
+
+### Chantier responsive web + finalisation apps mobiles (2026-04-26)
+
+5 lots livrés, ~6 commits propres, focus "sobre, pas fouilli" sur les apps mobiles.
+
+**Lots livrés** :
+- **L1 — Responsive web** : 18 grids non-responsives (`grid-cols-N` sans préfixe)
+  fixés sur 11 pages back-office + landing publique (5 grids), 2 tables HTML
+  brutes (PlatformIntegrations, QuotaSettings) — `overflow-hidden` → `overflow-x-auto`
+  + min-w. PageQuaiFreight `min-w-[220px]` problématique fixé
+  (`flex-1 basis-full sm:basis-auto sm:min-w-[220px]`).
+- **L2 — Admin mobile** : passage de 4 → 6 écrans, 13% → ~70% capacités terrain.
+  AdminHomeScreen passe de 4 à 8 KPIs structurés (CA jour vedette + 6 KPIs grille).
+  AdminTripsScreen (NEW) — surveillance trajets J ± 1 + actions blueprint
+  (suspend, cancel-in-transit, declare-major-delay) via incident-compensation API.
+  AdminIncidentsScreen (NEW) — triage temps réel SOS + résolution one-tap.
+- **L3 — Customer mobile** : CustomerProfileScreen (NEW) self-service identité +
+  langue + canaux notification. Prompt feedback post-trip ≤ 7j sur Home.
+  Fix bug critique troncature QR (TOKEN_DISPLAY_MAX cassait l'HMAC côté agent).
+- **L4 — Cashier + Station** : CashierTicketsScreen (NEW) annulation billet
+  one-tap (4ème onglet). StationCustomerLookupScreen (NEW) recherche client
+  + détail billets + actions cancel/refund.
+- **L5 — Polish** : tous les nouveaux écrans i18n fr+en, ARIA, dark mode,
+  Idempotency-Key déterministe sur mutations critiques, refus offline pour
+  les actions non queueables.
+
+**Métriques finales** :
+- Unit : **1171 / 1171 PASS** (+0 régression)
+- Vite build frontend : ✅ propre
+- TypeScript mobile : 0 erreur sur les 5 nouveaux écrans (erreurs préexistantes
+  isolées sur MobileSignatureInput/BriefingScreen, hors scope)
+- 5 nouveaux écrans React Native : AdminTripsScreen, AdminIncidentsScreen,
+  CustomerProfileScreen, CashierTicketsScreen, StationCustomerLookupScreen
+- AdminHomeScreen + CustomerHomeScreen enrichis
+- Couverture mobile par profil après chantier :
+  admin ~70% (vs 13%), customer ~75% (vs 50%), cashier ~90% (vs 60%),
+  station ~90% (vs 70%), driver/quai inchangés (déjà bons)
+
+**Hors scope assumé** (web-only justifié) : Workflow Studio, IAM granulaire,
+Branding, Modules, Intégrations secrets, Routes/Trips planning lourd,
+Profitability simulator. Tous nécessitent clavier + écran large.
 
 ### Chantier audit endpoints + couverture E2E (2026-04-24 → 2026-04-25)
 

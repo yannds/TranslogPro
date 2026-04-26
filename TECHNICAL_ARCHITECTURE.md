@@ -5,6 +5,26 @@
 
 ## Changelog récent
 
+- **2026-04-26 : Finalisation apps mobiles + responsive web** (5 lots).
+  Côté web : 18 grids non-responsives fixées sur 11 pages back-office +
+  landing publique, 2 tables HTML brutes wrappées en `overflow-x-auto`,
+  `PageQuaiFreight` `min-w-[220px]` neutralisé en mobile.
+  Côté apps mobiles (React Native / Expo SDK 52) : passage de 28 → 33
+  écrans avec philosophie "sobre, pas fouilli" (admin = surveillance +
+  actions rapides, pas de configuration tenant). 5 nouveaux écrans :
+  `AdminTripsScreen` (actions blueprint suspend/cancel/declare-delay via
+  incident-compensation), `AdminIncidentsScreen` (triage SOS + résolution
+  one-tap), `CustomerProfileScreen` (langue + canaux notification),
+  `CashierTicketsScreen` (annulation billet, 4ème onglet caissier),
+  `StationCustomerLookupScreen` (recherche CRM + cancel/refund).
+  `AdminHomeScreen` enrichi de 4 → 8 KPIs via `/analytics/today-summary`
+  avec fallback `/analytics/kpis`. Fix bug critique troncature QR
+  (TOKEN_DISPLAY_MAX cassait l'HMAC côté agent). Couverture mobile par
+  profil : admin 13% → ~70%, customer 50% → ~75%, cashier 60% → ~90%,
+  station 70% → ~90%. Tous écrans avec i18n fr+en, ARIA, dark mode,
+  Idempotency-Key déterministe sur mutations critiques, refus offline pour
+  les actions non queueables (cancel/refund/incident).
+
 - **2026-04-24 : Refonte briefing pré-voyage QHSE** (7 sprints).
   Passage d'une checklist équipement-seule à un briefing multi-chapitres
   tenant-configurable. 4 nouveaux modèles Prisma (`BriefingTemplate`,
