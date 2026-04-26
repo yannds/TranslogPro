@@ -10,6 +10,7 @@ import { UserNotificationListener }      from './user-notification.listener';
 import { TripCancelledNotificationListener } from './trip-cancelled-notification.listener';
 import { ParcelNotificationListener }    from './parcel-notification.listener';
 import { TicketNotificationListener }    from './ticket-notification.listener';
+import { AuthNotificationListener }      from './auth-notification.listener';
 
 /**
  * NotificationModule — consomme ISmsService et IWhatsappService fournis
@@ -46,6 +47,7 @@ import { TicketNotificationListener }    from './ticket-notification.listener';
     TripCancelledNotificationListener,
     ParcelNotificationListener,
     TicketNotificationListener,
+    AuthNotificationListener,
   ],
   exports:     [NotificationService],
 })

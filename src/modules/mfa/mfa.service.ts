@@ -19,13 +19,16 @@
  */
 import {
   Injectable, BadRequestException, ConflictException,
-  NotFoundException, UnauthorizedException,
+  NotFoundException, UnauthorizedException, Inject, Optional, Logger,
 } from '@nestjs/common';
 import { authenticator } from 'otplib';
 import * as bcrypt from 'bcryptjs';
 import * as qrcode from 'qrcode';
 import { randomBytes } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { EventTypes } from '../../common/types/domain-event.type';
 
 // window: 2 = tolère ±60 s de drift entre serveur et téléphone client.
 // Standard de l'industrie (Google Authenticator côté serveur tolère 1-2 steps).
@@ -55,7 +58,37 @@ export interface MfaEnableResult {
 
 @Injectable()
 export class MfaService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger('MfaService');
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(EVENT_BUS) private readonly eventBus?: IEventBus,
+  ) {}
+
+  /** Émission best-effort d'un AUTH_MFA_* event (le mail part via listener). */
+  private async emitMfaEvent(
+    type: typeof EventTypes.AUTH_MFA_ENABLED | typeof EventTypes.AUTH_MFA_DISABLED,
+    userId: string,
+    email: string,
+    tenantId: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<void> {
+    if (!this.eventBus) return;
+    const event: DomainEvent = {
+      id:            uuidv4(),
+      type,
+      tenantId,
+      aggregateId:   userId,
+      aggregateType: 'User',
+      payload: { userId, email, factor: 'TOTP', ...extra },
+      occurredAt: new Date(),
+    };
+    try {
+      await this.prisma.transact((tx) => this.eventBus!.publish(event, tx));
+    } catch (err) {
+      this.logger.warn(`[MFA] event emission failed type=${type}: ${(err as Error).message}`);
+    }
+  }
 
   /**
    * Étape 1 : génère un secret + QR code, persiste le secret en attente
@@ -115,13 +148,18 @@ export class MfaService {
     );
     const hashedCodes = await Promise.all(plainCodes.map(c => bcrypt.hash(c, 10)));
 
-    await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         mfaEnabled:     true,
         mfaVerifiedAt:  new Date(),
         mfaBackupCodes: hashedCodes,
       },
+      select: { id: true, email: true, tenantId: true },
+    });
+
+    await this.emitMfaEvent(EventTypes.AUTH_MFA_ENABLED, updated.id, updated.email, updated.tenantId, {
+      enabledAt: new Date().toISOString(),
     });
 
     return { backupCodes: plainCodes };
@@ -142,7 +180,7 @@ export class MfaService {
     const ok = await this.verifyCode(user, code);
     if (!ok) throw new UnauthorizedException('Code invalide');
 
-    await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         mfaEnabled:     false,
@@ -150,6 +188,12 @@ export class MfaService {
         mfaVerifiedAt:  null,
         mfaBackupCodes: [],
       },
+      select: { id: true, email: true, tenantId: true },
+    });
+
+    await this.emitMfaEvent(EventTypes.AUTH_MFA_DISABLED, updated.id, updated.email, updated.tenantId, {
+      disabledAt: new Date().toISOString(),
+      by:         'self',
     });
   }
 

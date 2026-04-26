@@ -58,6 +58,19 @@ export const EventTypes = {
   // payload : { userId, email, name, tenantName, tenantSlug, roleName?, agencyName?, resetUrl }
   USER_INVITED:           'user.invited',
 
+  // Auth — sécurité (Tier 3 chantier email 2026-04-26)
+  // password reset link  : payload { userId, email, tenantName, resetUrl, expiresAt, source: 'self' | 'admin' | 'platform' }
+  // password reset done  : payload { userId, email, tenantName, completedAt, ipAddress }
+  // mfa enabled          : payload { userId, email, tenantName, enabledAt, factor: 'TOTP' }
+  // mfa disabled         : payload { userId, email, tenantName, disabledAt, by: 'self' | 'admin' }
+  // email verified       : payload { userId, email, tenantName, verifiedAt }
+  AUTH_PASSWORD_RESET_LINK:        'auth.password_reset.link',
+  AUTH_PASSWORD_RESET_COMPLETED:   'auth.password_reset.completed',
+  AUTH_EMAIL_VERIFICATION_SENT:    'auth.email_verification.sent',
+  AUTH_EMAIL_VERIFIED:             'auth.email_verified',
+  AUTH_MFA_ENABLED:                'auth.mfa.enabled',
+  AUTH_MFA_DISABLED:               'auth.mfa.disabled',
+
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',

@@ -1,12 +1,16 @@
 import {
   Injectable, Logger, BadRequestException,
   UnauthorizedException, ForbiddenException, NotFoundException,
+  Inject, Optional,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuthIdentityService } from '../../core/identity/auth-identity.service';
 import { HostConfigService } from '../../core/tenancy';
+import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { EventTypes } from '../../common/types/domain-event.type';
+import { v4 as uuidv4 } from 'uuid';
 
 /** 30 minutes — suffisant pour cliquer le lien email, court pour limiter l'exposition. */
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1_000;
@@ -33,7 +37,26 @@ export class PasswordResetService {
     private readonly prisma:     PrismaService,
     private readonly identity:   AuthIdentityService,
     private readonly hostConfig: HostConfigService,
+    // @Optional pour rétrocompat tests existants (ctor 3 args). EVENT_BUS est
+    // @Global donc toujours injecté en prod.
+    @Optional() @Inject(EVENT_BUS) private readonly eventBus?: IEventBus,
   ) {}
+
+  /**
+   * Émet un AUTH_* event en best-effort. Un échec d'émission est logué mais ne
+   * fait jamais échouer le flow reset password — la sécurité du compte prime
+   * sur la notification.
+   */
+  private async emitAuthEvent(event: DomainEvent): Promise<void> {
+    if (!this.eventBus) return;
+    try {
+      await this.prisma.transact((tx) => this.eventBus!.publish(event, tx));
+    } catch (err) {
+      this.logger.warn(
+        `[PasswordReset] event emission failed type=${event.type}: ${(err as Error).message}`,
+      );
+    }
+  }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -181,11 +204,28 @@ export class PasswordResetService {
 
     const resetUrl = this.buildResetUrl(rawToken, tenantSlug);
 
-    // Email stub — NotificationService dispatchera quand l'EMAIL channel sera
-    // câblé (Resend/SendGrid). En attendant on logge pour traçabilité.
+    // Émission AUTH_PASSWORD_RESET_LINK — le AuthNotificationListener
+    // dispatche l'email avec le bon template.
+    await this.emitAuthEvent({
+      id:            uuidv4(),
+      type:          EventTypes.AUTH_PASSWORD_RESET_LINK,
+      tenantId:      account.user.tenantId,
+      aggregateId:   account.user.id,
+      aggregateType: 'User',
+      payload: {
+        userId:    account.user.id,
+        email,
+        resetUrl,
+        expiresAt: expiresAt.toISOString(),
+        tenantSlug,
+        source:    'self',
+      },
+      occurredAt: new Date(),
+    });
+
     this.logger.log(
       `[PasswordReset] self-service link issued user=${account.user.id} ` +
-      `email=${email} tenant=${tenantId} expiresAt=${expiresAt.toISOString()} link=${resetUrl}`,
+      `email=${email} tenant=${tenantId} expiresAt=${expiresAt.toISOString()}`,
     );
 
     await this.writeAuditLog({
@@ -319,6 +359,16 @@ export class PasswordResetService {
       ipAddress: params.ipAddress,
       meta:     { email: target.email, expiresAt: expiresAt.toISOString(), crossTenant: true },
     });
+    await this.emitAuthEvent({
+      id: uuidv4(), type: EventTypes.AUTH_PASSWORD_RESET_LINK,
+      tenantId: target.tenantId, aggregateId: target.id, aggregateType: 'User',
+      payload: {
+        userId: target.id, email: target.email,
+        resetUrl, expiresAt: expiresAt.toISOString(),
+        tenantSlug: target.tenant.slug, source: 'platform',
+      },
+      occurredAt: new Date(),
+    });
     return { email: target.email, mode: 'link', rawToken, resetUrl, expiresAt };
   }
 
@@ -411,6 +461,16 @@ export class PasswordResetService {
       ipAddress: params.ipAddress,
       meta:     { email: target.email, expiresAt: expiresAt.toISOString() },
     });
+    await this.emitAuthEvent({
+      id: uuidv4(), type: EventTypes.AUTH_PASSWORD_RESET_LINK,
+      tenantId: target.tenantId, aggregateId: target.id, aggregateType: 'User',
+      payload: {
+        userId: target.id, email: target.email,
+        resetUrl, expiresAt: expiresAt.toISOString(),
+        tenantSlug: target.tenant.slug, source: 'admin',
+      },
+      occurredAt: new Date(),
+    });
 
     return {
       email:    target.email,
@@ -468,6 +528,24 @@ export class PasswordResetService {
       action:   'auth.password_reset.complete',
       ipAddress,
       meta:     { email: account.user.email },
+    });
+
+    // Notification de sécurité post-reset (AUTH_PASSWORD_RESET_COMPLETED) —
+    // alerte l'utilisateur que son mot de passe vient d'être changé. Si ce
+    // n'est pas lui (compromission), il sait immédiatement et peut agir.
+    await this.emitAuthEvent({
+      id:            uuidv4(),
+      type:          EventTypes.AUTH_PASSWORD_RESET_COMPLETED,
+      tenantId:      account.user.tenantId,
+      aggregateId:   account.user.id,
+      aggregateType: 'User',
+      payload: {
+        userId:      account.user.id,
+        email:       account.user.email,
+        completedAt: new Date().toISOString(),
+        ipAddress,
+      },
+      occurredAt: new Date(),
     });
   }
 
