@@ -370,6 +370,122 @@ export class AuthService {
     };
   }
 
+  // ─── Cross-tenant sign-in (mobile multi-tenant SaaS) ──────────────────────
+
+  /**
+   * Sign-in cross-tenant — l'utilisateur fournit juste son email+password
+   * et l'API découvre le tenant.
+   *
+   * Cas multi-tenants : si la même adresse email a un compte sur plusieurs
+   * tenants (rare — ex: chauffeur prêté entre 2 sociétés), on retourne la
+   * liste pour que le client demande au user de choisir, puis re-appelle
+   * avec `preferredTenantSlug`.
+   *
+   * Sécurité (anti-énumération + anti-bruteforce) :
+   *   - bcrypt systématique même si aucun compte trouvé (timing-safe)
+   *   - rate-limit IP via Guard côté controller (5/15min en prod)
+   *   - réponse 401 générique pour tout cas d'échec
+   *   - CAPTCHA adaptatif via le compteur `auth:fail:ip:*` partagé avec signIn
+   *
+   * Retour : SignInResult (avec token) + tenantSlug/tenantHost (champ extra
+   * sur le DTO User), OU `{ kind: 'choice', tenants: [...] }`.
+   */
+  async signInCrossTenant(
+    email:     string,
+    password:  string,
+    ipAddress: string,
+    userAgent: string,
+    captchaToken?: string | null,
+    preferredTenantSlug?: string,
+  ): Promise<SignInResult | { kind: 'choice'; tenants: Array<{ slug: string; name: string }> }> {
+
+    const lcEmail = email.toLowerCase().trim();
+
+    // CAPTCHA adaptatif : on partage le compteur d'échecs par IP avec le
+    // signIn classique pour éviter qu'un attaquant contourne le seuil en
+    // alternant les deux endpoints.
+    const ipFailKey = `auth:fail:ip:${ipAddress}`;
+    const ipFails   = await this.redis.get(ipFailKey).then(v => parseInt(v ?? '0', 10));
+    if (ipFails >= SIGNIN_CAPTCHA_AFTER_FAILURES) {
+      if (!captchaToken) {
+        if (await this.turnstile.isConfigured()) {
+          throw new BadRequestException({
+            message: 'Trop d\'échecs récents — veuillez compléter le captcha',
+            requireCaptcha: true,
+          });
+        }
+      } else {
+        const ver = await this.turnstile.verify(captchaToken, ipAddress);
+        if (!ver.ok) {
+          throw new BadRequestException({
+            message: 'Captcha invalide',
+            requireCaptcha: true,
+            reason: ver.reason,
+          });
+        }
+      }
+    }
+
+    // Recherche TOUS les Account credential pour cet email (cross-tenant).
+    // Si un slug préféré est fourni (résolution d'ambiguïté du 2e appel),
+    // on filtre côté query pour ne garder que ce tenant.
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        providerId: 'credential',
+        accountId:  lcEmail,
+        ...(preferredTenantSlug
+          ? { tenant: { slug: preferredTenantSlug } }
+          : {}),
+      },
+      include: {
+        tenant: { select: { id: true, slug: true, name: true } },
+        user:   { select: { id: true, isActive: true, tenantId: true } },
+      },
+    });
+
+    // Toujours faire au moins 1 bcrypt compare (timing-safe vs énumération).
+    const dummyHash = '$2a$12$Wz1q2FAKEHASHJUSTFORTIMINGPROTECTION.padding.padding';
+
+    if (accounts.length === 0) {
+      await bcrypt.compare(password, dummyHash);
+      await this.redis.multi().incr(ipFailKey).expire(ipFailKey, SIGNIN_FAIL_WINDOW_SEC).exec();
+      throw new UnauthorizedException('Identifiants invalides');
+    }
+
+    // Test du password contre chaque compte. On ne sort PAS au premier
+    // match : sinon le timing révèle quelle position dans la liste matche
+    // (info utile pour un attaquant qui connaît la liste de tenants).
+    const matches: typeof accounts = [];
+    for (const acc of accounts) {
+      const hash  = acc.password ?? dummyHash;
+      const valid = await bcrypt.compare(password, hash);
+      if (valid && acc.password && acc.user.isActive) {
+        matches.push(acc);
+      }
+    }
+
+    if (matches.length === 0) {
+      await this.redis.multi().incr(ipFailKey).expire(ipFailKey, SIGNIN_FAIL_WINDOW_SEC).exec();
+      throw new UnauthorizedException('Identifiants invalides');
+    }
+
+    if (matches.length > 1 && !preferredTenantSlug) {
+      // Cas rare : même email + même password sur ≥ 2 tenants. On laisse
+      // l'utilisateur choisir. Pas d'incrément du compteur (le password est
+      // valide, ce n'est pas une attaque).
+      return {
+        kind:    'choice',
+        tenants: matches.map(m => ({ slug: m.tenant.slug, name: m.tenant.name })),
+      };
+    }
+
+    // Un (ou plusieurs avec slug fourni → on prend le 1er qui matche). On
+    // délègue au flow signIn classique pour bénéficier des mêmes garanties
+    // (MFA, audit, housekeeping sessions, rotation token).
+    const target = matches[0];
+    return this.signIn(target.tenant.id, lcEmail, password, ipAddress, userAgent, captchaToken);
+  }
+
   // ─── Self-service : changement de mot de passe ───────────────────────────
 
   /**

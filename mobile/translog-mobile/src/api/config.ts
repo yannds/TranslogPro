@@ -1,40 +1,27 @@
 /**
- * Configuration API — unique point de vérité pour la base URL + tenant host dev.
+ * Configuration API — façade rétro-compatible vers `host-store.ts`.
  *
- * Résolution de l'URL :
- *   1. build env `EXPO_PUBLIC_API_BASE_URL`
- *   2. `expo.extra.apiBaseUrl` (app.json)
- *   3. fallback `http://localhost:3000`
+ * Avant : la base URL était hardcodée au build via EXPO_PUBLIC_API_BASE_URL.
+ * Maintenant : l'app est multi-tenant SaaS — l'utilisateur saisit son slug
+ * au login et l'app route dynamiquement. Voir `host-store.ts`.
  *
- * Résolution du tenant dev :
- *   - `expo.extra.devTenantHost` (app.json) — défaut 'trans-express.translog.test'
- *     pour que le backend résolve le tenant via X-Tenant-Host sans exiger que
- *     l'app mobile hit un sous-domaine réel (ce qui casse avec HSTS).
- *   - En prod (apiBaseUrl = https://<slug>.translogpro.com) le Host réel suffit
- *     et X-Tenant-Host est strippé côté edge proxy.
+ * Cette façade existe pour ne pas casser les imports existants
+ * (`getApiBaseUrl`, `getDevTenantHost`).
  */
 
-import Constants from 'expo-constants';
+import { getApiBaseUrl as _getApiBaseUrl } from './host-store';
 
-const DEFAULT_DEV_URL         = 'http://localhost:3000';
-const DEFAULT_DEV_TENANT_HOST = 'trans-express.translog.test';
-
-export function getApiBaseUrl(): string {
-  const extra = (Constants.expoConfig?.extra ?? {}) as { apiBaseUrl?: string };
-  const fromEnv   = process.env.EXPO_PUBLIC_API_BASE_URL;
-  const fromExtra = extra.apiBaseUrl;
-  return fromEnv ?? fromExtra ?? DEFAULT_DEV_URL;
-}
+export { getApiBaseUrl } from './host-store';
 
 /**
- * Retourne le hostname à envoyer en `X-Tenant-Host` en dev, ou null en prod.
- * Le backend NestJS n'honore ce header qu'en NODE_ENV=development.
+ * Header `X-Tenant-Host` pour le dev local (backend lit ce header en
+ * NODE_ENV=development pour résoudre le tenant sans dépendre du sous-domaine).
+ * En prod, le sous-domaine de l'URL suffit — on retourne null.
  */
 export function getDevTenantHost(): string | null {
-  const base = getApiBaseUrl();
-  // Si l'API est déjà un sous-domaine tenant (prod ou dev avec DNS local),
-  // le Host natif suffit — on n'ajoute pas le header.
+  const base = _getApiBaseUrl();
   if (!/localhost|127\.0\.0\.1/.test(base)) return null;
-  const extra = (Constants.expoConfig?.extra ?? {}) as { devTenantHost?: string };
-  return extra.devTenantHost ?? DEFAULT_DEV_TENANT_HOST;
+  // En dev local pur (pas de slug encore choisi), on cible 'trans-express'
+  // par défaut pour que le seed dev fonctionne sans config.
+  return 'trans-express.translog.test';
 }

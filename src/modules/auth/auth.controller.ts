@@ -6,6 +6,7 @@ import {
 import { Request, Response } from 'express';
 import { AuthService, AuthUserDto } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
+import { SignInCrossTenantDto } from './dto/sign-in-cross-tenant.dto';
 import {
   RateLimit,
   RedisRateLimitGuard,
@@ -135,6 +136,87 @@ export class AuthController {
 
     res.cookie(COOKIE_NAME, result.token, COOKIE_OPTS);
     return result.user;
+  }
+
+  /**
+   * POST /api/auth/sign-in-cross-tenant
+   *
+   * Sign-in cross-tenant pour clients qui ne connaissent pas leur sous-domaine
+   * (mobile multi-tenant SaaS, intégrations B2B). Le serveur découvre le
+   * tenant à partir de l'email + password, crée la session sur ce tenant, et
+   * retourne le couple `{ tenantSlug, tenantHost, token, user }` pour que le
+   * client puisse :
+   *   1. persister `tenantHost` (toutes les requêtes suivantes la-bas)
+   *   2. persister `token` (header Authorization: Bearer)
+   *
+   * Cas multi-tenants : si la même adresse a un compte sur ≥ 2 tenants avec
+   * le même password, retourne `{ multiple: true, tenants: [...] }`. Le client
+   * affiche un picker et re-appelle avec `preferredTenantSlug`.
+   *
+   * Sécurité :
+   *   - rate-limit IP partagé avec sign-in (compteur global anti-bruteforce)
+   *   - bcrypt systématique même si email inconnu (timing-safe)
+   *   - 401 générique sur échec (pas d'enum)
+   *   - CAPTCHA adaptatif au-delà de 3 échecs
+   *   - PAS de cookie posé : le client mobile utilise Bearer (cookie scopé
+   *     subdomain ne pourrait pas être posé sur api.* depuis ce flow)
+   */
+  @Post('sign-in-cross-tenant')
+  @HttpCode(200)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit([
+    {
+      limit:    process.env.NODE_ENV === 'production' ? 5 : 1000,
+      windowMs: 15 * 60_000,
+      keyBy:    'ip',
+      suffix:   'auth_signin_xt',
+    },
+  ])
+  async signInCrossTenant(
+    @Body() dto: SignInCrossTenantDto,
+    @Req()  req: Request,
+  ): Promise<
+    | (AuthUserDto & { token: string; tenantHost: string })
+    | { mfaRequired: true; expiresAt: string }
+    | { multiple: true; tenants: Array<{ slug: string; name: string }> }
+  > {
+    const result = await this.authService.signInCrossTenant(
+      dto.email,
+      dto.password,
+      extractIp(req),
+      req.headers['user-agent'] ?? '',
+      dto.captchaToken,
+      dto.preferredTenantSlug,
+    );
+
+    if (result.kind === 'choice') {
+      return { multiple: true, tenants: result.tenants };
+    }
+
+    if (result.kind === 'mfaChallenge') {
+      // Pas de cookie en cross-tenant — on retourne le challenge en JSON,
+      // le client devra appeler /mfa/verify sur le tenantHost résolu (pas
+      // possible ici car on n'a pas encore le slug). Solution simple : on
+      // expose le slug via une 2e étape — pour la v1, on ne supporte pas
+      // MFA en cross-tenant et on demande au client de basculer sur le
+      // sub-domaine après le 1er essai. Si MFA enabled et qu'on arrive ici,
+      // on renvoie une erreur explicite.
+      throw new BadRequestException(
+        'MFA activé sur ce compte — connectez-vous depuis le sous-domaine de votre société.',
+      );
+    }
+
+    // result.kind === 'session' — on construit le tenantHost depuis le slug.
+    const tenantSlug = result.user.tenantSlug;
+    if (!tenantSlug) {
+      throw new BadRequestException('Tenant slug manquant — réessayez depuis le portail web.');
+    }
+    const tenantHost = `${tenantSlug}.${this.appConfig.publicBaseDomain}`;
+    return {
+      ...result.user,
+      token:      result.token,
+      tenantHost,
+    };
   }
 
   /**

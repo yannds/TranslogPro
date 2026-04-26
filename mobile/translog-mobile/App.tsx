@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/auth/AuthContext';
 import { I18nProvider } from './src/i18n/useI18n';
 import { ThemeProvider } from './src/theme/ThemeProvider';
+import { TenantHostProvider } from './src/api/TenantHostProvider';
 import { AppNavigator } from './src/navigation/Navigator';
 import { startSyncLoop } from './src/offline/outbox';
 import { getDb } from './src/offline/db';
@@ -24,10 +25,12 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <I18nProvider>
-            <AuthProvider>
-              <StatusBar style="auto" />
-              <AppNavigator />
-            </AuthProvider>
+            <TenantHostProvider>
+              <AuthProvider>
+                <StatusBar style="auto" />
+                <AppNavigator />
+              </AuthProvider>
+            </TenantHostProvider>
           </I18nProvider>
         </ThemeProvider>
       </SafeAreaProvider>
