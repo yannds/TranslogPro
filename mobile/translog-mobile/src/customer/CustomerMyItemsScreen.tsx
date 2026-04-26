@@ -16,8 +16,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, SafeAreaView, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import QRCode from 'react-native-qrcode-svg';
 import { apiGet } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useI18n } from '../i18n/useI18n';
@@ -26,10 +28,10 @@ import { useOnline } from '../offline/useOnline';
 
 type Tab = 'tickets' | 'parcels';
 
-// Affichage du token signé : on l'expose en intégralité pour que l'agent
-// puisse le saisir en fallback manuel dans QuaiHome (sinon HMAC invalide).
-// Une future itération (Chantier-Expo53) ajoutera le rendu QR via
-// `react-native-qrcode-svg` (réutilisera react-native-svg déjà installé).
+// Rendu QR via react-native-qrcode-svg (réutilise react-native-svg déjà
+// présent). Le token signé est embarqué entier dans le QR pour permettre la
+// vérification HMAC côté agent. Le token reste affiché en texte sélectionnable
+// sous le QR pour le fallback manuel dans QuaiHome.
 
 interface Ticket {
   id:             string;
@@ -64,6 +66,10 @@ export function CustomerMyItemsScreen() {
   const { colors } = useTheme();
   const online = useOnline();
   const nav = useNavigation<NavigationProp<any>>();
+  const { width } = useWindowDimensions();
+  // QR carré centré, pleine largeur dispo - padding modale, plafonné à 320 px
+  // pour éviter de couper l'écran sur iPad / petit écran horizontal.
+  const qrSize = Math.min(320, width - 96);
   const tenantId = user?.effectiveTenantId ?? user?.tenantId ?? '';
 
   const lang = (user as any)?.locale === 'en' ? 'en' : 'fr';
@@ -257,26 +263,44 @@ export function CustomerMyItemsScreen() {
                   {qrOpen.seatNumber ? ` · ${L('Siège', 'Seat')} ${qrOpen.seatNumber}` : ''}
                 </Text>
                 {qrOpen.qrCode && (
-                  <View style={{
-                    alignSelf: 'center',
-                    padding: 16,
-                    backgroundColor: '#fff',
-                    borderRadius: 12,
-                    maxWidth: '100%',
-                  }}>
-                    <Text
-                      accessibilityLabel="QR token"
-                      selectable
+                  <>
+                    <View
                       style={{
-                        color: '#000',
-                        fontFamily: 'Courier',
-                        fontSize: 12,
-                        textAlign: 'center',
+                        alignSelf: 'center',
+                        padding: 16,
+                        backgroundColor: '#fff',
+                        borderRadius: 12,
                       }}
+                      accessibilityRole="image"
+                      accessibilityLabel={L('Code QR du billet', 'Ticket QR code')}
+                    >
+                      <QRCode
+                        value={qrOpen.qrCode}
+                        size={qrSize}
+                        backgroundColor="#fff"
+                        color="#000"
+                        // Niveau ECC M : 15% de redondance, équilibre lisibilité/densité.
+                        // 'L' économiserait des modules mais devient illisible avec un
+                        // léger reflet ou une caméra moyenne.
+                        ecl="M"
+                      />
+                    </View>
+                    <Text
+                      selectable
+                      accessibilityLabel="QR token"
+                      style={{
+                        color: colors.textMuted,
+                        fontFamily: 'Courier',
+                        fontSize: 10,
+                        textAlign: 'center',
+                        marginTop: 12,
+                        paddingHorizontal: 8,
+                      }}
+                      numberOfLines={2}
                     >
                       {qrOpen.qrCode}
                     </Text>
-                  </View>
+                  </>
                 )}
                 <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 16, fontSize: 12 }}>
                   {L('Présentez ce QR à l\'agent de quai.', 'Show this QR to the gate agent.')}

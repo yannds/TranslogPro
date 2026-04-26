@@ -75,14 +75,91 @@ adb devices
 
 ## 3. Expo Go sur ton téléphone physique
 
+> ⚠️ **Limitation Expo Go** : l'app utilise `react-native-mmkv` (lib native) qui
+> n'est PAS supportée par Expo Go. Pour tester un build complet, voir §3bis
+> (dev build) ou §3ter (preview build).
+
+Pour un test partiel des écrans qui n'utilisent pas MMKV :
 - **iOS** : App Store → "Expo Go" (gratuit)
 - **Android** : Play Store → "Expo Go" (gratuit)
 
 Scanner le QR code affiché par `npx expo start` (même réseau WiFi que le Mac).
 
-Si ton device refuse localhost :
-- Option A : `expo start --tunnel` (via ngrok, plus lent mais contourne le LAN)
+### 3.A — Lancement rapide (script projet)
+
+```bash
+./mobile/scripts/dev-phone.sh                              # WiFi LAN classique
+./mobile/scripts/dev-phone.sh --tunnel                     # NAT/4G/wifi public
+API_HOST=192.168.1.42 ./mobile/scripts/dev-phone.sh        # IP forcée
+API_BASE_URL=https://staging.translogpro.com ./mobile/scripts/dev-phone.sh  # backend distant
+```
+
+Le script :
+1. détecte l'IP LAN du Mac (`ipconfig getifaddr en0|en1`)
+2. exporte `EXPO_PUBLIC_API_BASE_URL` pour que l'app pointe sur le bon backend
+3. ping `/api/health` pour valider que le backend répond
+4. lance `expo start` (LAN ou tunnel selon flag)
+
+### 3.B — Manuel
+
+Si tu préfères ne pas utiliser le script :
+- Option A : `npx expo start --tunnel` (via Cloudflare Tunnel, plus lent mais contourne tout pare-feu/NAT)
 - Option B : dans `app.json`, remplace `extra.apiBaseUrl` par l'IP LAN de ton Mac (ex. `http://192.168.1.23:3000`)
+- Option C : `EXPO_PUBLIC_API_BASE_URL=https://app.translogpro.com npx expo start` pour pointer sur la prod
+
+---
+
+## 3bis. Dev build (recommandé — toutes les libs natives)
+
+Nécessaire dès qu'on veut tester MMKV / signature biométrique / impression
+ESC/POS. Génère une app installable une fois, puis itérations à la volée.
+
+```bash
+# Connexion à EAS (compte Expo gratuit)
+npx eas-cli login
+
+# Build dev (cloud) — ~10 min, donne un APK Android ou IPA iOS sideloadable
+cd mobile/translog-mobile
+eas build --profile development --platform android   # APK
+eas build --profile development --platform ios       # .ipa (iOS Distribution requis)
+```
+
+Une fois installé sur le téléphone, ouvrir l'app puis scanner le QR de `expo start`.
+
+### Alternative locale (sans EAS)
+
+Si Xcode/Android Studio sont installés et le téléphone branché en USB :
+```bash
+cd mobile/translog-mobile
+npx expo run:android   # branché USB, débogage USB activé
+npx expo run:ios       # branché USB, signing local + udid récupéré
+```
+Premier lancement = ~5 min de compilation native. Itérations suivantes = rechargement à chaud.
+
+---
+
+## 3ter. Preview build (test "comme un user final")
+
+Utile pour faire tester par un PM, recetteur ou client sans Metro. Donne une vraie app installable comme depuis un store interne.
+
+```bash
+cd mobile/translog-mobile
+eas build --profile preview --platform android       # APK side-loadable
+eas build --profile preview --platform ios           # .ipa via TestFlight
+```
+
+Le `eas.json` est déjà configuré (`distribution: internal`).
+
+---
+
+### Choisir entre les 3 options
+
+| Besoin | Méthode |
+|---|---|
+| Itérer vite sur du JS pur | §3.A — Expo Go + dev-phone.sh |
+| Tester impression ESC/POS, signature dessin, MFA biométrique | §3bis — dev build |
+| Faire essayer à un client sans setup | §3ter — preview build |
+| Tester sur le réseau prod | `API_BASE_URL=https://app.translogpro.com ./mobile/scripts/dev-phone.sh` |
 
 ---
 
