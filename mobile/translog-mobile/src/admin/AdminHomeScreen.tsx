@@ -121,8 +121,20 @@ export function AdminHomeScreen() {
             {user?.name ?? user?.email}
           </Text>
         </View>
-        <Pressable onPress={logout} accessibilityRole="button" style={styles.logoutBtn}>
-          <Text style={{ color: colors.danger, fontWeight: '600' }}>⎋</Text>
+        {/* Bouton avatar → AdminProfileScreen (menu utilisateur complet :
+            identité, langue, notifs, sécurité, accès rapides, déconnexion). */}
+        <Pressable
+          onPress={() => navigation.navigate('AdminProfile')}
+          accessibilityRole="button"
+          accessibilityLabel="Mon profil"
+          style={({ pressed }) => [
+            styles.avatarBtn,
+            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>
+            {(user?.name ?? user?.email ?? '?').slice(0, 1).toUpperCase()}
+          </Text>
         </Pressable>
       </View>
 
@@ -372,6 +384,14 @@ const styles = StyleSheet.create({
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   h1:        { fontSize: 20, fontWeight: '800' },
   logoutBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  avatarBtn: {
+    width:           40,
+    height:          40,
+    borderRadius:    20,
+    borderWidth:     1,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
   banner:    { marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 8 },
 
   heroKpi:   { padding: 16, borderRadius: 14, borderWidth: 1, borderLeftWidth: 4 },
