@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback, createContext, useContext, type ReactNode } from 'react';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -27,33 +28,32 @@ const LOCALES: Record<Language, Record<string, Record<string, string>>> = {
 
 const STORAGE_KEY = 'translog_lang';
 
-// Storage adapter : MMKV sur natif (rapide, chiffré), localStorage sur web.
-// Évite l'erreur "NativeMmkvModule not found" quand on bundle pour web.
+// Storage adapter — AsyncStorage sur natif (compatible Expo Go), localStorage
+// sur web. AsyncStorage est asynchrone : on initialise la langue avec une
+// détection device synchrone, puis on override via useEffect dès que le
+// stockage est lu.
 interface KvStorage {
-  getString(key: string): string | undefined;
-  set(key: string, value: string): void;
+  getString(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
 }
 function createStorage(): KvStorage {
   if (Platform.OS === 'web') {
     return {
-      getString: (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) ?? undefined : undefined),
-      set:       (k, v) => { if (typeof localStorage !== 'undefined') localStorage.setItem(k, v); },
+      getString: async (k) =>
+        typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null,
+      set:       async (k, v) => {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(k, v);
+      },
     };
   }
-  // Import synchrone sur natif — dispo partout car Metro inclut la lib.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { MMKV } = require('react-native-mmkv');
-  const mmkv = new MMKV();
   return {
-    getString: (k) => mmkv.getString(k),
-    set:       (k, v) => mmkv.set(k, v),
+    getString: (k) => AsyncStorage.getItem(k),
+    set:       (k, v) => AsyncStorage.setItem(k, v),
   };
 }
 const storage = createStorage();
 
-function detectInitialLang(): Language {
-  const stored = storage.getString(STORAGE_KEY) as Language | undefined;
-  if (stored && stored in LOCALES) return stored;
+function detectDeviceLang(): Language {
   const deviceLangs = Localization.getLocales();
   for (const loc of deviceLangs) {
     const code = loc.languageCode?.toLowerCase() as Language | undefined;
@@ -90,18 +90,34 @@ interface I18nCtx {
 const Context = createContext<I18nCtx | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Language>(detectInitialLang);
-  const setLang = useCallback((l: Language) => {
-    storage.set(STORAGE_KEY, l);
-    setLangState(l);
+  // 1er render : on prend la langue device. Le stockage est lu en effet,
+  // si une pref existe on l'applique (override silencieux d'1 frame).
+  const [lang, setLangState] = useState<Language>(detectDeviceLang);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await storage.getString(STORAGE_KEY);
+        if (cancelled) return;
+        if (stored && stored in LOCALES) {
+          setLangState(stored as Language);
+        }
+      } catch { /* storage indispo : on garde la langue device */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
+
+  const setLang = useCallback((l: Language) => {
+    setLangState(l);
+    void storage.set(STORAGE_KEY, l);
+  }, []);
+
   const t = useCallback(
     (key: string, params?: I18nParams) => interpolate(resolve(key, lang), params),
     [lang],
   );
-  useEffect(() => {
-    // hook de réactualisation si device change
-  }, []);
+
   return (
     <Context.Provider value={{ lang, setLang, t }}>{children}</Context.Provider>
   );

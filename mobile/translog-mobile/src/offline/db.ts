@@ -3,11 +3,27 @@
  * `execute() → Promise<QueryResult>`).
  *
  * Web : op-sqlite n'a pas d'impl web. On sert un shim in-memory qui permet
- * à l'UI de se charger, mais sans persistance. Utile pour prototyper en
- * navigateur ; la vraie stack offline n'est garantie que sur iOS/Android.
+ * à l'UI de se charger, mais sans persistance.
+ *
+ * Expo Go : op-sqlite est une lib native non incluse dans le runtime Expo
+ * Go (qui ne contient que les libs autorisées par défaut). Si on ne peut
+ * pas charger le module à l'exécution, on bascule sur le même shim
+ * in-memory que le web. Cela permet de tester toute l'UI dans Expo Go
+ * sans dev-build, en sacrifiant uniquement la persistance offline.
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Détecte si on tourne dans Expo Go (vs dev build / standalone).
+// Expo Go n'embarque pas les libs natives custom comme op-sqlite.
+function isExpoGo(): boolean {
+  try {
+    return Constants.appOwnership === 'expo';
+  } catch {
+    return false;
+  }
+}
 
 const DB_NAME = 'translog_offline.db';
 
@@ -50,8 +66,33 @@ export function getDb(): Promise<DB> {
       _db = db;
       return db;
     }
+    // Expo Go n'embarque pas op-sqlite — on bascule sur le shim in-memory
+    // pour permettre le test de l'UI sans dev build. La persistance offline
+    // n'est garantie qu'avec un dev build / preview build / production.
+    if (isExpoGo()) {
+      const db = createWebShimDb();
+      _db = db;
+      console.warn('[offline/db] Expo Go detected — using in-memory shim (no offline persistence)');
+      return db;
+    }
     // Import différé pour éviter que le bundler web charge la dep native.
-    const { open } = await import('@op-engineering/op-sqlite');
+    // En cas d'échec (lib non liée dans le runtime, ex: dev sans pod install),
+    // on bascule aussi sur le shim plutôt que de crasher l'app.
+    let open: ((opts: { name: string }) => unknown) | undefined;
+    try {
+      const mod = await import('@op-engineering/op-sqlite');
+      open = (mod as { open?: typeof open }).open;
+    } catch (e) {
+      console.warn('[offline/db] op-sqlite unavailable — using in-memory shim:', e);
+      const db = createWebShimDb();
+      _db = db;
+      return db;
+    }
+    if (!open) {
+      const db = createWebShimDb();
+      _db = db;
+      return db;
+    }
     const db = open({ name: DB_NAME }) as unknown as DB;
     await db.execute(`
       CREATE TABLE IF NOT EXISTS outbox (
