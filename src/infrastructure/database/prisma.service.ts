@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Inject, Logger } from '@nest
 import { Prisma, PrismaClient } from '@prisma/client';
 import { ISecretService, SECRET_SERVICE } from '../secret/interfaces/secret.interface';
 import { TenantContextService } from './tenant-context.service';
+import { TenantTxStorage } from './tenant-tx.storage';
 
 /**
  * Injecte app.tenant_id dans la session PostgreSQL (scope transaction).
@@ -170,6 +171,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  /**
+   * Ouvre la transaction request-scoped + set_config + invoque fn dans le scope
+   * AsyncLocalStorage. Utilise par TenantTxInterceptor pour wrapper chaque
+   * requete HTTP authentifiee. La transaction commit a la fin de fn (ou rollback
+   * si erreur). Pendant l'execution, tout `prismaProxy.<model>.<op>()` est
+   * automatiquement route via tx (cf. wrapPrismaServiceWithTxProxy).
+   */
+  async runInTenantTx<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+    return this.$transaction(async (tx) => {
+      await setTenantLocal(tx, tenantId);
+      return TenantTxStorage.run(tx, fn);
+    });
+  }
+
   /** Transaction standard avec contexte tenant injecté automatiquement */
   async transact<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     const ctx = TenantContextService.getStore();
@@ -180,4 +195,44 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return fn(tx);
     });
   }
+}
+
+/**
+ * Wrappe l'instance PrismaService dans un Proxy qui route les acces aux
+ * accesseurs de modele (`.user`, `.ticket`, …) vers la transaction
+ * request-scoped quand le `TenantTxInterceptor` en a ouvert une.
+ *
+ * Les methodes infrastructurelles (commencant par `$` ou champs internes)
+ * sont toujours servies par l'instance reelle (ex: `$transaction`, `$connect`,
+ * `withTenant`, `runInTenantTx`).
+ *
+ * Activable via env `TENANT_DB_LEVEL_RLS=on` (OFF par defaut le temps d'auditer
+ * les paths fire-and-forget post-handler qui pourraient referencer une tx morte).
+ */
+export function wrapPrismaServiceWithTxProxy(real: PrismaService): PrismaService {
+  if (process.env.TENANT_DB_LEVEL_RLS !== 'on') {
+    return real;
+  }
+
+  return new Proxy(real, {
+    get(target, prop, receiver) {
+      // Methodes Prisma client / fields internes : toujours sur l'instance reelle
+      if (
+        typeof prop !== 'string' ||
+        prop.startsWith('$') ||
+        prop.startsWith('_') ||
+        prop in PrismaService.prototype ||
+        !(prop in target)
+      ) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      // Acces a un modele : route via tx si presente
+      const tx = TenantTxStorage.getStore();
+      if (tx && prop in tx) {
+        return Reflect.get(tx, prop, tx);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as PrismaService;
 }
