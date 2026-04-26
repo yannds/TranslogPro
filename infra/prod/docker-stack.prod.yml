@@ -72,12 +72,10 @@ services:
   # ── Caddy — reverse proxy UNIQUE (80/443) avec plugin rfc2136 pour DNS-01 ──
   caddy:
     image: prod-caddy:latest
-    # Hardening : tourne en uid 1000 (caddy user créé dans Dockerfile).
-    # NET_BIND_SERVICE seule capability nécessaire pour bind 80/443/443udp
-    # en non-root. Volumes pré-chown 1000:1000 côté VPS.
-    user: "1000:1000"
-    cap_add:
-      - NET_BIND_SERVICE
+    # ⚠️ V5-D Caddy non-root tenté puis revert : TLS policies non générées
+    # en runtime avec user 1000:1000 (TLS internal error sur HTTPS). À
+    # ré-essayer en V6 après diagnostic du bug acquisition cert au boot.
+    # Reste en root pour l'instant — reste une dette hardening.
     ports:
       - target: 80
         published: 80
