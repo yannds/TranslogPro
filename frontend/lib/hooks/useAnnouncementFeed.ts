@@ -20,6 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api';
+import { PLATFORM_TENANT_ID } from '../platform-scope/TenantScopeProvider';
 import type { TranslationMap } from '../i18n/types';
 import type { Notification, NotificationType } from './useNotifications';
 
@@ -105,8 +106,14 @@ export function useAnnouncementFeed(
   const [error,       setError]       = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Le super-admin plateforme a `tenantId === PLATFORM_TENANT_ID` (UUID nul)
+  // qui ne correspond à aucun tenant réel — l'endpoint /announcements renvoie
+  // 404, le service worker logue 'no-response' et la console se remplit de
+  // bruit. On skip silencieusement ce cas.
+  const isQueryable = !!tenantId && tenantId !== PLATFORM_TENANT_ID;
+
   const fetchFeed = useCallback(async () => {
-    if (!tenantId) return;
+    if (!isQueryable) return;
     setLoading(true);
     setError(null);
     try {
@@ -121,14 +128,14 @@ export function useAnnouncementFeed(
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, isQueryable]);
 
   useEffect(() => {
-    if (!tenantId) return;
+    if (!isQueryable) return;
     fetchFeed();
     const iv = setInterval(fetchFeed, POLL_INTERVAL_MS);
     return () => clearInterval(iv);
-  }, [tenantId, fetchFeed]);
+  }, [isQueryable, fetchFeed]);
 
   const notifications = useMemo<Notification[]>(() => {
     if (cleared) return [];
