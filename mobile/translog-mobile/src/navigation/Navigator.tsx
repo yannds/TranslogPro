@@ -41,15 +41,21 @@ import { CustomerBookingScreen } from '../customer/CustomerBookingScreen';
 import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
 import { CustomerSavScreen } from '../customer/CustomerSavScreen';
 import { CustomerProfileScreen } from '../customer/CustomerProfileScreen';
+import { PlatformDashboardScreen } from '../platform/PlatformDashboardScreen';
+import { PlatformTenantsScreen } from '../platform/PlatformTenantsScreen';
+import { PlatformSecurityScreen } from '../platform/PlatformSecurityScreen';
+import { PlatformMoreScreen } from '../platform/PlatformMoreScreen';
+import { ChangePasswordScreen } from '../auth/ChangePasswordScreen';
 import { portalForUser } from './portalForUser';
 import {
   type IconProps,
   TabIconBoard, TabIconOperations, TabIconTeams, TabIconMore,
   TabIconCash, TabIconSell, TabIconTickets,
   TabIconStation, TabIconManifest,
-  TabIconDock, TabIconScanner,
-  TabIconTrips, TabIconBriefing, TabIconCabin,
-  TabIconHome, TabIconMyDocs, TabIconSav, TabIconProfile,
+  TabIconDock,
+  TabIconTrips,
+  TabIconHome,
+  TabIconPlatform, TabIconTenants, TabIconSecurity,
   IconWarn,
 } from '../ui/icons';
 
@@ -59,6 +65,7 @@ const StationStack = createNativeStackNavigator();
 const QuaiStack    = createNativeStackNavigator();
 const AdminStack     = createNativeStackNavigator();
 const CustomerStack  = createNativeStackNavigator();
+const PlatformStack  = createNativeStackNavigator();
 const Tab            = createBottomTabNavigator();
 
 /* ── Helpers tab bar ───────────────────────────────────────────────────── */
@@ -320,6 +327,45 @@ function AdminNav() {
   );
 }
 
+/* ── PLATFORM (SUPER-ADMIN) ─────────────────────────────────────────────── */
+
+function PlatformBottomTabs() {
+  const opts = useTabScreenOptions();
+  return (
+    <Tab.Navigator screenOptions={opts}>
+      <Tab.Screen
+        name="Plateforme"
+        component={PlatformDashboardScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconPlatform) }}
+      />
+      <Tab.Screen
+        name="Tenants"
+        component={PlatformTenantsScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconTenants) }}
+      />
+      <Tab.Screen
+        name="Sécurité"
+        component={PlatformSecurityScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconSecurity) }}
+      />
+      <Tab.Screen
+        name="Plus"
+        component={PlatformMoreScreen}
+        options={{ tabBarIcon: makeTabIcon(TabIconMore) }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+function PlatformNav() {
+  return (
+    <PlatformStack.Navigator screenOptions={{ headerShown: false }}>
+      <PlatformStack.Screen name="PlatformHome"     component={PlatformBottomTabs} />
+      <PlatformStack.Screen name="ChangePassword"   component={ChangePasswordScreen} />
+    </PlatformStack.Navigator>
+  );
+}
+
 /* ── ROOT NAVIGATOR ─────────────────────────────────────────────────────── */
 
 export function AppNavigator() {
@@ -337,6 +383,7 @@ export function AppNavigator() {
           {(() => {
             const portal = portalForUser(user);
             switch (portal) {
+              case 'platform': return <RootStack.Screen name="Platform" component={PlatformNav} />;
               case 'cashier':  return <RootStack.Screen name="Cashier"  component={CashierTabs} />;
               case 'driver':   return <RootStack.Screen name="Driver"   component={DriverNav} />;
               case 'station':  return <RootStack.Screen name="Station"  component={StationNav} />;
