@@ -1,0 +1,73 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }, "unit": "percent" } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by(container_label_com_docker_swarm_service_name) (rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=~\"translog_.+|translog_obs_.+\"}[5m])) * 100",
+        "legendFormat": "{{container_label_com_docker_swarm_service_name}}",
+        "refId": "A"
+      }],
+      "title": "CPU % par service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "bytes" } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [{
+        "expr": "sum by(container_label_com_docker_swarm_service_name) (container_memory_usage_bytes{container_label_com_docker_swarm_service_name=~\"translog_.+|translog_obs_.+\"})",
+        "legendFormat": "{{container_label_com_docker_swarm_service_name}}",
+        "refId": "A"
+      }],
+      "title": "Mémoire par service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "binBps" } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by(container_label_com_docker_swarm_service_name) (rate(container_network_receive_bytes_total{container_label_com_docker_swarm_service_name=~\"translog_.+\"}[5m]))", "legendFormat": "↓ {{container_label_com_docker_swarm_service_name}}", "refId": "A" },
+        { "expr": "sum by(container_label_com_docker_swarm_service_name) (rate(container_network_transmit_bytes_total{container_label_com_docker_swarm_service_name=~\"translog_.+\"}[5m]))", "legendFormat": "↑ {{container_label_com_docker_swarm_service_name}}", "refId": "B" }
+      ],
+      "title": "Réseau par service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "red", "value": 1 }] }, "unit": "short" } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "id": 4,
+      "options": { "showHeader": true },
+      "targets": [{
+        "expr": "count by(container_label_com_docker_swarm_service_name) (container_last_seen{container_label_com_docker_swarm_service_name=~\"translog_.+\"})",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "Conteneurs vivants par service",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["containers", "translog"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Containers — Docker stats",
+  "uid": "translog-containers",
+  "version": 1
+}

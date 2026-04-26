@@ -1,0 +1,18 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# Grafana — provisioning dashboards (auto-loaded au démarrage depuis /var/lib/grafana/dashboards)
+# ═════════════════════════════════════════════════════════════════════════════
+apiVersion: 1
+
+providers:
+  - name: 'translog-dashboards'
+    orgId: 1
+    folder: 'TransLog'
+    folderUid: translog
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

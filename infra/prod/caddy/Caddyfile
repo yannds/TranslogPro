@@ -138,6 +138,35 @@ translog.dsyann.info, *.translog.dsyann.info {
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
+# OBSERVABILITY — Grafana sous-domaine privé (auth gérée par Grafana lui-même)
+# ═════════════════════════════════════════════════════════════════════════════
+# `grafana.translog.dsyann.info` est couvert par le wildcard *.translog.* (DNS-01
+# + zone BIND9). Caddy proxy → grafana:3000 via `translog_obs_net` (stack obs
+# séparée). L'auth est faite par Grafana (admin user/password seedé via Vault),
+# pas Caddy — pour permettre à Grafana de gérer ses sessions/cookies.
+#
+# Pas de @api_path ni @ws ici : Grafana est une app SPA standalone, pas un
+# tenant ni un endpoint API. Le bloc précédent *.translog.dsyann.info est plus
+# spécifique sur le routing /api/*, donc DOIT précéder ce bloc — Caddy match
+# le bloc le plus spécifique (host explicite > wildcard).
+# ═════════════════════════════════════════════════════════════════════════════
+
+grafana.translog.dsyann.info {
+    import translog_tls_dns
+    import translog_headers
+
+    reverse_proxy grafana:3000 {
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+        # Grafana Live (WebSocket) sur /api/live/ws
+        header_up Connection        {http.request.header.Connection}
+        header_up Upgrade           {http.request.header.Upgrade}
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
 # GMP COEXISTENCE — HTTP-01 (certs importés de Traefik au cutover)
 # ═════════════════════════════════════════════════════════════════════════════
 

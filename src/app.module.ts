@@ -115,6 +115,7 @@ import { SessionMiddleware }     from './core/iam/middleware/session.middleware'
 import { TenantMiddleware }      from './core/iam/middleware/tenant.middleware';
 import { WhiteLabelMiddleware }  from './modules/white-label/white-label.middleware';
 import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
+import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -131,6 +132,11 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
 
     // Config typée globale — AVANT tout module qui pourrait en dépendre
     AppConfigModule,
+
+    // Observabilité — expose GET /metrics (Prometheus) + APP_INTERCEPTOR
+    // qui mesure latence + status code de toute requête HTTP. Aucun import
+    // bloquant (pas de DB), donc sûr de le placer en tête.
+    MetricsModule,
 
     // Infrastructure (ordre important — SecretModule en premier)
     SecretModule,

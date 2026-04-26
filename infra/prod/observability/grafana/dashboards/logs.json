@@ -1,0 +1,64 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [{
+        "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "{container_name=\"translog_api\"} |~ \"(?i)error|exception|fail\"",
+        "refId": "A"
+      }],
+      "title": "Erreurs API (live)",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 6 },
+      "id": 2,
+      "options": { "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [{
+        "expr": "{container_name=\"translog_caddy\"} | json | status >= 400",
+        "refId": "A"
+      }],
+      "title": "Caddy access logs ≥400",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 12 },
+      "id": 3,
+      "options": { "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [{
+        "expr": "{container_name=~\"translog_postgres|translog_redis|translog_minio\"}",
+        "refId": "A"
+      }],
+      "title": "Infra logs (Postgres / Redis / MinIO)",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 18 },
+      "id": 4,
+      "options": { "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [{
+        "expr": "{job=\"syslog\", process=\"sshd\"}",
+        "refId": "A"
+      }],
+      "title": "SSH login attempts (auth.log)",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["logs", "translog"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Logs — Recherche live",
+  "uid": "translog-logs",
+  "version": 1
+}

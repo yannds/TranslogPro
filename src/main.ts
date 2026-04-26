@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
@@ -32,7 +32,11 @@ async function bootstrap() {
   );
   app.useWebSocketAdapter(redisIoAdapter);
 
-  app.setGlobalPrefix('api');
+  // Global API prefix — /metrics est exclu pour que Prometheus puisse
+  // scraper sur l'URL canonique (sinon il faudrait /api/metrics, non standard).
+  app.setGlobalPrefix('api', {
+    exclude: [{ path: 'metrics', method: RequestMethod.GET }],
+  });
 
   // HTTP Security headers (CSP, X-Frame-Options, HSTS, etc.)
   // Dev : pas de HSTS — sinon le navigateur upgrade http→https sur les

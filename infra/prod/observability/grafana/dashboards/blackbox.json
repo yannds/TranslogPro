@@ -1,0 +1,72 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }, "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }] } },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name" },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "probe_success",
+        "legendFormat": "{{instance}}",
+        "refId": "A"
+      }],
+      "title": "Statut sous-domaines (UP / DOWN)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "s" } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{
+        "expr": "probe_duration_seconds",
+        "legendFormat": "{{instance}}",
+        "refId": "A"
+      }],
+      "title": "Latence des probes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{
+        "expr": "probe_http_status_code",
+        "legendFormat": "{{instance}}",
+        "refId": "A"
+      }],
+      "title": "Code HTTP des probes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red" }, { "color": "yellow", "value": 30 }, { "color": "green", "value": 90 }] }, "unit": "s" } },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 15 },
+      "id": 4,
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{
+        "expr": "probe_ssl_earliest_cert_expiry - time()",
+        "legendFormat": "{{instance}}",
+        "refId": "A"
+      }],
+      "title": "Expiration certificats TLS (secondes restantes)",
+      "type": "stat"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["uptime", "translog"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Uptime — Sous-domaines publics",
+  "uid": "translog-blackbox",
+  "version": 1
+}

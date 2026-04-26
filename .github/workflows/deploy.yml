@@ -196,12 +196,26 @@ jobs:
 
       - name: Sync infra/prod (sans .env.prod)
         run: |
+          # Exclusions de protection : tout fichier qui peut exister UNIQUEMENT
+          # sur le VPS (généré au runtime, secret manuel, backup ad hoc) et qui
+          # serait écrasé silencieusement par `--delete` est listé ici.
+          # Source de vérité de ces patterns : .gitignore racine + infra/prod/.gitignore.
           rsync -avz --delete \
             --exclude='.env.prod' \
+            --exclude='.env.prod.backup.*' \
+            --exclude='.env.prod.local' \
             --exclude='caddy/data/' \
             --exclude='caddy/config/' \
             --exclude='bind9/zones/*.jnl' \
             --exclude='bind9/zones/tsig.key' \
+            --exclude='vault-keys.txt' \
+            --exclude='.unseal-keys' \
+            --exclude='*.key' \
+            --exclude='*.snap' \
+            --exclude='*.pgdump' \
+            --exclude='*.enc' \
+            --exclude='*.log' \
+            --exclude='nohup.out' \
             ./infra/prod/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/infra/prod/
 
@@ -309,7 +323,7 @@ jobs:
           # Attente 30s pour que les services convergent post-deploy
           sleep 30
           FAIL=0
-          for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info panel.dsyann.info; do
+          for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info panel.dsyann.info grafana.translog.dsyann.info; do
             for attempt in 1 2 3; do
               code=$(curl -kI -o /dev/null -w "%{http_code}" -m 10 "https://$d/?cb=$(date +%s%N)" || echo 000)
               if [ "$code" = "200" ] || [ "$code" = "404" ] || [ "$code" = "302" ] || [ "$code" = "301" ]; then

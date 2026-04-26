@@ -1,0 +1,97 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 180 }] } } },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(pg_stat_activity_count)", "refId": "A" }],
+      "title": "Connexions actives",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }] }, "unit": "ops" } },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(rate(pg_stat_database_xact_commit{datname=\"translog\"}[1m]))", "refId": "A" }],
+      "title": "Commits / sec",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "red", "value": 1 }] }, "unit": "ops" } },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(rate(pg_stat_database_xact_rollback{datname=\"translog\"}[1m]))", "refId": "A" }],
+      "title": "Rollbacks / sec",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 80 }, { "color": "red", "value": 95 }] }, "unit": "percent" } },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "(sum(pg_stat_database_blks_hit) / (sum(pg_stat_database_blks_hit) + sum(pg_stat_database_blks_read))) * 100", "refId": "A" }],
+      "title": "Cache hit ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "ops" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list" } },
+      "targets": [
+        { "expr": "rate(pg_stat_database_tup_returned{datname=\"translog\"}[1m])", "legendFormat": "rows returned", "refId": "A" },
+        { "expr": "rate(pg_stat_database_tup_fetched{datname=\"translog\"}[1m])", "legendFormat": "rows fetched", "refId": "B" },
+        { "expr": "rate(pg_stat_database_tup_inserted{datname=\"translog\"}[1m])", "legendFormat": "rows inserted", "refId": "C" },
+        { "expr": "rate(pg_stat_database_tup_updated{datname=\"translog\"}[1m])", "legendFormat": "rows updated", "refId": "D" },
+        { "expr": "rate(pg_stat_database_tup_deleted{datname=\"translog\"}[1m])", "legendFormat": "rows deleted", "refId": "E" }
+      ],
+      "title": "Activité requêtes (rows/sec)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "bytes" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list" } },
+      "targets": [
+        { "expr": "pg_database_size_bytes{datname=\"translog\"}", "legendFormat": "translog DB", "refId": "A" }
+      ],
+      "title": "Taille base translog",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } } },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{
+        "expr": "pg_stat_activity_count",
+        "legendFormat": "{{state}} ({{datname}})",
+        "refId": "A"
+      }],
+      "title": "Connexions par état",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["postgres", "translog"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Postgres",
+  "uid": "translog-postgres",
+  "version": 1
+}

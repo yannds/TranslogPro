@@ -1,0 +1,335 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# TransLog Pro — Stack OBSERVABILITY (Lot 1)
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Composants :
+#   Prometheus 2.x          — métriques (rétention 15j)
+#   Grafana 10.x            — dashboards
+#   Loki 2.x                — agrégation logs (rétention 7j)
+#   Promtail                — shipper logs Docker → Loki
+#   node-exporter           — métriques host (CPU/RAM/disk/réseau VPS)
+#   cAdvisor                — métriques conteneurs Docker
+#   postgres-exporter       — métriques Postgres
+#   redis-exporter          — métriques Redis
+#   blackbox-exporter       — uptime checks HTTP des sous-domaines
+#
+# Réseau :
+#   - translog_obs_net : overlay attachable, isolé de la stack applicative
+#   - Le Caddy de la stack `translog` joindra ce réseau pour reverse-proxy
+#     `grafana.translog.dsyann.info` → grafana:3000
+#
+# Sécurité :
+#   - Prometheus + Loki + exporters : NON exposés publiquement (réseau interne uniquement)
+#   - Grafana : exposé via Caddy avec TLS wildcard + auth admin (mot de passe initial Vault)
+#   - Aucun port host bindé sauf les exports de scrape internes
+#
+# Resource limits (VPS 8GB, marge ~2GB allouée à l'observabilité) :
+#   Prometheus   384M | Grafana 256M | Loki 256M | Promtail 128M
+#   cAdvisor     256M | node-exp 64M | pg-exp 64M | redis-exp 64M | blackbox 64M
+#   Total ~1.5GB max
+#
+# Volumes persistants :
+#   translog_prometheus_data    — métriques (≈3-5GB pour 15j)
+#   translog_grafana_data       — config + dashboards éditées en UI
+#   translog_loki_data          — logs (≈2-3GB pour 7j)
+# ═════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Prometheus — collecte métriques ────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    configs:
+      - source: prometheus_yml
+        target: /etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=4GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - translog_obs_net
+      - translog_net   # pour scraper api:3000, postgres-exp, redis-exp via DNS Swarm
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 384M }
+        reservations: { memory: 192M }
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Grafana — dashboards ───────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.12
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+      - source: grafana_dashboards_yml
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: dash_host
+        target: /var/lib/grafana/dashboards/host.json
+      - source: dash_containers
+        target: /var/lib/grafana/dashboards/containers.json
+      - source: dash_postgres
+        target: /var/lib/grafana/dashboards/postgres.json
+      - source: dash_redis
+        target: /var/lib/grafana/dashboards/redis.json
+      - source: dash_api
+        target: /var/lib/grafana/dashboards/api.json
+      - source: dash_blackbox
+        target: /var/lib/grafana/dashboards/blackbox.json
+      - source: dash_logs
+        target: /var/lib/grafana/dashboards/logs.json
+    environment:
+      GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      GF_AUTH_ANONYMOUS_ENABLED:  "false"
+      GF_SERVER_ROOT_URL:         https://grafana.translog.dsyann.info
+      GF_SERVER_DOMAIN:           grafana.translog.dsyann.info
+      # Reverse proxy headers (Caddy → Grafana en HTTP interne)
+      GF_SERVER_ENFORCE_DOMAIN:   "false"
+      GF_LOG_MODE:                console
+      GF_LOG_LEVEL:               info
+      # Désactive les "news" et le check de version (réduit appels sortants)
+      GF_NEWS_NEWS_FEED_ENABLED:  "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - translog_obs_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 256M }
+        reservations: { memory: 128M }
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Loki — agrégation logs ─────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.10
+    configs:
+      - source: loki_yaml
+        target: /etc/loki/loki-config.yaml
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - translog_obs_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 256M }
+        reservations: { memory: 128M }
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Promtail — collecte logs Docker (global mode = 1 par node) ────────────
+  promtail:
+    image: grafana/promtail:2.9.10
+    configs:
+      - source: promtail_yaml
+        target: /etc/promtail/promtail-config.yaml
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - promtail_positions:/tmp
+    networks:
+      - translog_obs_net
+    deploy:
+      mode: global
+      resources:
+        limits:    { memory: 128M }
+        reservations: { memory: 64M }
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  # ── node-exporter — métriques host (global mode) ──────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.netclass.ignored-devices=^(veth.*|docker.*|br-.*|lo)$$'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - translog_obs_net
+    deploy:
+      mode: global
+      resources:
+        limits:    { memory: 64M }
+        reservations: { memory: 32M }
+      restart_policy:
+        condition: on-failure
+
+  # ── cAdvisor — métriques conteneurs Docker (global mode) ──────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+      - '--store_container_labels=false'
+      - '--whitelisted_container_labels=com.docker.swarm.service.name,com.docker.stack.namespace'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - translog_obs_net
+    deploy:
+      mode: global
+      resources:
+        limits:    { memory: 256M }
+        reservations: { memory: 128M }
+      restart_policy:
+        condition: on-failure
+
+  # ── postgres-exporter — métriques Postgres ────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://app_admin:${POSTGRES_APP_ADMIN_PASSWORD}@postgres:5432/translog?sslmode=disable"
+      PG_EXPORTER_EXCLUDE_DATABASES: "template0,template1"
+    networks:
+      - translog_obs_net
+      - translog_net   # pour joindre postgres
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 64M }
+        reservations: { memory: 32M }
+      restart_policy:
+        condition: on-failure
+
+  # ── redis-exporter — métriques Redis ──────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    environment:
+      REDIS_ADDR:     "redis://redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    networks:
+      - translog_obs_net
+      - translog_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 64M }
+        reservations: { memory: 32M }
+      restart_policy:
+        condition: on-failure
+
+  # ── blackbox-exporter — probes HTTP/uptime sous-domaines ──────────────────
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    configs:
+      - source: blackbox_yml
+        target: /etc/blackbox/blackbox.yml
+    command: --config.file=/etc/blackbox/blackbox.yml
+    networks:
+      - translog_obs_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 64M }
+        reservations: { memory: 32M }
+      restart_policy:
+        condition: on-failure
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+# IMPORTANT : translog_obs_net est `external: true` ici aussi, parce qu'il
+# est pré-créé par 04-deploy.sh AVANT les stacks (sinon poulet/œuf : Caddy
+# de la stack applicative le référence aussi en `external: true`).
+networks:
+  translog_obs_net:
+    external: true
+    name: translog_obs_net
+  translog_net:
+    external: true   # réseau de la stack applicative (déjà créé par stack `translog`)
+    name: translog_net
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  prometheus_data:    { name: translog_prometheus_data }
+  grafana_data:       { name: translog_grafana_data }
+  loki_data:          { name: translog_loki_data }
+  promtail_positions: { name: translog_promtail_positions }
+
+# ─── Configs (versionnés via stack deploy — read-only en runtime) ────────────
+# Chaque modification de fichier nécessite un re-deploy stack pour pickup,
+# car Swarm tag les configs par hash content (immuable une fois créées).
+configs:
+  prometheus_yml:
+    file: ./prometheus/prometheus.yml
+  loki_yaml:
+    file: ./loki/loki-config.yaml
+  promtail_yaml:
+    file: ./promtail/promtail-config.yaml
+  blackbox_yml:
+    file: ./blackbox/blackbox.yml
+  grafana_datasources:
+    file: ./grafana/provisioning/datasources/datasources.yml
+  grafana_dashboards_yml:
+    file: ./grafana/provisioning/dashboards/dashboards.yml
+  dash_host:
+    file: ./grafana/dashboards/host.json
+  dash_containers:
+    file: ./grafana/dashboards/containers.json
+  dash_postgres:
+    file: ./grafana/dashboards/postgres.json
+  dash_redis:
+    file: ./grafana/dashboards/redis.json
+  dash_api:
+    file: ./grafana/dashboards/api.json
+  dash_blackbox:
+    file: ./grafana/dashboards/blackbox.json
+  dash_logs:
+    file: ./grafana/dashboards/logs.json

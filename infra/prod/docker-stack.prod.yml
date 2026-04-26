@@ -103,6 +103,7 @@ services:
       - translog_net
       - easypanel-gmp
       - easypanel
+      - translog_obs_net    # reverse-proxy vers grafana:3000 (stack obs séparée)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:2019/config/"]
       interval: 30s
@@ -346,6 +347,13 @@ networks:
     external: true
   easypanel:
     external: true
+  # Réseau de la stack observability (déployée séparément via
+  # observability/docker-stack.observability.yml). Caddy s'y connecte pour
+  # reverse-proxy `grafana.translog.dsyann.info`. Marqué `external: true` car
+  # le réseau est créé/possédé par l'autre stack.
+  translog_obs_net:
+    external: true
+    name: translog_obs_net
 
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:

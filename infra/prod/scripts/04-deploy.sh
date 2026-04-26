@@ -30,6 +30,8 @@ header() { echo ""; echo "══════════════════
 STACK_NAME="translog"
 COMPOSE_FILE="docker-compose.prod.yml"   # build only
 STACK_FILE="docker-stack.prod.yml"        # deploy
+OBS_STACK_NAME="translog-obs"
+OBS_STACK_FILE="observability/docker-stack.observability.yml"
 
 # ─── 0. Sanity ──────────────────────────────────────────────────────────────
 header "[0/12] Sanity checks"
@@ -130,7 +132,17 @@ done
 ok "Cleanup OK"
 
 # ─── 4. Deploy stack Swarm ───────────────────────────────────────────────────
-header "[4/12] Deploy Swarm stack"
+header "[4/13] Deploy Swarm stack"
+
+# Pré-création du réseau d'observabilité (référencé `external: true` par
+# Caddy de la stack applicative ET par la stack obs). Idempotent : si déjà
+# créé, on ne fait rien. Cassé le poulet/œuf entre les deux stacks.
+if ! docker network inspect translog_obs_net >/dev/null 2>&1; then
+    docker network create --driver overlay --attachable translog_obs_net >/dev/null
+    ok "Réseau translog_obs_net créé (overlay attachable)"
+else
+    ok "Réseau translog_obs_net déjà présent"
+fi
 
 docker stack deploy \
     -c $STACK_FILE \
@@ -138,6 +150,46 @@ docker stack deploy \
     --with-registry-auth \
     $STACK_NAME || fail "Stack deploy failed"
 ok "Stack $STACK_NAME déployé"
+
+# ─── 4b. Deploy observability stack (Lot 1 — Prometheus/Grafana/Loki) ───────
+header "[4b/13] Deploy observability stack"
+
+if [ -f "$OBS_STACK_FILE" ]; then
+    # GRAFANA_ADMIN_PASSWORD : fallback sur APP_SECRET si pas défini (acceptable
+    # car APP_SECRET est déjà un secret robuste dans .env.prod). Préférable :
+    # ajouter une var dédiée GRAFANA_ADMIN_PASSWORD dans .env.prod.
+    if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
+        # Génère un mdp aléatoire si absent + persiste dans .env.prod (idempotent)
+        if ! grep -q '^GRAFANA_ADMIN_PASSWORD=' .env.prod; then
+            GP=$(openssl rand -hex 24)
+            echo "GRAFANA_ADMIN_PASSWORD=$GP" >> .env.prod
+            warn "GRAFANA_ADMIN_PASSWORD généré et écrit dans .env.prod"
+        fi
+        set -a; . ./.env.prod; set +a
+    fi
+
+    docker stack deploy \
+        -c "$OBS_STACK_FILE" \
+        --resolve-image=always \
+        $OBS_STACK_NAME || fail "Stack observability deploy failed"
+    ok "Stack $OBS_STACK_NAME déployé (Prometheus + Grafana + Loki + exporters)"
+
+    # Restart Caddy si la stack applicative tournait déjà (premier deploy obs)
+    # → Caddy doit picker le réseau translog_obs_net pour atteindre grafana:3000.
+    if docker service inspect ${STACK_NAME}_caddy >/dev/null 2>&1; then
+        # Vérifie si Caddy est déjà sur translog_obs_net
+        on_obs_net=$(docker service inspect ${STACK_NAME}_caddy \
+            --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null \
+            | grep -c translog_obs_net || true)
+        if [ "$on_obs_net" -eq 0 ]; then
+            warn "Caddy pas encore sur translog_obs_net → docker service update --force"
+            docker service update --network-add translog_obs_net ${STACK_NAME}_caddy >/dev/null 2>&1 || \
+                docker service update --force ${STACK_NAME}_caddy >/dev/null 2>&1 || true
+        fi
+    fi
+else
+    warn "$OBS_STACK_FILE introuvable — skip stack observability"
+fi
 
 # Smart reload BIND9 si named.conf ou zone changé (sinon DNSSEC perdrait les
 # RRSIG en mémoire et devrait re-signer toute la zone).
@@ -408,7 +460,7 @@ header "[11/12] Healthchecks externes"
 
 sleep 5
 
-for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info app.dsyann.info api.dsyann.info panel.dsyann.info; do
+for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info app.dsyann.info api.dsyann.info panel.dsyann.info grafana.translog.dsyann.info; do
     code=$(curl -kI -o /dev/null -w "%{http_code}" -m 15 https://${d}/ 2>/dev/null || echo 000)
     if [ "$code" = "200" ] || [ "$code" = "404" ] || [ "$code" = "302" ]; then
         ok "https://${d}/ → HTTP $code"
@@ -447,6 +499,7 @@ echo "  https://<tenant>.translog.dsyann.info — Tenants (PortailVoyageur)"
 echo "  https://app.dsyann.info              — gmp frontend (proxy Caddy)"
 echo "  https://api.dsyann.info              — gmp backend (proxy Caddy)"
 echo "  https://panel.dsyann.info            — Easypanel UI (proxy Caddy)"
+echo "  https://grafana.translog.dsyann.info — Grafana (mdp dans .env.prod : GRAFANA_ADMIN_PASSWORD)"
 echo ""
 echo "Observabilité :"
 echo "  docker stack ps $STACK_NAME       — Status tasks"
