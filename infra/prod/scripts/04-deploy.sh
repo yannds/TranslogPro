@@ -174,17 +174,22 @@ if [ -f "$OBS_STACK_FILE" ]; then
         $OBS_STACK_NAME || fail "Stack observability deploy failed"
     ok "Stack $OBS_STACK_NAME déployé (Prometheus + Grafana + Loki + exporters)"
 
-    # Restart Caddy si la stack applicative tournait déjà (premier deploy obs)
-    # → Caddy doit picker le réseau translog_obs_net pour atteindre grafana:3000.
+    # NE PAS faire de docker service update --force translog_caddy ici.
+    # Raison documentée (incident 2026-04-26) : un --force sur Caddy en mode:host
+    # alors qu'un rolling update Swarm est encore en cours suite au stack deploy
+    # [4/13] (qui a déjà déclaré translog_obs_net dans la spec Caddy) déclenche
+    # une reconfig iptables qui CASSE LA SESSION SSH du runner GitHub Actions
+    # (broken pipe ~4 min après). On laisse Swarm faire son boulot tout seul.
+    # Si Caddy n'a pas le réseau après l'étape CUTOVER [10/12], on log un warn
+    # mais on n'agit pas — fix manuel possible en SSH dédié.
     if docker service inspect ${STACK_NAME}_caddy >/dev/null 2>&1; then
-        # Vérifie si Caddy est déjà sur translog_obs_net
         on_obs_net=$(docker service inspect ${STACK_NAME}_caddy \
             --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null \
             | grep -c translog_obs_net || true)
         if [ "$on_obs_net" -eq 0 ]; then
-            warn "Caddy pas encore sur translog_obs_net → docker service update --force"
-            docker service update --network-add translog_obs_net ${STACK_NAME}_caddy >/dev/null 2>&1 || \
-                docker service update --force ${STACK_NAME}_caddy >/dev/null 2>&1 || true
+            warn "Caddy n'a pas encore translog_obs_net dans sa spec — Swarm va le reconfigurer au rolling update du stack deploy [4/13]. Aucune action ici."
+        else
+            ok "Caddy déjà sur translog_obs_net (Swarm a reconfiguré via stack deploy)"
         fi
     fi
 else
