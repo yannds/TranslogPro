@@ -46,13 +46,16 @@ type CountryBounds = { north: number; south: number; east: number; west: number 
 interface MapsConfig {
   jsApiKey:      string | null;
   countryCode?:  string | null;
-  countryBounds?: { north: number; south: number; east: number; west: number } | null;
+  countryBounds?: CountryBounds | null;
 }
 
-const LIBRARIES: ('places')[] = ['places'];
+// La carte est volontairement compacte — la modale tient ainsi sans scroll
+// sur un viewport desktop standard.
+const LIBRARIES: ('places')[] = ['places']; // Places JS pour l'autocomplete client-side (precision Google directe)
 const DEFAULT_CENTER = { lat: 4.0, lng: 12.0 }; // Afrique centrale
 const DEFAULT_ZOOM   = 4;
 const MARKED_ZOOM    = 14;
+const MAP_HEIGHT_PX  = 220;
 
 function parseCoord(s: string): number | null {
   if (!s.trim()) return null;
@@ -118,7 +121,7 @@ export function GoogleMapPicker(props: Props) {
  * `useJsApiLoader`, exactement une fois pour la durée de vie du composant.
  */
 function GoogleMapPickerInner({
-  value, onChange, disabled, mapHeightPx = 320, jsApiKey, countryBounds,
+  value, onChange, disabled, mapHeightPx = MAP_HEIGHT_PX, jsApiKey, countryBounds,
 }: Props & { jsApiKey: string; countryBounds: CountryBounds | null }) {
   const { t } = useI18n();
 
@@ -132,72 +135,95 @@ function GoogleMapPickerInner({
   const lat = parseCoord(value.lat);
   const lng = parseCoord(value.lng);
   const hasMarker = lat !== null && lng !== null;
+
+  // Centre par defaut : le centre de la box du pays du tenant (si fourni),
+  // sinon Afrique centrale. La carte sera deplacee sur le marker s'il existe.
+  const fallbackCenter = useMemo(() => {
+    if (!countryBounds) return DEFAULT_CENTER;
+    return {
+      lat: (countryBounds.north + countryBounds.south) / 2,
+      lng: (countryBounds.east  + countryBounds.west)  / 2,
+    };
+  }, [countryBounds]);
+
   const center = useMemo(
-    () => (hasMarker ? { lat: lat!, lng: lng! } : DEFAULT_CENTER),
-    [lat, lng, hasMarker],
+    () => (hasMarker ? { lat: lat!, lng: lng! } : fallbackCenter),
+    [lat, lng, hasMarker, fallbackCenter],
   );
 
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // État pour la recherche Google Places (autocomplete client).
-  const [query,        setQuery]        = useState('');
-  const [predictions,  setPredictions]  = useState<google.maps.places.AutocompletePrediction[]>([]);
-  const [searching,    setSearching]    = useState(false);
-  const [showResults,  setShowResults]  = useState(false);
-  const acServiceRef    = useRef<google.maps.places.AutocompleteService | null>(null);
+  // ── Recherche d'adresse via Google Places JS (client-side) ─────────────────
+  // On utilise EXCLUSIVEMENT Google ici — l'utilisateur a explicitement refuse
+  // que la fenetre retombe sur la chaine backend Nominatim qui retournait des
+  // coordonnees decalees (ex. "Bitam" au Cameroun au lieu du Gabon).
+  //
+  // Architecture en 2 etapes Places :
+  //   1. AutocompleteService.getPlacePredictions(query) → suggestions textuelles
+  //      (cheap, ~1c les 1000 calls).
+  //   2. PlacesService.getDetails(placeId) → coordonnees lat/lng precises (avec
+  //      session token pour facturer en bundle au lieu de par appel).
+  //
+  // Biais SOFT par bbox du pays (les villes du tenant remontent en tete sans
+  // bloquer les resultats hors pays — pratique pour aeroport hub etranger, etc.)
+  const [query,       setQuery]       = useState('');
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [searching,   setSearching]   = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [searchErr,   setSearchErr]   = useState<string | null>(null);
+  const acServiceRef     = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const sessionTokenRef  = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
-  // Initialise les services Places quand la lib est chargée.
+  // Initialise les services Places dès que la lib Google JS est chargée.
   useEffect(() => {
     if (!gmapsLoaded || typeof google === 'undefined') return;
     acServiceRef.current = new google.maps.places.AutocompleteService();
     sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
-    // PlacesService a besoin d'un container DOM ou Map ; on lui donne un div volatil.
+    // PlacesService a besoin d'un container DOM (Map ou div) — un div volatil suffit.
     const tmp = document.createElement('div');
     placesServiceRef.current = new google.maps.places.PlacesService(tmp);
   }, [gmapsLoaded]);
 
-  // Recherche Places debounced.
+  // Recherche debounced : Autocomplete dès 3 caractères, biais soft sur le pays du tenant.
   useEffect(() => {
     if (!gmapsLoaded || !acServiceRef.current) return;
     const q = query.trim();
-    if (q.length < 3) { setPredictions([]); setShowResults(false); return; }
+    if (q.length < 3) { setPredictions([]); setShowResults(false); setSearchErr(null); return; }
 
     const timer = setTimeout(() => {
-      setSearching(true);
-      // Bias SOFT par bounding box du pays : les resultats dans la box remontent
-      // mais ceux a l'exterieur restent visibles (`location` + `radius` ou
-      // `bounds` sans `strictBounds:true` = preference, pas filtre).
-      const bias: google.maps.places.AutocompletionRequest = {
+      setSearching(true); setSearchErr(null);
+      const req: google.maps.places.AutocompletionRequest = {
         input:        q,
         sessionToken: sessionTokenRef.current!,
       };
       if (countryBounds) {
-        bias.bounds = new google.maps.LatLngBounds(
+        req.bounds = new google.maps.LatLngBounds(
           { lat: countryBounds.south, lng: countryBounds.west },
           { lat: countryBounds.north, lng: countryBounds.east },
         );
         // strictBounds NON spécifié → bias soft, n'exclut pas les resultats hors box.
       }
-      acServiceRef.current!.getPlacePredictions(
-        bias,
-        (results, status) => {
-          setSearching(false);
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            setPredictions(results);
-            setShowResults(true);
-          } else {
-            setPredictions([]);
-            setShowResults(false);
-          }
-        },
-      );
+      acServiceRef.current!.getPlacePredictions(req, (results, status) => {
+        setSearching(false);
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          setPredictions(results);
+          setShowResults(true);
+        } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+          setPredictions([]);
+          setShowResults(true); // affiche l'état "aucun résultat"
+        } else {
+          setPredictions([]);
+          setShowResults(false);
+          setSearchErr(`Places: ${status}`);
+        }
+      });
     }, 250);
 
     return () => clearTimeout(timer);
   }, [query, gmapsLoaded, countryBounds]);
 
+  // Sélection d'une prediction → lookup détaillé pour récupérer les coords.
   const pickPrediction = useCallback((p: google.maps.places.AutocompletePrediction) => {
     if (!placesServiceRef.current || !sessionTokenRef.current) return;
     placesServiceRef.current.getDetails(
@@ -207,11 +233,13 @@ function GoogleMapPickerInner({
         sessionToken: sessionTokenRef.current,
       },
       (details, status) => {
-        // Reset du session token : Google facture par session ; on ouvre une nouvelle.
+        // Renouvelle le token : Google facture par session (Autocomplete + getDetails groupés).
         sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
         if (status === google.maps.places.PlacesServiceStatus.OK && details?.geometry?.location) {
           const la = details.geometry.location.lat();
           const ln = details.geometry.location.lng();
+          // Met à jour les champs lat/lng du formulaire parent — c'est ce qui fait
+          // que les inputs Latitude/Longitude se remplissent automatiquement.
           onChange({ lat: fmt(la), lng: fmt(ln) });
           setQuery(details.formatted_address ?? p.description);
           setShowResults(false);
@@ -219,6 +247,8 @@ function GoogleMapPickerInner({
             mapRef.current.panTo({ lat: la, lng: ln });
             mapRef.current.setZoom(MARKED_ZOOM);
           }
+        } else {
+          setSearchErr(`getDetails: ${status}`);
         }
       },
     );
@@ -264,26 +294,38 @@ function GoogleMapPickerInner({
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" aria-hidden />
           )}
 
-          {showResults && predictions.length > 0 && (
-            <ul
-              role="listbox"
+          {showResults && (
+            <div
               className="absolute left-0 right-0 top-full mt-1 z-30 max-h-60 overflow-auto rounded-lg shadow-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
             >
-              {predictions.map(p => (
-                <li key={p.place_id} role="option">
-                  <button
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); pickPrediction(p); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-start gap-2"
-                  >
-                    <MapPin className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" aria-hidden />
-                    <span className="truncate">{p.description}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+              {predictions.length > 0 ? (
+                <ul role="listbox">
+                  {predictions.map(p => (
+                    <li key={p.place_id} role="option">
+                      <button
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); pickPrediction(p); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-start gap-2"
+                      >
+                        <MapPin className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" aria-hidden />
+                        <span className="truncate">{p.description}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('stations.mapSearchEmpty')}
+                </p>
+              )}
+            </div>
           )}
         </div>
+        {searchErr && (
+          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+            {t('stations.mapSearchError')} ({searchErr})
+          </p>
+        )}
         {mapFailed && (
           <p className="text-[11px] text-amber-700 dark:text-amber-300">
             {t('stations.mapLoadFailed')}

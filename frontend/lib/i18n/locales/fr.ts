@@ -656,7 +656,9 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "mapLoading": "Chargement de la carte Google…",
     "mapKeyMissing": "La clé navigateur Google Maps n'est pas encore configurée. Saisissez les coordonnées à la main ou demandez à l'admin plateforme de l'ajouter dans Paramètres → Intégrations.",
     "mapKeyError": "Impossible de récupérer la configuration carte — saisie manuelle des coordonnées disponible.",
-    "mapLoadFailed": "Impossible de charger Google Maps — vérifiez la clé navigateur (restriction par référent HTTP) ou la connexion réseau."
+    "mapLoadFailed": "Impossible de charger Google Maps — vérifiez la clé navigateur (restriction par référent HTTP) ou la connexion réseau.",
+    "mapSearchEmpty": "Aucune adresse trouvée — affinez votre recherche.",
+    "mapSearchError": "Erreur Google Places"
   },
   "shipments": {
     "groupShipments": "Expéditions groupées",

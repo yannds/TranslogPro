@@ -803,7 +803,9 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "mapLoading": "Loading Google Map…",
     "mapKeyMissing": "The browser Google Maps key is not configured yet. Enter coordinates manually or ask the platform admin to add it under Settings → Integrations.",
     "mapKeyError": "Unable to fetch map config — manual coordinate entry is still available.",
-    "mapLoadFailed": "Failed to load Google Maps — check the browser key (HTTP referrer restriction) or the network."
+    "mapLoadFailed": "Failed to load Google Maps — check the browser key (HTTP referrer restriction) or the network.",
+    "mapSearchEmpty": "No address found — refine your query.",
+    "mapSearchError": "Google Places error"
   },
   "shipments": {
     "groupShipments": "Group Shipments",
