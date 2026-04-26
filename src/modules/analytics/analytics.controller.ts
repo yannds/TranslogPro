@@ -165,6 +165,42 @@ export class AnalyticsController {
   }
 
   /**
+   * Finances temps réel — CA jour / semaine / mois pour mobile admin.
+   *
+   * Filtres optionnels : agencyId, stationId. Si scope=agency, l'agencyId du
+   * scope override le query param (defense-in-depth).
+   *
+   * Query :
+   *   - period = 'day' | 'week' | 'month' (défaut 'day')
+   *   - agencyId, stationId (optionnels)
+   *
+   * Retour : { period, totalRevenue, byPaymentMethod, byClass, ticketsSold,
+   *            parcelsRegistered, refundsAmount, computedAt }
+   */
+  @Get('finance-realtime')
+  @RequirePermission(Permission.STATS_READ_TENANT)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    limit: 60, windowMs: 60_000, keyBy: 'userId', suffix: 'analytics_finance_rt',
+    message: 'Too many finance refresh requests.',
+  })
+  financeRealtime(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+    @Query('period')    period?:   'day' | 'week' | 'month',
+    @Query('agencyId')  agencyId?: string,
+    @Query('stationId') stationId?: string,
+  ) {
+    const effectiveAgencyId = scope.scope === 'agency' ? scope.agencyId : agencyId;
+    return this.analyticsService.getFinanceRealtime(
+      tenantId,
+      period ?? 'day',
+      effectiveAgencyId,
+      stationId,
+    );
+  }
+
+  /**
    * Segmentation client par activité (voyageur / expéditeur / les deux).
    * Source de vérité : tables Ticket + Parcel — pas le rôle.
    */

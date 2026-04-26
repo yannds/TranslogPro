@@ -209,6 +209,105 @@ export class AnalyticsService {
   }
 
   /**
+   * Finance temps réel — CA jour / semaine / mois (lite mobile, ~1 KB).
+   *
+   * Diffère de getRevenueReport (rapport CSV-like) par :
+   *   - Période standardisée (day/week/month) calculée serveur-side
+   *   - Inclut count tickets vendus + colis + remboursements
+   *   - Filtre stationId (boardingStationId|alightingStationId du ticket)
+   *   - Toujours scope tenantId + agencyId si scope.agency
+   */
+  async getFinanceRealtime(
+    tenantId:  string,
+    period:    'day' | 'week' | 'month',
+    agencyId?: string,
+    stationId?: string,
+  ) {
+    const now = new Date();
+    let from = new Date(now);
+    from.setHours(0, 0, 0, 0);
+    if (period === 'week') {
+      const day = from.getDay();
+      const diff = day === 0 ? 6 : day - 1; // semaine commence lundi
+      from.setDate(from.getDate() - diff);
+    } else if (period === 'month') {
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const txWhere = {
+      tenantId,
+      createdAt: { gte: from, lte: now },
+      ...(agencyId ? { agencyId } : {}),
+    };
+
+    const ticketWhere: Record<string, unknown> = {
+      tenantId,
+      createdAt: { gte: from, lte: now },
+      ...(agencyId ? { agencyId } : {}),
+      ...(stationId ? {
+        OR: [
+          { boardingStationId: stationId },
+          { alightingStationId: stationId },
+        ],
+      } : {}),
+    };
+
+    const parcelWhere = {
+      tenantId,
+      createdAt: { gte: from, lte: now },
+      ...(agencyId ? { agencyId } : {}),
+    };
+
+    // Refund n'a pas d'agencyId direct — on filtre via la relation ticket
+    // (Ticket.agencyId est nullable mais positionné lors de la vente).
+    const refundWhere = {
+      tenantId,
+      processedAt: { gte: from, lte: now },
+      status: 'PROCESSED' as const,
+      ...(agencyId ? { ticket: { agencyId } } : {}),
+    };
+
+    const [transactions, ticketsSold, parcelsRegistered, refunds] = await Promise.all([
+      this.prisma.transaction.groupBy({
+        by:    ['type', 'paymentMethod'],
+        where: txWhere,
+        _sum:  { amount: true },
+        _count:{ _all:   true },
+      }),
+      this.prisma.ticket.count({ where: ticketWhere }),
+      this.prisma.parcel.count({ where: parcelWhere }),
+      this.prisma.refund.aggregate({
+        where: refundWhere,
+        _sum:  { amount: true },
+      }),
+    ]);
+
+    // Agrégation : total + breakdown par méthode de paiement
+    let totalRevenue = 0;
+    const byPaymentMethod: Record<string, number> = {};
+    for (const row of transactions) {
+      // On compte uniquement les types positifs (vente). Refunds traités séparément.
+      if (row.type === 'TICKET_SALE' || row.type === 'PARCEL_REGISTRATION' || row.type === 'PAYMENT') {
+        const amount = row._sum.amount ?? 0;
+        totalRevenue += amount;
+        byPaymentMethod[row.paymentMethod] = (byPaymentMethod[row.paymentMethod] ?? 0) + amount;
+      }
+    }
+
+    return {
+      period,
+      from,
+      to:                  now,
+      totalRevenue,
+      byPaymentMethod,
+      ticketsSold,
+      parcelsRegistered,
+      refundsAmount:       refunds._sum.amount ?? 0,
+      computedAt:          now,
+    };
+  }
+
+  /**
    * Résumé "Aujourd'hui" pour le dashboard exécutif du gérant (Sprint 4).
    *
    * Agrège tout ce dont la page a besoin en UN SEUL appel :

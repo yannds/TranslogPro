@@ -209,6 +209,47 @@ export class TripService {
     }));
   }
 
+  /**
+   * Trips "live" — pour le dashboard temps réel admin/manager.
+   *
+   * Filtre statuts en cours + enrichissement client-friendly :
+   *   - state : 'planned' | 'on-time' | 'early' | 'delayed' | 'arrived' | 'suspended'
+   *   - delayMinutes : signe + magnitude (négatif = en avance)
+   *   - assignedSeats / capacity (déjà calculé par count travelers)
+   *
+   * Réutilise findAll avec un set de statuts fixes — la complexité est tout
+   * entière dans le mapping post-process.
+   */
+  async findLive(tenantId: string, scope?: ScopeContext) {
+    const STATUSES_LIVE = ['PLANNED', 'OPEN', 'BOARDING', 'IN_PROGRESS', 'SUSPENDED'];
+    const trips = await this.findAll(tenantId, { status: STATUSES_LIVE }, scope);
+
+    const now = Date.now();
+    return trips.map((t) => {
+      const scheduled = t.departureScheduled?.getTime?.() ?? null;
+      const actual    = (t as { departureActual?: Date | null }).departureActual?.getTime() ?? null;
+      const delayMinutes = scheduled && actual
+        ? Math.round((actual - scheduled) / 60_000)
+        : (scheduled && now > scheduled && t.status === 'PLANNED'
+            ? Math.round((now - scheduled) / 60_000)
+            : 0);
+
+      let state: 'planned' | 'on-time' | 'early' | 'delayed' | 'arrived' | 'suspended' = 'planned';
+      if (t.status === 'SUSPENDED' || t.status === 'CANCELLED')      state = 'suspended';
+      else if (t.status === 'COMPLETED')                              state = 'arrived';
+      else if (t.status === 'IN_PROGRESS' && delayMinutes >  10)      state = 'delayed';
+      else if (t.status === 'IN_PROGRESS' && delayMinutes < -5)       state = 'early';
+      else if (t.status === 'IN_PROGRESS')                            state = 'on-time';
+      else if (t.status === 'BOARDING' || t.status === 'OPEN')        state = 'on-time';
+
+      return {
+        ...t,
+        state,
+        delayMinutes,
+      };
+    });
+  }
+
   async findOne(tenantId: string, id: string, scope?: ScopeContext) {
     const trip = await this.prisma.trip.findFirst({
       where:   { id, tenantId },

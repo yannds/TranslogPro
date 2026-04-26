@@ -32,6 +32,100 @@ export class PlatformAnalyticsService {
 
   // ─── Growth (tenants, revenus, churn) ──────────────────────────────────
 
+  /**
+   * Summary léger pour mobile super-admin (~1 KB).
+   *
+   * Agrège les KPIs critiques pour le dashboard plateforme :
+   *   - Croissance : total tenants, MRR (par devise), churn 30j, nouveaux MTD
+   *   - Adoption : DAU/MAU, total users actifs
+   *   - Santé : tenants at-risk, support tickets ouverts, incidents ouverts,
+   *             DLQ events non résolus
+   *   - Paiements : subscriptions PAST_DUE (paiements échoués)
+   *
+   * Réutilise les requêtes des 3 méthodes existantes (getGrowth/getAdoption/
+   * getHealth) en parallèle pour minimiser la latence. Pas de cache —
+   * payload pas trop lourd (≤ 1 KB) et SA accepte 200ms de latence.
+   */
+  async getSummary() {
+    const now      = new Date();
+    const start1d  = new Date(now.getTime() - ACTIVITY_WINDOWS.dauDays * MS_PER_DAY);
+    const start30d = new Date(now.getTime() - ACTIVITY_WINDOWS.mauDays * MS_PER_DAY);
+    const startMTD = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      totalTenants,
+      newThisMonth,
+      activeSubs,
+      pastDueSubs,
+      cancelled30d,
+      dau,
+      mau,
+      openTickets,
+      openIncidents,
+      dlq,
+    ] = await Promise.all([
+      this.prisma.tenant.count({ where: { id: { not: PLATFORM_TENANT_ID } } }),
+      this.prisma.tenant.count({
+        where: { id: { not: PLATFORM_TENANT_ID }, createdAt: { gte: startMTD } },
+      }),
+      this.prisma.platformSubscription.findMany({
+        where:   { status: { in: ['ACTIVE', 'PAST_DUE'] } },
+        include: { plan: { select: { price: true, currency: true, billingCycle: true } } },
+      }),
+      this.prisma.platformSubscription.count({ where: { status: 'PAST_DUE' } }),
+      this.prisma.platformSubscription.count({
+        where: { status: 'CANCELLED', cancelledAt: { gte: start30d } },
+      }),
+      this.prisma.user.count({
+        where: { tenantId: { not: PLATFORM_TENANT_ID }, lastActiveAt: { gte: start1d } },
+      }),
+      this.prisma.user.count({
+        where: { tenantId: { not: PLATFORM_TENANT_ID }, lastActiveAt: { gte: start30d } },
+      }),
+      this.prisma.supportTicket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      this.prisma.incident.count({ where: { resolvedAt: null } }),
+      this.prisma.deadLetterEvent.count({ where: { resolvedAt: null } }),
+    ]);
+
+    // MRR par devise (normalisation YEARLY → MONTHLY/12)
+    const mrrByCurrency: Record<string, number> = {};
+    for (const s of activeSubs) {
+      const amount = s.plan.billingCycle === 'YEARLY'
+        ? s.plan.price / 12
+        : s.plan.billingCycle === 'MONTHLY'
+          ? s.plan.price
+          : 0;
+      mrrByCurrency[s.plan.currency] = (mrrByCurrency[s.plan.currency] ?? 0) + amount;
+    }
+
+    const churnRate30d = activeSubs.length > 0
+      ? cancelled30d / Math.max(1, activeSubs.length + cancelled30d)
+      : 0;
+
+    return {
+      tenants: {
+        total:        totalTenants,
+        newThisMonth,
+        cancelled30d,
+        churnRate30d: Number(churnRate30d.toFixed(4)),
+      },
+      revenue: {
+        mrrByCurrency,
+        paymentsFailed: pastDueSubs,
+      },
+      activity: {
+        dau,
+        mau,
+      },
+      ops: {
+        supportTicketsOpen: openTickets,
+        incidentsOpen:      openIncidents,
+        dlqOpen:            dlq,
+      },
+      computedAt: now,
+    };
+  }
+
   async getGrowth() {
     const now       = new Date();
     const startMTD  = new Date(now.getFullYear(), now.getMonth(), 1);

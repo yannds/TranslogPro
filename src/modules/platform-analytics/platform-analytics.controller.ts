@@ -18,6 +18,12 @@ import { Permission } from '../../common/constants/permissions';
 export class PlatformAnalyticsController {
   constructor(private readonly analytics: PlatformAnalyticsService) {}
 
+  /** Summary léger mobile super-admin (~1 KB) — KPIs essentiels Dashboard. */
+  @Get('summary')
+  summary() {
+    return this.analytics.getSummary();
+  }
+
   @Get('growth')
   growth() {
     return this.analytics.getGrowth();

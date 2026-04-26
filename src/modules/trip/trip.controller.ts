@@ -36,6 +36,28 @@ export class TripController {
     return this.tripService.findAll(tenantId, { status, driverId, from, to }, scope);
   }
 
+  /**
+   * Trips "live" — pour le dashboard temps réel admin/manager mobile.
+   *
+   * Filtre serveur sur les statuts en cours (PLANNED/OPEN/BOARDING/IN_PROGRESS)
+   * + retour enrichi par trip avec :
+   *   - delayMinutes (différence departureScheduled vs departureActual)
+   *   - state ('on-time' | 'delayed' | 'early' | 'arrived' | 'suspended')
+   *   - assignedSeats / capacity
+   *   - bus.plate, route.origin/destination, driver.name
+   *
+   * Optimisé pour le polling court (~5-10s côté mobile). Pas de cache, pas
+   * de pagination — la quantité de trips actifs simultanés est faible.
+   */
+  @Get('live')
+  @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_AGENCY])
+  findLive(
+    @TenantId() tenantId: string,
+    @ScopeCtx() scope: ScopeContext,
+  ) {
+    return this.tripService.findLive(tenantId, scope);
+  }
+
   @Get(':id')
   @RequirePermission([Permission.TRIP_READ_TENANT, Permission.TRIP_READ_AGENCY, Permission.TRIP_READ_OWN])
   findOne(
