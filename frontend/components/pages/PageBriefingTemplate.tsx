@@ -500,7 +500,7 @@ function SectionForm(props: { baseUrl: string; templateId: string; onDone: () =>
         <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('briefingTemplate.sectionCode')}</span>
         <input required pattern="[A-Z_]+" value={code} onChange={e => setCode(e.target.value.toUpperCase())} className={inputClass} />
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('briefingTemplate.sectionTitleFr')}</span>
           <input required value={titleFr} onChange={e => setTitleFr(e.target.value)} className={inputClass} />
@@ -556,7 +556,7 @@ function ItemForm(props: {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('briefingTemplate.itemCode')}</span>
           <input required value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className={inputClass} />
@@ -568,7 +568,7 @@ function ItemForm(props: {
           </select>
         </label>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('briefingTemplate.itemLabelFr')}</span>
           <input required value={form.labelFr} onChange={e => setForm(f => ({ ...f, labelFr: e.target.value }))} className={inputClass} />

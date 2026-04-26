@@ -307,7 +307,7 @@ export function PageParcelsList() {
       >
         {detail && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('parcelsList.status')}</p>
                 <Badge variant={statusToVariant(detail.status)}>{detail.status}</Badge>

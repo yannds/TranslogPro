@@ -95,7 +95,7 @@ export function PageSavReports() {
       <Dialog open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }}
         title={t('savReports.reportDetail')} size="lg">
         {detail && (
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('savReports.type')}</p>
               <Badge variant="warning">{detail.type}</Badge>

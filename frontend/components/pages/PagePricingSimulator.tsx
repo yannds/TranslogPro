@@ -349,7 +349,7 @@ function BlockPriceBands({
   return (
     <BlockCard icon={TrendingUp} title={t('simulator.bands.title')} description={t('simulator.bands.desc')}>
       {busy ? <Spinner /> : error ? <ErrorBox msg={error} /> : !data ? null : (
-        <ul className="grid grid-cols-2 gap-3">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {bandsList.map(b => (
             <li key={b.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/60">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t(`simulator.bands.${b.label}`)}</p>
@@ -496,7 +496,7 @@ function BlockCompetitor({
           <div className={cn('rounded-lg px-3 py-2 text-sm font-semibold dark:bg-opacity-20', recoColor)}>
             {recoLabel}
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
               <p className="text-xs text-slate-500">{t('simulator.competitor.yourPrice')}</p>
               <p className="font-semibold">{fmtMoney(data.ownBaseline.ticketPrice)}</p>
@@ -567,7 +567,7 @@ function BlockWhatIf({
         </label>
       </div>
       {busy ? <Spinner /> : error ? <ErrorBox msg={error} /> : !data ? null : (
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <Stat label={t('simulator.whatIf.totalCostDelta')} value={`${data.delta.totalCost >= 0 ? '+' : ''}${fmtMoney(data.delta.totalCost)}`} />
           <Stat label={t('simulator.whatIf.netMarginDelta')} value={`${data.delta.netMargin >= 0 ? '+' : ''}${fmtMoney(data.delta.netMargin)}`} />
           <Stat label={t('simulator.whatIf.finalTag')}       value={<Badge variant={data.scenario.profitabilityTag === 'PROFITABLE' ? 'success' : data.scenario.profitabilityTag === 'BREAK_EVEN' ? 'warning' : 'danger'}>{t(`routes.simulator.tag${data.scenario.profitabilityTag === 'PROFITABLE' ? 'Profitable' : data.scenario.profitabilityTag === 'BREAK_EVEN' ? 'BreakEven' : 'Deficit'}`)}</Badge>} />
@@ -676,7 +676,7 @@ function BlockMonthlyBreakEven({
     <BlockCard icon={Activity} title={t('simulator.monthlyBE.title')} description={t('simulator.monthlyBE.desc')}>
       {busy ? <Spinner /> : error ? <ErrorBox msg={error} /> : !data ? null : (
         <div className="space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Stat label={t('simulator.monthlyBE.fixedCost')} value={fmt.format(data.monthlyFixedCost)} />
             <Stat label={t('simulator.monthlyBE.perTripMargin')} value={fmt.format(data.perTripNetMarginOnVariable)} />
             <Stat label={t('simulator.monthlyBE.tripsNeeded')} value={data.tripsPerMonthToBreakEven == null ? '∞' : String(data.tripsPerMonthToBreakEven)} />

@@ -116,8 +116,8 @@ export function PageQuotaSettings() {
 
       {error && <ErrorAlert error={error} className="mb-4" />}
 
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-        <table className="w-full text-sm" aria-label={T.title}>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]" aria-label={T.title}>
           <thead className="bg-slate-50 dark:bg-slate-800/40 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">
             <tr>
               <th scope="col" className="px-4 py-3">{T.colName}</th>

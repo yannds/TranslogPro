@@ -340,7 +340,7 @@ function TripDetailDialog({
             </section>
 
             {/* ── Info grid ── */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <InfoTile
                 icon={<Clock className="w-4 h-4" />}
                 label={t('driverSchedule.departure')}

@@ -295,7 +295,7 @@ function ManifestCard({
         </div>
 
         {m && (m.status === 'SUBMITTED' || m.status === 'DRAFT') && (
-          <div className="grid grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
             <div>
               <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('manifests.passengers')}</p>
               <p className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">{m.passengerCount}</p>

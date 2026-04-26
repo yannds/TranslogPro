@@ -114,8 +114,8 @@ export function PagePlatformIntegrations() {
 
       {actionError && <ErrorAlert error={actionError} />}
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 text-xs uppercase tracking-wider">
             <tr>
               <th className="text-left px-4 py-3">{t('platformIntegrations.colProvider')}</th>

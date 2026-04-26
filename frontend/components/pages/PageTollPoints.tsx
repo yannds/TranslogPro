@@ -324,7 +324,7 @@ function TollPointFormDialog({
           <label className="text-xs font-medium">{t('tollPoints.fieldName')}</label>
           <input value={name} onChange={e => setName(e.target.value)} className={inp} />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label className="text-xs font-medium">{t('tollPoints.fieldLat')}</label>
             <input type="number" step="0.000001" value={lat} onChange={e => setLat(e.target.value)} className={inp} />
@@ -334,7 +334,7 @@ function TollPointFormDialog({
             <input type="number" step="0.000001" value={lng} onChange={e => setLng(e.target.value)} className={inp} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label className="text-xs font-medium">{t('tollPoints.fieldKind')}</label>
             <select value={kind} onChange={e => setKind(e.target.value as Kind)} className={inp}>

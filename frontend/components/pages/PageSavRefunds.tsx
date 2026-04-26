@@ -175,7 +175,7 @@ export function PageSavRefunds() {
       <Dialog open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }}
         title={t('savRefunds.refundDetail')} size="lg">
         {detail && (
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{t('savRefunds.colTicket')}</p>
               <p className="font-mono text-slate-900 dark:text-slate-100">{detail.ticketId.slice(0, 16)}</p>

@@ -130,7 +130,7 @@ function DashboardMockup() {
       <div className="grid grid-cols-12">
         <FakeSidebar />
         <div className="col-span-9 p-4">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MiniKpi label={t('landing.hero.mockupRevenue')}  value="1.2M" suffix="FCFA" trend="+14%" tone="teal"    />
             <MiniKpi label={t('landing.hero.mockupTickets')}  value="348"                trend="+8%"  tone="emerald" />
             <MiniKpi label={t('landing.hero.mockupParcels')}  value="72"                 trend="+3%"  tone="sky"     />
@@ -402,7 +402,7 @@ function AfricaSection() {
               {t('landing.africa.subtitle')}
             </p>
 
-            <dl className="mt-10 grid grid-cols-2 gap-6">
+            <dl className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-6">
               {stats.map(s => (
                 <div key={s} className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                   <dt className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -860,7 +860,7 @@ function SellTicketMockup() {
           </span>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <MockField label="Date" value="Demain · 07:30" />
           <MockField label="Siège" value="12A" />
           <MockField label="Passager" value="M. Nganga" />
@@ -932,7 +932,7 @@ function CrmMockup() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
           <MiniStat label="Tickets" value="42" />
           <MiniStat label="Colis" value="9" />
           <MiniStat label="Total dépensé" value="685k" suffix="FCFA" />
@@ -1013,7 +1013,7 @@ function AnalyticsMockup() {
           </g>
         </svg>
 
-        <div className="mt-3 grid grid-cols-3 gap-3">
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
           <MiniStat label="Revenu" value="+22%" tone="teal" />
           <MiniStat label="Taux rempl." value="86%" tone="emerald" />
           <MiniStat label="Prév. J+7" value="+12%" tone="sky" />

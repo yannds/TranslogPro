@@ -397,7 +397,7 @@ export function PageQuaiScan() {
         {detectedCode && !lookup && !busy && error && (
           <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <p className="text-xs t-text-3">{t('quaiScan.fallbackHint')}</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Button variant="outline"
                 onClick={() => lookupCode(detectedCode, 'ticket')}
                 className="min-h-[40px] justify-center"

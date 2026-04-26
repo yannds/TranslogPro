@@ -526,7 +526,7 @@ function RestoreDialog({ job, scopes, onClose, onCreated, t }: {
           <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
             {t('backup.restore.preview')}
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-700 dark:text-slate-300">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-700 dark:text-slate-300">
             <span><strong>{t('backup.restore.scope')}</strong> {t(scope?.labelKey ?? job.scopeId)}</span>
             <span><strong>{t('backup.restore.tables')}</strong> {job.resolvedTables.length}</span>
             <span><strong>{t('backup.restore.rows')}</strong> {Object.values(job.rowCounts).reduce((a, b) => a + b, 0)}</span>
@@ -639,7 +639,7 @@ function ScheduleDialog({ schedule, scopes, onClose, onSaved, t }: {
 
         {form.enabled && (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1">{t('backup.schedule.freq')}</label>
                 <select className={inputCls} value={form.frequency}

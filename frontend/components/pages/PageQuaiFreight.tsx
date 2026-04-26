@@ -98,7 +98,7 @@ export function PageQuaiFreight() {
               className={inputClass}
             />
           </div>
-          <div className="flex-1 min-w-[220px] space-y-1.5">
+          <div className="flex-1 basis-full sm:basis-auto sm:min-w-[220px] space-y-1.5">
             <label htmlFor="quai-trip" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {t('quaiFreight.tripLabel')}
             </label>

@@ -108,7 +108,7 @@ export function PageClaim() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <StatCard icon={<Ticket className="w-4 h-4" aria-hidden />}
                   value={preview.ticketsCount} label={t('claim.tickets')} />
                 <StatCard icon={<Package className="w-4 h-4" aria-hidden />}
