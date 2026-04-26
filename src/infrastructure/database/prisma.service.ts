@@ -241,9 +241,19 @@ export function wrapPrismaServiceWithTxProxy(real: PrismaService): PrismaService
         return Reflect.get(target, prop, receiver);
       }
 
-      // Methodes Prisma forcees sur le client racine
+      // Methodes Prisma forcees sur le client racine. CRITIQUE : on bind sur
+      // `target` (et NON sur `receiver` qui est le proxy) — sinon `$transaction`
+      // est appele avec `this = proxy` et Prisma cherche ses internes (engine,
+      // _baseDmmf, etc.) sur le proxy → `this.$transaction is not a function`
+      // au prochain appel imbrique. Reproduit a 100% des qu'un service custom
+      // (ex. RouteService.setWaypoints) appelle prisma.transact() depuis un
+      // controller wrappe par TenantTxInterceptor (cf. logs prod 2026-04-26).
       if (PRISMA_ALWAYS_ON_REAL.has(prop)) {
-        return Reflect.get(target, prop, receiver);
+        const value = Reflect.get(target, prop, target);
+        if (typeof value === 'function') {
+          return value.bind(target);
+        }
+        return value;
       }
 
       // Si une tx est active dans le storage et que la propriete existe sur tx

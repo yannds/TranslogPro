@@ -77,12 +77,23 @@ describe('wrapPrismaServiceWithTxProxy', () => {
     process.env.TENANT_DB_LEVEL_RLS = 'on';
     const { real, $transactionReal } = mkRealStub();
     const { tx } = mkTxStub();
-    (tx as any).$transaction = jest.fn(); // tx.$transaction existe aussi
+    const txSpy = jest.fn();
+    (tx as any).$transaction = txSpy; // tx.$transaction existe aussi
     const wrapped = wrapPrismaServiceWithTxProxy(real);
 
     TenantTxStorage.run(tx, async () => {
-      // Acces a $transaction → doit etre sur real, pas sur tx
-      expect((wrapped as any).$transaction).toBe($transactionReal);
+      // Acces a $transaction → doit invoquer celle de real (avec bind sur target),
+      // pas celle de tx. On verifie l'effet d'invocation pas l'identite de
+      // reference : depuis le fix prod 2026-04-26 (proxy bind sur target pour
+      // eviter "this.$transaction is not a function" dans les services qui
+      // appellent prisma.transact() depuis un controller wrappe), la fonction
+      // retournee est `bind(target)` — donc une reference nouvelle, mais qui
+      // delegue bien a $transactionReal.
+      const fn = (wrapped as any).$transaction;
+      expect(typeof fn).toBe('function');
+      fn('arg-test');
+      expect($transactionReal).toHaveBeenCalledWith('arg-test');
+      expect(txSpy).not.toHaveBeenCalled();
     });
   });
 
