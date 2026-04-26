@@ -66,6 +66,7 @@ import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-a
 import { PlatformKpiModule }       from './modules/platform-kpi/platform-kpi.module';
 import { PlatformConfigModule }    from './modules/platform-config/platform-config.module';
 import { PlatformEmailModule }     from './modules/platform-email/platform-email.module';
+import { PlatformTelecomModule }   from './modules/platform-telecom/platform-telecom.module';
 import { SupportModule }           from './modules/support/support.module';
 import { DocumentsModule }      from './modules/documents/documents.module';
 import { TemplatesModule }       from './modules/templates/templates.module';
@@ -200,6 +201,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     PlatformConfigModule,
     // Email plateforme — liste providers + healthcheck (read-only sur le choix)
     PlatformEmailModule,
+    // Telecom plateforme — providers SMS / WhatsApp (Twilio) + healthcheck
+    PlatformTelecomModule,
     // Support tenant → plateforme (tickets + thread)
     SupportModule,
     // Documents imprimables (billets, manifestes, colis, factures)

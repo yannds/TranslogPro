@@ -246,6 +246,8 @@ const LazyPlatformSettings    = lazy(() => import('../pages/PagePlatformSettings
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformEmail       = lazy(() => import('../pages/PagePlatformEmail').then(m => ({ default: m.PagePlatformEmail })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformTelecom     = lazy(() => import('../pages/PagePlatformTelecom').then(m => ({ default: m.PagePlatformTelecom })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformAudit       = lazy(() => import('../pages/PagePlatformAudit').then(m => ({ default: m.PagePlatformAudit })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformSessions    = lazy(() => import('../pages/PagePlatformSessions').then(m => ({ default: m.PagePlatformSessions })));
@@ -459,6 +461,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-modules-usage': return <LazyPlatformModulesUsage />;
     case 'platform-settings':   return <LazyPlatformSettings />;
     case 'platform-email':      return <LazyPlatformEmail />;
+    case 'platform-telecom':    return <LazyPlatformTelecom />;
 
     // ── Support tenant → plateforme (côté tenant) ──────────────────────────
     case 'support':             return <LazyCustomerSupport />;

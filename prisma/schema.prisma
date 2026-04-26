@@ -4298,6 +4298,25 @@ model EmailProviderState {
   @@map("email_provider_states")
 }
 
+// TelecomProviderState — équivalent EmailProviderState pour SMS/WhatsApp
+// (Twilio actuellement, extensible). Provider actif = clé 'sms' ou 'whatsapp'
+// puisqu'on en utilise un seul par canal. Vault paths : platform/sms,
+// platform/whatsapp. tenantId TOUJOURS null (config plateforme).
+model TelecomProviderState {
+  id                    String    @id @default(cuid())
+  providerKey           String    @unique // 'sms' | 'whatsapp'
+  displayName           String
+  vaultPath             String?
+  lastHealthCheckAt     DateTime?
+  lastHealthCheckStatus String? // UP | DOWN | DEGRADED | UNKNOWN
+  lastHealthCheckError  String?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("telecom_provider_states")
+}
+
 // ── TenantTax : taxes multiples empilables (remplace tvaEnabled/tvaRate) ─────
 // Seed-migration depuis TenantBusinessConfig au provisioning.
 // base = SUBTOTAL  → taxe appliquée au HT (classique)

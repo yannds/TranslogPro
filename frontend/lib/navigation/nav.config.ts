@@ -966,6 +966,14 @@ export const PLATFORM_NAV: PortalNavConfig = {
           icon: 'Mail',
           anyOf: [P.PLATFORM_CONFIG_MANAGE],
         },
+        {
+          kind: 'leaf',
+          id: 'platform-telecom',
+          label: 'nav.platform_telecom',
+          href: '/admin/platform/telecom',
+          icon: 'MessageSquare',
+          anyOf: [P.PLATFORM_CONFIG_MANAGE],
+        },
       ],
     },
     {
