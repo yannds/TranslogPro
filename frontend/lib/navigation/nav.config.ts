@@ -962,6 +962,14 @@ export const PLATFORM_NAV: PortalNavConfig = {
           icon: 'Settings',
           anyOf: [P.PLATFORM_CONFIG_MANAGE],
         },
+        {
+          kind: 'leaf',
+          id: 'platform-email',
+          label: 'nav.platform_email',
+          href: '/admin/platform/email',
+          icon: 'Mail',
+          anyOf: [P.PLATFORM_CONFIG_MANAGE],
+        },
       ],
     },
     {
