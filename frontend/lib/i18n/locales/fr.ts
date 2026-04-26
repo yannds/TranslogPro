@@ -5611,7 +5611,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "saveAndTest":  "Enregistrer & tester",
     "savedAndHealthy":  "Configuration enregistrée — test de connexion OK",
     "savedHealthFailed":  "Configuration enregistrée mais test de connexion KO",
-    "secretHint":  "Les champs sensibles (clés, secrets, mots de passe) sont chiffrés dans Vault. Laissez la valeur masquée •••••••• pour conserver l"ancienne.",
+    "secretHint":  "Les champs sensibles (clés, secrets, mots de passe) sont chiffrés dans Vault. Laissez la valeur masquée •••••••• pour conserver l'ancienne.",
     "notConfigured":  "Non configuré"
   },
 
