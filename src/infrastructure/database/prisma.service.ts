@@ -198,13 +198,33 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 }
 
 /**
+ * Methodes Prisma qui DOIVENT toujours etre invoquees sur l'instance reelle :
+ * lifecycle, transactions racine, extensions, middleware. Elles n'existent
+ * pas sur Prisma.TransactionClient ou n'auraient aucun sens dans une tx.
+ */
+const PRISMA_ALWAYS_ON_REAL = new Set([
+  '$connect',
+  '$disconnect',
+  '$on',
+  '$use',
+  '$extends',
+  '$transaction',
+  '$runCommandRaw',
+]);
+
+/**
  * Wrappe l'instance PrismaService dans un Proxy qui route les acces aux
- * accesseurs de modele (`.user`, `.ticket`, …) vers la transaction
- * request-scoped quand le `TenantTxInterceptor` en a ouvert une.
+ * accesseurs de modele (`.user`, `.ticket`, …) ET aux methodes raw
+ * (`$queryRaw`, `$executeRaw` …) vers la transaction request-scoped quand le
+ * `TenantTxInterceptor` en a ouvert une.
  *
- * Les methodes infrastructurelles (commencant par `$` ou champs internes)
- * sont toujours servies par l'instance reelle (ex: `$transaction`, `$connect`,
- * `withTenant`, `runInTenantTx`).
+ * Les methodes lifecycle / extensions / racine de tx (`$transaction`,
+ * `$connect`, `$extends`, `$use`, `$on`, `$disconnect`) ainsi que les
+ * methodes custom de PrismaService (`withTenant`, `runInTenantTx`, `transact`)
+ * sont toujours servies par l'instance reelle.
+ *
+ * Pour les methodes routees vers la tx, on rebind explicitement `this = tx`
+ * pour ne pas casser l'acces aux champs internes de Prisma.TransactionClient.
  *
  * Activable via env `TENANT_DB_LEVEL_RLS=on` (OFF par defaut le temps d'auditer
  * les paths fire-and-forget post-handler qui pourraient referencer une tx morte).
@@ -216,22 +236,28 @@ export function wrapPrismaServiceWithTxProxy(real: PrismaService): PrismaService
 
   return new Proxy(real, {
     get(target, prop, receiver) {
-      // Methodes Prisma client / fields internes : toujours sur l'instance reelle
-      if (
-        typeof prop !== 'string' ||
-        prop.startsWith('$') ||
-        prop.startsWith('_') ||
-        prop in PrismaService.prototype ||
-        !(prop in target)
-      ) {
+      // Champs internes / Symboles : toujours sur l'instance reelle
+      if (typeof prop !== 'string' || prop.startsWith('_')) {
         return Reflect.get(target, prop, receiver);
       }
 
-      // Acces a un modele : route via tx si presente
+      // Methodes Prisma forcees sur le client racine
+      if (PRISMA_ALWAYS_ON_REAL.has(prop)) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      // Si une tx est active dans le storage et que la propriete existe sur tx
+      // (modeles, $queryRaw, $executeRaw, $queryRawUnsafe, $executeRawUnsafe…),
+      // on l'utilise. Pour les fonctions, on bind a tx pour preserver `this`.
       const tx = TenantTxStorage.getStore();
       if (tx && prop in tx) {
-        return Reflect.get(tx, prop, tx);
+        const value = Reflect.get(tx, prop, tx);
+        if (typeof value === 'function') {
+          return value.bind(tx);
+        }
+        return value;
       }
+
       return Reflect.get(target, prop, receiver);
     },
   }) as PrismaService;

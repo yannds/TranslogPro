@@ -294,6 +294,10 @@ services:
       PUBLIC_BASE_DOMAIN:   ${PUBLIC_BASE_DOMAIN}
       PUBLIC_APP_URL:       ${PUBLIC_APP_URL}
       DOMAIN_CHECK_API_KEY: ${DOMAIN_CHECK_API_KEY}
+      # V6.1 — Active la fondation RLS DB-level (Proxy + Interceptor request-scoped tx).
+      # Kill-switch immediat : passer a "off" + redeploy si regression. Aucun changement
+      # de policy RLS Postgres (toujours PERMISSIVE) — la couche est en mode observation.
+      TENANT_DB_LEVEL_RLS:  "on"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/live"]
       interval: 30s
