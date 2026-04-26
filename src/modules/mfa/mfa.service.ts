@@ -37,6 +37,12 @@ export interface MfaSetupResult {
   secret:     string;   // base32 — à afficher en "mode manuel"
   otpauthUrl: string;   // URI otpauth:// à mettre dans un QR
   qrDataUrl:  string;   // QR en data URL PNG (pour <img src=...>)
+  /**
+   * Alias de `qrDataUrl` — exposé pour les anciens bundles frontend qui lisent
+   * cette clé (cache PWA / service worker non-mis-à-jour). À supprimer une
+   * fois que tous les clients sont sur le bundle qui lit `qrDataUrl`.
+   */
+  qrCodeDataUrl: string;
 }
 
 export interface MfaEnableResult {
@@ -68,7 +74,7 @@ export class MfaService {
       data:  { mfaSecret: secret },
     });
 
-    return { secret, otpauthUrl, qrDataUrl };
+    return { secret, otpauthUrl, qrDataUrl, qrCodeDataUrl: qrDataUrl };
   }
 
   /**
