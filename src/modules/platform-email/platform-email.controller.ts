@@ -17,6 +17,7 @@ import { PlatformEmailService } from './platform-email.service';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Permission } from '../../common/constants/permissions';
 import type { EmailProviderName } from '../../infrastructure/notification/interfaces/email.interface';
+import { SendTestEmailDto } from './dto/send-test-email.dto';
 
 @Controller({ version: '1', path: 'platform/email' })
 @RequirePermission(Permission.PLATFORM_CONFIG_MANAGE_GLOBAL)
@@ -44,5 +45,32 @@ export class PlatformEmailController {
   @Post('providers/:key/healthcheck')
   runHealthcheck(@Param('key') key: EmailProviderName) {
     return this.email.runHealthcheck(key);
+  }
+
+  /**
+   * Catalogue des templates email disponibles pour le testeur plateforme.
+   * Renvoie {id, group, labelFr/En, descriptionFr/En, sampleVars, recipientNameVar}
+   * pour chaque template du registre central — alimente la combobox UI.
+   */
+  @Get('templates')
+  listTemplates() {
+    return this.email.listTemplates();
+  }
+
+  /**
+   * Envoie un email de test via le provider spécifié, avec un template choisi
+   * et un destinataire saisi par l'admin. Permet de valider qu'un provider
+   * délivre vraiment un mail à une adresse réelle, sans attendre qu'un
+   * événement métier réel se produise.
+   *
+   * Le mail est marqué `category: 'system'` + `tags: ['platform-test']` côté
+   * provider — exclu des stats commerciales / analytics.
+   */
+  @Post('providers/:key/send-test')
+  sendTest(
+    @Param('key') key: EmailProviderName,
+    @Body() dto: SendTestEmailDto,
+  ) {
+    return this.email.sendTestEmail(key, dto);
   }
 }

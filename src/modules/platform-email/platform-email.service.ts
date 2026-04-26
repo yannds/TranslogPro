@@ -25,6 +25,10 @@ import type {
   EmailProviderName, IEmailService,
 } from '../../infrastructure/notification/interfaces/email.interface';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
+import {
+  listEmailTemplates, getEmailTemplate, type EmailTemplateLang,
+} from '../notification/email-templates';
+import type { SendTestEmailDto } from './dto/send-test-email.dto';
 
 // ─── Config des providers (DRY — liste source de vérité) ────────────────────
 // Note : `vaultPath=null` pour console (pas de secret). Display name et path
@@ -304,5 +308,82 @@ export class PlatformEmailService {
 
     this.log.log(`[PlatformEmail] healthcheck ${providerKey} → ${status}${detail ? ` (${detail})` : ''}`);
     return { ok, status, detail };
+  }
+
+  // ─── Catalogue + Send Test (testeur plateforme) ──────────────────────────
+
+  /**
+   * Liste des templates exposés par le registre central (sans la fonction
+   * render — elle n'a pas de représentation JSON). Alimente la combobox UI.
+   */
+  listTemplates() {
+    return listEmailTemplates().map(d => ({
+      id:               d.id,
+      group:            d.group,
+      labelFr:          d.labelFr,
+      labelEn:          d.labelEn,
+      descriptionFr:    d.descriptionFr,
+      descriptionEn:    d.descriptionEn,
+      sampleVars:       d.sampleVars,
+      recipientNameVar: d.recipientNameVar,
+    }));
+  }
+
+  /**
+   * Envoi d'un email de test via le provider spécifié, avec un template choisi
+   * et un destinataire saisi par l'admin plateforme.
+   *
+   * Garde-fous :
+   *  - templateId doit exister dans le registre (sinon 400)
+   *  - le nom saisi remplace `recipientNameVar` du descripteur (passenger/customer/etc.)
+   *  - extraVars surchargent les sampleVars du descripteur
+   *  - tag `platform-test` + category `system` → exclu des stats commerciales
+   *  - tenantId=null → utilise la config plateforme (pas de Vault tenant)
+   */
+  async sendTestEmail(
+    providerKey: EmailProviderName,
+    dto:         SendTestEmailDto,
+  ): Promise<{ ok: boolean; messageId?: string; provider?: EmailProviderName; detail?: string }> {
+    const known = PROVIDER_DEFAULTS.find(p => p.key === providerKey);
+    if (!known) throw new NotFoundException(`Email provider ${providerKey} inconnu`);
+
+    const descriptor = getEmailTemplate(dto.templateId);
+    if (!descriptor) {
+      throw new BadRequestException(`Template "${dto.templateId}" inconnu du catalogue`);
+    }
+
+    const lang = (dto.lang ?? 'fr') as EmailTemplateLang;
+    const vars = {
+      ...descriptor.sampleVars,
+      ...(dto.extraVars ?? {}),
+      [descriptor.recipientNameVar]: dto.toName,
+    };
+    const rendered = descriptor.render(lang, vars);
+
+    const service = this.resolveService(providerKey);
+    try {
+      const result = await service.send({
+        to:      { email: dto.toEmail, name: dto.toName },
+        subject: rendered.subject,
+        html:    rendered.html,
+        text:    rendered.text,
+        category: 'system',
+        tags:    ['platform-test', `template:${dto.templateId}`, `provider:${providerKey}`],
+        tenantId: null,
+        idempotencyKey: `platform-test:${providerKey}:${dto.toEmail}:${Date.now()}`,
+      });
+      this.log.log(
+        `[PlatformEmail] test send OK provider=${providerKey} template=${dto.templateId} ` +
+        `to=${dto.toEmail} messageId=${result.messageId}`,
+      );
+      return { ok: true, messageId: result.messageId, provider: result.provider };
+    } catch (err) {
+      const detail = (err as Error)?.message ?? 'Unknown error';
+      this.log.warn(
+        `[PlatformEmail] test send FAILED provider=${providerKey} template=${dto.templateId} ` +
+        `to=${dto.toEmail}: ${detail}`,
+      );
+      return { ok: false, detail };
+    }
   }
 }
