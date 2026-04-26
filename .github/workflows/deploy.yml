@@ -219,6 +219,46 @@ jobs:
           rsync -avz ./frontend/.env.production ./frontend/.dockerignore ./frontend/Dockerfile.prod \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/frontend/ 2>/dev/null || true
 
+      - name: Forensic VPS (qui/quand/pourquoi .env.prod a disparu)
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<'EOF'
+            set +e
+            echo "═══ FORENSIC .env.prod ═══"
+            echo ""
+            echo "── 1. Sessions SSH 24 dernieres heures (last + lastlog)"
+            last -F | head -15
+            echo ""
+            echo "── 2. Connexions SSH dans /var/log/auth.log (dernieres ~3h)"
+            grep -E "Accepted|Failed|session opened|sudo" /var/log/auth.log 2>/dev/null \
+              | awk -v cutoff="$(date -d '3 hours ago' +%s)" '
+                {
+                  cmd = "date -d \"" $1 " " $2 " " $3 "\" +%s 2>/dev/null"
+                  cmd | getline ts
+                  close(cmd)
+                  if (ts >= cutoff) print
+                }' | tail -25
+            echo ""
+            echo "── 3. who est connecte la maintenant"
+            who -a 2>&1 | head -5
+            echo ""
+            echo "── 4. ~/.bash_history root — operations sur .env.prod ou infra/prod"
+            grep -nE "\.env\.prod|infra/prod|rm |mv |sudo rm|git reset|git checkout" /root/.bash_history 2>/dev/null | tail -30
+            echo ""
+            echo "── 5. journalctl 3 dernieres heures grep env|prod|delete"
+            journalctl --since "3 hours ago" 2>/dev/null | grep -iE "\.env\.prod|infra.prod" | tail -10
+            echo ""
+            echo "── 6. Snapshots good-state existants (chronologie)"
+            ls -lat /root/snapshots/good-state-deploy-*/config/.env.prod 2>/dev/null | head -10
+            echo ""
+            echo "── 7. Stat des fichiers vivants dans infra/prod"
+            stat /opt/TranslogPro/infra/prod/.env.prod 2>&1 | head -3
+            stat /opt/TranslogPro/infra/prod 2>&1 | grep -E "Modify|Change"
+            echo ""
+            echo "── 8. Audit auditd si actif"
+            ausearch -f /opt/TranslogPro/infra/prod/.env.prod 2>/dev/null | tail -10 || echo "(auditd non actif)"
+            echo "═══ FIN FORENSIC ═══"
+          EOF
+
       - name: Recovery .env.prod depuis snapshot si manquant (non-destructif)
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<EOF
