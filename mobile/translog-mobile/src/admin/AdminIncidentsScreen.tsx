@@ -149,7 +149,7 @@ export function AdminIncidentsScreen() {
         { text: L('Annuler', 'Cancel'), style: 'cancel' },
         {
           text: L('Résoudre', 'Resolve'),
-          onPress: async (resolution) => {
+          onPress: async (resolution?: string) => {
             const r = (resolution ?? '').trim();
             if (r.length < 5) {
               Alert.alert(L('Note trop courte', 'Note too short'));

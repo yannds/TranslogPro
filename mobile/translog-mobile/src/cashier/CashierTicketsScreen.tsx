@@ -107,7 +107,7 @@ export function CashierTicketsScreen() {
         {
           text: L('Annuler le billet', 'Cancel ticket'),
           style: 'destructive',
-          onPress: async (reason) => {
+          onPress: async (reason?: string) => {
             const r = (reason ?? '').trim();
             if (r.length < 3) {
               Alert.alert(L('Motif requis', 'Reason required'));

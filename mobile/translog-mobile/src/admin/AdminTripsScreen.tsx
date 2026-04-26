@@ -148,7 +148,7 @@ export function AdminTripsScreen() {
         { text: L('Annuler', 'Cancel'), style: 'cancel' },
         {
           text: L('Déclarer', 'Declare'),
-          onPress: async (val) => {
+          onPress: async (val?: string) => {
             const minutes = Number(val);
             if (!Number.isFinite(minutes) || minutes <= 0) return;
             await mutate(trip, 'declare-major-delay', { delayMinutes: minutes });
@@ -170,7 +170,7 @@ export function AdminTripsScreen() {
         {
           text: L('Suspendre', 'Suspend'),
           style: 'destructive',
-          onPress: async (reason) => {
+          onPress: async (reason?: string) => {
             if (!reason || reason.trim().length < 3) {
               Alert.alert(L('Motif requis', 'Reason required'));
               return;
@@ -192,7 +192,7 @@ export function AdminTripsScreen() {
         {
           text: L('Confirmer', 'Confirm'),
           style: 'destructive',
-          onPress: async (reason) => {
+          onPress: async (reason?: string) => {
             if (!reason || reason.trim().length < 3) {
               Alert.alert(L('Motif requis', 'Reason required'));
               return;
