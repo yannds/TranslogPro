@@ -219,6 +219,28 @@ jobs:
           rsync -avz ./frontend/.env.production ./frontend/.dockerignore ./frontend/Dockerfile.prod \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/frontend/ 2>/dev/null || true
 
+      - name: Diagnostic VPS (non-destructif — verifie .env.prod present)
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<EOF
+            set +e  # ne pas planter sur les ls
+            echo "═══ DIAGNOSTIC VPS ═══"
+            echo "VPS_DEPLOY_PATH = ${{ secrets.VPS_DEPLOY_PATH }}"
+            echo ""
+            echo "── cd \${VPS_DEPLOY_PATH}/infra/prod"
+            cd ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod 2>&1
+            pwd
+            echo ""
+            echo "── ls .env.prod :"
+            ls -la .env.prod 2>&1 || echo "ABSENT depuis cd-target"
+            echo ""
+            echo "── ls -la racine du dir :"
+            ls -la | head -30
+            echo ""
+            echo "── find autres .env.prod sur le systeme :"
+            find /opt /root /home -maxdepth 5 -name '.env.prod' -type f 2>/dev/null | head -5
+            echo "═══ FIN DIAGNOSTIC ═══"
+          EOF
+
       - name: Pull images + redeploy stack
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<EOF
