@@ -227,7 +227,6 @@ export function PageStations() {
         open={!!editTarget}
         mode="edit"
         tenantId={tenantId}
-        stationId={editTarget?.id}
         stationName={editTarget?.name}
         initial={editTarget ? {
           name: editTarget.name,
