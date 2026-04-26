@@ -10,23 +10,29 @@
  *   - Préférences  : locale (8 langues) + timezone (select IANA).
  *
  * Endpoints consommés :
- *   POST  /api/auth/change-password   { currentPassword, newPassword }
- *   PATCH /api/auth/me/preferences    { locale?, timezone? }
- *   POST  /api/mfa/setup                                  → { otpauthUrl, secret, qrDataUrl }
- *   POST  /api/mfa/enable          { code }               → { backupCodes[] }
- *   POST  /api/mfa/disable         { password, code? }
+ *   POST   /api/auth/change-password   { currentPassword, newPassword }
+ *   PATCH  /api/auth/me/preferences    { locale?, timezone? }
+ *   POST   /api/mfa/setup                                  → { otpauthUrl, secret, qrDataUrl }
+ *   GET    /api/mfa/status                                 → { enabled, verifiedAt, backupCodesRemaining, pendingSetup }
+ *   POST   /api/mfa/enable          { code }               → { backupCodes[] }
+ *   POST   /api/mfa/disable         { code }
+ *   POST   /api/mfa/backup-codes/regenerate   { code }     → { backupCodes[] }
+ *   GET    /api/auth/sessions                              → Array<{ id, ipAddress, userAgent, createdAt, expiresAt, isCurrent }>
+ *   DELETE /api/auth/sessions/:id                          → 204
+ *   DELETE /api/auth/sessions                              → { revoked }
  */
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
 import { useSearchParams } from 'react-router-dom';
 import {
   UserCircle2, ShieldCheck, SlidersHorizontal, Save, KeyRound,
   Smartphone, Check, X, AlertTriangle, Copy, CheckCircle2, CreditCard,
+  RefreshCw, Trash2, Globe, Monitor,
 } from 'lucide-react';
 import { useAuth }  from '../../lib/auth/auth.context';
 import { useI18n } from '../../lib/i18n/useI18n';
-import { apiPost, ApiError } from '../../lib/api';
+import { apiGet, apiPost, apiDelete, ApiError } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Badge }  from '../ui/Badge';
 import { PageAdminBilling } from './PageAdminBilling';
@@ -181,9 +187,38 @@ function SecurityTab() {
   const [mfaBusy,  setMfaBusy]  = useState(false);
   const [mfaErr,   setMfaErr]   = useState<string | null>(null);
   const [backup,   setBackup]   = useState<string[] | null>(null);
-  const [disPwd,   setDisPwd]   = useState('');
+  // Désactivation : on demande le code TOTP, pas le mot de passe (le service
+  // attend `{ code }`. Confondre les deux causait un 400 "property password
+  // should not exist" à la désactivation).
+  const [disCode,  setDisCode]  = useState('');
   const [showDis,  setShowDis]  = useState(false);
-  const mfaEnabled = user?.mfaEnabled ?? false;
+  // Régénération codes de secours.
+  const [showRegen, setShowRegen] = useState(false);
+  const [regenCode, setRegenCode] = useState('');
+
+  // Statut MFA dérivé du backend (date d'activation, codes restants).
+  const [mfaStatus, setMfaStatus] = useState<{
+    enabled:              boolean;
+    verifiedAt:           string | null;
+    backupCodesRemaining: number;
+    pendingSetup:         boolean;
+  } | null>(null);
+
+  const reloadMfaStatus = useCallback(async () => {
+    try {
+      const s = await apiGet<{
+        enabled: boolean; verifiedAt: string | null;
+        backupCodesRemaining: number; pendingSetup: boolean;
+      }>('/api/mfa/status');
+      setMfaStatus(s);
+    } catch {
+      // En cas d'erreur on retombe sur le user.mfaEnabled du contexte (pas de blocage).
+      setMfaStatus(null);
+    }
+  }, []);
+  useEffect(() => { void reloadMfaStatus(); }, [reloadMfaStatus]);
+
+  const mfaEnabled = mfaStatus?.enabled ?? user?.mfaEnabled ?? false;
 
   // Rendu du QR sur canvas dès que mfaSetup.otpauthUrl est disponible.
   // Aucun data: URI n'est exposé au DOM — toute CSP img-src ne peut bloquer.
@@ -214,6 +249,7 @@ function SecurityTab() {
       const out = await apiPost<{ backupCodes: string[] }>('/api/mfa/enable', { code: mfaCode });
       setBackup(out.backupCodes);
       setMfaSetup(null); setMfaCode('');
+      await reloadMfaStatus();
     } catch (e) {
       setMfaErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
     } finally { setMfaBusy(false); }
@@ -222,9 +258,27 @@ function SecurityTab() {
   async function disableMfa() {
     setMfaBusy(true); setMfaErr(null);
     try {
-      await apiPost('/api/mfa/disable', { password: disPwd });
-      setDisPwd(''); setShowDis(false);
+      // Backend attend { code } TOTP (cf. MfaService.disable). Le mot de passe
+      // n'est PAS requis ici — la possession du second facteur est suffisante.
+      await apiPost('/api/mfa/disable', { code: disCode });
+      setDisCode(''); setShowDis(false);
+      await reloadMfaStatus();
       window.location.reload(); // Force /me refresh — UX simple
+    } catch (e) {
+      setMfaErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
+    } finally { setMfaBusy(false); }
+  }
+
+  async function regenerateBackupCodes() {
+    setMfaBusy(true); setMfaErr(null);
+    try {
+      const out = await apiPost<{ backupCodes: string[] }>(
+        '/api/mfa/backup-codes/regenerate',
+        { code: regenCode },
+      );
+      setBackup(out.backupCodes);
+      setRegenCode(''); setShowRegen(false);
+      await reloadMfaStatus();
     } catch (e) {
       setMfaErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
     } finally { setMfaBusy(false); }
@@ -363,28 +417,103 @@ function SecurityTab() {
         )}
 
         {mfaEnabled && !mfaSetup && !backup && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 justify-between">
-              <p className="text-sm t-text-body inline-flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-teal-600" aria-hidden />
-                {t('account.mfaStatusOn')}
-              </p>
-              {!showDis && (
-                <Button variant="outline" onClick={() => setShowDis(true)}>
-                  {t('account.mfaDeactivate')}
-                </Button>
+          <div className="space-y-4">
+            {/* Bandeau statut */}
+            <div className="rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-4 py-3">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" aria-hidden />
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium text-teal-900 dark:text-teal-100">
+                    {t('account.mfaStatusOn')}
+                  </p>
+                  <dl className="text-xs text-teal-800 dark:text-teal-300 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                    <div className="flex gap-1.5">
+                      <dt className="font-medium">{t('account.mfaMethodLabel')}:</dt>
+                      <dd>{t('account.mfaMethodTotp')}</dd>
+                    </div>
+                    {mfaStatus?.verifiedAt && (
+                      <div className="flex gap-1.5">
+                        <dt className="font-medium">{t('account.mfaActiveSince')}:</dt>
+                        <dd><time dateTime={mfaStatus.verifiedAt}>
+                          {new Date(mfaStatus.verifiedAt).toLocaleDateString(undefined, {
+                            day: 'numeric', month: 'long', year: 'numeric',
+                          })}
+                        </time></dd>
+                      </div>
+                    )}
+                    <div className="flex gap-1.5">
+                      <dt className="font-medium">{t('account.mfaBackupRemaining')}:</dt>
+                      <dd>
+                        <span className={(mfaStatus?.backupCodesRemaining ?? 0) <= 2
+                          ? 'font-semibold text-amber-700 dark:text-amber-400'
+                          : ''
+                        }>
+                          {mfaStatus?.backupCodesRemaining ?? 0} / 10
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2 justify-end">
+              {!showDis && !showRegen && (
+                <>
+                  <Button variant="outline" onClick={() => setShowRegen(true)} disabled={mfaBusy}>
+                    <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden />
+                    {t('account.mfaRegenBackup')}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowDis(true)} disabled={mfaBusy}>
+                    {t('account.mfaDeactivate')}
+                  </Button>
+                </>
               )}
             </div>
+
+            {/* Régénération codes de secours */}
+            {showRegen && (
+              <div className="rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 px-3 py-3 space-y-2">
+                <p className="text-xs t-text-body">{t('account.mfaRegenWarn')}</p>
+                <label className="block text-xs font-medium t-text">{t('account.mfaCodeLabel')}</label>
+                <input
+                  type="text" inputMode="numeric" pattern="\d{6}"
+                  value={regenCode}
+                  onChange={e => setRegenCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className={`${inp} font-mono text-center tracking-widest`}
+                  disabled={mfaBusy}
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { setShowRegen(false); setRegenCode(''); }} disabled={mfaBusy}>
+                    <X className="w-4 h-4 mr-1.5" aria-hidden />{t('common.cancel')}
+                  </Button>
+                  <Button onClick={regenerateBackupCodes} disabled={mfaBusy || regenCode.length !== 6}>
+                    <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden />
+                    {mfaBusy ? t('common.saving') : t('account.mfaRegenConfirm')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Désactivation */}
             {showDis && (
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-3 space-y-2">
                 <p className="text-xs text-amber-800 dark:text-amber-300">{t('account.mfaDisableWarn')}</p>
-                <input type="password" value={disPwd} onChange={e => setDisPwd(e.target.value)}
-                  placeholder={t('account.pwdCurrent')} className={inp} disabled={mfaBusy} />
+                <label className="block text-xs font-medium t-text">{t('account.mfaCodeLabel')}</label>
+                <input
+                  type="text" inputMode="numeric" pattern="\d{6}"
+                  value={disCode}
+                  onChange={e => setDisCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className={`${inp} font-mono text-center tracking-widest`}
+                  disabled={mfaBusy}
+                  autoComplete="off"
+                />
                 <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => { setShowDis(false); setDisPwd(''); }} disabled={mfaBusy}>
+                  <Button variant="outline" onClick={() => { setShowDis(false); setDisCode(''); }} disabled={mfaBusy}>
                     {t('common.cancel')}
                   </Button>
-                  <Button onClick={disableMfa} disabled={mfaBusy || !disPwd}
+                  <Button onClick={disableMfa} disabled={mfaBusy || disCode.length !== 6}
                     className="bg-red-600 hover:bg-red-700 text-white border-red-600">
                     {mfaBusy ? t('common.saving') : t('account.mfaDeactivateConfirm')}
                   </Button>
@@ -394,8 +523,146 @@ function SecurityTab() {
           </div>
         )}
       </Card>
+
+      <SessionsCard />
     </div>
   );
+}
+
+// ─── Carte Sessions actives ────────────────────────────────────────────────
+
+interface SessionRow {
+  id:         string;
+  ipAddress:  string | null;
+  userAgent:  string | null;
+  createdAt:  string;
+  expiresAt:  string;
+  isCurrent:  boolean;
+}
+
+function SessionsCard() {
+  const { t } = useI18n();
+  const [rows, setRows] = useState<SessionRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setBusy(true); setErr(null);
+    try {
+      const data = await apiGet<SessionRow[]>('/api/auth/sessions');
+      setRows(data);
+    } catch (e) {
+      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
+    } finally { setBusy(false); }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  async function revokeOne(id: string) {
+    setBusyId(id); setErr(null);
+    try {
+      await apiDelete(`/api/auth/sessions/${id}`);
+      await reload();
+    } catch (e) {
+      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
+    } finally { setBusyId(null); }
+  }
+
+  async function revokeAllOthers() {
+    setBusy(true); setErr(null);
+    try {
+      await apiDelete('/api/auth/sessions');
+      await reload();
+    } catch (e) {
+      setErr(e instanceof ApiError ? String((e.body as any)?.message ?? e.message) : String(e));
+    } finally { setBusy(false); }
+  }
+
+  const others = rows.filter(r => !r.isCurrent);
+
+  return (
+    <Card title={t('account.sessionsTitle')} description={t('account.sessionsDesc')}>
+      {err && (
+        <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300 mb-3">
+          {err}
+        </div>
+      )}
+
+      {others.length > 0 && (
+        <div className="flex justify-end mb-3">
+          <Button variant="outline" size="sm" onClick={revokeAllOthers} disabled={busy}>
+            <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
+            {t('account.sessionsRevokeOthers')}
+          </Button>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-sm t-text-3">{busy ? t('common.loading') : t('account.sessionsEmpty')}</p>
+      ) : (
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+          {rows.map(r => (
+            <li key={r.id} className="py-3 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                  <Monitor className="w-4 h-4 t-text-3 shrink-0" aria-hidden />
+                  <span className="text-sm t-text font-medium truncate">
+                    {compactUserAgent(r.userAgent)}
+                  </span>
+                  {r.isCurrent && (
+                    <Badge variant="success">{t('account.sessionsCurrent')}</Badge>
+                  )}
+                </div>
+                <dl className="text-xs t-text-3 flex flex-wrap gap-x-4 gap-y-0.5">
+                  {r.ipAddress && (
+                    <div className="flex gap-1">
+                      <dt className="inline-flex items-center gap-1"><Globe className="w-3 h-3" aria-hidden />IP:</dt>
+                      <dd className="font-mono">{r.ipAddress}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-1">
+                    <dt>{t('account.sessionsStarted')}:</dt>
+                    <dd><time dateTime={r.createdAt}>{formatDateTime(r.createdAt)}</time></dd>
+                  </div>
+                  <div className="flex gap-1">
+                    <dt>{t('account.sessionsExpires')}:</dt>
+                    <dd><time dateTime={r.expiresAt}>{formatDateTime(r.expiresAt)}</time></dd>
+                  </div>
+                </dl>
+              </div>
+              {!r.isCurrent && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => revokeOne(r.id)}
+                  disabled={busyId === r.id || busy}
+                  aria-label={t('account.sessionsRevokeOne')}
+                >
+                  <Trash2 className="w-4 h-4" aria-hidden />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function compactUserAgent(ua: string | null): string {
+  if (!ua) return 'Unknown device';
+  // On extrait juste le nom du browser + OS pour un affichage lisible.
+  const browserMatch = ua.match(/(Chrome|Safari|Firefox|Edge|Opera)\/[\d.]+/);
+  const osMatch      = ua.match(/(Windows|Mac OS X|Linux|Android|iPhone OS|iPad)/);
+  const browser = browserMatch ? browserMatch[1] : 'Browser';
+  const os      = osMatch ? osMatch[1].replace('Mac OS X', 'macOS').replace('iPhone OS', 'iOS') : '';
+  return os ? `${browser} — ${os}` : browser;
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 }
 
 // ─── Onglet Préférences ───────────────────────────────────────────────────────

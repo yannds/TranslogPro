@@ -154,6 +154,57 @@ export class MfaService {
   }
 
   /**
+   * Statut MFA self-service — pour la page /account.
+   * Retourne uniquement des données non-sensibles (jamais le secret).
+   */
+  async getStatus(userId: string): Promise<{
+    enabled:           boolean;
+    verifiedAt:        Date | null;
+    backupCodesRemaining: number;
+    pendingSetup:      boolean;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { mfaEnabled: true, mfaSecret: true, mfaVerifiedAt: true, mfaBackupCodes: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    return {
+      enabled:              user.mfaEnabled,
+      verifiedAt:           user.mfaVerifiedAt,
+      backupCodesRemaining: user.mfaBackupCodes.length,
+      pendingSetup:         !user.mfaEnabled && !!user.mfaSecret,
+    };
+  }
+
+  /**
+   * Régénère les 10 codes de secours. Exige un code TOTP valide pour bloquer
+   * un attaquant qui aurait volé le cookie de session — sans le second
+   * facteur, la rotation des backup codes est refusée.
+   */
+  async regenerateBackupCodes(userId: string, code: string): Promise<MfaEnableResult> {
+    const user = await this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { id: true, mfaEnabled: true, mfaSecret: true, mfaBackupCodes: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    if (!user.mfaEnabled) throw new BadRequestException('MFA non activé');
+
+    const ok = await this.verifyCode(user, code);
+    if (!ok) throw new UnauthorizedException('Code invalide');
+
+    const plainCodes = Array.from({ length: BACKUP_CODE_COUNT }, () =>
+      randomBytes(BACKUP_CODE_LENGTH).toString('hex').slice(0, BACKUP_CODE_LENGTH).toUpperCase(),
+    );
+    const hashedCodes = await Promise.all(plainCodes.map(c => bcrypt.hash(c, 10)));
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data:  { mfaBackupCodes: hashedCodes },
+    });
+    return { backupCodes: plainCodes };
+  }
+
+  /**
    * Vérifie un code TOTP OU un backup code. Utilisé par AuthService.signIn
    * quand on activera le flow MFA en production.
    * Consomme le backup code si match (single-use).

@@ -773,6 +773,82 @@ export class AuthService {
     await this.prisma.session.deleteMany({ where: { token } });
   }
 
+  // ─── Self-service sessions (page /account) ───────────────────────────────
+
+  /**
+   * Liste les sessions actives (non expirées) de l'utilisateur. Inclut un
+   * flag `isCurrent` calculé depuis le token du cookie reçu — utile pour que
+   * l'UI bloque la suppression de la session courante.
+   *
+   * SÉCURITÉ : on filtre toujours par userId — pas de leak cross-user.
+   * Le token n'est JAMAIS retourné, seulement un id stable.
+   */
+  async listUserSessions(
+    userId:        string,
+    currentToken:  string | null,
+  ): Promise<Array<{
+    id:         string;
+    ipAddress:  string | null;
+    userAgent:  string | null;
+    createdAt:  Date;
+    expiresAt:  Date;
+    isCurrent:  boolean;
+  }>> {
+    const rows = await this.prisma.session.findMany({
+      where:   { userId, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select:  {
+        id: true, token: true, ipAddress: true, userAgent: true,
+        createdAt: true, expiresAt: true,
+      },
+      take: 50,
+    });
+    return rows.map(r => ({
+      id:        r.id,
+      ipAddress: r.ipAddress,
+      userAgent: r.userAgent,
+      createdAt: r.createdAt,
+      expiresAt: r.expiresAt,
+      isCurrent: !!currentToken && r.token === currentToken,
+    }));
+  }
+
+  /**
+   * Révoque une session par id. Refuse de supprimer la session courante
+   * (l'utilisateur doit passer par /sign-out pour aussi clear son cookie).
+   */
+  async revokeSessionById(
+    userId:       string,
+    sessionId:    string,
+    currentToken: string | null,
+  ): Promise<void> {
+    const row = await this.prisma.session.findFirst({
+      where:  { id: sessionId, userId },
+      select: { id: true, token: true },
+    });
+    if (!row) throw new NotFoundException('Session introuvable');
+    if (currentToken && row.token === currentToken) {
+      throw new BadRequestException('Utilisez /sign-out pour fermer la session courante');
+    }
+    await this.prisma.session.delete({ where: { id: sessionId } });
+  }
+
+  /**
+   * Révoque TOUTES les sessions de l'utilisateur sauf la courante. Pratique
+   * après changement de mot de passe ou suspicion de compromission.
+   * Retourne le nombre de sessions effectivement supprimées.
+   */
+  async revokeAllOtherSessions(
+    userId:       string,
+    currentToken: string | null,
+  ): Promise<number> {
+    const where = currentToken
+      ? { userId, token: { not: currentToken } }
+      : { userId };
+    const res = await this.prisma.session.deleteMany({ where });
+    return res.count;
+  }
+
   // ─── Création compte credential (utilisé par le seed dev) ─────────────────
 
   /**

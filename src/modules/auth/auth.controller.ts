@@ -1,7 +1,7 @@
 import {
-  Controller, Post, Get, Patch, Body, Req, Res, Query,
+  Controller, Post, Get, Patch, Delete, Body, Req, Res, Query, Param,
   HttpCode, UseGuards, UnauthorizedException, BadRequestException,
-  ForbiddenException,
+  ForbiddenException, NotFoundException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService, AuthUserDto } from './auth.service';
@@ -363,6 +363,44 @@ export class AuthController {
     // Redirect vers l'UI admin du tenant cible. Le frontend lira son tenant
     // depuis window.location.host et affichera la zone admin.
     res.redirect(302, '/admin');
+  }
+
+  // ─── Sessions self-service (page /account) ─────────────────────────────
+  //
+  // Trois endpoints pour qu'un utilisateur voie et révoque ses propres sessions
+  // (ex: oublié déconnexion d'un poste public, vol de smartphone). La session
+  // courante est marquée `isCurrent: true` ; on refuse sa suppression via
+  // /sessions/:id (forcer le passage par /sign-out pour clear le cookie).
+
+  @Get('sessions')
+  async listSessions(
+    @Req() req: Request,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    const currentToken = this.extractToken(req);
+    return this.authService.listUserSessions(user.id, currentToken);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(204)
+  async revokeSession(
+    @Param('id') sessionId: string,
+    @Req()       req:       Request,
+    @CurrentUser() user:    CurrentUserPayload,
+  ): Promise<void> {
+    const currentToken = this.extractToken(req);
+    await this.authService.revokeSessionById(user.id, sessionId, currentToken);
+  }
+
+  @Delete('sessions')
+  @HttpCode(200)
+  async revokeAllOtherSessions(
+    @Req() req: Request,
+    @CurrentUser() user: CurrentUserPayload,
+  ): Promise<{ revoked: number }> {
+    const currentToken = this.extractToken(req);
+    const revoked = await this.authService.revokeAllOtherSessions(user.id, currentToken);
+    return { revoked };
   }
 
   // ─── Helpers privés ───────────────────────────────────────────────────────

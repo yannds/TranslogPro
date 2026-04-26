@@ -12,7 +12,7 @@
  * néanmoins révoquer les sessions pour forcer une reconnexion.
  */
 import {
-  Controller, Post, Body, HttpCode, HttpStatus,
+  Controller, Post, Get, Body, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { IsString, Length, Matches } from 'class-validator';
 import { MfaService } from './mfa.service';
@@ -59,5 +59,27 @@ export class MfaController {
     @Body()        dto:  VerifyCodeDto,
   ) {
     return this.mfa.disable(user.id, dto.code);
+  }
+
+  /**
+   * Statut MFA self-service. Renvoie uniquement les flags non-sensibles
+   * (jamais le secret). Consommé par PageAccount pour piloter l'UI.
+   */
+  @Get('status')
+  status(@CurrentUser() user: CurrentUserPayload) {
+    return this.mfa.getStatus(user.id);
+  }
+
+  /**
+   * Rotation des codes de secours. Exige un code TOTP valide pour bloquer
+   * un attaquant qui aurait volé le cookie de session.
+   */
+  @Post('backup-codes/regenerate')
+  @HttpCode(HttpStatus.OK)
+  regenerateBackupCodes(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body()        dto:  VerifyCodeDto,
+  ) {
+    return this.mfa.regenerateBackupCodes(user.id, dto.code);
   }
 }
