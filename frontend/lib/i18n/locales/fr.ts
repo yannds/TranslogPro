@@ -639,7 +639,14 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "placeholderName": "ex. Gare centrale",
     "placeholderCity": "ex. Brazzaville",
     "cityFreeTextWarning": "Cette ville ne figure pas dans le référentiel. Vérifiez qu'elle n'existe pas sous un autre nom — la recherche voyageurs dépend de ce nom.",
-    "pageDesc": "Points d'origine et de destination pour lignes, colis et voyageurs."
+    "pageDesc": "Points d'origine et de destination pour lignes, colis et voyageurs.",
+    "regeocodeTitle": "Re-calibrer la position",
+    "regeocodeHelp": "Recalcule les coordonnées via le provider de géocodage actif (Google → Mapbox → OpenStreetMap selon configuration plateforme). Utile si le pin a été placé loin de la rue réelle.",
+    "regeocodeButton": "Re-calibrer",
+    "regeocodeRunning": "Calcul…",
+    "regeocodeApply": "Appliquer",
+    "regeocodeNoResult": "Aucune adresse trouvée pour ce nom + ville. Vérifiez l'orthographe.",
+    "regeocodeDistance": "Distance par rapport à la position actuelle : ~{km} km"
   },
   "shipments": {
     "groupShipments": "Expéditions groupées",
@@ -3454,6 +3461,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "platform_support": "File de support",
     "platform_settings": "Paramètres plateforme",
     "platform_email":    "Email plateforme",
+    "platform_telecom":  "SMS / WhatsApp plateforme",
     "contact_support": "Contacter le support",
     "help_support":    "Aide & Support",
     "help_center":     "Centre d'aide",
@@ -5190,6 +5198,13 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "routingProvider":         "Fournisseur de routage",
     "routingProviderHelp":     "Valeurs : haversine (ligne droite, sans API), google (Google Maps Directions), mapbox (Mapbox Directions). Les clés API sont lues depuis Vault.",
     "routingProviderInvalid":  "Valeur invalide — doit être 'haversine', 'google' ou 'mapbox'.",
+    "geoProvider":             "Fournisseur de géocodage",
+    "geoProviderHelp":         "Adresse → coordonnées GPS pour les gares et adresses. auto = essaie Google → Mapbox → Nominatim selon clés disponibles. Les clés sont les mêmes que pour routing.",
+    "geoProviderInvalid":      "Valeur invalide — doit être 'auto', 'google', 'mapbox' ou 'nominatim'.",
+    "geoProviderAuto":         "Cascade Google → Mapbox → OSM (recommandé)",
+    "geoProviderGoogle":       "Google Geocoding (meilleure précision Afrique)",
+    "geoProviderMapbox":       "Mapbox Geocoding (alternative économique)",
+    "geoProviderNominatim":    "OpenStreetMap (gratuit, qualité dégradée Afrique)",
     "routingApiKeysTitle":     "Clés API (Vault)",
     "routingApiKeysDesc":      "Les clés sont stockées dans HashiCorp Vault et ne sont jamais exposées. Seul le statut (configurée / manquante) est affiché.",
     "routingKeyGoogle":        "Google Maps Directions",
@@ -5716,6 +5731,25 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "sending":                  "Envoi en cours…",
     "sendOk":                   "Email envoyé avec succès",
     "sendFailed":               "Échec de l'envoi"
+  },
+
+  "platformTelecom": {
+    "title":              "SMS / WhatsApp plateforme",
+    "subtitle":           "Configuration des providers SMS et WhatsApp (Twilio aujourd'hui).",
+    "providersTitle":     "Providers disponibles",
+    "providersHint":      "Les credentials de chaque provider vivent dans Vault (path affiché sur chaque ligne). Twilio actuellement — 1 compte par canal (SMS et WhatsApp peuvent être 2 sous-comptes Twilio distincts).",
+    "configure":          "Configurer",
+    "configureTitle":     "Configurer le provider",
+    "vaultPath":          "Chemin Vault",
+    "saveAndTest":        "Enregistrer & tester",
+    "savedAndHealthy":    "Configuration enregistrée — test API Twilio OK",
+    "savedHealthFailed":  "Configuration enregistrée mais test API Twilio KO",
+    "secretHint":         "Les champs sensibles (Auth Token) sont chiffrés dans Vault. Laissez la valeur masquée •••••••• pour conserver l'ancienne.",
+    "notConfigured":      "Non configuré",
+    "lastCheck":          "Dernier test",
+    "test":               "Tester",
+    "healthcheckOk":      "Connexion API Twilio vérifiée",
+    "healthcheckFailed":  "Échec du test de connexion"
   },
 
   // ─── Portail plateforme — IAM cross-tenant (audit / sessions / users / rôles)

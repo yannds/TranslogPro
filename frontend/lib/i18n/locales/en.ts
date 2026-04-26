@@ -786,7 +786,14 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "placeholderName": "e.g. Central Station",
     "placeholderCity": "e.g. Brazzaville",
     "cityFreeTextWarning": "This city is not in the official directory. Please check it doesn't already exist under another name — traveler search depends on this name.",
-    "pageDesc": "Origin and destination points for routes, parcels and travelers."
+    "pageDesc": "Origin and destination points for routes, parcels and travelers.",
+    "regeocodeTitle": "Re-calibrate position",
+    "regeocodeHelp": "Recomputes coordinates via the active geocoding provider (Google → Mapbox → OpenStreetMap based on platform config). Useful if the pin is far from the actual street.",
+    "regeocodeButton": "Re-calibrate",
+    "regeocodeRunning": "Computing…",
+    "regeocodeApply": "Apply",
+    "regeocodeNoResult": "No address found for this name + city. Check spelling.",
+    "regeocodeDistance": "Distance from current position: ~{km} km"
   },
   "shipments": {
     "groupShipments": "Group Shipments",
@@ -3600,6 +3607,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "platform_support": "Support Queue",
     "platform_settings": "Platform Settings",
     "platform_email":    "Platform Email",
+    "platform_telecom":  "Platform SMS / WhatsApp",
     "contact_support": "Contact Support",
     "help_support":    "Help & Support",
     "help_center":     "Help Center",
@@ -5178,6 +5186,13 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "routingProvider":         "Routing provider",
     "routingProviderHelp":     "Values: haversine (straight line, no API), google (Google Maps Directions), mapbox (Mapbox Directions). API keys are read from Vault.",
     "routingProviderInvalid":  "Invalid value — must be 'haversine', 'google' or 'mapbox'.",
+    "geoProvider":             "Geocoding provider",
+    "geoProviderHelp":         "Address → GPS coords for stations and addresses. auto = tries Google → Mapbox → Nominatim based on Vault key availability. Same keys as routing.",
+    "geoProviderInvalid":      "Invalid value — must be 'auto', 'google', 'mapbox' or 'nominatim'.",
+    "geoProviderAuto":         "Cascade Google → Mapbox → OSM (recommended)",
+    "geoProviderGoogle":       "Google Geocoding (best Africa accuracy)",
+    "geoProviderMapbox":       "Mapbox Geocoding (cost-effective alternative)",
+    "geoProviderNominatim":    "OpenStreetMap (free, degraded quality in Africa)",
     "routingApiKeysTitle":     "API Keys (Vault)",
     "routingApiKeysDesc":      "Keys are stored in HashiCorp Vault and never exposed. Only status (configured / missing) is shown.",
     "routingKeyGoogle":        "Google Maps Directions",
@@ -5689,6 +5704,25 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "sending":                  "Sending…",
     "sendOk":                   "Email sent successfully",
     "sendFailed":               "Send failed"
+  },
+
+  "platformTelecom": {
+    "title":              "Platform SMS / WhatsApp",
+    "subtitle":           "Configure the SMS and WhatsApp providers (Twilio today).",
+    "providersTitle":     "Available providers",
+    "providersHint":      "Each provider's credentials live in Vault (path shown on each row). Twilio currently — 1 account per channel (SMS and WhatsApp can be 2 distinct Twilio sub-accounts).",
+    "configure":          "Configure",
+    "configureTitle":     "Configure provider",
+    "vaultPath":          "Vault path",
+    "saveAndTest":        "Save & test",
+    "savedAndHealthy":    "Settings saved — Twilio API test OK",
+    "savedHealthFailed":  "Settings saved but Twilio API test failed",
+    "secretHint":         "Sensitive fields (Auth Token) are encrypted in Vault. Leave the masked value •••••••• to keep the previous one.",
+    "notConfigured":      "Not configured",
+    "lastCheck":          "Last check",
+    "test":               "Test",
+    "healthcheckOk":      "Twilio API connection verified",
+    "healthcheckFailed":  "Connection test failed"
   },
 
   "platformAudit": {

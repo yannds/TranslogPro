@@ -207,4 +207,84 @@ describe('GeoService — strategy multi-provider Google → Mapbox → Nominatim
     await expect(svc.reverse(0, 200)).rejects.toThrow(/range/);
     await expect(svc.reverse(NaN, 0)).rejects.toThrow(/finite/);
   });
+
+  // ─── Selecteur de preference geo.provider ─────────────────────────────────
+
+  const mkSvcWithPref = (
+    pref: string | Error,
+    google: GeoProvider,
+    mapbox: GeoProvider,
+    nominatim: GeoProvider,
+  ) => {
+    const redis = mkRedis();
+    const fakeSecret: any = { getSecret: jest.fn() };
+    const platformConfig: any = {
+      getString: jest.fn(async () => {
+        if (pref instanceof Error) throw pref;
+        return pref;
+      }),
+    };
+    const { GeoService } = require('../../../src/modules/geo/geo.service');
+    const svc: any = new GeoService(redis, fakeSecret, platformConfig);
+    svc.google = google;
+    svc.mapbox = mapbox;
+    svc.nominatim = nominatim;
+    return svc;
+  };
+
+  it('PREF nominatim : ne tente JAMAIS Google ou Mapbox meme si configured', async () => {
+    const google = mkProvider('google', { isConfigured: true, searchResults: [dummy(0, 0, 'g')] });
+    const mapbox = mkProvider('mapbox', { isConfigured: true, searchResults: [dummy(0, 0, 'm')] });
+    const nominatim = mkProvider('nominatim', { searchResults: [dummy(0, 0, 'n')] });
+    const svc = mkSvcWithPref('nominatim', google, mapbox, nominatim);
+
+    const out = await svc.search('xxxxx', 'CG');
+    expect(out[0].displayName).toBe('n');
+    expect(google.search).not.toHaveBeenCalled();
+    expect(mapbox.search).not.toHaveBeenCalled();
+  });
+
+  it('PREF google : Google d abord, fallback Nominatim si echec, jamais Mapbox', async () => {
+    const google = mkProvider('google', { isConfigured: true, searchResults: new Error('quota') });
+    const mapbox = mkProvider('mapbox', { isConfigured: true, searchResults: [dummy(0, 0, 'm')] });
+    const nominatim = mkProvider('nominatim', { searchResults: [dummy(0, 0, 'n-fallback')] });
+    const svc = mkSvcWithPref('google', google, mapbox, nominatim);
+
+    const out = await svc.search('xxxxx', 'CG');
+    expect(out[0].displayName).toBe('n-fallback');
+    expect(google.search).toHaveBeenCalled();
+    expect(mapbox.search).not.toHaveBeenCalled();
+  });
+
+  it('PREF mapbox : Mapbox d abord, fallback Nominatim, jamais Google', async () => {
+    const google = mkProvider('google', { isConfigured: true, searchResults: [dummy(0, 0, 'g')] });
+    const mapbox = mkProvider('mapbox', { isConfigured: true, searchResults: [dummy(0, 0, 'mb')] });
+    const nominatim = mkProvider('nominatim');
+    const svc = mkSvcWithPref('mapbox', google, mapbox, nominatim);
+
+    const out = await svc.search('xxxxx', 'CG');
+    expect(out[0].displayName).toBe('mb');
+    expect(google.search).not.toHaveBeenCalled();
+  });
+
+  it('PREF auto : chaine complete Google → Mapbox → Nominatim', async () => {
+    const google = mkProvider('google', { isConfigured: false });
+    const mapbox = mkProvider('mapbox', { isConfigured: true, searchResults: [dummy(0, 0, 'mb')] });
+    const nominatim = mkProvider('nominatim');
+    const svc = mkSvcWithPref('auto', google, mapbox, nominatim);
+
+    const out = await svc.search('xxxxx', 'CG');
+    expect(out[0].displayName).toBe('mb');
+    expect(mapbox.search).toHaveBeenCalled();
+  });
+
+  it('PREF inconnue ou throw du PlatformConfig : tombe sur auto par defaut', async () => {
+    const google = mkProvider('google', { isConfigured: false });
+    const mapbox = mkProvider('mapbox', { isConfigured: false });
+    const nominatim = mkProvider('nominatim', { searchResults: [dummy(0, 0, 'n')] });
+    const svc = mkSvcWithPref(new Error('PlatformConfig DB down'), google, mapbox, nominatim);
+
+    const out = await svc.search('xxxxx', 'CG');
+    expect(out[0].displayName).toBe('n');
+  });
 });

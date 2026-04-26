@@ -704,6 +704,24 @@ export const PLATFORM_CONFIG_REGISTRY: PlatformConfigDef<unknown>[] = [
       return null;
     },
   },
+  // Provider de geocoding (adresse → lat/lng + reverse). Valeurs possibles :
+  //  - 'auto'      : essaie Google → Mapbox → Nominatim selon disponibilite Vault
+  //  - 'google'    : force Google (fallback Nominatim si echec/non configure)
+  //  - 'mapbox'    : force Mapbox (fallback Nominatim si echec/non configure)
+  //  - 'nominatim' : force Nominatim seul (gratuit, qualite degradee Afrique)
+  {
+    key:      'geo.provider',
+    type:     'string',
+    default:  'auto',
+    label:    'platformConfig.geoProvider',
+    help:     'platformConfig.geoProviderHelp',
+    group:    'platformConfig.groupRouting',
+    validate: (v) => {
+      if (typeof v !== 'string') return 'platformConfig.errNotString';
+      if (!['auto', 'google', 'mapbox', 'nominatim'].includes(v)) return 'platformConfig.geoProviderInvalid';
+      return null;
+    },
+  },
 ];
 
 // ─── Validators JSON ─────────────────────────────────────────────────────────

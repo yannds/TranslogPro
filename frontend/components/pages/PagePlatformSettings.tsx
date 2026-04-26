@@ -361,6 +361,19 @@ export function PagePlatformSettings() {
             <option value="google">google — Google Maps Directions</option>
             <option value="mapbox">mapbox — Mapbox Directions</option>
           </select>
+        ) : e.key === 'geo.provider' ? (
+          <select
+            id={`cfg-input-${e.key}`}
+            value={val}
+            onChange={ev => handleChange(e.key, ev.target.value)}
+            className={inp}
+            disabled={saving}
+          >
+            <option value="auto">auto — {t('platformConfig.geoProviderAuto')}</option>
+            <option value="google">google — {t('platformConfig.geoProviderGoogle')}</option>
+            <option value="mapbox">mapbox — {t('platformConfig.geoProviderMapbox')}</option>
+            <option value="nominatim">nominatim — {t('platformConfig.geoProviderNominatim')}</option>
+          </select>
         ) : e.type === 'boolean' ? (
           <select
             id={`cfg-input-${e.key}`}
