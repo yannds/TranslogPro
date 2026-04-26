@@ -37,25 +37,39 @@ export class OnboardingWizardService {
   // ─── État agrégé ────────────────────────────────────────────────────────────
 
   async getState(tenantId: string) {
-    const [tenant, brand, agencyCount, stationCount, routeCount, userCount] =
-      await Promise.all([
-        this.prisma.tenant.findUnique({
-          where:  { id: tenantId },
-          select: {
-            name: true, slug: true, language: true, country: true, currency: true,
-            businessActivity: true, onboardingCompletedAt: true,
-          },
-        }),
-        this.prisma.tenantBrand.findUnique({ where: { tenantId } }),
-        this.prisma.agency.count({ where: { tenantId } }),
-        this.prisma.station.count({ where: { tenantId } }),
-        this.prisma.route.count({ where: { tenantId } }),
-        this.prisma.user.count({ where: { tenantId, userType: 'STAFF' } }),
-      ]);
+    const [
+      tenant, brand,
+      agencyCount, stationCount, routeCount, userCount,
+      busCount, tripCount, ticketCount, parcelCount,
+      demoBusCount,
+    ] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where:  { id: tenantId },
+        select: {
+          name: true, slug: true, language: true, country: true, currency: true,
+          businessActivity: true, onboardingCompletedAt: true,
+        },
+      }),
+      this.prisma.tenantBrand.findUnique({ where: { tenantId } }),
+      this.prisma.agency.count({ where: { tenantId } }),
+      this.prisma.station.count({ where: { tenantId } }),
+      this.prisma.route.count({ where: { tenantId } }),
+      this.prisma.user.count({ where: { tenantId, userType: 'STAFF' } }),
+      // Compteurs activation (post-wizard) — utilisés par WelcomePage pour
+      // afficher une checklist véridique par dépendance plutôt qu'une promesse
+      // mensongère ("Vendre votre 1er billet" sans Bus/Trip → erreur).
+      this.prisma.bus.count({ where: { tenantId } }),
+      this.prisma.trip.count({ where: { tenantId } }),
+      this.prisma.ticket.count({ where: { tenantId, status: { notIn: ['CANCELLED', 'EXPIRED'] } } }),
+      this.prisma.parcel.count({ where: { tenantId } }),
+      // Détection seed démo : convention "[DÉMO] " préfixe sur Bus.model.
+      // Aucune migration nécessaire — purge possible par même convention.
+      this.prisma.bus.count({ where: { tenantId, model: { startsWith: '[DÉMO] ' } } }),
+    ]);
 
     if (!tenant) throw new NotFoundException(`Tenant ${tenantId} introuvable`);
 
-    // Une étape est "terminée" si la condition propre est vraie.
+    // Étapes wizard (inchangées) — terminée si condition propre vraie.
     const steps = {
       brand:   Boolean(brand?.brandName || brand?.logoUrl || brand?.primaryColor),
       agency:  agencyCount  > 0, // crée par onboarding atomique — toujours vrai en théorie
@@ -64,10 +78,24 @@ export class OnboardingWizardService {
       team:    userCount    > 1, // > 1 car l'admin lui-même compte pour 1
     };
 
+    // Étapes activation (post-wizard) — pilotent la checklist WelcomePage.
+    // Ordre de dépendance : bus → trip → firstTicket. La règle "lock" est
+    // appliquée côté front : un item ne devient cliquable que si le précédent
+    // est ✓. Backend renvoie juste les booléens.
+    const activation = {
+      bus:          busCount > 0,
+      trip:         tripCount > 0,
+      firstTicket:  ticketCount > 0,
+      firstParcel:  parcelCount > 0,
+      team:         userCount > 1,
+      hasDemoSeed:  demoBusCount > 0,
+    };
+
     const completedCount = Object.values(steps).filter(Boolean).length;
     return {
       tenant,
       steps,
+      activation,
       completedCount,
       totalSteps: 5,
       completedAt: tenant.onboardingCompletedAt,
