@@ -5695,7 +5695,21 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "savedAndHealthy":  "Configuration enregistrée — test de connexion OK",
     "savedHealthFailed":  "Configuration enregistrée mais test de connexion KO",
     "secretHint":  "Les champs sensibles (clés, secrets, mots de passe) sont chiffrés dans Vault. Laissez la valeur masquée •••••••• pour conserver l'ancienne.",
-    "notConfigured":  "Non configuré"
+    "notConfigured":  "Non configuré",
+    "testWithTemplate":         "Tester avec modèle",
+    "sendTestTitle":            "Envoyer un email de test",
+    "sendTestDesc":             "Envoie un mail réel à l'adresse saisie en utilisant un template du catalogue. Marqué \"platform-test\" — exclu des stats commerciales.",
+    "sendTestHint":             "Le mail part avec category=system et tag platform-test. Aucune notification n'est créée côté tenant.",
+    "template":                 "Modèle",
+    "selectTemplate":           "Sélectionner un modèle…",
+    "recipientEmail":           "Email destinataire",
+    "recipientName":            "Nom destinataire",
+    "recipientNamePlaceholder": "ex: Awa Diallo",
+    "language":                 "Langue",
+    "send":                     "Envoyer",
+    "sending":                  "Envoi en cours…",
+    "sendOk":                   "Email envoyé avec succès",
+    "sendFailed":               "Échec de l'envoi"
   },
 
   // ─── Portail plateforme — IAM cross-tenant (audit / sessions / users / rôles)

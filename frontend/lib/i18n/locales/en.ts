@@ -5668,7 +5668,21 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "savedAndHealthy":  "Settings saved — connection test OK",
     "savedHealthFailed":  "Settings saved but connection test failed",
     "secretHint":  "Secret fields (keys, secrets, passwords) are encrypted in Vault. Leave the masked value •••••••• to keep the previous one.",
-    "notConfigured":  "Not configured"
+    "notConfigured":  "Not configured",
+    "testWithTemplate":         "Test with template",
+    "sendTestTitle":            "Send a test email",
+    "sendTestDesc":             "Sends a real email to the address entered using a catalogue template. Tagged \"platform-test\" — excluded from commercial stats.",
+    "sendTestHint":             "Email is sent with category=system and tag platform-test. No tenant-side notification is created.",
+    "template":                 "Template",
+    "selectTemplate":           "Select a template…",
+    "recipientEmail":           "Recipient email",
+    "recipientName":            "Recipient name",
+    "recipientNamePlaceholder": "e.g. John Doe",
+    "language":                 "Language",
+    "send":                     "Send",
+    "sending":                  "Sending…",
+    "sendOk":                   "Email sent successfully",
+    "sendFailed":               "Send failed"
   },
 
   "platformAudit": {
