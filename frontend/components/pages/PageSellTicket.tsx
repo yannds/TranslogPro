@@ -15,8 +15,9 @@ import { useState, useMemo } from 'react';
 import { useFetch } from '../../lib/hooks/useFetch';
 import {
   Ticket, Calculator, CheckCircle2, Loader2, Printer,
-  UserPlus, X, FileText,
+  UserPlus, X, FileText, Bus, Calendar, ArrowRight,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth }    from '../../lib/auth/auth.context';
 import { apiGet, apiPost } from '../../lib/api';
 import { Button }     from '../ui/Button';
@@ -536,6 +537,55 @@ export function PageSellTicket() {
 
       <ErrorAlert error={error ?? tripsError} icon />
 
+      {/* Empty state honnête : aucun trajet programmé → l'admin doit créer
+          Bus + Trip avant de pouvoir vendre. On guide explicitement plutôt
+          que d'afficher un select vide menant à un formulaire inutile. */}
+      {!confirmed && !loadingTrips && !tripsError && (!trips || trips.length === 0) && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/30">
+              <Calendar className="h-8 w-8 text-amber-600 dark:text-amber-400" aria-hidden />
+            </div>
+            <div className="max-w-md space-y-2">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+                {t('sellTicket.empty.title')}
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {t('sellTicket.empty.body')}
+              </p>
+            </div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2 w-full max-w-md">
+              <Link to="/admin/fleet"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm hover:border-teal-400 hover:bg-teal-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-teal-700 dark:hover:bg-teal-950/30">
+                <Bus className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+                <div className="flex-1">
+                  <div className="font-medium text-slate-900 dark:text-slate-50">
+                    {t('sellTicket.empty.addBus')}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {t('sellTicket.empty.addBusHint')}
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              </Link>
+              <Link to="/admin/trips/planning"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm hover:border-teal-400 hover:bg-teal-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-teal-700 dark:hover:bg-teal-950/30">
+                <Calendar className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+                <div className="flex-1">
+                  <div className="font-medium text-slate-900 dark:text-slate-50">
+                    {t('sellTicket.empty.planTrip')}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {t('sellTicket.empty.planTripHint')}
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Success state */}
       {confirmed && batchResult && (
         <Card>
@@ -582,8 +632,9 @@ export function PageSellTicket() {
         </Card>
       )}
 
-      {/* Main layout */}
-      {!confirmed && (
+      {/* Main layout — masqué tant qu'aucun trajet n'est programmable
+          (l'empty state ci-dessus prend le relais et guide vers la création). */}
+      {!confirmed && (loadingTrips || (trips && trips.length > 0)) && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* ── Left column: form ── */}
           <div className="lg:col-span-3 space-y-5">
