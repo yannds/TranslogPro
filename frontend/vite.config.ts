@@ -18,6 +18,11 @@ export default defineConfig({
         // qui voient "j'ai déployé mais le site n'a pas changé".
         skipWaiting:  true,
         clientsClaim: true,
+        // Purge tous les caches précachés des anciennes versions du SW au
+        // démarrage. Sans ça, un asset qui disparaissait du précache (ex: une
+        // icône PWA renommée, un fichier supprimé) restait servi depuis le
+        // cache obsolète — d'où des 404 fantômes côté client après deploy.
+        cleanupOutdatedCaches: true,
         // Fichiers statiques mis en pre-cache. On évite les gros assets bin.
         globPatterns: ['**/*.{js,css,html,svg,woff2,png,jpg,webp}'],
         // PageTemplateStudio est lazy-loadé et pèse actuellement 12.7 MB à
