@@ -24,12 +24,13 @@ import { LIFECYCLE_DESCRIPTORS } from './lifecycle.descriptors';
 import { INVOICE_DESCRIPTORS }   from './invoice.descriptors';
 import { VOUCHER_DESCRIPTORS }   from './voucher.descriptors';
 import { REFUND_DESCRIPTORS }    from './refund.descriptors';
+import { USER_DESCRIPTORS }      from './user.descriptors';
 
 /**
  * Catalogue exhaustif des templates email.
  *
  * Ordre = ordre d'apparition dans la combobox du testeur plateforme.
- * À chaque nouveau tier (User invite, Trip cancelled…) on ajoute son tableau
+ * À chaque nouveau tier (Trip cancelled, Parcel…) on ajoute son tableau
  * importé de son fichier `*.descriptors.ts`.
  */
 const ALL_DESCRIPTORS: ReadonlyArray<EmailTemplateDescriptor> = [
@@ -37,7 +38,8 @@ const ALL_DESCRIPTORS: ReadonlyArray<EmailTemplateDescriptor> = [
   ...INVOICE_DESCRIPTORS,
   ...VOUCHER_DESCRIPTORS,
   ...REFUND_DESCRIPTORS,
-  // À venir : ...USER_DESCRIPTORS, ...TRIP_DESCRIPTORS, ...PARCEL_DESCRIPTORS,
+  ...USER_DESCRIPTORS,
+  // À venir : ...TRIP_DESCRIPTORS, ...PARCEL_DESCRIPTORS,
   //          ...TICKET_DESCRIPTORS, ...AUTH_DESCRIPTORS, ...SUBSCRIPTION_DESCRIPTORS
 ];
 

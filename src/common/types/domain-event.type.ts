@@ -48,6 +48,10 @@ export const EventTypes = {
   // payload : { voucherId, code, amount, currency, validityEnd, origin, sourceTripId?, sourceTicketId? }
   VOUCHER_ISSUED:         'voucher.issued',
 
+  // User (invitation par admin tenant — différent du colleague invite onboarding)
+  // payload : { userId, email, name, tenantName, tenantSlug, roleName?, agencyName?, resetUrl }
+  USER_INVITED:           'user.invited',
+
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',

@@ -16,6 +16,9 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  Inject,
+  Optional,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService }  from '../../infrastructure/database/prisma.service';
@@ -25,12 +28,23 @@ import {
   CreateRoleDto, UpdateRoleDto, SetPermissionsDto,
   AuditQueryDto,
 } from './dto/tenant-iam.dto';
+import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { EventTypes } from '../../common/types/domain-event.type';
+import { AppConfigService } from '../../common/config/app-config.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TenantIamService {
+  private readonly logger = new Logger(TenantIamService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly rbac:   RbacService,
+    // Optional pour rester compatible avec les tests existants qui instancient
+    // le service avec 2 args. En prod, AppConfigService et EVENT_BUS sont
+    // @Global et toujours injectés par Nest.
+    @Optional() private readonly appConfig?: AppConfigService,
+    @Optional() @Inject(EVENT_BUS) private readonly eventBus?: IEventBus,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -144,6 +158,49 @@ export class TenantIamService {
       resource: `User:${user.id}`,
       newValue: { email: dto.email, name: dto.name },
     });
+
+    // Émission USER_INVITED (best-effort) — déclenche l'envoi mail invite par
+    // UserNotificationListener. Hors tx car createUser n'est pas wrappé dans
+    // transact() ; un échec d'émission est logué mais ne fait pas échouer la
+    // création (le user existe déjà en DB et peut se connecter avec dto.password).
+    if (this.eventBus && this.appConfig) {
+      try {
+        const tenant = await this.prisma.tenant.findUnique({
+          where:  { id: tenantId },
+          select: { name: true, slug: true, language: true },
+        });
+        const baseDomain = this.appConfig.publicBaseDomain;
+        const tenantSlug = tenant?.slug ?? '';
+        const resetUrl = tenantSlug
+          ? `https://${tenantSlug}.${baseDomain}/auth/forgot-password?email=${encodeURIComponent(dto.email)}`
+          : '';
+
+        const event: DomainEvent = {
+          id:            uuidv4(),
+          type:          EventTypes.USER_INVITED,
+          tenantId,
+          aggregateId:   user.id,
+          aggregateType: 'User',
+          payload: {
+            userId:      user.id,
+            email:       dto.email,
+            name:        dto.name,
+            tenantName:  tenant?.name ?? '',
+            tenantSlug,
+            roleName:    user.role?.name ?? null,
+            agencyName:  user.agency?.name ?? null,
+            language:    tenant?.language ?? 'fr',
+            resetUrl,
+          },
+          occurredAt: new Date(),
+        };
+        await this.prisma.transact((tx) => this.eventBus!.publish(event, tx));
+      } catch (err) {
+        this.logger.warn(
+          `[TenantIam] USER_INVITED emission failed for user=${user.id}: ${(err as Error).message}`,
+        );
+      }
+    }
 
     return user;
   }
