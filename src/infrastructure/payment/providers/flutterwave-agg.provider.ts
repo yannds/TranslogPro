@@ -81,6 +81,15 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
         && this.meta.supportedCurrencies.includes(q.currency);
   }
 
+  /**
+   * Flutterwave supporte le split natif via le tableau `subaccounts[]` du
+   * payload `/payments`. Le compte porteur de la SECRET_KEY (= compte
+   * plateforme TransLog Pro) reçoit la commission ; le subaccount du tenant
+   * reçoit `amount - transaction_charge - frais_flutterwave`.
+   * Doc : https://developer.flutterwave.com/v3.0/docs/split-payments
+   */
+  supportsSplit(): boolean { return true; }
+
   async healthcheck(): Promise<ProviderHealth> {
     const start = Date.now();
     try {
@@ -98,21 +107,47 @@ export class FlutterwaveAggregatorProvider implements IPaymentProvider {
   async initiate(dto: InitiatePaymentDto): Promise<PaymentResult> {
     const key = await this.getSecretKey();
 
+    const payload: Record<string, unknown> = {
+      tx_ref:          dto.txRef,
+      amount:          dto.amount,
+      currency:        dto.currency,
+      redirect_url:    dto.redirectUrl,
+      customer: {
+        email:       dto.customerEmail ?? `${dto.txRef}@translogpro.noreply`,
+        phonenumber: dto.customerPhone,
+        name:        dto.customerName ?? 'Client TransLog',
+      },
+      meta:            dto.meta ?? {},
+      payment_options: this.mapMethod(dto.method),
+    };
+
+    // Split natif : Flutterwave Subaccounts.
+    // Sémantique : la `transaction_charge` (ici platformAmount) est PRÉLEVÉE
+    // par le compte principal (porteur de la SECRET_KEY = plateforme), et le
+    // reste est crédité au subaccount du tenant. Frais Flutterwave eux-mêmes
+    // déduits du subaccount par défaut.
+    if (dto.split && dto.split.tenantSubaccountId) {
+      payload['subaccounts'] = [{
+        id:                       dto.split.tenantSubaccountId,
+        transaction_charge_type:  'flat',
+        transaction_charge:       dto.split.platformAmount,
+      }];
+      this.logger.log(
+        `[FLW] split tx_ref=${dto.txRef} platform=${dto.split.platformAmount} ` +
+        `tenant=${dto.split.tenantAmount} → ${dto.split.tenantSubaccountId}`,
+      );
+    } else if (dto.split) {
+      // Split demandé mais aucun subaccount tenant configuré : on encaisse en
+      // legacy (tout chez la plateforme) ; l'orchestrator a déjà loggé l'event
+      // SPLIT_SKIPPED_NO_SUBACCOUNT pour audit + payout T+1 manuel.
+      this.logger.warn(
+        `[FLW] split skipped tx_ref=${dto.txRef} — aucun tenantSubaccountId`,
+      );
+    }
+
     const { data } = await this.http.post(
       '/payments',
-      {
-        tx_ref:          dto.txRef,
-        amount:          dto.amount,
-        currency:        dto.currency,
-        redirect_url:    dto.redirectUrl,
-        customer: {
-          email:       dto.customerEmail ?? `${dto.txRef}@translogpro.noreply`,
-          phonenumber: dto.customerPhone,
-          name:        dto.customerName ?? 'Client TransLog',
-        },
-        meta:            dto.meta ?? {},
-        payment_options: this.mapMethod(dto.method),
-      },
+      payload,
       { headers: { Authorization: `Bearer ${key}` } },
     );
 

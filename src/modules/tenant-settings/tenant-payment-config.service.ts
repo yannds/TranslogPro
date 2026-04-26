@@ -22,6 +22,13 @@ export interface UpdatePaymentConfigDto {
   requireCustomerEmailFor?: string[];
   allowGuestCheckout?:      boolean;
   refundMfaThreshold?:      number;
+  // Compte de retrait du transporteur (où arrive sa part de chaque ticket).
+  payoutMethod?:            string;  // MOBILE_MONEY | SUBACCOUNT | BANK
+  payoutPhoneE164?:         string | null;
+  payoutSubaccountId?:      string | null;
+  payoutAccountName?:       string | null;
+  // platformFeeBpsOverride n'est PAS exposé côté tenant — réservé super-admin
+  // pour des deals négociés. Géré uniquement via PlatformPaymentService.
 }
 
 @Injectable()
@@ -57,6 +64,10 @@ export class TenantPaymentConfigService {
         ...('requireCustomerEmailFor' in dto ? { requireCustomerEmailFor: dto.requireCustomerEmailFor! } : {}),
         ...('allowGuestCheckout'      in dto ? { allowGuestCheckout:      dto.allowGuestCheckout! } : {}),
         ...('refundMfaThreshold'      in dto ? { refundMfaThreshold:      dto.refundMfaThreshold! } : {}),
+        ...('payoutMethod'            in dto ? { payoutMethod:            dto.payoutMethod! } : {}),
+        ...('payoutPhoneE164'         in dto ? { payoutPhoneE164:         dto.payoutPhoneE164 } : {}),
+        ...('payoutSubaccountId'      in dto ? { payoutSubaccountId:      dto.payoutSubaccountId } : {}),
+        ...('payoutAccountName'       in dto ? { payoutAccountName:       dto.payoutAccountName } : {}),
       },
     });
   }

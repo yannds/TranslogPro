@@ -4424,6 +4424,20 @@ model TenantPaymentConfig {
   // Montant au-delà duquel un refund nécessite MFA step-up (devise tenant).
   refundMfaThreshold Float @default(100000)
 
+  // ── Compte de retrait du tenant (où arrive l'argent du transporteur) ────
+  // payoutMethod : MOBILE_MONEY (numéro MoMo direct) | SUBACCOUNT (sous-compte
+  // agrégateur, ex Flutterwave RS_*) | BANK (virement, hors split natif).
+  payoutMethod              String  @default("MOBILE_MONEY")
+  payoutPhoneE164           String?
+  // ID du sous-compte agrégateur — Flutterwave: "RS_xxx", FedaPay sub-account, etc.
+  // Quand renseigné + provider supporte le split natif, l'orchestrator route
+  // l'argent directement chez le tenant et ne prélève que la commission plateforme.
+  payoutSubaccountId        String?
+  payoutAccountName         String?
+  // Override négocié de la commission plateforme (basis points : 250 = 2.5 %).
+  // null = on applique le défaut de PlatformPaymentConfig.platformFeeBps.
+  platformFeeBpsOverride    Int?
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -4447,6 +4461,28 @@ model PlatformPaymentConfig {
   alertEmailOnGhostPayment      String?
   // Chiffrement application-level — rotation key path dans Vault
   payloadEncryptionVaultPath    String   @default("platform/payments/app-key")
+
+  // ── Commission plateforme par défaut (split à l'encaissement) ──────────
+  // platformFeeBps : commission par défaut en basis points. 300 = 3 %, 250 = 2.5 %.
+  // Surchargeable par tenant via TenantPaymentConfig.platformFeeBpsOverride.
+  platformFeeBps                Int      @default(300)
+  // PERCENT (default) : platformAmount = round(amount * bps / 10000) + flatMinor
+  // FLAT             : platformAmount = platformFeeFlatMinor (tjs cette somme)
+  platformFeePolicy             String   @default("PERCENT")
+  // Frais fixes ajoutés en plus du % (en plus petite unité de devise — centimes/centavos).
+  // Pour XAF/XOF (sans cents) on travaille en unités entières (1 = 1 XAF).
+  platformFeeFlatMinor          Int      @default(0)
+
+  // ── Compte de retrait commission plateforme ──────────────────────────────
+  // Configuré par le SA TransLog Pro pour recevoir la part SaaS de chaque
+  // transaction. MOBILE_MONEY = numéro perso ; SUBACCOUNT = compte principal
+  // de l'agrégateur (par défaut, l'argent reste sur le compte plateforme).
+  platformPayoutMethod          String   @default("AGGREGATOR_MAIN")
+  // AGGREGATOR_MAIN | MOBILE_MONEY | SUBACCOUNT | BANK
+  platformPayoutPhoneE164       String?
+  platformPayoutSubaccountId    String?
+  platformPayoutAccountName     String?
+
   updatedAt                     DateTime @updatedAt
 
   @@map("platform_payment_config")

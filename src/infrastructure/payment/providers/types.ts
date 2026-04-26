@@ -81,4 +81,15 @@ export interface IPaymentProvider extends IPaymentService {
   readonly webhookSignatureHeader: string;
   supports(q: SupportsQuery): boolean;
   healthcheck(): Promise<ProviderHealth>;
+  /**
+   * Indique si ce provider sait router une partie de l'encaissement vers un
+   * sous-compte marchand au moment du charge (split natif). Quand `false`,
+   * l'orchestrator passe en mode legacy (tout chez la plateforme, payout
+   * manuel à coder en aval). Défaut conservatif : `false`.
+   *
+   * Aujourd'hui supporté natif : Flutterwave (subaccounts), FedaPay
+   * (sub-accounts), Paystack (transaction splits). Pas natif : MTN/Airtel
+   * direct, Wave, Stripe, MoMo Open API.
+   */
+  supportsSplit(): boolean;
 }

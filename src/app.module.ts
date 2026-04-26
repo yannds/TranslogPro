@@ -61,6 +61,7 @@ import { WorkflowDispatchModule } from './modules/workflow/workflow-dispatch.mod
 import { PlatformModule }   from './modules/platform/platform.module';
 import { PlatformPlansModule }     from './modules/platform-plans/platform-plans.module';
 import { PlatformBillingModule }   from './modules/platform-billing/platform-billing.module';
+import { PlatformPaymentModule }   from './modules/platform-payment/platform-payment.module';
 import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module';
 import { PlatformKpiModule }       from './modules/platform-kpi/platform-kpi.module';
 import { PlatformConfigModule }    from './modules/platform-config/platform-config.module';
@@ -189,6 +190,8 @@ import { TenantHostMiddleware, PathTenantMatchGuard } from './core/tenancy';
     PlatformPlansModule,
     // Billing plateforme — souscriptions + factures plateforme → tenants
     PlatformBillingModule,
+    // Payment plateforme — config commission SaaS + payout commission (split)
+    PlatformPaymentModule,
     // Analytics plateforme — growth/adoption/health + crons DAU/HealthScore
     PlatformAnalyticsModule,
     // KPI plateforme — North Star, MRR, cohortes, activation, stratégique (lecture cross-tenant)

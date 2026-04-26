@@ -59,6 +59,15 @@ export class PaystackAggregatorProvider implements IPaymentProvider {
         && this.meta.supportedCurrencies.includes(q.currency);
   }
 
+  /**
+   * Paystack supporte les Transaction Splits, mais l'implémentation concrète
+   * (création des subaccounts, propagation `split_code`) reste à coder. Pour
+   * l'instant on déclare false pour ne pas mentir à l'orchestrator.
+   * TODO: implémenter le payload `subaccount` ou `split_code` quand Paystack
+   *       sera utilisé pour des tenants TransLog Pro réels.
+   */
+  supportsSplit(): boolean { return false; }
+
   async healthcheck(): Promise<ProviderHealth> {
     const start = Date.now();
     try {

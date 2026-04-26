@@ -92,6 +92,9 @@ export class AirtelMoneyCgProvider implements IPaymentProvider {
         && this.meta.supportedCurrencies.includes(q.currency);
   }
 
+  /** API directe opérateur Airtel — pas d'endpoint split, payout manuel après coup. */
+  supportsSplit(): boolean { return false; }
+
   async healthcheck(): Promise<ProviderHealth> {
     const start = Date.now();
     try {

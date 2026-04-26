@@ -42,6 +42,7 @@ import {
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaymentRouter } from './payment-router.service';
 import { PayloadEncryptor } from './payload-encryptor.service';
+import { PaymentSplitService } from './payment-split.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventTypes } from '../../common/types/domain-event.type';
 
@@ -93,6 +94,7 @@ export class PaymentOrchestrator {
     private readonly registry:  PaymentProviderRegistry,
     private readonly encryptor: PayloadEncryptor,
     private readonly events:    EventEmitter2,
+    private readonly splitter:  PaymentSplitService,
   ) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -205,7 +207,49 @@ export class PaymentOrchestrator {
       return { intent, attempt };
     });
 
-    // 5. Appel provider (hors TX — réseau)
+    // 5. Calcul du split commission SaaS — uniquement si le provider supporte
+    // le split natif. Sinon on reste en mode legacy (tout encaissé chez la
+    // plateforme, payout T+1 manuel à coder en aval).
+    const split = await this.splitter.computeSplit({
+      tenantId, amount: intent.amount,
+    });
+    if (split && route.provider.supportsSplit() && !split.tenantSubaccountId) {
+      // Tenant n'a pas configuré son subaccount alors que le provider sait splitter :
+      // on log l'événement pour reconciliation manuelle. Le paiement n'est PAS bloqué.
+      await this.prisma.paymentEvent.create({
+        data: {
+          intentId: intent.id, attemptId: attempt.id,
+          type: 'SPLIT_SKIPPED_NO_SUBACCOUNT', source: EVENT_SOURCE_SYSTEM,
+          payload: {
+            providerKey:    route.providerKey,
+            platformAmount: split.platformAmount,
+            tenantAmount:   split.tenantAmount,
+            policyTrace:    split.policyTrace,
+          },
+        },
+      });
+      this.log.warn(
+        `[Split] tenant ${tenantId} — payoutSubaccountId absent, paiement legacy ` +
+        `(provider=${route.providerKey}, intent=${intent.id})`,
+      );
+    } else if (split && route.provider.supportsSplit() && split.tenantSubaccountId) {
+      // Split actif et supporté → trace dans l'audit log.
+      await this.prisma.paymentEvent.create({
+        data: {
+          intentId: intent.id, attemptId: attempt.id,
+          type: 'SPLIT_PLANNED', source: EVENT_SOURCE_SYSTEM,
+          payload: {
+            providerKey:        route.providerKey,
+            platformAmount:     split.platformAmount,
+            tenantAmount:       split.tenantAmount,
+            tenantSubaccountId: split.tenantSubaccountId,
+            policyTrace:        split.policyTrace,
+          },
+        },
+      });
+    }
+
+    // 6. Appel provider (hors TX — réseau)
     const initiateDto: InitiatePaymentDto = {
       txRef:          intent.id,
       amount:         intent.amount,
@@ -216,6 +260,9 @@ export class PaymentOrchestrator {
       customerName:   dto.customerName,
       redirectUrl:    dto.redirectUrl,
       meta: { tenantId, intentId: intent.id, ...(dto.metadata as Record<string, string> | undefined) },
+      // Le provider décide lui-même : ignore split si supportsSplit() === false
+      // (pas de mensonge dans le payload), ou si tenantSubaccountId absent.
+      ...(split && route.provider.supportsSplit() ? { split } : {}),
     };
 
     let providerResult: PaymentResult;

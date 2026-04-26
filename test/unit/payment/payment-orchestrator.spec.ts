@@ -81,9 +81,15 @@ describe('Orchestrator — validations amont', () => {
     router    = { resolve: jest.fn() };
     encryptor = { encryptJson: jest.fn().mockResolvedValue(null), decryptJson: jest.fn() };
 
-    // Nouveau : EventEmitter2 ajouté en 5e dépendance (event bus domaine pour PaymentSucceeded etc.)
+    // EventEmitter2 ajouté en 5e dépendance (event bus domaine pour PaymentSucceeded etc.)
     const events = { emit: jest.fn(), emitAsync: jest.fn() };
-    orchestrator = new PaymentOrchestrator(prisma, router, registry, encryptor, events as any);
+    // PaymentSplitService ajouté en 6e dépendance (calcul commission SaaS).
+    // Mock par défaut → null (pas de split) pour ne pas casser les tests qui
+    // ne ciblent pas le split.
+    const splitter = { computeSplit: jest.fn().mockResolvedValue(null) };
+    orchestrator = new PaymentOrchestrator(
+      prisma, router, registry, encryptor, events as any, splitter as any,
+    );
   });
 
   it('createIntent rejette si idempotencyKey manquant', async () => {

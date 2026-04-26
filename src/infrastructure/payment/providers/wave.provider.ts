@@ -75,6 +75,9 @@ export class WaveProvider implements IPaymentProvider {
         && this.meta.supportedCurrencies.includes(q.currency);
   }
 
+  /** Wave Direct API : pas de split natif. Aggregated Merchants ≠ split-charge. */
+  supportsSplit(): boolean { return false; }
+
   async healthcheck(): Promise<ProviderHealth> {
     const start = Date.now();
     try {

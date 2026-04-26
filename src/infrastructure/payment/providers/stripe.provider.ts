@@ -93,6 +93,9 @@ export class StripeProvider implements IPaymentProvider {
         && this.meta.supportedCurrencies.includes(q.currency);
   }
 
+  /** Stripe Connect (transfer_data, application_fee_amount) à brancher plus tard. */
+  supportsSplit(): boolean { return false; }
+
   async healthcheck(): Promise<ProviderHealth> {
     const start = Date.now();
     try {

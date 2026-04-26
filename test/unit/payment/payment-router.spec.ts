@@ -38,6 +38,7 @@ function makeProvider(
       fullMeta.supportedMethods.includes(q.method) &&
       fullMeta.supportedCountries.includes(q.country) &&
       fullMeta.supportedCurrencies.includes(q.currency)),
+    supportsSplit: () => false,
     healthcheck: jest.fn(),
     initiate:    jest.fn(),
     verify:      jest.fn(),

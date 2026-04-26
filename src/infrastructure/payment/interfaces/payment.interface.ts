@@ -24,6 +24,30 @@ export type PaymentStatus   =
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Plan de split commission SaaS — calculé par PaymentSplitCalculator avant
+ * l'appel au provider, propagé tel quel dans le payload provider quand le
+ * provider supporte un split natif (Flutterwave subaccounts, FedaPay
+ * sub-accounts…). Tous les montants sont dans la **même devise** que le
+ * paiement principal (`amount`).
+ *
+ * `tenantSubaccountId` doit être renseigné pour activer le split natif —
+ * sinon l'orchestrator log un warning et tombe en mode legacy (tout encaissé
+ * sur le compte plateforme, payout T+1 manuel à coder dans une étape future).
+ */
+export interface PaymentSplit {
+  /** Part qui revient à la plateforme (commission SaaS, devise = currency). */
+  platformAmount:        number;
+  /** Part qui revient au marchand-final (tenant, devise = currency). */
+  tenantAmount:          number;
+  /** ID sous-compte agrégateur du tenant (Flutterwave RS_xxx). Requis pour split natif. */
+  tenantSubaccountId?:   string;
+  /** ID sous-compte agrégateur plateforme — informatif, défaut = compte principal. */
+  platformSubaccountId?: string;
+  /** Trace d'audit : "PERCENT bps=300 + flat=0" ou "FLAT 500". */
+  policyTrace:           string;
+}
+
 export interface InitiatePaymentDto {
   /** Référence idempotente — si déjà traitée, retourne le résultat existant */
   txRef:        string;
@@ -38,6 +62,12 @@ export interface InitiatePaymentDto {
   redirectUrl?:   string;
   /** Métadonnées libres (ticketId, tenantId, etc.) */
   meta?:          Record<string, string>;
+  /**
+   * Plan de split commission SaaS. Quand fourni ET que le provider supporte
+   * un split natif, le payload est augmenté pour router la part tenant chez
+   * son sous-compte. Sinon le provider l'ignore (mode legacy, audité).
+   */
+  split?:        PaymentSplit;
 }
 
 export interface PaymentResult {

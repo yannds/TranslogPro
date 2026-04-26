@@ -234,6 +234,10 @@ const LazyPlatformPlans       = lazy(() => import('../pages/PagePlatformPlans').
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformBilling     = lazy(() => import('../pages/PagePlatformBilling').then(m => ({ default: m.PagePlatformBilling })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformPayment     = lazy(() => import('../pages/PagePlatformPayment').then(m => ({ default: m.PagePlatformPayment })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+const LazyPlatformIntegrations = lazy(() => import('../pages/PagePlatformIntegrations').then(m => ({ default: m.PagePlatformIntegrations })));
+// eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyPlatformSupport     = lazy(() => import('../pages/PagePlatformSupport').then(m => ({ default: m.PagePlatformSupport })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyCustomerSupport     = lazy(() => import('../pages/PageCustomerSupport').then(m => ({ default: m.PageCustomerSupport })));
@@ -442,7 +446,9 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'platform-dashboard':  return <LazyPlatformDashboard />;
     case 'tenants':             return <LazyTenants />;
     case 'platform-plans':      return <LazyPlatformPlans />;
-    case 'platform-billing':    return <LazyPlatformBilling />;
+    case 'platform-billing':       return <LazyPlatformBilling />;
+    case 'platform-payment':       return <LazyPlatformPayment />;
+    case 'platform-integrations':  return <LazyPlatformIntegrations />;
     case 'platform-support':    return <LazyPlatformSupport />;
     case 'platform-staff':      return <LazyPlatformStaff />;
     case 'impersonation':       return <LazyImpersonation />;
