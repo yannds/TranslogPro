@@ -21,7 +21,7 @@
  * Le workflow ISSUE n'a pas de fromState (c'est la création) — on crée
  * directement en ISSUED puis on transitionne via engine pour REDEEM/EXPIRE/CANCEL.
  */
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CashierService } from '../cashier/cashier.service';
@@ -32,6 +32,9 @@ import {
 } from '../../common/constants/workflow-states';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { randomBytes } from 'crypto';
+import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
+import { EventTypes } from '../../common/types/domain-event.type';
+import { v4 as uuidv4 } from 'uuid';
 
 const SYSTEM_ACTOR: CurrentUserPayload = {
   id:       'SYSTEM',
@@ -64,6 +67,7 @@ export class VoucherService {
     private readonly prisma:   PrismaService,
     private readonly workflow: WorkflowEngine,
     private readonly cashier:  CashierService,
+    @Inject(EVENT_BUS) private readonly eventBus: IEventBus,
   ) {}
 
   /**
@@ -82,27 +86,54 @@ export class VoucherService {
     const now = new Date();
     const validityEnd = new Date(now.getTime() + params.validityDays * 86_400_000);
 
-    const voucher = await this.prisma.voucher.create({
-      data: {
-        tenantId:       params.tenantId,
-        code,
-        customerId:     params.customerId ?? null,
-        recipientEmail: params.recipientEmail ?? null,
-        recipientPhone: params.recipientPhone ?? null,
-        amount:         params.amount,
-        currency:       params.currency,
-        usageScope:     params.usageScope ?? VoucherUsageScope.SAME_COMPANY,
-        routeId:        params.routeId ?? null,
-        validityStart:  now,
-        validityEnd,
-        status:         VoucherState.ISSUED,
-        origin:         params.origin,
-        sourceTripId:   params.sourceTripId ?? null,
-        sourceTicketId: params.sourceTicketId ?? null,
-        issuedBy:       params.issuedBy ?? 'SYSTEM',
-        metadata:       (params.metadata ?? {}) as object,
-        version:        1,
-      },
+    // Création + émission VOUCHER_ISSUED dans la MÊME tx Prisma (Outbox atomique).
+    // Évite les events orphelins si le create échoue après l'émission, ou un voucher
+    // créé sans event si la publication échoue.
+    const voucher = await this.prisma.transact(async (tx) => {
+      const created = await tx.voucher.create({
+        data: {
+          tenantId:       params.tenantId,
+          code,
+          customerId:     params.customerId ?? null,
+          recipientEmail: params.recipientEmail ?? null,
+          recipientPhone: params.recipientPhone ?? null,
+          amount:         params.amount,
+          currency:       params.currency,
+          usageScope:     params.usageScope ?? VoucherUsageScope.SAME_COMPANY,
+          routeId:        params.routeId ?? null,
+          validityStart:  now,
+          validityEnd,
+          status:         VoucherState.ISSUED,
+          origin:         params.origin,
+          sourceTripId:   params.sourceTripId ?? null,
+          sourceTicketId: params.sourceTicketId ?? null,
+          issuedBy:       params.issuedBy ?? 'SYSTEM',
+          metadata:       (params.metadata ?? {}) as object,
+          version:        1,
+        },
+      });
+
+      const event: DomainEvent = {
+        id:            uuidv4(),
+        type:          EventTypes.VOUCHER_ISSUED,
+        tenantId:      params.tenantId,
+        aggregateId:   created.id,
+        aggregateType: 'Voucher',
+        payload: {
+          voucherId:      created.id,
+          code:           created.code,
+          amount:         created.amount,
+          currency:       created.currency,
+          validityEnd:    created.validityEnd.toISOString(),
+          origin:         created.origin,
+          usageScope:     created.usageScope,
+          sourceTripId:   created.sourceTripId,
+          sourceTicketId: created.sourceTicketId,
+        },
+        occurredAt: new Date(),
+      };
+      await this.eventBus.publish(event, tx);
+      return created;
     });
 
     this.logger.log(

@@ -14,6 +14,8 @@ describe('VoucherService', () => {
 
   const tenantId = 'T1';
 
+  let eventBusMock: any;
+
   beforeEach(() => {
     prismaMock = {
       tenant: {
@@ -35,6 +37,10 @@ describe('VoucherService', () => {
       agency: {
         findFirst: jest.fn().mockResolvedValue({ id: 'ag-1' }),
       },
+      // issue() wrappe maintenant create + eventBus.publish dans transact —
+      // on exécute le callback en lui repassant prismaMock comme tx pour garder
+      // les assertions sur voucher.create.* fonctionnelles.
+      transact: jest.fn().mockImplementation(async (fn: any) => fn(prismaMock)),
     };
     workflowMock = {
       transition: jest.fn().mockImplementation((_entity, _input, cfg) => cfg.persist(_entity, 'REDEEMED', prismaMock)),
@@ -43,7 +49,11 @@ describe('VoucherService', () => {
       getOrCreateVirtualRegister: jest.fn().mockResolvedValue({ id: 'vreg-1' }),
       recordTransaction:          jest.fn().mockResolvedValue({ id: 'tx-1' }),
     };
-    service = new VoucherService(prismaMock, workflowMock, cashierMock);
+    eventBusMock = {
+      publish:   jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(),
+    };
+    service = new VoucherService(prismaMock, workflowMock, cashierMock, eventBusMock);
   });
 
   // ─── issue ─────────────────────────────────────────────────────────────────
@@ -62,7 +72,13 @@ describe('VoucherService', () => {
     });
 
     it('crée un voucher ISSUED avec code unique préfixé tenant', async () => {
-      prismaMock.voucher.create.mockResolvedValue({ id: 'V1', code: 'TRAN-ABCD-1234' });
+      prismaMock.voucher.create.mockResolvedValue({
+        id: 'V1', code: 'TRAN-ABCD-1234',
+        amount: 5000, currency: 'XAF',
+        validityEnd: new Date('2026-10-23T00:00:00Z'),
+        origin: 'MANUAL', usageScope: VoucherUsageScope.SAME_COMPANY,
+        sourceTripId: null, sourceTicketId: null,
+      });
       const res = await service.issue({
         tenantId, amount: 5000, currency: 'XAF', validityDays: 180, origin: 'MANUAL',
       } as any);
@@ -73,6 +89,16 @@ describe('VoucherService', () => {
           usageScope: VoucherUsageScope.SAME_COMPANY,
         }),
       }));
+      // Émission VOUCHER_ISSUED en Outbox dans la même tx
+      expect(eventBusMock.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'voucher.issued',
+          tenantId,
+          aggregateType: 'Voucher',
+          aggregateId: 'V1',
+        }),
+        prismaMock,
+      );
       // Code commence par préfixe slug tenant (transformé maj / no-alpha retiré)
       const createdCode = prismaMock.voucher.create.mock.calls[0][0].data.code;
       expect(createdCode).toMatch(/^[A-Z]{1,4}-[0-9A-F]{4}-[0-9A-F]{4}$/);

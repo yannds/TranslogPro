@@ -4,6 +4,7 @@ import { NotificationController } from './notification.controller';
 import { LifecycleNotificationListener } from './lifecycle-notification.listener';
 import { InvoiceNotificationListener }   from './invoice-notification.listener';
 import { InvoiceOverdueScheduler }       from './invoice-overdue.scheduler';
+import { VoucherNotificationListener }   from './voucher-notification.listener';
 
 /**
  * NotificationModule — consomme ISmsService et IWhatsappService fournis
@@ -15,6 +16,8 @@ import { InvoiceOverdueScheduler }       from './invoice-overdue.scheduler';
  *     embarquement, rappels, arrivée).
  *   - InvoiceNotificationListener   : 4 events facturation (issued, paid,
  *     overdue, cancelled) — Tier 1.1 chantier email 2026-04-26.
+ *   - VoucherNotificationListener   : 1 event bon d'avoir (voucher.issued) —
+ *     Tier 1.2 chantier email 2026-04-26.
  *
  * Schedulers :
  *   - InvoiceOverdueScheduler : @Cron quotidien 07h UTC qui détecte les
@@ -27,6 +30,7 @@ import { InvoiceOverdueScheduler }       from './invoice-overdue.scheduler';
     LifecycleNotificationListener,
     InvoiceNotificationListener,
     InvoiceOverdueScheduler,
+    VoucherNotificationListener,
   ],
   exports:     [NotificationService],
 })

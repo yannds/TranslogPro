@@ -44,6 +44,10 @@ export const EventTypes = {
   INVOICE_OVERDUE:        'invoice.overdue',        // cron : ISSUED + dueDate < now (idempotent par invoice)
   INVOICE_CANCELLED:      'invoice.cancelled',      // ISSUED → CANCELLED : annulation après émission
 
+  // Voucher (bons d'avoir CRM — émis manuellement ou via incidents/delays)
+  // payload : { voucherId, code, amount, currency, validityEnd, origin, sourceTripId?, sourceTicketId? }
+  VOUCHER_ISSUED:         'voucher.issued',
+
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',
