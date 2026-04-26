@@ -50,4 +50,17 @@ export class StationController {
   remove(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.stations.remove(tenantId, id);
   }
+
+  /**
+   * POST /api/tenants/:tid/stations/:id/regeocode
+   * Re-geocode l'adresse "name, city" via la chaine Google → Mapbox → Nominatim
+   * et retourne une suggestion (current vs suggested + distance). Ne sauve pas.
+   * L'admin applique via PATCH /stations/:id si la suggestion est correcte.
+   */
+  @Post(':id/regeocode')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission(Permission.STATION_MANAGE_TENANT)
+  regeocode(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.stations.regeocode(tenantId, id);
+  }
 }

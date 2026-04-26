@@ -69,6 +69,52 @@ Cinq providers implémentés à ce jour :
 
 À quoi ça sert : encaissement des billets vendus sur le portail voyageur, des colis déposés au portail public, et **des abonnements SaaS de la plateforme** (`/admin/billing` → checkout).
 
+### 3.1.bis MAPS — geocoding + routing (clef partagee)
+
+Trois providers de cartographie sont orchestres en chaine de fallback :
+
+| Key | Display name | Vault path | Couverture Afrique francophone |
+|---|---|---|---|
+| `google` | Google Maps Platform | `platform/google-maps` | ★★★★★ |
+| `mapbox` | Mapbox | `platform/mapbox` | ★★★★ |
+| `nominatim` | OpenStreetMap (gratuit) | — (sans clef) | ★★ (decalage frequent) |
+
+**Une seule clef par provider couvre :**
+- **Geocoding** (adresse texte → lat/lng) via [GeoService](../src/modules/geo/geo.service.ts)
+- **Reverse-geocoding** (lat/lng → adresse) via le meme service
+- **Distance routiere** (origine → destination via routes) via [RoutingService](../src/modules/routing/routing.service.ts)
+
+Cote Google et Mapbox, autoriser dans la console les APIs : `Geocoding API`, `Directions API`, `Maps JavaScript API`.
+
+**Chaine de fallback automatique** : Google (si configured) → Mapbox (si configured) → Nominatim (toujours dispo). Si un provider retourne 0 resultat OU throw, on essaie le suivant. Cache Redis 1h sur la query (95%+ cache-hit en pratique).
+
+**A quoi ca sert** : place le marker du bon endroit lors de la creation d'une station/agence/adresse de destination. Avant l'introduction de Google/Mapbox, Nominatim placait souvent les pins a plusieurs centaines de metres de leur position reelle en Afrique francophone (donnees OSM peu denses).
+
+**Activer Google en dev** :
+```bash
+vault kv put secret/platform/google-maps API_KEY="AIza..."
+```
+Aucune autre action — au prochain redemarrage de l'API, Google Geocoding sera tete de chaine.
+
+**Activer Mapbox** :
+```bash
+vault kv put secret/platform/mapbox API_KEY="pk.eyJ..."
+```
+
+**Endpoint admin "re-geocoder une station"** :
+```
+POST /api/tenants/:tid/stations/:id/regeocode
+→ { current: { lat, lng } | null,
+    suggested: { displayName, lat, lng, countryCode } | null,
+    distanceKmFromCurrent: number | null }
+```
+Retourne juste une suggestion (ne sauve pas). L'admin valide via `PATCH /stations/:id` si la suggestion est correcte. Permet de **corriger en lot** les stations existantes posees par Nominatim.
+
+**CGU** :
+- Google : la clause "results must be displayed on a Google Map" est ambigue quand on stocke juste les coords pour les afficher sur Leaflet. Plusieurs gros SaaS l'ont fait sans incident, mais grise legalement.
+- Mapbox : aucune restriction de stockage long-terme — clean.
+- Nominatim : usage policy 1 req/s max (rate-limit cote backend).
+
 ### 3.2 AUTH — connexion OAuth
 
 Trois providers implémentés :

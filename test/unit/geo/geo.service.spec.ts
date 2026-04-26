@@ -33,7 +33,7 @@ function makeService(fetchImpl: jest.Mock) {
     get:   jest.fn().mockResolvedValue(null),
     setex: jest.fn().mockResolvedValue('OK'),
   };
-  const svc = new GeoService(redisMock as any);
+  const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
   (svc as any).fetch = fetchImpl; // override — see note in service
   return { svc, redisMock };
 }
@@ -59,7 +59,7 @@ describe('GeoService.search — viewbox bias', () => {
     // countrycodes= ET bounded=1 pour éviter les homonymes cross-pays.
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([DAKAR_RESULT]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     await svc.search('Dakar', 'SN');
 
@@ -73,7 +73,7 @@ describe('GeoService.search — viewbox bias', () => {
   it("n'ajoute pas viewbox si le countryCode n'est pas dans le registre", async () => {
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     await svc.search('Lomé', 'XX');
 
@@ -84,7 +84,7 @@ describe('GeoService.search — viewbox bias', () => {
   it("n'ajoute pas viewbox si aucun countryCode n'est fourni", async () => {
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     await svc.search('Abidjan');
 
@@ -99,7 +99,7 @@ describe('GeoService.search — viewbox bias', () => {
     // Empêche les homonymes (ex: Kintélé existe au CG ET au GA).
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) } as any);
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     const results = await svc.search('Abidjan', 'SN');
 
@@ -112,7 +112,7 @@ describe('GeoService.search — viewbox bias', () => {
       get:   jest.fn().mockResolvedValue(JSON.stringify(cached)),
       setex: jest.fn(),
     };
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     const results = await svc.search('Brazzaville', 'CG');
 
@@ -123,7 +123,7 @@ describe('GeoService.search — viewbox bias', () => {
   it('clé de cache diffère selon le countryCode (pas de collision cross-tenant)', async () => {
     const redisMock = { get: jest.fn().mockResolvedValue(null), setex: jest.fn().mockResolvedValue('OK') };
     fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) } as any);
-    const svc = new GeoService(redisMock as any);
+    const svc = new GeoService(redisMock as any, { getSecret: jest.fn().mockRejectedValue(new Error("not configured")) } as any);
 
     await svc.search('Dakar', 'SN');
     await svc.search('Dakar', 'CG');

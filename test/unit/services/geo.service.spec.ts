@@ -26,7 +26,10 @@ function makeRedis(getReturn: string | null = null): RedisMock {
 }
 
 function svc(redis: RedisMock): GeoService {
-  return new GeoService(redis as never);
+  // SECRET_SERVICE stub : aucun secret → providers Google/Mapbox `isConfigured=false`
+  // → la chaine retombe sur Nominatim, qui est ce que les tests historiques attendent.
+  const secrets = { getSecret: jest.fn().mockRejectedValue(new Error('not configured')) };
+  return new GeoService(redis as never, secrets as never);
 }
 
 describe('GeoService.search', () => {
@@ -82,7 +85,7 @@ describe('GeoService.search', () => {
     expect(String(call[0])).toContain('nominatim.openstreetmap.org/search');
     expect(call[1].headers['User-Agent']).toMatch(/TransLogPro/);
     expect(r.setex).toHaveBeenCalledWith(
-      expect.stringMatching(/^geo:search:v2:[a-f0-9]+$/),
+      expect.stringMatching(/^geo:search:v3:[a-f0-9]+$/),
       3600,
       expect.any(String),
     );

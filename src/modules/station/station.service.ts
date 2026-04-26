@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { GeoService } from '../geo/geo.service';
+import type { GeoSearchResult } from '../geo/providers/geo-provider.interface';
 
 export type StationType = 'PRINCIPALE' | 'RELAIS';
 const STATION_TYPES: readonly StationType[] = ['PRINCIPALE', 'RELAIS'];
@@ -36,7 +38,48 @@ export interface UpdateStationDto {
  */
 @Injectable()
 export class StationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly geo:    GeoService,
+  ) {}
+
+  /**
+   * Suggere de nouvelles coordonnees pour une station existante en re-geocodant
+   * son nom + ville via la chaine multi-provider (Google → Mapbox → Nominatim).
+   * NE SAUVE PAS — retourne une suggestion que l'admin valide via PATCH /stations/:id.
+   *
+   * Sert principalement a corriger en lot les pins faux poses par Nominatim/OSM
+   * en Afrique francophone avant l'introduction de Google Geocoding.
+   */
+  async regeocode(tenantId: string, stationId: string): Promise<{
+    current:  { lat: number; lng: number } | null;
+    suggested: GeoSearchResult | null;
+    distanceKmFromCurrent: number | null;
+  }> {
+    const station = await this.prisma.station.findFirst({
+      where:  { id: stationId, tenantId },
+      select: { name: true, city: true, coordinates: true, tenant: { select: { country: true } } },
+    });
+    if (!station) throw new NotFoundException('Station introuvable');
+
+    const query = [station.name, station.city].filter(Boolean).join(', ').trim();
+    if (query.length < 3) throw new BadRequestException('Nom/ville insuffisants pour re-geocoder');
+
+    const results = await this.geo.search(query, station.tenant?.country ?? undefined);
+    const suggested = results[0] ?? null;
+
+    const coords = station.coordinates as { lat?: number; lng?: number } | null;
+    const current = coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
+      ? { lat: coords.lat as number, lng: coords.lng as number }
+      : null;
+
+    let distanceKmFromCurrent: number | null = null;
+    if (current && suggested) {
+      distanceKmFromCurrent = haversineKm(current.lat, current.lng, suggested.lat, suggested.lng);
+    }
+
+    return { current, suggested, distanceKmFromCurrent };
+  }
 
   findAll(tenantId: string) {
     return this.prisma.station.findMany({
@@ -170,4 +213,15 @@ export class StationService {
 
     return out;
   }
+}
+
+/** Distance approximative entre 2 points GPS (formule haversine, km). */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 100) / 100;
 }
