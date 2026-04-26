@@ -24,6 +24,7 @@ import { useI18n } from '../i18n/useI18n';
 import { Loading } from '../ui/Loading';
 import { EmptyState } from '../ui/EmptyState';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { AgencyFilter } from '../ui/AgencyFilter';
 import { IconRefresh, IconTruck, IconClock, IconWarn, IconOk, IconAlert } from '../ui/icons';
 
 interface LiveTrip {
@@ -53,6 +54,7 @@ export function AdminLiveScreen() {
   const L = (fr: string, en: string) => (lang === 'en' ? en : fr);
 
   const [trips,    setTrips]    = useState<LiveTrip[]>([]);
+  const [agencyId, setAgencyId] = useState<string | 'ALL'>('ALL');
   const [loading,  setLoading]  = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -61,16 +63,16 @@ export function AdminLiveScreen() {
   const load = useCallback(async () => {
     if (!tenantId) return;
     try {
-      const res = await apiGet<LiveTrip[]>(
-        `/api/tenants/${tenantId}/trips/live`,
-        { skipAuthRedirect: true },
-      );
+      const path = agencyId === 'ALL'
+        ? `/api/tenants/${tenantId}/trips/live`
+        : `/api/tenants/${tenantId}/trips/live?agencyId=${encodeURIComponent(agencyId)}`;
+      const res = await apiGet<LiveTrip[]>(path, { skipAuthRedirect: true });
       setTrips(res ?? []);
       setLastUpdate(new Date());
     } catch {
       // silencieux — on garde le snapshot précédent (UI résiliente)
     }
-  }, [tenantId]);
+  }, [tenantId, agencyId]);
 
   useEffect(() => {
     setLoading(true);
@@ -112,6 +114,8 @@ export function AdminLiveScreen() {
           <Text style={{ color: colors.warning }}>{t('offline.bannerOffline')}</Text>
         </View>
       )}
+
+      <AgencyFilter selected={agencyId} onChange={setAgencyId} />
 
       <View style={styles.summaryRow}>
         <SummaryChip icon={IconTruck} label={L('En cours', 'Live')} value={counts.inProgress} tone={colors.success} colors={colors} />

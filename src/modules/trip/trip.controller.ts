@@ -32,8 +32,16 @@ export class TripController {
     @Query('driverId') driverId?: string,
     @Query('from')     from?:     string,
     @Query('to')       to?:       string,
+    @Query('agencyId') agencyId?: string,
   ) {
-    return this.tripService.findAll(tenantId, { status, driverId, from, to }, scope);
+    // Filtre agence optionnel — l'utilisateur tenant-scope peut filtrer une
+    // agence précise. Pour un user agency-scope, le scope serveur force déjà
+    // son agence (le query est alors ignoré : le scope ne peut pas être élargi).
+    let effectiveScope = scope;
+    if (agencyId && scope?.scope === 'tenant') {
+      effectiveScope = { ...scope, scope: 'agency', agencyId } as ScopeContext;
+    }
+    return this.tripService.findAll(tenantId, { status, driverId, from, to }, effectiveScope);
   }
 
   /**
@@ -54,8 +62,12 @@ export class TripController {
   findLive(
     @TenantId() tenantId: string,
     @ScopeCtx() scope: ScopeContext,
+    @Query('agencyId') agencyId?: string,
   ) {
-    return this.tripService.findLive(tenantId, scope);
+    // Filtre agence optionnel — l'utilisateur tenant-scope peut filtrer une
+    // agence précise ; un user agency-scope voit toujours son agence (le
+    // filtre query est ignoré dans ce cas, sécurité serveur).
+    return this.tripService.findLive(tenantId, scope, agencyId);
   }
 
   @Get(':id')

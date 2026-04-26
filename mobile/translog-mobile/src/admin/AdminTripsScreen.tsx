@@ -26,6 +26,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeProvider';
 import { useOnline } from '../offline/useOnline';
 import { useI18n } from '../i18n/useI18n';
+import { AgencyFilter } from '../ui/AgencyFilter';
 
 type StatusFilter = 'ALL' | 'PLANNED' | 'BOARDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SUSPENDED' | 'CANCELLED';
 
@@ -72,6 +73,7 @@ export function AdminTripsScreen() {
   const L = (fr: string, en: string) => (lang === 'en' ? en : fr);
 
   const [filter, setFilter]     = useState<StatusFilter>('ALL');
+  const [agencyId, setAgencyId] = useState<string | 'ALL'>('ALL');
   const [trips, setTrips]       = useState<Trip[]>([]);
   const [loading, setLoading]   = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -102,7 +104,8 @@ export function AdminTripsScreen() {
     if (!tenantId) return;
     try {
       const qs = new URLSearchParams({ from: range.from, to: range.to });
-      if (filter !== 'ALL') qs.set('status', filter);
+      if (filter !== 'ALL')   qs.set('status',   filter);
+      if (agencyId !== 'ALL') qs.set('agencyId', agencyId);
       const res = await apiGet<Trip[]>(
         `/api/tenants/${tenantId}/trips?${qs.toString()}`,
         { skipAuthRedirect: true },
@@ -111,7 +114,7 @@ export function AdminTripsScreen() {
     } catch {
       setTrips([]);
     }
-  }, [tenantId, range, filter]);
+  }, [tenantId, range, filter, agencyId]);
 
   useEffect(() => {
     setLoading(true);
@@ -253,6 +256,9 @@ export function AdminTripsScreen() {
           <Text style={{ color: colors.warning }}>{t('offline.bannerOffline')}</Text>
         </View>
       )}
+
+      {/* ── Filtre agence (défaut Toutes) ───────────────────────────────── */}
+      <AgencyFilter selected={agencyId} onChange={setAgencyId} />
 
       {/* ── Date picker linéaire J ± 7 ──────────────────────────────────── */}
       <View style={[styles.dateRow, { borderBottomColor: colors.border }]}>

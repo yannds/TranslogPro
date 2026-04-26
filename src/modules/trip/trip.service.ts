@@ -220,9 +220,17 @@ export class TripService {
    * Réutilise findAll avec un set de statuts fixes — la complexité est tout
    * entière dans le mapping post-process.
    */
-  async findLive(tenantId: string, scope?: ScopeContext) {
+  async findLive(tenantId: string, scope?: ScopeContext, agencyIdFilter?: string) {
     const STATUSES_LIVE = ['PLANNED', 'OPEN', 'BOARDING', 'IN_PROGRESS', 'SUSPENDED'];
-    const trips = await this.findAll(tenantId, { status: STATUSES_LIVE }, scope);
+    // Si l'appelant filtre une agence ET qu'il a la perm tenant-scope,
+    // on convertit en scope agency local (sans toucher au scope original
+    // de defense-in-depth). Pour un user déjà agency-scope, le scope serveur
+    // gagne — l'agencyIdFilter est ignoré (sinon il pourrait élargir).
+    let effectiveScope = scope;
+    if (agencyIdFilter && scope?.scope === 'tenant') {
+      effectiveScope = { ...scope, scope: 'agency', agencyId: agencyIdFilter };
+    }
+    const trips = await this.findAll(tenantId, { status: STATUSES_LIVE }, effectiveScope);
 
     const now = Date.now();
     return trips.map((t) => {
