@@ -155,7 +155,13 @@ grafana.translog.dsyann.info {
     import translog_tls_dns
     import translog_headers
 
-    reverse_proxy grafana:3000 {
+    # IMPORTANT : nom complet `translog-obs_grafana` (PAS l'alias court `grafana`).
+    # Raison : la stack gmp d'Easypanel expose AUSSI un service avec alias DNS
+    # `grafana` (cf. plus bas dans ce fichier `gmp_grafana`). Caddy etant connecte
+    # a `translog_obs_net` ET `easypanel-gmp`, l'alias court resolvait l'un OU
+    # l'autre aleatoirement → login Grafana cassait sur 50% des requetes
+    # (incident 2026-04-26).
+    reverse_proxy translog-obs_grafana:3000 {
         header_up X-Real-IP         {remote_host}
         header_up X-Forwarded-For   {remote_host}
         header_up X-Forwarded-Proto {scheme}
