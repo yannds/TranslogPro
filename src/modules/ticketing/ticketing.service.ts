@@ -893,7 +893,7 @@ export class TicketingService {
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, p) => {
-        return p.ticket.update({
+        const updated = (await p.ticket.update({
           where: { id: entity.id },
           data:  {
             status: state,
@@ -901,7 +901,19 @@ export class TicketingService {
             noShowMarkedById: actor.id,
             version: { increment: 1 },
           },
-        }) as Promise<typeof entity>;
+        })) as typeof entity;
+        // Outbox atomique : émission TICKET_NO_SHOW pour notifier le voyageur
+        // que la grâce est expirée et qu'il a des options (rebook / refund).
+        await this.eventBus.publish({
+          id:            uuidv4(),
+          type:          EventTypes.TICKET_NO_SHOW,
+          tenantId,
+          aggregateId:   ticket.id,
+          aggregateType: 'Ticket',
+          payload: { ticketId: ticket.id, tripId: ticket.tripId },
+          occurredAt: new Date(),
+        }, p);
+        return updated;
       },
     });
   }
@@ -1042,10 +1054,28 @@ export class TicketingService {
     }, {
       aggregateType: 'Ticket',
       persist: async (entity, state, p) => {
-        return p.ticket.update({
+        const updated = (await p.ticket.update({
           where: { id: entity.id },
           data:  { status: state, version: { increment: 1 } },
-        }) as Promise<typeof entity>;
+        })) as typeof entity;
+        // Outbox atomique : émission TICKET_REBOOKED pour notifier le voyageur.
+        // Le payload réfère le NOUVEAU tripId (newTripId) — le listener fera
+        // un lookup du nouveau ticket pour récupérer les détails.
+        await this.eventBus.publish({
+          id:            uuidv4(),
+          type:          EventTypes.TICKET_REBOOKED,
+          tenantId,
+          aggregateId:   oldTicket.id,
+          aggregateType: 'Ticket',
+          payload: {
+            ticketId:        oldTicket.id,
+            tripId:          oldTicket.tripId,
+            newTripId,
+            rebookAction:    action,
+          },
+          occurredAt: new Date(),
+        }, p);
+        return updated;
       },
     });
 
@@ -1298,14 +1328,25 @@ export class TicketingService {
         }, {
           aggregateType: 'Ticket',
           persist: async (entity, state, p) => {
-            return p.ticket.update({
+            const updated = (await p.ticket.update({
               where: { id: entity.id },
               data:  {
                 status: state,
                 forfeitedAt: new Date(),
                 version: { increment: 1 },
               },
-            }) as Promise<typeof entity>;
+            })) as typeof entity;
+            // Émission TICKET_FORFEITED — notifie que le billet est perdu (TTL).
+            await this.eventBus.publish({
+              id:            uuidv4(),
+              type:          EventTypes.TICKET_FORFEITED,
+              tenantId,
+              aggregateId:   ticket.id,
+              aggregateType: 'Ticket',
+              payload: { ticketId: ticket.id, tripId: ticket.tripId },
+              occurredAt: new Date(),
+            }, p);
+            return updated;
           },
         });
         forfeited++;

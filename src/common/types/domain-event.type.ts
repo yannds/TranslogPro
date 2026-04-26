@@ -37,6 +37,12 @@ export const EventTypes = {
   TICKET_REFUNDED:        'ticket.refunded',
   TICKET_EXPIRED:         'ticket.expired',
 
+  // Ticket no-show / rebook / forfeit (Tier 2.2 chantier email 2026-04-26)
+  // payload : { ticketId, tripId, passengerName, ticketRef?, newTripId?, newTicketId? }
+  TICKET_NO_SHOW:         'ticket.no_show',
+  TICKET_REBOOKED:        'ticket.rebooked',
+  TICKET_FORFEITED:       'ticket.forfeited',
+
   // Invoice (facturation tenant — émis par InvoiceService transitions + InvoiceOverdueScheduler)
   // payload : { invoiceId, invoiceNumber, totalAmount, currency, dueDate?, paidAt?, paymentMethod?, daysOverdue? }
   INVOICE_ISSUED:         'invoice.issued',         // DRAFT → ISSUED : nouvelle facture envoyée au client
