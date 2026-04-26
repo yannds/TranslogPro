@@ -25,6 +25,7 @@ import { INVOICE_DESCRIPTORS }   from './invoice.descriptors';
 import { VOUCHER_DESCRIPTORS }   from './voucher.descriptors';
 import { REFUND_DESCRIPTORS }    from './refund.descriptors';
 import { USER_DESCRIPTORS }      from './user.descriptors';
+import { TRIP_DESCRIPTORS }      from './trip.descriptors';
 
 /**
  * Catalogue exhaustif des templates email.
@@ -39,8 +40,9 @@ const ALL_DESCRIPTORS: ReadonlyArray<EmailTemplateDescriptor> = [
   ...VOUCHER_DESCRIPTORS,
   ...REFUND_DESCRIPTORS,
   ...USER_DESCRIPTORS,
-  // À venir : ...TRIP_DESCRIPTORS, ...PARCEL_DESCRIPTORS,
-  //          ...TICKET_DESCRIPTORS, ...AUTH_DESCRIPTORS, ...SUBSCRIPTION_DESCRIPTORS
+  ...TRIP_DESCRIPTORS,
+  // À venir : ...PARCEL_DESCRIPTORS, ...TICKET_DESCRIPTORS,
+  //          ...AUTH_DESCRIPTORS, ...SUBSCRIPTION_DESCRIPTORS
 ];
 
 /** Catalogue complet — utilisé par `GET /platform/email/templates`. */

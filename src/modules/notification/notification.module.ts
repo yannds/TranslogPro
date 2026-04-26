@@ -7,6 +7,7 @@ import { InvoiceOverdueScheduler }       from './invoice-overdue.scheduler';
 import { VoucherNotificationListener }   from './voucher-notification.listener';
 import { RefundNotificationListener }    from './refund-notification.listener';
 import { UserNotificationListener }      from './user-notification.listener';
+import { TripCancelledNotificationListener } from './trip-cancelled-notification.listener';
 
 /**
  * NotificationModule — consomme ISmsService et IWhatsappService fournis
@@ -40,6 +41,7 @@ import { UserNotificationListener }      from './user-notification.listener';
     VoucherNotificationListener,
     RefundNotificationListener,
     UserNotificationListener,
+    TripCancelledNotificationListener,
   ],
   exports:     [NotificationService],
 })
