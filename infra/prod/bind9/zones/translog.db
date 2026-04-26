@@ -3,7 +3,7 @@ $TTL    3600
 
 ; ─── SOA ───────────────────────────────────────────────────────────────────────
 @   IN  SOA   ns1.translog.dsyann.info. admin.translog.dsyann.info. (
-                2026042502   ; serial YYYYMMDDNN — bump à chaque edit manuel
+                2026042601   ; serial YYYYMMDDNN — bump à chaque edit manuel
                 3600         ; refresh  (1h)
                 900          ; retry    (15m)
                 604800       ; expire   (7j)
@@ -16,6 +16,12 @@ $TTL    3600
 
 ns1         IN  A     72.61.108.160
 ns2         IN  A     72.61.108.160
+
+; ─── CAA records (restrict CA to Let's Encrypt) ──────────────────────────────
+; Empêche n'importe quelle CA d'émettre un cert pour cette zone.
+; iodef = adresse pour notifier les violations détectées.
+@               IN  CAA   0 issue "letsencrypt.org"
+@               IN  CAA   0 iodef "mailto:security@translog.dsyann.info"
 
 ; ─── Records applicatifs TransLog ─────────────────────────────────────────────
 ; Apex translog.dsyann.info — landing publique SaaS (PublicLanding)
