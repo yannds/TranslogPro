@@ -383,6 +383,37 @@ export class RefundService {
           data,
         });
 
+        // Émission DomainEvent dans la même tx (Outbox atomique). Les listeners
+        // notification consomment APPROVED/REJECTED ; PROCESSED reste émis pour
+        // permettre un futur template "virement effectué" sans changer le service.
+        const eventType = action === RefundAction.APPROVE ? EventTypes.REFUND_APPROVED
+                        : action === RefundAction.PROCESS ? EventTypes.REFUND_PROCESSED
+                        : action === RefundAction.REJECT  ? EventTypes.REFUND_REJECTED
+                        : null;
+        if (eventType) {
+          const event: DomainEvent = {
+            id:            uuidv4(),
+            type:          eventType,
+            tenantId,
+            aggregateId:   entity.id,
+            aggregateType: 'Refund',
+            payload: {
+              refundId:       entity.id,
+              ticketId:       entity.ticketId,
+              tripId:         entity.tripId,
+              amount:         entity.amount,
+              originalAmount: entity.originalAmount,
+              policyPercent:  entity.policyPercent,
+              currency:       entity.currency,
+              reason:         entity.reason,
+              paymentMethod:  entity.paymentMethod,
+              notes:          extras?.notes ?? null,
+            },
+            occurredAt: new Date(),
+          };
+          await this.eventBus.publish(event, p);
+        }
+
         // Side-effect caisse atomique sur PROCESS → Transaction{type:REFUND}
         // avec amount négatif sur la caisse VIRTUELLE de l'agence.
         // Garantit la traçabilité comptable dans la même TX que la transition

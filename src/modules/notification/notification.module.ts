@@ -5,6 +5,7 @@ import { LifecycleNotificationListener } from './lifecycle-notification.listener
 import { InvoiceNotificationListener }   from './invoice-notification.listener';
 import { InvoiceOverdueScheduler }       from './invoice-overdue.scheduler';
 import { VoucherNotificationListener }   from './voucher-notification.listener';
+import { RefundNotificationListener }    from './refund-notification.listener';
 
 /**
  * NotificationModule — consomme ISmsService et IWhatsappService fournis
@@ -18,6 +19,9 @@ import { VoucherNotificationListener }   from './voucher-notification.listener';
  *     overdue, cancelled) — Tier 1.1 chantier email 2026-04-26.
  *   - VoucherNotificationListener   : 1 event bon d'avoir (voucher.issued) —
  *     Tier 1.2 chantier email 2026-04-26.
+ *   - RefundNotificationListener    : 4 events refund (created/approved/
+ *     auto_approved/rejected) — 3 templates (approved et auto_approved
+ *     partagent le même) — Tier 1.3 chantier email 2026-04-26.
  *
  * Schedulers :
  *   - InvoiceOverdueScheduler : @Cron quotidien 07h UTC qui détecte les
@@ -31,6 +35,7 @@ import { VoucherNotificationListener }   from './voucher-notification.listener';
     InvoiceNotificationListener,
     InvoiceOverdueScheduler,
     VoucherNotificationListener,
+    RefundNotificationListener,
   ],
   exports:     [NotificationService],
 })
