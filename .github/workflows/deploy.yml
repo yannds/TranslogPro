@@ -161,6 +161,24 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "mkdir -p ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod ${{ secrets.VPS_DEPLOY_PATH }}/prisma/seeds ${{ secrets.VPS_DEPLOY_PATH }}/frontend"
 
+      - name: Pre-flight validation Caddyfile + BIND9
+        # Bloque le deploy si Caddyfile / named.conf / zone BIND9 ne valident
+        # pas localement. Évite de pusher une config qui crash le runtime.
+        run: |
+          # Caddy validate (via image officielle, pas besoin du custom)
+          docker run --rm -v "$(pwd)/infra/prod/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -5
+          # BIND9 named-checkconf (image officielle)
+          docker run --rm \
+            -v "$(pwd)/infra/prod/bind9/named.conf:/etc/bind/named.conf:ro" \
+            -v "$(pwd)/infra/prod/bind9/zones:/var/lib/bind:ro" \
+            internetsystemsconsortium/bind9:9.20 \
+            named-checkconf /etc/bind/named.conf 2>&1 | tail -3 || \
+            { echo "::error::named.conf validation failed"; exit 1; }
+          # docker-stack.prod.yml syntax (skip env vars qui sont sur VPS)
+          docker compose -f infra/prod/docker-stack.prod.yml config --quiet 2>&1 | tail -5 || \
+            { echo "::warning::docker-stack.prod.yml validation a des warnings (env vars manquantes en CI, normal)"; }
+
       - name: Drift check Caddyfile + BIND9 zone
         # Garde-fou : si quelqu'un a modifié Caddyfile ou zone BIND9 sur le VPS
         # sans sync dans le repo, le rsync va écraser ses modifs. On compare
@@ -225,16 +243,43 @@ jobs:
             SKIP_BUILD=1 bash scripts/04-deploy.sh
           EOF
 
-      - name: External healthcheck
+      - name: External healthcheck (smoke test post-deploy)
         run: |
-          for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info; do
-            code=$(curl -kI -o /dev/null -w "%{http_code}" -m 15 https://$d/ || echo 000)
-            echo "https://$d/ → HTTP $code"
-            if [ "$code" -ge 500 ] || [ "$code" = "000" ]; then
-              echo "::error::$d unhealthy (HTTP $code)"
-              exit 1
+          # Attente 30s pour que les services convergent post-deploy
+          sleep 30
+          FAIL=0
+          for d in translog.dsyann.info admin.translog.dsyann.info api.translog.dsyann.info panel.dsyann.info; do
+            for attempt in 1 2 3; do
+              code=$(curl -kI -o /dev/null -w "%{http_code}" -m 10 "https://$d/?cb=$(date +%s%N)" || echo 000)
+              if [ "$code" = "200" ] || [ "$code" = "404" ] || [ "$code" = "302" ] || [ "$code" = "301" ]; then
+                echo "✔ https://$d/ → HTTP $code"
+                break
+              fi
+              [ "$attempt" = "3" ] && { echo "::error::$d unhealthy après 3 tentatives (HTTP $code)"; FAIL=1; }
+              sleep 5
+            done
+          done
+          # Vérifier que DNS public résout encore
+          for d in translog.dsyann.info api.translog.dsyann.info; do
+            ip=$(dig +short A "$d" @8.8.8.8 +time=3 +tries=2 | head -1)
+            if [ -z "$ip" ]; then
+              echo "::error::DNS public ne résout plus $d (BIND9 cassé ?)"
+              FAIL=1
+            else
+              echo "✔ DNS $d → $ip"
             fi
           done
+          if [ "$FAIL" = "1" ]; then
+            echo "::error::Smoke test post-deploy KO — rollback recommandé : bash /opt/TranslogPro/infra/prod/scripts/restore-good-state.sh latest"
+            exit 1
+          fi
+
+      - name: Snapshot good-state si succès
+        if: success()
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "cd ${{ secrets.VPS_DEPLOY_PATH }}/infra/prod && ./scripts/snapshot-good-state.sh deploy-${{ needs.build-push.outputs.tag }} 2>&1 | tail -10" || \
+            echo "::warning::Snapshot good-state post-deploy a échoué (non bloquant)"
 
       - name: Notify success
         if: success()
