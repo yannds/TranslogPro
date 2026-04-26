@@ -502,6 +502,51 @@ export class TenantIamService {
     });
   }
 
+  /**
+   * Reset MFA d'un user du tenant — ops destructive : efface secret + backup
+   * codes + flag enabled. Le user devra re-enroll au prochain login. Permet
+   * à un admin tenant de débloquer un utilisateur qui a perdu son téléphone
+   * sans devoir escalader au super-admin plateforme.
+   *
+   * Sécurité :
+   *   - Permission `USER_RESET_MFA_TENANT` requise (TENANT_ADMIN).
+   *   - Le user cible doit appartenir au même tenant que l'actor (findFirst
+   *     scopé tenantId — pas de fuite cross-tenant).
+   *   - Audit log level=warn — équivalent d'une compromission second facteur.
+   *   - Toutes les sessions actives du user sont révoquées (oblige re-login
+   *     avec password seul, puis re-enroll MFA).
+   */
+  async resetUserMfa(tenantId: string, userId: string, actorId: string): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where:  { id: userId, tenantId },
+      select: { id: true, email: true, mfaEnabled: true },
+    });
+    if (!user) throw new NotFoundException(`User ${userId} introuvable dans ce tenant`);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data:  {
+          mfaEnabled:     false,
+          mfaSecret:      null,
+          mfaBackupCodes: [],
+          mfaVerifiedAt:  null,
+        },
+      });
+      // Forcer la déconnexion — sans ça, le user resterait connecté avec son
+      // ancien cookie, sans avoir prouvé son identité de second facteur.
+      await tx.session.deleteMany({ where: { userId, tenantId } });
+    });
+
+    await this.log({
+      tenantId, actorId,
+      action:   'control.iam.user.reset-mfa.tenant',
+      resource: `User:${userId}`,
+      level:    'warn',
+      oldValue: { mfaWasEnabled: user.mfaEnabled, email: user.email },
+    });
+  }
+
   // ─── Journal d'accès ──────────────────────────────────────────────────────
 
   async listAuditLogs(tenantId: string, query: AuditQueryDto) {

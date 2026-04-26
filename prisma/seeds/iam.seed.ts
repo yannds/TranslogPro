@@ -218,8 +218,9 @@ export const TENANT_ROLES: Array<{
       'data.display.update.agency',
       'control.iam.manage.tenant',
       'control.iam.audit.tenant',
-      // IAM — reset mot de passe et suppression en masse (ops destructives)
+      // IAM — reset mot de passe / MFA et suppression en masse (ops destructives)
       'control.iam.user.reset-password.tenant',
+      'control.iam.user.reset-mfa.tenant',
       'control.iam.user.bulk-delete.tenant',
       // Documents imprimables
       'data.ticket.print.agency',

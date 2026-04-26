@@ -148,6 +148,21 @@ export class TenantIamController {
   }
 
   /**
+   * Reset MFA d'un user — clear secret + backup codes + sessions. Le user
+   * devra re-enroll au prochain login. Réservé TENANT_ADMIN.
+   */
+  @Post('users/:userId/reset-mfa')
+  @RequirePermission(Permission.USER_RESET_MFA_TENANT)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async resetUserMfa(
+    @Param('tenantId') tenantId: string,
+    @Param('userId')   userId:   string,
+    @CurrentUser()     actor:    CurrentUserPayload,
+  ): Promise<void> {
+    await this.iam.resetUserMfa(tenantId, userId, actor.id);
+  }
+
+  /**
    * Batch — envoi d'un lien de reset à plusieurs users (mode 'link' uniquement).
    * Le mode 'set' en batch est interdit (trop dangereux).
    */

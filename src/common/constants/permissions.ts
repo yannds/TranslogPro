@@ -30,6 +30,7 @@ export const P_IAM_AUDIT_TENANT            = 'control.iam.audit.tenant';
 export const P_INTEGRATION_SETUP_TENANT    = 'control.integration.setup.tenant';
 export const P_USER_READ_AGENCY            = 'data.user.read.agency';
 export const P_USER_RESET_PASSWORD_TENANT  = 'control.iam.user.reset-password.tenant';
+export const P_USER_RESET_MFA_TENANT       = 'control.iam.user.reset-mfa.tenant';
 export const P_USER_BULK_DELETE_TENANT     = 'control.iam.user.bulk-delete.tenant';
 export const P_BULK_IMPORT_TENANT          = 'control.bulk.import.tenant';
 export const P_SESSION_REVOKE_OWN          = 'data.session.revoke.own';
@@ -395,6 +396,7 @@ export const Permission = {
   INTEGRATION_SETUP_TENANT:   P_INTEGRATION_SETUP_TENANT,
   USER_READ_AGENCY:           P_USER_READ_AGENCY,
   USER_RESET_PASSWORD_TENANT: P_USER_RESET_PASSWORD_TENANT,
+  USER_RESET_MFA_TENANT:      P_USER_RESET_MFA_TENANT,
   USER_BULK_DELETE_TENANT:    P_USER_BULK_DELETE_TENANT,
   BULK_IMPORT_TENANT:         P_BULK_IMPORT_TENANT,
   SESSION_REVOKE_OWN:         P_SESSION_REVOKE_OWN,

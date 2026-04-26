@@ -16,11 +16,11 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Monitor, LogOut, KeyRound, ShieldCheck, ShieldOff,
-  Calendar, CheckCircle2, XCircle,
+  Monitor, LogOut, KeyRound, ShieldCheck, ShieldOff, ShieldX,
+  Calendar, CheckCircle2, XCircle, Trash2,
 } from 'lucide-react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost, apiDelete } from '../../lib/api';
 import { useI18n } from '../../lib/i18n/useI18n';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -121,8 +121,12 @@ export function UserDetailDialog({
   const [history,  setHistory]  = useState<LoginHistoryItem[] | null>(null);
   const [loading,  setLoading]  = useState(false);
   const [err,      setErr]      = useState<string | null>(null);
-  const [revoking, setRevoking] = useState(false);
-  const [tab,      setTab]      = useState('info');
+  const [revoking,    setRevoking]    = useState(false);
+  const [revokingId,  setRevokingId]  = useState<string | null>(null);
+  const [resettingMfa, setResettingMfa] = useState(false);
+  const [resettingPwd, setResettingPwd] = useState(false);
+  const [pwdLink,      setPwdLink]      = useState<string | null>(null);
+  const [tab,         setTab]         = useState('info');
   const { t } = useI18n();
 
   const base = `/api/tenants/${tenantId}/iam/users/${userId}`;
@@ -157,6 +161,51 @@ export function UserDetailDialog({
       setSessions(fresh);
     } catch (e) { setErr((e as Error).message); }
     finally { setRevoking(false); }
+  };
+
+  const handleRevokeOne = async (sessionId: string) => {
+    if (!confirm(t('userDetail.confirmRevokeOne'))) return;
+    setRevokingId(sessionId);
+    try {
+      // Endpoint tenant-iam : DELETE /api/tenants/:tid/iam/sessions/:sessionId
+      // (scopé tenant ; pas besoin de scope user — la session est déjà liée).
+      await apiDelete(`/api/tenants/${tenantId}/iam/sessions/${sessionId}`);
+      const fresh = await apiGet<SessionItem[]>(`${base}/sessions`);
+      setSessions(fresh);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setRevokingId(null); }
+  };
+
+  const handleResetMfa = async () => {
+    if (!userId) return;
+    if (!confirm(t('userDetail.confirmResetMfa'))) return;
+    setResettingMfa(true); setErr(null);
+    try {
+      await apiPost(`${base}/reset-mfa`);
+      // Refresh user pour refléter mfaEnabled=false + sessions vides (le reset
+      // côté serveur supprime aussi toutes les sessions du user).
+      const [u, s] = await Promise.all([
+        apiGet<UserDetail>(base),
+        apiGet<SessionItem[]>(`${base}/sessions`),
+      ]);
+      setUser(u); setSessions(s);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setResettingMfa(false); }
+  };
+
+  const handleResetPassword = async () => {
+    if (!userId) return;
+    if (!confirm(t('userDetail.confirmResetPassword'))) return;
+    setResettingPwd(true); setErr(null); setPwdLink(null);
+    try {
+      const out = await apiPost<{ resetUrl?: string }>(
+        `${base}/reset-password`, { mode: 'link' },
+      );
+      // Mode 'link' : retourne une URL one-shot à transmettre hors-bande
+      // (l'envoi email automatique sera branché plus tard).
+      if (out?.resetUrl) setPwdLink(out.resetUrl);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setResettingPwd(false); }
   };
 
   if (!open) return null;
@@ -296,7 +345,7 @@ export function UserDetailDialog({
                         const ua = parseUA(s.userAgent);
                         return (
                           <li key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <div className="min-w-0 text-xs">
+                            <div className="min-w-0 text-xs flex-1">
                               <p className="font-medium text-slate-700 dark:text-slate-200">
                                 {ua.browser} · {ua.os}
                               </p>
@@ -304,7 +353,19 @@ export function UserDetailDialog({
                                 {s.ipAddress ?? '—'} · {t('userDetail.since')} {formatDateTime(s.createdAt)}
                               </p>
                             </div>
-                            <Badge variant="success">{t('userDetail.active')}</Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="success">{t('userDetail.active')}</Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRevokeOne(s.id)}
+                                disabled={revokingId === s.id || revoking}
+                                aria-label={t('userDetail.revokeOne')}
+                                className="text-red-600 border-red-200 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
                           </li>
                         );
                       })}
@@ -329,15 +390,40 @@ export function UserDetailDialog({
                     <p className="mt-2 text-xs text-slate-500">
                       {user.mfaEnabled
                         ? `${t('userDetail.mfaEnabledOn')} ${formatDateTime(user.mfaVerifiedAt)}`
-                        : t('userDetail.mfaComingSoon')}
+                        : t('userDetail.mfaNotConfigured')}
                     </p>
+                    {user.mfaEnabled && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleResetMfa}
+                          disabled={resettingMfa}
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                        >
+                          <ShieldX size={14} className="mr-1.5" />
+                          {resettingMfa ? t('userDetail.resettingMfa') : t('userDetail.resetMfa')}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Reset mot de passe (placeholder — à brancher quand endpoint prêt) */}
-                  <div className="mt-4">
-                    <Button variant="outline" disabled>
+                  {/* Reset mot de passe — branché à POST .../reset-password mode 'link' */}
+                  <div className="mt-4 space-y-2">
+                    {pwdLink && (
+                      <div role="status" className="rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-3 py-2 text-xs text-teal-800 dark:text-teal-300 break-all">
+                        <p className="font-medium mb-1">{t('userDetail.resetPasswordLinkLabel')}</p>
+                        <code className="font-mono text-[11px] block">{pwdLink}</code>
+                        <p className="mt-1 text-[11px] opacity-80">{t('userDetail.resetPasswordLinkHint')}</p>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={handleResetPassword}
+                      disabled={resettingPwd}
+                    >
                       <KeyRound size={14} className="mr-1.5" />
-                      {t('userDetail.resetPassword')}
+                      {resettingPwd ? t('userDetail.resettingPassword') : t('userDetail.resetPassword')}
                     </Button>
                   </div>
                 </TabsContent>
