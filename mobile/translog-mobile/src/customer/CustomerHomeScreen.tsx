@@ -27,7 +27,10 @@ interface Ticket {
   id:             string;
   status:         string;
   trip?: {
+    id?:                string;
     departureScheduled: string;
+    arrivalActual?:     string | null;
+    status?:            string;
     route?: { origin?: { name: string }; destination?: { name: string } };
   };
 }
@@ -93,6 +96,24 @@ export function CustomerHomeScreen() {
     [parcels],
   );
 
+  // Trajet récemment terminé (≤ 7 jours) sans feedback connu côté front.
+  // Le serveur dédoublonne via la contrainte (ticketId, userId) — l'écran SAV
+  // gère le 409/422 si le feedback existe déjà. Ici on amorce le prompt seulement.
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1_000;
+  const recentlyCompleted = useMemo(() => {
+    const now = Date.now();
+    return tickets.find(tk => {
+      const arrived = tk.trip?.arrivalActual ?? tk.trip?.departureScheduled;
+      if (!arrived) return false;
+      const arrivedAt = new Date(arrived).getTime();
+      const isCompleted =
+        tk.trip?.status === 'COMPLETED' ||
+        tk.status === 'CHECKED_IN' ||
+        tk.status === 'BOARDED';
+      return isCompleted && arrivedAt < now && now - arrivedAt < SEVEN_DAYS_MS;
+    });
+  }, [tickets]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.header}>
@@ -145,6 +166,29 @@ export function CustomerHomeScreen() {
           </Pressable>
         )}
 
+        {/* ── Prompt feedback post-trip (≤ 7j sans avis) ──────────────── */}
+        {recentlyCompleted && recentlyCompleted.trip && (
+          <Pressable
+            onPress={() => navigation.navigate('CustomerSav', { ticketId: recentlyCompleted.id })}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.feedbackCard,
+              { borderColor: colors.warning, backgroundColor: colors.warningBg, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={{ fontSize: 22 }}>⭐</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.warning, fontWeight: '800' }}>
+                {L('Notez votre dernier voyage', 'Rate your last trip')}
+              </Text>
+              <Text style={{ color: colors.text, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                {recentlyCompleted.trip.route?.origin?.name ?? '?'} → {recentlyCompleted.trip.route?.destination?.name ?? '?'}
+              </Text>
+            </View>
+            <Text style={{ color: colors.warning, fontSize: 18, fontWeight: '700' }}>›</Text>
+          </Pressable>
+        )}
+
         {/* ── Tuiles ──────────────────────────────────────────────────── */}
         <View style={styles.grid}>
           <Tile
@@ -164,6 +208,12 @@ export function CustomerHomeScreen() {
             label={L('SAV & avis', 'SAV & feedback')}
             icon="💬"
             onPress={() => navigation.navigate('CustomerSav')}
+            color={colors.surface} fg={colors.text} colors={colors}
+          />
+          <Tile
+            label={L('Mon profil', 'My profile')}
+            icon="👤"
+            onPress={() => navigation.navigate('CustomerProfile')}
             color={colors.surface} fg={colors.text} colors={colors}
           />
           <Tile
@@ -216,6 +266,7 @@ const styles = StyleSheet.create({
   logoutBtn:    { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   banner:       { marginHorizontal: 16, padding: 10, borderRadius: 8 },
   nextTripCard: { padding: 16, borderRadius: 12, borderWidth: 2 },
+  feedbackCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
   grid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tile:         { flexBasis: '47%', flexGrow: 1, aspectRatio: 1, padding: 16, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   badge:        { position: 'absolute', top: 8, right: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, minWidth: 20, alignItems: 'center' },

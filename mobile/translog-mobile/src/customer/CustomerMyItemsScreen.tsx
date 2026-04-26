@@ -26,11 +26,10 @@ import { useOnline } from '../offline/useOnline';
 
 type Tab = 'tickets' | 'parcels';
 
-// TODO: installer `react-native-qrcode-svg` pour afficher le QR en image.
-// En attendant, on expose le token signé en grands caractères — l'agent peut
-// soit le scanner via lecteur externe, soit le taper dans le fallback manuel
-// côté app agent (QuaiHome propose déjà "saisie manuelle").
-const TOKEN_DISPLAY_MAX = 64;
+// Affichage du token signé : on l'expose en intégralité pour que l'agent
+// puisse le saisir en fallback manuel dans QuaiHome (sinon HMAC invalide).
+// Une future itération (Chantier-Expo53) ajoutera le rendu QR via
+// `react-native-qrcode-svg` (réutilisera react-native-svg déjà installé).
 
 interface Ticket {
   id:             string;
@@ -271,12 +270,11 @@ export function CustomerMyItemsScreen() {
                       style={{
                         color: '#000',
                         fontFamily: 'Courier',
-                        fontSize: 11,
+                        fontSize: 12,
                         textAlign: 'center',
                       }}
                     >
-                      {qrOpen.qrCode.slice(0, TOKEN_DISPLAY_MAX)}
-                      {qrOpen.qrCode.length > TOKEN_DISPLAY_MAX ? '…' : ''}
+                      {qrOpen.qrCode}
                     </Text>
                   </View>
                 )}

@@ -33,6 +33,7 @@ import { CustomerHomeScreen } from '../customer/CustomerHomeScreen';
 import { CustomerBookingScreen } from '../customer/CustomerBookingScreen';
 import { CustomerMyItemsScreen } from '../customer/CustomerMyItemsScreen';
 import { CustomerSavScreen } from '../customer/CustomerSavScreen';
+import { CustomerProfileScreen } from '../customer/CustomerProfileScreen';
 import { portalForUser } from './portalForUser';
 
 const RootStack    = createNativeStackNavigator();
@@ -103,6 +104,7 @@ function CustomerNav() {
       <CustomerStack.Screen name="CustomerBooking"  component={CustomerBookingScreen} />
       <CustomerStack.Screen name="CustomerMyItems"  component={CustomerMyItemsScreen} />
       <CustomerStack.Screen name="CustomerSav"      component={CustomerSavScreen} />
+      <CustomerStack.Screen name="CustomerProfile"  component={CustomerProfileScreen} />
     </CustomerStack.Navigator>
   );
 }
