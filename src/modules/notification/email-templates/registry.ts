@@ -29,6 +29,7 @@ import { TRIP_DESCRIPTORS }      from './trip.descriptors';
 import { PARCEL_DESCRIPTORS }    from './parcel.descriptors';
 import { TICKET_DESCRIPTORS }    from './ticket.descriptors';
 import { AUTH_DESCRIPTORS }      from './auth.descriptors';
+import { SUBSCRIPTION_DESCRIPTORS } from './subscription.descriptors';
 
 /**
  * Catalogue exhaustif des templates email.
@@ -47,7 +48,7 @@ const ALL_DESCRIPTORS: ReadonlyArray<EmailTemplateDescriptor> = [
   ...PARCEL_DESCRIPTORS,
   ...TICKET_DESCRIPTORS,
   ...AUTH_DESCRIPTORS,
-  // À venir : ...SUBSCRIPTION_DESCRIPTORS
+  ...SUBSCRIPTION_DESCRIPTORS,
 ];
 
 /** Catalogue complet — utilisé par `GET /platform/email/templates`. */

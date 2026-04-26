@@ -71,6 +71,12 @@ export const EventTypes = {
   AUTH_MFA_ENABLED:                'auth.mfa.enabled',
   AUTH_MFA_DISABLED:               'auth.mfa.disabled',
 
+  // Subscription (Tier 4 chantier email 2026-04-26)
+  // payload : { subscriptionId, tenantId, planName, price, currency, trialEndsAt?, cancelledAt?, reason? }
+  SUBSCRIPTION_CREATED:        'subscription.created',
+  SUBSCRIPTION_CANCELLED:      'subscription.cancelled',
+  SUBSCRIPTION_TRIAL_EXPIRING: 'subscription.trial_expiring',
+
   // Refund
   REFUND_CREATED:         'refund.created',
   REFUND_APPROVED:        'refund.approved',
