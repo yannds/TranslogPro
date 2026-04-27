@@ -37,6 +37,7 @@ import type { ResolvedNavSection } from '../../lib/navigation/nav.types';
 import { TenantScopeSelector }        from '../platform/TenantScopeSelector';
 import { ImpersonationBanner }        from '../platform/ImpersonationBanner';
 import { TrialBanner }                from '../billing/TrialBanner';
+import { MfaSuggestionBanner }        from '../auth/MfaSuggestionBanner';
 import { SuspendedScreen }            from '../billing/SuspendedScreen';
 import { OfflineBanner }              from '../offline/OfflineBanner';
 
@@ -601,6 +602,7 @@ export function AdminDashboard() {
 
         <OfflineBanner />
         <ImpersonationBanner />
+        <MfaSuggestionBanner />
 
         {permissions.includes('control.settings.manage.tenant') && (
           <div className="px-4 pt-3 sm:px-6">

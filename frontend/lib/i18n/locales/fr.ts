@@ -6195,6 +6195,13 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "tips.t2":           "Invitez au moins un collègue aujourd'hui — les équipes à 2 convertissent 3× mieux.",
     "tips.t3":           "Consultez le module Analytics dès le 3ème jour — il devient précieux après quelques ventes."
   },
+  "mfa": {
+    "suggestion.aria":    "Suggestion de sécurité — activer la 2FA",
+    "suggestion.title":   "Sécurisez votre compte avec la 2FA",
+    "suggestion.body":    "Recommandé : ajoutez un code à 6 chiffres généré par votre téléphone pour mieux protéger votre compte. C'est optionnel et ça prend 2 minutes.",
+    "suggestion.cta":     "Activer maintenant",
+    "suggestion.dismiss": "Masquer cette suggestion"
+  },
   "tour": {
     "prev":              "Précédent",
     "next":              "Suivant",
@@ -6784,6 +6791,8 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "pwdFailed":          "Échec du changement de mot de passe.",
     "mustChangePassword": "Votre administrateur a demandé que vous changiez votre mot de passe avant de continuer.",
     "mustEnrollMfa":      "L'authentification à deux facteurs (MFA) est obligatoire pour votre rôle. Activez-la dans la section Sécurité ci-dessous pour continuer à utiliser l'application.",
+    "suggestedEnrollMfa": "Recommandé : activez l'authentification à deux facteurs pour mieux protéger votre compte. C'est rapide (2 minutes) et optionnel — vous pouvez le faire plus tard.",
+    "mfaPlatformLocked":  "La désactivation MFA est interdite pour le staff plateforme. Contactez un autre admin plateforme pour un reset.",
 
     "mfaTitle":           "Double authentification (TOTP)",
     "mfaDesc":            "Protégez votre compte avec une application d'authentification comme Google Authenticator ou 1Password.",

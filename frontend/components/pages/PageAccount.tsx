@@ -82,6 +82,17 @@ const TIMEZONES = [
 
 // ─── Sous-composants ──────────────────────────────────────────────────────────
 
+/**
+ * Détecte si le user appartient au tenant plateforme (SUPER_ADMIN, SUPPORT_L1/L2).
+ * Utilisé pour masquer le bouton "Désactiver MFA" — pour eux, MFA est obligatoire
+ * et permanent (politique 2026-04-27). Le backend (MfaService.disable) rejette
+ * aussi via ForbiddenException — double verrou UI + API.
+ */
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+function isPlatformStaff(user: { tenantId?: string; userType?: string } | null | undefined): boolean {
+  return Boolean(user && user.tenantId === PLATFORM_TENANT_ID && user.userType === 'STAFF');
+}
+
 function TabButton({ active, onClick, icon, label }: {
   active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
 }) {
@@ -300,6 +311,14 @@ function SecurityTab() {
         </div>
       )}
 
+      {/* MFA suggéré (politique 2026-04-27) — non-bloquant, ton positif */}
+      {user?.suggestedEnrollMfa && !user?.mustEnrollMfa && (
+        <div role="status" className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-4 py-3 text-sm text-blue-800 dark:text-blue-200 flex items-start gap-2">
+          <Smartphone className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          <span>{t('account.suggestedEnrollMfa')}</span>
+        </div>
+      )}
+
       <Card title={t('account.pwdTitle')} description={t('account.pwdDesc')}>
         <form onSubmit={handlePwdSubmit} className="space-y-3">
           {err && (
@@ -465,12 +484,22 @@ function SecurityTab() {
                     <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden />
                     {t('account.mfaRegenBackup')}
                   </Button>
-                  <Button variant="outline" onClick={() => setShowDis(true)} disabled={mfaBusy}>
-                    {t('account.mfaDeactivate')}
-                  </Button>
+                  {/* Désactivation MFA interdite pour le staff plateforme
+                      (SUPER_ADMIN, SUPPORT_L1/L2). Le backend rejette aussi
+                      via ForbiddenException — double verrou UI + API. */}
+                  {!isPlatformStaff(user) && (
+                    <Button variant="outline" onClick={() => setShowDis(true)} disabled={mfaBusy}>
+                      {t('account.mfaDeactivate')}
+                    </Button>
+                  )}
                 </>
               )}
             </div>
+            {isPlatformStaff(user) && !showDis && !showRegen && (
+              <p className="mt-2 text-right text-xs italic text-slate-500 dark:text-slate-400">
+                {t('account.mfaPlatformLocked')}
+              </p>
+            )}
 
             {/* Régénération codes de secours */}
             {showRegen && (

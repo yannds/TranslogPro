@@ -70,12 +70,19 @@ export interface AuthUser {
   /** True quand MFA activé et confirmé sur ce compte. */
   mfaEnabled?:         boolean;
   /**
-   * True ssi l'utilisateur a un rôle haut-privilège (TENANT_ADMIN, etc.) mais
-   * n'a pas encore enrôlé son MFA. Le frontend redirige alors vers
-   * /account?tab=security et bloque les autres pages tant que MFA pas activé.
+   * MFA STRICTEMENT OBLIGATOIRE — uniquement pour le staff plateforme
+   * (SUPER_ADMIN, SUPPORT_L1/L2). Si true, ProtectedRoute redirige vers
+   * /account?tab=security et bloque tout le reste de l'app.
    * Conforme NIST SP 800-63B AAL2.
    */
   mustEnrollMfa?:      boolean;
+  /**
+   * MFA RECOMMANDÉ — pour le staff tenant non-MFA. Non bloquant : un
+   * banner dismissible apparaît dans le dashboard. Le user peut activer
+   * MFA via /account?tab=security mais aussi continuer sans.
+   * Politique 2026-04-27 (contexte Afrique centrale).
+   */
+  suggestedEnrollMfa?: boolean;
 }
 
 /** Résultat possible de login : soit session OK, soit MFA requis. */
