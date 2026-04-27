@@ -1020,7 +1020,9 @@ export function PageFleetVehicles() {
     tenantId ? `/api/tenants/${tenantId}/agencies` : null, [tenantId],
   );
   const { data: plateFormats } = useFetch<LicensePlateFormatsResponse>(
-    tenantId ? `${base}/license-plate-formats` : null, [tenantId],
+    // URL absolue : `base` se termine par `/buses`, on ne peut pas y concaténer
+    // /license-plate-formats sinon Nest matche `buses/:id` et renvoie 404.
+    tenantId ? `/api/tenants/${tenantId}/fleet/license-plate-formats` : null, [tenantId],
   );
 
   const [showCreate,   setShowCreate]   = useState(false);
@@ -1063,6 +1065,27 @@ export function PageFleetVehicles() {
    * backend, ouvre la modale de confirmation et propose un retry avec le flag
    * adéquat. Pour toute autre erreur, on remonte simplement le message.
    */
+  /**
+   * Extrait le code structuré (PLATE_ATYPICAL/PLATE_DUPLICATE) du body d'erreur,
+   * en tolérant les 2 formes que NestJS peut produire :
+   *   - body.code (objet aplati à la racine)
+   *   - body.message.code (objet imbriqué dans `message` selon le pipeline Nest)
+   */
+  const extractStructuredCode = (e: unknown): { code?: string; message?: string } | null => {
+    if (!(e instanceof ApiError) || !e.body || typeof e.body !== 'object') return null;
+    const body = e.body as Record<string, unknown>;
+    if (typeof body.code === 'string') {
+      return { code: body.code, message: typeof body.message === 'string' ? body.message : undefined };
+    }
+    if (body.message && typeof body.message === 'object') {
+      const inner = body.message as Record<string, unknown>;
+      if (typeof inner.code === 'string') {
+        return { code: inner.code, message: typeof inner.message === 'string' ? inner.message : undefined };
+      }
+    }
+    return null;
+  };
+
   const submitWithPlateGuard = async (
     payload: ReturnType<typeof formToPayload>,
     fire:    (body: ReturnType<typeof formToPayload>) => Promise<unknown>,
@@ -1071,32 +1094,30 @@ export function PageFleetVehicles() {
       await fire(payload);
       return true;
     } catch (e) {
-      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
-        const body = e.body as { code?: string; message?: string };
-        if (body.code === 'PLATE_ATYPICAL') {
-          setPendingConfirm({
-            kind:    'atypical',
-            title:   t('fleetVehicles.plateAtypicalTitle'),
-            message: body.message ?? t('fleetVehicles.plateAtypicalDesc'),
-            retry:   async () => {
-              setPendingConfirm(null);
-              await submitWithPlateGuard({ ...payload, confirmedAtypical: true }, fire);
-            },
-          });
-          return false;
-        }
-        if (body.code === 'PLATE_DUPLICATE') {
-          setPendingConfirm({
-            kind:    'duplicate',
-            title:   t('fleetVehicles.plateDuplicateTitle'),
-            message: body.message ?? t('fleetVehicles.plateDuplicateDesc'),
-            retry:   async () => {
-              setPendingConfirm(null);
-              await submitWithPlateGuard({ ...payload, confirmedDuplicate: true }, fire);
-            },
-          });
-          return false;
-        }
+      const structured = extractStructuredCode(e);
+      if (structured?.code === 'PLATE_ATYPICAL') {
+        setPendingConfirm({
+          kind:    'atypical',
+          title:   t('fleetVehicles.plateAtypicalTitle'),
+          message: structured.message ?? t('fleetVehicles.plateAtypicalDesc'),
+          retry:   async () => {
+            setPendingConfirm(null);
+            await submitWithPlateGuard({ ...payload, confirmedAtypical: true }, fire);
+          },
+        });
+        return false;
+      }
+      if (structured?.code === 'PLATE_DUPLICATE') {
+        setPendingConfirm({
+          kind:    'duplicate',
+          title:   t('fleetVehicles.plateDuplicateTitle'),
+          message: structured.message ?? t('fleetVehicles.plateDuplicateDesc'),
+          retry:   async () => {
+            setPendingConfirm(null);
+            await submitWithPlateGuard({ ...payload, confirmedDuplicate: true }, fire);
+          },
+        });
+        return false;
       }
       setActionErr((e as Error).message);
       return false;
