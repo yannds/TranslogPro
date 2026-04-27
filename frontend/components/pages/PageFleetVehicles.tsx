@@ -1066,22 +1066,20 @@ export function PageFleetVehicles() {
    * adéquat. Pour toute autre erreur, on remonte simplement le message.
    */
   /**
-   * Extrait le code structuré (PLATE_ATYPICAL/PLATE_DUPLICATE) du body d'erreur,
-   * en tolérant les 2 formes que NestJS peut produire :
-   *   - body.code (objet aplati à la racine)
-   *   - body.message.code (objet imbriqué dans `message` selon le pipeline Nest)
+   * Extrait le code structuré (PLATE_ATYPICAL/PLATE_DUPLICATE) du body d'erreur.
+   * Le HttpExceptionFilter global retourne du Problem Details RFC 7807 :
+   *   { type, title, status, detail, instance, requestId, ...extensions }
+   * Les propriétés custom passées à BadRequestException(obj) sont préservées
+   * comme extensions à la racine (cf. http-exception.filter.ts).
    */
   const extractStructuredCode = (e: unknown): { code?: string; message?: string } | null => {
     if (!(e instanceof ApiError) || !e.body || typeof e.body !== 'object') return null;
     const body = e.body as Record<string, unknown>;
     if (typeof body.code === 'string') {
-      return { code: body.code, message: typeof body.message === 'string' ? body.message : undefined };
-    }
-    if (body.message && typeof body.message === 'object') {
-      const inner = body.message as Record<string, unknown>;
-      if (typeof inner.code === 'string') {
-        return { code: inner.code, message: typeof inner.message === 'string' ? inner.message : undefined };
-      }
+      const message = typeof body.detail === 'string'
+        ? body.detail
+        : typeof body.message === 'string' ? body.message : undefined;
+      return { code: body.code, message };
     }
     return null;
   };

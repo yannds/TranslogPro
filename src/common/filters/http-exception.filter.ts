@@ -46,7 +46,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       );
     }
 
-    const body: ProblemDetails & { stack?: string } = {
+    const body: ProblemDetails & { stack?: string; [k: string]: unknown } = {
       type:      `${ERROR_DOCS_BASE_URL}/${status}`,
       title:     HttpStatus[status] ?? 'Error',
       status,
@@ -54,6 +54,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
       instance:  request.path,
       requestId,
     };
+
+    // RFC 7807 §3.2 — extensions custom : préserver les propriétés métier du
+    // payload (ex: PLATE_ATYPICAL → { code, country, triedMasks }) pour que
+    // le frontend puisse les lire (ex: ouvrir une modale de confirmation).
+    // On exclut les champs déjà mappés ou internes Nest (message → detail,
+    // statusCode → status, error → title-équivalent).
+    if (exception instanceof HttpException) {
+      const response = exception.getResponse();
+      if (response && typeof response === 'object' && !Array.isArray(response)) {
+        const reserved = new Set(['message', 'statusCode', 'error',
+                                  'type', 'title', 'status', 'detail', 'instance', 'requestId']);
+        for (const [key, value] of Object.entries(response as Record<string, unknown>)) {
+          if (!reserved.has(key)) body[key] = value;
+        }
+      }
+    }
 
     // En dev, inclure le stack trace pour le debugging
     if (IS_DEV && status >= 500 && exception instanceof Error) {
