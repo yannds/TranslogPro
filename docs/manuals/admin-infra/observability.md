@@ -274,6 +274,14 @@ Si `cscli metrics show acquisition` montre 0 lignes lues, c'est que CrowdSec ne 
 
 **État par défaut au déploiement** : tous les scenarios sont en **simulation**. Aucune IP n'est réellement bannie. Le bouncer Caddy ignore les décisions taggées `simulated`.
 
+L'état est dans `/etc/crowdsec/simulation.yaml` (mounté depuis [`infra/prod/observability/crowdsec/simulation.yaml`](../../../infra/prod/observability/crowdsec/simulation.yaml)). Le format :
+```yaml
+simulation: true       # comportement par défaut = tout est simulé
+exclusions: []         # scenarios LISTÉS ici = NE sont PAS simulés (= actifs)
+```
+
+Au runtime, les commandes `cscli simulation enable/disable` éditent ce fichier sur le VPS.
+
 ### Lister les scenarios actuellement en simulation
 
 ```bash
@@ -453,13 +461,17 @@ docker exec $(docker ps -q -f name=translog-obs_crowdsec | head -1) cscli hub up
 
 ## 9. Limites connues
 
-### Patterns à éviter (incidents 2026-04-26)
+### Patterns à éviter (incidents 2026-04-26 et 27)
 
 | Anti-pattern | Conséquence | Fix |
 |---|---|---|
 | `docker service update --force translog_caddy` depuis SSH | Casse la session SSH du runner GitHub Actions (broken pipe ~4 min) — race iptables sur reconfig réseau d'un service mode:host | Modifier le stack file et laisser Swarm rolling update |
 | `reverse_proxy grafana:3000` (alias court) | Collision DNS si Caddy est sur plusieurs overlay (translog_obs_net + easypanel-gmp ont tous deux un service `grafana`) → résolution aléatoire entre stacks | Utiliser `<stack>_<service>` (ex: `translog-obs_grafana:3000`) |
 | `import translog_headers` dans le bloc Grafana du Caddyfile | Le CSP du SPA TransLog bloque les inline scripts + eval() de Grafana → tous les panels affichent "Panel plugin not found" | Headers minimalistes (HSTS + Referrer-Policy) sans CSP, laisser Grafana set ses propres en-têtes |
+| Mount `/var/log:ro` + mount enfant `vol:/var/log/caddy:ro` sur même container | Docker ne peut pas créer un mountpoint dans un parent read-only → container fail au runc create avec `make mountpoint /var/log/caddy: read-only file system` | Monter chaque mount à un chemin sans collision (ex: `/logs/caddy` à la racine) ou monter fichier par fichier |
+| Mount Swarm config (RO) sur `/etc/crowdsec/config.yaml` | L'entrypoint `docker_start.sh` de l'image CrowdSec réécrit ce fichier au boot pour injecter env vars (BOUNCER_KEY, COLLECTIONS, ...) → exit 1, restart loop | Ne PAS mount notre config.yaml. Tout configurer via env vars. Pattern identique pour beaucoup d'images officielles (Postgres init, etc.) |
+| `simulation: true` dans `profiles.yaml` CrowdSec | Le schema `csconfig.ProfileCfg` n'a pas de champ `simulation`. Agent crashe au boot avec `field simulation not found` | La simulation se configure dans un fichier séparé `simulation.yaml` (`simulation: true` + `exclusions: []`). Le `profiles.yaml` ne contient que les remediations |
+| Promtail v2.x avec docker_sd_configs | Client Docker API v1.42 trop ancien, refusé par les daemons récents (min v1.44). Promtail ne peut pas lister les containers → 0 logs | Promtail v3.x minimum (image `grafana/promtail:3.3.2` ou +) |
 
 ### Promtail ne tag pas `container_name` correctement
 
