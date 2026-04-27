@@ -1,5 +1,9 @@
 import { authenticator } from 'otplib';
 import { MfaService } from '../../../src/modules/mfa/mfa.service';
+import { ForbiddenException } from '@nestjs/common';
+import { EventTypes } from '../../../src/common/types/domain-event.type';
+
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Tests unit MfaService — couvrent :
@@ -122,6 +126,124 @@ describe('MfaService', () => {
       expect(updateCall.data.mfaBackupCodes).toHaveLength(10);
       // Les codes en DB sont hashés bcrypt, pas en clair
       expect(updateCall.data.mfaBackupCodes[0]).toMatch(/^\$2[aby]\$/);
+    });
+  });
+
+  // ─── disable() — verrou staff plateforme (politique 2026-04-27) ──────────
+  describe('disable() — verrou staff plateforme', () => {
+    it("refuse Forbidden si user appartient au tenant plateforme + STAFF", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'sa-1', tenantId: PLATFORM_TENANT_ID, userType: 'STAFF',
+        mfaEnabled: true, mfaSecret: 'X', mfaBackupCodes: [],
+      });
+      await expect(svc.disable('sa-1', '123456')).rejects.toBeInstanceOf(ForbiddenException);
+      // Pas d'update DB → MFA reste actif.
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("autorise un staff tenant (non-plateforme) à désactiver avec code valide", async () => {
+      const secret = authenticator.generateSecret();
+      const code   = authenticator.generate(secret);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'u-1', tenantId: 'tenant-acme', userType: 'STAFF',
+        mfaEnabled: true, mfaSecret: secret, mfaBackupCodes: [],
+      });
+      prismaMock.user.update.mockResolvedValueOnce({
+        id: 'u-1', email: 'u@acme.test', tenantId: 'tenant-acme',
+      });
+      await expect(svc.disable('u-1', code)).resolves.toBeUndefined();
+      expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ mfaEnabled: false, mfaSecret: null }),
+      }));
+    });
+  });
+
+  // ─── maybeSendSuggestion() — politique MFA douce (2026-04-27) ────────────
+  describe('maybeSendSuggestion()', () => {
+    it("no-op si user introuvable", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      await svc.maybeSendSuggestion('ghost');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op si user inactif", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'u-1', isActive: false, tenantId: 'tenant-acme', userType: 'STAFF',
+        mfaEnabled: false, mfaSuggestionSentAt: null,
+      });
+      await svc.maybeSendSuggestion('u-1');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op si user CUSTOMER (pas pertinent)", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'c-1', isActive: true, tenantId: 'tenant-acme', userType: 'CUSTOMER',
+        mfaEnabled: false, mfaSuggestionSentAt: null,
+      });
+      await svc.maybeSendSuggestion('c-1');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op si staff plateforme (eux ont mustEnrollMfa bloquant, pas de 'suggestion')", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'sa-1', isActive: true, tenantId: PLATFORM_TENANT_ID, userType: 'STAFF',
+        mfaEnabled: false, mfaSuggestionSentAt: null,
+      });
+      await svc.maybeSendSuggestion('sa-1');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op si MFA déjà activé", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'u-1', isActive: true, tenantId: 'tenant-acme', userType: 'STAFF',
+        mfaEnabled: true, mfaSuggestionSentAt: null,
+      });
+      await svc.maybeSendSuggestion('u-1');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op si déjà notifié (mfaSuggestionSentAt déjà set — anti-spam)", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'u-1', isActive: true, tenantId: 'tenant-acme', userType: 'STAFF',
+        mfaEnabled: false, mfaSuggestionSentAt: new Date('2026-04-26'),
+      });
+      await svc.maybeSendSuggestion('u-1');
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it("éligible : marque mfaSuggestionSentAt + émet AUTH_MFA_SUGGESTED", async () => {
+      const transactSpy = jest.fn().mockImplementation(async (cb) => cb({}));
+      prismaMock.transact = transactSpy;
+      const eventBusMock = { publish: jest.fn().mockResolvedValue(undefined) };
+      const appConfigMock = { publicBaseDomain: 'translog.test' } as any;
+      const svcWithBus = new MfaService(prismaMock, appConfigMock, eventBusMock as any);
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'u-1', email: 'admin@acme.test', isActive: true,
+        tenantId: 'tenant-acme', userType: 'STAFF',
+        mfaEnabled: false, mfaSuggestionSentAt: null,
+        tenant: { slug: 'acme' },
+      });
+      prismaMock.user.update.mockResolvedValueOnce({});
+
+      await svcWithBus.maybeSendSuggestion('u-1');
+
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u-1' },
+        data:  { mfaSuggestionSentAt: expect.any(Date) },
+      });
+      expect(eventBusMock.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type:        EventTypes.AUTH_MFA_SUGGESTED,
+          tenantId:    'tenant-acme',
+          aggregateId: 'u-1',
+          payload: expect.objectContaining({
+            email:    'admin@acme.test',
+            setupUrl: 'https://acme.translog.test/account?tab=security',
+          }),
+        }),
+        expect.anything(),
+      );
     });
   });
 });

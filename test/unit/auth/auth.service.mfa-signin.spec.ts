@@ -51,7 +51,8 @@ describe('AuthService.signIn — MFA wire', () => {
     service = new AuthService(
       prismaMock,
       { listActiveKeys: jest.fn().mockResolvedValue([]) } as any,
-      { verifyLoginCode: jest.fn() } as any,
+      // MfaService — verifyLoginCode + maybeSendSuggestion (no-op fire-and-forget).
+      { verifyLoginCode: jest.fn(), maybeSendSuggestion: jest.fn().mockResolvedValue(undefined) } as any,
       identityMock,
       { isConfigured: jest.fn().mockResolvedValue(false), verify: jest.fn() } as any,
       {
