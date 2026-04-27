@@ -28,6 +28,7 @@ interface AuthEventPayload {
   email?:       string;
   resetUrl?:    string;
   verifyUrl?:   string;
+  setupUrl?:    string;
   expiresAt?:   string;
   completedAt?: string;
   ipAddress?:   string;
@@ -52,6 +53,7 @@ export class AuthNotificationListener implements OnModuleInit {
     this.eventBus.subscribe(EventTypes.AUTH_EMAIL_VERIFICATION_SENT,    (e) => this.handle(e, 'auth.email_verification'));
     this.eventBus.subscribe(EventTypes.AUTH_MFA_ENABLED,                (e) => this.handle(e, 'auth.mfa.enabled'));
     this.eventBus.subscribe(EventTypes.AUTH_MFA_DISABLED,               (e) => this.handle(e, 'auth.mfa.disabled'));
+    this.eventBus.subscribe(EventTypes.AUTH_MFA_SUGGESTED,              (e) => this.handle(e, 'auth.mfa.suggested'));
   }
 
   private async handle(event: DomainEvent, templateId: AuthTemplateId): Promise<void> {
@@ -84,6 +86,7 @@ export class AuthNotificationListener implements OnModuleInit {
         tenantName:  tenant?.name ?? '',
         resetUrl:    p.resetUrl   ?? '',
         verifyUrl:   p.verifyUrl  ?? '',
+        setupUrl:    p.setupUrl   ?? '',
         expiresAt:   p.expiresAt  ?? '',
         completedAt: p.completedAt ?? '',
         ipAddress:   p.ipAddress  ?? '',
@@ -104,6 +107,25 @@ export class AuthNotificationListener implements OnModuleInit {
           source:     p.source ?? '',
         },
       });
+
+      // Suggestion MFA — envoi IN_APP additionnel pour laisser une trace
+      // dans le bell icon du dashboard, même si l'utilisateur ne lit pas
+      // ses emails. Email + IN_APP fan-out → l'utilisateur ne peut pas
+      // rater l'incitation.
+      if (templateId === 'auth.mfa.suggested' && p.userId) {
+        await this.notifications.send({
+          tenantId,
+          userId:    p.userId,
+          channel:   'IN_APP',
+          templateId,
+          title:     out.title,
+          body:      out.body,
+          metadata: {
+            userId: p.userId,
+            kind:   'mfa-suggestion',
+          },
+        });
+      }
     } catch (err) {
       this.logger.error(`[Auth ${event.type}] dispatch failed: ${(err as Error).message}`);
     }

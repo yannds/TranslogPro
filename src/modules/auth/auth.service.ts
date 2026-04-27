@@ -133,13 +133,24 @@ export interface AuthUserDto {
    */
   mfaEnabled:       boolean;
   /**
-   * Indique que l'utilisateur a un rôle haut-privilège (ex: TENANT_ADMIN
-   * via permission `control.iam.audit.tenant` ou `control.platform.manage.tenant`)
-   * mais n'a pas encore enrôlé son MFA. Le frontend doit alors rediriger
-   * vers /account/mfa-enrollment et bloquer les actions sensibles tant que
-   * MFA n'est pas activé. Conforme NIST SP 800-63B AAL2.
+   * MFA STRICTEMENT OBLIGATOIRE — uniquement pour le staff plateforme
+   * (tenantId = PLATFORM_TENANT_ID, userType = STAFF). Si true, ProtectedRoute
+   * redirige vers /account?tab=security et bloque tout le reste de l'app
+   * tant que MFA n'est pas activé. Conforme NIST SP 800-63B AAL2.
+   *
+   * Politique 2026-04-27 : assouplie pour les autres acteurs (TENANT_ADMIN,
+   * AGENCY_MANAGER, etc.) — voir `suggestedEnrollMfa` ci-dessous.
    */
   mustEnrollMfa: boolean;
+  /**
+   * MFA RECOMMANDÉ — pour le staff tenant (TENANT_ADMIN, AGENCY_MANAGER,
+   * CASHIER, DRIVER…) qui n'a pas encore activé MFA. Non bloquant : un
+   * banner dismissible apparaît dans le dashboard. Le user peut activer
+   * MFA via /account?tab=security mais aussi continuer à travailler sans.
+   * Politique de contexte Afrique centrale — friction 2FA trop forte sans
+   * grace period progressive.
+   */
+  suggestedEnrollMfa: boolean;
   /**
    * Indique qu'un admin a forcé la rotation du mot de passe au prochain
    * login (Account.forcePasswordChange). Le frontend affiche alors
@@ -360,6 +371,13 @@ export class AuthService {
       userAgent,
       email,
     });
+
+    // 4b. Suggestion MFA — politique 2026-04-27. Au 1er signIn d'un user
+    //     éligible (staff tenant non-MFA), on dispatche un event one-shot
+    //     pour déclencher email + IN_APP "Sécurisez votre compte avec 2FA".
+    //     Idempotent via User.mfaSuggestionSentAt — pas de spam multi-login.
+    //     setupUrl résolu dans le service (lookup tenant.slug + publicBaseDomain).
+    void this.mfa.maybeSendSuggestion(user.id);
 
     this.logger.log(`[AUTH] sign-in: ${email} tenant=${user.tenantId} ip=${ipAddress}`);
 
@@ -1048,16 +1066,22 @@ export class AuthService {
     const mfaEnabled = fullUser?.mfaEnabled ?? user.mfaEnabled ?? false;
     const permissions = user.role?.permissions?.map(p => p.permission) ?? [];
 
-    // LOW-18 — MFA enrollment forcé pour les rôles haut-privilège
-    // On code contre les permissions (pas les noms de rôle) car les rôles
-    // sont configurables par tenant. Toute permission qui donne accès à
-    // l'audit IAM ou à la gestion plateforme déclenche la contrainte.
-    const isHighPrivilege =
-      permissions.includes('control.iam.audit.tenant') ||
-      permissions.includes('control.iam.manage.tenant') ||
-      permissions.includes('control.platform.manage.tenant') ||
-      permissions.includes('control.tenant.plan.change.tenant');
-    const mustEnrollMfa = !mfaEnabled && user.userType === 'STAFF' && isHighPrivilege;
+    // ── Politique MFA 2026-04-27 (Vague Onboarding-2) ──────────────────────
+    // Avant : tout TENANT_ADMIN était bloqué dès la 1re connexion → friction
+    // trop forte en contexte Afrique centrale (un nouveau tenant ne peut
+    // même pas accéder à son onboarding sans setup TOTP).
+    // Maintenant :
+    //   - mustEnrollMfa (BLOQUANT)  → uniquement staff plateforme
+    //                                  (SUPER_ADMIN, SUPPORT_L1/L2)
+    //   - suggestedEnrollMfa (NON-BLOQUANT) → autres staff non-MFA
+    //                                          (TENANT_ADMIN, AGENCY_MANAGER…)
+    // Les CUSTOMER ne reçoivent ni l'un ni l'autre.
+    // Voir docs/MFA_POLICY.md pour la justification complète.
+    const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+    const isPlatformStaff   = user.tenantId === PLATFORM_TENANT_ID && user.userType === 'STAFF';
+    const isTenantStaff     = user.tenantId !== PLATFORM_TENANT_ID && user.userType === 'STAFF';
+    const mustEnrollMfa      = !mfaEnabled && isPlatformStaff;
+    const suggestedEnrollMfa = !mfaEnabled && isTenantStaff;
 
     return {
       id:               user.id,
@@ -1080,6 +1104,7 @@ export class AuthService {
       timezone:         (prefs['timezone'] as string | undefined) ?? null,
       mfaEnabled,
       mustEnrollMfa,
+      suggestedEnrollMfa,
       mustChangePassword: credAccount?.forcePasswordChange ?? false,
     };
   }

@@ -70,6 +70,11 @@ export const EventTypes = {
   AUTH_EMAIL_VERIFIED:             'auth.email_verified',
   AUTH_MFA_ENABLED:                'auth.mfa.enabled',
   AUTH_MFA_DISABLED:               'auth.mfa.disabled',
+  // Suggestion MFA (Vague Onboarding-2 2026-04-27) :
+  // émis 1 fois par staff tenant non-MFA à sa 1re connexion réussie.
+  // Idempotence garantie par User.mfaSuggestionSentAt — pas de spam.
+  // payload { userId, email, tenantName, setupUrl }
+  AUTH_MFA_SUGGESTED:              'auth.mfa.suggested',
 
   // Subscription (Tier 4 chantier email 2026-04-26)
   // payload : { subscriptionId, tenantId, planName, price, currency, trialEndsAt?, cancelledAt?, reason? }

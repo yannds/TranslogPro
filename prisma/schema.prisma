@@ -494,6 +494,15 @@ model User {
   mfaSecret      String? // secret base32 TOTP (à chiffrer en prod — KMS)
   mfaBackupCodes String[]  @default([]) // codes de secours (hash bcrypt), single-use
   mfaVerifiedAt  DateTime? // moment d'activation effective
+  // 2026-04-27 — politique MFA assouplie (Vague Onboarding-2) :
+  //   - Staff plateforme (tenantId = PLATFORM_TENANT_ID) → MFA OBLIGATOIRE,
+  //     blocage app tant que non activé, désactivation interdite.
+  //   - Tous les autres staff (TENANT_ADMIN, AGENCY_MANAGER, CASHIER…) →
+  //     MFA SUGGÉRÉ, jamais bloquant. Une seule notification email + IN_APP
+  //     "Sécurisez votre compte avec 2FA" est envoyée à la 1re connexion
+  //     éligible. `mfaSuggestionSentAt` garantit l'idempotence (anti-spam)
+  //     même si le user se reconnecte 100×.
+  mfaSuggestionSentAt DateTime?
 
   // ── Activity tracking (pour DAU/MAU/adoption plateforme) ────────────────
   // Mis à jour par AuthService au login et périodiquement via middleware.

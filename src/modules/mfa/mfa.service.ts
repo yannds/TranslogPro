@@ -19,7 +19,8 @@
  */
 import {
   Injectable, BadRequestException, ConflictException,
-  NotFoundException, UnauthorizedException, Inject, Optional, Logger,
+  NotFoundException, UnauthorizedException, ForbiddenException,
+  Inject, Optional, Logger,
 } from '@nestjs/common';
 import { authenticator } from 'otplib';
 import * as bcrypt from 'bcryptjs';
@@ -29,6 +30,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { IEventBus, EVENT_BUS, DomainEvent } from '../../infrastructure/eventbus/interfaces/eventbus.interface';
 import { EventTypes } from '../../common/types/domain-event.type';
+import { AppConfigService } from '../../common/config/app-config.service';
 
 // window: 2 = tolère ±60 s de drift entre serveur et téléphone client.
 // Standard de l'industrie (Google Authenticator côté serveur tolère 1-2 steps).
@@ -62,12 +64,16 @@ export class MfaService {
 
   constructor(
     private readonly prisma: PrismaService,
+    @Optional() private readonly appConfig?: AppConfigService,
     @Optional() @Inject(EVENT_BUS) private readonly eventBus?: IEventBus,
   ) {}
 
   /** Émission best-effort d'un AUTH_MFA_* event (le mail part via listener). */
   private async emitMfaEvent(
-    type: typeof EventTypes.AUTH_MFA_ENABLED | typeof EventTypes.AUTH_MFA_DISABLED,
+    type:
+      | typeof EventTypes.AUTH_MFA_ENABLED
+      | typeof EventTypes.AUTH_MFA_DISABLED
+      | typeof EventTypes.AUTH_MFA_SUGGESTED,
     userId: string,
     email: string,
     tenantId: string,
@@ -168,14 +174,31 @@ export class MfaService {
   /**
    * Désactive MFA. Requiert un code TOTP ou backup code valide.
    * (Le password check est fait en amont par le controller si nécessaire.)
+   *
+   * Politique 2026-04-27 : la désactivation est INTERDITE pour le staff
+   * plateforme (SUPER_ADMIN, SUPPORT_L1/L2). Pour eux, MFA est obligatoire
+   * et permanent — pas d'opt-out. Le seul moyen de "réinitialiser" un MFA
+   * compromis sur ce tier passe par `control.platform.mfa.reset.global`
+   * (un autre staff plateforme), avec audit log.
    */
   async disable(userId: string, code: string): Promise<void> {
+    const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
-      select: { id: true, mfaSecret: true, mfaEnabled: true, mfaBackupCodes: true },
+      select: {
+        id: true, tenantId: true, userType: true,
+        mfaSecret: true, mfaEnabled: true, mfaBackupCodes: true,
+      },
     });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     if (!user.mfaEnabled) throw new BadRequestException('MFA non activé');
+
+    if (user.tenantId === PLATFORM_TENANT_ID && user.userType === 'STAFF') {
+      throw new ForbiddenException(
+        'La désactivation MFA est interdite pour le staff plateforme. ' +
+        'Contactez un autre admin plateforme pour un reset MFA en cas de problème.',
+      );
+    }
 
     const ok = await this.verifyCode(user, code);
     if (!ok) throw new UnauthorizedException('Code invalide');
@@ -195,6 +218,64 @@ export class MfaService {
       disabledAt: new Date().toISOString(),
       by:         'self',
     });
+  }
+
+  /**
+   * Suggestion MFA idempotente — politique 2026-04-27.
+   *
+   * Appelée par AuthService.signIn() à chaque connexion réussie. Émet
+   * AUTH_MFA_SUGGESTED **une seule fois** par user (`User.mfaSuggestionSentAt`
+   * sert de marqueur — pas de spam multi-login).
+   *
+   * Conditions d'éligibilité strictes :
+   *   - User existe + actif
+   *   - userType = 'STAFF'         (pas de notif aux CUSTOMER)
+   *   - tenantId ≠ PLATFORM_TENANT (le staff plateforme a déjà mustEnrollMfa
+   *                                 → blocage UI direct, pas de "suggestion")
+   *   - mfaEnabled = false         (déjà activé → rien à suggérer)
+   *   - mfaSuggestionSentAt = null (jamais notifié)
+   *
+   * Si une condition échoue → no-op silencieux. La méthode est fire-and-forget
+   * côté caller (`void mfa.maybeSendSuggestion(...)`).
+   */
+  async maybeSendSuggestion(userId: string): Promise<void> {
+    const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+    try {
+      const user = await this.prisma.user.findUnique({
+        where:  { id: userId },
+        select: {
+          id: true, email: true, tenantId: true, userType: true, isActive: true,
+          mfaEnabled: true, mfaSuggestionSentAt: true,
+          tenant: { select: { slug: true } },
+        },
+      });
+      if (!user) return;
+      if (!user.isActive) return;
+      if (user.userType !== 'STAFF') return;
+      if (user.tenantId === PLATFORM_TENANT_ID) return;
+      if (user.mfaEnabled) return;
+      if (user.mfaSuggestionSentAt) return;
+
+      // Marque AVANT d'émettre — si l'event échoue, on évite de spammer
+      // au prochain login (mieux : 1 notif perdue que 1000 notifs envoyées).
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data:  { mfaSuggestionSentAt: new Date() },
+      });
+
+      const baseDomain = this.appConfig?.publicBaseDomain;
+      const setupUrl = baseDomain && user.tenant?.slug
+        ? `https://${user.tenant.slug}.${baseDomain}/account?tab=security`
+        : '';
+
+      await this.emitMfaEvent(
+        EventTypes.AUTH_MFA_SUGGESTED,
+        user.id, user.email, user.tenantId,
+        { setupUrl },
+      );
+    } catch (err) {
+      this.logger.warn(`[MFA] suggestion dispatch failed userId=${userId}: ${(err as Error).message}`);
+    }
   }
 
   /**
