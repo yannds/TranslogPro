@@ -35,6 +35,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
   private readonly tenantScopedModels = buildTenantScopedModels();
 
+  /**
+   * Reference directe a la $transaction de PrismaClient capturee a la
+   * construction. Permet aux methodes custom (transact, withTenant,
+   * runInTenantTx) d'ouvrir une transaction SANS passer par `this.$transaction`
+   * qui resoud via le proxy externe wrapPrismaServiceWithTxProxy. Ce dernier
+   * reagit differemment quand une TX est deja active dans TenantTxStorage
+   * (cas d'un appel imbrique : interceptor → service → prisma.transact),
+   * ce qui produisait `TypeError: this.$transaction is not a function`.
+   *
+   * En capturant ici, le `this` est l'instance Prisma reelle (pas le proxy),
+   * `bind(this)` fige le contexte, et le proxy externe ne peut plus interferer.
+   */
+  private readonly _txOpen: PrismaClient['$transaction'];
+
   constructor(
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
     private readonly tenantContext: TenantContextService,
@@ -44,6 +58,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ? [{ emit: 'event', level: 'query' }]
         : [{ emit: 'event', level: 'error' }],
     });
+    // Bind sur l'instance reelle. Le `this` ici est l'instance PrismaClient
+    // que super() a retournee — c'est la "source de verite" pour les internes
+    // engine, _baseDmmf, etc.
+    this._txOpen = this.$transaction.bind(this) as PrismaClient['$transaction'];
   }
 
   async onModuleInit() {
@@ -165,7 +183,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /** Exécute une transaction avec SET LOCAL tenant_id */
   async withTenant<T>(tenantId: string, fn: (tx: PrismaService) => Promise<T>): Promise<T> {
-    return this.$transaction(async (tx) => {
+    return this._txOpen(async (tx) => {
       await setTenantLocal(tx, tenantId);
       return fn(tx as unknown as PrismaService);
     });
@@ -179,7 +197,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    * automatiquement route via tx (cf. wrapPrismaServiceWithTxProxy).
    */
   async runInTenantTx<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-    return this.$transaction(async (tx) => {
+    return this._txOpen(async (tx) => {
       await setTenantLocal(tx, tenantId);
       return TenantTxStorage.run(tx, fn);
     });
@@ -188,7 +206,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   /** Transaction standard avec contexte tenant injecté automatiquement */
   async transact<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     const ctx = TenantContextService.getStore();
-    return this.$transaction(async (tx) => {
+    return this._txOpen(async (tx) => {
       if (ctx?.tenantId) {
         await setTenantLocal(tx, ctx.tenantId);
       }
