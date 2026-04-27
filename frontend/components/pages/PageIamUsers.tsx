@@ -244,6 +244,9 @@ function EditUserForm({ user, roles, onSubmit, onCancel, busy, error }: {
             <option value="">{t('iamUsers.noRole')}</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {t('iamUsers.roleSyncHint')}
+          </p>
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
           <p>{t('common.email')} : <span className="font-mono">{user.email}</span></p>

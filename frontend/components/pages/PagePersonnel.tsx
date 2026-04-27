@@ -493,6 +493,9 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
               className={inp} disabled={busy}>
               {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
             </select>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('personnel.roleSyncHint')}
+            </p>
           </div>
 
           <div className="space-y-1.5">
