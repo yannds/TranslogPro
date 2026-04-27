@@ -7,9 +7,11 @@
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Logs Caddy (access logs + erreurs) — format JSON
+# Le volume `translog_caddy_logs` est monté en /logs/caddy (pas /var/log/caddy)
+# pour eviter le conflit de mount avec /var/log:ro — cf. docker-stack.observability.yml
 filenames:
-  - /var/log/caddy/caddy.log
-  - /var/log/caddy/access.log
+  - /logs/caddy/caddy.log
+  - /logs/caddy/access.log
 labels:
   type: caddy
 

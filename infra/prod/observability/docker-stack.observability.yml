@@ -305,8 +305,12 @@ services:
         target: /etc/crowdsec/parsers/s02-enrich/whitelists-translog.yaml
     volumes:
       - crowdsec_data:/var/lib/crowdsec/data
-      # Logs Caddy (volume partagé avec stack translog)
-      - translog_caddy_logs:/var/log/caddy:ro
+      # Logs Caddy — montés HORS de /var/log pour eviter le conflit avec le
+      # mount /var/log:/var/log:ro juste en-dessous (Docker ne peut pas creer
+      # un sous-mount dans un parent ro → container init failed avec
+      # "make mountpoint /var/log/caddy: read-only file system" — incident
+      # 2026-04-27, cf. acquis.yaml mis a jour pour lire depuis /logs/caddy/).
+      - translog_caddy_logs:/logs/caddy:ro
       # Logs système (auth.log SSH, syslog kernel)
       - /var/log:/var/log:ro
       # Logs Docker JSON
@@ -422,6 +426,9 @@ configs:
     file: ./crowdsec/config.yaml
   crowdsec_acquis_yaml:
     file: ./crowdsec/acquis.yaml
+    # v2 — bumped 2026-04-27 (chemin Caddy logs change /var/log/caddy →
+    # /logs/caddy pour eviter conflit mount avec /var/log:ro)
+    name: crowdsec_acquis_yaml_v2
   crowdsec_profiles_yaml:
     file: ./crowdsec/profiles.yaml
   crowdsec_whitelists_yaml:
