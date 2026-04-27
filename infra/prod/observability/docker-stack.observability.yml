@@ -295,8 +295,14 @@ services:
       DISABLE_ONLINE_API: "false"
       DISABLE_LOCAL_API: "false"
     configs:
-      - source: crowdsec_config_yaml
-        target: /etc/crowdsec/config.yaml
+      # NB : on NE mount PAS /etc/crowdsec/config.yaml en Swarm config (RO),
+      # parce que l'entrypoint de l'image (docker_start.sh) réécrit ce fichier
+      # au boot pour injecter les env vars (BOUNCER_KEY_*, COLLECTIONS,
+      # LOCAL_API_URL, ...) → un mount RO le casse :
+      #   "Error: failed copying from /tmp/... to /etc/crowdsec/config.yaml:
+      #    open /etc/crowdsec/config.yaml: read-only file system"
+      # → CrowdSec exit 1, Swarm relance en boucle, service 0/1.
+      # La config par défaut de l'image + les env vars ci-dessous suffisent.
       - source: crowdsec_acquis_yaml
         target: /etc/crowdsec/acquis.yaml
       - source: crowdsec_profiles_yaml
@@ -422,8 +428,8 @@ configs:
     file: ./grafana/dashboards/security.json
     # v2 — bumped 2026-04-27 (CrowdSec phase 2 — dashboard sécurité enrichi)
     name: dash_security_v2
-  crowdsec_config_yaml:
-    file: ./crowdsec/config.yaml
+  # crowdsec_config_yaml retiré (cf. commentaire dans le service crowdsec) —
+  # l'entrypoint reecrit /etc/crowdsec/config.yaml au boot, mount RO interdit.
   crowdsec_acquis_yaml:
     file: ./crowdsec/acquis.yaml
     # v2 — bumped 2026-04-27 (chemin Caddy logs change /var/log/caddy →
