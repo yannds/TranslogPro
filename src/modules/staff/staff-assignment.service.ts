@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { StaffProvisioningService } from './staff-provisioning.service';
 
 /**
  * StaffAssignmentService — gestion des postes occupés par un Staff.
@@ -29,7 +30,15 @@ export interface UpdateAssignmentDto {
 
 @Injectable()
 export class StaffAssignmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(StaffAssignmentService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional pour rétrocompatibilité avec les tests qui instancient le service
+    // sans le helper. En prod, StaffProvisioningService est toujours injecté
+    // via le module (cf. staff.module.ts).
+    @Optional() private readonly provisioning?: StaffProvisioningService,
+  ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -85,7 +94,7 @@ export class StaffAssignmentService {
       );
     }
 
-    return this.prisma.staffAssignment.create({
+    const created = await this.prisma.staffAssignment.create({
       data: {
         staffId:     staff.id,
         role:        dto.role,
@@ -98,6 +107,18 @@ export class StaffAssignmentService {
       },
       include: { coverageAgencies: { select: { agencyId: true } } },
     });
+
+    // Sync forward : si ce nouvel assignment devient le primary, aligner
+    // User.roleId pour que IAM reflète le rôle métier.
+    if (this.provisioning) {
+      try {
+        await this.provisioning.syncFromAssignment(created.id);
+      } catch (err) {
+        this.logger.warn(`syncFromAssignment failed for ${created.id}: ${(err as Error).message}`);
+      }
+    }
+
+    return created;
   }
 
   async listForStaff(tenantId: string, userId: string) {
@@ -157,7 +178,7 @@ export class StaffAssignmentService {
       }
     }
 
-    return this.prisma.staffAssignment.update({
+    const updated = await this.prisma.staffAssignment.update({
       where: { id: assignmentId },
       data:  {
         ...(dto.role        !== undefined ? { role:        dto.role }                     : {}),
@@ -167,6 +188,18 @@ export class StaffAssignmentService {
       },
       include: { coverageAgencies: { select: { agencyId: true } } },
     });
+
+    // Sync forward : si .role a changé et que cet assignment est le primary,
+    // aligner User.roleId pour préserver l'invariant.
+    if (dto.role !== undefined && this.provisioning) {
+      try {
+        await this.provisioning.syncFromAssignment(assignmentId);
+      } catch (err) {
+        this.logger.warn(`syncFromAssignment failed for ${assignmentId}: ${(err as Error).message}`);
+      }
+    }
+
+    return updated;
   }
 
   async close(tenantId: string, assignmentId: string) {

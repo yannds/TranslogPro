@@ -282,6 +282,16 @@ export class TenantIamService {
       },
     });
 
+    // Sync inverse : si le rôle IAM change, propager au primary StaffAssignment
+    // pour préserver l'invariant User.role.name === assignment.role.
+    if (dto.roleId !== undefined && this.provisioning) {
+      try {
+        await this.provisioning.syncFromUserRole(userId);
+      } catch (err) {
+        this.logger.warn(`syncFromUserRole failed for ${userId}: ${(err as Error).message}`);
+      }
+    }
+
     await this.log({
       tenantId, actorId,
       action:   'control.iam.user.update.tenant',
