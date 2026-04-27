@@ -52,7 +52,7 @@ export class FleetService {
       where:  { tenantId: opts.tenantId },
       select: { licensePlateFormats: true },
     });
-    const formats = (businessConfig?.licensePlateFormats ?? {}) as LicensePlateFormatsConfig;
+    const formats = (businessConfig?.licensePlateFormats ?? {}) as unknown as LicensePlateFormatsConfig;
     const country = (opts.plateCountry ?? tenant?.country ?? '').toUpperCase();
 
     const result = this.plateVal.validate({ plate: opts.plate, country, formats });
@@ -212,6 +212,29 @@ export class FleetService {
       where:   { tenantId },
       orderBy: { plateNumber: 'asc' },
     });
+  }
+
+  /**
+   * Lecture du registre des masques d'immatriculation pour le tenant
+   * (TenantBusinessConfig.licensePlateFormats) + pays par défaut.
+   * Utilisé par l'UI pour afficher le placeholder selon le pays sélectionné
+   * et par l'éditeur admin des formats.
+   */
+  async getLicensePlateFormats(tenantId: string) {
+    const [tenant, businessConfig] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where:  { id: tenantId },
+        select: { country: true },
+      }),
+      this.prisma.tenantBusinessConfig.findUnique({
+        where:  { tenantId },
+        select: { licensePlateFormats: true },
+      }),
+    ]);
+    return {
+      defaultCountry: (tenant?.country ?? '').toUpperCase() || null,
+      formats:        (businessConfig?.licensePlateFormats ?? {}) as unknown as LicensePlateFormatsConfig,
+    };
   }
 
   async findOne(tenantId: string, id: string) {
