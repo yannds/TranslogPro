@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Param, Body } from '@nestjs/common';
 import { FleetService } from './fleet.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
@@ -78,6 +78,20 @@ export class FleetController {
   @RequirePermission(Permission.FLEET_STATUS_AGENCY)
   getLicensePlateFormats(@TenantId() tenantId: string) {
     return this.fleetService.getLicensePlateFormats(tenantId);
+  }
+
+  /**
+   * Met à jour le registre complet des formats. L'admin tenant peut ajouter,
+   * modifier ou retirer des entrées. Validation : code pays ISO 3166-1 alpha-2,
+   * au moins un masque non vide par pays.
+   */
+  @Put('license-plate-formats')
+  @RequirePermission(Permission.FLEET_MANAGE_TENANT)
+  updateLicensePlateFormats(
+    @TenantId() tenantId: string,
+    @Body() body: { formats: Record<string, unknown> },
+  ) {
+    return this.fleetService.updateLicensePlateFormats(tenantId, body.formats);
   }
 
   @Get('buses/:id')

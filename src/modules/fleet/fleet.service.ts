@@ -215,6 +215,44 @@ export class FleetService {
   }
 
   /**
+   * Met à jour le registre des formats. Validation : code pays ISO valide,
+   * au moins un masque non vide par pays. L'admin remplace TOUT le registre
+   * (l'UI envoie l'objet complet, modifié ou non).
+   */
+  async updateLicensePlateFormats(tenantId: string, formats: Record<string, unknown>) {
+    if (!formats || typeof formats !== 'object') {
+      throw new BadRequestException('Le champ formats est requis (objet pays → entrée)');
+    }
+    const cleaned: Record<string, LicensePlateFormatsConfig[string]> = {};
+    for (const [rawCode, rawEntry] of Object.entries(formats)) {
+      const code = rawCode.toUpperCase().trim();
+      if (!/^[A-Z]{2}$/.test(code)) {
+        throw new BadRequestException(`Code pays "${rawCode}" invalide (ISO 3166-1 alpha-2 attendu)`);
+      }
+      if (!rawEntry || typeof rawEntry !== 'object') {
+        throw new BadRequestException(`Entrée invalide pour ${code}`);
+      }
+      const entry = rawEntry as Partial<LicensePlateFormatsConfig[string]>;
+      const masks = (entry.masks ?? []).map(m => m.trim()).filter(Boolean);
+      if (masks.length === 0) {
+        throw new BadRequestException(`Pays ${code} : au moins un masque non vide requis`);
+      }
+      cleaned[code] = {
+        label:           entry.label?.trim() || code,
+        masks,
+        excludedLetters: (entry.excludedLetters ?? []).map(l => l.toUpperCase().trim()).filter(Boolean),
+        examples:        (entry.examples ?? []).map(e => e.trim()).filter(Boolean),
+        notes:           entry.notes?.trim() || undefined,
+      };
+    }
+    await this.prisma.tenantBusinessConfig.update({
+      where: { tenantId },
+      data:  { licensePlateFormats: cleaned as any },
+    });
+    return { ok: true, count: Object.keys(cleaned).length };
+  }
+
+  /**
    * Lecture du registre des masques d'immatriculation pour le tenant
    * (TenantBusinessConfig.licensePlateFormats) + pays par défaut.
    * Utilisé par l'UI pour afficher le placeholder selon le pays sélectionné

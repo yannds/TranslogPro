@@ -3414,6 +3414,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "vehicles": "Véhicules",
     "mileage_fuel": "Suivi km & Carburant",
     "seat_plans": "Plans de sièges",
+    "license_plate_formats": "Formats d'immatriculation",
     "maintenance_garage": "Maintenance / Garage",
     "maintenance_sheets": "Fiches de maintenance",
     "garage_planning": "Planning garage",
@@ -6884,6 +6885,35 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "instr2":              "Remplissez les lignes à partir de la 3ᵉ (les 2 premières sont réservées).",
     "instr3":              "Les colonnes marquées * sont obligatoires.",
     "instr4":              "Importez le fichier rempli via le bouton ci-dessus."
+  },
+  "licensePlateFormats": {
+    "pageTitle":            "Formats d'immatriculation",
+    "pageSubtitle":         "Gérez les masques de plaques par pays. Mode warn-only — vous ne bloquez personne, vous aidez juste à éviter les fautes de frappe.",
+    "helpHint":             "Convention : tout chiffre = un emplacement chiffre, toute lettre = un emplacement lettre. Plusieurs masques par pays autorisés (ancien + nouveau format).",
+    "addCountry":           "Ajouter un pays",
+    "editCountry":          "Modifier le pays",
+    "defaultCountry":       "Pays du tenant",
+    "empty":                "Aucun format défini. Cliquez sur « Ajouter un pays » pour commencer.",
+    "colCountry":           "Code",
+    "colLabel":             "Pays",
+    "colMasks":             "Masques",
+    "colExcluded":          "Lettres exclues",
+    "colExamples":          "Exemples",
+    "fieldCountryCode":     "Code ISO (2 lettres)",
+    "iso2Hint":             "Code ISO 3166-1 alpha-2 (ex : CG, GA, FR).",
+    "fieldLabel":           "Nom du pays",
+    "fieldMasks":           "Masques (un par ligne)",
+    "masksHint":            "Saisissez un exemple réel par ligne (ex : « 001-AS-4 »). Les chiffres représentent des chiffres, les lettres des lettres.",
+    "fieldExcluded":        "Lettres exclues",
+    "excludedHint":         "Lettres interdites dans ce pays (séparées par virgule). Ex Congo : W, Y, O, I, Z.",
+    "fieldExamples":        "Exemples (un par ligne)",
+    "fieldNotes":           "Notes",
+    "notesPlaceholder":     "Particularités du pays (séries spéciales, codes de département, etc.)",
+    "deleteTitle":          "Supprimer ce format ?",
+    "deleteDesc":           "Le format pour {code} ({label}) sera retiré du registre. Les véhicules existants ne sont pas impactés. Continuer ?",
+    "invalidCountryCode":   "Code pays invalide. Utilisez 2 lettres ISO (ex : CG, FR).",
+    "atLeastOneMask":       "Saisissez au moins un masque non vide.",
+    "countryAlreadyExists": "Le pays {code} est déjà défini. Modifiez-le directement plutôt que d'en créer un autre."
   }
 };
 

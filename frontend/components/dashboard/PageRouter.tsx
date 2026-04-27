@@ -73,6 +73,7 @@ const LazyPricingSimulator = lazy(() => import('../pages/PagePricingSimulator').
 const LazyTollPoints     = lazy(() => import('../pages/PageTollPoints').then(m => ({ default: m.PageTollPoints })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyTenantBusinessRules = lazy(() => import('../pages/PageTenantBusinessRules').then(m => ({ default: m.PageTenantBusinessRules })));
+const LazyLicensePlateFormats = lazy(() => import('../pages/PageLicensePlateFormats').then(m => ({ default: m.PageLicensePlateFormats })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const LazyQuotaSettings = lazy(() => import('../pages/PageQuotaSettings').then(m => ({ default: m.PageQuotaSettings })));
 // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -429,6 +430,7 @@ export function PageRouter({ activeId }: PageRouterProps) {
     case 'tenant-taxes':        return <LazyTenantTaxes />;
     case 'tenant-fare-classes': return <LazyTenantFareClasses />;
     case 'tenant-rules':        return <LazyTenantBusinessRules />;
+    case 'license-plate-formats': return <LazyLicensePlateFormats />;
     case 'tenant-quotas':       return <LazyQuotaSettings />;
     case 'vouchers':            return <LazyVouchers />;
     case 'tenant-payment':      return <LazyTenantPayment />;

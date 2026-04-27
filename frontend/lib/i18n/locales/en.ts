@@ -3562,6 +3562,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "vehicles": "Vehicles",
     "mileage_fuel": "Mileage & Fuel",
     "seat_plans": "Seat Plans",
+    "license_plate_formats": "License plate formats",
     "maintenance_garage": "Maintenance / Garage",
     "maintenance_sheets": "Maintenance Sheets",
     "garage_planning": "Garage Planning",
@@ -6807,6 +6808,35 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "instr2":              "Fill in rows starting from row 3 (rows 1–2 are reserved).",
     "instr3":              "Columns marked * are required.",
     "instr4":              "Upload the filled file using the button above."
+  },
+  "licensePlateFormats": {
+    "pageTitle":            "License plate formats",
+    "pageSubtitle":         "Manage plate masks per country. Warn-only mode — you don't block anyone, you just help avoid typos.",
+    "helpHint":             "Convention: any digit = a digit slot, any letter = a letter slot. Multiple masks per country allowed (old + new format).",
+    "addCountry":           "Add a country",
+    "editCountry":          "Edit country",
+    "defaultCountry":       "Tenant country",
+    "empty":                "No format defined yet. Click \"Add a country\" to get started.",
+    "colCountry":           "Code",
+    "colLabel":             "Country",
+    "colMasks":             "Masks",
+    "colExcluded":          "Excluded letters",
+    "colExamples":          "Examples",
+    "fieldCountryCode":     "ISO code (2 letters)",
+    "iso2Hint":             "ISO 3166-1 alpha-2 code (e.g. CG, GA, FR).",
+    "fieldLabel":           "Country name",
+    "fieldMasks":           "Masks (one per line)",
+    "masksHint":            "Enter one real example per line (e.g. \"001-AS-4\"). Digits represent digits, letters represent letters.",
+    "fieldExcluded":        "Excluded letters",
+    "excludedHint":         "Letters not used in this country (comma-separated). Congo example: W, Y, O, I, Z.",
+    "fieldExamples":        "Examples (one per line)",
+    "fieldNotes":           "Notes",
+    "notesPlaceholder":     "Country specifics (special series, department codes, etc.)",
+    "deleteTitle":          "Delete this format?",
+    "deleteDesc":           "The format for {code} ({label}) will be removed from the registry. Existing vehicles are not affected. Continue?",
+    "invalidCountryCode":   "Invalid country code. Use 2 ISO letters (e.g. CG, FR).",
+    "atLeastOneMask":       "Enter at least one non-empty mask.",
+    "countryAlreadyExists": "Country {code} is already defined. Edit it directly instead of creating another one."
   }
 };
 

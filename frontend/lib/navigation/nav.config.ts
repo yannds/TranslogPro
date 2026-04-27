@@ -389,6 +389,7 @@ export const ADMIN_NAV: PortalNavConfig = {
             { kind: 'leaf', id: 'fleet-tracking', label: 'nav.mileage_fuel',          href: '/admin/fleet/tracking', icon: 'Gauge',      anyOf: [P.FLEET_MANAGE, P.FLEET_STATUS, P.FLEET_TRACKING, P.FLEET_TRACKING_CREATE] },
             { kind: 'leaf', id: 'fleet-seats',    label: 'nav.seat_plans',            href: '/admin/fleet/seats',    icon: 'LayoutGrid', anyOf: [P.FLEET_LAYOUT] },
             { kind: 'leaf', id: 'fleet-docs',     label: 'nav.documents_consumables', href: '/admin/fleet-docs',     icon: 'FileCheck',  anyOf: [P.FLEET_MANAGE, P.DRIVER_MANAGE], moduleKey: 'FLEET_DOCS' },
+            { kind: 'leaf', id: 'license-plate-formats', label: 'nav.license_plate_formats', href: '/admin/fleet/license-plate-formats', icon: 'Globe', anyOf: [P.FLEET_MANAGE] },
           ],
         },
         {
