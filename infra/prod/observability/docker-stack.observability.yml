@@ -367,11 +367,15 @@ volumes:
     name: translog_caddy_logs
 
 # ─── Configs (versionnés via stack deploy — read-only en runtime) ────────────
-# Chaque modification de fichier nécessite un re-deploy stack pour pickup,
-# car Swarm tag les configs par hash content (immuable une fois créées).
+# Chaque modification de fichier nécessite un BUMP du suffixe de version sur la
+# config concernée — Swarm tag les configs par hash content (immuable une fois
+# créées) et refuse les updates de contenu (`only updates to Labels are allowed`).
+# Convention : suffixe `_v<N>` à incrémenter quand le fichier source change.
 configs:
   prometheus_yml:
     file: ./prometheus/prometheus.yml
+    # v2 — bumped 2026-04-27 (CrowdSec phase 2 ajoute scrape target)
+    name: prometheus_yml_v2
   loki_yaml:
     file: ./loki/loki-config.yaml
   promtail_yaml:
@@ -398,6 +402,8 @@ configs:
     file: ./grafana/dashboards/logs.json
   dash_security:
     file: ./grafana/dashboards/security.json
+    # v2 — bumped 2026-04-27 (CrowdSec phase 2 — dashboard sécurité enrichi)
+    name: dash_security_v2
   crowdsec_config_yaml:
     file: ./crowdsec/config.yaml
   crowdsec_acquis_yaml:
