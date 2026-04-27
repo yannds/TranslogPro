@@ -255,8 +255,14 @@ export class FleetService {
   /**
    * Lecture du registre des masques d'immatriculation pour le tenant
    * (TenantBusinessConfig.licensePlateFormats) + pays par défaut.
-   * Utilisé par l'UI pour afficher le placeholder selon le pays sélectionné
-   * et par l'éditeur admin des formats.
+   *
+   * **Lazy seed** : si le registre est vide (tenant existant qui n'a pas
+   * bénéficié du seed initial à l'onboarding), on écrit les défauts en
+   * best-effort et on les retourne. Idempotent — l'admin peut ensuite
+   * éditer librement sans écrasement.
+   *
+   * Utilisé par l'UI pour afficher le placeholder selon le pays
+   * (Tenant.country) et par l'éditeur admin des formats.
    */
   async getLicensePlateFormats(tenantId: string) {
     const [tenant, businessConfig] = await Promise.all([
@@ -266,12 +272,31 @@ export class FleetService {
       }),
       this.prisma.tenantBusinessConfig.findUnique({
         where:  { tenantId },
-        select: { licensePlateFormats: true },
+        select: { id: true, licensePlateFormats: true },
       }),
     ]);
+
+    let formats = (businessConfig?.licensePlateFormats ?? {}) as unknown as LicensePlateFormatsConfig;
+
+    // Lazy seed : registre vide → on écrit les défauts (silent, best-effort).
+    // Tenants legacy n'ont jamais à exécuter `npm run db:seed` à la main.
+    if (Object.keys(formats).length === 0 && businessConfig?.id) {
+      const { DEFAULT_LICENSE_PLATE_FORMATS } = await import('../../../prisma/seeds/license-plate-formats.seed');
+      try {
+        await this.prisma.tenantBusinessConfig.update({
+          where: { id: businessConfig.id },
+          data:  { licensePlateFormats: DEFAULT_LICENSE_PLATE_FORMATS as any },
+        });
+      } catch {
+        // Best-effort : si l'écriture échoue, on retourne quand même les
+        // défauts en mémoire pour que l'UI ait un placeholder utilisable.
+      }
+      formats = DEFAULT_LICENSE_PLATE_FORMATS as unknown as LicensePlateFormatsConfig;
+    }
+
     return {
       defaultCountry: (tenant?.country ?? '').toUpperCase() || null,
-      formats:        (businessConfig?.licensePlateFormats ?? {}) as unknown as LicensePlateFormatsConfig,
+      formats,
     };
   }
 
