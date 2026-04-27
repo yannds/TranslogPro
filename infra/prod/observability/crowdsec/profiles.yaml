@@ -1,13 +1,18 @@
 # ═════════════════════════════════════════════════════════════════════════════
 # CrowdSec — Profiles de décisions
 # ═════════════════════════════════════════════════════════════════════════════
-# Détermine quoi faire quand un scenario match.
-# IMPORTANT : `simulation: true` par défaut → toutes les décisions sont taggées
-# `simulated`, ignorées par le bouncer Caddy. Aucune IP n'est réellement bannie.
+# Détermine quoi faire quand un scenario match (type de remediation, durée).
 #
-# Pour activer le blocage réel d'un scenario précis, utiliser `cscli simulation
-# disable <scenario>` après période d'observation. Cette commande modifie l'état
-# runtime sans toucher à ce fichier.
+# IMPORTANT : la simulation est gérée dans `simulation.yaml` (pas ici).
+# Le champ `simulation:` n'existe PAS dans le schéma ProfileCfg — l'avoir
+# mis ici faisait crasher l'agent au boot avec :
+#   "while decoding profiles.yaml: field simulation not found in type
+#    csconfig.ProfileCfg" (incident 2026-04-27).
+#
+# Pour activer/désactiver la simulation par scenario, utiliser :
+#   cscli simulation disable <scenario>   (= active le blocage réel)
+#   cscli simulation enable  <scenario>   (= retour en observation)
+# Ces commandes editent simulation.yaml runtime sans toucher à ce fichier.
 # ═════════════════════════════════════════════════════════════════════════════
 
 name: default_ip_remediation
@@ -16,11 +21,6 @@ filters:
 decisions:
   - type: ban
     duration: 4h
-
-# Mode simulation : la décision est créée mais marquée "simulated".
-# Les bouncers (ex: caddy-crowdsec-bouncer) DOIVENT respecter ce flag et NE PAS
-# enforcer les décisions simulées. Le bouncer Caddy par défaut le respecte.
-simulation: true
 
 # Pas de notification email/slack/etc. en simulation — uniquement les logs +
 # métriques Prometheus consommées par Grafana.

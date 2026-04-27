@@ -307,6 +307,8 @@ services:
         target: /etc/crowdsec/acquis.yaml
       - source: crowdsec_profiles_yaml
         target: /etc/crowdsec/profiles.yaml
+      - source: crowdsec_simulation_yaml
+        target: /etc/crowdsec/simulation.yaml
       - source: crowdsec_whitelists_yaml
         target: /etc/crowdsec/parsers/s02-enrich/whitelists-translog.yaml
     volumes:
@@ -437,5 +439,10 @@ configs:
     name: crowdsec_acquis_yaml_v2
   crowdsec_profiles_yaml:
     file: ./crowdsec/profiles.yaml
+    # v2 — bumped 2026-04-27 (retire `simulation: true` qui n'existe pas dans
+    # le schema ProfileCfg — la simulation est gere via simulation.yaml)
+    name: crowdsec_profiles_yaml_v2
+  crowdsec_simulation_yaml:
+    file: ./crowdsec/simulation.yaml
   crowdsec_whitelists_yaml:
     file: ./crowdsec/parsers/whitelists.yaml

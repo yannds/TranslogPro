@@ -1,0 +1,16 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# CrowdSec — État de la simulation globale
+# ═════════════════════════════════════════════════════════════════════════════
+# `simulation: true`  → tous les scenarios sont en MODE OBSERVATION par défaut.
+#                       Le bouncer Caddy reçoit les décisions taggées
+#                       `simulated` et ne bloque PAS les requêtes réelles.
+# `exclusions: []`    → liste des scenarios qui NE sont PAS simulés (= actifs,
+#                       blocage réel). Vide au démarrage. Géré au runtime via :
+#                         cscli simulation disable <scenario>  → ajoute aux exclusions
+#                         cscli simulation enable  <scenario>  → retire des exclusions
+#
+# Manuel d'opération : docs/manuals/admin-infra/observability.md §6
+# ═════════════════════════════════════════════════════════════════════════════
+
+simulation: true
+exclusions: []
