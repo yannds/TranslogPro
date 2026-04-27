@@ -138,8 +138,9 @@ export class StaffService {
       include: {
         user: {
           select: {
-            id: true, email: true, name: true, roleId: true,
-            role: { select: { name: true } },
+            id: true, email: true, name: true, roleId: true, agencyId: true,
+            role:   { select: { name: true } },
+            agency: { select: { id: true, name: true } },  // fallback "Affectation" si pas d'assignment
           },
         },
         assignments: {

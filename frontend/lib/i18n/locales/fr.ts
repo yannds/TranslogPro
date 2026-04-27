@@ -1083,6 +1083,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "roleNeedsRegularization": "Rôle hérité de IAM — pas encore d'affectation. Cliquez sur Modifier pour régulariser.",
     "workLocation": "Affectation",
     "noWorkLocation": "Non affecté",
+    "workLocationNeedsRegularization": "Agence héritée du User (RH) — pas encore d'affectation active. Cliquez sur l'icône valise pour régulariser.",
     "roleInheritedHint": "Hérité du rôle de la personne — modifiable via « Modifier le membre ».",
     "assignmentNeedsRole": "Définissez d'abord le rôle de la personne via « Modifier le membre » avant d'ajouter une affectation.",
     "promote": "Promouvoir",

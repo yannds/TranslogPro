@@ -69,10 +69,12 @@ interface StaffRow {
   createdAt:     string;
   assignments?:  AssignmentSummary[];          // postes actifs (lus depuis StaffAssignment)
   user: {
-    id:    string;
-    email: string;
-    name:  string | null;
-    role?: { name: string } | null;            // rôle IAM du User (fallback colonne Rôle)
+    id:        string;
+    email:     string;
+    name:      string | null;
+    agencyId?: string | null;
+    role?:     { name: string } | null;             // rôle IAM (fallback colonne Rôle)
+    agency?:   { id: string; name: string } | null; // agence du User (fallback colonne Affectation)
   };
 }
 
@@ -191,48 +193,61 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
       key: 'assignments',
       header: t('personnel.workLocation'),
       cellRenderer: (_v, row) => {
-        const actives = (row.assignments ?? []).filter(a => a.status === 'ACTIVE');
-        if (actives.length === 0) {
-          return <span className="text-xs text-slate-400 italic">{t('personnel.noWorkLocation')}</span>;
-        }
-        // Aggregate location info from primary assignment (1 user = 1 fonction = 1 assignment ACTIVE)
-        const primary = actives[0];
-        if (primary.agency) {
+        const primary = (row.assignments ?? []).filter(a => a.status === 'ACTIVE')[0];
+        if (primary) {
+          if (primary.agency) {
+            return (
+              <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+                <MapPin className="w-3.5 h-3.5 text-slate-400" aria-hidden />
+                {primary.agency.name}
+              </span>
+            );
+          }
+          if ((primary.coverageAgencies ?? []).length > 0) {
+            const names = primary.coverageAgencies!.map(c => c.agency.name);
+            return (
+              <span
+                className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200"
+                title={names.join(', ')}
+              >
+                <Users className="w-3.5 h-3.5 text-slate-400" aria-hidden />
+                {names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`}
+              </span>
+            );
+          }
           return (
-            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" aria-hidden />
-              {primary.agency.name}
+            <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300">
+              <Globe2 className="w-3.5 h-3.5" aria-hidden />
+              {t('personnel.allTenant')}
             </span>
           );
         }
-        if ((primary.coverageAgencies ?? []).length > 0) {
-          const names = primary.coverageAgencies!.map(c => c.agency.name);
+        // Fallback : agence du User (legacy Staff sans assignment ACTIVE).
+        // Affichée en variant warning + tooltip "À régulariser via le bouton valise".
+        const fallback = row.user?.agency;
+        if (fallback) {
           return (
             <span
-              className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200"
-              title={names.join(', ')}
+              className="inline-flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-300"
+              title={t('personnel.workLocationNeedsRegularization')}
             >
-              <Users className="w-3.5 h-3.5 text-slate-400" aria-hidden />
-              {names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`}
+              <MapPin className="w-3.5 h-3.5" aria-hidden />
+              {fallback.name}
             </span>
           );
         }
-        return (
-          <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300">
-            <Globe2 className="w-3.5 h-3.5" aria-hidden />
-            {t('personnel.allTenant')}
-          </span>
-        );
+        return <span className="text-xs text-slate-400 italic">{t('personnel.noWorkLocation')}</span>;
       },
       csvValue: (_v, row) => {
-        const actives = (row.assignments ?? []).filter(a => a.status === 'ACTIVE');
-        if (actives.length === 0) return '';
-        const primary = actives[0];
-        if (primary.agency) return primary.agency.name;
-        if ((primary.coverageAgencies ?? []).length > 0) {
-          return primary.coverageAgencies!.map(c => c.agency.name).join(', ');
+        const primary = (row.assignments ?? []).filter(a => a.status === 'ACTIVE')[0];
+        if (primary) {
+          if (primary.agency) return primary.agency.name;
+          if ((primary.coverageAgencies ?? []).length > 0) {
+            return primary.coverageAgencies!.map(c => c.agency.name).join(', ');
+          }
+          return 'tenant-wide';
         }
-        return 'tenant-wide';
+        return row.user?.agency?.name ?? '';
       },
     },
     {

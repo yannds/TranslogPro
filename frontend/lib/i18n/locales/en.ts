@@ -1230,6 +1230,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "roleNeedsRegularization": "Role inherited from IAM — no active assignment yet. Click Edit to regularize.",
     "workLocation": "Work location",
     "noWorkLocation": "Not assigned",
+    "workLocationNeedsRegularization": "Agency inherited from User (HR) — no active assignment yet. Click the briefcase icon to regularize.",
     "roleInheritedHint": "Inherited from this person's role — editable via \"Edit member\".",
     "assignmentNeedsRole": "Define the person's role first via \"Edit member\" before adding a work location.",
     "promote": "Promote",
