@@ -295,10 +295,18 @@ services:
       PUBLIC_BASE_DOMAIN:   ${PUBLIC_BASE_DOMAIN}
       PUBLIC_APP_URL:       ${PUBLIC_APP_URL}
       DOMAIN_CHECK_API_KEY: ${DOMAIN_CHECK_API_KEY}
-      # V6.1 — Active la fondation RLS DB-level (Proxy + Interceptor request-scoped tx).
-      # Kill-switch immediat : passer a "off" + redeploy si regression. Aucun changement
-      # de policy RLS Postgres (toujours PERMISSIVE) — la couche est en mode observation.
-      TENANT_DB_LEVEL_RLS:  "on"
+      # V6.1 — Fondation RLS DB-level (Proxy + Interceptor request-scoped tx).
+      # OFF : kill-switch active. La couche n'ouvre plus de tx ni ne set app.tenant_id.
+      # Les policies PERMISSIVE backward-compat retombent en NULL fallback.
+      # Raison : V6.1 mettait `app.tenant_id=PLATFORM_TENANT_ID` sur les requetes
+      # plateforme, ce qui bloquait la lecture cross-tenant indispensable au
+      # panneau /admin-platform (audit logs, users, sessions).
+      TENANT_DB_LEVEL_RLS:           "off"
+      # V5 — Middleware applicatif Prisma qui auto-injecte where.tenantId / data.tenantId.
+      # OFF : meme raison — l'auto-injection forcait where.tenantId=PLATFORM sur les
+      # requetes plateforme. L'audit pre-V5 a confirme que tous les appels Prisma du
+      # codebase passent tenantId explicitement, V5 etait redondant.
+      TENANT_ISOLATION_MIDDLEWARE:   "off"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/live"]
       interval: 30s
