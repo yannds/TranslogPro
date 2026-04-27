@@ -34,6 +34,10 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
@@ -55,7 +59,18 @@
     },
     "extra": {
       "apiBaseUrl": "http://localhost:3000",
-      "comment_apiBaseUrl": "Dev local — backend NestJS sur localhost:3000. Le tenant est résolu via le header X-Forwarded-Host côté middleware (cf. TenantHostMiddleware). En prod le build cible https://app.translogpro.com."
+      "comment_apiBaseUrl": "Dev local — backend NestJS sur localhost:3000. Le tenant est résolu via le header X-Forwarded-Host côté middleware (cf. TenantHostMiddleware). En prod le build cible https://app.translogpro.com.",
+      "router": {},
+      "eas": {
+        "projectId": "dff34128-dbb0-4c1a-9baf-c16f71e2ebc9"
+      }
+    },
+    "owner": "dsyann",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/dff34128-dbb0-4c1a-9baf-c16f71e2ebc9"
     }
   }
 }
