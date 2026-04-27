@@ -3,12 +3,20 @@
 # ═════════════════════════════════════════════════════════════════════════════
 # Scrape jobs :
 #   prometheus    — auto-monitoring
-#   node          — métriques host (DNS Swarm: tasks.node-exporter)
-#   cadvisor      — métriques conteneurs Docker
+#   node          — métriques host (mode global → 1 task / node)
+#   cadvisor      — métriques conteneurs Docker (mode global)
 #   postgres      — postgres-exporter
 #   redis         — redis-exporter
-#   api           — NestJS /metrics (réseau translog_net)
+#   translog-api  — NestJS /metrics (réseau translog_net)
+#   caddy         — Caddy admin API metrics
+#   crowdsec      — CrowdSec agent metrics (Lot 2)
 #   blackbox-http — uptime sous-domaines via blackbox-exporter
+#
+# RÈGLE : tous les targets utilisent le NOM COMPLET de service Swarm
+# `<stack>_<service>:<port>` au lieu de l'alias court.
+# Pourquoi : Caddy + Easypanel ont chacun leurs propres services (`gmp_grafana`,
+# `gmp_prometheus`...), et les alias courts résolvent aléatoirement entre les
+# stacks quand Prometheus est sur plusieurs réseaux overlay (incident 2026-04-26).
 # ═════════════════════════════════════════════════════════════════════════════
 
 global:
@@ -25,24 +33,20 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # ── Host metrics (node-exporter, mode global → tasks.* DNS) ──────────────
+  # ── Host metrics (node-exporter, mode global) ────────────────────────────
+  # Avec mode:global + 1 nœud, le VIP du service résout vers la seule task.
   - job_name: 'node'
-    dns_sd_configs:
-      - names: ['tasks.node-exporter']
-        type: 'A'
-        port: 9100
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label:  instance
-        regex:         '([^:]+):.*'
-        replacement:   '$1'
+    static_configs:
+      - targets: ['translog-obs_node-exporter:9100']
+        labels:
+          instance: 'srv1128228'
 
   # ── Container metrics (cAdvisor, mode global) ────────────────────────────
   - job_name: 'cadvisor'
-    dns_sd_configs:
-      - names: ['tasks.cadvisor']
-        type: 'A'
-        port: 8080
+    static_configs:
+      - targets: ['translog-obs_cadvisor:8080']
+        labels:
+          instance: 'srv1128228'
     metric_relabel_configs:
       # Drop very high-cardinality labels which inflate disk usage
       - source_labels: [__name__]
@@ -52,14 +56,14 @@ scrape_configs:
   # ── Postgres ─────────────────────────────────────────────────────────────
   - job_name: 'postgres'
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets: ['translog-obs_postgres-exporter:9187']
         labels:
           db: 'translog'
 
   # ── Redis ────────────────────────────────────────────────────────────────
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis-exporter:9121']
+      - targets: ['translog-obs_redis-exporter:9121']
 
   # ── API NestJS (/metrics) ────────────────────────────────────────────────
   # L'API expose /metrics en plain HTTP sur :3000, accessible via translog_net.
@@ -67,15 +71,14 @@ scrape_configs:
   - job_name: 'translog-api'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['api:3000']
+      - targets: ['translog_api:3000']
 
   # ── Caddy admin API (métriques internes) ─────────────────────────────────
-  # Caddy 2.x expose /metrics sur le port admin (2019). Le réseau translog_net
-  # nous y donne accès. Si admin était bind sur 0.0.0.0:2019 dans Caddyfile.
+  # Caddy 2.x expose /metrics sur le port admin (2019).
   - job_name: 'caddy'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['caddy:2019']
+      - targets: ['translog_caddy:2019']
 
   # ── CrowdSec — métriques de détection (Lot 2) ────────────────────────────
   # L'agent expose ses métriques sur :6060/metrics : nb d'événements, scenarios
@@ -84,7 +87,7 @@ scrape_configs:
   - job_name: 'crowdsec'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['crowdsec:6060']
+      - targets: ['translog-obs_crowdsec:6060']
 
   # ── Blackbox uptime probes (sous-domaines publics) ───────────────────────
   - job_name: 'blackbox-http'
@@ -99,10 +102,11 @@ scrape_configs:
         - https://app.dsyann.info
         - https://api.dsyann.info
         - https://panel.dsyann.info
+        - https://grafana.translog.dsyann.info
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: blackbox-exporter:9115
+        replacement: translog-obs_blackbox-exporter:9115

@@ -1080,6 +1080,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "newAssignment": "Nouvelle affectation",
     "addAssignment": "Ajouter une affectation",
     "roleSyncHint": "Le rôle IAM de cet utilisateur sera mis à jour automatiquement pour correspondre au poste primaire (le plus récent ACTIF).",
+    "roleNeedsRegularization": "Rôle hérité de IAM — pas encore d'affectation. Cliquez sur Modifier pour régulariser.",
     "promote": "Promouvoir",
     "archiveAction": "Archiver",
     "suspendAction": "Suspendre",

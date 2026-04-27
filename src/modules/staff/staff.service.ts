@@ -4,6 +4,7 @@ import { IIdentityManager, IDENTITY_SERVICE } from '../../infrastructure/identit
 import { Inject } from '@nestjs/common';
 import { WorkflowEngine } from '../../core/workflow/workflow.engine';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { StaffProvisioningService } from './staff-provisioning.service';
 
 const SYSTEM_ACTOR: CurrentUserPayload = {
   id:       'SYSTEM',
@@ -36,7 +37,14 @@ const STAFF_ROLE_TO_IAM: Record<string, string> = {
 
 export interface UpdateStaffDto {
   name?:     string;
-  agencyId?: string | null;                    // home admin uniquement (rôle/dispo gérés via StaffAssignment)
+  agencyId?: string | null;                    // home admin
+  /**
+   * Rôle métier — si fourni, aligne via StaffProvisioningService :
+   *   - Crée/met à jour le primary StaffAssignment(role=role)
+   *   - Aligne User.roleId pour matcher Role(tenantId, name=role)
+   * Doit correspondre à un Role.name existant dans le tenant.
+   */
+  role?:     string;
 }
 
 @Injectable()
@@ -45,6 +53,7 @@ export class StaffService {
     private readonly prisma:    PrismaService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IIdentityManager,
     private readonly workflow: WorkflowEngine,
+    private readonly provisioning: StaffProvisioningService,
   ) {}
 
   async create(tenantId: string, dto: CreateStaffDto) {
@@ -127,7 +136,12 @@ export class StaffService {
         } : {}),
       },
       include: {
-        user:        { select: { id: true, email: true, name: true, roleId: true } },
+        user: {
+          select: {
+            id: true, email: true, name: true, roleId: true,
+            role: { select: { name: true } },
+          },
+        },
         assignments: {
           where:  { status: 'ACTIVE' },
           select: { id: true, role: true, agencyId: true, status: true, isAvailable: true, startDate: true },
@@ -209,13 +223,27 @@ export class StaffService {
       });
     }
 
-    return this.prisma.staff.update({
+    const updated = await this.prisma.staff.update({
       where: { userId },
       data:  {
         ...(dto.agencyId !== undefined ? { agencyId: dto.agencyId ?? null } : {}),
       },
       include: { user: true },
     });
+
+    // Si un nouveau rôle est demandé, le helper aligne primary StaffAssignment
+    // + User.roleId. Refusera si le Role n'existe pas dans le tenant ou si
+    // le rôle est externe (CUSTOMER, PUBLIC_REPORTER).
+    if (dto.role !== undefined && dto.role !== '') {
+      await this.provisioning.ensureStaffForUser({
+        userId,
+        tenantId,
+        role:     dto.role,
+        agencyId: dto.agencyId !== undefined ? (dto.agencyId ?? null) : updated.agencyId,
+      });
+    }
+
+    return updated;
   }
 
   async suspend(tenantId: string, userId: string, actor?: CurrentUserPayload) {

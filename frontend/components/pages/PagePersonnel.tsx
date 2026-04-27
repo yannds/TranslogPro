@@ -67,6 +67,7 @@ interface StaffRow {
     id:    string;
     email: string;
     name:  string | null;
+    role?: { name: string } | null;            // rôle IAM du User (fallback colonne Rôle)
   };
 }
 
@@ -125,7 +126,8 @@ interface AgencyOption { id: string; name: string }
 
 interface EditForm {
   name:     string;
-  agencyId: string;   // home administrative — rôle/dispo gérés via AssignmentsManager
+  role:     string;   // rôle métier — provisionne/aligne le primary StaffAssignment + sync IAM
+  agencyId: string;   // home administrative
 }
 
 const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
@@ -174,19 +176,30 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
       // de sens sur "rôle primaire" calculé, donc sortable=false.
       key: 'assignments',
       header: t('personnel.role'),
-      width: '170px',
+      width: '180px',
       cellRenderer: (_v, row) => {
         const primary = (row.assignments ?? [])
           .filter(a => a.status === 'ACTIVE')
           .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
-        if (!primary) return <span className="text-xs text-slate-400 italic">{t('personnel.noRole')}</span>;
-        return <Badge variant="info">{roleLabel(primary.role)}</Badge>;
+        if (primary) return <Badge variant="info">{roleLabel(primary.role)}</Badge>;
+        // Fallback : User.role.name (legacy Staff sans assignment ACTIVE).
+        // Affiché en variant warning + tooltip "À régulariser via l'édition".
+        const iamRole = row.user?.role?.name;
+        if (iamRole) {
+          return (
+            <span title={t('personnel.roleNeedsRegularization')}>
+              <Badge variant="warning">{roleLabel(iamRole)}</Badge>
+            </span>
+          );
+        }
+        return <span className="text-xs text-slate-400 italic">{t('personnel.noRole')}</span>;
       },
       csvValue: (_v, row) => {
         const primary = (row.assignments ?? [])
           .filter(a => a.status === 'ACTIVE')
           .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
-        return primary ? roleLabel(primary.role) : '';
+        if (primary) return roleLabel(primary.role);
+        return row.user?.role?.name ? roleLabel(row.user.role.name) : '';
       },
     },
     {
@@ -338,8 +351,14 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
   onPreviewChange?: (open: boolean) => void;
 }) {
   const { t } = useI18n();
+  const initialRole = (staff.assignments ?? [])
+    .filter(a => a.status === 'ACTIVE')
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0]?.role
+    ?? staff.user?.role?.name
+    ?? '';
   const [f, setF] = useState<EditForm>({
     name:     staff.user?.name ?? '',
+    role:     initialRole,
     agencyId: staff.agencyId ?? '',
   });
   const set = <K extends keyof EditForm>(k: K, v: EditForm[K]) =>
@@ -354,6 +373,18 @@ function EditStaffForm({ staff, tenantId, onSubmit, onCancel, busy, error, agenc
           <input type="text" value={f.name}
             onChange={e => set('name', e.target.value)}
             className={inp} disabled={busy} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('personnel.role')}</label>
+          <select value={f.role}
+            onChange={e => set('role', e.target.value)}
+            className={inp} disabled={busy}>
+            <option value="">{t('personnel.noRole')}</option>
+            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
+          </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {t('personnel.roleSyncHint')}
+          </p>
         </div>
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -712,6 +743,7 @@ export function PagePersonnel() {
       await apiPatch(`${base}/${editTarget.userId}`, {
         name:     f.name,
         agencyId: f.agencyId || null,
+        ...(f.role ? { role: f.role } : {}),
       });
       setEditTarget(null); refetch();
     } catch (e) { setActionErr((e as Error).message); }

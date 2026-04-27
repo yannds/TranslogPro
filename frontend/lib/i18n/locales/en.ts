@@ -1227,6 +1227,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "newAssignment": "New Assignment",
     "addAssignment": "Add an assignment",
     "roleSyncHint": "This user's IAM role will be updated automatically to match the primary (most recent active) assignment.",
+    "roleNeedsRegularization": "Role inherited from IAM — no active assignment yet. Click Edit to regularize.",
     "promote": "Promote",
     "archiveAction": "Archive",
     "suspendAction": "Suspend",

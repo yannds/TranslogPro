@@ -1,9 +1,28 @@
 # ═════════════════════════════════════════════════════════════════════════════
 # Promtail — collecte logs Docker → Loki
 # ═════════════════════════════════════════════════════════════════════════════
-# Lit les logs JSON Docker depuis /var/lib/docker/containers/*/*-json.log
-# Extrait labels Swarm (service, stack, container_name) pour requêtage par
-# tenant logique dans Grafana (ex: {service="translog_api"}).
+# Stratégie v2 (2026-04-27) : utiliser `docker_sd_configs` au lieu de lire les
+# fichiers /var/lib/docker/containers/*/*-json.log directement.
+#
+# Pourquoi le changement :
+#   - L'approche file-based dépendait du champ `attrs.tag` dans le JSON Docker,
+#     non peuplé par défaut → labels `container_name` toujours vides → toutes
+#     les requêtes `{container_name="translog_api"}` de Loki retournaient vide.
+#   - `docker_sd_configs` consulte la socket Docker pour découvrir tous les
+#     conteneurs avec leur métadata complète (nom, labels Swarm, image…) et
+#     lit les logs via Docker API. Plus de parsing tag.
+#
+# Labels exposés dans Loki :
+#   container_name : nom du service Swarm (ex: translog_api). Mappé depuis
+#                    com.docker.swarm.service.name. Pour les conteneurs hors
+#                    Swarm, ce label est vide.
+#   stack          : nom de la stack Swarm (ex: translog, translog-obs).
+#   container_full_name : nom complet du conteneur (ex: translog_api.1.abc123).
+#   stream         : stdout | stderr.
+#
+# Sécurité : la socket Docker est montée en READ-ONLY (`:ro`) — Promtail peut
+# lire la liste des conteneurs et leurs logs, mais ne peut pas en créer ni en
+# tuer. Mode global = 1 instance par nœud, lit la socket locale.
 # ═════════════════════════════════════════════════════════════════════════════
 
 server:
@@ -25,63 +44,49 @@ clients:
 
 scrape_configs:
 
-  # ── Docker container logs (tous les containers du host) ──────────────────
-  - job_name: containers
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: containerlogs
-          __path__: /var/lib/docker/containers/*/*-json.log
-
+  # ── Docker containers via Docker socket ──────────────────────────────────
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Nom complet du conteneur (préserve l'info pour debug fin)
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container_full_name'
+      # Stream stdout/stderr
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      # Mappe le nom de service Swarm → label `container_name`
+      # (compatibilité ascendante avec les requêtes Loki existantes)
+      - source_labels: ['__meta_docker_container_label_com_docker_swarm_service_name']
+        target_label: 'container_name'
+      # Stack Swarm (ex: translog, translog-obs)
+      - source_labels: ['__meta_docker_container_label_com_docker_stack_namespace']
+        target_label: 'stack'
+      # Pour les conteneurs hors Swarm, fallback sur le nom de conteneur
+      - source_labels: ['container_name']
+        regex: '^$'
+        target_label: 'container_name'
+        replacement: 'standalone'
+      # Drop tous les autres labels __meta_docker_* (cardinalité)
+      - regex: '__meta_docker_.+'
+        action: labeldrop
     pipeline_stages:
-      # Parse Docker JSON log format : {"log":"...", "stream":"stdout|stderr", "time":"..."}
-      - json:
-          expressions:
-            output: log
-            stream: stream
-            time:   time
-            attrs:  attrs
-
-      # Extrait les attrs Swarm (tag = container metadata)
-      - json:
-          source: attrs
-          expressions:
-            tag: tag
-
-      # Tag Swarm format : <container-name>/<task-id>
-      # Exemple : translog_api.1.abc123/abc123
-      - regex:
-          source: tag
-          expression: '^(?P<container_name>[^.]+)\.(?P<task_slot>\d+)\.(?P<task_id>[a-z0-9]+)'
-
-      # Stream = stdout|stderr
-      - labels:
-          stream:
-          container_name:
-
-      # Timestamp parse (RFC3339Nano)
-      - timestamp:
-          source: time
-          format: RFC3339Nano
-
-      # Sortie finale = log seul (sans wrapper JSON)
-      - output:
-          source: output
-
-      # Drop messages trop verbeux (réduit volume Loki)
-      # On peut affiner après mesure réelle.
+      # Drop healthchecks bruyants (Caddy + autres)
       - drop:
-          expression: '^.*health/live.*$'
+          expression: '.*GET /health/.*'
           drop_counter_reason: noisy_health_probe
 
   # ── Logs système /var/log/syslog (auth ssh, kernel, cron) ────────────────
+  # Fournit les logs SSH/auth.log à CrowdSec et permet aux dashboards Grafana
+  # d'afficher les tentatives de login échouées via Loki.
   - job_name: system
     static_configs:
       - targets: [localhost]
         labels:
           job: syslog
           __path__: /var/log/syslog
-
     pipeline_stages:
       - regex:
           expression: '^(?P<timestamp>\w{3}\s+\d+\s\d+:\d+:\d+)\s(?P<host>\S+)\s(?P<process>[^:\[]+)(\[(?P<pid>\d+)\])?:\s(?P<message>.*)$'
