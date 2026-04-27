@@ -99,6 +99,11 @@ services:
       TSIG_SECRET:   ${TSIG_SECRET}
       TSIG_ALG:      ${TSIG_ALG:-hmac-sha256}
       ACME_EMAIL:    ${ACME_EMAIL}
+      # Cle bouncer CrowdSec (Phase 2 observability) — requise par
+      # `crowdsec` block dans Caddyfile, sinon Caddy crashloop avec
+      # "crowdsec API key must not be empty". Generee + persistee dans
+      # .env.prod par 04-deploy.sh (etape [4b] obs stack).
+      CROWDSEC_BOUNCER_KEY_CADDY: ${CROWDSEC_BOUNCER_KEY_CADDY}
     networks:
       - translog_net
       - easypanel-gmp
