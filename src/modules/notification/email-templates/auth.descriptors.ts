@@ -6,6 +6,7 @@ const AUTH_SAMPLE_VARS = {
   tenantName:  'Trans Express CG',
   resetUrl:    'https://trans-express.translog.pro/auth/reset?token=demo-token-here',
   verifyUrl:   'https://trans-express.translog.pro/auth/verify-email?token=demo-token',
+  setupUrl:    'https://trans-express.translog.pro/account/security/mfa',
   expiresAt:   'lundi 27 avril 2026 à 09:00',
   completedAt: 'lundi 27 avril 2026 à 08:42',
   ipAddress:   '192.0.2.42',
