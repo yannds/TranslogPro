@@ -52,6 +52,11 @@ interface AssignmentSummary {
   status:      string;
   isAvailable: boolean;
   startDate:   string;
+  // Lieu de travail — exposé par StaffService.findAll pour l'affichage
+  // de la colonne "Affectation" (mono = agency, multi = coverageAgencies,
+  // tenant-wide = ni l'un ni l'autre).
+  agency?:           { id: string; name: string } | null;
+  coverageAgencies?: { agency: { id: string; name: string } }[];
 }
 
 interface StaffRow {
@@ -71,15 +76,6 @@ interface StaffRow {
   };
 }
 
-interface AssignmentSummary {
-  id:          string;
-  role:        string;
-  agencyId:    string | null;
-  status:      string;
-  isAvailable: boolean;
-  startDate:   string;
-}
-
 interface AssignmentDetail {
   id:          string;
   role:        string;
@@ -92,27 +88,14 @@ interface AssignmentDetail {
   coverageAgencies: { agencyId: string; agency: { id: string; name: string } }[];
 }
 
-interface EligibleUser {
-  id:       string;
-  email:    string;
-  name:     string | null;
-  agencyId: string | null;
-  agency:   { id: string; name: string } | null;
-}
-
 type Coverage = 'mono' | 'tenant' | 'multi';
 
 interface NewAssignmentForm {
-  role:              StaffRole;
+  // Le rôle métier est désormais hérité de User.role.name (1 user = 1 fonction).
+  // Cette modale ne sert plus qu'à définir le LIEU de travail.
   coverage:          Coverage;
   agencyId:          string;
   coverageAgencyIds: string[];
-}
-
-interface PromoteForm {
-  userId:   string;
-  role:     StaffRole;
-  agencyId: string;
 }
 
 interface CreateForm {
@@ -203,24 +186,54 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
       },
     },
     {
+      // Affectation = LIEU de travail (agence, plusieurs agences, ou tenant-wide).
+      // Le rôle métier est dans la colonne "Rôle" — invariant 1 user = 1 fonction.
       key: 'assignments',
-      header: t('personnel.assignments'),
+      header: t('personnel.workLocation'),
       cellRenderer: (_v, row) => {
-        const list = row.assignments ?? [];
-        if (list.length === 0) {
-          return <span className="text-xs text-slate-400 italic">{t('personnel.noActiveAssignment')}</span>;
+        const actives = (row.assignments ?? []).filter(a => a.status === 'ACTIVE');
+        if (actives.length === 0) {
+          return <span className="text-xs text-slate-400 italic">{t('personnel.noWorkLocation')}</span>;
+        }
+        // Aggregate location info from primary assignment (1 user = 1 fonction = 1 assignment ACTIVE)
+        const primary = actives[0];
+        if (primary.agency) {
+          return (
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" aria-hidden />
+              {primary.agency.name}
+            </span>
+          );
+        }
+        if ((primary.coverageAgencies ?? []).length > 0) {
+          const names = primary.coverageAgencies!.map(c => c.agency.name);
+          return (
+            <span
+              className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200"
+              title={names.join(', ')}
+            >
+              <Users className="w-3.5 h-3.5 text-slate-400" aria-hidden />
+              {names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`}
+            </span>
+          );
         }
         return (
-          <div className="flex flex-wrap gap-1.5">
-            {list.map(a => (
-              <Badge key={a.id} variant={a.isAvailable ? 'info' : 'default'}>
-                {roleLabel(a.role)}
-              </Badge>
-            ))}
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300">
+            <Globe2 className="w-3.5 h-3.5" aria-hidden />
+            {t('personnel.allTenant')}
+          </span>
         );
       },
-      csvValue: (_v, row) => (row.assignments ?? []).map(a => roleLabel(a.role)).join(', '),
+      csvValue: (_v, row) => {
+        const actives = (row.assignments ?? []).filter(a => a.status === 'ACTIVE');
+        if (actives.length === 0) return '';
+        const primary = actives[0];
+        if (primary.agency) return primary.agency.name;
+        if ((primary.coverageAgencies ?? []).length > 0) {
+          return primary.coverageAgencies!.map(c => c.agency.name).join(', ');
+        }
+        return 'tenant-wide';
+      },
     },
     {
       key: 'status',
@@ -448,9 +461,13 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
   const url = `/api/tenants/${tenantId}/staff/${staff.userId}/assignments`;
   const { data: list, refetch } = useFetch<AssignmentDetail[]>(url, [staff.userId]);
 
+  // Le rôle métier de l'assignment est forcément = User.role.name (1 user = 1 fonction).
+  // Si le user n'a pas encore de rôle IAM, on guide l'admin vers la modale Modifier.
+  const inheritedRole = staff.user?.role?.name ?? '';
+
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState<NewAssignmentForm>({
-    role: 'DRIVER', coverage: 'mono', agencyId: '', coverageAgencyIds: [],
+    coverage: 'mono', agencyId: '', coverageAgencyIds: [],
   });
 
   const setF = <K extends keyof NewAssignmentForm>(k: K, v: NewAssignmentForm[K]) =>
@@ -459,8 +476,12 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     onError('');
+    if (!inheritedRole) {
+      onError(t('personnel.assignmentNeedsRole'));
+      return;
+    }
     try {
-      const body: Record<string, unknown> = { role: form.role };
+      const body: Record<string, unknown> = { role: inheritedRole };
       if (form.coverage === 'mono') {
         if (!form.agencyId) { onError(t('personnel.selectError')); return; }
         body.agencyId = form.agencyId;
@@ -471,7 +492,7 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
 
       await apiPost(url, body);
       setShowAdd(false);
-      setForm({ role: 'DRIVER', coverage: 'mono', agencyId: '', coverageAgencyIds: [] });
+      setForm({ coverage: 'mono', agencyId: '', coverageAgencyIds: [] });
       refetch();
       onAction();
     } catch (err) {
@@ -546,15 +567,21 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
         <form onSubmit={submit} className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900/50">
           <h4 className="text-sm font-semibold">{t('personnel.newAssignment')}</h4>
 
+          {/* Rôle métier — readonly, hérité de User.role (modifiable depuis "Modifier le membre"). */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium">{t('common.role')}</label>
-            <select value={form.role} onChange={e => setF('role', e.target.value as StaffRole)}
-              className={inp} disabled={busy}>
-              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
-            </select>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {t('personnel.roleSyncHint')}
-            </p>
+            {inheritedRole ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="info">{roleLabel(inheritedRole)}</Badge>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('personnel.roleInheritedHint')}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                {t('personnel.assignmentNeedsRole')}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -617,76 +644,6 @@ function AssignmentsManager({ staff, tenantId, agencies, busy, onAction, onError
   );
 }
 
-// ─── Dialog : Promouvoir un user IAM en Staff ────────────────────────────────
-
-function PromoteFromIamForm({ tenantId, agencies, busy, onSubmit, onCancel, error }: {
-  tenantId: string;
-  agencies: AgencyOption[];
-  busy:     boolean;
-  onSubmit: (f: PromoteForm) => void;
-  onCancel: () => void;
-  error:    string | null;
-}) {
-  const { t } = useI18n();
-  const { data: users, loading } = useFetch<EligibleUser[]>(
-    `/api/tenants/${tenantId}/staff/eligible-users`, [tenantId],
-  );
-  const [f, setF] = useState<PromoteForm>({ userId: '', role: 'DRIVER', agencyId: '' });
-  const set = <K extends keyof PromoteForm>(k: K, v: PromoteForm[K]) =>
-    setF(p => ({ ...p, [k]: v }));
-
-  return (
-    <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(f); }} className="space-y-4">
-      <ErrorAlert error={error} />
-      {loading && <p className="text-sm text-slate-500">{t('personnel.loadingIamUsers')}</p>}
-      {!loading && (users ?? []).length === 0 && (
-        <p className="text-sm text-slate-500">
-          {t('personnel.noEligibleUsers')}
-        </p>
-      )}
-      {!loading && (users ?? []).length > 0 && (
-        <p className="text-xs text-slate-400">
-          {(users ?? []).length} {t('personnel.eligibleCount')}
-        </p>
-      )}
-      {!loading && (users ?? []).length > 0 && (
-        <>
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium">{t('personnel.iamUser')}</label>
-            <select value={f.userId} onChange={e => set('userId', e.target.value)}
-              className={inp} required disabled={busy}>
-              <option value="">{t('personnel.selectAgency')}</option>
-              {(users ?? []).map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name ?? u.email} ({u.email}{u.agency ? ` · ${u.agency.name}` : ''})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium">{t('personnel.initialRole')}</label>
-              <select value={f.role} onChange={e => set('role', e.target.value as StaffRole)}
-                className={inp} disabled={busy}>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{t(r.label)}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium">{t('personnel.homeAgency')}</label>
-              <select value={f.agencyId} onChange={e => set('agencyId', e.target.value)}
-                className={inp} disabled={busy}>
-                <option value="">{t('personnel.noAgencyShort')}</option>
-                {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-          </div>
-        </>
-      )}
-      <FormFooter onCancel={onCancel} busy={busy} submitLabel={t('personnel.promote')} pendingLabel="..." />
-    </form>
-  );
-}
-
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function PagePersonnel() {
@@ -708,7 +665,6 @@ export function PagePersonnel() {
   const [filterRole,    setFilterRole]    = useState<string>('');
   const [filterStatus,  setFilterStatus]  = useState<string>('');
   const [showCreate,    setShowCreate]    = useState(false);
-  const [showPromote,   setShowPromote]   = useState(false);
   const [editTarget,    setEditTarget]    = useState<StaffRow | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<StaffRow | null>(null);
   const [assignmentsTarget, setAssignmentsTarget] = useState<StaffRow | null>(null);
@@ -717,7 +673,13 @@ export function PagePersonnel() {
   const [editPreviewOpen, setEditPreviewOpen] = useState(false);
 
   const data = (staffList ?? []).filter(s => {
-    if (filterRole && !(s.assignments ?? []).some(a => a.role === filterRole)) return false;
+    if (filterRole) {
+      // Match soit un assignment ACTIVE de ce rôle, soit le rôle IAM (fallback
+      // pour Staff legacy sans assignment).
+      const hasAssignment = (s.assignments ?? []).some(a => a.role === filterRole);
+      const hasIamRole    = s.user?.role?.name === filterRole;
+      if (!hasAssignment && !hasIamRole) return false;
+    }
     if (filterStatus && s.status !== filterStatus) return false;
     return true;
   });
@@ -760,17 +722,6 @@ export function PagePersonnel() {
     finally { setBusy(false); }
   };
 
-  const handlePromote = async (f: PromoteForm) => {
-    setBusy(true); setActionErr(null);
-    try {
-      await apiPost(`${base}/from-user/${f.userId}`, {
-        role:     f.role,
-        agencyId: f.agencyId || null,
-      });
-      setShowPromote(false); refetch();
-    } catch (e) { setActionErr((e as Error).message); }
-    finally { setBusy(false); }
-  };
 
   const handleArchive = async () => {
     if (!archiveTarget) return;
@@ -836,9 +787,6 @@ export function PagePersonnel() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setShowPromote(true); setActionErr(null); }}>
-            <Users className="w-4 h-4 mr-2" aria-hidden />{t('personnel.fromIam')}
-          </Button>
           <Button onClick={() => { setShowCreate(true); setActionErr(null); }}>
             <Plus className="w-4 h-4 mr-2" aria-hidden />{t('personnel.newMember')}
           </Button>
@@ -941,24 +889,6 @@ export function PagePersonnel() {
             />
           </div>
         )}
-      </Dialog>
-
-      {/* Modal Promouvoir depuis IAM (Phase 4) */}
-      <Dialog
-        open={showPromote}
-        onOpenChange={o => { if (!o) setShowPromote(false); }}
-        title={t('personnel.promoteDialogTitle')}
-        description={t('personnel.promoteDialogDesc')}
-        size="lg"
-      >
-        <PromoteFromIamForm
-          tenantId={tenantId}
-          agencies={agencyOptions}
-          busy={busy}
-          error={actionErr}
-          onSubmit={handlePromote}
-          onCancel={() => setShowPromote(false)}
-        />
       </Dialog>
 
       {/* Modal Archiver */}

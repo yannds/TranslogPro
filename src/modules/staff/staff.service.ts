@@ -144,7 +144,11 @@ export class StaffService {
         },
         assignments: {
           where:  { status: 'ACTIVE' },
-          select: { id: true, role: true, agencyId: true, status: true, isAvailable: true, startDate: true },
+          select: {
+            id: true, role: true, agencyId: true, status: true, isAvailable: true, startDate: true,
+            agency:           { select: { id: true, name: true } },
+            coverageAgencies: { select: { agency: { select: { id: true, name: true } } } },
+          },
         },
       },
       orderBy: { createdAt: 'asc' },
