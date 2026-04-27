@@ -40,7 +40,9 @@ import { DriverLicensePanel } from '../drivers/DriverLicensePanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type StaffRole   = 'DRIVER' | 'HOSTESS' | 'MECHANIC' | 'AGENT' | 'CONTROLLER' | 'SUPERVISOR';
+type StaffRole   =
+  | 'DRIVER' | 'HOSTESS' | 'MECHANIC' | 'AGENT' | 'CONTROLLER' | 'SUPERVISOR'
+  | 'TENANT_ADMIN' | 'AGENCY_MANAGER' | 'CASHIER' | 'ACCOUNTANT' | 'AGENT_QUAI' | 'DISPATCHER';
 type StaffStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
 
 interface AssignmentSummary {
@@ -127,12 +129,18 @@ interface EditForm {
 }
 
 const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
-  { value: 'DRIVER',     label: 'personnel.roleDriver' },
-  { value: 'HOSTESS',    label: 'personnel.roleHostess' },
-  { value: 'MECHANIC',   label: 'personnel.roleMechanic' },
-  { value: 'AGENT',      label: 'personnel.roleAgent' },
-  { value: 'CONTROLLER', label: 'personnel.roleController' },
-  { value: 'SUPERVISOR', label: 'personnel.roleSupervisor' },
+  { value: 'TENANT_ADMIN',   label: 'personnel.roleTenantAdmin' },
+  { value: 'AGENCY_MANAGER', label: 'personnel.roleAgencyManager' },
+  { value: 'DISPATCHER',     label: 'personnel.roleDispatcher' },
+  { value: 'CASHIER',        label: 'personnel.roleCashier' },
+  { value: 'ACCOUNTANT',     label: 'personnel.roleAccountant' },
+  { value: 'AGENT_QUAI',     label: 'personnel.roleAgentQuai' },
+  { value: 'DRIVER',         label: 'personnel.roleDriver' },
+  { value: 'HOSTESS',        label: 'personnel.roleHostess' },
+  { value: 'MECHANIC',       label: 'personnel.roleMechanic' },
+  { value: 'AGENT',          label: 'personnel.roleAgent' },
+  { value: 'CONTROLLER',     label: 'personnel.roleController' },
+  { value: 'SUPERVISOR',     label: 'personnel.roleSupervisor' },
 ];
 
 // ─── Colonnes ─────────────────────────────────────────────────────────────────
@@ -160,6 +168,26 @@ function buildColumns(t: (k: string | Record<string, string | undefined>) => str
         </div>
       ),
       csvValue: (_v, row) => `${row.user?.name ?? ''} <${row.user?.email ?? ''}>`,
+    },
+    {
+      // key réutilisée (le type Column<T>.key doit être keyof T) — le tri n'a pas
+      // de sens sur "rôle primaire" calculé, donc sortable=false.
+      key: 'assignments',
+      header: t('personnel.role'),
+      width: '170px',
+      cellRenderer: (_v, row) => {
+        const primary = (row.assignments ?? [])
+          .filter(a => a.status === 'ACTIVE')
+          .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
+        if (!primary) return <span className="text-xs text-slate-400 italic">{t('personnel.noRole')}</span>;
+        return <Badge variant="info">{roleLabel(primary.role)}</Badge>;
+      },
+      csvValue: (_v, row) => {
+        const primary = (row.assignments ?? [])
+          .filter(a => a.status === 'ACTIVE')
+          .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
+        return primary ? roleLabel(primary.role) : '';
+      },
     },
     {
       key: 'assignments',
