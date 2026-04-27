@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OnboardingService } from './onboarding.service';
+import { StaffModule } from '../staff/staff.module';
 
 /**
  * OnboardingModule — provisioning tenant atomique (signup public, seed).
@@ -14,8 +15,12 @@ import { OnboardingService } from './onboarding.service';
  *
  * Ne pas importer directement dans AppModule — il est déjà importé par
  * PublicSignupModule qui en a besoin.
+ *
+ * StaffModule importé pour StaffProvisioningService — provisioning RH/IAM de
+ * l'admin tenant créé lors du signup.
  */
 @Module({
+  imports:   [StaffModule],
   providers: [OnboardingService],
   exports:   [OnboardingService],
 })

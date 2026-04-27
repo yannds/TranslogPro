@@ -1,4 +1,4 @@
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, ConflictException, Optional } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
@@ -19,6 +19,7 @@ import {
 } from '../../../prisma/seeds/iam.seed';
 import { STARTER_PACK_SLUGS } from '../../../server/seed/templates/templates.seeder';
 import { seedCmsPages } from '../../../prisma/seeds/cms-pages.seed';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 
 export interface OnboardTenantDto {
   name:       string;
@@ -99,6 +100,10 @@ export class OnboardingService {
     private readonly prisma:         PrismaService,
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
     private readonly platformConfig: PlatformConfigService,
+    // Optional pour rétrocompatibilité avec les tests qui instancient le service
+    // sans le helper. En prod, StaffProvisioningService est toujours injecté
+    // via le module (cf. onboarding.module.ts).
+    @Optional() private readonly provisioning?: StaffProvisioningService,
   ) {}
 
   async onboard(dto: OnboardTenantDto) {
@@ -201,6 +206,22 @@ export class OnboardingService {
     const hmacKey = randomBytes(32).toString('hex');
     await this.secretService.putSecret(`tenants/${result.tenant.id}/hmac`, { KEY: hmacKey });
     this.logger.log(`Vault HMAC key provisionnée pour tenant ${result.tenant.id}`);
+
+    // Provisioning RH hors tx : crée Staff + StaffAssignment ACTIVE primaire pour
+    // l'admin tenant (rôle TENANT_ADMIN). Sans cet appel, l'admin existait dans
+    // IAM mais pas dans la liste Personnel. Best-effort : un échec ne fait pas
+    // régresser l'onboarding (le tenant est ACTIVE, l'admin peut se connecter).
+    if (this.provisioning) {
+      try {
+        await this.provisioning.ensureStaffForUser({
+          userId:   result.admin.id,
+          tenantId: result.tenant.id,
+          role:     'TENANT_ADMIN',
+        });
+      } catch (err) {
+        this.logger.warn(`Staff provisioning admin tenant=${result.tenant.id} failed: ${(err as Error).message}`);
+      }
+    }
 
     this.logger.log(`Tenant "${dto.slug}" onboardé avec succès (id=${result.tenant.id})`);
     return result;

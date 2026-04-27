@@ -23,6 +23,7 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { PrismaService }  from '../../infrastructure/database/prisma.service';
 import { RbacService }    from '../../core/iam/services/rbac.service';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 import {
   CreateUserDto, UpdateUserDto,
   CreateRoleDto, UpdateRoleDto, SetPermissionsDto,
@@ -41,10 +42,11 @@ export class TenantIamService {
     private readonly prisma: PrismaService,
     private readonly rbac:   RbacService,
     // Optional pour rester compatible avec les tests existants qui instancient
-    // le service avec 2 args. En prod, AppConfigService et EVENT_BUS sont
-    // @Global et toujours injectés par Nest.
-    @Optional() private readonly appConfig?: AppConfigService,
+    // le service avec 2 args. En prod, AppConfigService, EVENT_BUS et
+    // StaffProvisioningService sont @Global ou injectés par Nest.
+    @Optional() private readonly appConfig?:    AppConfigService,
     @Optional() @Inject(EVENT_BUS) private readonly eventBus?: IEventBus,
+    @Optional() private readonly provisioning?: StaffProvisioningService,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -151,6 +153,22 @@ export class TenantIamService {
         password:   hash,
       },
     });
+
+    // Provisioning RH : si un rôle IAM est attribué, créer Staff + StaffAssignment
+    // ACTIVE primaire pour que l'utilisateur apparaisse dans Personnel.
+    // Best-effort : un échec (rôle externe, etc.) ne bloque pas la création User.
+    if (this.provisioning && dto.roleId && user.role?.name) {
+      try {
+        await this.provisioning.ensureStaffForUser({
+          userId:   user.id,
+          tenantId,
+          role:     user.role.name,
+          agencyId: dto.agencyId ?? null,
+        });
+      } catch (err) {
+        this.logger.warn(`Staff provisioning failed for ${dto.email}: ${(err as Error).message}`);
+      }
+    }
 
     await this.log({
       tenantId, actorId,

@@ -6,6 +6,7 @@ import {
 import * as ExcelJS from 'exceljs';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,12 @@ const COLOR_FONT         = 'FFFFFFFF';
 export class BulkImportService {
   private readonly log = new Logger(BulkImportService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BulkImportService.name);
+
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly provisioning: StaffProvisioningService,
+  ) {}
 
   // ── Template generation ───────────────────────────────────────────────────
 
@@ -554,6 +560,8 @@ export class BulkImportService {
           include: { staffProfile: { select: { id: true } } },
         });
 
+        let userIdForProvisioning: string;
+
         if (existingUser) {
           // Mise à jour partielle — le mot de passe n'est jamais réécrasé
           await this.prisma.$transaction(async tx => {
@@ -575,6 +583,7 @@ export class BulkImportService {
               });
             }
           });
+          userIdForProvisioning = existingUser.id;
           result.updated++;
         } else {
           if (!password || password.length < 8) {
@@ -583,18 +592,29 @@ export class BulkImportService {
             continue;
           }
           const hash = await bcrypt.hash(password, 12);
-          await this.prisma.$transaction(async tx => {
+          const newUserId = await this.prisma.$transaction(async tx => {
             const user = await tx.user.create({
               data: { tenantId, email: email!, name: nom!, userType: 'STAFF', roleId: roleId ?? null, agencyId: agencyId ?? null },
             });
             await tx.account.create({
               data: { tenantId, userId: user.id, providerId: 'credential', accountId: email!, password: hash },
             });
-            await tx.staff.create({
-              data: { tenantId, userId: user.id, agencyId: agencyId ?? null, hireDate: hireDate ?? new Date() },
-            });
+            return user.id;
           });
+          userIdForProvisioning = newUserId;
           result.created++;
+        }
+
+        // Provisioning RH unifié hors tx : crée/réconcilie Staff + StaffAssignment
+        // ACTIVE primaire et aligne User.roleId. Best-effort.
+        try {
+          await this.provisioning.ensureStaffForUser({
+            userId:   userIdForProvisioning,
+            tenantId,
+            agencyId: agencyId ?? null,
+          });
+        } catch (err) {
+          this.logger.warn(`Staff provisioning bulk-import failed for ${email}: ${(err as Error).message}`);
         }
       } catch (e: unknown) {
         result.errors.push({ row: rowNum, message: `Erreur personnel : ${e instanceof Error ? e.message : String(e)}` });

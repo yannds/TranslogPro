@@ -22,12 +22,16 @@ import { PLATFORM_TENANT_ID } from '../../../prisma/seeds/iam.seed';
 import { BootstrapDto } from './dto/bootstrap.dto';
 import { CreatePlatformStaffDto, PlatformRole } from './dto/create-platform-staff.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 
 @Injectable()
 export class PlatformService {
   private readonly logger = new Logger(PlatformService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly provisioning: StaffProvisioningService,
+  ) {}
 
   // ─── Bootstrap ──────────────────────────────────────────────────────────────
 
@@ -56,6 +60,17 @@ export class PlatformService {
         userType: 'STAFF',
       },
     });
+
+    // Provisioning RH best-effort sur le tenant plateforme.
+    try {
+      await this.provisioning.ensureStaffForUser({
+        userId:   user.id,
+        tenantId: PLATFORM_TENANT_ID,
+        role:     'SUPER_ADMIN',
+      });
+    } catch (err) {
+      this.logger.warn(`Staff provisioning bootstrap failed: ${(err as Error).message}`);
+    }
 
     this.logger.log(`[Bootstrap] Premier SUPER_ADMIN créé : ${user.id} (${user.email})`);
 
@@ -89,6 +104,17 @@ export class PlatformService {
         userType: 'STAFF',
       },
     });
+
+    // Provisioning RH best-effort sur le tenant plateforme.
+    try {
+      await this.provisioning.ensureStaffForUser({
+        userId:   user.id,
+        tenantId: PLATFORM_TENANT_ID,
+        role:     dto.roleName,
+      });
+    } catch (err) {
+      this.logger.warn(`Staff provisioning createStaff failed for ${dto.email}: ${(err as Error).message}`);
+    }
 
     this.logger.log(
       `[Platform] Staff créé : ${user.id} role=${dto.roleName} par actor=${actor.id}`,

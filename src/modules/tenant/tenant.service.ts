@@ -1,9 +1,10 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ISecretService, SECRET_SERVICE } from '../../infrastructure/secret/interfaces/secret.interface';
 import { Inject } from '@nestjs/common';
 import { createHmac, randomBytes } from 'crypto';
 import { seedCmsPages } from '../../../prisma/seeds/cms-pages.seed';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 
 export interface CreateTenantDto {
   name:       string;
@@ -76,8 +77,11 @@ const SUPPORTED_LANGUAGES = ['fr', 'en', 'ln', 'ktu', 'es', 'pt', 'ar', 'wo'];
 
 @Injectable()
 export class TenantService {
+  private readonly logger = new Logger(TenantService.name);
+
   constructor(
-    private readonly prisma:  PrismaService,
+    private readonly prisma:       PrismaService,
+    private readonly provisioning: StaffProvisioningService,
     @Inject(SECRET_SERVICE) private readonly secretService: ISecretService,
   ) {}
 
@@ -94,7 +98,7 @@ export class TenantService {
     await this.secretService.putSecret(`tenants/${tenant.id}/hmac`, { KEY: hmacKey });
 
     // Create admin user (seeded — Better Auth creates the session-side record separately)
-    await this.prisma.user.create({
+    const admin = await this.prisma.user.create({
       data: {
         email:    dto.adminEmail,
         name:     dto.adminName,
@@ -102,6 +106,29 @@ export class TenantService {
         userType: 'STAFF',
       },
     });
+
+    // Provisioning RH best-effort : si le rôle TENANT_ADMIN a été seedé pour
+    // ce tenant, on l'attribue à l'admin et on crée Staff + StaffAssignment.
+    // Sans roleId résolu (chemin legacy sans seed IAM), no-op silencieux.
+    try {
+      const tenantAdminRole = await this.prisma.role.findFirst({
+        where:  { tenantId: tenant.id, name: 'TENANT_ADMIN' },
+        select: { id: true },
+      });
+      if (tenantAdminRole) {
+        await this.prisma.user.update({
+          where: { id: admin.id },
+          data:  { roleId: tenantAdminRole.id },
+        });
+        await this.provisioning.ensureStaffForUser({
+          userId:   admin.id,
+          tenantId: tenant.id,
+          role:     'TENANT_ADMIN',
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Staff provisioning admin tenant=${tenant.id} failed: ${(err as Error).message}`);
+    }
 
     // Seed default CMS pages + portail config — éditable via portail admin
     await this.seedDefaultCmsPages(tenant.id, dto.name);

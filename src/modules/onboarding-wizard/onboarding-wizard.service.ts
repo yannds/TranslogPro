@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, BadRequestException,
+  Injectable, Logger, Inject, Optional, BadRequestException,
   ConflictException, NotFoundException, ForbiddenException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { EMAIL_SERVICE, IEmailService } from '../../infrastructure/notification/interfaces/email.interface';
 import { AppConfigService } from '../../common/config/app-config.service';
+import { StaffProvisioningService } from '../staff/staff-provisioning.service';
 import {
   UpdateBrandStepDto, UpdateAgencyStepDto, CreateFirstStationDto,
   CreateFirstRouteDto, InviteTeamStepDto,
@@ -32,6 +33,10 @@ export class OnboardingWizardService {
     private readonly prisma:    PrismaService,
     private readonly appConfig: AppConfigService,
     @Inject(EMAIL_SERVICE) private readonly email: IEmailService,
+    // Optional pour rétrocompatibilité avec les tests qui instancient le service
+    // sans le helper. En prod, StaffProvisioningService est toujours injecté
+    // via le module (cf. onboarding-wizard.module.ts).
+    @Optional() private readonly provisioning?: StaffProvisioningService,
   ) {}
 
   // ─── État agrégé ────────────────────────────────────────────────────────────
@@ -300,6 +305,22 @@ export class OnboardingWizardService {
             forcePasswordChange: true,
           },
         });
+
+        // Provisioning RH : crée Staff + StaffAssignment ACTIVE primaire, aligné
+        // sur le rôle IAM. Sans cet appel, l'invité existait dans IAM mais pas
+        // dans la liste Personnel. Best-effort : un échec ne bloque pas l'invite.
+        if (this.provisioning) {
+          try {
+            await this.provisioning.ensureStaffForUser({
+              userId:   user.id,
+              tenantId,
+              role:     inv.roleSlug.toUpperCase(),
+              agencyId: defaultAgency?.id ?? null,
+            });
+          } catch (err) {
+            this.logger.warn(`Staff provisioning failed for ${inv.email}: ${(err as Error).message}`);
+          }
+        }
 
         // Fire-and-forget : email de bienvenue collègue (template simple inline).
         void this.sendColleagueInvite({
