@@ -53,6 +53,7 @@ const en: Record<string, Record<string, LocaleValue>> = {
     "delete": "Delete",
     "readOnly": "Read only",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "close": "Close",
     "add": "Add",
     "remove": "Remove",
@@ -1817,6 +1818,10 @@ const en: Record<string, Record<string, LocaleValue>> = {
   "fleetVehicles": {
     "pageTitle": "Vehicles",
     "pageSubtitle": "Tenant fleet — profile, capacity, operational status.",
+    "plateAtypicalTitle": "Atypical license plate",
+    "plateAtypicalDesc": "This license plate does not match any known format for the country. Confirm if it is correct.",
+    "plateDuplicateTitle": "License plate already used",
+    "plateDuplicateDesc": "This plate already exists in your fleet. Confirm if this is a legitimate duplicate (cross-country collision).",
     "addVehicle": "Add Vehicle",
     "editVehicle": "Edit Vehicle",
     "deleteVehicle": "Delete Vehicle",

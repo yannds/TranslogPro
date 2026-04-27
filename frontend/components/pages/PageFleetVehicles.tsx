@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth }                         from '../../lib/auth/auth.context';
 import { useFetch }                        from '../../lib/hooks/useFetch';
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiFetch } from '../../lib/api';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiFetch, ApiError } from '../../lib/api';
 import { useI18n }                     from '../../lib/i18n/useI18n';
 import { Badge }                           from '../ui/Badge';
 import { Button }                          from '../ui/Button';
@@ -37,6 +37,19 @@ type BusStatus = 'AVAILABLE' | 'IN_SERVICE' | 'MAINTENANCE' | 'OFFLINE';
 type FuelType  = 'DIESEL' | 'PETROL' | 'BIO_DIESEL' | 'HYBRID' | 'ELECTRIC';
 type EngineType = 'EURO_3' | 'EURO_4' | 'EURO_5' | 'EURO_6';
 type BusAmenity = 'WIFI' | 'AC' | 'TOILETS' | 'USB_CHARGING' | 'RECLINING_SEATS' | 'TV' | 'SNACK_BAR' | 'BLANKETS' | 'LUGGAGE_TRACKING';
+
+interface LicensePlateFormatEntry {
+  label?:           string;
+  masks:            string[];
+  excludedLetters?: string[];
+  examples?:        string[];
+  notes?:           string;
+}
+
+interface LicensePlateFormatsResponse {
+  defaultCountry: string | null;
+  formats:        Record<string, LicensePlateFormatEntry>;
+}
 
 const ALL_AMENITIES: BusAmenity[] = [
   'WIFI', 'AC', 'TOILETS', 'USB_CHARGING', 'RECLINING_SEATS',
@@ -157,17 +170,18 @@ const ENGINE_TYPE_LABEL: Record<EngineType, string> = {
 // ─── Formulaire ───────────────────────────────────────────────────────────────
 
 function BusForm({
-  agencies, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel, currencyCode,
+  agencies, initial, onSubmit, onCancel, busy, error, submitLabel, pendingLabel, currencyCode, platePlaceholder,
 }: {
-  agencies:     AgencyRow[];
-  initial:      BusFormValues;
-  onSubmit:     (v: BusFormValues) => void;
-  onCancel:     () => void;
-  busy:         boolean;
-  error:        string | null;
-  submitLabel:  string;
-  pendingLabel: string;
-  currencyCode: string;
+  agencies:         AgencyRow[];
+  initial:          BusFormValues;
+  onSubmit:         (v: BusFormValues) => void;
+  onCancel:         () => void;
+  busy:             boolean;
+  error:            string | null;
+  submitLabel:      string;
+  pendingLabel:     string;
+  currencyCode:     string;
+  platePlaceholder: string;
 }) {
   const { t } = useI18n();
   const [f, setF] = useState<BusFormValues>(initial);
@@ -197,7 +211,7 @@ function BusForm({
           </label>
           <input type="text" required value={f.plateNumber}
             onChange={e => patch({ plateNumber: e.target.value.toUpperCase() })}
-            className={inp} disabled={busy} placeholder="KA-4421-B" />
+            className={inp} disabled={busy} placeholder={platePlaceholder} />
         </div>
         <div className="space-y-1.5 lg:col-span-3">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -935,7 +949,34 @@ function toFormValues(bus: BusRow): BusFormValues {
   };
 }
 
-function formToPayload(f: BusFormValues) {
+interface BusPayload {
+  plateNumber:         string;
+  model?:              string;
+  type:                BusType;
+  capacity:            number;
+  year?:               number;
+  agencyId:            string;
+  vin?:                string;
+  fuelType?:           string;
+  engineType?:         string;
+  fuelTankCapacityL?:  number;
+  adBlueTankCapacityL?: number;
+  luggageCapacityKg?:  number;
+  luggageCapacityM3?:  number;
+  registrationDate?:   string;
+  purchaseDate?:       string;
+  purchasePrice?:      number;
+  initialOdometerKm?:  number;
+  fuelConsumptionPer100Km?:    number;
+  adBlueConsumptionPer100Km?:  number;
+  amenities:           BusAmenity[];
+  // Flags de confirmation (warn-only override) — optionnels, ajoutés au retry
+  // après que l'utilisateur a confirmé la modale atypique/doublon.
+  confirmedAtypical?:  boolean;
+  confirmedDuplicate?: boolean;
+}
+
+function formToPayload(f: BusFormValues): BusPayload {
   const numOrUndef = (v: string) => v ? Number(v) : undefined;
   const strOrUndef = (v: string) => v || undefined;
   return {
@@ -978,6 +1019,9 @@ export function PageFleetVehicles() {
   const { data: agencies } = useFetch<AgencyRow[]>(
     tenantId ? `/api/tenants/${tenantId}/agencies` : null, [tenantId],
   );
+  const { data: plateFormats } = useFetch<LicensePlateFormatsResponse>(
+    tenantId ? `${base}/license-plate-formats` : null, [tenantId],
+  );
 
   const [showCreate,   setShowCreate]   = useState(false);
   const [editBus,      setEditBus]      = useState<BusRow | null>(null);
@@ -985,6 +1029,24 @@ export function PageFleetVehicles() {
   const [deleteBus,    setDeleteBus]    = useState<BusRow | null>(null);
   const [busy,         setBusy]         = useState(false);
   const [actionErr,    setActionErr]    = useState<string | null>(null);
+
+  // Modale de confirmation atypique/doublon : stocke la requête en attente.
+  // Quand l'utilisateur confirme, on rejoue la requête avec le flag adéquat.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    kind:    'atypical' | 'duplicate';
+    title:   string;
+    message: string;
+    retry:   () => Promise<void>;
+  } | null>(null);
+
+  // Placeholder = 1er exemple du pays par défaut (Tenant.country),
+  // ou KA-4421-B en fallback. Permet à l'admin d'avoir tout de suite
+  // une indication du format attendu sans que ce soit contraignant.
+  const platePlaceholder = useMemo(() => {
+    if (!plateFormats?.defaultCountry) return 'KA-4421-B';
+    const entry = plateFormats.formats[plateFormats.defaultCountry];
+    return entry?.examples?.[0] ?? entry?.masks?.[0] ?? 'KA-4421-B';
+  }, [plateFormats]);
 
   const kpi = useMemo(() => {
     const list = buses ?? [];
@@ -996,23 +1058,70 @@ export function PageFleetVehicles() {
     };
   }, [buses]);
 
+  /**
+   * Intercepte les erreurs PLATE_ATYPICAL (400) et PLATE_DUPLICATE (409) du
+   * backend, ouvre la modale de confirmation et propose un retry avec le flag
+   * adéquat. Pour toute autre erreur, on remonte simplement le message.
+   */
+  const submitWithPlateGuard = async (
+    payload: ReturnType<typeof formToPayload>,
+    fire:    (body: ReturnType<typeof formToPayload>) => Promise<unknown>,
+  ): Promise<boolean> => {
+    try {
+      await fire(payload);
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
+        const body = e.body as { code?: string; message?: string };
+        if (body.code === 'PLATE_ATYPICAL') {
+          setPendingConfirm({
+            kind:    'atypical',
+            title:   t('fleetVehicles.plateAtypicalTitle'),
+            message: body.message ?? t('fleetVehicles.plateAtypicalDesc'),
+            retry:   async () => {
+              setPendingConfirm(null);
+              await submitWithPlateGuard({ ...payload, confirmedAtypical: true }, fire);
+            },
+          });
+          return false;
+        }
+        if (body.code === 'PLATE_DUPLICATE') {
+          setPendingConfirm({
+            kind:    'duplicate',
+            title:   t('fleetVehicles.plateDuplicateTitle'),
+            message: body.message ?? t('fleetVehicles.plateDuplicateDesc'),
+            retry:   async () => {
+              setPendingConfirm(null);
+              await submitWithPlateGuard({ ...payload, confirmedDuplicate: true }, fire);
+            },
+          });
+          return false;
+        }
+      }
+      setActionErr((e as Error).message);
+      return false;
+    }
+  };
+
   const handleCreate = async (f: BusFormValues) => {
     setBusy(true); setActionErr(null);
-    try {
-      await apiPost(base, formToPayload(f));
-      setShowCreate(false); refetch();
-    } catch (e) { setActionErr((e as Error).message); }
-    finally { setBusy(false); }
+    const ok = await submitWithPlateGuard(
+      formToPayload(f),
+      (body) => apiPost(base, body),
+    );
+    if (ok) { setShowCreate(false); refetch(); }
+    setBusy(false);
   };
 
   const handleEdit = async (f: BusFormValues) => {
     if (!editBus) return;
     setBusy(true); setActionErr(null);
-    try {
-      await apiPatch(`${base}/${editBus.id}`, formToPayload(f));
-      setEditBus(null); refetch();
-    } catch (e) { setActionErr((e as Error).message); }
-    finally { setBusy(false); }
+    const ok = await submitWithPlateGuard(
+      formToPayload(f),
+      (body) => apiPatch(`${base}/${editBus.id}`, body),
+    );
+    if (ok) { setEditBus(null); refetch(); }
+    setBusy(false);
   };
 
   const handleStatusChange = async (bus: BusRow, status: BusStatus) => {
@@ -1138,6 +1247,7 @@ export function PageFleetVehicles() {
               submitLabel={t('common.save')}
               pendingLabel={t('common.saving')}
               currencyCode={operational.currency}
+              platePlaceholder={platePlaceholder}
             />
             <BusPhotoManager tenantId={tenantId} busId={editBus.id} />
             <BusCostProfileSection
@@ -1195,6 +1305,7 @@ export function PageFleetVehicles() {
           submitLabel={t('common.create')}
           pendingLabel={t('common.creating')}
           currencyCode={operational.currency}
+          platePlaceholder={platePlaceholder}
         />
       </Dialog>
 
@@ -1221,6 +1332,26 @@ export function PageFleetVehicles() {
                   : <Badge variant={STATUS_VARIANT[s]} size="sm">{t(STATUS_LABEL[s])}</Badge>}
               </button>
             ))}
+          </div>
+        )}
+      </Dialog>
+
+      {/* Modale confirmation plaque atypique / doublon (warn-only override) */}
+      <Dialog
+        open={!!pendingConfirm}
+        onOpenChange={o => { if (!o) setPendingConfirm(null); }}
+        title={pendingConfirm?.title ?? ''}
+        description={pendingConfirm?.message ?? ''}
+        size="md"
+      >
+        {pendingConfirm && (
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPendingConfirm(null)} disabled={busy}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={() => void pendingConfirm.retry()} disabled={busy}>
+              {t('common.confirm')}
+            </Button>
           </div>
         )}
       </Dialog>

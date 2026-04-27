@@ -70,6 +70,16 @@ export class FleetController {
     return this.fleetService.findAll(tenantId, scope);
   }
 
+  /**
+   * Renvoie le registre des masques d'immatriculation par pays pour ce tenant
+   * + le code pays par défaut (Tenant.country) pour amorcer le placeholder UI.
+   */
+  @Get('license-plate-formats')
+  @RequirePermission(Permission.FLEET_STATUS_AGENCY)
+  getLicensePlateFormats(@TenantId() tenantId: string) {
+    return this.fleetService.getLicensePlateFormats(tenantId);
+  }
+
   @Get('buses/:id')
   @RequirePermission(Permission.FLEET_STATUS_AGENCY)
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {

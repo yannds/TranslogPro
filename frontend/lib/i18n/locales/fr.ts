@@ -1670,6 +1670,10 @@ const fr: Record<string, Record<string, LocaleValue>> = {
   "fleetVehicles": {
     "pageTitle": "Véhicules",
     "pageSubtitle": "Flotte du tenant — profil, capacité, statut opérationnel.",
+    "plateAtypicalTitle": "Immatriculation atypique",
+    "plateAtypicalDesc": "Cette immatriculation ne correspond à aucun format connu pour le pays. Confirmez si elle est correcte.",
+    "plateDuplicateTitle": "Immatriculation déjà utilisée",
+    "plateDuplicateDesc": "Cette plaque existe déjà dans votre flotte. Confirmez s'il s'agit d'un doublon légitime (collision inter-pays).",
     "addVehicle": "Ajouter un véhicule",
     "editVehicle": "Modifier le véhicule",
     "deleteVehicle": "Supprimer le véhicule",
@@ -3596,6 +3600,7 @@ const fr: Record<string, Record<string, LocaleValue>> = {
     "delete": "Supprimer",
     "readOnly": "Lecture seule",
     "cancel": "Annuler",
+    "confirm": "Confirmer",
     "close": "Fermer",
     "add": "Ajouter",
     "remove": "Retirer",
