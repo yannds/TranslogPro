@@ -10,6 +10,9 @@ import { UpdateBusDto } from './dto/update-bus.dto';
 import {
   IStorageService, STORAGE_SERVICE, DocumentType,
 } from '../../infrastructure/storage/interfaces/storage.interface';
+import {
+  LicensePlateValidator, LicensePlateFormatsConfig,
+} from './license-plate-validator.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const ACTIVE_TRIP_STATUSES = [
@@ -22,17 +25,85 @@ const ALLOWED_PHOTO_EXT = ['jpg', 'jpeg', 'png', 'webp'];
 @Injectable()
 export class FleetService {
   constructor(
-    private readonly prisma:   PrismaService,
-    private readonly workflow: WorkflowEngine,
+    private readonly prisma:    PrismaService,
+    private readonly workflow:  WorkflowEngine,
+    private readonly plateVal:  LicensePlateValidator,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
+  /**
+   * Validation graduée + check doublon. Lève BadRequest avec un body structuré
+   * que l'UI peut interpréter pour afficher la modale de confirmation.
+   * Voir docs/LICENSE_PLATE_FORMATS.md.
+   */
+  private async validatePlate(opts: {
+    tenantId:           string;
+    plate:              string;
+    plateCountry?:      string;
+    confirmedAtypical?: boolean;
+    confirmedDuplicate?: boolean;
+    excludeBusId?:      string;
+  }): Promise<{ normalized: string }> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where:  { id: opts.tenantId },
+      select: { country: true },
+    });
+    const businessConfig = await this.prisma.tenantBusinessConfig.findUnique({
+      where:  { tenantId: opts.tenantId },
+      select: { licensePlateFormats: true },
+    });
+    const formats = (businessConfig?.licensePlateFormats ?? {}) as LicensePlateFormatsConfig;
+    const country = (opts.plateCountry ?? tenant?.country ?? '').toUpperCase();
+
+    const result = this.plateVal.validate({ plate: opts.plate, country, formats });
+    if (result.status === 'invalid') {
+      throw new BadRequestException({
+        code:    'PLATE_INVALID',
+        message: 'Numéro d\'immatriculation invalide (trop court ou bruit).',
+      });
+    }
+    if (result.status === 'unknown' && !opts.confirmedAtypical) {
+      throw new BadRequestException({
+        code:        'PLATE_ATYPICAL',
+        message:     `Cette immatriculation ne correspond à aucun format connu pour ${country || 'ce pays'}. Confirmez si elle est correcte.`,
+        country,
+        triedMasks:  result.triedMasks ?? [],
+        normalized:  result.normalized,
+        confirmHint: 'Renvoyer le formulaire avec confirmedAtypical=true pour forcer.',
+      });
+    }
+
+    const dup = await this.plateVal.findDuplicate({
+      tenantId:     opts.tenantId,
+      plateNumber:  result.normalized,
+      excludeBusId: opts.excludeBusId,
+    });
+    if (dup && !opts.confirmedDuplicate) {
+      throw new ConflictException({
+        code:        'PLATE_DUPLICATE',
+        message:     `Cette immatriculation existe déjà sur le bus ${dup.id}. Confirmez le doublon (collision inter-pays légitime ?).`,
+        existingId:  dup.id,
+        normalized:  result.normalized,
+        confirmHint: 'Renvoyer le formulaire avec confirmedDuplicate=true pour forcer.',
+      });
+    }
+
+    return { normalized: result.normalized };
+  }
+
   async createBus(tenantId: string, dto: CreateBusDto) {
+    const { normalized } = await this.validatePlate({
+      tenantId,
+      plate:               dto.plateNumber,
+      plateCountry:        dto.plateCountry,
+      confirmedAtypical:   dto.confirmedAtypical,
+      confirmedDuplicate:  dto.confirmedDuplicate,
+    });
     return this.prisma.bus.create({
       data: {
         tenantId,
         agencyId:            dto.agencyId,
-        plateNumber:         dto.plateNumber,
+        plateNumber:         normalized,
         model:               dto.model ?? '',
         type:                dto.type,
         year:                dto.year,
@@ -57,11 +128,23 @@ export class FleetService {
   }
 
   async updateBus(tenantId: string, id: string, dto: UpdateBusDto) {
-    await this.findOne(tenantId, id);
+    const current = await this.findOne(tenantId, id);
+    let normalizedPlate: string | undefined;
+    if (dto.plateNumber !== undefined && dto.plateNumber !== current.plateNumber) {
+      const r = await this.validatePlate({
+        tenantId,
+        plate:              dto.plateNumber,
+        plateCountry:       dto.plateCountry,
+        confirmedAtypical:  dto.confirmedAtypical,
+        confirmedDuplicate: dto.confirmedDuplicate,
+        excludeBusId:       id,
+      });
+      normalizedPlate = r.normalized;
+    }
     const res = await this.prisma.bus.updateMany({
       where: { id, tenantId },
       data: {
-        plateNumber:         dto.plateNumber,
+        plateNumber:         normalizedPlate ?? dto.plateNumber,
         model:               dto.model,
         type:                dto.type,
         year:                dto.year,

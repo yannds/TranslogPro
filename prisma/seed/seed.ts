@@ -10,6 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import { seedSystemTemplates } from '../../server/seed/templates/templates.seeder';
 import { backfillVehicleDocumentTypes, backfillDefaultWorkflows } from '../seeds/iam.seed';
+import { seedLicensePlateFormats } from '../seeds/license-plate-formats.seed';
 
 const prisma = new PrismaClient();
 
@@ -521,6 +522,14 @@ async function main() {
   const wfReport = await backfillDefaultWorkflows(prisma);
   if (wfReport.rowsCreated > 0) {
     console.log(`✅ WorkflowConfigs — ${wfReport.rowsCreated} transition(s) créée(s) sur ${wfReport.scanned} tenant(s)`);
+  }
+
+  // ── Backfill silencieux des formats d'immatriculation (tous tenants existants)
+  const plateUpdated = await seedLicensePlateFormats(prisma, {
+    logger: { log: (m: string) => console.log(m) },
+  });
+  if (plateUpdated > 0) {
+    console.log(`✅ LicensePlateFormats — ${plateUpdated} tenant(s) mis à jour avec les formats par défaut`);
   }
 }
 

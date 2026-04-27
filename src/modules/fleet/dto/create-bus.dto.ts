@@ -1,5 +1,5 @@
 import {
-  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray,
+  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray, IsBoolean, Length,
 } from 'class-validator';
 
 export enum BusType {
@@ -37,8 +37,32 @@ export enum EngineType {
 }
 
 export class CreateBusDto {
-  @IsString()
+  @IsString() @Length(3, 32)
   plateNumber: string;
+
+  /**
+   * Code pays ISO 3166-1 alpha-2 de l'immatriculation (ex: "CG", "GA", "FR").
+   * Si absent, le service prend le pays du tenant. Permet aux tenants ayant des
+   * agences dans plusieurs pays de saisir des plaques de pays différents.
+   */
+  @IsString() @IsOptional()
+  plateCountry?: string;
+
+  /**
+   * Confirme une plaque atypique (ne match aucun masque connu pour le pays).
+   * Sans ce flag, le service répond 400 avec l'info "atypique" pour que l'UI
+   * demande confirmation à l'admin (warn-only, jamais hard reject sur le pattern).
+   */
+  @IsBoolean() @IsOptional()
+  confirmedAtypical?: boolean;
+
+  /**
+   * Confirme un doublon de plaque dans le tenant (collision inter-pays légitime).
+   * Sans ce flag, le service répond 409 avec le bus existant pour que l'UI
+   * demande confirmation.
+   */
+  @IsBoolean() @IsOptional()
+  confirmedDuplicate?: boolean;
 
   @IsEnum(BusType)
   type: BusType;

@@ -1,11 +1,20 @@
 import {
-  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray,
+  IsString, IsInt, IsOptional, Min, IsEnum, IsNumber, IsDateString, IsArray, IsBoolean, Length,
 } from 'class-validator';
 import { BusType, FuelType, EngineType, BusAmenity } from './create-bus.dto';
 
 export class UpdateBusDto {
-  @IsString() @IsOptional()
+  @IsString() @IsOptional() @Length(3, 32)
   plateNumber?: string;
+
+  @IsString() @IsOptional()
+  plateCountry?: string;
+
+  @IsBoolean() @IsOptional()
+  confirmedAtypical?: boolean;
+
+  @IsBoolean() @IsOptional()
+  confirmedDuplicate?: boolean;
 
   @IsEnum(BusType) @IsOptional()
   type?: BusType;

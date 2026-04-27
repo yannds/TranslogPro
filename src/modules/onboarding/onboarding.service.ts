@@ -291,11 +291,12 @@ export class OnboardingService {
    */
   private async seedPricingDefaults(prisma: PrismaService, tenantId: string) {
     // 1. TenantBusinessConfig — upsert minimal ; les colonnes ont toutes des
-    // defaults Prisma. La seule raison de l'appeler ici : garantir la présence
-    // de la ligne pour que les futures lectures n'aient pas à upsert en lazy.
+    // defaults Prisma. On charge aussi le registre des formats d'immatriculation
+    // par défaut (36 pays) pour que le tenant soit opérationnel sans config admin.
+    const { DEFAULT_LICENSE_PLATE_FORMATS } = await import('../../../prisma/seeds/license-plate-formats.seed');
     await prisma.tenantBusinessConfig.upsert({
       where:  { tenantId },
-      create: { tenantId },
+      create: { tenantId, licensePlateFormats: DEFAULT_LICENSE_PLATE_FORMATS as any },
       update: {},
     });
 

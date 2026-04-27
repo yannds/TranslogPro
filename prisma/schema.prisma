@@ -437,6 +437,17 @@ model TenantBusinessConfig {
   // Défaut 11h (réglementation UE transport routier). Configurable par tenant.
   minDriverRestHours           Int     @default(11)
 
+  // ── Immatriculations véhicules — formats par pays (warn-only) ─────────────
+  // Dictionnaire ISO 3166-1 alpha-2 → { masks: string[], excludedLetters: string[],
+  //   examples: string[], notes?: string }. Les masques utilisent une convention
+  // permissive : tout chiffre = emplacement chiffre (0-9), toute lettre =
+  // emplacement lettre (A-Z, hors excludedLetters), autres caractères = séparateur
+  // littéral. Plusieurs masques par pays autorisés (ancien + nouveau format).
+  // Validation graduée : anti-poubelle hard reject, hors-masque = warn-only
+  // (l'admin confirme les plaques atypiques). Voir docs/LICENSE_PLATE_FORMATS.md.
+  // Seedé à l'onboarding et backfillé silencieusement pour les tenants existants.
+  licensePlateFormats          Json    @default("{}")
+
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
