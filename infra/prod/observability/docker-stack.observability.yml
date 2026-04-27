@@ -161,8 +161,11 @@ services:
       start_period: 30s
 
   # ── Promtail — collecte logs Docker (global mode = 1 par node) ────────────
+  # v3.3.2 requise (vs 2.9.10) : le client Docker de 2.9.10 utilise API v1.42,
+  # rejetée par le daemon Docker du VPS (min v1.44). Sans bump, docker_sd_configs
+  # ne peut pas lister les conteneurs → aucun log collecté.
   promtail:
-    image: grafana/promtail:2.9.10
+    image: grafana/promtail:3.3.2
     configs:
       - source: promtail_yaml
         target: /etc/promtail/promtail-config.yaml
