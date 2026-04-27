@@ -1,0 +1,27 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# CrowdSec — Profiles de décisions
+# ═════════════════════════════════════════════════════════════════════════════
+# Détermine quoi faire quand un scenario match.
+# IMPORTANT : `simulation: true` par défaut → toutes les décisions sont taggées
+# `simulated`, ignorées par le bouncer Caddy. Aucune IP n'est réellement bannie.
+#
+# Pour activer le blocage réel d'un scenario précis, utiliser `cscli simulation
+# disable <scenario>` après période d'observation. Cette commande modifie l'état
+# runtime sans toucher à ce fichier.
+# ═════════════════════════════════════════════════════════════════════════════
+
+name: default_ip_remediation
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip"
+decisions:
+  - type: ban
+    duration: 4h
+
+# Mode simulation : la décision est créée mais marquée "simulated".
+# Les bouncers (ex: caddy-crowdsec-bouncer) DOIVENT respecter ce flag et NE PAS
+# enforcer les décisions simulées. Le bouncer Caddy par défaut le respecte.
+simulation: true
+
+# Pas de notification email/slack/etc. en simulation — uniquement les logs +
+# métriques Prometheus consommées par Grafana.
+on_success: break

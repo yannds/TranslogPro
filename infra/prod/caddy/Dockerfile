@@ -1,5 +1,9 @@
-# Custom Caddy build with rfc2136 DNS plugin (pour DNS-01 via BIND9 local TSIG).
-# Image finale <50 MB.
+# Custom Caddy build avec :
+#   - rfc2136 (DNS-01 via BIND9 local TSIG, wildcard cert *.translog.dsyann.info)
+#   - caddy-crowdsec-bouncer (Lot 2 — middleware HTTP qui interroge la LAPI
+#     CrowdSec sur chaque requête. En mode simulation par défaut, n'enforce
+#     rien — observe seulement. Doc : docs/manuals/admin-infra/observability.md §6)
+# Image finale <60 MB.
 #
 # Pinning à `caddy:2-builder` (latest 2.x) parce que :
 #   - rfc2136 v1.0.0+ nécessite Go ≥1.24 (présent dans Caddy 2.9+)
@@ -8,13 +12,17 @@
 FROM caddy:2-builder AS builder
 
 RUN xcaddy build \
-    --with github.com/caddy-dns/rfc2136
+    --with github.com/caddy-dns/rfc2136 \
+    --with github.com/hslatman/caddy-crowdsec-bouncer/http \
+    --with github.com/hslatman/caddy-crowdsec-bouncer/layer4
 
 FROM caddy:2-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 
-# Vérification plugin chargé (fail-fast si build cassé)
+# Vérifications plugins chargés (fail-fast si build cassé)
 RUN caddy list-modules | grep -q "dns.providers.rfc2136" || (echo "FATAL: rfc2136 plugin missing" && exit 1)
+RUN caddy list-modules | grep -q "http.handlers.crowdsec" || (echo "FATAL: crowdsec http handler missing" && exit 1)
+RUN caddy list-modules | grep -q "crowdsec" || (echo "FATAL: crowdsec module missing" && exit 1)
 
 # ⚠️ Caddy non-root tenté en V5-D mais TLS internal error — Caddy 2.x ne
 # génère pas de tls_connection_policies en runtime quand user=1000 sur cette

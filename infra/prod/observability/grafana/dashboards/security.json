@@ -1,0 +1,128 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 50 }] } } },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(cs_active_decisions)", "refId": "A" }],
+      "title": "Décisions actives (simulées + bloquantes)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }] } } },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(increase(cs_alerts_total[24h]))", "refId": "A" }],
+      "title": "Alertes 24h",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }] } } },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(cs_parser_hits_total)", "refId": "A" }],
+      "title": "Lignes de logs parsées",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue" }] } } },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "count(count by(reason) (cs_active_decisions))", "refId": "A" }],
+      "title": "Scenarios uniques déclenchés",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "mean"] } },
+      "targets": [{
+        "expr": "topk(10, sum by(reason) (cs_active_decisions))",
+        "legendFormat": "{{reason}}",
+        "refId": "A"
+      }],
+      "title": "Top 10 scenarios déclenchés",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "stacking": { "mode": "normal" } } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list" } },
+      "targets": [{
+        "expr": "sum by(origin) (cs_alerts_total)",
+        "legendFormat": "{{origin}}",
+        "refId": "A"
+      }],
+      "title": "Alertes par source de log",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }] }, "unit": "short" } },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 14 },
+      "id": 7,
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "targets": [{
+        "expr": "topk(20, sum by(value) (cs_active_decisions))",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "Top 20 IPs détectées",
+      "type": "table",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": { "value": 0, "Value": 1 }, "renameByName": { "value": "IP", "Value": "décisions actives" } } }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 }, "unit": "ops" } },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 14 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{
+        "expr": "rate(cs_parser_hits_total[5m])",
+        "legendFormat": "{{type}}",
+        "refId": "A"
+      }],
+      "title": "Débit de parsing par source de log (lignes/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 24 },
+      "id": 9,
+      "options": { "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [{
+        "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "{container_name=\"translog-obs_crowdsec\"} |~ \"(?i)alert|ban|decision\"",
+        "refId": "A"
+      }],
+      "title": "Logs CrowdSec live (alertes + décisions)",
+      "type": "logs"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["security", "crowdsec", "translog"],
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Sécurité — Détections live",
+  "uid": "translog-security",
+  "version": 1
+}

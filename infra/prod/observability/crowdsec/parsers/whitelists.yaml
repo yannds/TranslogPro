@@ -1,0 +1,42 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# CrowdSec — Whitelists d'infrastructure
+# ═════════════════════════════════════════════════════════════════════════════
+# Stage : s02-enrich (après parsing initial, avant scenarios)
+# Les IPs/CIDR ici listés sont marqués `whitelist` → aucun scenario ne crée
+# de décision pour eux, même actifs.
+#
+# IMPORTANT : ne PAS ajouter d'IPs perso ici (DHCP, dynamiques) — utiliser
+# une décision de whitelist en base via `cscli decisions add --type whitelist`
+# pour des cas temporaires.
+# ═════════════════════════════════════════════════════════════════════════════
+
+name: translog/infra-whitelist
+description: "Whitelist VPS infra : localhost, Docker overlays, GitHub Actions"
+
+whitelist:
+  reason: "TransLog Pro infra whitelist"
+  ip:
+    - "127.0.0.1"
+    - "::1"
+  cidr:
+    # Réseaux Docker overlay/bridge — sinon Prometheus scrape, healthchecks,
+    # et trafic inter-container se feraient bannir par http-probing.
+    - "172.16.0.0/12"
+    - "10.0.0.0/8"
+    - "192.168.0.0/16"
+    # GitHub Actions runner ranges (publiques, source github/meta).
+    # Sans cela, le rsync + SSH du workflow peut tomber dans http-cve si CrowdSec
+    # observait les logs CI accidentellement, et surtout les outils CI font
+    # parfois des connexions répétées qu'un scenario aggressif pourrait flagger.
+    - "4.175.114.51/32"
+    - "20.99.184.0/23"
+    - "20.118.0.0/16"
+    - "20.201.28.151/32"
+    - "20.205.243.166/32"
+    - "20.207.73.82/32"
+    - "20.27.177.113/32"
+    - "20.87.245.0/32"
+    - "143.55.64.0/20"
+    # NOTE : la plage runner GitHub évolue. Source officielle :
+    # https://api.github.com/meta → champ "actions". À mettre à jour au besoin.
+    # Cette liste couvre les blocs principaux observés en avril 2026.

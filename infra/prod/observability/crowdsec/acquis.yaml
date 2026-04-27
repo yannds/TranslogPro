@@ -1,0 +1,29 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# CrowdSec — Acquisition des logs
+# ═════════════════════════════════════════════════════════════════════════════
+# Sources de logs analysées par l'agent CrowdSec.
+# Les fichiers cibles sont montés en lecture seule dans le conteneur via
+# docker-stack.observability.yml.
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Logs Caddy (access logs + erreurs) — format JSON
+filenames:
+  - /var/log/caddy/caddy.log
+  - /var/log/caddy/access.log
+labels:
+  type: caddy
+
+---
+# Logs SSH / authentification système (auth.log)
+filenames:
+  - /var/log/auth.log
+labels:
+  type: syslog
+
+---
+# Logs Docker JSON (tous les containers du host)
+# CrowdSec a un parser docker natif qui extrait container_name, etc.
+filenames:
+  - /var/lib/docker/containers/*/*-json.log
+labels:
+  type: docker

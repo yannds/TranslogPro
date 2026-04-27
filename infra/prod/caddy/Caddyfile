@@ -40,6 +40,26 @@
     servers {
         protocols h1 h2
     }
+
+    # ─── CrowdSec bouncer (Lot 2) ────────────────────────────────────────────
+    # Configuration GLOBALE du bouncer : il sait se connecter à la LAPI mais
+    # n'est PAS invoqué tant qu'aucun bloc de site ne contient la directive
+    # `crowdsec`. C'est volontaire : Phase 2 démarre sans même évaluer les
+    # décisions sur le trafic réel — l'agent CrowdSec observe les logs et
+    # écrit des décisions simulées que tu vois dans Grafana, le bouncer reste
+    # en standby. Pour activer l'évaluation passive (sans bloquer car simu),
+    # ajouter `crowdsec` dans les blocs de site souhaités. Pour activer le
+    # blocage réel : `cscli simulation disable <scenario>`.
+    # Manuel d'opération : docs/manuals/admin-infra/observability.md §6
+    crowdsec {
+        api_url http://translog-obs_crowdsec:8080
+        api_key {env.CROWDSEC_BOUNCER_KEY_CADDY}
+        ticker_interval 30s
+        # fail-open : si LAPI down, Caddy laisse passer toutes les requêtes
+        # (= pas de blackout en cas de panne CrowdSec). Choix délibéré.
+        # Inversion = `disable_streaming` + appendix `enable_hard_fails`,
+        # à NE PAS faire avant d'avoir une supervision LAPI active.
+    }
 }
 
 # ═════════════════════════════════════════════════════════════════════════════

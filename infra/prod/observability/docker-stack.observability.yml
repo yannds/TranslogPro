@@ -93,6 +93,8 @@ services:
         target: /var/lib/grafana/dashboards/blackbox.json
       - source: dash_logs
         target: /var/lib/grafana/dashboards/logs.json
+      - source: dash_security
+        target: /var/lib/grafana/dashboards/security.json
     environment:
       GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -265,6 +267,61 @@ services:
       restart_policy:
         condition: on-failure
 
+  # ── CrowdSec — détection d'attaques (Lot 2, mode SIMULATION par défaut) ────
+  # Agent + LAPI dans un seul container (mode standalone simple).
+  # - Lit les logs Caddy + auth.log + Docker via volumes read-only
+  # - Expose la LAPI sur :8080 (interne translog_obs_net) → Caddy bouncer
+  # - Expose métriques Prometheus sur :6060/metrics → scrape automatique
+  # - Au boot, crée un bouncer nommé `caddy` avec la clé ${CROWDSEC_BOUNCER_KEY_CADDY}
+  # - Tous les scenarios par défaut sont en simulation → aucun blocage réel
+  # - Manuel d'opération : docs/manuals/admin-infra/observability.md §6 et §7
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.6.4
+    environment:
+      COLLECTIONS: "crowdsecurity/linux crowdsecurity/caddy crowdsecurity/http-cve crowdsecurity/sshd crowdsecurity/base-http-scenarios crowdsecurity/whitelist-good-actors"
+      USE_WAL: "true"
+      # Bouncer pre-registration : au boot CrowdSec crée un bouncer `caddy`
+      # avec cette clé. Caddy utilisera la même clé pour s'authentifier sur LAPI.
+      BOUNCER_KEY_caddy: "${CROWDSEC_BOUNCER_KEY_CADDY}"
+      # Désactive le check online communautaire au démarrage (offline OK)
+      DISABLE_ONLINE_API: "false"
+      DISABLE_LOCAL_API: "false"
+    configs:
+      - source: crowdsec_config_yaml
+        target: /etc/crowdsec/config.yaml
+      - source: crowdsec_acquis_yaml
+        target: /etc/crowdsec/acquis.yaml
+      - source: crowdsec_profiles_yaml
+        target: /etc/crowdsec/profiles.yaml
+      - source: crowdsec_whitelists_yaml
+        target: /etc/crowdsec/parsers/s02-enrich/whitelists-translog.yaml
+    volumes:
+      - crowdsec_data:/var/lib/crowdsec/data
+      # Logs Caddy (volume partagé avec stack translog)
+      - translog_caddy_logs:/var/log/caddy:ro
+      # Logs système (auth.log SSH, syslog kernel)
+      - /var/log:/var/log:ro
+      # Logs Docker JSON
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - translog_obs_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:    { memory: 384M }
+        reservations: { memory: 192M }
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "cscli", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   # ── blackbox-exporter — probes HTTP/uptime sous-domaines ──────────────────
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.25.0
@@ -302,6 +359,12 @@ volumes:
   grafana_data:       { name: translog_grafana_data }
   loki_data:          { name: translog_loki_data }
   promtail_positions: { name: translog_promtail_positions }
+  crowdsec_data:      { name: translog_crowdsec_data }
+  # Volume des logs Caddy — créé par la stack `translog`, monté ici en read-only
+  # pour que CrowdSec lise les access logs JSON de Caddy.
+  translog_caddy_logs:
+    external: true
+    name: translog_caddy_logs
 
 # ─── Configs (versionnés via stack deploy — read-only en runtime) ────────────
 # Chaque modification de fichier nécessite un re-deploy stack pour pickup,
@@ -333,3 +396,13 @@ configs:
     file: ./grafana/dashboards/blackbox.json
   dash_logs:
     file: ./grafana/dashboards/logs.json
+  dash_security:
+    file: ./grafana/dashboards/security.json
+  crowdsec_config_yaml:
+    file: ./crowdsec/config.yaml
+  crowdsec_acquis_yaml:
+    file: ./crowdsec/acquis.yaml
+  crowdsec_profiles_yaml:
+    file: ./crowdsec/profiles.yaml
+  crowdsec_whitelists_yaml:
+    file: ./crowdsec/parsers/whitelists.yaml

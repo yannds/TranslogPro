@@ -77,6 +77,15 @@ scrape_configs:
     static_configs:
       - targets: ['caddy:2019']
 
+  # ── CrowdSec — métriques de détection (Lot 2) ────────────────────────────
+  # L'agent expose ses métriques sur :6060/metrics : nb d'événements, scenarios
+  # déclenchés, décisions actives (incluant simulées), top IPs, sources de logs
+  # acquises, etc. Consommé par le dashboard Grafana 'Sécurité'.
+  - job_name: 'crowdsec'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['crowdsec:6060']
+
   # ── Blackbox uptime probes (sous-domaines publics) ───────────────────────
   - job_name: 'blackbox-http'
     metrics_path: /probe

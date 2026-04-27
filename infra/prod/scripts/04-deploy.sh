@@ -155,15 +155,28 @@ ok "Stack $STACK_NAME déployé"
 header "[4b/13] Deploy observability stack"
 
 if [ -f "$OBS_STACK_FILE" ]; then
-    # GRAFANA_ADMIN_PASSWORD : fallback sur APP_SECRET si pas défini (acceptable
-    # car APP_SECRET est déjà un secret robuste dans .env.prod). Préférable :
-    # ajouter une var dédiée GRAFANA_ADMIN_PASSWORD dans .env.prod.
+    # GRAFANA_ADMIN_PASSWORD : généré aléatoirement au premier deploy, persiste
+    # dans .env.prod ensuite. Récupération via :
+    #   grep ^GRAFANA_ADMIN_PASSWORD= /opt/TranslogPro/infra/prod/.env.prod
     if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
-        # Génère un mdp aléatoire si absent + persiste dans .env.prod (idempotent)
         if ! grep -q '^GRAFANA_ADMIN_PASSWORD=' .env.prod; then
             GP=$(openssl rand -hex 24)
             echo "GRAFANA_ADMIN_PASSWORD=$GP" >> .env.prod
             warn "GRAFANA_ADMIN_PASSWORD généré et écrit dans .env.prod"
+        fi
+        set -a; . ./.env.prod; set +a
+    fi
+
+    # CROWDSEC_BOUNCER_KEY_CADDY : clé partagée entre l'agent CrowdSec
+    # (qui pré-enregistre un bouncer `caddy` à son boot via env var
+    # BOUNCER_KEY_caddy) et Caddy (qui l'envoie en header X-Api-Key sur
+    # chaque requête à la LAPI). Générée au premier deploy, persiste ensuite.
+    # Cf. docs/manuals/admin-infra/observability.md pour le rôle de cette clé.
+    if [ -z "${CROWDSEC_BOUNCER_KEY_CADDY:-}" ]; then
+        if ! grep -q '^CROWDSEC_BOUNCER_KEY_CADDY=' .env.prod; then
+            CK=$(openssl rand -hex 32)
+            echo "CROWDSEC_BOUNCER_KEY_CADDY=$CK" >> .env.prod
+            warn "CROWDSEC_BOUNCER_KEY_CADDY généré et écrit dans .env.prod"
         fi
         set -a; . ./.env.prod; set +a
     fi
